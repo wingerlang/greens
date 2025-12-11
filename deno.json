@@ -1,0 +1,23 @@
+{
+  "tasks": {
+    "dev": "deno run -A npm:vite@^5.4.0",
+    "build": "deno run -A npm:vite@^5.4.0 build",
+    "preview": "deno run -A npm:vite@^5.4.0 preview"
+  },
+  "compilerOptions": {
+    "lib": [
+      "ES2020",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react"
+  },
+  "nodeModulesDir": "auto",
+  "imports": {
+    "react": "npm:react@^18.3.1",
+    "react-dom": "npm:react-dom@^18.3.1",
+    "react-dom/client": "npm:react-dom@^18.3.1/client",
+    "react-router-dom": "npm:react-router-dom@^7.0.2"
+  }
+}
