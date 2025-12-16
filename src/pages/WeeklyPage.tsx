@@ -103,7 +103,7 @@ export function WeeklyPage() {
     // Hooks - Use settings.visibleMeals from SettingsContext for user preferences
     const visibleMeals = settings.visibleMeals;
 
-    const { shoppingList, totalItems, handleCopyShoppingList } = useShoppingList(
+    const { shoppingList, totalItems, handleCopyShoppingList, copyStatus, formatQuantity } = useShoppingList(
         weekPlan || { monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {} },
         recipes,
         foodItems,
@@ -359,6 +359,8 @@ export function WeeklyPage() {
                 togglePantryItem={togglePantryItem}
                 totalItems={totalItems}
                 onCopy={handleCopyShoppingList}
+                copyStatus={copyStatus}
+                formatQuantity={formatQuantity}
             />
 
             {/* Recipe Selection Modal */}

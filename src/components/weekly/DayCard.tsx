@@ -2,7 +2,7 @@
  * DayCard - Individual day card in weekly view
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     type Weekday,
     type MealType,
@@ -89,6 +89,26 @@ export function DayCard({
         e.dataTransfer.dropEffect = 'move';
     };
 
+    // Calculate daily totals for calories and protein
+    const dailyTotals = useMemo(() => {
+        let calories = 0;
+        let protein = 0;
+
+        visibleMeals.forEach(meal => {
+            const planned = meals[meal];
+            const recipe = getRecipe(planned);
+            if (recipe?.ingredientsText && planned) {
+                const estimate = calculateRecipeEstimate(recipe.ingredientsText, foodItems, planned.swaps);
+                const servings = planned.servings || recipe.servings || 4;
+                // Assume 1 serving per person
+                calories += Math.round(estimate.calories / servings);
+                protein += Math.round(estimate.protein / servings);
+            }
+        });
+
+        return { calories, protein };
+    }, [meals, visibleMeals, recipes, foodItems]);
+
     // Build class names
     const wrapperClasses = [
         'day-card-wrapper',
@@ -144,6 +164,14 @@ export function DayCard({
                         )}
                     </div>
                 </div>
+
+                {/* Daily Totals - only show if meals are planned */}
+                {dailyTotals.calories > 0 && (
+                    <div className="day-totals">
+                        <span className="total-item">🔥 {dailyTotals.calories} kcal</span>
+                        <span className="total-item">🌱 {dailyTotals.protein}g</span>
+                    </div>
+                )}
 
                 {/* Meal Slots */}
                 <div className="day-meals">

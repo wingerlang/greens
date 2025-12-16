@@ -6,15 +6,46 @@ interface ShoppingListViewProps {
     pantryItems: Set<string>;
     togglePantryItem: (item: string) => void;
     totalItems: number;
-    onCopy: () => void;
+    onCopy: () => Promise<boolean>;
+    copyStatus?: 'idle' | 'copied' | 'error';
+    formatQuantity?: (item: ShoppingItem) => string;
 }
 
-export function ShoppingListView({ shoppingList, pantryItems, togglePantryItem, totalItems, onCopy }: ShoppingListViewProps) {
+export function ShoppingListView({
+    shoppingList,
+    pantryItems,
+    togglePantryItem,
+    totalItems,
+    onCopy,
+    copyStatus = 'idle',
+    formatQuantity
+}: ShoppingListViewProps) {
     const [isExpanded, setIsExpanded] = useState(false);
 
     if (totalItems === 0 && Object.values(shoppingList).every(l => l.length === 0)) {
         return null;
     }
+
+    const getCopyButtonContent = () => {
+        if (copyStatus === 'copied') {
+            return '✓ Kopierat!';
+        }
+        if (copyStatus === 'error') {
+            return '✗ Fel';
+        }
+        return '📋 Kopiera';
+    };
+
+    const getCopyButtonClass = () => {
+        const base = "flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-xl border transition-all active:scale-95";
+        if (copyStatus === 'copied') {
+            return `${base} bg-emerald-500 text-white border-emerald-400`;
+        }
+        if (copyStatus === 'error') {
+            return `${base} bg-rose-500/20 text-rose-400 border-rose-500/30`;
+        }
+        return `${base} bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700`;
+    };
 
     return (
         <section className="bg-slate-900 border border-slate-800 rounded-2xl p-6 mb-8 shadow-xl">
@@ -37,11 +68,11 @@ export function ShoppingListView({ shoppingList, pantryItems, togglePantryItem, 
                         </span>
                     )}
                     <button
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-semibold rounded-xl border border-slate-700 transition-all active:scale-95"
+                        className={getCopyButtonClass()}
                         onClick={onCopy}
                         title="Kopiera listan"
                     >
-                        📋 Kopiera
+                        {getCopyButtonContent()}
                     </button>
                 </div>
             </div>
@@ -63,20 +94,28 @@ export function ShoppingListView({ shoppingList, pantryItems, togglePantryItem, 
                         <div key={storageType} className="flex flex-col gap-3">
                             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider pl-1">{storageLabels[storageType] || storageType}</h3>
                             <div className="flex flex-col gap-2">
-                                {filteredItems.map((item, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="group flex items-center justify-between p-2.5 bg-slate-800/40 border border-transparent hover:border-emerald-500/30 hover:bg-slate-800/60 rounded-xl transition-all cursor-pointer"
-                                        onClick={() => togglePantryItem(item.name.toLowerCase())}
-                                    >
-                                        <span className="text-sm text-slate-200 font-medium pl-1">{item.name}</span>
-                                        <span
-                                            className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition-all"
+                                {filteredItems.map((item, idx) => {
+                                    const qty = formatQuantity ? formatQuantity(item) : '';
+                                    return (
+                                        <div
+                                            key={idx}
+                                            className="group flex items-center justify-between p-2.5 bg-slate-800/40 border border-transparent hover:border-emerald-500/30 hover:bg-slate-800/60 rounded-xl transition-all cursor-pointer"
+                                            onClick={() => togglePantryItem(item.name.toLowerCase())}
                                         >
-                                            ✓
-                                        </span>
-                                    </div>
-                                ))}
+                                            <div className="flex flex-col">
+                                                <span className="text-sm text-slate-200 font-medium pl-1">{item.name}</span>
+                                                {qty && (
+                                                    <span className="text-xs text-slate-500 pl-1">{qty}</span>
+                                                )}
+                                            </div>
+                                            <span
+                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition-all"
+                                            >
+                                                ✓
+                                            </span>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     );

@@ -1,15 +1,89 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* ============================================
+   MODERN THEME SYSTEM
+   AI-driven, holistic, premium design
+   ============================================ */
+
+:root {
+    /* Dark Theme (Default) - Premium slate/emerald aesthetic */
+    --background: #0a0f1a;
+    --background-gradient: linear-gradient(135deg, #0a0f1a 0%, #0d1321 50%, #111827 100%);
+    --surface: #111827;
+    --surface-elevated: #1e293b;
+    --surface-hover: #1e3a5f;
+
+    --border: rgba(148, 163, 184, 0.1);
+    --border-hover: rgba(16, 185, 129, 0.3);
+
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+
+    --accent-primary: #10b981;
+    --accent-secondary: #06b6d4;
+    --accent-bg: rgba(16, 185, 129, 0.1);
+    --accent-glow: rgba(16, 185, 129, 0.2);
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-glow: 0 0 30px rgba(16, 185, 129, 0.15);
+
+    /* Glass effect */
+    --glass-bg: rgba(17, 24, 39, 0.8);
+    --glass-border: rgba(148, 163, 184, 0.1);
+}
+
+[data-theme="light"] {
+    --background: #f8fafc;
+    --background-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 50%, #e2e8f0 100%);
+    --surface: #ffffff;
+    --surface-elevated: #f8fafc;
+    --surface-hover: #f1f5f9;
+
+    --border: rgba(15, 23, 42, 0.1);
+    --border-hover: rgba(16, 185, 129, 0.4);
+
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+
+    --accent-primary: #059669;
+    --accent-secondary: #0891b2;
+    --accent-bg: rgba(16, 185, 129, 0.1);
+    --accent-glow: rgba(16, 185, 129, 0.15);
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.15);
+    --shadow-glow: 0 0 30px rgba(16, 185, 129, 0.1);
+
+    --glass-bg: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(15, 23, 42, 0.1);
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+    html {
+        scroll-behavior: smooth;
+    }
+
     body {
-        @apply bg-slate-950 text-slate-100 font-sans antialiased;
-        /* Premium background gradient */
-        background-image: radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.05) 0%, transparent 50%);
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        background: var(--background);
+        background-image: var(--background-gradient);
+        color: var(--text-primary);
         min-height: 100vh;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    [data-theme="light"] body {
+        @apply text-slate-900;
     }
 
     /* Custom Scrollbar */
@@ -19,11 +93,16 @@
     }
 
     ::-webkit-scrollbar-track {
-        @apply bg-transparent;
+        background: transparent;
     }
 
     ::-webkit-scrollbar-thumb {
-        @apply bg-slate-800 rounded-full hover:bg-slate-700 transition-colors;
+        background: var(--border);
+        border-radius: 3px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--text-muted);
     }
 }
 
