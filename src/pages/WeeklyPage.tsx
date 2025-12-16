@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useData } from '../context/DataContext.tsx';
+import { useSettings } from '../context/SettingsContext.tsx';
 import { useCooking } from '../context/CookingModeProvider.tsx';
 import {
     type Weekday,
@@ -65,12 +66,12 @@ export function WeeklyPage() {
         recipes,
         weeklyPlans,
         saveWeeklyPlan,
-        userSettings,
         foodItems,
         pantryItems,
         togglePantryItem,
     } = useData();
 
+    const { settings } = useSettings();
     const { openRecipe } = useCooking();
 
     // State
@@ -95,12 +96,12 @@ export function WeeklyPage() {
     // Save on change
     useEffect(() => {
         if (weekPlan) {
-            saveWeeklyPlan({ weekStartDate: currentWeekStart, meals: weekPlan });
+            saveWeeklyPlan(currentWeekStart, weekPlan);
         }
     }, [weekPlan, currentWeekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Hooks
-    const visibleMeals = userSettings?.visibleMeals || ['breakfast', 'lunch', 'dinner', 'snack'];
+    // Hooks - Use settings.visibleMeals from SettingsContext for user preferences
+    const visibleMeals = settings.visibleMeals;
 
     const { shoppingList, totalItems, handleCopyShoppingList } = useShoppingList(
         weekPlan || { monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {} },
@@ -110,7 +111,7 @@ export function WeeklyPage() {
         visibleMeals as MealType[]
     );
 
-    const { getRandomRecipe, randomizeDay } = useRandomizer(recipes, weekPlan);
+    const { getRandomRecipe, getSuggestions, randomizeDay } = useRandomizer(recipes, weekPlan);
 
     // Derived values
     const weekNumber = getWeekNumber(currentWeekStart);
@@ -273,6 +274,17 @@ export function WeeklyPage() {
             <div className="days-grid">
                 {WEEKDAYS.map((day, index) => {
                     const { dateStr, dateNumber } = formatDateForCard(currentWeekStart, index);
+                    const dayDate = new Date(currentWeekStart);
+                    dayDate.setDate(dayDate.getDate() + index);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    dayDate.setHours(0, 0, 0, 0);
+
+                    const isTodayCheck = dayDate.getTime() === today.getTime();
+                    const isPast = dayDate < today;
+                    const yesterday = new Date(today);
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    const isYesterday = dayDate.getTime() === yesterday.getTime();
 
                     return (
                         <DayCard
@@ -280,14 +292,59 @@ export function WeeklyPage() {
                             day={day}
                             dateStr={dateStr}
                             dateNumber={dateNumber}
-                            isToday={isToday(currentWeekStart, index)}
+                            isToday={isTodayCheck}
+                            isPast={isPast}
+                            isYesterday={isYesterday}
                             meals={weekPlan[day] || {}}
                             visibleMeals={visibleMeals as MealType[]}
                             recipes={recipes}
                             foodItems={foodItems}
+                            getSuggestions={(meal) => getSuggestions(meal)}
                             onMealClick={(meal) => handleMealClick(day, meal)}
                             onCookMeal={(meal, recipe) => handleCookMeal(day, meal, recipe)}
+                            onRemoveMeal={(meal) => {
+                                setWeekPlan(prev => {
+                                    if (!prev) return prev;
+                                    return {
+                                        ...prev,
+                                        [day]: {
+                                            ...prev[day],
+                                            [meal]: undefined
+                                        }
+                                    };
+                                });
+                            }}
                             onShuffleDay={() => handleShuffleDay(day)}
+                            onShuffleMeal={(meal) => {
+                                const recipe = getRandomRecipe(meal);
+                                if (recipe) {
+                                    setWeekPlan(prev => {
+                                        if (!prev) return prev;
+                                        return {
+                                            ...prev,
+                                            [day]: {
+                                                ...prev[day],
+                                                [meal]: { recipeId: recipe.id, servings: recipe.servings || 4 }
+                                            }
+                                        };
+                                    });
+                                }
+                            }}
+                            onQuickSelect={(meal, recipeId) => {
+                                const recipe = recipes.find(r => r.id === recipeId);
+                                if (recipe) {
+                                    setWeekPlan(prev => {
+                                        if (!prev) return prev;
+                                        return {
+                                            ...prev,
+                                            [day]: {
+                                                ...prev[day],
+                                                [meal]: { recipeId, servings: recipe.servings || 4 }
+                                            }
+                                        };
+                                    });
+                                }
+                            }}
                             onDragStart={(e, meal, recipeId) => handleDragStart(e, day, meal, recipeId)}
                             onDrop={(e, meal) => handleDrop(e, day, meal)}
                         />

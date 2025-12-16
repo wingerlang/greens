@@ -2,7 +2,7 @@
  * DayCard - Individual day card in weekly view
  */
 
-import React, { useMemo } from 'react';
+import React, { useState } from 'react';
 import {
     type Weekday,
     type MealType,
@@ -30,13 +30,19 @@ interface DayCardProps {
     dateStr: string;          // "8 DEC."
     dateNumber: number;       // 8 (for watermark)
     isToday: boolean;
+    isPast: boolean;          // Days before today
+    isYesterday: boolean;     // Special styling for yesterday
     meals: Partial<Record<MealType, PlannedMeal>>;
     visibleMeals: MealType[];
     recipes: Recipe[];
     foodItems: FoodItem[];
+    getSuggestions?: (meal: MealType) => Recipe[];
     onMealClick: (meal: MealType) => void;
     onCookMeal: (meal: MealType, recipe: Recipe) => void;
+    onRemoveMeal?: (meal: MealType) => void;
     onShuffleDay?: () => void;
+    onShuffleMeal?: (meal: MealType) => void;
+    onQuickSelect?: (meal: MealType, recipeId: string) => void;
     onDragStart?: (e: React.DragEvent, meal: MealType, recipeId: string) => void;
     onDrop?: (e: React.DragEvent, meal: MealType) => void;
 }
@@ -46,16 +52,23 @@ export function DayCard({
     dateStr,
     dateNumber,
     isToday,
+    isPast,
+    isYesterday,
     meals,
     visibleMeals,
     recipes,
     foodItems,
+    getSuggestions,
     onMealClick,
     onCookMeal,
+    onRemoveMeal,
     onShuffleDay,
+    onShuffleMeal,
+    onQuickSelect,
     onDragStart,
     onDrop,
 }: DayCardProps) {
+    const [isFlipped, setIsFlipped] = useState(false);
 
     // Get recipe for a planned meal
     const getRecipe = (planned: PlannedMeal | undefined): Recipe | undefined => {
@@ -76,12 +89,29 @@ export function DayCard({
         e.dataTransfer.dropEffect = 'move';
     };
 
+    // Build class names
+    const wrapperClasses = [
+        'day-card-wrapper',
+        isFlipped && 'is-flipped',
+    ].filter(Boolean).join(' ');
+
+    const cardClasses = [
+        'day-card',
+        isToday && 'today',
+        isPast && 'past',
+        isYesterday && 'yesterday',
+    ].filter(Boolean).join(' ');
+
     return (
         <div
-            className={`day-card-wrapper`}
+            className={wrapperClasses}
             data-date-number={dateNumber}
         >
-            <div className={`day-card ${isToday ? 'today' : ''}`}>
+            {/* Front of card */}
+            <div className={`day-card-front ${cardClasses}`}>
+                {/* Date Watermark */}
+                <span className="date-watermark">{dateNumber}</span>
+
                 {/* Header */}
                 <div className="day-card-header">
                     <div className="day-info">
@@ -89,18 +119,30 @@ export function DayCard({
                         <span className="day-date">{dateStr}</span>
                     </div>
 
-                    {onShuffleDay && (
+                    <div className="day-actions">
                         <button
-                            className="shuffle-btn"
+                            className="flip-btn"
                             onClick={(e) => {
                                 e.stopPropagation();
-                                onShuffleDay();
+                                setIsFlipped(true);
                             }}
-                            title="Slumpa denna dag"
+                            title="Vänd kortet"
                         >
-                            🔀
+                            🔄
                         </button>
-                    )}
+                        {onShuffleDay && (
+                            <button
+                                className="shuffle-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onShuffleDay();
+                                }}
+                                title="Slumpa denna dag"
+                            >
+                                🔀
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Meal Slots */}
@@ -109,6 +151,7 @@ export function DayCard({
                         const planned = meals[meal];
                         const recipe = getRecipe(planned);
                         const protein = getProteinPerServing(recipe, planned);
+                        const suggestions = getSuggestions?.(meal) || [];
 
                         return (
                             <MealSlot
@@ -117,8 +160,12 @@ export function DayCard({
                                 planned={planned}
                                 recipe={recipe}
                                 proteinPerServing={protein}
+                                suggestions={suggestions}
                                 onSelect={() => onMealClick(meal)}
                                 onCook={() => recipe && onCookMeal(meal, recipe)}
+                                onRemove={() => onRemoveMeal?.(meal)}
+                                onQuickSelect={(id) => onQuickSelect?.(meal, id)}
+                                onShuffleMeal={() => onShuffleMeal?.(meal)}
                                 onDragStart={(e) => planned?.recipeId && onDragStart?.(e, meal, planned.recipeId)}
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => onDrop?.(e, meal)}
@@ -127,8 +174,24 @@ export function DayCard({
                     })}
                 </div>
             </div>
+
+            {/* Back of card - flipped state */}
+            <div className="day-card-back">
+                <div className="back-content">
+                    <h3 className="back-title">{DAY_ABBREV[day]} - Ignorerad</h3>
+                    <p className="back-text">Denna dag är vänd/ignorerad</p>
+                    <button
+                        className="unflip-btn"
+                        onClick={() => setIsFlipped(false)}
+                    >
+                        Återställ ↩
+                    </button>
+                </div>
+            </div>
         </div>
     );
 }
 
 export default DayCard;
+
+

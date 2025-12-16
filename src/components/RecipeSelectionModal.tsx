@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { type Recipe, type Weekday, type MealType, type PlannedMeal, MEAL_TYPE_COLORS, MEAL_TYPE_LABELS, WEEKDAY_LABELS } from '../models/types.ts';
 import { useData } from '../context/DataContext.tsx';
 import { useCooking } from '../context/CookingModeProvider.tsx';
@@ -34,8 +34,19 @@ export function RecipeSelectionModal({
     // New: Track ingredient swaps (originalId -> newId)
     const [activeSwaps, setActiveSwaps] = useState<Record<string, string>>(currentPlannedMeal?.swaps || {});
 
+    // ESC key handler
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isOpen) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onClose]);
+
     // Reset state when opening/changing slot
-    React.useEffect(() => {
+    useEffect(() => {
         if (isOpen && currentPlannedMeal?.recipeId) {
             setSelectedRecipeId(currentPlannedMeal.recipeId);
             setActiveSwaps(currentPlannedMeal.swaps || {});

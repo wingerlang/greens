@@ -421,7 +421,143 @@
 
 .day-card.today {
     border: 2px solid var(--accent-primary);
-    box-shadow: 0 0 20px rgba(34, 197, 94, 0.1);
+    box-shadow: 0 0 30px rgba(34, 197, 94, 0.2);
+    background: linear-gradient(135deg, var(--surface), rgba(34, 197, 94, 0.05));
+}
+
+.day-card.today .day-name {
+    color: var(--accent-primary);
+}
+
+.day-card.past {
+    opacity: 0.6;
+}
+
+.day-card.yesterday {
+    opacity: 0.8;
+    border-color: var(--text-secondary);
+}
+
+/* Meal slot header */
+.meal-slot-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.meal-shuffle-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.7rem;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.meal-slot:hover .meal-shuffle-btn {
+    opacity: 0.6;
+}
+
+.meal-shuffle-btn:hover {
+    opacity: 1 !important;
+    background: var(--accent-bg);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+/* Remove button */
+.meal-remove-btn {
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.7rem;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+.meal-slot:hover .meal-remove-btn {
+    opacity: 0.6;
+}
+
+.meal-remove-btn:hover {
+    opacity: 1 !important;
+    background: rgba(239, 68, 68, 0.2);
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+/* Slot actions container */
+.slot-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+/* Hover state with border */
+.meal-slot.hovered {
+    border-color: var(--accent-primary) !important;
+    box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+/* Hover suggestions */
+.empty-content {
+    position: relative;
+}
+
+.hover-suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.5rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+    animation: fadeIn 0.2s ease;
+}
+
+.hover-suggestions .suggestion-chip {
+    padding: 0.3rem 0.5rem;
+    font-size: 0.65rem;
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+}
+
+.hover-suggestions .suggestion-chip:hover {
+    background: rgba(34, 197, 94, 0.15);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+}
+
+/* Swap indicator */
+.swap-indicator {
+    font-size: 0.65rem;
+    color: var(--accent-secondary);
+    margin-top: 0.25rem;
 }
 
 /* ============================================
@@ -526,7 +662,143 @@
 
 /* Hide watermark */
 .date-watermark {
-    display: none;
+    position: absolute;
+    top: 50%;
+    right: 1rem;
+    font-size: 5rem;
+    font-weight: 900;
+    color: var(--text-primary);
+    opacity: 0.03;
+    transform: translateY(-50%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Day actions container */
+.day-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+/* Flip button */
+.flip-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.9rem;
+    opacity: 0.5;
+    transition: all 0.2s ease;
+}
+
+.flip-btn:hover {
+    opacity: 1;
+    background: var(--surface-elevated);
+}
+
+/* Card flip animation */
+.day-card-wrapper {
+    perspective: 1000px;
+    position: relative;
+}
+
+.day-card-wrapper.is-flipped .day-card-front {
+    transform: rotateY(180deg);
+    pointer-events: none;
+}
+
+.day-card-wrapper.is-flipped .day-card-back {
+    transform: rotateY(0deg);
+    pointer-events: auto;
+}
+
+.day-card-front {
+    backface-visibility: hidden;
+    transition: transform 0.5s ease;
+}
+
+.day-card-back {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    backface-visibility: hidden;
+    transform: rotateY(-180deg);
+    transition: transform 0.5s ease;
+    background: var(--surface-elevated);
+    border: 1px dashed var(--border);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.back-content {
+    text-align: center;
+    padding: 1.5rem;
+}
+
+.back-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.back-text {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    margin-bottom: 1rem;
+}
+
+.unflip-btn {
+    padding: 0.5rem 1rem;
+    background: var(--accent-bg);
+    border: 1px solid var(--accent-primary);
+    border-radius: 8px;
+    color: var(--accent-primary);
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.unflip-btn:hover {
+    background: var(--accent-primary);
+    color: #000;
+}
+
+/* Shuffle button */
+.shuffle-btn {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 0.9rem;
+    opacity: 0.5;
+    transition: all 0.2s ease;
+}
+
+.shuffle-btn:hover {
+    opacity: 1;
+    background: var(--accent-bg);
+    border-color: var(--accent-primary);
+    color: var(--accent-primary);
+    transform: rotate(15deg);
 }
 
 /* ============================================
@@ -711,7 +983,7 @@
 }
 
 .macro-pill.p {
-    /* Protein specific styling if needed */
+    color: var(--accent-secondary);
 }
 
 /* Adjust empty text for clarity */
