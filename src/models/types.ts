@@ -155,11 +155,16 @@ export type Weekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday'
 /** Planned meal for a specific day and meal type */
 export interface PlannedMeal {
     recipeId?: string;
+    servings?: number;
     note?: string;
     /** Additional recipe IDs for multiple snacks */
     additionalRecipeIds?: string[];
     /** Ingredient swaps: originalItemId -> newItemId */
     swaps?: Record<string, string>;
+    /** When this meal was cooked */
+    cookedAt?: string;
+    /** Whether logged to CaloriesPage */
+    loggedToCalories?: boolean;
 }
 
 /** Weekly meal plan structure */
