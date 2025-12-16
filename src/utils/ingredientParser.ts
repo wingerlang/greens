@@ -196,7 +196,8 @@ export function calculateIngredientNutrition(
  */
 export function calculateRecipeEstimate(
     ingredientsText: string,
-    foodItems: FoodItem[]
+    foodItems: FoodItem[],
+    swaps?: Record<string, string>
 ): RecipeEstimate {
     const parsed = parseIngredients(ingredientsText);
 
@@ -210,7 +211,18 @@ export function calculateRecipeEstimate(
     let matchedCount = 0;
 
     for (const ingredient of parsed) {
-        const foodItem = matchToFoodItem(ingredient, foodItems);
+        let foodItem = matchToFoodItem(ingredient, foodItems);
+
+        // Apply swap if exists
+        if (foodItem && swaps && swaps[foodItem.id]) {
+            const swappedItem = foodItems.find(f => f.id === swaps[foodItem!.id]);
+            if (swappedItem) {
+                // Use the swapped item, but keep the original quantity/unit from the recipe text
+                // Ideally we might want a conversion factor here, but 1:1 is MVP
+                foodItem = swappedItem;
+            }
+        }
+
         if (foodItem) {
             const { nutrition, price, co2 } = calculateIngredientNutrition(ingredient, foodItem);
             totalCalories += nutrition.calories;

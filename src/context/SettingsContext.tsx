@@ -57,34 +57,34 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
     }, [settings]);
 
     const setTheme = (theme: Theme) => {
-        setSettings(prev => ({ ...prev, theme }));
+        setSettings((prev: UserSettings) => ({ ...prev, theme }));
     };
 
     const toggleTheme = () => {
-        setSettings(prev => ({
+        setSettings((prev: UserSettings) => ({
             ...prev,
             theme: prev.theme === 'dark' ? 'light' : 'dark'
         }));
     };
 
     const setVisibleMeals = (meals: MealType[]) => {
-        setSettings(prev => ({ ...prev, visibleMeals: meals }));
+        setSettings((prev: UserSettings) => ({ ...prev, visibleMeals: meals }));
     };
 
     const toggleMealVisibility = (meal: MealType) => {
-        setSettings(prev => {
+        setSettings((prev: UserSettings) => {
             const isVisible = prev.visibleMeals.includes(meal);
             return {
                 ...prev,
                 visibleMeals: isVisible
-                    ? prev.visibleMeals.filter(m => m !== meal)
+                    ? prev.visibleMeals.filter((m: MealType) => m !== meal)
                     : [...prev.visibleMeals, meal]
             };
         });
     };
 
     const updateSettings = (updates: Partial<UserSettings>) => {
-        setSettings(prev => ({ ...prev, ...updates }));
+        setSettings((prev: UserSettings) => ({ ...prev, ...updates }));
     };
 
     const value: SettingsContextType = {

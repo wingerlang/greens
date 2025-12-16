@@ -42,6 +42,7 @@ const MEAL_CATEGORIES: Record<MealType, string[]> = {
     lunch: ['lunch', 'middag', 'dinner'],
     dinner: ['lunch', 'middag', 'dinner', 'kvällsmat'],
     snack: ['snack', 'mellanmål', 'fika'],
+    beverage: ['dryck', 'dricka', 'beverage', 'drink'],
 };
 
 // Season detection
@@ -335,7 +336,7 @@ export function PlanningPage() {
                             <span className="day-short">{SHORT_WEEKDAY_LABELS[day]}</span>
                         </div>
                         <div className="day-meals">
-                            {(['breakfast', 'lunch', 'dinner', 'snack'] as MealType[]).map(meal => {
+                            {settings.visibleMeals.map(meal => {
                                 const planned = weekPlan[day]?.[meal];
                                 const isSelected = selectedSlot?.day === day && selectedSlot?.meal === meal;
 
@@ -350,7 +351,8 @@ export function PlanningPage() {
                                                 <span className="meal-icon">{
                                                     meal === 'breakfast' ? '🌅' :
                                                         meal === 'lunch' ? '☀️' :
-                                                            meal === 'dinner' ? '🌙' : '🍎'
+                                                            meal === 'dinner' ? '🌙' :
+                                                                meal === 'beverage' ? '🥤' : '🍎'
                                                 }</span>
                                                 <span className="meal-name">{getRecipeName(planned.recipeId)}</span>
                                                 <button

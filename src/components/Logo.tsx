@@ -6,22 +6,23 @@ interface LogoProps {
 }
 
 const SIZES = {
-    sm: { icon: 24, text: '1rem' },
-    md: { icon: 32, text: '1.25rem' },
-    lg: { icon: 48, text: '1.75rem' },
+    sm: { icon: 24, fontSize: 'text-base' },
+    md: { icon: 32, fontSize: 'text-xl' },
+    lg: { icon: 48, fontSize: 'text-3xl' },
 };
 
 export function Logo({ size = 'md', showText = true }: LogoProps) {
-    const { icon, text } = SIZES[size];
+    const { icon, fontSize } = SIZES[size];
 
     return (
-        <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className="flex items-center gap-2 select-none">
             <svg
                 width={icon}
                 height={icon}
                 viewBox="0 0 48 48"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
+                className="text-emerald-500"
             >
                 {/* Leaf shape */}
                 <path
@@ -31,20 +32,20 @@ export function Logo({ size = 'md', showText = true }: LogoProps) {
                 {/* Stem */}
                 <path
                     d="M24 44V28"
-                    stroke="var(--accent-primary)"
+                    className="stroke-emerald-600"
                     strokeWidth="3"
                     strokeLinecap="round"
                 />
                 {/* Leaf veins */}
                 <path
                     d="M24 28C18 24 14 20 14 16"
-                    stroke="rgba(255,255,255,0.3)"
+                    className="stroke-white/30"
                     strokeWidth="2"
                     strokeLinecap="round"
                 />
                 <path
                     d="M24 28C30 24 34 20 34 16"
-                    stroke="rgba(255,255,255,0.3)"
+                    className="stroke-white/30"
                     strokeWidth="2"
                     strokeLinecap="round"
                 />
@@ -56,14 +57,7 @@ export function Logo({ size = 'md', showText = true }: LogoProps) {
                 </defs>
             </svg>
             {showText && (
-                <span
-                    style={{
-                        fontSize: text,
-                        fontWeight: 700,
-                        color: 'var(--text-primary)',
-                        letterSpacing: '-0.02em',
-                    }}
-                >
+                <span className={`${fontSize} font-bold text-slate-100 tracking-tight`}>
                     Greens
                 </span>
             )}

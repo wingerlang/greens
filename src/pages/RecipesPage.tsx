@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
+import { useCooking } from '../context/CookingModeProvider.tsx';
 import { type Recipe, type MealType, MEAL_TYPE_LABELS, generateId } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import './RecipesPage.css';
@@ -30,6 +31,7 @@ const EMPTY_FORM: RecipeFormState = {
 
 export function RecipesPage() {
     const { recipes, addRecipe, updateRecipe, deleteRecipe, foodItems, getRecipeWithNutrition } = useData();
+    const { openRecipe } = useCooking();
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
     const [formData, setFormData] = useState<RecipeFormState>(EMPTY_FORM);
@@ -186,6 +188,18 @@ export function RecipesPage() {
                                         </div>
                                     </div>
                                 )}
+
+                                <div className="recipe-actions">
+                                    <button
+                                        className="btn btn-primary btn-sm"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openRecipe(recipe);
+                                        }}
+                                    >
+                                        🍳 Laga
+                                    </button>
+                                </div>
                             </div>
                         );
                     })}

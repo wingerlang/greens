@@ -31,6 +31,7 @@ const getDefaultData = (): AppData => ({
     recipes: SAMPLE_RECIPES,
     mealEntries: [],
     weeklyPlans: [],
+    pantryItems: [], // Default empty pantry
 });
 
 export class LocalStorageService implements StorageService {
@@ -42,6 +43,10 @@ export class LocalStorageService implements StorageService {
                 // Ensure weeklyPlans exists (migration for older data)
                 if (!data.weeklyPlans) {
                     data.weeklyPlans = [];
+                }
+                // Ensure pantryItems exists (migration)
+                if (!data.pantryItems) {
+                    data.pantryItems = [];
                 }
                 return data;
             }

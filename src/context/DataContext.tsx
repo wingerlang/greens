@@ -4,6 +4,8 @@ import {
     type Recipe,
     type MealEntry,
     type WeeklyPlan,
+    type PlannedMeal,
+    type MealType,
     type AppData,
     type FoodItemFormData,
     type RecipeFormData,
@@ -11,9 +13,13 @@ import {
     type WeeklyPlanFormData,
     type NutritionSummary,
     type RecipeWithNutrition,
+    type AppSettings,
     generateId,
+    getWeekStartDate,
+    getWeekdayFromDate,
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
+import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 
 // ============================================
 // Context Types
@@ -25,6 +31,12 @@ interface DataContextType {
     recipes: Recipe[];
     mealEntries: MealEntry[];
     weeklyPlans: WeeklyPlan[];
+    pantryItems: string[]; // New: Global pantry state
+    userSettings: AppSettings;
+
+    // Pantry CRUD
+    togglePantryItem: (item: string) => void;
+    setPantryItems: (items: string[]) => void;
 
     // FoodItem CRUD
     addFoodItem: (data: FoodItemFormData) => FoodItem;
@@ -48,6 +60,7 @@ interface DataContextType {
     // WeeklyPlan CRUD
     getWeeklyPlan: (weekStartDate: string) => WeeklyPlan | undefined;
     saveWeeklyPlan: (weekStartDate: string, meals: WeeklyPlan['meals']) => void;
+    getPlannedMealsForDate: (date: string) => { mealType: MealType; meal: PlannedMeal }[];
 
     // Computed
     calculateRecipeNutrition: (recipe: Recipe) => NutritionSummary;
@@ -69,6 +82,10 @@ export function DataProvider({ children }: DataProviderProps) {
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [mealEntries, setMealEntries] = useState<MealEntry[]>([]);
     const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
+    const [pantryItems, setPantryItems] = useState<string[]>([]);
+    const [userSettings, setUserSettings] = useState<AppSettings>({
+        visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack']
+    });
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from storage on mount
@@ -79,6 +96,10 @@ export function DataProvider({ children }: DataProviderProps) {
             setRecipes(data.recipes);
             setMealEntries(data.mealEntries);
             setWeeklyPlans(data.weeklyPlans || []);
+            setPantryItems(data.pantryItems || []);
+            if (data.userSettings) {
+                setUserSettings(data.userSettings);
+            }
             setIsLoaded(true);
         };
         loadData();
@@ -87,9 +108,26 @@ export function DataProvider({ children }: DataProviderProps) {
     // Save to storage on changes
     useEffect(() => {
         if (isLoaded) {
-            storageService.save({ foodItems, recipes, mealEntries, weeklyPlans });
+            storageService.save({ foodItems, recipes, mealEntries, weeklyPlans, pantryItems, userSettings });
         }
-    }, [foodItems, recipes, mealEntries, weeklyPlans, isLoaded]);
+    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, userSettings, isLoaded]);
+
+    // ============================================
+    // Pantry CRUD
+    // ============================================
+
+    const togglePantryItem = useCallback((item: string) => {
+        setPantryItems((prev: string[]) => {
+            const next = [...prev];
+            const index = next.indexOf(item);
+            if (index >= 0) {
+                next.splice(index, 1);
+            } else {
+                next.push(item);
+            }
+            return next;
+        });
+    }, []);
 
 
     // ============================================
@@ -104,13 +142,13 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: now,
             updatedAt: now,
         };
-        setFoodItems(prev => [...prev, newItem]);
+        setFoodItems((prev: FoodItem[]) => [...prev, newItem]);
         return newItem;
     }, []);
 
     const updateFoodItem = useCallback((id: string, data: Partial<FoodItemFormData>): void => {
-        setFoodItems(prev =>
-            prev.map(item =>
+        setFoodItems((prev: FoodItem[]) =>
+            prev.map((item: FoodItem) =>
                 item.id === id
                     ? { ...item, ...data, updatedAt: new Date().toISOString() }
                     : item
@@ -119,7 +157,7 @@ export function DataProvider({ children }: DataProviderProps) {
     }, []);
 
     const deleteFoodItem = useCallback((id: string): void => {
-        setFoodItems(prev => prev.filter(item => item.id !== id));
+        setFoodItems((prev: FoodItem[]) => prev.filter((item: FoodItem) => item.id !== id));
     }, []);
 
     const getFoodItem = useCallback((id: string): FoodItem | undefined => {
@@ -138,13 +176,13 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: now,
             updatedAt: now,
         };
-        setRecipes(prev => [...prev, newRecipe]);
+        setRecipes((prev: Recipe[]) => [...prev, newRecipe]);
         return newRecipe;
     }, []);
 
     const updateRecipe = useCallback((id: string, data: Partial<RecipeFormData>): void => {
-        setRecipes(prev =>
-            prev.map(recipe =>
+        setRecipes((prev: Recipe[]) =>
+            prev.map((recipe: Recipe) =>
                 recipe.id === id
                     ? { ...recipe, ...data, updatedAt: new Date().toISOString() }
                     : recipe
@@ -153,7 +191,7 @@ export function DataProvider({ children }: DataProviderProps) {
     }, []);
 
     const deleteRecipe = useCallback((id: string): void => {
-        setRecipes(prev => prev.filter(recipe => recipe.id !== id));
+        setRecipes((prev: Recipe[]) => prev.filter((recipe: Recipe) => recipe.id !== id));
     }, []);
 
     const getRecipe = useCallback((id: string): Recipe | undefined => {
@@ -165,6 +203,19 @@ export function DataProvider({ children }: DataProviderProps) {
     // ============================================
 
     const calculateRecipeNutrition = useCallback((recipe: Recipe): NutritionSummary => {
+        // Use ingredientsText if available (new UI), otherwise use ingredients array
+        if (recipe.ingredientsText && recipe.ingredientsText.trim()) {
+            const estimate = calculateRecipeEstimate(recipe.ingredientsText, foodItems);
+            return {
+                calories: Math.round(estimate.calories),
+                protein: Math.round(estimate.protein * 10) / 10,
+                carbs: Math.round(estimate.carbs * 10) / 10,
+                fat: Math.round(estimate.fat * 10) / 10,
+                fiber: Math.round(estimate.fiber * 10) / 10,
+            };
+        }
+
+        // Fallback to ingredients array
         const summary: NutritionSummary = {
             calories: 0,
             protein: 0,
@@ -225,20 +276,20 @@ export function DataProvider({ children }: DataProviderProps) {
             id: generateId(),
             createdAt: new Date().toISOString(),
         };
-        setMealEntries(prev => [...prev, newEntry]);
+        setMealEntries((prev: MealEntry[]) => [...prev, newEntry]);
         return newEntry;
     }, []);
 
     const updateMealEntry = useCallback((id: string, data: Partial<MealEntryFormData>): void => {
-        setMealEntries(prev =>
-            prev.map(entry =>
+        setMealEntries((prev: MealEntry[]) =>
+            prev.map((entry: MealEntry) =>
                 entry.id === id ? { ...entry, ...data } : entry
             )
         );
     }, []);
 
     const deleteMealEntry = useCallback((id: string): void => {
-        setMealEntries(prev => prev.filter(entry => entry.id !== id));
+        setMealEntries((prev: MealEntry[]) => prev.filter((entry: MealEntry) => entry.id !== id));
     }, []);
 
     const getMealEntriesForDate = useCallback((date: string): MealEntry[] => {
@@ -303,8 +354,8 @@ export function DataProvider({ children }: DataProviderProps) {
     const saveWeeklyPlan = useCallback((weekStartDate: string, meals: WeeklyPlan['meals']): void => {
         const now = new Date().toISOString();
 
-        setWeeklyPlans(prev => {
-            const existingIndex = prev.findIndex(p => p.weekStartDate === weekStartDate);
+        setWeeklyPlans((prev: WeeklyPlan[]) => {
+            const existingIndex = prev.findIndex((p: WeeklyPlan) => p.weekStartDate === weekStartDate);
 
             if (existingIndex >= 0) {
                 // Update existing plan
@@ -328,6 +379,31 @@ export function DataProvider({ children }: DataProviderProps) {
         });
     }, []);
 
+    // Get planned meals for a specific date
+    const getPlannedMealsForDate = useCallback((date: string): { mealType: MealType; meal: PlannedMeal }[] => {
+        const weekStart = getWeekStartDate(new Date(date));
+        const plan = weeklyPlans.find(p => p.weekStartDate === weekStart);
+        if (!plan) return [];
+
+        const weekday = getWeekdayFromDate(date);
+        if (!weekday) return [];
+
+        const dayMeals = plan.meals[weekday];
+        if (!dayMeals) return [];
+
+        const result: { mealType: MealType; meal: PlannedMeal }[] = [];
+        const mealTypes: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+        for (const mealType of mealTypes) {
+            const meal = dayMeals[mealType];
+            if (meal && meal.recipeId) {
+                result.push({ mealType, meal });
+            }
+        }
+
+        return result;
+    }, [weeklyPlans]);
+
     // ============================================
     // Context Value
     // ============================================
@@ -337,6 +413,7 @@ export function DataProvider({ children }: DataProviderProps) {
         recipes,
         mealEntries,
         weeklyPlans,
+        userSettings,
         addFoodItem,
         updateFoodItem,
         deleteFoodItem,
@@ -352,6 +429,10 @@ export function DataProvider({ children }: DataProviderProps) {
         getMealEntriesForDate,
         getWeeklyPlan,
         saveWeeklyPlan,
+        getPlannedMealsForDate,
+        pantryItems,
+        togglePantryItem,
+        setPantryItems,
         calculateRecipeNutrition,
         calculateDailyNutrition,
     };

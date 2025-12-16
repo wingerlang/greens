@@ -139,6 +139,33 @@ export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
         pricePerUnit: 20,
         co2PerUnit: 2.7,
         containsGluten: false,
+        isCooked: false,
+        defaultPortionGrams: 70, // raw
+        gramsPerDl: 85,
+        yieldFactor: 2.5,
+        createdAt: now,
+        updatedAt: now,
+    },
+    {
+        id: 'food-ris-kokt',
+        name: 'Ris (kokt)',
+        description: 'kokt jasmin- eller basmatiris',
+        calories: 130, // Approx for cooked
+        protein: 2.7,
+        carbs: 28,
+        fat: 0.3,
+        fiber: 0.4,
+        unit: 'kg',
+        category: 'grains',
+        storageType: 'fresh',
+        pricePerUnit: 10, // cheaper per kg cooked? irrelevant
+        co2PerUnit: 1.0,
+        containsGluten: false,
+        isCooked: true,
+        defaultPortionGrams: 175,
+        gramsPerDl: 60, // fluffier
+        yieldFactor: 1,
+        linkedItemId: 'food-ris',
         createdAt: now,
         updatedAt: now,
     },
@@ -157,6 +184,10 @@ export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
         pricePerUnit: 15,
         co2PerUnit: 1.1,
         containsGluten: true,
+        isCooked: false,
+        defaultPortionGrams: 75,
+        gramsPerDl: 35, // pasta shapes vary, but 35g/dl for penne/fusilli approx
+        yieldFactor: 2.2,
         createdAt: now,
         updatedAt: now,
     },
@@ -175,6 +206,10 @@ export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
         pricePerUnit: 15,
         co2PerUnit: 0.6,
         containsGluten: true,
+        isCooked: false,
+        defaultPortionGrams: 40, // standard porridge portion
+        gramsPerDl: 40,
+        yieldFactor: 1, // distinct usage mostly
         createdAt: now,
         updatedAt: now,
     },
@@ -193,6 +228,10 @@ export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
         pricePerUnit: 60,
         co2PerUnit: 1.0,
         containsGluten: false,
+        isCooked: false,
+        defaultPortionGrams: 60,
+        gramsPerDl: 85,
+        yieldFactor: 3,
         createdAt: now,
         updatedAt: now,
     },
@@ -791,6 +830,38 @@ Fluffa couscousen med en gaffel.
 Lägg på kikärtor, paprika och spenat.
 Ringla över olivolja och citronsaft.`,
         totalWeight: 500,
+        createdAt: now,
+        updatedAt: now,
+    },
+    {
+        id: 'recipe-stress-test',
+        name: 'The Ultimate Stress Test',
+        description: 'TEST: Komplex rätt med timers, återanvändning och enheter.',
+        servings: 4,
+        prepTime: 30,
+        cookTime: 45,
+        mealType: 'dinner',
+        ingredients: [],
+        instructions: [],
+        ingredientsText: `4 port ris
+200g tofu
+2 msk sojasås
+1 lök
+2 vitlöksklyftor
+1 burk kikärtor
+1 dl havregrädde
+1 tsk sriracha
+0.5 dl vatten`,
+        instructionsText: `Koka riset enligt förpackningen.
+Tärna tofun fint. Hacka löken.
+Stek tofun i lite olja tills gyllene (ca 5 min). Lägg åt sidan.
+I samma panna: Fräs den hackade löken tills mjuk.
+Tillsätt vitlök och kikärtor. Stek i 2 min.
+Häll i den stekta tofun och sojasås.
+Tillsätt havregrädde, sriracha och vatten.
+Låt puttra i 5 minuter.
+Servera med riset.`,
+        totalWeight: 1000,
         createdAt: now,
         updatedAt: now,
     },

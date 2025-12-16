@@ -1,48 +1,22 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
-import { useSettings } from '../context/SettingsContext.tsx';
+import { useCooking } from '../context/CookingModeProvider.tsx';
 import {
     type Weekday,
     type MealType,
-    type PlannedMeal,
     type WeeklyPlan,
+    type PlannedMeal,
     WEEKDAY_LABELS,
     WEEKDAYS,
     MEAL_TYPE_LABELS,
+    MEAL_TYPE_COLORS,
     getWeekStartDate,
     getISODate,
 } from '../models/types.ts';
-import { parseIngredients, matchToFoodItem, calculateRecipeEstimate } from '../utils/ingredientParser.ts';
-import './WeeklyPage.css';
-
-// Short weekday labels for compact display
-const SHORT_WEEKDAY_LABELS: Record<Weekday, string> = {
-    monday: 'MÅN',
-    tuesday: 'TIS',
-    wednesday: 'ONS',
-    thursday: 'TOR',
-    friday: 'FRE',
-    saturday: 'LÖR',
-    sunday: 'SÖN',
-};
-
-// Types for local state
-interface WeekPlan {
-    [key: string]: {  // weekday
-        [key: string]: PlannedMeal;  // mealType
-    };
-}
-
-// All meal types for nutrition calculations
-const ALL_MEAL_TYPES: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-
-// Shopping list item with day/meal references
-interface ShoppingItem {
-    name: string;
-    category: string;
-    dayMeals: { day: Weekday; meal: MealType }[];  // Track which days/meals need this
-    storageType: string;
-}
+import { RecipeSelectionModal } from '../components/RecipeSelectionModal.tsx';
+import { useSmartSuggestions } from '../hooks/useSmartSuggestions.ts';
+import { useShoppingList } from '../hooks/useShoppingList.ts';
+import { ShoppingListView } from '../components/ShoppingListView.tsx';
 
 // Meal abbreviations for display
 const MEAL_ABBREV: Record<MealType, string> = {
@@ -50,118 +24,164 @@ const MEAL_ABBREV: Record<MealType, string> = {
     lunch: 'L',
     dinner: 'M',
     snack: 'S',
+    beverage: 'D',
 };
 
 export function WeeklyPage() {
-    const { recipes, foodItems, getWeeklyPlan, saveWeeklyPlan } = useData();
-    const { settings } = useSettings();
+    const {
+        recipes,
+        weeklyPlans,
+        saveWeeklyPlan,
+        userSettings,
+        foodItems,
+        pantryItems, // Global pantry state
+        togglePantryItem
+    } = useData();
 
-    const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate());
-    const [weekPlan, setWeekPlan] = useState<WeekPlan>({});
+    // State
+    const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStartDate());
+    const [weekPlan, setWeekPlan] = useState<WeeklyPlan['meals']>();
     const [isPlannerOpen, setIsPlannerOpen] = useState(false);
     const [editingSlot, setEditingSlot] = useState<{ day: Weekday; meal: MealType } | null>(null);
-    const [selectedRecipeId, setSelectedRecipeId] = useState('');
 
-    // Load week plan from storage when week changes
+    // Initial load try/catch
     useEffect(() => {
-        const savedPlan = getWeeklyPlan(currentWeekStart);
-        if (savedPlan) {
-            setWeekPlan(savedPlan.meals as WeekPlan);
-        } else {
-            setWeekPlan({});
-        }
-    }, [currentWeekStart, getWeeklyPlan]);
+        console.log('WeeklyPage: Loading plan for', currentWeekStart);
+        console.log('WeeklyPage: Available plans:', weeklyPlans);
+        try {
+            const plan = weeklyPlans?.find(p => p.weekStartDate === currentWeekStart);
+            console.log('WeeklyPage: Found plan:', plan);
 
-    // Save week plan when it changes
+            if (plan) {
+                setWeekPlan(plan.meals);
+            } else {
+                // New empty plan
+                setWeekPlan({
+                    monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {}
+                });
+            }
+        } catch (e) {
+            console.error('WeeklyPage: Error loading plan', e);
+        }
+    }, [currentWeekStart, weeklyPlans]);
+
+    // Save on change
     useEffect(() => {
-        if (Object.keys(weekPlan).length > 0) {
-            saveWeeklyPlan(currentWeekStart, weekPlan as WeeklyPlan['meals']);
+        if (weekPlan) {
+            saveWeeklyPlan({
+                weekStartDate: currentWeekStart,
+                meals: weekPlan
+            });
         }
-    }, [weekPlan, currentWeekStart, saveWeeklyPlan]);
+    }, [weekPlan, currentWeekStart]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Calculate week number
-    const weekNumber = useMemo(() => {
-        const date = new Date(currentWeekStart);
-        const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-        const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
-        return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-    }, [currentWeekStart]);
+    // --- Hooks ---
+    const { getSuggestions } = useSmartSuggestions(recipes, weeklyPlans);
 
-    // Get date for a specific weekday
-    const getDateForWeekday = (day: Weekday): Date => {
-        const dayIndex = WEEKDAYS.indexOf(day);
-        const date = new Date(currentWeekStart);
-        date.setDate(date.getDate() + dayIndex);
-        return date;
+    const visibleMeals = userSettings.visibleMeals;
+
+    const { shoppingList, totalItems, handleCopyShoppingList } = useShoppingList(
+        weekPlan || { monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {} }, // Safe fallback
+        recipes,
+        foodItems,
+        pantryItems,
+        visibleMeals
+    );
+
+    const { openRecipe } = useCooking();
+
+    // --- Handlers ---
+
+    const handleWeekChange = (offset: number) => {
+        const d = new Date(currentWeekStart);
+        d.setDate(d.getDate() + (offset * 7));
+        setCurrentWeekStart(getISODate(d));
     };
 
-    // Format date for display (e.g., "8 DEC.")
-    const formatDayDate = (day: Weekday): string => {
-        const date = getDateForWeekday(day);
-        const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEC'];
-        return `${date.getDate()} ${months[date.getMonth()]}.`;
+    const handleDragStart = (e: React.DragEvent, recipeId: string) => {
+        e.dataTransfer.setData('recipeId', recipeId);
+        e.dataTransfer.effectAllowed = 'copy';
     };
 
-    // Check if a day is today
-    const isToday = (day: Weekday): boolean => {
-        const dayDate = getDateForWeekday(day);
-        const today = new Date();
-        return dayDate.toDateString() === today.toDateString();
+    const handleDrop = (e: React.DragEvent, day: Weekday, meal: MealType) => {
+        e.preventDefault();
+        const recipeId = e.dataTransfer.getData('recipeId');
+        if (recipeId) {
+            setWeekPlan((prev: WeeklyPlan['meals'] | undefined) => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    [day]: {
+                        ...prev[day],
+                        [meal]: { recipeId, servings: 1 }
+                    }
+                };
+            });
+        }
     };
 
-    // Navigate weeks
-    const navigateWeek = (direction: number) => {
-        const newDate = new Date(currentWeekStart);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        setCurrentWeekStart(getISODate(newDate));
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
     };
 
-    // Get meal for a slot
     const getMealForSlot = (day: Weekday, meal: MealType): PlannedMeal | undefined => {
-        return weekPlan[day]?.[meal];
+        return weekPlan?.[day]?.[meal];
     };
 
-    // Get recipe name
-    const getRecipeName = (recipeId: string): string => {
-        const recipe = recipes.find(r => r.id === recipeId);
-        return recipe?.name || 'Okänt recept';
+    const handleSlotClick = (day: Weekday, meal: MealType) => {
+        setEditingSlot({ day, meal });
+        setIsPlannerOpen(true);
     };
 
-    // Get recipe object
-    const getRecipe = (recipeId: string) => {
-        return recipes.find(r => r.id === recipeId);
-    };
-
-    // Handle save meal
-    const handleSaveMeal = () => {
-        if (!editingSlot) return;
-
-        setWeekPlan((prev: WeekPlan) => ({
-            ...prev,
-            [editingSlot.day]: {
-                ...prev[editingSlot.day],
-                [editingSlot.meal]: selectedRecipeId ? {
-                    recipeId: selectedRecipeId,
-                    servings: 1,
-                } : undefined,
-            },
-        }));
-
-        setIsPlannerOpen(false);
-        setEditingSlot(null);
-        setSelectedRecipeId('');
-    };
-
-    // Handle remove meal
     const handleRemoveMeal = () => {
-        if (!editingSlot) return;
-
-        setWeekPlan((prev: WeekPlan) => {
-            const dayPlan = { ...prev[editingSlot.day] };
-            delete dayPlan[editingSlot.meal];
+        if (!editingSlot || !weekPlan) return;
+        setWeekPlan((prev: WeeklyPlan['meals'] | undefined) => {
+            if (!prev) return prev;
             return {
                 ...prev,
-                [editingSlot.day]: dayPlan,
+                [editingSlot.day]: {
+                    ...prev[editingSlot.day],
+                    [editingSlot.meal]: undefined
+                }
+            };
+        });
+        setIsPlannerOpen(false);
+        setEditingSlot(null);
+    };
+
+    const handleSaveMeal = (recipeId?: string, swaps?: Record<string, string>) => {
+        if (!editingSlot || !weekPlan || !recipeId) return;
+
+        setWeekPlan((prev: WeeklyPlan['meals'] | undefined) => {
+            if (!prev) return prev;
+            const existing = prev[editingSlot.day]?.[editingSlot.meal];
+
+            // If snack and already has recipe, add as additional
+            if (editingSlot.meal === 'snack' && existing?.recipeId && recipeId !== existing.recipeId) {
+                return {
+                    ...prev,
+                    [editingSlot.day]: {
+                        ...prev[editingSlot.day],
+                        snack: {
+                            ...existing,
+                            additionalRecipeIds: [...(existing.additionalRecipeIds || []), recipeId]
+                        }
+                    }
+                };
+            }
+
+            // Normal replace or update
+            return {
+                ...prev,
+                [editingSlot.day]: {
+                    ...prev[editingSlot.day],
+                    [editingSlot.meal]: {
+                        recipeId,
+                        servings: 1,
+                        swaps // Check if undefined is fine, types say optional
+                    }
+                }
             };
         });
 
@@ -169,293 +189,161 @@ export function WeeklyPage() {
         setEditingSlot(null);
     };
 
-    // Generate shopping list from week's recipes
-    const shoppingList = useMemo(() => {
-        const items: Map<string, ShoppingItem> = new Map();
+    const getRecipe = (id?: string) => recipes.find(r => r.id === id);
 
-        WEEKDAYS.forEach(day => {
-            ALL_MEAL_TYPES.forEach((meal: MealType) => {
-                const planned = weekPlan[day]?.[meal];
-                if (planned?.recipeId) {
-                    const recipe = getRecipe(planned.recipeId);
-                    if (recipe?.ingredientsText) {
-                        const parsed = parseIngredients(recipe.ingredientsText);
-                        parsed.forEach(ingredient => {
-                            const matched = matchToFoodItem(ingredient, foodItems);
-                            const key = ingredient.name.toLowerCase();
-
-                            if (items.has(key)) {
-                                const existing = items.get(key)!;
-                                // Add day/meal if not already tracked
-                                const hasDayMeal = existing.dayMeals.some(
-                                    dm => dm.day === day && dm.meal === meal
-                                );
-                                if (!hasDayMeal) {
-                                    existing.dayMeals.push({ day, meal });
-                                }
-                            } else {
-                                items.set(key, {
-                                    name: ingredient.name,
-                                    category: matched?.category || 'other',
-                                    dayMeals: [{ day, meal }],
-                                    storageType: matched?.storageType || 'pantry',
-                                });
-                            }
-                        });
-                    }
-                }
-            });
-        });
-
-        // Group by storage type
-        const grouped: Record<string, ShoppingItem[]> = {
-            fresh: [],
-            frozen: [],
-            pantry: [],
-        };
-
-        items.forEach(item => {
-            const type = item.storageType as keyof typeof grouped;
-            if (grouped[type]) {
-                grouped[type].push(item);
-            } else {
-                grouped.pantry.push(item);
-            }
-        });
-
-        return grouped;
-    }, [weekPlan, recipes, foodItems]);
-
-    // Format day/meal labels for an item
-    const formatDayMeals = (dayMeals: { day: Weekday; meal: MealType }[]): string => {
-        return dayMeals
-            .map(dm => `${SHORT_WEEKDAY_LABELS[dm.day]} ${MEAL_ABBREV[dm.meal]}`)
-            .join(', ');
-    };
-
-    // Copy shopping list to clipboard
-    const handleCopyShoppingList = () => {
-        const lines: string[] = [];
-
-        Object.entries(shoppingList).forEach(([storageType, items]) => {
-            if (items.length > 0) {
-                lines.push(storageLables[storageType]);
-                items.forEach(item => {
-                    const dayLabels = formatDayMeals(item.dayMeals);
-                    lines.push(`☐ ${item.name} — ${dayLabels}`);
-                });
-                lines.push('');
-            }
-        });
-
-        navigator.clipboard.writeText(lines.join('\n'));
-        // Could add toast notification here
-    };
-
-    // Category labels for shopping list
-    const storageLables: Record<string, string> = {
-        fresh: '🥬 Färskvaror',
-        frozen: '❄️ Frysvaror',
-        pantry: '🏠 Skafferi',
-    };
-
-    // Count items for price estimate
-    const totalItems = useMemo(() => {
-        return Object.values(shoppingList).flat().length;
-    }, [shoppingList]);
+    if (!weekPlan) return <div className="p-8 text-center text-slate-500">Laddar veckoplan...</div>;
 
     return (
-        <div className="weekly-page">
-            {/* Header with week navigation */}
-            <header className="weekly-header">
-                <h1>Veckans Meny</h1>
-                <div className="week-nav">
-                    <button className="nav-btn" onClick={() => navigateWeek(-1)}>‹</button>
-                    <div className="week-display">
-                        <span className="week-label">VECKA</span>
-                        <span className="week-number">{weekNumber}</span>
-                    </div>
-                    <button className="nav-btn" onClick={() => navigateWeek(1)}>›</button>
+        <div className="max-w-7xl mx-auto pb-24">
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-8">
+                <div>
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent">Veckoplanering</h1>
+                    <p className="text-slate-400 mt-1">Planera för vecka {getISODate(new Date(currentWeekStart)).substring(5)}</p>
                 </div>
-            </header>
-
-            {/* Day cards grid */}
-            <div className="days-grid">
-                {WEEKDAYS.map(day => {
-                    const dayMeals = settings.visibleMeals.filter(meal => getMealForSlot(day, meal)?.recipeId);
-                    const today = isToday(day);
-
-                    return (
-                        <div key={day} className={`day-card ${today ? 'today' : ''}`}>
-                            <div className="day-card-header">
-                                <div className="day-info">
-                                    <span className="day-name">{SHORT_WEEKDAY_LABELS[day]}</span>
-                                    <span className="day-date">{formatDayDate(day)}</span>
-                                </div>
-                                <button className="add-btn" title="Lägg till måltid">⇆</button>
-                            </div>
-
-                            {/* Date watermark */}
-                            <div className="date-watermark">
-                                {getDateForWeekday(day).getDate()} {['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEC'][getDateForWeekday(day).getMonth()]}.
-                            </div>
-
-                            {/* Meal slots */}
-                            <div className="day-meals">
-                                {settings.visibleMeals.map(meal => {
-                                    const planned = getMealForSlot(day, meal);
-                                    const hasRecipe = !!planned?.recipeId;
-                                    const recipe = hasRecipe ? getRecipe(planned.recipeId!) : null;
-
-                                    return (
-                                        <div
-                                            key={meal}
-                                            className={`meal-slot ${hasRecipe ? 'has-recipe' : 'empty'}`}
-                                            onClick={() => {
-                                                setEditingSlot({ day, meal });
-                                                setSelectedRecipeId(planned?.recipeId || '');
-                                                setIsPlannerOpen(true);
-                                            }}
-                                        >
-                                            <span className="meal-type">{MEAL_TYPE_LABELS[meal].toUpperCase()}</span>
-                                            {hasRecipe ? (
-                                                <>
-                                                    <span className="recipe-name">{getRecipeName(planned.recipeId!)}</span>
-                                                    {recipe && (
-                                                        <div className="recipe-meta">
-                                                            <span>⏱️ {(recipe.prepTime || 0) + (recipe.cookTime || 0)}m</span>
-                                                            <span>🍽️ {recipe.servings}</span>
-                                                        </div>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <span className="empty-text">+ Lägg till</span>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    );
-                })}
+                <div className="flex items-center gap-4 bg-slate-900/50 p-1.5 rounded-xl border border-slate-700/50">
+                    <button onClick={() => handleWeekChange(-1)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors">◀</button>
+                    <span className="font-mono font-bold text-slate-200 min-w-[100px] text-center">{currentWeekStart}</span>
+                    <button onClick={() => handleWeekChange(1)} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors">▶</button>
+                </div>
             </div>
 
-            {/* Shopping List */}
-            {totalItems > 0 && (
-                <section className="shopping-section">
-                    <div className="shopping-header">
-                        <h2>🛒 Att Handla</h2>
-                        <button
-                            className="btn btn-secondary btn-sm copy-btn"
-                            onClick={handleCopyShoppingList}
-                            title="Kopiera listan"
-                        >
-                            📋 Kopiera
-                        </button>
-                    </div>
-                    <p className="shopping-hint">
-                        Format: vara — dag/måltid (F=frukost, L=lunch, M=middag, S=snacks)
-                    </p>
+            {/* Shopping List Component */}
+            <ShoppingListView
+                shoppingList={shoppingList}
+                pantryItems={new Set(pantryItems)}
+                togglePantryItem={togglePantryItem}
+                totalItems={totalItems}
+                onCopy={handleCopyShoppingList}
+            />
 
-                    <div className="shopping-list">
-                        {Object.entries(shoppingList).map(([storageType, items]) => (
-                            (items as ShoppingItem[]).length > 0 && (
-                                <div key={storageType} className="shopping-category">
-                                    <h3 className="category-title">{storageLables[storageType]}</h3>
-                                    <div className="shopping-items">
-                                        {(items as ShoppingItem[]).map((item, idx) => (
-                                            <label key={idx} className="shopping-item">
-                                                <input type="checkbox" />
-                                                <div className="item-content">
-                                                    <span className="item-name">{item.name}</span>
-                                                    <span className="item-days">
-                                                        {formatDayMeals(item.dayMeals)}
-                                                    </span>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
+            {/* Planning Grid */}
+            <div className="overflow-x-auto pb-4">
+                <div className="min-w-[1000px] grid grid-cols-[100px_repeat(7,1fr)] gap-2">
+                    {/* Header Row */}
+                    <div className="sticky left-0 z-20"></div>
+                    {WEEKDAYS.map(day => (
+                        <div key={day} className="text-center p-3 bg-slate-900/80 rounded-xl border border-slate-800 backdrop-blur-sm">
+                            <div className="font-bold text-slate-200 capitalize">{WEEKDAY_LABELS[day]}</div>
+                        </div>
+                    ))}
+
+                    {/* Meal Rows */}
+                    {visibleMeals.map(meal => (
+                        <React.Fragment key={meal}>
+                            <div className="sticky left-0 z-10 flex items-center justify-center bg-slate-900/90 border border-slate-800 rounded-xl backdrop-blur-sm">
+                                <div className="text-center">
+                                    <div className="font-bold text-slate-300 text-sm">{MEAL_TYPE_LABELS[meal]}</div>
+                                    <div className="text-xs text-slate-500 font-mono mt-1 opacity-50">{MEAL_ABBREV[meal]}</div>
                                 </div>
-                            )
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            {/* Planner Modal */}
-            {isPlannerOpen && editingSlot && (
-                <div className="modal-overlay" onClick={() => setIsPlannerOpen(false)}>
-                    <div className="modal" onClick={(e) => e.stopPropagation()}>
-                        <div className="modal-header">
-                            <h2>
-                                {WEEKDAY_LABELS[editingSlot.day]} - {MEAL_TYPE_LABELS[editingSlot.meal]}
-                            </h2>
-                            <button className="close-btn" onClick={() => setIsPlannerOpen(false)}>×</button>
-                        </div>
-
-                        <div className="form-group">
-                            <label>Välj recept</label>
-                            <select
-                                value={selectedRecipeId}
-                                onChange={(e) => setSelectedRecipeId(e.target.value)}
-                            >
-                                <option value="">-- Inget recept --</option>
-                                {recipes.map(recipe => (
-                                    <option key={recipe.id} value={recipe.id}>
-                                        {recipe.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        {selectedRecipeId && (
-                            <div className="recipe-preview">
-                                {(() => {
-                                    const recipe = getRecipe(selectedRecipeId);
-                                    if (!recipe) return null;
-                                    // Use calculateRecipeEstimate for accurate nutrition from ingredientsText
-                                    const estimate = recipe.ingredientsText
-                                        ? calculateRecipeEstimate(recipe.ingredientsText, foodItems)
-                                        : null;
-                                    const perServing = estimate ? {
-                                        calories: Math.round(estimate.calories / recipe.servings),
-                                        protein: Math.round(estimate.protein / recipe.servings),
-                                    } : null;
-                                    return (
-                                        <>
-                                            <p className="preview-desc">{recipe.description}</p>
-                                            {perServing && perServing.calories > 0 && (
-                                                <div className="preview-stats">
-                                                    <span>🔥 {perServing.calories} kcal</span>
-                                                    <span>💪 {perServing.protein}g protein</span>
-                                                </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
                             </div>
-                        )}
 
-                        <div className="form-actions">
-                            {getMealForSlot(editingSlot.day, editingSlot.meal)?.recipeId && (
-                                <button
-                                    type="button"
-                                    className="btn btn-danger"
-                                    onClick={handleRemoveMeal}
-                                >
-                                    Ta bort
-                                </button>
-                            )}
-                            <button type="button" className="btn btn-secondary" onClick={() => setIsPlannerOpen(false)}>
-                                Avbryt
-                            </button>
-                            <button type="button" className="btn btn-primary" onClick={handleSaveMeal}>
-                                Spara
-                            </button>
-                        </div>
-                    </div>
+                            {WEEKDAYS.map(day => {
+                                const planned = getMealForSlot(day, meal);
+                                const recipe = getRecipe(planned?.recipeId);
+                                const suggestions = !planned ? getSuggestions(day, meal) : [];
+
+                                return (
+                                    <div
+                                        key={`${day}-${meal}`}
+                                        className={`
+                                            min-h-[140px] relative group rounded-xl border-2 transition-all p-2 flex flex-col gap-2
+                                            ${planned
+                                                ? 'bg-slate-800/40 border-slate-700 hover:border-emerald-500/30 hover:bg-slate-800/60'
+                                                : 'bg-slate-900/20 border-dashed border-slate-800 hover:border-slate-600 hover:bg-slate-800/20'
+                                            }
+                                        `}
+                                        onDragOver={handleDragOver}
+                                        onDrop={(e) => handleDrop(e, day, meal)}
+                                        onClick={() => handleSlotClick(day, meal)}
+                                    >
+                                        {planned ? (
+                                            <>
+                                                {recipe ? (
+                                                    <div draggable onDragStart={(e) => handleDragStart(e, recipe.id)} className="cursor-move h-full flex flex-col">
+                                                        <div className="flex-1">
+                                                            <div className={`text-xs font-bold uppercase tracking-wider mb-1 px-1.5 py-0.5 rounded-md w-fit ${MEAL_TYPE_COLORS[recipe.mealType || 'dinner']}`}>
+                                                                {recipe.name.length > 20 ? recipe.name.substring(0, 20) + '...' : recipe.name}
+                                                            </div>
+                                                            {planned.note && <div className="text-xs text-slate-400 italic mb-1">"{planned.note}"</div>}
+                                                            <div className="flex items-center gap-2 mt-auto">
+                                                                <span className="text-xs text-slate-500">⏳ {recipe.cookTime}m</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="mt-2 flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                className="p-1.5 hover:bg-emerald-500/20 rounded-lg text-slate-400 hover:text-emerald-400 transition-colors"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    openRecipe(recipe.id);
+                                                                }}
+                                                            >
+                                                                👨‍🍳 Laga
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-xs text-rose-400">Recept saknas</div>
+                                                )}
+
+                                                {/* Additional Items (Snacks) */}
+                                                {planned.additionalRecipeIds?.map(aid => {
+                                                    const ar = getRecipe(aid);
+                                                    if (!ar) return null;
+                                                    return (
+                                                        <div key={aid} className="text-xs bg-slate-900/50 p-1 rounded border border-slate-700/50 text-slate-400 truncate">
+                                                            + {ar.name}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </>
+                                        ) : (
+                                            /* Empty Slot Suggestions */
+                                            <div className="h-full flex flex-col justify-center">
+                                                {suggestions.length > 0 ? (
+                                                    <div className="flex flex-col gap-1.5">
+                                                        {suggestions.slice(0, 2).map((s) => (
+                                                            <div
+                                                                key={s.recipe.id}
+                                                                className="text-[10px] p-1.5 bg-slate-800/80 hover:bg-emerald-500/10 hover:text-emerald-300 border border-slate-700/50 rounded-lg cursor-pointer transition-colors text-slate-400 truncate text-left"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleSaveMeal(s.recipe.id);
+                                                                }}
+                                                            >
+                                                                {s.reasons[0].includes('Fredag') ? '🔥' : '✨'} {s.recipe.name}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <span className="text-2xl opacity-20 text-slate-500">+</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </React.Fragment>
+                    ))}
                 </div>
-            )}
+            </div>
+
+            {/* Modals */}
+            <RecipeSelectionModal
+                isOpen={isPlannerOpen}
+                onClose={() => setIsPlannerOpen(false)}
+                editingSlot={editingSlot}
+                currentPlannedMeal={editingSlot ? getMealForSlot(editingSlot.day, editingSlot.meal) : undefined}
+                onSelectRecipe={() => { }} // Internal state in modal mostly used now
+                onRemoveMeal={handleRemoveMeal}
+                onSave={(id, swaps) => handleSaveMeal(id, swaps)}
+                getSuggestions={getSuggestions}
+            />
         </div>
     );
 }
+
+export default WeeklyPage;

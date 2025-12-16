@@ -6,17 +6,24 @@
 export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l';
 
 /** Meal type for calorie tracking entries */
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'beverage';
 
 /** Food category for organizing the database (vegan only) */
 export type FoodCategory =
-    | 'vegetables'
-    | 'fruits'
-    | 'grains'
-    | 'legumes'
-    | 'protein'
-    | 'fats'
-    | 'beverages'
+    | 'vegetables'     // Grönsaker
+    | 'fruits'         // Frukter
+    | 'grains'         // Spannmål, ris, pasta
+    | 'legumes'        // Baljväxter (linser, bönor, kikärtor)
+    | 'protein'        // Proteinrika (tofu, tempeh, seitan)
+    | 'fats'           // Fetter/oljor
+    | 'beverages'      // Drycker
+    | 'dairy-alt'      // Mejerialternativ (havremjölk, veganost)
+    | 'nuts-seeds'     // Nötter och frön
+    | 'spices'         // Kryddor och örter
+    | 'condiments'     // Smaksättare (soja, miso, vinäger)
+    | 'sauces'         // Färdiga såser
+    | 'sweeteners'     // Sötningsmedel (sirap, socker)
+    | 'baking'         // Bakvaror (mjöl, bakpulver)
     | 'other';
 
 /** Food storage type */
@@ -40,7 +47,7 @@ export interface UserSettings {
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
-    theme: 'dark',
+    theme: 'light',
     visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack'],
     dailyCalorieGoal: 2000,
     dailyProteinGoal: 150,
@@ -73,6 +80,10 @@ export interface FoodItem {
     co2PerUnit?: number;        // CO2 emission in kg per unit
     containsGluten?: boolean;   // Whether the item contains gluten
     isCooked?: boolean;         // Whether this is the cooked version (affects kcal)
+    defaultPortionGrams?: number; // Default portion size in grams (e.g., banana = 120g)
+    gramsPerDl?: number;        // Weight in grams for 1 dl
+    yieldFactor?: number;       // Cooked weight / Raw weight (e.g. 2.5 for rice)
+    linkedItemId?: string;      // ID of the corresponding raw/cooked version
     createdAt: string;
     updatedAt: string;
 }
@@ -145,6 +156,10 @@ export type Weekday = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday'
 export interface PlannedMeal {
     recipeId?: string;
     note?: string;
+    /** Additional recipe IDs for multiple snacks */
+    additionalRecipeIds?: string[];
+    /** Ingredient swaps: originalItemId -> newItemId */
+    swaps?: Record<string, string>;
 }
 
 /** Weekly meal plan structure */
@@ -199,6 +214,8 @@ export interface AppData {
     recipes: Recipe[];
     mealEntries: MealEntry[];
     weeklyPlans?: WeeklyPlan[];
+    pantryItems?: string[]; // New: List of ingredient names user has at home
+    userSettings?: AppSettings;
 }
 
 /** Generate a unique ID */
@@ -234,7 +251,17 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
     breakfast: 'Frukost',
     lunch: 'Lunch',
     dinner: 'Middag',
-    snack: 'Mellanmål'
+    snack: 'Mellanmål',
+    beverage: 'Dryck'
+};
+
+/** Meal type colors for UI */
+export const MEAL_TYPE_COLORS: Record<MealType, string> = {
+    breakfast: 'text-amber-400 bg-amber-500/10',
+    lunch: 'text-sky-400 bg-sky-500/10',
+    dinner: 'text-emerald-400 bg-emerald-500/10',
+    snack: 'text-violet-400 bg-violet-500/10',
+    beverage: 'text-cyan-400 bg-cyan-500/10',
 };
 
 /** Weekday display labels (Swedish) */
@@ -251,6 +278,12 @@ export const WEEKDAY_LABELS: Record<Weekday, string> = {
 /** Ordered weekdays array */
 export const WEEKDAYS: Weekday[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 
+export interface AppSettings {
+    visibleMeals: MealType[];
+    calorieTarget?: number;
+    theme?: 'light' | 'dark';
+}
+
 /** Category display labels (Swedish, vegan only) */
 export const CATEGORY_LABELS: Record<FoodCategory, string> = {
     vegetables: 'Grönsaker',
@@ -260,6 +293,29 @@ export const CATEGORY_LABELS: Record<FoodCategory, string> = {
     protein: 'Protein',
     fats: 'Fett & Oljor',
     beverages: 'Drycker',
+    'dairy-alt': 'Mejerialternativ',
+    'nuts-seeds': 'Nötter & Frön',
+    spices: 'Kryddor',
+    condiments: 'Smaksättare',
+    sauces: 'Såser',
+    sweeteners: 'Sötningsmedel',
+    baking: 'Bakvaror',
     other: 'Övrigt'
 };
+
+/**
+ * Get weekday key from ISO date string
+ * @param date ISO date string (YYYY-MM-DD)
+ * @returns Weekday key or null if invalid
+ */
+export function getWeekdayFromDate(date: string): Weekday | null {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return null;
+
+    // getDay() returns 0-6 where 0 is Sunday
+    const jsDay = d.getDay();
+    // Convert to Monday-first index: 0=Mon, 1=Tue, ..., 6=Sun
+    const weekdayIndex = jsDay === 0 ? 6 : jsDay - 1;
+    return WEEKDAYS[weekdayIndex];
+}
 
