@@ -2,14 +2,15 @@
  * MealSlot - Individual meal slot within a day card
  */
 
-import React, { useState } from 'react';
-import { type MealType, type PlannedMeal, type Recipe, MEAL_TYPE_LABELS, MEAL_TYPE_COLORS } from '../../models/types.ts';
+import React, { useState, useMemo } from 'react';
+import { type MealType, type PlannedMeal, type Recipe, type FoodItem, MEAL_TYPE_LABELS, MEAL_TYPE_COLORS } from '../../models/types.ts';
 
 interface MealSlotProps {
     meal: MealType;
     planned: PlannedMeal | undefined;
     recipe: Recipe | undefined;
     proteinPerServing?: number;
+    foodItems?: FoodItem[]; // For looking up swap details
     suggestions?: Recipe[];
     onSelect: () => void;
     onCook: () => void;
@@ -26,6 +27,7 @@ export function MealSlot({
     planned,
     recipe,
     proteinPerServing,
+    foodItems = [],
     suggestions = [],
     onSelect,
     onCook,
@@ -39,8 +41,23 @@ export function MealSlot({
     const [isHovered, setIsHovered] = useState(false);
     const hasRecipe = !!planned?.recipeId && !!recipe;
     const isCooked = !!planned?.cookedAt;
+    const hasSwaps = !!(planned?.swaps && Object.keys(planned.swaps).length > 0);
 
     const colorClass = MEAL_TYPE_COLORS[meal] || 'text-slate-400 bg-slate-500/10';
+
+    // Build swap tooltip text
+    const swapTooltip = useMemo(() => {
+        if (!hasSwaps || !planned?.swaps) return '';
+        const lines: string[] = [];
+        Object.entries(planned.swaps).forEach(([originalId, newId]) => {
+            const original = foodItems.find(f => f.id === originalId);
+            const replacement = foodItems.find(f => f.id === newId);
+            if (original && replacement) {
+                lines.push(`${replacement.name} (istf ${original.name})`);
+            }
+        });
+        return lines.join('\n');
+    }, [hasSwaps, planned?.swaps, foodItems]);
 
     const handleClick = () => {
         if (hasRecipe) {
@@ -124,8 +141,11 @@ export function MealSlot({
                         {proteinPerServing && <span>🌱 {proteinPerServing}g</span>}
                     </div>
 
-                    {planned?.swaps && Object.keys(planned.swaps).length > 0 && (
-                        <div className="swap-indicator">♻️ Byten</div>
+                    {hasSwaps && (
+                        <div className="swap-indicator" title={swapTooltip}>
+                            <span className="swap-badge">🌍 Modifierat</span>
+                            <span className="swap-count">{Object.keys(planned!.swaps!).length} byte{Object.keys(planned!.swaps!).length > 1 ? 'n' : ''}</span>
+                        </div>
                     )}
                 </>
             ) : (

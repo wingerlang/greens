@@ -4,10 +4,11 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { type Recipe, type FoodItem } from '../../models/types.ts';
-import { calculateRecipeEstimate, matchToFoodItem, calculateIngredientNutrition } from '../../utils/ingredientParser.ts';
+import { calculateRecipeEstimate, matchToFoodItem, calculateIngredientNutrition, parseIngredients } from '../../utils/ingredientParser.ts';
 import { formatIngredientQuantity } from '../../utils/unitHelper.ts';
 import { parseIngredientLine, scaleAmount, type MatchedIngredient } from '../../utils/stepParser.ts';
 import { type IngredientCustomizations, type ScaledIngredient } from '../../hooks/useCookingSession.ts';
+import { findSmartSwaps, type SwapSuggestion } from '../../utils/smartSwaps.ts';
 import './RecipeDetailModal.css';
 
 interface RecipeDetailModalProps {
@@ -16,6 +17,9 @@ interface RecipeDetailModalProps {
     onClose: () => void;
     onStartCooking: (recipe: Recipe, portions: number, customizations?: IngredientCustomizations) => void;
     isActive?: boolean;
+    // Optional: For planned meals with swaps
+    plannedSwaps?: Record<string, string>; // originalItemId -> newItemId
+    onSwapsChange?: (swaps: Record<string, string>) => void;
 }
 
 const PORTION_OPTIONS = [2, 4, 6, 8];
@@ -26,6 +30,8 @@ export function RecipeDetailModal({
     onClose,
     onStartCooking,
     isActive = true,
+    plannedSwaps = {},
+    onSwapsChange,
 }: RecipeDetailModalProps) {
     const [portions, setPortions] = useState(recipe.servings || 4);
     const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
@@ -35,6 +41,33 @@ export function RecipeDetailModal({
     const [customizeMode, setCustomizeMode] = useState(false); // Toggle customization mode
     const [excludedIngredients, setExcludedIngredients] = useState<Set<number>>(new Set()); // Excluded ingredient indices
     const [ingredientMultipliers, setIngredientMultipliers] = useState<Map<number, number>>(new Map()); // Per-ingredient quantity adjustments
+
+    // Local swap state - initialized from plannedSwaps prop (no sync needed since we control locally)
+    const [activeSwaps, setActiveSwaps] = useState<Record<string, string>>(plannedSwaps);
+
+    // Toggle swap function
+    const toggleSwap = useCallback((originalItemId: string, newItemId: string) => {
+        setActiveSwaps(prev => {
+            const next = { ...prev };
+            if (prev[originalItemId] === newItemId) {
+                delete next[originalItemId];
+            } else {
+                next[originalItemId] = newItemId;
+            }
+            // Notify parent of change
+            if (onSwapsChange) {
+                onSwapsChange(next);
+            }
+            return next;
+        });
+    }, [onSwapsChange]);
+
+    // Calculate smart swaps for this recipe
+    const smartSwaps = useMemo(() => {
+        if (!recipe.ingredientsText) return [];
+        const parsed = parseIngredients(recipe.ingredientsText);
+        return findSmartSwaps(parsed, foodItems);
+    }, [recipe.ingredientsText, foodItems]);
 
     // Calculate portion multiplier
     const basePortions = recipe.servings || 4;
@@ -549,6 +582,131 @@ export function RecipeDetailModal({
                                 </button>
                             </div>
                         )}
+
+                        {/* SMART SWAPS SECTION - Temporarily disabled for debugging */}
+                        {false && (smartSwaps.length > 0 || Object.keys(activeSwaps).length > 0) && (
+                            <div className="smart-swaps-section" style={{
+                                background: 'rgba(6, 182, 212, 0.08)',
+                                border: '1px solid rgba(6, 182, 212, 0.2)',
+                                borderRadius: '12px',
+                                padding: '12px 16px',
+                                marginTop: '16px'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    marginBottom: '10px'
+                                }}>
+                                    <h4 style={{
+                                        fontSize: '11px',
+                                        fontWeight: 'bold',
+                                        color: 'var(--accent-secondary)',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px',
+                                        margin: 0,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px'
+                                    }}>
+                                        🌍 Klimat & Pris-smart
+                                        {Object.keys(activeSwaps).length > 0 && (
+                                            <span style={{
+                                                background: 'var(--accent-secondary)',
+                                                color: '#0f172a',
+                                                padding: '2px 6px',
+                                                borderRadius: '6px',
+                                                fontSize: '10px'
+                                            }}>
+                                                {Object.keys(activeSwaps).length} aktiva
+                                            </span>
+                                        )}
+                                    </h4>
+                                    {Object.keys(activeSwaps).length > 0 && (
+                                        <button
+                                            onClick={() => setActiveSwaps({})}
+                                            style={{
+                                                background: 'rgba(100, 116, 139, 0.3)',
+                                                border: '1px solid rgba(100, 116, 139, 0.3)',
+                                                borderRadius: '6px',
+                                                padding: '4px 10px',
+                                                color: 'var(--text-secondary)',
+                                                fontSize: '11px',
+                                                cursor: 'pointer'
+                                            }}
+                                        >
+                                            ↩ Återställ
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                    {smartSwaps.map((swap, idx) => {
+                                        const isApplied = activeSwaps[swap.originalItem.id] === swap.suggestion.id;
+                                        return (
+                                            <div key={idx} style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                padding: '8px 10px',
+                                                background: isApplied ? 'rgba(34, 197, 94, 0.1)' : 'rgba(0,0,0,0.2)',
+                                                borderRadius: '8px',
+                                                border: isApplied ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid transparent'
+                                            }}>
+                                                <div>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                        <span style={{
+                                                            fontWeight: 'bold',
+                                                            fontSize: '13px',
+                                                            color: isApplied ? 'var(--accent-primary)' : 'var(--text-primary)'
+                                                        }}>
+                                                            {isApplied ? swap.suggestion.name : swap.original.name}
+                                                        </span>
+                                                        {isApplied && (
+                                                            <span style={{
+                                                                fontSize: '11px',
+                                                                color: 'var(--text-muted)',
+                                                                textDecoration: 'line-through'
+                                                            }}>
+                                                                ({swap.original.name})
+                                                            </span>
+                                                        )}
+                                                        {!isApplied && (
+                                                            <>
+                                                                <span style={{ color: 'var(--text-muted)' }}>→</span>
+                                                                <span style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                                                                    {swap.suggestion.name}
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                    <div style={{ fontSize: '11px', color: 'var(--accent-primary)', marginTop: '2px' }}>
+                                                        {swap.reason === 'price' && `💰 Spara pengar`}
+                                                        {swap.reason === 'co2' && `🌍 Miljövänligt`}
+                                                        {swap.reason === 'both' && `🌟 Spara pengar & miljö`}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => toggleSwap(swap.originalItem.id, swap.suggestion.id)}
+                                                    style={{
+                                                        background: isApplied ? 'var(--accent-primary)' : 'rgba(100, 116, 139, 0.3)',
+                                                        border: 'none',
+                                                        borderRadius: '6px',
+                                                        padding: '6px 12px',
+                                                        color: isApplied ? '#0f172a' : 'var(--text-secondary)',
+                                                        fontSize: '11px',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer'
+                                                    }}
+                                                >
+                                                    {isApplied ? '✓ Vald' : 'Byt'}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Right Column - Instructions */}
@@ -609,6 +767,6 @@ export function RecipeDetailModal({
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

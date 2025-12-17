@@ -68,7 +68,9 @@ export function WeeklyPage() {
         saveWeeklyPlan,
         foodItems,
         pantryItems,
+        pantryQuantities,
         togglePantryItem,
+        setPantryQuantity,
     } = useData();
 
     const { settings } = useSettings();
@@ -79,9 +81,16 @@ export function WeeklyPage() {
     const [weekPlan, setWeekPlan] = useState<WeeklyPlan['meals']>();
     const [editingSlot, setEditingSlot] = useState<{ day: Weekday; meal: MealType } | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [hasLoaded, setHasLoaded] = useState(false);
+
+    // Ref to track if we're currently loading (to prevent save during load)
+    const isLoadingRef = React.useRef(false);
+    // Ref to store the last saved plan to avoid redundant saves
+    const lastSavedRef = React.useRef<string>('');
 
     // Load week plan
     useEffect(() => {
+        isLoadingRef.current = true; // Mark as loading
         const plan = weeklyPlans?.find(p => p.weekStartDate === currentWeekStart);
         if (plan) {
             setWeekPlan(plan.meals);
@@ -91,14 +100,28 @@ export function WeeklyPage() {
                 friday: {}, saturday: {}, sunday: {}
             });
         }
+        // Mark as loaded after first data fetch - weeklyPlans is array so check !== undefined
+        if (weeklyPlans !== undefined) {
+            setHasLoaded(true);
+        }
+        // Use timeout to allow state to settle before enabling saves
+        setTimeout(() => {
+            isLoadingRef.current = false;
+        }, 100);
     }, [currentWeekStart, weeklyPlans]);
 
-    // Save on change
+    // Save on change - only after initial load and not during loading
     useEffect(() => {
-        if (weekPlan) {
-            saveWeeklyPlan(currentWeekStart, weekPlan);
+        if (weekPlan && hasLoaded && !isLoadingRef.current) {
+            // Avoid redundant saves by comparing serialized plan
+            const planKey = JSON.stringify(weekPlan);
+            if (planKey !== lastSavedRef.current) {
+                lastSavedRef.current = planKey;
+                console.log('[WeeklyPage] Saving weekPlan to context:', currentWeekStart);
+                saveWeeklyPlan(currentWeekStart, weekPlan);
+            }
         }
-    }, [weekPlan, currentWeekStart]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [weekPlan, currentWeekStart, hasLoaded, saveWeeklyPlan]);
 
     // Hooks - Use settings.visibleMeals from SettingsContext for user preferences
     const visibleMeals = settings.visibleMeals;
@@ -356,7 +379,9 @@ export function WeeklyPage() {
             <ShoppingListView
                 shoppingList={shoppingList}
                 pantryItems={new Set(pantryItems)}
+                pantryQuantities={pantryQuantities}
                 togglePantryItem={togglePantryItem}
+                setPantryQuantity={setPantryQuantity}
                 totalItems={totalItems}
                 onCopy={handleCopyShoppingList}
                 copyStatus={copyStatus}

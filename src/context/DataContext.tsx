@@ -31,12 +31,15 @@ interface DataContextType {
     recipes: Recipe[];
     mealEntries: MealEntry[];
     weeklyPlans: WeeklyPlan[];
-    pantryItems: string[]; // New: Global pantry state
+    pantryItems: string[]; // Legacy: items marked as "have at home"
+    pantryQuantities: Record<string, { quantity: number; unit: string }>; // New: quantity tracking
     userSettings: AppSettings;
 
     // Pantry CRUD
     togglePantryItem: (item: string) => void;
     setPantryItems: (items: string[]) => void;
+    setPantryQuantity: (itemName: string, quantity: number, unit: string) => void;
+    getPantryQuantity: (itemName: string) => { quantity: number; unit: string } | undefined;
 
     // FoodItem CRUD
     addFoodItem: (data: FoodItemFormData) => FoodItem;
@@ -83,6 +86,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [mealEntries, setMealEntries] = useState<MealEntry[]>([]);
     const [weeklyPlans, setWeeklyPlans] = useState<WeeklyPlan[]>([]);
     const [pantryItems, setPantryItems] = useState<string[]>([]);
+    const [pantryQuantities, setPantryQuantitiesState] = useState<Record<string, { quantity: number; unit: string }>>({});
     const [userSettings, setUserSettings] = useState<AppSettings>({
         visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack']
     });
@@ -97,6 +101,7 @@ export function DataProvider({ children }: DataProviderProps) {
             setMealEntries(data.mealEntries);
             setWeeklyPlans(data.weeklyPlans || []);
             setPantryItems(data.pantryItems || []);
+            setPantryQuantitiesState(data.pantryQuantities || {});
             if (data.userSettings) {
                 setUserSettings(data.userSettings);
             }
@@ -108,9 +113,9 @@ export function DataProvider({ children }: DataProviderProps) {
     // Save to storage on changes
     useEffect(() => {
         if (isLoaded) {
-            storageService.save({ foodItems, recipes, mealEntries, weeklyPlans, pantryItems, userSettings });
+            storageService.save({ foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings });
         }
-    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, userSettings, isLoaded]);
+    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, isLoaded]);
 
     // ============================================
     // Pantry CRUD
@@ -128,6 +133,32 @@ export function DataProvider({ children }: DataProviderProps) {
             return next;
         });
     }, []);
+
+    // Set specific quantity for a pantry item
+    const setPantryQuantity = useCallback((itemName: string, quantity: number, unit: string) => {
+        const key = itemName.toLowerCase();
+        setPantryQuantitiesState(prev => {
+            if (quantity <= 0) {
+                // Remove item if quantity is 0 or negative
+                const next = { ...prev };
+                delete next[key];
+                return next;
+            }
+            return { ...prev, [key]: { quantity, unit } };
+        });
+        // Also add to pantryItems if not present
+        setPantryItems(prev => {
+            if (!prev.includes(key)) {
+                return [...prev, key];
+            }
+            return prev;
+        });
+    }, []);
+
+    // Get quantity of a pantry item
+    const getPantryQuantity = useCallback((itemName: string): { quantity: number; unit: string } | undefined => {
+        return pantryQuantities[itemName.toLowerCase()];
+    }, [pantryQuantities]);
 
 
     // ============================================
@@ -431,8 +462,11 @@ export function DataProvider({ children }: DataProviderProps) {
         saveWeeklyPlan,
         getPlannedMealsForDate,
         pantryItems,
+        pantryQuantities,
         togglePantryItem,
         setPantryItems,
+        setPantryQuantity,
+        getPantryQuantity,
         calculateRecipeNutrition,
         calculateDailyNutrition,
     };

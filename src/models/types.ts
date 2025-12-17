@@ -219,8 +219,17 @@ export interface AppData {
     recipes: Recipe[];
     mealEntries: MealEntry[];
     weeklyPlans?: WeeklyPlan[];
-    pantryItems?: string[]; // New: List of ingredient names user has at home
+    pantryItems?: string[]; // Legacy: List of ingredient names user has at home
+    pantryQuantities?: PantryQuantities; // New: Item name -> quantity at home
     userSettings?: AppSettings;
+}
+
+/** Pantry quantities - maps item name (lowercase) to quantity at home */
+export interface PantryQuantities {
+    [itemName: string]: {
+        quantity: number;
+        unit: string;
+    };
 }
 
 /** Generate a unique ID */

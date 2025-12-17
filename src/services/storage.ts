@@ -58,6 +58,7 @@ export class LocalStorageService implements StorageService {
 
     async save(data: AppData): Promise<void> {
         try {
+            console.log('[Storage] Saving to localStorage:', { weeklyPlansCount: data.weeklyPlans?.length });
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch (e) {
             console.error('Failed to save to storage:', e);

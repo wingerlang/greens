@@ -188,6 +188,7 @@ export function DayCard({
                                 planned={planned}
                                 recipe={recipe}
                                 proteinPerServing={protein}
+                                foodItems={foodItems}
                                 suggestions={suggestions}
                                 onSelect={() => onMealClick(meal)}
                                 onCook={() => recipe && onCookMeal(meal, recipe)}

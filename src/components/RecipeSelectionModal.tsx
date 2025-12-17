@@ -249,8 +249,8 @@ export function RecipeSelectionModal({
                         </div>
                     </div>
 
-                    {/* Preview Column */}
-                    <div className="hidden md:flex flex-col bg-slate-950/30 border-l border-slate-700/50 h-full overflow-hidden relative">
+                    {/* Preview Column - Scrollable */}
+                    <div className="hidden md:flex flex-col bg-slate-950/30 border-l border-slate-700/50 h-full overflow-y-auto relative">
                         {selectedRecipeId ? (
                             (() => {
                                 const recipe = getRecipe(selectedRecipeId);
@@ -286,6 +286,62 @@ export function RecipeSelectionModal({
                                                 <h4 className="flex items-center gap-2 text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3">
                                                     <span>🌱</span> Klimat & Pris-smart
                                                 </h4>
+
+                                                {/* Quick-apply buttons */}
+                                                <div className="flex flex-wrap gap-2 mb-4">
+                                                    <button
+                                                        onClick={() => {
+                                                            // Apply all price-saving swaps
+                                                            const priceSwaps: Record<string, string> = {};
+                                                            smartSwaps.forEach(s => {
+                                                                if (s.reason === 'price' || s.reason === 'both') {
+                                                                    priceSwaps[s.originalItem.id] = s.suggestion.id;
+                                                                }
+                                                            });
+                                                            setActiveSwaps(prev => ({ ...prev, ...priceSwaps }));
+                                                        }}
+                                                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30 hover:bg-amber-500/20 transition-all"
+                                                    >
+                                                        💰 Spara pengar
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            // Apply all CO2-saving swaps
+                                                            const co2Swaps: Record<string, string> = {};
+                                                            smartSwaps.forEach(s => {
+                                                                if (s.reason === 'co2' || s.reason === 'both') {
+                                                                    co2Swaps[s.originalItem.id] = s.suggestion.id;
+                                                                }
+                                                            });
+                                                            setActiveSwaps(prev => ({ ...prev, ...co2Swaps }));
+                                                        }}
+                                                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/20 transition-all"
+                                                    >
+                                                        🌍 Tänk på miljön
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            // Apply all swaps
+                                                            const allSwaps: Record<string, string> = {};
+                                                            smartSwaps.forEach(s => {
+                                                                allSwaps[s.originalItem.id] = s.suggestion.id;
+                                                            });
+                                                            setActiveSwaps(prev => ({ ...prev, ...allSwaps }));
+                                                        }}
+                                                        className="px-3 py-1.5 text-xs font-bold rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 hover:bg-cyan-500/20 transition-all"
+                                                    >
+                                                        ✨ Alla byten
+                                                    </button>
+                                                    {Object.keys(activeSwaps).length > 0 && (
+                                                        <button
+                                                            onClick={() => setActiveSwaps({})}
+                                                            className="px-3 py-1.5 text-xs font-bold rounded-lg bg-slate-700/50 text-slate-400 border border-slate-600 hover:bg-slate-600 transition-all"
+                                                        >
+                                                            ↩ Återställ
+                                                        </button>
+                                                    )}
+                                                </div>
+
                                                 <div className="space-y-3">
                                                     {smartSwaps.map((swap: SwapSuggestion, idx: number) => {
                                                         const originalId = swap.originalItem.id; // Use real ID
@@ -295,9 +351,20 @@ export function RecipeSelectionModal({
                                                             <div key={idx} className="flex items-start gap-3 text-sm">
                                                                 <div className="flex-1">
                                                                     <div className="flex items-center gap-2 text-slate-300">
-                                                                        <span className={`decoration-rose-500/50 ${isApplied ? 'line-through text-slate-500' : 'text-slate-200'}`}>{swap.original.name}</span>
-                                                                        <span className="text-slate-600">→</span>
-                                                                        <span className={`font-bold ${isApplied ? 'text-emerald-300' : 'text-slate-400'}`}>{swap.suggestion.name}</span>
+                                                                        <span className={`font-bold ${isApplied ? 'text-emerald-300' : 'text-slate-200'}`}>
+                                                                            {isApplied ? swap.suggestion.name : swap.original.name}
+                                                                        </span>
+                                                                        {isApplied && (
+                                                                            <span className="text-slate-500 text-xs">
+                                                                                (<s>{swap.original.name}</s>)
+                                                                            </span>
+                                                                        )}
+                                                                        {!isApplied && (
+                                                                            <>
+                                                                                <span className="text-slate-600">→</span>
+                                                                                <span className="text-slate-400">{swap.suggestion.name}</span>
+                                                                            </>
+                                                                        )}
                                                                     </div>
                                                                     <div className="text-xs text-emerald-500/70 mt-0.5">
                                                                         {swap.reason === 'price' && `💰 Spara pengar (${swap.savingsFn(1000)})`}

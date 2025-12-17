@@ -4,7 +4,9 @@ import { ShoppingItem } from '../hooks/useShoppingList.ts';
 interface ShoppingListViewProps {
     shoppingList: Record<string, ShoppingItem[]>;
     pantryItems: Set<string>;
+    pantryQuantities?: Record<string, { quantity: number; unit: string }>;
     togglePantryItem: (item: string) => void;
+    setPantryQuantity?: (itemName: string, quantity: number, unit: string) => void;
     totalItems: number;
     onCopy: () => Promise<boolean>;
     copyStatus?: 'idle' | 'copied' | 'error';
@@ -14,17 +16,48 @@ interface ShoppingListViewProps {
 export function ShoppingListView({
     shoppingList,
     pantryItems,
+    pantryQuantities = {},
     togglePantryItem,
+    setPantryQuantity,
     totalItems,
     onCopy,
     copyStatus = 'idle',
     formatQuantity
 }: ShoppingListViewProps) {
     const [isExpanded, setIsExpanded] = useState(false);
+    const [quantityInput, setQuantityInput] = useState<{ itemName: string; unit: string } | null>(null);
+    const [inputValue, setInputValue] = useState('');
 
     if (totalItems === 0 && Object.values(shoppingList).every(l => l.length === 0)) {
         return null;
     }
+
+    // Handle marking item as owned with optional quantity
+    const handleItemClick = (item: ShoppingItem, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const key = item.name.toLowerCase();
+
+        if (e.shiftKey && setPantryQuantity) {
+            // Shift+click: prompt for quantity
+            setQuantityInput({ itemName: item.name, unit: item.unit || 'st' });
+            setInputValue(item.quantity.toString());
+        } else {
+            // Normal click: just toggle
+            togglePantryItem(key);
+        }
+    };
+
+    // Save quantity input
+    const handleSaveQuantity = () => {
+        if (quantityInput && setPantryQuantity && inputValue) {
+            const qty = parseFloat(inputValue);
+            if (!isNaN(qty) && qty > 0) {
+                setPantryQuantity(quantityInput.itemName, qty, quantityInput.unit);
+            }
+        }
+        setQuantityInput(null);
+        setInputValue('');
+    };
 
     const getCopyButtonContent = () => {
         if (copyStatus === 'copied') {
@@ -96,17 +129,26 @@ export function ShoppingListView({
                             <div className="flex flex-col gap-2">
                                 {filteredItems.map((item, idx) => {
                                     const qty = formatQuantity ? formatQuantity(item) : '';
+                                    const owned = pantryQuantities[item.name.toLowerCase()];
                                     return (
                                         <div
                                             key={idx}
                                             className="group flex items-center justify-between p-2.5 bg-slate-800/40 border border-transparent hover:border-emerald-500/30 hover:bg-slate-800/60 rounded-xl transition-all cursor-pointer"
-                                            onClick={() => togglePantryItem(item.name.toLowerCase())}
+                                            onClick={(e) => handleItemClick(item, e)}
+                                            title="Klicka för att markera som köpt. Shift+klick för att ange mängd."
                                         >
                                             <div className="flex flex-col">
                                                 <span className="text-sm text-slate-200 font-medium pl-1">{item.name}</span>
-                                                {qty && (
-                                                    <span className="text-xs text-slate-500 pl-1">{qty}</span>
-                                                )}
+                                                <div className="flex gap-2 pl-1">
+                                                    {qty && (
+                                                        <span className="text-xs text-slate-500">Behöver: {qty}</span>
+                                                    )}
+                                                    {owned && (
+                                                        <span className="text-xs text-emerald-500">
+                                                            Har: {owned.quantity} {owned.unit}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                             <span
                                                 className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition-all"
@@ -166,6 +208,51 @@ export function ShoppingListView({
                     );
                 })()}
             </div>
+
+            {/* Quantity Input Modal */}
+            {quantityInput && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50" onClick={() => setQuantityInput(null)}>
+                    <div
+                        className="bg-slate-800 border border-slate-700 rounded-2xl p-6 w-80 shadow-2xl"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <h3 className="text-lg font-bold text-white mb-4">
+                            Hur mycket {quantityInput.itemName} har du?
+                        </h3>
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="number"
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                className="flex-1 px-3 py-2 bg-slate-900 border border-slate-600 rounded-lg text-white text-lg focus:outline-none focus:border-emerald-500"
+                                placeholder="Mängd"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') handleSaveQuantity();
+                                    if (e.key === 'Escape') setQuantityInput(null);
+                                }}
+                            />
+                            <span className="px-4 py-2 bg-slate-700 rounded-lg text-slate-300 font-medium">
+                                {quantityInput.unit}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setQuantityInput(null)}
+                                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-xl font-semibold transition-all"
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                onClick={handleSaveQuantity}
+                                className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-semibold transition-all"
+                            >
+                                Spara
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </section>
     );
 }
