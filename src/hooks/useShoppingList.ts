@@ -2,6 +2,14 @@ import { useMemo, useState, useCallback } from 'react';
 import { Weekday, MealType, WeeklyPlan, FoodItem, Recipe, WEEKDAYS } from '../models/types.ts';
 import { parseIngredients, matchToFoodItem } from '../utils/ingredientParser.ts';
 
+export interface IngredientUsage {
+    day: Weekday;
+    meal: MealType;
+    recipeName: string;
+    quantity: number;
+    unit: string;
+}
+
 export interface ShoppingItem {
     name: string;
     category: string;
@@ -9,6 +17,7 @@ export interface ShoppingItem {
     unit: string;               // Unit (st, g, dl, etc.)
     dayMeals: { day: Weekday; meal: MealType }[];
     storageType: string;
+    usages: IngredientUsage[];  // Detailed usage info for modal
 }
 
 export function useShoppingList(
@@ -46,11 +55,20 @@ export function useShoppingList(
                             const key = matched ? matched.name.toLowerCase() : ingredient.name.toLowerCase();
                             const qty = ingredient.quantity || 1;
                             const unit = ingredient.unit || 'st';
+                            const usage: IngredientUsage = {
+                                day,
+                                meal,
+                                recipeName: recipe.name,
+                                quantity: qty,
+                                unit
+                            };
 
                             if (items.has(key)) {
                                 const existing = items.get(key)!;
                                 // Accumulate quantity
                                 existing.quantity += qty;
+                                // Add usage
+                                existing.usages.push(usage);
                                 // Add day/meal if not already tracked
                                 const hasDayMeal = existing.dayMeals.some(
                                     dm => dm.day === day && dm.meal === meal
@@ -66,6 +84,7 @@ export function useShoppingList(
                                     unit: unit,
                                     dayMeals: [{ day, meal }],
                                     storageType: matched?.storageType || 'pantry',
+                                    usages: [usage],
                                 });
                             }
                         });

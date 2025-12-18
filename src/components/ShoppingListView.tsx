@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ShoppingItem } from '../hooks/useShoppingList.ts';
+import { WEEKDAY_LABELS, MEAL_TYPE_LABELS } from '../models/types.ts';
 
 interface ShoppingListViewProps {
     shoppingList: Record<string, ShoppingItem[]>;
@@ -27,13 +28,20 @@ export function ShoppingListView({
     const [isExpanded, setIsExpanded] = useState(false);
     const [quantityInput, setQuantityInput] = useState<{ itemName: string; unit: string } | null>(null);
     const [inputValue, setInputValue] = useState('');
+    const [selectedItem, setSelectedItem] = useState<ShoppingItem | null>(null);
 
     if (totalItems === 0 && Object.values(shoppingList).every(l => l.length === 0)) {
         return null;
     }
 
-    // Handle marking item as owned with optional quantity
-    const handleItemClick = (item: ShoppingItem, e: React.MouseEvent) => {
+    // Handle name click - show usage modal
+    const handleNameClick = (item: ShoppingItem, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setSelectedItem(item);
+    };
+
+    // Handle green button click - mark as owned
+    const handleMarkOwned = (item: ShoppingItem, e: React.MouseEvent) => {
         e.stopPropagation();
         const key = item.name.toLowerCase();
 
@@ -133,12 +141,14 @@ export function ShoppingListView({
                                     return (
                                         <div
                                             key={idx}
-                                            className="group flex items-center justify-between p-2.5 bg-slate-800/40 border border-transparent hover:border-emerald-500/30 hover:bg-slate-800/60 rounded-xl transition-all cursor-pointer"
-                                            onClick={(e) => handleItemClick(item, e)}
-                                            title="Klicka för att markera som köpt. Shift+klick för att ange mängd."
+                                            className="group flex items-center justify-between p-2.5 bg-slate-800/40 border border-transparent hover:border-cyan-500/30 hover:bg-slate-800/60 rounded-xl transition-all"
                                         >
-                                            <div className="flex flex-col">
-                                                <span className="text-sm text-slate-200 font-medium pl-1">{item.name}</span>
+                                            <div
+                                                className="flex flex-col cursor-pointer flex-1"
+                                                onClick={(e) => handleNameClick(item, e)}
+                                                title="Klicka för att se var och när ingrediensen används"
+                                            >
+                                                <span className="text-sm text-slate-200 font-medium pl-1 hover:text-cyan-400 transition-colors">{item.name}</span>
                                                 <div className="flex gap-2 pl-1">
                                                     {qty && (
                                                         <span className="text-xs text-slate-500">Behöver: {qty}</span>
@@ -150,11 +160,13 @@ export function ShoppingListView({
                                                     )}
                                                 </div>
                                             </div>
-                                            <span
-                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 group-hover:bg-emerald-500 group-hover:text-white transition-all"
+                                            <button
+                                                className="w-7 h-7 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 hover:bg-emerald-500 hover:text-white transition-all cursor-pointer"
+                                                onClick={(e) => handleMarkOwned(item, e)}
+                                                title="Markera som köpt (Shift+klick för mängd)"
                                             >
                                                 ✓
-                                            </span>
+                                            </button>
                                         </div>
                                     );
                                 })}
@@ -248,6 +260,81 @@ export function ShoppingListView({
                                 className="flex-1 px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-semibold transition-all"
                             >
                                 Spara
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Ingredient Usage Modal */}
+            {selectedItem && (
+                <div
+                    className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+                    onClick={() => setSelectedItem(null)}
+                >
+                    <div
+                        className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex items-center justify-between p-4 border-b border-slate-700 bg-slate-800">
+                            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                                🥦 {selectedItem.name}
+                            </h2>
+                            <button
+                                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition-colors text-xl"
+                                onClick={() => setSelectedItem(null)}
+                            >
+                                ×
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="p-4 max-h-[60vh] overflow-y-auto">
+                            {/* Total needed */}
+                            <div className="mb-4 p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-xl">
+                                <div className="text-sm text-slate-400">Totalt behov:</div>
+                                <div className="text-xl font-bold text-cyan-400">
+                                    {selectedItem.quantity} {selectedItem.unit}
+                                </div>
+                            </div>
+
+                            {/* Usage breakdown */}
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+                                Används i {selectedItem.usages?.length || 0} recept
+                            </h3>
+                            <div className="flex flex-col gap-2">
+                                {selectedItem.usages?.map((usage, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="flex items-center justify-between p-3 bg-slate-800/60 rounded-xl border border-slate-700"
+                                    >
+                                        <div>
+                                            <div className="text-sm font-medium text-white">
+                                                {usage.recipeName}
+                                            </div>
+                                            <div className="text-xs text-slate-400">
+                                                📅 {WEEKDAY_LABELS[usage.day]} • {MEAL_TYPE_LABELS[usage.meal]}
+                                            </div>
+                                        </div>
+                                        <div className="text-sm font-bold text-emerald-400">
+                                            {usage.quantity} {usage.unit}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Footer - Har hemma button */}
+                        <div className="p-4 border-t border-slate-700 bg-slate-800">
+                            <button
+                                onClick={() => {
+                                    togglePantryItem(selectedItem.name.toLowerCase());
+                                    setSelectedItem(null);
+                                }}
+                                className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+                            >
+                                ✓ Markera som "Har hemma"
                             </button>
                         </div>
                     </div>
