@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext.tsx';
 import { type FoodItem, CATEGORY_LABELS, UNIT_LABELS } from '../models/types.ts';
 import { UsersModule } from '../components/admin/UsersModule.tsx';
 import { RoadmapModule } from '../components/admin/RoadmapModule.tsx';
+import { SystemGeneratorModule } from '../components/admin/SystemGeneratorModule.tsx';
 import { DatabasePage } from './DatabasePage.tsx';
 import { ApiPage } from './ApiPage.tsx';
 import { DocumentationPage } from '../components/DocumentationPage.tsx';
@@ -118,6 +119,12 @@ export const AdminPage: React.FC = () => {
                     className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'roadmap' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
                     🚀 Roadmap
+                </button>
+                <button
+                    onClick={() => setActiveTab('generator')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'generator' ? 'text-rose-400 border-b-2 border-rose-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    🔧 Verktyg
                 </button>
             </div>
 
@@ -264,6 +271,12 @@ export const AdminPage: React.FC = () => {
             {activeTab === 'roadmap' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <RoadmapModule />
+                </div>
+            )}
+
+            {activeTab === 'generator' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <SystemGeneratorModule />
                 </div>
             )}
 

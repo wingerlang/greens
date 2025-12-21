@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { type MealType, MEAL_TYPE_LABELS } from '../models/types.ts';
 import { useData } from '../context/DataContext.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
+import { LoginStat } from '../api/db.ts';
 import './ProfilePage.css';
 
 const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -138,22 +140,29 @@ export function ProfilePage() {
                             <input
                                 type="number"
                                 id="sleepGoal"
-                                value={settings.dailySleepGoal || 8}
+                                value={settings.dailySleepGoal}
                                 onChange={(e) => updateSettings({ dailySleepGoal: Number(e.target.value) })}
                                 min="0"
-                                step="0.5"
                             />
                         </div>
-                        <div className="goal-input-group">
-                            <label htmlFor="waterGoal">Vattenmål (glas)</label>
-                            <input
-                                type="number"
-                                id="waterGoal"
-                                value={settings.dailyWaterGoal || 8}
-                                onChange={(e) => updateSettings({ dailyWaterGoal: Number(e.target.value) })}
-                                min="0"
-                            />
-                        </div>
+                    </div>
+
+                    <div className="mt-6 space-y-3 border-t border-white/5 pt-4">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Synlighet & Loggning</h3>
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${settings.showSleep !== false ? 'bg-blue-500 border-blue-500' : 'border-slate-600 bg-slate-800'}`}>
+                                {settings.showSleep !== false && <span className="text-xs font-bold text-white">✓</span>}
+                            </div>
+                            <input type="checkbox" className="hidden" checked={settings.showSleep !== false} onChange={(e) => updateSettings({ showSleep: e.target.checked })} />
+                            <span className="text-sm text-slate-300 group-hover:text-white">Visa Sömnmål & Loggning</span>
+                        </label>
+                        <label className="flex items-center gap-3 cursor-pointer group">
+                            <div className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${settings.showWater !== false ? 'bg-sky-500 border-sky-500' : 'border-slate-600 bg-slate-800'}`}>
+                                {settings.showWater !== false && <span className="text-xs font-bold text-white">✓</span>}
+                            </div>
+                            <input type="checkbox" className="hidden" checked={settings.showWater !== false} onChange={(e) => updateSettings({ showWater: e.target.checked })} />
+                            <span className="text-sm text-slate-300 group-hover:text-white">Visa Vatten & Koffein</span>
+                        </label>
                     </div>
                 </div>
             </section>
@@ -232,6 +241,52 @@ export function ProfilePage() {
                     </div>
                 </div>
             </section>
+
+            <LoginHistoryModule />
         </div>
+    );
+}
+
+function LoginHistoryModule() {
+    const { fetchStats } = useAuth();
+    const [stats, setStats] = useState<LoginStat[]>([]);
+
+    useEffect(() => {
+        fetchStats().then(setStats);
+    }, []);
+
+    return (
+        <section className="profile-section glass">
+            <h2 className="section-title">🔐 Inloggningshistorik</h2>
+            <div className="overflow-hidden rounded-xl border border-slate-800">
+                <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-900/50 text-slate-500 uppercase tracking-wider font-bold">
+                        <tr>
+                            <th className="p-3">Tidpunkt</th>
+                            <th className="p-3">IP-adress</th>
+                            <th className="p-3">Resultat</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50 text-slate-300">
+                        {stats.slice(0, 10).map((s) => (
+                            <tr key={s.timestamp} className="hover:bg-white/5">
+                                <td className="p-3 font-mono text-[10px]">{new Date(s.timestamp).toLocaleString()}</td>
+                                <td className="p-3 font-mono text-[10px] opacity-70">{s.ip}</td>
+                                <td className="p-3">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${s.success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                        {s.success ? 'Lyckad' : 'Misslyckad'}
+                                    </span>
+                                </td>
+                            </tr>
+                        ))}
+                        {stats.length === 0 && (
+                            <tr>
+                                <td colSpan={3} className="p-4 text-center text-slate-500 italic">Ingen historik hittades.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     );
 }

@@ -197,6 +197,21 @@ export function CommandCenter() {
 
             {query && (
                 <div className="suggestion-panel animate-in fade-in slide-in-from-top-2 duration-300">
+                    {!['vitals', 'exercise', 'weight'].includes(intent.type) && (
+                        <div className="suggestion-card search-card">
+                            <div className="card-header">
+                                <span className="card-icon">🔍</span>
+                                <div className="card-title">
+                                    <h3>Söker efter...</h3>
+                                    <p className="intent-summary text-base font-normal opacity-80">"{query}"</p>
+                                </div>
+                            </div>
+                            <div className="card-content text-right">
+                                <button className="confirm-btn bg-indigo-500 hover:bg-indigo-600 shadow-indigo-500/20" onClick={handleAction}>Sök</button>
+                            </div>
+                        </div>
+                    )}
+
                     {intent.type === 'vitals' && (
                         <div className="suggestion-card vitals-card reflective">
                             <div className="card-header">
@@ -238,7 +253,16 @@ export function CommandCenter() {
                             <div className="card-header">
                                 <span className="card-icon">{EXERCISE_TYPES.find(t => t.type === draftType)?.icon || '🏃'}</span>
                                 <div className="card-title">
-                                    <h3>Regga träning</h3>
+                                    <div className="flex justify-between items-start">
+                                        <h3>Regga träning</h3>
+                                        {draftType && draftDuration && (
+                                            <div className="text-right">
+                                                <span className="text-xs font-bold text-orange-400">
+                                                    🔥 ~{calculateExerciseCalories(draftType, draftDuration, draftIntensity || 'moderate')} kcal
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
                                     <p className="intent-summary">{draftDuration} min {EXERCISE_TYPES.find(t => t.type === draftType)?.label}</p>
                                 </div>
                             </div>
@@ -257,6 +281,46 @@ export function CommandCenter() {
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* Running Sub-types */}
+                                {draftType === 'running' && (
+                                    <div className="input-row">
+                                        <div className="flex gap-2 overflow-x-auto pb-2">
+                                            {[
+                                                { id: 'default', label: 'Vanligt' },
+                                                { id: 'interval', label: 'Intervall' },
+                                                { id: 'long-run', label: 'Långpass' },
+                                                { id: 'ultra', label: 'Ultra' },
+                                                { id: 'competition', label: 'Tävling' }
+                                            ].map(sub => (
+                                                <button
+                                                    key={sub.id}
+                                                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg border transition-all ${intent.data.subType === sub.id
+                                                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
+                                                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600'
+                                                        }`}
+                                                    onClick={() => {
+                                                        // Note: We can't update intent directly as it's parsed from query.
+                                                        // We should append the keyword to the query string to trigger parser update?
+                                                        // OR we add local state for subType. 
+                                                        // The intent is read-only from parser.
+                                                        // If we want to change it, we should update 'query' text to include keyword.
+                                                        let newQuery = query;
+                                                        // Remove existing keywords
+                                                        newQuery = newQuery.replace(/intervall|långpass|ultra|tävling/gi, '');
+                                                        if (sub.id !== 'default') {
+                                                            newQuery += ` ${sub.label.toLowerCase()}`;
+                                                        }
+                                                        setQuery(newQuery.trim());
+                                                    }}
+                                                >
+                                                    {sub.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="input-row">
                                     <div className="flex items-center gap-2">
                                         <input
@@ -279,6 +343,31 @@ export function CommandCenter() {
                                         ))}
                                     </div>
                                 </div>
+
+                                {/* Strength Tonnage Input */}
+                                {draftType === 'strength' && (
+                                    <div className="input-row flex items-center gap-3 pt-2 border-t border-white/5 mt-2">
+                                        <div className="flex items-center gap-2 flex-1">
+                                            <span className="text-lg">🏗️</span>
+                                            <input
+                                                type="number"
+                                                placeholder="0" // Default
+                                                value={intent.data.tonnage ? intent.data.tonnage / 1000 : ''} // Display in tons
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    // Update query with "X ton"
+                                                    let newQuery = query.replace(/\d+\s*ton/gi, '').trim();
+                                                    if (val) {
+                                                        newQuery += ` ${val} ton`;
+                                                    }
+                                                    setQuery(newQuery.trim());
+                                                }}
+                                                className="reflective-field w-20 text-right"
+                                            />
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase">Ton (Volym)</span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <button className="confirm-btn" onClick={handleAction}>Spara Träning</button>
@@ -305,6 +394,15 @@ export function CommandCenter() {
                                         className="reflective-field bigger text-center"
                                     />
                                     <span className="text-slate-400 font-bold">KG</span>
+                                </div>
+                                <div className="input-row border-t border-white/5 pt-2 mt-2">
+                                    <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Datum</label>
+                                    <input
+                                        type="date"
+                                        value={selectedDate}
+                                        onChange={(e) => setSelectedDate(e.target.value)}
+                                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
+                                    />
                                 </div>
                             </div>
                             <button className="confirm-btn" onClick={handleAction}>Spara Vikt</button>

@@ -11,9 +11,11 @@ import {
     MEAL_TYPE_LABELS,
     getWeekStartDate,
     getISODate,
-    type WeeklyPlan // Ensure this is imported or handled
 } from '../models/types.ts';
+import type { WeeklyPlan } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
+import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
+import { RecipeSelectionModal } from '../components/RecipeSelectionModal.tsx';
 import printJS from 'print-js';
 import './PlanningPage.css';
 
@@ -85,6 +87,7 @@ const SHORT_WEEKDAY_LABELS: Record<Weekday, string> = {
 export function PlanningPage() {
     const { recipes, foodItems, weeklyPlans, getWeeklyPlan, saveWeeklyPlan } = useData();
     const { settings } = useSettings();
+    const { getOptimizationSuggestion } = useSmartPlanner(recipes, foodItems);
 
     const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate());
     const [selectedSlot, setSelectedSlot] = useState<{ day: Weekday; meal: MealType } | null>(null);
@@ -97,7 +100,9 @@ export function PlanningPage() {
 
     // Derived meal map
     const weekPlanMeals = useMemo<WeeklyPlan['meals']>(() => {
-        return weekPlanData?.meals || {};
+        return weekPlanData?.meals || {
+            monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {}
+        };
     }, [weekPlanData]);
 
     // Calculate week number
@@ -302,6 +307,108 @@ export function PlanningPage() {
         setSearchQuery('');
     };
 
+    // Handle saving meal with swaps
+    const handleSaveMeal = (recipeId: string, swaps?: Record<string, string>) => {
+        if (!selectedSlot) return;
+
+        const currentMeals = weekPlanMeals[selectedSlot.day] || {};
+
+        const newPlan: WeeklyPlan['meals'] = {
+            ...weekPlanMeals,
+            [selectedSlot.day]: {
+                ...currentMeals,
+                [selectedSlot.meal]: {
+                    recipeId,
+                    swaps
+                } as PlannedMeal,
+            },
+        };
+
+        saveWeeklyPlan(currentWeekStart, newPlan);
+        setSelectedSlot(null);
+        setSearchQuery('');
+    };
+
+    // History Analysis for "Long time ago" and "Often"
+    const recipeStats = useMemo(() => {
+        if (!weeklyPlans) return {};
+        const stats: Record<string, { count: number; lastDate: string }> = {};
+
+        weeklyPlans.forEach(plan => {
+            if (!plan || !plan.meals) return;
+            Object.values(plan.meals).forEach(day => {
+                if (!day) return;
+                Object.values(day).forEach(meal => {
+                    if (meal?.recipeId) {
+                        if (!stats[meal.recipeId]) {
+                            stats[meal.recipeId] = { count: 0, lastDate: '2000-01-01' };
+                        }
+                        stats[meal.recipeId].count++;
+                        if (plan.weekStartDate > stats[meal.recipeId].lastDate) {
+                            stats[meal.recipeId].lastDate = plan.weekStartDate;
+                        }
+                    }
+                });
+            });
+        });
+        return stats;
+    }, [weeklyPlans]);
+
+    // Get suggestions for modal
+    const getSuggestionsForSlot = (day: Weekday, meal: MealType) => {
+        const fullPlan: WeeklyPlan = {
+            id: 'current',
+            weekStartDate: currentWeekStart,
+            meals: weekPlanMeals || { monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {} },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        const suggestions: { recipe: Recipe; reasons: string[] }[] = [];
+        const addedIds = new Set<string>();
+
+        // 1. Optimization (Completes the day)
+        const opt = getOptimizationSuggestion(fullPlan, day, meal);
+        if (opt && !addedIds.has(opt.id)) {
+            suggestions.push({ recipe: opt, reasons: ['Kompletterar näringen', 'Ökar variationen'] });
+            addedIds.add(opt.id);
+        }
+
+        // 2. "Often" (High count)
+        const popular = recipes
+            .filter(r => r.mealType === meal && !addedIds.has(r.id))
+            .sort((a, b) => (recipeStats[b.id]?.count || 0) - (recipeStats[a.id]?.count || 0))
+            .slice(0, 2);
+
+        popular.forEach(r => {
+            if (recipeStats[r.id]?.count > 0) {
+                suggestions.push({ recipe: r, reasons: ['Ofta lagad', 'Favorit'] });
+                addedIds.add(r.id);
+            }
+        });
+
+        // 3. "Long time ago" (High count but old date, or just old date)
+        const forgotten = recipes
+            .filter(r => r.mealType === meal && !addedIds.has(r.id))
+            .sort((a, b) => (recipeStats[a.id]?.lastDate || '9999').localeCompare(recipeStats[b.id]?.lastDate || '9999'))
+            .slice(0, 1);
+
+        forgotten.forEach(r => {
+            suggestions.push({ recipe: r, reasons: ['Länge sedan sist', 'Dags att återbesöka?'] });
+            addedIds.add(r.id);
+        });
+
+        // 4. Quick (if needed)
+        if (suggestions.length < 3) {
+            const quick = recipes.find(r => r.mealType === meal && !addedIds.has(r.id) && (r.cookTime || 60) <= 20);
+            if (quick) {
+                suggestions.push({ recipe: quick, reasons: ['Snabblagat (under 20 min)'] });
+                addedIds.add(quick.id);
+            }
+        }
+
+        return suggestions;
+    };
     // Handle removing a meal
     const handleRemoveMeal = (day: Weekday, meal: MealType) => {
         const currentMeals = weekPlanMeals[day] || {};
@@ -436,71 +543,17 @@ export function PlanningPage() {
                 ))}
             </div>
 
-            {/* Suggestion Panel */}
-            {selectedSlot && (
-                <div className="suggestion-panel">
-                    <div className="panel-header">
-                        <h2>
-                            {WEEKDAY_LABELS[selectedSlot.day]} - {MEAL_TYPE_LABELS[selectedSlot.meal]}
-                        </h2>
-                        <button className="close-btn" onClick={() => setSelectedSlot(null)}>×</button>
-                    </div>
-
-                    {/* Search */}
-                    <input
-                        type="text"
-                        className="recipe-search"
-                        placeholder="🔍 Sök recept..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-
-                    {/* Smart Suggestions */}
-                    {!searchQuery && suggestions.length > 0 && (
-                        <div className="suggestions-section">
-                            <h3>✨ Förslag för dig</h3>
-                            <div className="suggestion-cards">
-                                {suggestions.map(({ recipe, reasons, tags }) => (
-                                    <div
-                                        key={recipe.id}
-                                        className={`suggestion-card ${tags.includes('friday-favorite') ? 'highlight' : ''}`}
-                                        onClick={() => handleSelectRecipe(recipe.id)}
-                                    >
-                                        <div className="suggestion-name">{recipe.name}</div>
-                                        <div className="suggestion-reasons">
-                                            {reasons.slice(0, 2).map((reason, i) => (
-                                                <span key={i} className="reason-tag">{reason}</span>
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* All Recipes */}
-                    <div className="all-recipes-section">
-                        <h3>{searchQuery ? 'Sökresultat' : 'Alla recept'}</h3>
-                        <div className="recipe-list">
-                            {filteredRecipes.map(recipe => (
-                                <div
-                                    key={recipe.id}
-                                    className="recipe-item"
-                                    onClick={() => handleSelectRecipe(recipe.id)}
-                                >
-                                    <span className="recipe-name">{recipe.name}</span>
-                                    {recipe.cookTime && (
-                                        <span className="recipe-time">⏱️ {recipe.cookTime} min</span>
-                                    )}
-                                </div>
-                            ))}
-                            {filteredRecipes.length === 0 && (
-                                <p className="no-recipes">Inga recept hittades för denna måltidstyp.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
+            {/* Smart Recipe Selection Modal */}
+            <RecipeSelectionModal
+                isOpen={!!selectedSlot}
+                onClose={() => setSelectedSlot(null)}
+                editingSlot={selectedSlot}
+                currentPlannedMeal={selectedSlot ? (weekPlanMeals[selectedSlot.day]?.[selectedSlot.meal]) : undefined}
+                onSelectRecipe={handleSelectRecipe}
+                onRemoveMeal={() => selectedSlot && handleRemoveMeal(selectedSlot.day, selectedSlot.meal)}
+                onSave={(recipeId, swaps) => handleSaveMeal(recipeId, swaps)}
+                getSuggestions={getSuggestionsForSlot}
+            />
         </div>
     );
 }

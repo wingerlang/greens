@@ -75,34 +75,36 @@ export function DailyVitalsModule({ vitals, onUpdate }: DailyVitalsProps) {
             )}
 
             {/* Water & Caffeine Row */}
-            <div className="flex gap-4">
-                {/* Water (Slimmer) */}
-                <div className="flex-1 space-y-2">
-                    <div className="flex justify-between items-end px-1">
-                        <span className="text-[10px] font-bold text-sky-400 flex items-center gap-1">💧 {vitals.water}<span className="opacity-40">/{waterGoal}</span></span>
+            {(settings.showWater !== false) && (
+                <div className="flex gap-4">
+                    {/* Water (Slimmer) */}
+                    <div className="flex-1 space-y-2">
+                        <div className="flex justify-between items-end px-1">
+                            <span className="text-[10px] font-bold text-sky-400 flex items-center gap-1">💧 {vitals.water}<span className="opacity-40">/{waterGoal}</span></span>
+                        </div>
+                        <div className="flex gap-1">
+                            {[1, 2, 3, 4, 5, 6].map(i => (
+                                <div
+                                    key={i}
+                                    onClick={() => handleWaterClick(i)}
+                                    className={`h-1.5 flex-1 rounded-full cursor-pointer transition-all ${vitals.water >= i ? 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.4)]' : 'bg-slate-800'}`}
+                                />
+                            ))}
+                        </div>
                     </div>
-                    <div className="flex gap-1">
-                        {[1, 2, 3, 4, 5, 6].map(i => (
-                            <div
-                                key={i}
-                                onClick={() => handleWaterClick(i)}
-                                className={`h-1.5 flex-1 rounded-full cursor-pointer transition-all ${vitals.water >= i ? 'bg-sky-400 shadow-[0_0_8px_rgba(56,189,248,0.4)]' : 'bg-slate-800'}`}
-                            />
-                        ))}
-                    </div>
-                </div>
 
-                {/* Caffeine (New) */}
-                <div className="w-24 space-y-2">
-                    <div className="flex justify-between items-end px-1">
-                        <span className="text-[10px] font-bold text-amber-400">⚡ {vitals.caffeine || 0}</span>
-                    </div>
-                    <div className="flex gap-1 justify-end">
-                        <button onClick={() => handleCaffeine('coffee')} className="text-xs hover:scale-110 transition-transform" title="Kaffe">☕</button>
-                        <button onClick={() => handleCaffeine('nocco')} className="text-xs hover:scale-110 transition-transform" title="Nocco">🥤</button>
+                    {/* Caffeine (New) */}
+                    <div className="w-24 space-y-2">
+                        <div className="flex justify-between items-end px-1">
+                            <span className="text-[10px] font-bold text-amber-400">⚡ {vitals.caffeine || 0}</span>
+                        </div>
+                        <div className="flex gap-1 justify-end">
+                            <button onClick={() => handleCaffeine('coffee')} className="text-xs hover:scale-110 transition-transform" title="Kaffe">☕</button>
+                            <button onClick={() => handleCaffeine('nocco')} className="text-xs hover:scale-110 transition-transform" title="Nocco">🥤</button>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Sleep Slider (Slimmer) */}
             <div className="space-y-2">

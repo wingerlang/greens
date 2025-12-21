@@ -1,6 +1,7 @@
 {
   "version": "4",
   "specifiers": {
+    "jsr:@std/encoding@*": "1.0.10",
     "npm:@types/react-dom@^18.3.1": "18.3.7_@types+react@18.3.27",
     "npm:@types/react@^18.3.1": "18.3.27",
     "npm:@vitejs/plugin-react@^4.3.4": "4.7.0_vite@6.4.1__picomatch@4.0.3_@babel+core@7.28.5",
@@ -13,6 +14,11 @@
     "npm:vite@*": "7.2.7_picomatch@4.0.3",
     "npm:vite@^5.4.0": "5.4.21",
     "npm:vite@^6.0.1": "6.4.1_picomatch@4.0.3"
+  },
+  "jsr": {
+    "@std/encoding@1.0.10": {
+      "integrity": "8783c6384a2d13abd5e9e87a7ae0520a30e9f56aeeaa3bdf910a3eaaf5c811a1"
+    }
   },
   "npm": {
     "@alloc/quick-lru@5.2.0": {
@@ -1301,7 +1307,9 @@
     "https://deno.land/std@0.208.0/expect/expect.ts": "58d5dc55ac177b3963aba448d74bf1375c7bd39d49143c5a3426e595a9ea1912",
     "https://deno.land/std@0.208.0/expect/fn.ts": "83e7a6965770f92b4cd32313753742ed75305019711a87ce3d9370f706a24296",
     "https://deno.land/std@0.208.0/expect/mod.ts": "e963871d002da3d9eddceb01068d93d956bd477292537c4e58dbaf189880455b",
-    "https://deno.land/std@0.208.0/fmt/colors.ts": "34b3f77432925eb72cf0bfb351616949746768620b8e5ead66da532f93d10ba2"
+    "https://deno.land/std@0.208.0/fmt/colors.ts": "34b3f77432925eb72cf0bfb351616949746768620b8e5ead66da532f93d10ba2",
+    "https://deno.land/std@0.224.0/async/delay.ts": "f90dd685b97c2f142b8069082993e437b1602b8e2561134827eeb7c12b95c499",
+    "https://deno.land/std@0.224.0/http/server.ts": "f9313804bf6467a1704f45f76cb6cd0a3396a3b31c316035e6a4c2035d1ea514"
   },
   "workspace": {
     "dependencies": [

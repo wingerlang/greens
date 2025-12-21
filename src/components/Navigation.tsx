@@ -1,12 +1,16 @@
 import React, { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
+import logo from '../assets/logo_icon.png';
+import './Navigation.css';
 import { Logo } from './Logo.tsx';
 
-export function Navigation() {
+export const Navigation: React.FC = () => {
+    const location = useLocation();
+    const { user, logout } = useAuth();
     const { theme, toggleTheme } = useSettings();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
-    const location = useLocation();
 
     const isAdminRoute = ['/admin', '/database', '/api', '/documentation'].some(path => location.pathname.startsWith(path));
     const isFoodRoute = ['/planera', '/pantry', '/recipes'].some(path => location.pathname.startsWith(path));
@@ -143,6 +147,36 @@ export function Navigation() {
                                         <span className="w-5 text-center">🚀</span>
                                         <span>Roadmap</span>
                                     </NavLink>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* User Profile & Logout */}
+                        <div className="h-6 w-px bg-white/10 mx-2" />
+
+                        <div className="relative group">
+                            <button className={`${linkClasses({ isActive: location.pathname === '/profile' })} flex items-center gap-2 !px-3 !py-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border border-white/5`}>
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-emerald-500/20">
+                                    {user?.username?.substring(0, 1).toUpperCase() || 'U'}
+                                </div>
+                                <span className="hidden xl:inline text-xs font-bold text-slate-300 group-hover:text-white transition-colors">
+                                    {user?.username || 'Gäst'}
+                                </span>
+                            </button>
+
+                            <div className="absolute top-full right-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
+                                <div className="grid gap-1">
+                                    <NavLink to="/profile" className={linkClasses}>
+                                        <span className="w-5 text-center">👤</span>
+                                        <span>Min Profil</span>
+                                    </NavLink>
+                                    <button
+                                        onClick={logout}
+                                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 font-bold text-xs hover:text-rose-400 hover:bg-rose-500/10 transition-all w-full text-left"
+                                    >
+                                        <span className="w-5 text-center">🚪</span>
+                                        <span>Logga ut</span>
+                                    </button>
                                 </div>
                             </div>
                         </div>

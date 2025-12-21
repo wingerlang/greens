@@ -67,6 +67,8 @@ export interface UserSettings {
     trainingGoal?: 'neutral' | 'deff' | 'bulk';
     dailySleepGoal?: number;
     dailyWaterGoal?: number;
+    showSleep?: boolean;
+    showWater?: boolean;
 }
 
 /** User roles for permissions */
@@ -88,12 +90,17 @@ export interface User {
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
-    theme: 'light',
+    theme: 'dark',
     visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack'],
     dailyCalorieGoal: 2000,
     dailyProteinGoal: 150,
-    dailyCarbsGoal: 250,
-    dailyFatGoal: 65,
+    dailyCarbsGoal: 50,
+    dailyFatGoal: 30,
+    trainingGoal: 'neutral',
+    dailySleepGoal: 8,
+    dailyWaterGoal: 8,
+    showSleep: true,
+    showWater: true,
 };
 
 // ============================================
@@ -256,7 +263,7 @@ export type ExerciseType =
 export type ExerciseIntensity = 'low' | 'moderate' | 'high' | 'ultra';
 
 /** Available sub-types for deep exercise analysis */
-export type ExerciseSubType = 'default' | 'interval' | 'long-run' | 'race' | 'tonnage';
+export type ExerciseSubType = 'default' | 'interval' | 'long-run' | 'race' | 'tonnage' | 'ultra' | 'competition';
 
 /** Exercise tracking entry */
 export interface ExerciseEntry {

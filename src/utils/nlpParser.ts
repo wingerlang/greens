@@ -1,4 +1,4 @@
-import { type ExerciseType, type ExerciseIntensity, type MealType } from '../models/types.ts';
+import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType } from '../models/types.ts';
 
 export type OmniboxIntent =
     | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number }; date?: string }
@@ -7,6 +7,9 @@ export type OmniboxIntent =
     | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy'; amount: number }; date?: string }
     | { type: 'search'; data: { query: string }; date?: string };
 
+/**
+ * Parses a natural language string into a structured intent
+ */
 /**
  * Parses a natural language string into a structured intent
  */
@@ -22,18 +25,21 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
     const vitalsIntent = parseVitals(lower);
     if (vitalsIntent) return { ...vitalsIntent, date };
 
-    // 3. Weight Check
+    // 3. Exercise Check (PRIORITY OVER WEIGHT if explicit exercise keywords exist)
+    // This fixes "Styrka 200kg" being interpreted as weight update
+    const exerciseIntents = parseExercise(lower);
+    if (exerciseIntents) return { ...exerciseIntents, date };
+
+    // 4. Weight Check
+    // Matches "vikt 80kg", "80kg", "80 kg", but NOT if context implies exercise (handled above)
     const weightMatch = lower.match(/(?:vikt\s*[:\s]*|)(\d+(?:[.,]\d+)?)\s*(?:kg|kilo)?$/);
     if (weightMatch && (lower.startsWith('vikt') || lower.endsWith('kg') || lower.endsWith('kilo'))) {
         const weight = parseFloat(weightMatch[1].replace(',', '.'));
+        // Sanity check for weight
         if (!isNaN(weight) && weight > 20 && weight < 500) {
             return { type: 'weight', data: { weight }, date };
         }
     }
-
-    // 4. Exercise Check
-    const exerciseIntents = parseExercise(lower);
-    if (exerciseIntents) return { ...exerciseIntents, date };
 
     // 5. Food/Meal Check
     const foodIntents = parseFood(lower);
@@ -42,6 +48,7 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
     // 6. Default to Search
     return { type: 'search', data: { query: input }, date };
 }
+
 
 function parseDate(input: string): { date?: string; remaining: string } {
     const today = new Date();
@@ -98,7 +105,6 @@ function parseVitals(input: string): OmniboxIntent | null {
 }
 
 function parseExercise(input: string): OmniboxIntent | null {
-    // ... (rest of the existing parseExercise function, but refactored to return intent)
     // Type keywords mapping
     const typeKeywords: Record<string, ExerciseType> = {
         'löpning': 'running', 'löpn': 'running', 'löp': 'running', 'run': 'running',
@@ -121,12 +127,64 @@ function parseExercise(input: string): OmniboxIntent | null {
     }
 
     if (!type && (input.includes('träning') || input.includes('tränat') || input.includes('pass'))) {
-        // Continue
+        // Continue but generic
     }
 
-    if (!type && !input.match(/\d+\s*(min|h|t|m)/)) return null;
+    // Tonnage detection (moved UP to avoid conflict with duration)
+    // E.g. "20 ton" or "20t" (if ton shorthand) should NOT match duration
+    let tonnage: number | undefined;
+    let subType: ExerciseSubType = 'default';
 
-    const durationMatch = input.match(/(\d+)\s*(min|h|t|m)?/);
+    // We create a "clean" string for duration parsing that removes tonnage
+    let inputForDuration = input;
+
+    const tonnageMatch = input.match(/(\d+)\s*ton/i); // Matches "20 ton", "20ton"
+    const tonnageShortMatch = input.match(/(\d+)\s*t\b/i); // Matches "20 t" (but could be hours?) - "t" usually means hours in duration. 
+    // Let's stick to "ton" explicit or maybe context. User said "20t" calculates ton correctly.
+    // If user says "20t" and it matches tonnage, we must assume it's NOT duration.
+
+    if (tonnageMatch) {
+        tonnage = parseInt(tonnageMatch[1]) * 1000;
+        subType = 'tonnage';
+        inputForDuration = inputForDuration.replace(tonnageMatch[0], '');
+    } else {
+        const setRepWeightMatch = input.match(/(\d+)\s*x\s*(\d+)\s*(\d+)\s*kg/i);
+        if (setRepWeightMatch) {
+            const sets = parseInt(setRepWeightMatch[1]);
+            const reps = parseInt(setRepWeightMatch[2]);
+            const weight = parseInt(setRepWeightMatch[3]);
+            tonnage = sets * reps * weight;
+            subType = 'tonnage';
+            inputForDuration = inputForDuration.replace(setRepWeightMatch[0], '');
+        } else {
+            const multiTonnageMatch = input.match(/(\d+)\s*kg/i);
+            // If it's a large weight and context is strength, assume tonnage
+            if (multiTonnageMatch && (type === 'strength' || input.includes('lyft'))) {
+                const totalKg = parseInt(multiTonnageMatch[1]);
+                if (totalKg > 300) { // Unlikely to be a single lift notes, probably tonnage
+                    tonnage = totalKg;
+                    subType = 'tonnage';
+                    // Don't replace for duration, unlikely to conflict with "min"
+                } else if (type === 'strength') {
+                    // "Styrka 200kg" -> Tonnage implied? 
+                    // Or maybe just generic strength. 
+                    // User said "Styrka 200kg" thinks it is weight update.
+                    // By attempting parseExercise FIRST, we are here.
+                    // We can swallow this as a strength workout with 200kg "tonnage" (maybe deadlift?) or just notes?
+                    // Let's assume tonnage if explicitly strength
+                    tonnage = totalKg;
+                    subType = 'tonnage';
+                }
+            }
+        }
+    }
+
+    // Now check for duration in the CLEANED string
+    // This prevents "20 ton" from matching "20 t" (hours)
+
+    if (!type && !inputForDuration.match(/\d+\s*(min|h|t|m)/)) return null;
+
+    const durationMatch = inputForDuration.match(/(\d+)\s*(min|h|t|m)?/);
     let duration = 30;
     if (durationMatch) {
         duration = parseInt(durationMatch[1]);
@@ -140,38 +198,12 @@ function parseExercise(input: string): OmniboxIntent | null {
     else if (input.includes('max') || input.includes('ultra')) intensity = 'ultra';
 
     // Sub-types for running
-    let subType: ExerciseSubType = 'default';
     if (type === 'running') {
         if (input.includes('intervall')) subType = 'interval';
         else if (input.includes('långpass')) subType = 'long-run';
-        else if (input.includes('tävling')) subType = 'race';
-    }
-
-    // Tonnage detection (e.g. "3x10 100kg", "bänk 5 ton", "styrka 5000kg")
-    let tonnage: number | undefined;
-    const tonnageMatch = input.match(/(\d+)\s*ton/i);
-    if (tonnageMatch) {
-        tonnage = parseInt(tonnageMatch[1]) * 1000;
-        subType = 'tonnage';
-    } else {
-        const setRepWeightMatch = input.match(/(\d+)\s*x\s*(\d+)\s*(\d+)\s*kg/i);
-        if (setRepWeightMatch) {
-            const sets = parseInt(setRepWeightMatch[1]);
-            const reps = parseInt(setRepWeightMatch[2]);
-            const weight = parseInt(setRepWeightMatch[3]);
-            tonnage = sets * reps * weight;
-            subType = 'tonnage';
-        } else {
-            const multiTonnageMatch = input.match(/(\d+)\s*kg/i);
-            // If it's a large weight and context is strength, assume tonnage
-            if (multiTonnageMatch && (type === 'strength' || input.includes('lyft'))) {
-                const totalKg = parseInt(multiTonnageMatch[1]);
-                if (totalKg > 300) { // Unlikely to be a single lift notes, probably tonnage
-                    tonnage = totalKg;
-                    subType = 'tonnage';
-                }
-            }
-        }
+        else if (input.includes('tävling')) subType = 'competition';
+        else if (input.includes('lopp')) subType = 'race';
+        else if (input.includes('ultra')) subType = 'ultra';
     }
 
     return {

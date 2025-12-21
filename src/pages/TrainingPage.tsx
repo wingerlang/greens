@@ -160,7 +160,7 @@ export function TrainingPage() {
                 {/* Permanent Smart Input Header */}
                 <div className="flex-1 max-w-xl w-full">
                     <div className="relative group">
-                        <div className="absolute -top-6 left-0 flex items-center gap-2">
+                        <div className="flex items-center gap-2 mb-2">
                             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Snabb-logga pass</span>
                             <span className="text-[9px] text-slate-500 italic lowercase">t.ex. "45min löpning hög"</span>
                         </div>
