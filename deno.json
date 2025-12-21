@@ -20,6 +20,7 @@
     "react-dom/client": "npm:react-dom@^18.3.1/client",
     "react-router-dom": "npm:react-router-dom@^7.0.2",
     "@types/react": "npm:@types/react@^18.3.1",
-    "@types/react-dom": "npm:@types/react-dom@^18.3.1"
+    "@types/react-dom": "npm:@types/react-dom@^18.3.1",
+    "print-js": "npm:print-js@^1.6.0"
   }
 }

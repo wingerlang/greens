@@ -6,8 +6,9 @@
 .training-grid {
     display: grid;
     grid-template-columns: 280px 1fr;
-    gap: 2rem;
+    gap: 3rem;
     align-items: start;
+    margin-top: 2rem;
 }
 
 @media (max-width: 1024px) {

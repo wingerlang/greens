@@ -255,6 +255,9 @@ export type ExerciseType =
 /** Intensity levels for exercise */
 export type ExerciseIntensity = 'low' | 'moderate' | 'high' | 'ultra';
 
+/** Available sub-types for deep exercise analysis */
+export type ExerciseSubType = 'default' | 'interval' | 'long-run' | 'race' | 'tonnage';
+
 /** Exercise tracking entry */
 export interface ExerciseEntry {
     id: string;
@@ -264,6 +267,8 @@ export interface ExerciseEntry {
     intensity: ExerciseIntensity;
     caloriesBurned: number;
     notes?: string;
+    subType?: ExerciseSubType;
+    tonnage?: number;   // total kg lifted
     createdAt: string;
 }
 
@@ -329,6 +334,38 @@ export type MealEntryFormData = Omit<MealEntry, 'id' | 'createdAt'>;
 // Utility Types
 // ============================================
 
+// ============================================
+// Competition Mode Types
+// ============================================
+
+export interface CompetitionRule {
+    id: string;
+    name: string;
+    description: string;
+    points: number;
+    type: 'activity' | 'metric' | 'diet' | 'custom';
+    presetId?: string;
+}
+
+export interface CompetitionParticipant {
+    userId: string;
+    name: string;
+    scores: Record<string, number>; // date -> daily total points
+}
+
+export interface Competition {
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+    participants: CompetitionParticipant[];
+    rules: CompetitionRule[];
+    isDraft?: boolean;
+    isPublic?: boolean;
+    creatorId?: string;
+    createdAt: string;
+}
+
 /** Storage structure for LocalStorage persistence */
 export interface AppData {
     foodItems: FoodItem[];
@@ -343,6 +380,7 @@ export interface AppData {
     dailyVitals?: Record<string, DailyVitals>; // Key is YYYY-MM-DD
     exerciseEntries?: ExerciseEntry[];
     weightEntries?: WeightEntry[];
+    competitions?: Competition[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */

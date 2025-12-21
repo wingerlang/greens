@@ -24,6 +24,9 @@ import {
     type WeightEntry,
     type ExerciseType,
     type ExerciseIntensity,
+    type Competition,
+    type CompetitionRule,
+    type CompetitionParticipant,
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
@@ -101,6 +104,13 @@ interface DataContextType {
     addWeightEntry: (weight: number, date?: string) => WeightEntry;
     deleteWeightEntry: (id: string) => void;
     getLatestWeight: () => number;
+
+    // Competition CRUD
+    competitions: Competition[];
+    addCompetition: (data: Omit<Competition, 'id' | 'createdAt'>) => Competition;
+    updateCompetition: (id: string, updates: Partial<Competition>) => void;
+    deleteCompetition: (id: string) => void;
+    calculateParticipantPoints: (compId: string, userId: string, date: string) => number;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -128,6 +138,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [dailyVitals, setDailyVitals] = useState<Record<string, DailyVitals>>({});
     const [exerciseEntries, setExerciseEntries] = useState<ExerciseEntry[]>([]);
     const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
+    const [competitions, setCompetitions] = useState<Competition[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from storage on mount
@@ -165,6 +176,9 @@ export function DataProvider({ children }: DataProviderProps) {
             if (data.weightEntries) {
                 setWeightEntries(data.weightEntries);
             }
+            if (data.competitions) {
+                setCompetitions(data.competitions);
+            }
             setIsLoaded(true);
         };
         loadData();
@@ -185,10 +199,11 @@ export function DataProvider({ children }: DataProviderProps) {
                 currentUserId: currentUser?.id,
                 dailyVitals,
                 exerciseEntries,
-                weightEntries
+                weightEntries,
+                competitions
             });
         }
-    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries]);
+    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions]);
 
     // ============================================
     // Pantry CRUD
@@ -756,6 +771,28 @@ export function DataProvider({ children }: DataProviderProps) {
         getLatestWeight,
         calculateBMR,
         calculateExerciseCalories,
+        competitions,
+        addCompetition: useCallback((data) => {
+            const newComp: Competition = {
+                ...data,
+                id: generateId(),
+                createdAt: new Date().toISOString()
+            };
+            setCompetitions(prev => [...prev, newComp]);
+            return newComp;
+        }, []),
+        updateCompetition: useCallback((id, updates) => {
+            setCompetitions(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+        }, []),
+        deleteCompetition: useCallback((id) => {
+            setCompetitions(prev => prev.filter(c => c.id !== id));
+        }, []),
+        calculateParticipantPoints: useCallback((compId, userId, date) => {
+            const comp = competitions.find(c => c.id === compId);
+            if (!comp) return 0;
+            // Logic for calculating points based on rules will be implemented in a service/util
+            return 0; // Placeholder
+        }, [competitions])
     };
 
     return (

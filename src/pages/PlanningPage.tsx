@@ -11,8 +11,10 @@ import {
     MEAL_TYPE_LABELS,
     getWeekStartDate,
     getISODate,
+    type WeeklyPlan // Ensure this is imported or handled
 } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
+import printJS from 'print-js';
 import './PlanningPage.css';
 
 // ============================================
@@ -88,11 +90,15 @@ export function PlanningPage() {
     const [selectedSlot, setSelectedSlot] = useState<{ day: Weekday; meal: MealType } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Get current week plan
-    const weekPlan = useMemo(() => {
-        const plan = getWeeklyPlan(currentWeekStart);
-        return plan?.meals || {};
+    // Get current week plan data - ensure it defaults to empty plan structure
+    const weekPlanData = useMemo(() => {
+        return getWeeklyPlan(currentWeekStart);
     }, [currentWeekStart, getWeeklyPlan]);
+
+    // Derived meal map
+    const weekPlanMeals = useMemo<WeeklyPlan['meals']>(() => {
+        return weekPlanData?.meals || {};
+    }, [weekPlanData]);
 
     // Calculate week number
     const weekNumber = useMemo(() => {
@@ -224,7 +230,7 @@ export function PlanningPage() {
             }
 
             // 6. Carb variety (avoid too much rice/pasta in a row)
-            const plannedThisWeek = Object.values(weekPlan).flatMap(dayMeals =>
+            const plannedThisWeek = Object.values(weekPlanMeals).flatMap(dayMeals =>
                 Object.values(dayMeals || {}).map(m => m?.recipeId)
             ).filter(Boolean);
 
@@ -257,7 +263,7 @@ export function PlanningPage() {
 
         // Sort by score descending
         return suggestions.sort((a, b) => b.score - a.score).slice(0, 8);
-    }, [recipes, foodItems, weekPlan, getMealHistory]);
+    }, [recipes, foodItems, weekPlanMeals, getMealHistory]);
 
     // Get filtered recipes for search
     const filteredRecipes = useMemo(() => {
@@ -281,10 +287,12 @@ export function PlanningPage() {
     const handleSelectRecipe = (recipeId: string) => {
         if (!selectedSlot) return;
 
-        const newPlan = {
-            ...weekPlan,
+        const currentMeals = weekPlanMeals[selectedSlot.day] || {};
+
+        const newPlan: WeeklyPlan['meals'] = {
+            ...weekPlanMeals,
             [selectedSlot.day]: {
-                ...weekPlan[selectedSlot.day],
+                ...currentMeals,
                 [selectedSlot.meal]: { recipeId } as PlannedMeal,
             },
         };
@@ -296,13 +304,16 @@ export function PlanningPage() {
 
     // Handle removing a meal
     const handleRemoveMeal = (day: Weekday, meal: MealType) => {
-        const dayPlan = { ...weekPlan[day] };
-        delete dayPlan[meal];
+        const currentMeals = weekPlanMeals[day] || {};
+        const updatedDayMeals = { ...currentMeals };
+        delete updatedDayMeals[meal];
 
-        saveWeeklyPlan(currentWeekStart, {
-            ...weekPlan,
-            [day]: dayPlan,
-        });
+        const updatedPlanMeals: WeeklyPlan['meals'] = {
+            ...weekPlanMeals,
+            [day]: updatedDayMeals
+        };
+
+        saveWeeklyPlan(currentWeekStart, updatedPlanMeals);
     };
 
     // Get recipe name
@@ -326,6 +337,60 @@ export function PlanningPage() {
                     <button className="nav-btn" onClick={() => navigateWeek(1)}>→</button>
                 </div>
                 <p className="planning-subtitle">Smarta förslag baserat på dina mönster</p>
+                <button
+                    onClick={() => {
+                        // Create a temporary simplified layout for printing
+                        const printContent = `
+                            <div style="font-family: sans-serif; padding: 20px;">
+                                <h1 style="color: #10b981; margin-bottom: 20px;">Matsedel Vecka ${weekNumber}</h1>
+                                ${WEEKDAYS.map(day => {
+                            const dayPlan = weekPlanMeals[day];
+                            if (!dayPlan || Object.keys(dayPlan).length === 0) return '';
+                            return `
+                                        <div style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                                            <h3 style="margin: 0 0 10px 0; color: #333; text-transform: uppercase;">
+                                                ${WEEKDAY_LABELS[day]}
+                                            </h3>
+                                            ${settings.visibleMeals.map(meal => {
+                                const planned = dayPlan[meal];
+                                if (!planned) return '';
+                                const recipe = recipes.find(r => r.id === planned.recipeId);
+                                return `
+                                                    <div style="display: flex; margin-bottom: 5px;">
+                                                        <span style="width: 80px; color: #666; font-size: 0.9em; font-weight: bold;">
+                                                            ${MEAL_TYPE_LABELS[meal]}:
+                                                        </span>
+                                                        <span style="flex: 1;">${recipe?.name || 'Okänt recept'}</span>
+                                                    </div>
+                                                `;
+                            }).join('')}
+                                        </div>
+                                    `;
+                        }).join('')}
+                                <div style="margin-top: 30px; font-size: 0.8em; color: #999; text-align: center;">
+                                    Utskrivet från Greens • ${new Date().toLocaleDateString()}
+                                </div>
+                            </div>
+                        `;
+
+                        // Create hidden element
+                        const printArea = document.createElement('div');
+                        printArea.id = 'print-area';
+                        printArea.innerHTML = printContent;
+                        document.body.appendChild(printArea);
+
+                        printJS({
+                            printable: 'print-area',
+                            type: 'html',
+                            style: '@page { size: A4; margin: 20mm; }',
+                            scanStyles: false,
+                            onPrintDialogClose: () => document.body.removeChild(printArea)
+                        });
+                    }}
+                    className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
+                >
+                    🖨️ Skriv ut Matsedel (PDF)
+                </button>
             </header>
 
             {/* Week Grid - Compact View */}
@@ -337,7 +402,7 @@ export function PlanningPage() {
                         </div>
                         <div className="day-meals">
                             {settings.visibleMeals.map(meal => {
-                                const planned = weekPlan[day]?.[meal];
+                                const planned = weekPlanMeals[day]?.[meal];
                                 const isSelected = selectedSlot?.day === day && selectedSlot?.meal === meal;
 
                                 return (

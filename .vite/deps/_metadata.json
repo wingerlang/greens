@@ -2,51 +2,60 @@
   "hash": "93476811",
   "configHash": "4375a2a7",
   "lockfileHash": "e3b0c442",
-  "browserHash": "70c5b6d4",
+  "browserHash": "76a97436",
   "optimized": {
     "react": {
       "src": "../../node_modules/.deno/react@18.3.1/node_modules/react/index.js",
       "file": "react.js",
-      "fileHash": "40912744",
+      "fileHash": "fa8e0b29",
       "needsInterop": true
     },
     "react-dom": {
       "src": "../../node_modules/.deno/react-dom@18.3.1/node_modules/react-dom/index.js",
       "file": "react-dom.js",
-      "fileHash": "596a740b",
+      "fileHash": "5ac6c198",
       "needsInterop": true
     },
     "react/jsx-dev-runtime": {
       "src": "../../node_modules/.deno/react@18.3.1/node_modules/react/jsx-dev-runtime.js",
       "file": "react_jsx-dev-runtime.js",
-      "fileHash": "53da9c1c",
+      "fileHash": "6c09c190",
       "needsInterop": true
     },
     "react/jsx-runtime": {
       "src": "../../node_modules/.deno/react@18.3.1/node_modules/react/jsx-runtime.js",
       "file": "react_jsx-runtime.js",
-      "fileHash": "cf8df808",
+      "fileHash": "de03d34a",
       "needsInterop": true
     },
     "react-dom/client": {
       "src": "../../node_modules/.deno/react-dom@18.3.1/node_modules/react-dom/client.js",
       "file": "react-dom_client.js",
-      "fileHash": "42a95859",
+      "fileHash": "7dbb4308",
       "needsInterop": true
     },
     "react-router-dom": {
       "src": "../../node_modules/.deno/react-router-dom@7.10.1/node_modules/react-router-dom/dist/index.mjs",
       "file": "react-router-dom.js",
-      "fileHash": "f49260b5",
+      "fileHash": "4d93ba57",
       "needsInterop": false
+    },
+    "print-js": {
+      "src": "../../node_modules/.deno/print-js@1.6.0/node_modules/print-js/dist/print.js",
+      "file": "print-js.js",
+      "fileHash": "87ef2336",
+      "needsInterop": true
     }
   },
   "chunks": {
-    "chunk-6FOMIOUU": {
-      "file": "chunk-6FOMIOUU.js"
+    "chunk-OPTW7C3H": {
+      "file": "chunk-OPTW7C3H.js"
     },
-    "chunk-6ZLH4LKA": {
-      "file": "chunk-6ZLH4LKA.js"
+    "chunk-GKTGAG25": {
+      "file": "chunk-GKTGAG25.js"
+    },
+    "chunk-5WRI5ZAA": {
+      "file": "chunk-5WRI5ZAA.js"
     }
   }
 }

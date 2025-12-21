@@ -16,6 +16,7 @@ import { ApiPage } from './pages/ApiPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { DocumentationPage } from './components/DocumentationPage.tsx';
 import { HealthPage } from './pages/HealthPage.tsx';
+import { CompetitionPage } from './pages/CompetitionPage.tsx';
 
 export function App() {
     return (
@@ -37,6 +38,8 @@ export function App() {
                                 <Route path="/profile" element={<ProfilePage />} />
                                 <Route path="/health" element={<HealthPage />} />
                                 <Route path="/halsa" element={<HealthPage />} />
+                                <Route path="/competition" element={<CompetitionPage />} />
+                                <Route path="/tävling" element={<CompetitionPage />} />
                                 <Route path="/admin" element={<AdminPage />} />
                             </Routes>
                         </Layout>

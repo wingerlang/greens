@@ -5,6 +5,7 @@
     "npm:@types/react@^18.3.1": "18.3.27",
     "npm:@vitejs/plugin-react@^4.3.4": "4.7.0_vite@6.4.1__picomatch@4.0.3_@babel+core@7.28.5",
     "npm:autoprefixer@^10.4.0": "10.4.23_postcss@8.5.6",
+    "npm:print-js@^1.6.0": "1.6.0",
     "npm:react-dom@^18.3.1": "18.3.1_react@18.3.1",
     "npm:react-router-dom@^7.0.2": "7.10.1_react@18.3.1_react-dom@18.3.1__react@18.3.1",
     "npm:react@^18.3.1": "18.3.1",
@@ -965,6 +966,9 @@
         "source-map-js"
       ]
     },
+    "print-js@1.6.0": {
+      "integrity": "sha512-BfnOIzSKbqGRtO4o0rnj/K3681BSd2QUrsIZy/+WdCIugjIswjmx3lDEZpXB2ruGf9d4b3YNINri81+J0FsBWg=="
+    },
     "queue-microtask@1.2.3": {
       "integrity": "sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A=="
     },
@@ -1303,6 +1307,7 @@
     "dependencies": [
       "npm:@types/react-dom@^18.3.1",
       "npm:@types/react@^18.3.1",
+      "npm:print-js@^1.6.0",
       "npm:react-dom@^18.3.1",
       "npm:react-router-dom@^7.0.2",
       "npm:react@^18.3.1"

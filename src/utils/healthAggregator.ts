@@ -1,4 +1,4 @@
-import { DailyVitals, WeightEntry, MealEntry, ExerciseEntry, NutritionSummary } from '../models/types.ts';
+import { DailyVitals, WeightEntry, MealEntry, ExerciseEntry, NutritionSummary, ExerciseSubType } from '../models/types.ts';
 
 export interface HealthStats {
     avgSleep: number;
@@ -12,6 +12,13 @@ export interface HealthStats {
     loggingConsistency: number; // 0-100 % of days with at least one log
     activeDays: number;
     untrackedDays: number;
+    exerciseBreakdown: {
+        intervals: number;
+        longRuns: number;
+        races: number;
+        totalTonnage: number;
+        strengthSessions: number;
+    };
 }
 
 export const RDA = {
@@ -32,6 +39,13 @@ export interface DaySnapshot {
     hasLogs: boolean;
     isVitalsOnly: boolean;
     isUntracked: boolean;
+    exerciseDeatils: {
+        intervals: number;
+        longRuns: number;
+        races: number;
+        tonnage: number;
+        isStrength: boolean;
+    };
 }
 
 /**
@@ -66,6 +80,14 @@ export function aggregateHealthData(
 
         const hasLogs = hasMealLogs || hasVitalLogs || hasExerciseLogs || hasWeightLog;
 
+        const exerciseDeatils = dayExercises.reduce((acc, e) => ({
+            intervals: acc.intervals + (e.subType === 'interval' ? 1 : 0),
+            longRuns: acc.longRuns + (e.subType === 'long-run' ? 1 : 0),
+            races: acc.races + (e.subType === 'race' ? 1 : 0),
+            tonnage: acc.tonnage + (e.tonnage || 0),
+            isStrength: acc.isStrength || e.type === 'strength'
+        }), { intervals: 0, longRuns: 0, races: 0, tonnage: 0, isStrength: false });
+
         snapshots.unshift({
             date: dateStr,
             vitals: dayVitals,
@@ -74,7 +96,8 @@ export function aggregateHealthData(
             weight: dayWeight,
             hasLogs,
             isVitalsOnly: !hasMealLogs && hasVitalLogs,
-            isUntracked: !hasLogs
+            isUntracked: !hasLogs,
+            exerciseDeatils
         });
     }
 
@@ -118,6 +141,16 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
     const untrackedDays = snapshots.filter(s => s.isUntracked).length;
     const loggingConsistency = Math.round((activeDays / count) * 100);
 
+    // Exercise Breakdown
+    const exerciseBreakdown = snapshots.reduce((acc, s) => {
+        acc.intervals += s.exerciseDeatils.intervals;
+        acc.longRuns += s.exerciseDeatils.longRuns;
+        acc.races += s.exerciseDeatils.races;
+        acc.totalTonnage += s.exerciseDeatils.tonnage;
+        if (s.exerciseDeatils.isStrength) acc.strengthSessions++;
+        return acc;
+    }, { intervals: 0, longRuns: 0, races: 0, totalTonnage: 0, strengthSessions: 0 });
+
     return {
         avgSleep: totals.sleep / count,
         avgWater: totals.water / count,
@@ -129,6 +162,7 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
         vitaminCoverage,
         loggingConsistency,
         activeDays,
-        untrackedDays
+        untrackedDays,
+        exerciseBreakdown
     };
 }

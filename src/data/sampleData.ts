@@ -42,6 +42,31 @@ export const SAMPLE_USERS: User[] = [
             dailyCalorieGoal: 2200
         },
         createdAt: now
+    },
+    {
+        id: 'user-johannes',
+        name: 'Johannes',
+        email: 'johannes@greens.se',
+        role: 'admin',
+        plan: 'evergreen',
+        settings: {
+            ...DEFAULT_USER_SETTINGS,
+            dailyCalorieGoal: 2500,
+            trainingGoal: 'bulk'
+        },
+        createdAt: now
+    },
+    {
+        id: 'user-gustav',
+        name: 'Gustav',
+        email: 'gustav@gmail.com',
+        role: 'user',
+        plan: 'free',
+        settings: {
+            ...DEFAULT_USER_SETTINGS,
+            trainingGoal: 'neutral'
+        },
+        createdAt: now
     }
 ];
 

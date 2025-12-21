@@ -9,10 +9,10 @@ const ROADMAP_ITEMS = [
         tags: ['Premium', 'Household']
     },
     {
-        title: 'AI Receptgenerator',
-        description: 'Skapa skräddarsydda recept baserat på vad du har i skafferiet just nu med hjälp av GPT-4.',
-        status: 'research',
-        tags: ['AI', 'Pantry']
+        title: 'Träningsläge & Tävlingar',
+        description: 'Dynamiska mål, djup analys av löpning/styrka och tävlingsläge mot vänner.',
+        status: 'done',
+        tags: ['Health', 'Competition']
     },
     {
         title: 'Smart Inköpslista v2',
@@ -21,7 +21,7 @@ const ROADMAP_ITEMS = [
         tags: ['Shopping']
     },
     {
-        title: 'Mobil App (PWA Enchancements)',
+        title: 'Mobil App (PWA Enhancements)',
         description: 'Bättre offline-stöd och push-notiser när det är dags att börja laga middagen.',
         status: 'planned',
         tags: ['Mobile']
@@ -29,13 +29,13 @@ const ROADMAP_ITEMS = [
     {
         title: 'Vatten & Sömn Tracking',
         description: 'Integrera holistisk hälsa med din kost för en komplett bild av ditt välmående.',
-        status: 'planned',
+        status: 'done',
         tags: ['Health']
     },
     {
         title: 'Exportera till PDF / Utskrift',
         description: 'Skriv ut din veckoplan eller enskilda recept med snygg layout för köksväggen.',
-        status: 'planned',
+        status: 'in-progress',
         tags: ['Utilities']
     }
 ];
@@ -53,10 +53,11 @@ export const RoadmapModule: React.FC = () => {
                         <div className="flex justify-between items-start mb-2">
                             <h3 className="font-bold text-white group-hover:text-purple-400 transition-colors">{item.title}</h3>
                             <span className={`text-[10px] px-2 py-1 rounded-full uppercase tracking-widest font-bold ${item.status === 'in-progress' ? 'bg-amber-500/10 text-amber-500' :
-                                    item.status === 'research' ? 'bg-sky-500/10 text-sky-500' :
+                                item.status === 'research' ? 'bg-sky-500/10 text-sky-500' :
+                                    item.status === 'done' ? 'bg-emerald-500/10 text-emerald-500' :
                                         'bg-slate-800 text-gray-400'
                                 }`}>
-                                {item.status === 'in-progress' ? 'Pågår' : item.status === 'research' ? 'Utforskas' : 'Planerad'}
+                                {item.status === 'in-progress' ? 'Pågår' : item.status === 'research' ? 'Utforskas' : item.status === 'done' ? 'Klart ✅' : 'Planerad'}
                             </span>
                         </div>
                         <p className="text-sm text-gray-400 leading-relaxed mb-4">

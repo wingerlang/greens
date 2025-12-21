@@ -120,7 +120,10 @@ export function CommandCenter() {
                 type,
                 durationMinutes: duration,
                 intensity,
-                caloriesBurned: calories
+                caloriesBurned: calories,
+                subType: intent.data.subType,
+                tonnage: intent.data.tonnage,
+                notes: intent.data.notes
             });
             setQuery('');
         } else if (intent.type === 'weight') {

@@ -35,7 +35,8 @@ const getDefaultData = (): AppData => ({
     users: SAMPLE_USERS,
     currentUserId: SAMPLE_USERS[0].id,
     exerciseEntries: [],
-    weightEntries: []
+    weightEntries: [],
+    competitions: []
 });
 
 export class LocalStorageService implements StorageService {
@@ -67,6 +68,9 @@ export class LocalStorageService implements StorageService {
                 }
                 if (!data.weightEntries) {
                     data.weightEntries = [];
+                }
+                if (!data.competitions) {
+                    data.competitions = [];
                 }
                 return data;
             }

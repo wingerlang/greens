@@ -1,7 +1,7 @@
 import { type ExerciseType, type ExerciseIntensity, type MealType } from '../models/types.ts';
 
 export type OmniboxIntent =
-    | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string }; date?: string }
+    | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number }; date?: string }
     | { type: 'food'; data: { query: string; quantity?: number; unit?: string; mealType?: MealType }; date?: string }
     | { type: 'weight'; data: { weight: number }; date?: string }
     | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy'; amount: number }; date?: string }
@@ -139,13 +139,50 @@ function parseExercise(input: string): OmniboxIntent | null {
     else if (input.includes('hög') || input.includes('hårt') || input.includes('hard') || input.includes('tuff')) intensity = 'high';
     else if (input.includes('max') || input.includes('ultra')) intensity = 'ultra';
 
+    // Sub-types for running
+    let subType: ExerciseSubType = 'default';
+    if (type === 'running') {
+        if (input.includes('intervall')) subType = 'interval';
+        else if (input.includes('långpass')) subType = 'long-run';
+        else if (input.includes('tävling')) subType = 'race';
+    }
+
+    // Tonnage detection (e.g. "3x10 100kg", "bänk 5 ton", "styrka 5000kg")
+    let tonnage: number | undefined;
+    const tonnageMatch = input.match(/(\d+)\s*ton/i);
+    if (tonnageMatch) {
+        tonnage = parseInt(tonnageMatch[1]) * 1000;
+        subType = 'tonnage';
+    } else {
+        const setRepWeightMatch = input.match(/(\d+)\s*x\s*(\d+)\s*(\d+)\s*kg/i);
+        if (setRepWeightMatch) {
+            const sets = parseInt(setRepWeightMatch[1]);
+            const reps = parseInt(setRepWeightMatch[2]);
+            const weight = parseInt(setRepWeightMatch[3]);
+            tonnage = sets * reps * weight;
+            subType = 'tonnage';
+        } else {
+            const multiTonnageMatch = input.match(/(\d+)\s*kg/i);
+            // If it's a large weight and context is strength, assume tonnage
+            if (multiTonnageMatch && (type === 'strength' || input.includes('lyft'))) {
+                const totalKg = parseInt(multiTonnageMatch[1]);
+                if (totalKg > 300) { // Unlikely to be a single lift notes, probably tonnage
+                    tonnage = totalKg;
+                    subType = 'tonnage';
+                }
+            }
+        }
+    }
+
     return {
         type: 'exercise',
         data: {
             exerciseType: type || 'other',
             duration,
             intensity,
-            notes: input.length > 20 ? input : undefined
+            notes: input.length > 20 ? input : undefined,
+            subType,
+            tonnage
         }
     };
 }
