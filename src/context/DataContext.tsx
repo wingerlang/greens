@@ -27,6 +27,7 @@ import {
     type Competition,
     type CompetitionRule,
     type CompetitionParticipant,
+    type TrainingCycle,
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
@@ -111,6 +112,12 @@ interface DataContextType {
     updateCompetition: (id: string, updates: Partial<Competition>) => void;
     deleteCompetition: (id: string) => void;
     calculateParticipantPoints: (compId: string, userId: string, date: string) => number;
+
+    // Training Cycle CRUD
+    trainingCycles: TrainingCycle[];
+    addTrainingCycle: (data: Omit<TrainingCycle, 'id'>) => TrainingCycle;
+    updateTrainingCycle: (id: string, updates: Partial<TrainingCycle>) => void;
+    deleteTrainingCycle: (id: string) => void;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -139,6 +146,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [exerciseEntries, setExerciseEntries] = useState<ExerciseEntry[]>([]);
     const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
     const [competitions, setCompetitions] = useState<Competition[]>([]);
+    const [trainingCycles, setTrainingCycles] = useState<TrainingCycle[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from storage on mount
@@ -174,10 +182,13 @@ export function DataProvider({ children }: DataProviderProps) {
                 setExerciseEntries(data.exerciseEntries);
             }
             if (data.weightEntries) {
-                setWeightEntries(data.weightEntries);
+                setWeightEntries(data.weightEntries || []);
             }
             if (data.competitions) {
-                setCompetitions(data.competitions);
+                setCompetitions(data.competitions || []);
+            }
+            if (data.trainingCycles) {
+                setTrainingCycles(data.trainingCycles || []);
             }
             setIsLoaded(true);
         };
@@ -489,7 +500,11 @@ export function DataProvider({ children }: DataProviderProps) {
         };
         setWeightEntries(prev => {
             const next = [...prev, newEntry];
-            return next.sort((a, b) => b.date.localeCompare(a.date)); // Sort descending
+            return next.sort((a, b) => {
+                const dateCompare = b.date.localeCompare(a.date);
+                if (dateCompare !== 0) return dateCompare;
+                return b.createdAt.localeCompare(a.createdAt);
+            });
         });
         return newEntry;
     }, []);
@@ -786,6 +801,23 @@ export function DataProvider({ children }: DataProviderProps) {
         }, []),
         deleteCompetition: useCallback((id) => {
             setCompetitions(prev => prev.filter(c => c.id !== id));
+        }, []),
+
+        // Training Cycle CRUD
+        trainingCycles,
+        addTrainingCycle: useCallback((data) => {
+            const newCycle: TrainingCycle = {
+                ...data,
+                id: generateId()
+            };
+            setTrainingCycles(prev => [...prev, newCycle]);
+            return newCycle;
+        }, []),
+        updateTrainingCycle: useCallback((id, updates) => {
+            setTrainingCycles(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+        }, []),
+        deleteTrainingCycle: useCallback((id) => {
+            setTrainingCycles(prev => prev.filter(c => c.id !== id));
         }, []),
         calculateParticipantPoints: useCallback((compId, userId, date) => {
             const comp = competitions.find(c => c.id === compId);

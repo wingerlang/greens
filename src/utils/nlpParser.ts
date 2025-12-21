@@ -206,6 +206,13 @@ function parseExercise(input: string): OmniboxIntent | null {
         else if (input.includes('ultra')) subType = 'ultra';
     }
 
+    // Inferred type from keywords (if not explicit)
+    if (!type) {
+        if (input.includes('intervall') || input.includes('långpass') || input.includes('lopp') || input.includes('tävling') || input.includes('ultra')) {
+            type = 'running';
+        }
+    }
+
     return {
         type: 'exercise',
         data: {

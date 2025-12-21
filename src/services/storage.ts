@@ -25,6 +25,7 @@ export interface StorageService {
 // ============================================
 
 const STORAGE_KEY = 'greens-app-data';
+const ENABLE_CLOUD_SYNC = false; // Set to true if running backend server
 
 const getDefaultData = (): AppData => ({
     foodItems: SAMPLE_FOOD_ITEMS,
@@ -36,7 +37,8 @@ const getDefaultData = (): AppData => ({
     currentUserId: SAMPLE_USERS[0].id,
     exerciseEntries: [],
     weightEntries: [],
-    competitions: []
+    competitions: [],
+    trainingCycles: []
 });
 
 // Helper to get token (if any)
@@ -50,7 +52,7 @@ export class LocalStorageService implements StorageService {
 
         // 1. Try API first if token exists
         const token = getToken();
-        if (token) {
+        if (token && ENABLE_CLOUD_SYNC) {
             try {
                 const res = await fetch('http://localhost:8000/api/data', {
                     headers: { 'Authorization': `Bearer ${token}` }

@@ -249,6 +249,17 @@ export interface DailyVitals {
 /** Training goals for calorie adjustments */
 export type TrainingGoal = 'neutral' | 'deff' | 'bulk';
 
+export interface TrainingCycle {
+    id: string;
+    name: string;
+    goal: TrainingGoal;
+    startDate: string;
+    endDate?: string;
+    startWeight?: number;
+    targetWeight?: number;
+    notes?: string;
+}
+
 /** Available exercise categories */
 export type ExerciseType =
     | 'running'
@@ -388,6 +399,7 @@ export interface AppData {
     exerciseEntries?: ExerciseEntry[];
     weightEntries?: WeightEntry[];
     competitions?: Competition[];
+    trainingCycles?: TrainingCycle[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */
