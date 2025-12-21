@@ -301,6 +301,14 @@ export interface NutritionSummary {
     carbs: number;
     fat: number;
     fiber: number;
+    // Micronutrients
+    iron?: number;
+    calcium?: number;
+    zinc?: number;
+    vitaminB12?: number;
+    vitaminC?: number;
+    vitaminA?: number;
+    proteinCategories?: string[];
 }
 
 /** Recipe with computed nutritional info */

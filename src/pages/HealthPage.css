@@ -1,0 +1,277 @@
+.health-page {
+    padding: 2rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    min-height: 100vh;
+}
+
+.health-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 3rem;
+}
+
+.header-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: rgba(16, 185, 129, 0.1);
+    color: #10b981;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    border-radius: 99px;
+    margin-bottom: 0.75rem;
+    transition: all 0.3s ease;
+}
+
+.header-content h1 {
+    font-size: 3rem;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: white;
+    margin: 0;
+}
+
+.header-content p {
+    color: #64748b;
+    margin: 0.5rem 0 0;
+}
+
+/* Timeframe Selector */
+.tf-selector {
+    display: flex;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 0.25rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.tf-btn {
+    padding: 0.5rem 1.25rem;
+    border-radius: 9px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 0.75rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tf-btn.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Grid Layout */
+.health-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+}
+
+.stat-card {
+    padding: 1.5rem;
+    border-radius: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.stat-label {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #64748b;
+}
+
+.stat-value {
+    font-size: 2rem;
+    font-weight: 900;
+    color: white;
+}
+
+.stat-trend {
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.stat-trend.positive {
+    color: #10b981;
+}
+
+.stat-trend.negative {
+    color: #f43f5e;
+}
+
+.stat-trend.neutral {
+    color: #64748b;
+}
+
+.visual-sections {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+}
+
+@media (max-width: 1024px) {
+    .visual-sections {
+        grid-template-columns: 1fr;
+    }
+}
+
+.health-card {
+    border-radius: 32px;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.card-header h2 {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: white;
+    margin: 0;
+}
+
+.card-header p {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin: 0.25rem 0 0;
+}
+
+.side-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.massive-chart {
+    min-height: 400px;
+}
+
+.chart-placeholder {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 20px;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.glass {
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3);
+}
+
+/* Score Circle */
+.score-circle {
+    width: 60px;
+    height: 60px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.circular-chart {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+}
+
+.circle-bg {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.05);
+    stroke-width: 3.8;
+}
+
+.circle {
+    fill: none;
+    stroke-width: 2.8;
+    stroke-linecap: round;
+    transition: all 1s ease;
+}
+
+.percentage {
+    fill: white;
+    font-size: 0.6rem;
+    font-weight: 900;
+    text-anchor: middle;
+}
+
+.score-label {
+    position: absolute;
+    bottom: -12px;
+    font-size: 7px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #64748b;
+    white-space: nowrap;
+}
+
+/* Insight Cards */
+.insights-row {
+    margin: 1.5rem 0;
+}
+
+.insight-card {
+    padding: 1rem 1.5rem;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    max-width: 380px;
+    border-left: 4px solid #64748b;
+}
+
+.insight-card.positive {
+    border-left-color: #10b981;
+}
+
+.insight-card.warning {
+    border-left-color: #f43f5e;
+}
+
+.insight-card.tip {
+    border-left-color: #8b5cf6;
+}
+
+.insight-card.goal {
+    border-left-color: #f59e0b;
+}
+
+.insight-icon {
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.insight-text {
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    line-height: 1.4;
+    margin: 0;
+}
+
+@keyframes dash {
+    from {
+        stroke-dasharray: 0, 100;
+    }
+}
+
+.circle {
+    animation: dash 1.5s ease-out forwards;
+}

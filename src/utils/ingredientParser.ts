@@ -38,6 +38,12 @@ export interface RecipeEstimate {
     carbs: number;
     fat: number;
     fiber: number;
+    iron: number;
+    calcium: number;
+    zinc: number;
+    vitaminB12: number;
+    vitaminC: number;
+    vitaminA: number;
     price: number;
     co2: number;
     matchedCount: number;
@@ -197,6 +203,12 @@ export function calculateIngredientNutrition(
             carbs: Math.round(foodItem.carbs * factor * 10) / 10,
             fat: Math.round(foodItem.fat * factor * 10) / 10,
             fiber: Math.round((foodItem.fiber || 0) * factor * 10) / 10,
+            iron: (foodItem.iron || 0) * factor,
+            calcium: (foodItem.calcium || 0) * factor,
+            zinc: (foodItem.zinc || 0) * factor,
+            vitaminB12: (foodItem.vitaminB12 || 0) * factor,
+            vitaminC: (foodItem.vitaminC || 0) * factor,
+            vitaminA: (foodItem.vitaminA || 0) * factor,
         },
         price: Math.round((foodItem.pricePerUnit || 0) * (grams / 1000) * 10) / 10, // price per kg
         co2: Math.round((foodItem.co2PerUnit || 0) * (grams / 1000) * 100) / 100, // co2 per kg
@@ -218,6 +230,12 @@ export function calculateRecipeEstimate(
     let totalCarbs = 0;
     let totalFat = 0;
     let totalFiber = 0;
+    let totalIron = 0;
+    let totalCalcium = 0;
+    let totalZinc = 0;
+    let totalVitB12 = 0;
+    let totalVitC = 0;
+    let totalVitA = 0;
     let totalPrice = 0;
     let totalCo2 = 0;
     let matchedCount = 0;
@@ -251,6 +269,12 @@ export function calculateRecipeEstimate(
             totalCarbs += nutrition.carbs;
             totalFat += nutrition.fat;
             totalFiber += nutrition.fiber;
+            totalIron += nutrition.iron || 0;
+            totalCalcium += nutrition.calcium || 0;
+            totalZinc += nutrition.zinc || 0;
+            totalVitB12 += nutrition.vitaminB12 || 0;
+            totalVitC += nutrition.vitaminC || 0;
+            totalVitA += nutrition.vitaminA || 0;
             totalPrice += price;
             totalCo2 += co2;
             matchedCount++;
@@ -278,10 +302,6 @@ export function calculateRecipeEstimate(
     const synergies: SynergyResult[] = [];
 
     // 1. Iron + Vitamin C Synergy
-    let totalIron = 0;
-    let totalVitC = 0;
-    let totalVitA = 0;
-    let totalZinc = 0;
     let hasTurmeric = false;
     let hasBlackPepper = false;
     let hasCruciferous = false;
@@ -369,6 +389,12 @@ export function calculateRecipeEstimate(
         carbs: Math.round(totalCarbs * 10) / 10,
         fat: Math.round(totalFat * 10) / 10,
         fiber: Math.round(totalFiber * 10) / 10,
+        iron: Math.round(totalIron * 10) / 10,
+        calcium: Math.round(totalCalcium),
+        zinc: Math.round(totalZinc * 10) / 10,
+        vitaminB12: Math.round(totalVitB12 * 100) / 100,
+        vitaminC: Math.round(totalVitC),
+        vitaminA: Math.round(totalVitA),
         price: Math.round(totalPrice),
         co2: Math.round(totalCo2 * 100) / 100,
         matchedCount,

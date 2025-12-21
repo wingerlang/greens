@@ -53,6 +53,10 @@ export function Navigation() {
                                 <span>🏋️</span>
                                 <span className="hidden xl:inline">Träning</span>
                             </NavLink>
+                            <NavLink to="/health" className={linkClasses}>
+                                <span>📊</span>
+                                <span className="hidden xl:inline">Hälsa</span>
+                            </NavLink>
                             <NavLink to="/pantry" className={linkClasses}>
                                 <span>🏠</span>
                                 <span className="hidden xl:inline">Skafferi</span>
@@ -166,6 +170,13 @@ export function Navigation() {
                             <div className="flex flex-col">
                                 <span className="font-bold text-slate-100">Träning</span>
                                 <span className="text-[10px] text-slate-500 font-medium">Logga pass</span>
+                            </div>
+                        </NavLink>
+                        <NavLink to="/health" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                            <span className="text-xl">📊</span>
+                            <div className="flex flex-col">
+                                <span className="font-bold text-slate-100">Hälsa</span>
+                                <span className="text-[10px] text-slate-500 font-medium">Trender & Insikter</span>
                             </div>
                         </NavLink>
                         <NavLink to="/pantry" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>

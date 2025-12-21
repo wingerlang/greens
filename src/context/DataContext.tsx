@@ -337,6 +337,13 @@ export function DataProvider({ children }: DataProviderProps) {
                 carbs: Math.round(estimate.carbs * 10) / 10,
                 fat: Math.round(estimate.fat * 10) / 10,
                 fiber: Math.round(estimate.fiber * 10) / 10,
+                iron: estimate.iron,
+                calcium: estimate.calcium,
+                zinc: estimate.zinc,
+                vitaminB12: estimate.vitaminB12,
+                vitaminC: estimate.vitaminC,
+                vitaminA: estimate.vitaminA,
+                proteinCategories: estimate.proteinCategories,
             };
         }
 
@@ -359,6 +366,18 @@ export function DataProvider({ children }: DataProviderProps) {
                 summary.carbs += foodItem.carbs * multiplier;
                 summary.fat += foodItem.fat * multiplier;
                 summary.fiber += (foodItem.fiber || 0) * multiplier;
+                summary.iron = (summary.iron || 0) + (foodItem.iron || 0) * multiplier;
+                summary.calcium = (summary.calcium || 0) + (foodItem.calcium || 0) * multiplier;
+                summary.zinc = (summary.zinc || 0) + (foodItem.zinc || 0) * multiplier;
+                summary.vitaminB12 = (summary.vitaminB12 || 0) + (foodItem.vitaminB12 || 0) * multiplier;
+                summary.vitaminC = (summary.vitaminC || 0) + (foodItem.vitaminC || 0) * multiplier;
+                summary.vitaminA = (summary.vitaminA || 0) + (foodItem.vitaminA || 0) * multiplier;
+                if (foodItem.proteinCategory) {
+                    summary.proteinCategories = summary.proteinCategories || [];
+                    if (!summary.proteinCategories.includes(foodItem.proteinCategory)) {
+                        summary.proteinCategories.push(foodItem.proteinCategory);
+                    }
+                }
             }
         }
 
@@ -368,6 +387,13 @@ export function DataProvider({ children }: DataProviderProps) {
             carbs: Math.round(summary.carbs * 10) / 10,
             fat: Math.round(summary.fat * 10) / 10,
             fiber: Math.round(summary.fiber * 10) / 10,
+            iron: Math.round((summary.iron || 0) * 10) / 10,
+            calcium: Math.round(summary.calcium || 0),
+            zinc: Math.round((summary.zinc || 0) * 10) / 10,
+            vitaminB12: Math.round((summary.vitaminB12 || 0) * 100) / 100,
+            vitaminC: Math.round(summary.vitaminC || 0),
+            vitaminA: Math.round(summary.vitaminA || 0),
+            proteinCategories: summary.proteinCategories || [],
         };
     }, [foodItems]);
 
@@ -523,6 +549,20 @@ export function DataProvider({ children }: DataProviderProps) {
                         summary.carbs += nutrition.carbs * multiplier;
                         summary.fat += nutrition.fat * multiplier;
                         summary.fiber += (nutrition.fiber || 0) * multiplier;
+                        summary.iron = (summary.iron || 0) + (nutrition.iron || 0) * multiplier;
+                        summary.calcium = (summary.calcium || 0) + (nutrition.calcium || 0) * multiplier;
+                        summary.zinc = (summary.zinc || 0) + (nutrition.zinc || 0) * multiplier;
+                        summary.vitaminB12 = (summary.vitaminB12 || 0) + (nutrition.vitaminB12 || 0) * multiplier;
+                        summary.vitaminC = (summary.vitaminC || 0) + (nutrition.vitaminC || 0) * multiplier;
+                        summary.vitaminA = (summary.vitaminA || 0) + (nutrition.vitaminA || 0) * multiplier;
+                        if (nutrition.proteinCategories) {
+                            summary.proteinCategories = summary.proteinCategories || [];
+                            nutrition.proteinCategories.forEach(cat => {
+                                if (!summary.proteinCategories?.includes(cat)) {
+                                    summary.proteinCategories?.push(cat);
+                                }
+                            });
+                        }
                     }
                 } else {
                     const foodItem = foodItems.find(f => f.id === item.referenceId);
@@ -533,6 +573,18 @@ export function DataProvider({ children }: DataProviderProps) {
                         summary.carbs += foodItem.carbs * multiplier;
                         summary.fat += foodItem.fat * multiplier;
                         summary.fiber += (foodItem.fiber || 0) * multiplier;
+                        summary.iron = (summary.iron || 0) + (foodItem.iron || 0) * multiplier;
+                        summary.calcium = (summary.calcium || 0) + (foodItem.calcium || 0) * multiplier;
+                        summary.zinc = (summary.zinc || 0) + (foodItem.zinc || 0) * multiplier;
+                        summary.vitaminB12 = (summary.vitaminB12 || 0) + (foodItem.vitaminB12 || 0) * multiplier;
+                        summary.vitaminC = (summary.vitaminC || 0) + (foodItem.vitaminC || 0) * multiplier;
+                        summary.vitaminA = (summary.vitaminA || 0) + (foodItem.vitaminA || 0) * multiplier;
+                        if (foodItem.proteinCategory) {
+                            summary.proteinCategories = summary.proteinCategories || [];
+                            if (!summary.proteinCategories.includes(foodItem.proteinCategory)) {
+                                summary.proteinCategories.push(foodItem.proteinCategory);
+                            }
+                        }
                     }
                 }
             }
@@ -550,6 +602,13 @@ export function DataProvider({ children }: DataProviderProps) {
             carbs: Math.round(summary.carbs * 10) / 10,
             fat: Math.round(summary.fat * 10) / 10,
             fiber: Math.round(summary.fiber * 10) / 10,
+            iron: Math.round((summary.iron || 0) * 10) / 10,
+            calcium: Math.round(summary.calcium || 0),
+            zinc: Math.round((summary.zinc || 0) * 10) / 10,
+            vitaminB12: Math.round((summary.vitaminB12 || 0) * 100) / 100,
+            vitaminC: Math.round(summary.vitaminC || 0),
+            vitaminA: Math.round(summary.vitaminA || 0),
+            proteinCategories: summary.proteinCategories || [],
         };
     }, [getMealEntriesForDate, recipes, foodItems, calculateRecipeNutrition, getExercisesForDate]);
 
