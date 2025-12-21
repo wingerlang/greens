@@ -95,6 +95,8 @@ export class LocalStorageService implements StorageService {
             if (!data.exerciseEntries) data.exerciseEntries = [];
             if (!data.weightEntries) data.weightEntries = [];
             if (!data.competitions) data.competitions = [];
+            if (!data.trainingCycles) data.trainingCycles = [];
+            if (!data.pantryQuantities) data.pantryQuantities = {};
         }
 
         return data;

@@ -15,6 +15,7 @@ import {
 import type { WeeklyPlan } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
+import { useHealth } from '../hooks/useHealth.ts'; // Import
 import { RecipeSelectionModal } from '../components/RecipeSelectionModal.tsx';
 import printJS from 'print-js';
 import './PlanningPage.css';
@@ -87,9 +88,12 @@ const SHORT_WEEKDAY_LABELS: Record<Weekday, string> = {
 export function PlanningPage() {
     const { recipes, foodItems, weeklyPlans, getWeeklyPlan, saveWeeklyPlan } = useData();
     const { settings } = useSettings();
-    const { getOptimizationSuggestion } = useSmartPlanner(recipes, foodItems);
-
     const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate());
+
+    // Use useHealth for the current week start to estimate goals (imperfect if cycle changes mid-week but good enough)
+    const { targetCalories, activeCycle } = useHealth(currentWeekStart);
+
+    const { getOptimizationSuggestion } = useSmartPlanner(recipes, foodItems);
     const [selectedSlot, setSelectedSlot] = useState<{ day: Weekday; meal: MealType } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -104,6 +108,30 @@ export function PlanningPage() {
             monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {}
         };
     }, [weekPlanData]);
+
+    // Calculate daily planned calories
+    const dailyPlannedCalories = useMemo(() => {
+        const stats: Record<Weekday, number> = {
+            monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0
+        };
+        Object.entries(weekPlanMeals).forEach(([day, meals]) => {
+            if (!meals) return;
+            Object.values(meals).forEach(planned => {
+                if (planned?.recipeId) {
+                    const recipe = recipes.find(r => r.id === planned.recipeId);
+                    if (recipe && recipe.ingredientsText) {
+                        const est = calculateRecipeEstimate(recipe.ingredientsText, foodItems);
+                        // Assume 1 serving per planned meal for now, or use recipe.servings?
+                        // Usually a planned meal is 1 serving for the user.
+                        // Estimate.calories is TOTAL for recipe.
+                        const calsPerServing = recipe.servings ? est.calories / recipe.servings : est.calories;
+                        stats[day as Weekday] += calsPerServing;
+                    }
+                }
+            });
+        });
+        return stats;
+    }, [weekPlanMeals, recipes, foodItems]);
 
     // Calculate week number
     const weekNumber = useMemo(() => {
@@ -506,6 +534,17 @@ export function PlanningPage() {
                     <div key={day} className="day-column">
                         <div className="day-header">
                             <span className="day-short">{SHORT_WEEKDAY_LABELS[day]}</span>
+                            <div className="flex flex-col items-center mt-1">
+                                <span className="text-[10px] text-slate-500 font-medium tracking-tighter">
+                                    {Math.round(dailyPlannedCalories[day])} / {targetCalories}
+                                </span>
+                                <div className="w-8 h-0.5 bg-slate-800 rounded-full mt-0.5 overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full ${dailyPlannedCalories[day] > targetCalories ? 'bg-rose-500' : 'bg-emerald-500'}`}
+                                        style={{ width: `${Math.min(100, (dailyPlannedCalories[day] / (targetCalories || 2000)) * 100)}%` }}
+                                    />
+                                </div>
+                            </div>
                         </div>
                         <div className="day-meals">
                             {settings.visibleMeals.map(meal => {

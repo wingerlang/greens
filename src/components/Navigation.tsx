@@ -2,14 +2,20 @@ import React, { useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
+import { useHealth } from '../hooks/useHealth.ts';
 import logo from '../assets/logo_icon.png';
 import './Navigation.css';
 import { Logo } from './Logo.tsx';
 
-export const Navigation: React.FC = () => {
+interface NavigationProps {
+    onOpenOmnibox?: () => void;
+}
+
+export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
     const { theme, toggleTheme } = useSettings();
+    const { cycleProgress, currentGoal, dailyCaloriesConsumed, targetCalories, activeCycle } = useHealth();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     const isAdminRoute = ['/admin', '/database', '/api', '/documentation'].some(path => location.pathname.startsWith(path));
@@ -48,6 +54,43 @@ export const Navigation: React.FC = () => {
 
                     {/* Desktop Navigation */}
                     <div className="hidden lg:flex items-center gap-1">
+                        {/* Cycle Status Widget */}
+                        {(activeCycle && cycleProgress) && (
+                            <div className="mr-4 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 flex items-center gap-2 text-xs font-medium">
+                                <span className={{
+                                    'deff': 'text-rose-400',
+                                    'bulk': 'text-emerald-400',
+                                    'neutral': 'text-blue-400'
+                                }[currentGoal]}>
+                                    ●
+                                </span>
+                                <span className="text-slate-300">{activeCycle.name}</span>
+                                {cycleProgress.daysLeft !== undefined && (
+                                    <span className="text-slate-500 border-l border-white/10 pl-2 ml-1">
+                                        {cycleProgress.daysLeft} dagar kvar
+                                    </span>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Energy Meter (Desktop Mini) */}
+                        {targetCalories > 0 && (
+                            <div className="hidden xl:flex flex-col justify-center mr-4 w-24 gap-1" title={`${Math.round(dailyCaloriesConsumed)} / ${targetCalories} kcal`}>
+                                <div className="flex justify-between text-[9px] font-bold text-slate-500 leading-none">
+                                    <span>KCAL</span>
+                                    <span className={dailyCaloriesConsumed > targetCalories ? 'text-amber-500' : 'text-slate-500'}>
+                                        {Math.round((dailyCaloriesConsumed / targetCalories) * 100)}%
+                                    </span>
+                                </div>
+                                <div className="h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-500 ${dailyCaloriesConsumed > targetCalories ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                        style={{ width: `${Math.min(100, (dailyCaloriesConsumed / targetCalories) * 100)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         {/* Veckan (Home) */}
                         <NavLink to="/" end className={linkClasses}>
                             <span>📅</span>
@@ -185,6 +228,13 @@ export const Navigation: React.FC = () => {
                     {/* Actions */}
                     <div className="flex items-center gap-2">
                         <button
+                            onClick={onOpenOmnibox}
+                            className="hidden md:flex w-9 h-9 items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all font-medium group"
+                            title="Öppna sök / Cmd+K"
+                        >
+                            <span className="text-sm group-hover:scale-110 transition-transform">🔍</span>
+                        </button>
+                        <button
                             onClick={toggleTheme}
                             className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-amber-400 hover:border-amber-400/50 hover:bg-amber-400/10 transition-all font-medium"
                             title={theme === 'dark' ? 'Byt till ljust läge' : 'Byt till mörkt läge'}
@@ -235,6 +285,20 @@ export const Navigation: React.FC = () => {
                                 <span className="text-[10px] text-slate-500 font-medium">Måltider & Pass</span>
                             </div>
                         </NavLink>
+                        {user && (
+                            <div className="px-4 py-2">
+                                <div className="text-[10px] text-slate-500 font-bold mb-1 flex justify-between">
+                                    <span>ENERGIBALANS</span>
+                                    <span>{Math.round(dailyCaloriesConsumed)} / {targetCalories} kcal</span>
+                                </div>
+                                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full ${dailyCaloriesConsumed > targetCalories ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                        style={{ width: `${Math.min(100, (dailyCaloriesConsumed / targetCalories) * 100)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
                         <NavLink to="/pantry" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
                             <span className="text-xl">🏠</span>
                             <div className="flex flex-col">

@@ -6,8 +6,13 @@ import {
     type ExerciseIntensity,
     WEEKDAY_LABELS
 } from '../models/types.ts';
+import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
+import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate } from '../models/types.ts';
-import { parseOmniboxInput } from '../utils/nlpParser.ts';
+import {
+    parseOmniboxInput,
+    parseCycleString // Import
+} from '../utils/nlpParser.ts';
 import './TrainingPage.css';
 
 const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
@@ -101,6 +106,10 @@ export function TrainingPage() {
     const [isExerciseModalOpen, setIsExerciseModalOpen] = useState(false);
     const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
 
+    // Chart State
+    const [zoomLevel, setZoomLevel] = useState(6);
+    const [chartMetric, setChartMetric] = useState<'calories' | 'volume' | 'workouts'>('calories');
+
     const [smartInput, setSmartInput] = useState('');
     const [weightInput, setWeightInput] = useState(getLatestWeight().toString());
     const [exerciseForm, setExerciseForm] = useState<{
@@ -148,27 +157,20 @@ export function TrainingPage() {
     const effectiveDuration = exerciseData?.duration?.toString() || exerciseForm.duration;
     const effectiveIntensity = exerciseData?.intensity || exerciseForm.intensity;
 
-    const dailyExercises = useMemo(() =>
-        exerciseEntries.filter(e => e.date === selectedDate),
-        [exerciseEntries, selectedDate]);
+    const {
+        bmr,
+        tdee: dailyTdee, // Renaming to avoid confusion if needed, or just usage
+        dailyCaloriesBurned: dailyBurned,
+        activeCycle,
+        goalAdjustment,
+        dailyExercises
+    } = useHealth(selectedDate);
 
-    const dailyBurned = useMemo(() =>
-        dailyExercises.reduce((sum, e) => sum + e.caloriesBurned, 0),
-        [dailyExercises]);
-    const bmr = calculateBMR();
-
-    const activeCycle = useMemo(() => {
-        const d = new Date(selectedDate);
-        return trainingCycles.find(c => {
-            const start = new Date(c.startDate);
-            const end = c.endDate ? new Date(c.endDate) : new Date('9999-12-31');
-            return d >= start && d <= end;
-        });
-    }, [trainingCycles, selectedDate]);
-
-    const currentGoal = activeCycle ? activeCycle.goal : settings.trainingGoal || 'neutral';
-    const goalAdjustment = currentGoal === 'deff' ? -500 : currentGoal === 'bulk' ? 500 : 0;
-    const tdee = bmr + dailyBurned + goalAdjustment;
+    // TDEE in TrainingPage was `bmr + dailyBurned + goalAdjustment`.
+    // useHealth returns `tdee` as `bmr + dailyBurned`.
+    // So the displayed "Dagens Kaloribehov" in UI was `tdee` variable which included adjustment.
+    // Let's match variable text:
+    const tdee = dailyTdee + goalAdjustment;
 
     const handleSmartAction = (e: React.FormEvent) => {
         e.preventDefault();
@@ -352,18 +354,22 @@ export function TrainingPage() {
                                         placeholder="t.ex. 'Sommardeff 2024-03-01 - 2024-06-01'"
                                         className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl p-3 text-white text-sm focus:border-emerald-500 transition-all outline-none"
                                         onChange={(e) => {
+                                            if (!isCycleCreatorOpen) setIsCycleCreatorOpen(true);
                                             const val = e.target.value;
-                                            // Simple regex for "Name YYYY-MM-DD - YYYY-MM-DD"
-                                            const match = val.match(/^(.*?)\s+(\d{4}[-/]\d{2}[-/]\d{2})\s*(?:-|to|till)\s*(\d{4}[-/]\d{2}[-/]\d{2})$/i);
-                                            if (match) {
-                                                const name = match[1].trim();
-                                                const start = match[2].replace(/\//g, '-');
-                                                const end = match[3].replace(/\//g, '-');
-                                                let goal: 'deff' | 'bulk' | 'neutral' = 'neutral';
-                                                if (name.toLowerCase().includes('deff') || name.toLowerCase().includes('cut')) goal = 'deff';
-                                                if (name.toLowerCase().includes('bulk')) goal = 'bulk';
 
-                                                setCycleForm(prev => ({ ...prev, name, startDate: start, endDate: end, goal }));
+                                            // Always update name field as user types
+                                            setCycleForm(prev => ({ ...prev, name: val }));
+
+                                            // Smart Parse
+                                            const smart = parseCycleString(val);
+                                            if (smart) {
+                                                setCycleForm(prev => ({
+                                                    ...prev,
+                                                    name: smart.name,
+                                                    startDate: smart.startDate,
+                                                    endDate: smart.endDate,
+                                                    goal: smart.goal
+                                                }));
                                             }
                                         }}
                                     />
@@ -519,12 +525,43 @@ export function TrainingPage() {
                 <div className="main-panel space-y-6">
                     {/* Year Visualization */}
                     <div className="content-card">
-                        <h3 className="section-title">Årsöversikt & Utveckling</h3>
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="section-title">Årsöversikt & Utveckling</h3>
+                            <div className="flex gap-2">
+                                <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
+                                    {[
+                                        { id: 'calories', label: 'Kcal', icon: '🔥' },
+                                        { id: 'volume', label: 'Volym', icon: '⚖️' },
+                                        { id: 'workouts', label: 'Pass', icon: '💪' }
+                                    ].map(m => (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => setChartMetric(m.id as any)}
+                                            className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${chartMetric === m.id
+                                                ? 'bg-emerald-500 text-slate-950'
+                                                : 'text-slate-400 hover:text-white'
+                                                }`}
+                                        >
+                                            <span>{m.icon}</span>
+                                            <span className="hidden sm:inline">{m.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
+                                    <button onClick={() => setZoomLevel(z => Math.min(12, z + 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">-</button>
+                                    <span className="px-2 flex items-center text-[10px] font-mono text-slate-500">{zoomLevel}m</span>
+                                    <button onClick={() => setZoomLevel(z => Math.max(2, z - 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">+</button>
+                                </div>
+                            </div>
+                        </div>
                         <div className="h-64 bg-slate-900/30 rounded-xl border border-white/5 relative overflow-hidden mt-4">
                             <CycleYearChart
                                 cycles={trainingCycles}
                                 weightEntries={weightEntries}
                                 nutrition={dailyNutrition}
+                                exercises={exerciseEntries}
+                                zoomMonths={zoomLevel}
+                                metric={chartMetric}
                             />
                         </div>
                     </div>
@@ -694,7 +731,7 @@ export function TrainingPage() {
             {isWeightModalOpen && (
                 <div className="modal-overlay backdrop-blur-md bg-slate-950/80" onClick={() => setIsWeightModalOpen(false)}>
                     <div
-                        className="modal-content max-w-sm w-full bg-slate-900 border border-white/10 shadow-2xl rounded-3xl p-0 overflow-hidden"
+                        className="modal-content max-w-lg w-full bg-slate-900 border border-white/10 shadow-2xl rounded-3xl p-0 overflow-hidden"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="bg-gradient-to-br from-emerald-500/20 to-slate-900 p-6 text-center border-b border-white/5">
@@ -741,29 +778,76 @@ export function TrainingPage() {
     );
 }
 
-function CycleYearChart({ cycles, weightEntries, nutrition }: { cycles: any[], weightEntries: any[], nutrition: any[] }) {
-    // 1. Calculate Time Range (Last 12 Months)
-    const today = new Date();
-    const oneYearAgo = new Date(today);
-    oneYearAgo.setFullYear(today.getFullYear() - 1);
+function addToWeek(map: any, d: Date, val: number, startDate: Date) {
+    const diffTime = d.getTime() - startDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    const weekNum = Math.floor(diffDays / 7);
 
-    const getX = (dateStr: string) => {
+    if (!map[weekNum]) {
+        const stableDate = new Date(startDate.getTime() + (weekNum * 7 * 24 * 60 * 60 * 1000));
+        map[weekNum] = { sum: 0, count: 0, date: stableDate.toISOString() };
+    }
+    map[weekNum].sum += val;
+    map[weekNum].count++;
+}
+
+function CycleYearChart({
+    cycles,
+    weightEntries,
+    nutrition,
+    exercises,
+    zoomMonths,
+    metric
+}: {
+    cycles: any[],
+    weightEntries: any[],
+    nutrition: any[],
+    exercises: any[],
+    zoomMonths: number,
+    metric: 'calories' | 'volume' | 'workouts'
+}) {
+    // 1. Calculate Time Range (+- zoomMonths)
+    const today = new Date();
+    const startDate = new Date(today);
+    startDate.setMonth(today.getMonth() - zoomMonths);
+    const endDate = new Date(today);
+    endDate.setMonth(today.getMonth() + zoomMonths);
+
+    const getX = (dateStr: string | Date) => {
         const d = new Date(dateStr);
-        const totalMs = today.getTime() - oneYearAgo.getTime();
-        const currentMs = d.getTime() - oneYearAgo.getTime();
-        return Math.max(0, Math.min(100, (currentMs / totalMs) * 100));
+        const totalMs = endDate.getTime() - startDate.getTime();
+        const currentMs = d.getTime() - startDate.getTime();
+        return (currentMs / totalMs) * 100;
     };
 
     // 2. Weight Min/Max for scaling
-    const weights = weightEntries.filter(w => new Date(w.date) >= oneYearAgo).map(w => w.weight);
-    const minWeight = Math.min(...weights, 70) - 2;
-    const maxWeight = Math.max(...weights, 90) + 2;
+    // Filter weights within the visual range for scaling calculation, but maybe allow a buffer?
+    const visibleWeights = weightEntries.filter(w => {
+        const d = new Date(w.date);
+        return d >= startDate && d <= endDate;
+    });
+
+    // Fallback if no specific weights in range, use generic 70-90 or nearby
+    const weights = visibleWeights.map(w => w.weight);
+    const minWeight = weights.length ? Math.min(...weights) - 2 : 70;
+    const maxWeight = weights.length ? Math.max(...weights) + 2 : 90;
 
     const getY = (weight: number) => {
         return 100 - ((weight - minWeight) / (maxWeight - minWeight)) * 100;
     };
 
-    const sortedWeights = [...weightEntries].sort((a, b) => a.date.localeCompare(b.date)).filter(w => new Date(w.date) >= oneYearAgo);
+    const sortedWeights = [...weightEntries]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .filter(w => {
+            const d = new Date(w.date);
+            // Include one point before/after to ensure lines connect to the edge properly?
+            // For now, strict range is safer for SVG bounds if we use 0-100 clamping, 
+            // but since we allow <0 and >100 in getX (to let lines flow offscreen), 
+            // we should maybe filter loosely. 
+            // Let's filter strictly for now to avoid complexity.
+            return d >= startDate && d <= endDate;
+        });
+
     const weightPath = sortedWeights.map((w, i) => {
         const x = getX(w.date);
         const y = getY(w.weight);
@@ -774,8 +858,12 @@ function CycleYearChart({ cycles, weightEntries, nutrition }: { cycles: any[], w
         <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
             {/* Background Zones for Cycles (rendered first) */}
             {cycles.map(cycle => {
-                const startX = getX(cycle.startDate);
-                const endX = cycle.endDate ? getX(cycle.endDate) : 100;
+                const startX = Math.max(0, getX(cycle.startDate));
+                const endX = cycle.endDate ? Math.min(100, getX(cycle.endDate)) : 100; // If no end date, assume infinity -> 100
+
+                // If cycle is completely out of view?
+                if (endX < 0 || startX > 100) return null;
+
                 const width = Math.max(0.5, endX - startX);
 
                 let color = 'rgba(59, 130, 246, 0.1)'; // Neutral (Blue)
@@ -794,32 +882,61 @@ function CycleYearChart({ cycles, weightEntries, nutrition }: { cycles: any[], w
                 );
             })}
 
-            {/* Calorie Bars (Weekly Averages) */}
+            {/* Today Line */}
+            <line x1={getX(today)} y1="0" x2={getX(today)} y2="100" stroke="rgba(255, 255, 255, 0.2)" strokeDasharray="4 4" strokeWidth="0.5" />
+
+            {/* Data Bars (Weekly Averages/Sums) */}
             {(() => {
                 // Group by week
-                const weeklyCals: { [key: string]: { sum: number, count: number, startWeekDate: string } } = {};
-                nutrition.forEach(n => {
-                    const d = new Date(n.date);
-                    if (d < oneYearAgo) return;
+                const weeklyData: { [key: string]: { sum: number, count: number, date: string } } = {};
 
-                    const diffTime = d.getTime() - oneYearAgo.getTime();
-                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-                    const weekNum = Math.floor(diffDays / 7);
+                if (metric === 'calories') {
+                    nutrition.forEach(n => {
+                        const d = new Date(n.date);
+                        if (d < startDate || d > endDate) return;
+                        addToWeek(weeklyData, d, n.calories, startDate);
+                    });
+                } else if (metric === 'workouts') {
+                    exercises.forEach(e => {
+                        const d = new Date(e.date);
+                        if (d < startDate || d > endDate) return;
+                        addToWeek(weeklyData, d, 1, startDate);
+                    });
+                } else if (metric === 'volume') {
+                    exercises.forEach(e => {
+                        const d = new Date(e.date);
+                        if (d < startDate || d > endDate) return;
+                        // Estimate volume if not present (simple placeholder logic)
+                        // Assuming tonnage is explicitly logged OR derive from duration*intensity factor? 
+                        // User asked for "ton lyfta", implying strength.
+                        // If no tonnage, maybe 0.
+                        const vol = e.tonnage || 0;
+                        addToWeek(weeklyData, d, vol, startDate);
+                    });
+                }
 
-                    if (!weeklyCals[weekNum]) {
-                        // Calculate stable date for this week
-                        const stableDate = new Date(oneYearAgo.getTime() + (weekNum * 7 * 24 * 60 * 60 * 1000));
-                        weeklyCals[weekNum] = { sum: 0, count: 0, startWeekDate: stableDate.toISOString() };
+                return Object.values(weeklyData).map((data: any, i) => {
+                    let val = data.sum;
+                    if (metric === 'calories') val = data.sum / data.count; // Average for calories
+                    // For workouts/volume, we want Sum per week, not average per entry. 
+                    // Wait, `addToWeek` increments count. 
+                    // So `data.sum` is total for the week.
+
+                    const x = getX(data.date);
+
+                    // Scaling
+                    let height = 0;
+                    let color = 'rgba(16, 185, 129, 0.2)';
+
+                    if (metric === 'calories') {
+                        height = Math.min(40, (val / 4000) * 40);
+                    } else if (metric === 'workouts') {
+                        height = Math.min(40, (val / 10) * 40); // Max 10 workouts per week
+                        color = 'rgba(59, 130, 246, 0.4)';
+                    } else if (metric === 'volume') {
+                        height = Math.min(40, (val / 20000) * 40); // Max 20 tons per week? 
+                        color = 'rgba(244, 63, 94, 0.4)';
                     }
-                    weeklyCals[weekNum].sum += n.calories;
-                    weeklyCals[weekNum].count++;
-                });
-
-                return Object.values(weeklyCals).map((data: any, i) => {
-                    const avg = data.sum / data.count;
-                    const x = getX(data.startWeekDate);
-                    // Scale calories: 0-4000 kcal mapped to 0-40 height (bottom of chart)
-                    const height = Math.min(40, (avg / 4000) * 40);
 
                     return (
                         <rect
@@ -828,7 +945,7 @@ function CycleYearChart({ cycles, weightEntries, nutrition }: { cycles: any[], w
                             y={100 - height}
                             width={1.5}
                             height={height}
-                            fill="rgba(16, 185, 129, 0.2)"
+                            fill={color}
                             rx="0.5"
                         />
                     );
@@ -836,10 +953,13 @@ function CycleYearChart({ cycles, weightEntries, nutrition }: { cycles: any[], w
             })()}
 
             {/* Grid Lines (Months) */}
-            {Array.from({ length: 12 }).map((_, i) => {
-                const d = new Date(oneYearAgo);
+            {Array.from({ length: 13 }).map((_, i) => {
+                const d = new Date(startDate);
                 d.setMonth(d.getMonth() + i);
                 const x = getX(d.toISOString().split('T')[0]);
+                // Only show if x is within bounds (0-100)
+                if (x < 0 || x > 100) return null;
+
                 return (
                     <g key={i}>
                         <line x1={x} y1="0" x2={x} y2="100" stroke="rgba(255,255,255,0.05)" strokeWidth="0.2" />

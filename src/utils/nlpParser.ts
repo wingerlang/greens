@@ -5,6 +5,7 @@ export type OmniboxIntent =
     | { type: 'food'; data: { query: string; quantity?: number; unit?: string; mealType?: MealType }; date?: string }
     | { type: 'weight'; data: { weight: number }; date?: string }
     | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy'; amount: number }; date?: string }
+    | { type: 'navigate'; data: { path: string }; date?: string }
     | { type: 'search'; data: { query: string }; date?: string };
 
 /**
@@ -24,6 +25,23 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
     // 2. Vitals Check (e.g., "7h sömn", "3 kaffe", "2 vatten")
     const vitalsIntent = parseVitals(lower);
     if (vitalsIntent) return { ...vitalsIntent, date };
+
+    // 2.5 Navigation Check
+    if (lower.startsWith('gå till') || lower.startsWith('navigera') || lower.startsWith('/')) {
+        let path = '/';
+        const target = lower.replace(/gå till|navigera/g, '').trim().toLowerCase();
+
+        if (target.includes('trän') || target.includes('gym')) path = '/training';
+        else if (target.includes('hälsa')) path = '/health';
+        else if (target.includes('recept')) path = '/recipes';
+        else if (target.includes('mat') || target.includes('plan')) path = '/planera';
+        else if (target.includes('kalori')) path = '/calories';
+        else if (target.includes('skafferi')) path = '/pantry';
+        else if (target.includes('tävling')) path = '/competition';
+        else if (target.includes('profil')) path = '/profile';
+
+        return { type: 'navigate', data: { path }, date };
+    }
 
     // 3. Exercise Check (PRIORITY OVER WEIGHT if explicit exercise keywords exist)
     // This fixes "Styrka 200kg" being interpreted as weight update
@@ -75,7 +93,93 @@ function parseDate(input: string): { date?: string; remaining: string } {
         return { date: `${year}-${month}-${day}`, remaining: input.replace(dateMatch[0], '') };
     }
 
+
     return { remaining: input };
+}
+
+export interface SmartCycle {
+    name: string;
+    startDate: string;
+    endDate: string;
+    goal: 'deff' | 'bulk' | 'neutral';
+}
+
+/**
+ * Parses a cycle string like "Deff 2026-02 - 3mån" or "Vinterbulk 2026-01 - 2026-04"
+ */
+export function parseCycleString(input: string): SmartCycle | null {
+    if (!input || input.length < 3) return null;
+
+    const lower = input.toLowerCase().trim();
+    const today = new Date();
+    const getISODate = (d: Date) => d.toISOString().split('T')[0];
+
+    // 1. Identify Goal
+    let goal: 'deff' | 'bulk' | 'neutral' = 'neutral';
+    if (lower.includes('deff') || lower.includes('cut')) goal = 'deff';
+    else if (lower.includes('bulk') || lower.includes('bygga')) goal = 'bulk';
+    else if (lower.includes('balans') || lower.includes('maintain')) goal = 'neutral';
+
+    // 2. Identify Dates/Durations
+    let startDate = getISODate(today);
+    let endDate = '';
+
+    // Regex Patterns
+    const datePattern = /(\d{4})[-\/](\d{1,2})(?:[-\/](\d{1,2}))?/g; // Matches YYYY-MM or YYYY-MM-DD
+    const durationPattern = /(\d+)\s*(mån|vec|veckor|dagar?|days?|months?)/i;
+
+    const dates: string[] = [];
+    let match;
+    while ((match = datePattern.exec(lower)) !== null) {
+        const y = match[1];
+        const m = match[2].padStart(2, '0');
+        const d = match[3] ? match[3].padStart(2, '0') : '01'; // Default day to 01 if missing
+        dates.push(`${y}-${m}-${d}`);
+    }
+
+    const durationMatch = lower.match(durationPattern);
+
+    if (dates.length >= 2) {
+        // "2026-01 - 2026-03"
+        startDate = dates[0];
+        endDate = dates[1];
+    } else if (dates.length === 1 && durationMatch) {
+        // "2026-01 - 3mån"
+        startDate = dates[0];
+        const amount = parseInt(durationMatch[1]);
+        const unit = durationMatch[2];
+        const end = new Date(startDate);
+        if (unit.startsWith('mån')) end.setMonth(end.getMonth() + amount);
+        else if (unit.startsWith('vec')) end.setDate(end.getDate() + amount * 7);
+        else if (unit.startsWith('dag')) end.setDate(end.getDate() + amount);
+        endDate = getISODate(end);
+    } else if (dates.length === 1) {
+        // Only start date? or assumed end date? 
+        startDate = dates[0];
+        // If they only provided one date and no duration, we can't infer end date reliably yet.
+        // But maybe they meant "End Date"? No, usually Start.
+    } else if (durationMatch) {
+        // "Deff 3 mån" -> Start Today, End Today + 3 months
+        const amount = parseInt(durationMatch[1]);
+        const unit = durationMatch[2];
+        const end = new Date(startDate); // Start is today
+        if (unit.startsWith('mån')) end.setMonth(end.getMonth() + amount);
+        else if (unit.startsWith('vec')) end.setDate(end.getDate() + amount * 7);
+        else if (unit.startsWith('dag')) end.setDate(end.getDate() + amount);
+        endDate = getISODate(end);
+    }
+
+    // 3. Name Inference
+    let name = input
+        .replace(datePattern, '')
+        .replace(durationPattern, '')
+        .replace(/-|to|till/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    if (!name || name.length < 2) name = goal.charAt(0).toUpperCase() + goal.slice(1);
+
+    return { name, startDate, endDate, goal };
 }
 
 function parseVitals(input: string): OmniboxIntent | null {
