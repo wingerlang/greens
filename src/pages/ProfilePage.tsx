@@ -133,6 +133,27 @@ export function ProfilePage() {
                                 min="0"
                             />
                         </div>
+                        <div className="goal-input-group">
+                            <label htmlFor="sleepGoal">Sömnmål (h)</label>
+                            <input
+                                type="number"
+                                id="sleepGoal"
+                                value={settings.dailySleepGoal || 8}
+                                onChange={(e) => updateSettings({ dailySleepGoal: Number(e.target.value) })}
+                                min="0"
+                                step="0.5"
+                            />
+                        </div>
+                        <div className="goal-input-group">
+                            <label htmlFor="waterGoal">Vattenmål (glas)</label>
+                            <input
+                                type="number"
+                                id="waterGoal"
+                                value={settings.dailyWaterGoal || 8}
+                                onChange={(e) => updateSettings({ dailyWaterGoal: Number(e.target.value) })}
+                                min="0"
+                            />
+                        </div>
                     </div>
                 </div>
             </section>

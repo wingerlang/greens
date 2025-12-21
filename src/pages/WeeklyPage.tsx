@@ -76,6 +76,7 @@ export function WeeklyPage() {
         setPantryQuantity,
         updateVitals,
         getVitalsForDate,
+        exerciseEntries,
     } = useData();
 
     const { settings } = useSettings();
@@ -454,6 +455,7 @@ export function WeeklyPage() {
                             onMagicWand={(meal) => handleMagicWand(day, meal)}
                             vitals={getVitalsForDate(getISODate(dayDate))}
                             onUpdateVitals={(updates) => updateVitals(getISODate(dayDate), updates)}
+                            exercises={exerciseEntries.filter(ex => ex.date === getISODate(dayDate))}
                         />
                     );
                 })}

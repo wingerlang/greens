@@ -209,4 +209,97 @@
     .scrollbar-hide::-webkit-scrollbar {
         display: none;
     }
+
+    /* Synergy Score Badge */
+    .daily-score-badge {
+        cursor: pointer;
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.15);
+        padding: 4px 10px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        backdrop-filter: blur(8px);
+        margin-left: 8px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+
+    .daily-score-badge:hover {
+        background: rgba(16, 185, 129, 0.15);
+        border-color: rgba(16, 185, 129, 0.3);
+        transform: translateY(-2px) scale(1.02);
+        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.15);
+    }
+
+    .daily-score-badge:active {
+        transform: translateY(0) scale(0.98);
+    }
+
+    .score-label {
+        font-size: 9px;
+        font-weight: 900;
+        text-transform: uppercase;
+        color: #10b981;
+        letter-spacing: 0.15em;
+        opacity: 0.8;
+    }
+
+    .score-value {
+        font-size: 13px;
+        font-weight: 900;
+        color: white;
+        text-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+    }
+
+    /* Score Modal Overlay */
+    .score-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.4);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 1rem;
+    }
+
+    .score-modal {
+        width: 100%;
+        max-width: 320px;
+        background: #0f172a;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 24px;
+        overflow: hidden;
+        animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+
+    @keyframes modalIn {
+        from {
+            opacity: 0;
+            transform: scale(0.9) translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: scale(1) translateY(0);
+        }
+    }
+
+    .score-progress-bar {
+        height: 6px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 4px;
+    }
+
+    .score-progress-fill {
+        height: 100%;
+        border-radius: 3px;
+        transition: width 1s ease-out;
+    }
 }

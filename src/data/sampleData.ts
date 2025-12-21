@@ -127,6 +127,31 @@ export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
     },
     // --- PROTEIN ---
     {
+        id: 'food-proteinshake',
+        name: 'Vegansk Proteinshake',
+        description: 'Ärt/Hampaprotein mix',
+        calories: 380, // per 100g powder
+        protein: 75,
+        carbs: 5,
+        fat: 4,
+        fiber: 6,
+        unit: 'kg',
+        category: 'protein',
+        storageType: 'pantry',
+        pricePerUnit: 250,
+        co2PerUnit: 0.8,
+        containsGluten: false,
+        iron: 12,
+        calcium: 80,
+        zinc: 5,
+        isCompleteProtein: true,
+        proteinCategory: 'soy_quinoa', // Close enough (complete)
+        seasons: ['winter', 'spring', 'summer', 'autumn'],
+        defaultPortionGrams: 30,
+        createdAt: now,
+        updatedAt: now,
+    },
+    {
         id: 'food-tofu',
         name: 'Tofu',
         description: 'fast tofu, silkestofu',

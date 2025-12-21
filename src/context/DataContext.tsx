@@ -640,6 +640,7 @@ export function DataProvider({ children }: DataProviderProps) {
         return dailyVitals[date] || {
             water: 0,
             sleep: 0,
+            caffeine: 0,
             updatedAt: new Date().toISOString()
         };
     }, [dailyVitals]);

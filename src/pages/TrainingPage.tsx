@@ -151,17 +151,57 @@ export function TrainingPage() {
 
     return (
         <div className="training-page">
-            <header className="page-header">
-                <div>
+            <header className="page-header flex-col md:flex-row gap-6">
+                <div className="flex-1">
                     <h1>Träning & Fysik</h1>
                     <p className="page-subtitle">Optimera din förbränning och följ din trend</p>
                 </div>
+
+                {/* Permanent Smart Input Header */}
+                <div className="flex-1 max-w-xl w-full">
+                    <div className="relative group">
+                        <div className="absolute -top-6 left-0 flex items-center gap-2">
+                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Snabb-logga pass</span>
+                            <span className="text-[9px] text-slate-500 italic lowercase">t.ex. "45min löpning hög"</span>
+                        </div>
+                        <input
+                            type="text"
+                            value={smartInput}
+                            onChange={(e) => setSmartInput(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && smartInput && handleAddExercise(e as any)}
+                            placeholder="Vad har du tränat idag?"
+                            className="w-full bg-slate-900/80 backdrop-blur-xl border border-white/5 rounded-2xl p-4 text-white focus:border-emerald-500/30 transition-all outline-none shadow-2xl"
+                        />
+                        {smartInput && (
+                            <button
+                                onClick={handleAddExercise}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 bg-emerald-500 text-slate-950 text-[10px] font-black px-4 py-2 rounded-xl hover:bg-emerald-400 transition-colors"
+                            >
+                                LOGGA
+                            </button>
+                        )}
+
+                        {/* Inline Preview */}
+                        {smartInput && (
+                            <div className="absolute top-full left-0 right-0 mt-2 p-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <span className="text-xl">{EXERCISE_TYPES.find(t => t.type === effectiveExerciseType)?.icon}</span>
+                                    <div>
+                                        <div className="text-[10px] font-black text-white">{EXERCISE_TYPES.find(t => t.type === effectiveExerciseType)?.label}</div>
+                                        <div className="text-[9px] text-slate-500">{effectiveDuration} min • {INTENSITIES.find(i => i.value === effectiveIntensity)?.label}</div>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-[10px] font-black text-emerald-400">-{calculateExerciseCalories(effectiveExerciseType, parseInt(effectiveDuration) || 0, effectiveIntensity)} kcal</div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 <div className="flex gap-2">
-                    <button className="btn btn-secondary" onClick={() => setIsWeightModalOpen(true)}>
+                    <button className="btn btn-secondary !rounded-2xl" onClick={() => setIsWeightModalOpen(true)}>
                         ⚖️ Logga Vikt
-                    </button>
-                    <button className="btn btn-primary" onClick={() => setIsExerciseModalOpen(true)}>
-                        + Ny Träning
                     </button>
                 </div>
             </header>
@@ -202,6 +242,45 @@ export function TrainingPage() {
                             <span>BMR: {bmr}</span>
                             {dailyBurned > 0 && <span>+ Träning: {dailyBurned}</span>}
                             {goalAdjustment !== 0 && <span>+ Mål: {goalAdjustment}</span>}
+                        </div>
+                    </div>
+
+                    {/* New Training Stats */}
+                    <div className="stat-card bg-slate-900/50 border-white/5">
+                        <span className="stat-label">Veckans Träning</span>
+                        <div className="flex justify-between items-end mt-2">
+                            <div>
+                                <div className="text-lg font-black text-white">{exerciseEntries.filter(e => {
+                                    const d = new Date(e.date);
+                                    const now = new Date();
+                                    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 1));
+                                    return d >= startOfWeek;
+                                }).length} pass</div>
+                                <div className="text-[9px] text-slate-500 font-bold uppercase">Denna vecka</div>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-lg font-black text-emerald-400">
+                                    {Math.round(exerciseEntries.reduce((sum, e) => sum + e.caloriesBurned, 0) / (exerciseEntries.length || 1))}
+                                </div>
+                                <div className="text-[9px] text-slate-500 font-bold uppercase">Snitt kcal/pass</div>
+                            </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-white/5">
+                            <div className="text-[9px] text-slate-500 font-bold uppercase mb-2">Topp-aktivitet</div>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xl">
+                                    {EXERCISE_TYPES.find(t => t.type === (
+                                        Object.entries(exerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
+                                            .sort((a, b) => b[1] - a[1])[0]?.[0] as ExerciseType || 'other'
+                                    ))?.icon}
+                                </span>
+                                <span className="text-xs font-bold text-white uppercase tracking-widest">
+                                    {EXERCISE_TYPES.find(t => t.type === (
+                                        Object.entries(exerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
+                                            .sort((a, b) => b[1] - a[1])[0]?.[0] as ExerciseType || 'other'
+                                    ))?.label || 'Ingen data'}
+                                </span>
+                            </div>
                         </div>
                     </div>
 

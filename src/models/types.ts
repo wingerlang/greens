@@ -65,6 +65,8 @@ export interface UserSettings {
     height?: number; // cm
     gender?: 'male' | 'female' | 'other';
     trainingGoal?: 'neutral' | 'deff' | 'bulk';
+    dailySleepGoal?: number;
+    dailyWaterGoal?: number;
 }
 
 /** User roles for permissions */
@@ -229,6 +231,7 @@ export interface PlannedMeal {
 export interface DailyVitals {
     water: number;       // Glasses (approx 250ml)
     sleep: number;       // Hours
+    caffeine?: number;   // Grams or counts (Coffee/Te/Nocco)
     updatedAt: string;
 }
 
