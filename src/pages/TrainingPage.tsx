@@ -4,6 +4,7 @@ import { useSettings } from '../context/SettingsContext.tsx';
 import {
     type ExerciseType,
     type ExerciseIntensity,
+    type ExerciseSubType,
     WEEKDAY_LABELS
 } from '../models/types.ts';
 import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
@@ -11,26 +12,13 @@ import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate } from '../models/types.ts';
 import {
     parseOmniboxInput,
-    parseCycleString // Import
+    parseCycleString
 } from '../utils/nlpParser.ts';
+import { CycleYearChart } from '../components/training/CycleYearChart.tsx';
+import { ExerciseModal, EXERCISE_TYPES, INTENSITIES } from '../components/training/ExerciseModal.tsx';
+import { WeightModal } from '../components/training/WeightModal.tsx';
+import { CycleDetailModal } from '../components/training/CycleDetailModal.tsx';
 import './TrainingPage.css';
-
-const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
-    { type: 'running', icon: '🏃', label: 'Löpning' },
-    { type: 'cycling', icon: '🚴', label: 'Cykling' },
-    { type: 'strength', icon: '🏋️', label: 'Styrka' },
-    { type: 'walking', icon: '🚶', label: 'Promenad' },
-    { type: 'swimming', icon: '🏊', label: 'Simning' },
-    { type: 'yoga', icon: '🧘', label: 'Yoga' },
-    { type: 'other', icon: '✨', label: 'Annat' },
-];
-
-const INTENSITIES: { value: ExerciseIntensity; label: string; color: string }[] = [
-    { value: 'low', label: 'Låg', color: 'text-slate-400' },
-    { value: 'moderate', label: 'Medel', color: 'text-emerald-400' },
-    { value: 'high', label: 'Hög', color: 'text-rose-400' },
-    { value: 'ultra', label: 'Max', color: 'text-purple-400' },
-];
 
 export function TrainingPage() {
     const {
@@ -48,7 +36,26 @@ export function TrainingPage() {
         mealEntries,
         foodItems,
         recipes,
+        updateTrainingCycle // Add this if available
     } = useData();
+
+    // Handlers for Chart Interaction
+    const [selectedCycle, setSelectedCycle] = useState<any>(null);
+    const [isCycleDetailOpen, setIsCycleDetailOpen] = useState(false);
+
+    const handleEditCycle = (cycle: any) => {
+        setSelectedCycle(cycle);
+        setIsCycleDetailOpen(true);
+    };
+
+    const handleCreateCycleAfter = (cycle: any) => {
+        const endDate = new Date(cycle.endDate || cycle.startDate); // Fallback
+        const nextStart = new Date(endDate.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        // Guess next goal?
+        const nextGoal = cycle.goal === 'deff' ? 'Bulk' : cycle.goal === 'bulk' ? 'Deff' : 'Mål';
+        setCycleInput(`${nextGoal} ${nextStart} - 3mån`);
+        setTimeout(() => document.getElementById('cycle-input')?.focus(), 100);
+    };
 
     // Calculate daily nutrition (calories only) for the chart
     const dailyNutrition = useMemo(() => {
@@ -108,22 +115,32 @@ export function TrainingPage() {
 
     // Chart State
     const [zoomLevel, setZoomLevel] = useState(6);
-    const [chartMetric, setChartMetric] = useState<'calories' | 'volume' | 'workouts'>('calories');
+    const [visibleMetrics, setVisibleMetrics] = useState({
+        calories: true,
+        volume: true,
+        workouts: true
+    });
 
     const [smartInput, setSmartInput] = useState('');
     const [weightInput, setWeightInput] = useState(getLatestWeight().toString());
+    const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
     const [exerciseForm, setExerciseForm] = useState<{
         type: ExerciseType;
         duration: string;
         intensity: ExerciseIntensity;
         notes: string;
+        subType?: ExerciseSubType;
+        tonnage?: string;
+        distance?: string;
     }>({
         type: 'running',
         duration: '30',
         intensity: 'moderate',
-        notes: ''
+        notes: '',
+        subType: 'default'
     });
 
+    const [cycleInput, setCycleInput] = useState('');
     const [isCycleCreatorOpen, setIsCycleCreatorOpen] = useState(false);
     const [cycleForm, setCycleForm] = useState({
         goal: 'neutral' as 'neutral' | 'deff' | 'bulk',
@@ -172,6 +189,20 @@ export function TrainingPage() {
     // Let's match variable text:
     const tdee = dailyTdee + goalAdjustment;
 
+    const handleEditExercise = (ex: any) => {
+        setExerciseForm({
+            type: ex.type,
+            duration: ex.durationMinutes.toString(),
+            intensity: ex.intensity,
+            notes: ex.notes || '',
+            subType: ex.subType || 'default',
+            tonnage: ex.tonnage ? ex.tonnage.toString() : '',
+            distance: ex.distance ? ex.distance.toString() : ''
+        });
+        setEditingExerciseId(ex.id);
+        setIsExerciseModalOpen(true);
+    };
+
     const handleSmartAction = (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -186,17 +217,29 @@ export function TrainingPage() {
         const duration = parseInt(effectiveDuration) || 0;
         const caloriesBurned = calculateExerciseCalories(effectiveExerciseType, duration, effectiveIntensity);
 
-        addExercise({
+        const exerciseDataToSave = {
             date: selectedDate,
             type: effectiveExerciseType,
             durationMinutes: duration,
             intensity: effectiveIntensity,
             caloriesBurned,
-            notes: exerciseForm.notes || (exerciseData?.notes)
-        });
+            notes: exerciseForm.notes || (exerciseData?.notes),
+            subType: exerciseForm.subType,
+            tonnage: exerciseForm.tonnage ? parseFloat(exerciseForm.tonnage) : undefined,
+            distance: exerciseForm.distance ? parseFloat(exerciseForm.distance) : undefined
+        };
+
+        if (editingExerciseId) {
+            // Updated via delete + add for now (preserves date)
+            deleteExercise(editingExerciseId);
+            addExercise(exerciseDataToSave);
+        } else {
+            addExercise(exerciseDataToSave);
+        }
 
         setSmartInput('');
-        setExerciseForm({ ...exerciseForm, notes: '' });
+        setExerciseForm({ ...exerciseForm, notes: '', tonnage: '', distance: '', subType: 'default' });
+        setEditingExerciseId(null);
         setIsExerciseModalOpen(false);
     };
 
@@ -285,7 +328,7 @@ export function TrainingPage() {
 
             {/* Cycle Manager (Replaces Goal Selector) */}
             <section className="mb-8">
-                {activeCycle ? (
+                {activeCycle && !isCycleCreatorOpen ? (
                     <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 border border-white/10 p-6 shadow-2xl group">
                         <div className="absolute top-0 right-0 p-4 opacity-10 text-[100px] leading-none select-none grayscale group-hover:grayscale-0 transition-all duration-500">
                             {activeCycle.goal === 'deff' ? '🔥' : activeCycle.goal === 'bulk' ? '💪' : '⚖️'}
@@ -316,10 +359,19 @@ export function TrainingPage() {
                                     }}
                                     className="px-6 py-3 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/5 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 font-bold text-xs uppercase tracking-wider transition-all"
                                 >
-                                    Avsluta Period
+                                    Avsluta
                                 </button>
-                                <button className="px-6 py-3 rounded-xl bg-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider hover:bg-emerald-400 transition-all shadow-lg hover:shadow-emerald-500/20">
+                                <button
+                                    onClick={() => handleEditCycle(activeCycle)}
+                                    className="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 hover:text-slate-950 transition-all border border-white/5 hover:border-emerald-500"
+                                >
                                     Redigera
+                                </button>
+                                <button
+                                    onClick={() => setIsCycleCreatorOpen(true)}
+                                    className="px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 hover:text-slate-950 transition-all border border-emerald-500/20 hover:border-emerald-500 text-center"
+                                >
+                                    + Ny Period
                                 </button>
                             </div>
                         </div>
@@ -353,6 +405,17 @@ export function TrainingPage() {
                                         type="text"
                                         placeholder="t.ex. 'Sommardeff 2024-03-01 - 2024-06-01'"
                                         className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl p-3 text-white text-sm focus:border-emerald-500 transition-all outline-none"
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && cycleForm.name && cycleForm.endDate) {
+                                                addTrainingCycle({
+                                                    name: cycleForm.name,
+                                                    goal: cycleForm.goal,
+                                                    startDate: cycleForm.startDate,
+                                                    endDate: cycleForm.endDate
+                                                });
+                                                setIsCycleCreatorOpen(false);
+                                            }
+                                        }}
                                         onChange={(e) => {
                                             if (!isCycleCreatorOpen) setIsCycleCreatorOpen(true);
                                             const val = e.target.value;
@@ -536,8 +599,8 @@ export function TrainingPage() {
                                     ].map(m => (
                                         <button
                                             key={m.id}
-                                            onClick={() => setChartMetric(m.id as any)}
-                                            className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${chartMetric === m.id
+                                            onClick={() => setVisibleMetrics(prev => ({ ...prev, [m.id]: !prev[m.id as keyof typeof prev] }))}
+                                            className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${visibleMetrics[m.id as keyof typeof visibleMetrics]
                                                 ? 'bg-emerald-500 text-slate-950'
                                                 : 'text-slate-400 hover:text-white'
                                                 }`}
@@ -561,10 +624,22 @@ export function TrainingPage() {
                                 nutrition={dailyNutrition}
                                 exercises={exerciseEntries}
                                 zoomMonths={zoomLevel}
-                                metric={chartMetric}
+                                visibleMetrics={visibleMetrics}
+                                onEditCycle={handleEditCycle}
+                                onCreateCycleAfter={handleCreateCycleAfter}
                             />
                         </div>
                     </div>
+
+                    <CycleDetailModal
+                        isOpen={isCycleDetailOpen}
+                        onClose={() => setIsCycleDetailOpen(false)}
+                        cycle={selectedCycle}
+                        onSave={updateTrainingCycle}
+                        onDelete={deleteTrainingCycle}
+                        exercises={exerciseEntries}
+                        nutrition={dailyNutrition}
+                    />
 
                     {/* Exercise Log */}
                     <div className="content-card">
@@ -581,7 +656,11 @@ export function TrainingPage() {
                         <div className="exercise-list space-y-2">
                             {dailyExercises.length > 0 ? (
                                 dailyExercises.map(ex => (
-                                    <div key={ex.id} className="exercise-row p-3 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between group hover:bg-white/10 transition-all">
+                                    <div
+                                        key={ex.id}
+                                        className="exercise-row p-3 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between group hover:bg-white/10 transition-all cursor-pointer"
+                                        onClick={() => handleEditExercise(ex)}
+                                    >
                                         <div className="flex items-center gap-4">
                                             <span className="text-2xl">{EXERCISE_TYPES.find(t => t.type === ex.type)?.icon}</span>
                                             <div>
@@ -611,384 +690,118 @@ export function TrainingPage() {
                         </div>
                     </div>
                 </div>
+                {/* Data Analysis Section - Final Polish */}
+                <div className="content-card mt-6">
+                    <h3 className="section-title mb-4">Djupanalys & Statistik</h3>
+
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        {/* Stat 1: Total Tonnage */}
+                        <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Totalt Tonnage</div>
+                            <div className="text-2xl font-black text-rose-400">
+                                {Math.round(exerciseEntries.reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000)} <span className="text-sm text-slate-500 font-bold">ton</span>
+                            </div>
+                        </div>
+
+                        {/* Stat 2: Total Distance */}
+                        <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Distans</div>
+                            <div className="text-2xl font-black text-sky-400">
+                                {Math.round(exerciseEntries.reduce((sum, e) => sum + (e.distance || 0), 0))} <span className="text-sm text-slate-500 font-bold">km</span>
+                            </div>
+                        </div>
+
+                        {/* Stat 3: Avg Intensity (Proxy) */}
+                        <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Snittduration</div>
+                            <div className="text-2xl font-black text-emerald-400">
+                                {Math.round(exerciseEntries.length > 0 ? exerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / exerciseEntries.length : 0)} <span className="text-sm text-slate-500 font-bold">min</span>
+                            </div>
+                        </div>
+
+                        {/* Stat 4: Total Time */}
+                        <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Träningstid</div>
+                            <div className="text-2xl font-black text-indigo-400">
+                                {Math.round(exerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / 60)} <span className="text-sm text-slate-500 font-bold">h</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Top Activities Table */}
+                        <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Topplista Aktiviteter</h4>
+                            <div className="space-y-2">
+                                {Object.entries(exerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
+                                    .sort((a, b) => b[1] - a[1])
+                                    .slice(0, 5)
+                                    .map(([type, count]) => (
+                                        <div key={type} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xl">{EXERCISE_TYPES.find(t => t.type === type)?.icon}</span>
+                                                <span className="text-xs font-bold capitalize text-slate-300">{EXERCISE_TYPES.find(t => t.type === type)?.label}</span>
+                                            </div>
+                                            <div className="text-sm font-black text-white">{count} <span className="text-[10px] text-slate-500 font-normal">pass</span></div>
+                                        </div>
+                                    ))}
+                            </div>
+                        </div>
+
+                        {/* Recent Records (Mock/Real) */}
+                        <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Senaste PB & MIstolpar</h4>
+                            <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 text-center mb-4">
+                                <span className="text-4xl">🏆</span>
+                                <h5 className="text-sm font-bold text-emerald-400 mt-2">Nytt Volymrekord!</h5>
+                                <p className="text-[10px] text-slate-400 mt-1">Du lyfte {Math.round(Math.max(...exerciseEntries.filter(e => e.tonnage).map(e => e.tonnage || 0)) || 0)} kg som mest i ett pass.</p>
+                            </div>
+                            <div className="p-6 rounded-2xl bg-gradient-to-br from-sky-500/10 to-transparent border border-sky-500/20 text-center">
+                                <span className="text-4xl">👟</span>
+                                <h5 className="text-sm font-bold text-sky-400 mt-2">Distanstopp</h5>
+                                <p className="text-[10px] text-slate-400 mt-1">Längsta passet var {Math.max(...exerciseEntries.filter(e => e.distance).map(e => e.distance || 0)) || 0} km.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
-            {/* Exercise Modal */}
-            {isExerciseModalOpen && (
-                <div className="modal-overlay" onClick={() => setIsExerciseModalOpen(false)}>
-                    <div className="modal-content" onClick={e => e.stopPropagation()}>
-                        <div className="flex justify-between items-center mb-6">
-                            <h2>Logga Träning</h2>
-                            <button className="text-slate-500 hover:text-white" onClick={() => setIsExerciseModalOpen(false)}>✕</button>
-                        </div>
-
-                        <form onSubmit={handleSmartAction} className="space-y-6">
-                            {/* Smart Input field */}
-                            <div className="input-group">
-                                <label className="text-emerald-400 font-bold text-[10px] uppercase tracking-widest flex items-center gap-2">
-                                    <span>🪄 Snabb-input</span>
-                                    <span className="text-[10px] text-slate-500 lowercase font-normal italic">t.ex. "30min löpning hög"</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={smartInput}
-                                    onChange={(e) => setSmartInput(e.target.value)}
-                                    placeholder="Beskriv passet här..."
-                                    className="w-full bg-slate-950/50 border border-emerald-500/20 rounded-2xl p-4 text-white focus:border-emerald-500/50 transition-all outline-none"
-                                    autoFocus
-                                />
-                            </div>
-
-                            {/* Derived Preview Tooltip-like area */}
-                            {smartInput && (
-                                <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-2xl">{EXERCISE_TYPES.find(t => t.type === effectiveExerciseType)?.icon}</span>
-                                        <div>
-                                            <div className="text-xs font-bold text-slate-200">
-                                                {EXERCISE_TYPES.find(t => t.type === effectiveExerciseType)?.label}
-                                            </div>
-                                            <div className="text-[10px] text-slate-500">
-                                                {effectiveDuration} min • {INTENSITIES.find(i => i.value === effectiveIntensity)?.label} intensitet
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-xs font-bold text-emerald-400">-{calculateExerciseCalories(effectiveExerciseType, parseInt(effectiveDuration) || 0, effectiveIntensity)} kcal</div>
-                                        <div className="text-[10px] text-slate-500 italic">beräknat</div>
-                                    </div>
-                                </div>
-                            )}
-
-                            <div className="border-t border-white/5 pt-4 my-2" />
-
-                            <div className="grid grid-cols-4 gap-2">
-                                {EXERCISE_TYPES.map(t => (
-                                    <button
-                                        key={t.type}
-                                        type="button"
-                                        className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${effectiveExerciseType === t.type ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-white/5 text-slate-400 opacity-60 hover:opacity-100'}`}
-                                        onClick={() => {
-                                            setExerciseForm({ ...exerciseForm, type: t.type });
-                                            setSmartInput(''); // Clear smart input if manually choosing
-                                        }}
-                                    >
-                                        <span className="text-xl">{t.icon}</span>
-                                        <span className="text-[10px] font-bold">{t.label}</span>
-                                    </button>
-                                ))}
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="input-group">
-                                    <label>Längd (min)</label>
-                                    <input
-                                        type="number"
-                                        value={effectiveDuration}
-                                        onChange={e => {
-                                            setExerciseForm({ ...exerciseForm, duration: e.target.value });
-                                            setSmartInput('');
-                                        }}
-                                        className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white"
-                                    />
-                                </div>
-                                <div className="input-group">
-                                    <label>Intensitet</label>
-                                    <select
-                                        value={effectiveIntensity}
-                                        onChange={e => {
-                                            setExerciseForm({ ...exerciseForm, intensity: e.target.value as ExerciseIntensity });
-                                            setSmartInput('');
-                                        }}
-                                        className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white appearance-none"
-                                    >
-                                        {INTENSITIES.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="input-group">
-                                <label>Anteckningar (valfritt)</label>
-                                <textarea
-                                    rows={2}
-                                    value={exerciseForm.notes}
-                                    onChange={e => setExerciseForm({ ...exerciseForm, notes: e.target.value })}
-                                    className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white resize-none"
-                                />
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button type="button" className="btn btn-secondary flex-1" onClick={() => setIsExerciseModalOpen(false)}>Avbryt</button>
-                                <button type="submit" className="btn btn-primary flex-1">Spara Träning</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Weight Modal */}
-            {/* Weight Modal */}
-            {isWeightModalOpen && (
-                <div className="modal-overlay backdrop-blur-md bg-slate-950/80" onClick={() => setIsWeightModalOpen(false)}>
-                    <div
-                        className="modal-content max-w-lg w-full bg-slate-900 border border-white/10 shadow-2xl rounded-3xl p-0 overflow-hidden"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        <div className="bg-gradient-to-br from-emerald-500/20 to-slate-900 p-6 text-center border-b border-white/5">
-                            <h2 className="text-xl font-black text-white italic tracking-tighter">NY VIKTNOTERING</h2>
-                            <p className="text-xs text-slate-400 font-medium">Uppdatera din kroppsdata</p>
-                        </div>
-
-                        <form onSubmit={handleAddWeight} className="p-8 space-y-6">
-                            <div className="space-y-4">
-                                <div className="relative group">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={weightInput}
-                                        autoFocus
-                                        onChange={e => setWeightInput(e.target.value)}
-                                        className="w-full bg-slate-950 border border-white/10 rounded-2xl p-8 text-5xl font-black text-center text-emerald-400 focus:border-emerald-500/50 transition-all outline-none placeholder-slate-800"
-                                        placeholder="0.0"
-                                    />
-                                    <span className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-700 font-black text-xl pointer-events-none">KG</span>
-                                </div>
-
-                                <input
-                                    type="date"
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="w-full bg-slate-950 border border-white/10 rounded-xl p-3 text-center text-slate-400 text-sm focus:text-white transition-all outline-none"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3">
-                                <button type="button" className="py-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold text-xs uppercase tracking-wider transition-all" onClick={() => setIsWeightModalOpen(false)}>
-                                    Avbryt
-                                </button>
-                                <button type="submit" className="py-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 transition-all">
-                                    Spara Vikt
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-function addToWeek(map: any, d: Date, val: number, startDate: Date) {
-    const diffTime = d.getTime() - startDate.getTime();
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const weekNum = Math.floor(diffDays / 7);
-
-    if (!map[weekNum]) {
-        const stableDate = new Date(startDate.getTime() + (weekNum * 7 * 24 * 60 * 60 * 1000));
-        map[weekNum] = { sum: 0, count: 0, date: stableDate.toISOString() };
-    }
-    map[weekNum].sum += val;
-    map[weekNum].count++;
-}
-
-function CycleYearChart({
-    cycles,
-    weightEntries,
-    nutrition,
-    exercises,
-    zoomMonths,
-    metric
-}: {
-    cycles: any[],
-    weightEntries: any[],
-    nutrition: any[],
-    exercises: any[],
-    zoomMonths: number,
-    metric: 'calories' | 'volume' | 'workouts'
-}) {
-    // 1. Calculate Time Range (+- zoomMonths)
-    const today = new Date();
-    const startDate = new Date(today);
-    startDate.setMonth(today.getMonth() - zoomMonths);
-    const endDate = new Date(today);
-    endDate.setMonth(today.getMonth() + zoomMonths);
-
-    const getX = (dateStr: string | Date) => {
-        const d = new Date(dateStr);
-        const totalMs = endDate.getTime() - startDate.getTime();
-        const currentMs = d.getTime() - startDate.getTime();
-        return (currentMs / totalMs) * 100;
-    };
-
-    // 2. Weight Min/Max for scaling
-    // Filter weights within the visual range for scaling calculation, but maybe allow a buffer?
-    const visibleWeights = weightEntries.filter(w => {
-        const d = new Date(w.date);
-        return d >= startDate && d <= endDate;
-    });
-
-    // Fallback if no specific weights in range, use generic 70-90 or nearby
-    const weights = visibleWeights.map(w => w.weight);
-    const minWeight = weights.length ? Math.min(...weights) - 2 : 70;
-    const maxWeight = weights.length ? Math.max(...weights) + 2 : 90;
-
-    const getY = (weight: number) => {
-        return 100 - ((weight - minWeight) / (maxWeight - minWeight)) * 100;
-    };
-
-    const sortedWeights = [...weightEntries]
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .filter(w => {
-            const d = new Date(w.date);
-            // Include one point before/after to ensure lines connect to the edge properly?
-            // For now, strict range is safer for SVG bounds if we use 0-100 clamping, 
-            // but since we allow <0 and >100 in getX (to let lines flow offscreen), 
-            // we should maybe filter loosely. 
-            // Let's filter strictly for now to avoid complexity.
-            return d >= startDate && d <= endDate;
-        });
-
-    const weightPath = sortedWeights.map((w, i) => {
-        const x = getX(w.date);
-        const y = getY(w.weight);
-        return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
-    }).join(' ');
-
-    return (
-        <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            {/* Background Zones for Cycles (rendered first) */}
-            {cycles.map(cycle => {
-                const startX = Math.max(0, getX(cycle.startDate));
-                const endX = cycle.endDate ? Math.min(100, getX(cycle.endDate)) : 100; // If no end date, assume infinity -> 100
-
-                // If cycle is completely out of view?
-                if (endX < 0 || startX > 100) return null;
-
-                const width = Math.max(0.5, endX - startX);
-
-                let color = 'rgba(59, 130, 246, 0.1)'; // Neutral (Blue)
-                if (cycle.goal === 'deff') color = 'rgba(244, 63, 94, 0.1)'; // Cut (Rose)
-                if (cycle.goal === 'bulk') color = 'rgba(16, 185, 129, 0.1)'; // Bulk (Emerald)
-
-                return (
-                    <rect
-                        key={cycle.id}
-                        x={startX}
-                        y="0"
-                        width={width}
-                        height="100"
-                        fill={color}
-                    />
-                );
-            })}
-
-            {/* Today Line */}
-            <line x1={getX(today)} y1="0" x2={getX(today)} y2="100" stroke="rgba(255, 255, 255, 0.2)" strokeDasharray="4 4" strokeWidth="0.5" />
-
-            {/* Data Bars (Weekly Averages/Sums) */}
-            {(() => {
-                // Group by week
-                const weeklyData: { [key: string]: { sum: number, count: number, date: string } } = {};
-
-                if (metric === 'calories') {
-                    nutrition.forEach(n => {
-                        const d = new Date(n.date);
-                        if (d < startDate || d > endDate) return;
-                        addToWeek(weeklyData, d, n.calories, startDate);
-                    });
-                } else if (metric === 'workouts') {
-                    exercises.forEach(e => {
-                        const d = new Date(e.date);
-                        if (d < startDate || d > endDate) return;
-                        addToWeek(weeklyData, d, 1, startDate);
-                    });
-                } else if (metric === 'volume') {
-                    exercises.forEach(e => {
-                        const d = new Date(e.date);
-                        if (d < startDate || d > endDate) return;
-                        // Estimate volume if not present (simple placeholder logic)
-                        // Assuming tonnage is explicitly logged OR derive from duration*intensity factor? 
-                        // User asked for "ton lyfta", implying strength.
-                        // If no tonnage, maybe 0.
-                        const vol = e.tonnage || 0;
-                        addToWeek(weeklyData, d, vol, startDate);
-                    });
-                }
-
-                return Object.values(weeklyData).map((data: any, i) => {
-                    let val = data.sum;
-                    if (metric === 'calories') val = data.sum / data.count; // Average for calories
-                    // For workouts/volume, we want Sum per week, not average per entry. 
-                    // Wait, `addToWeek` increments count. 
-                    // So `data.sum` is total for the week.
-
-                    const x = getX(data.date);
-
-                    // Scaling
-                    let height = 0;
-                    let color = 'rgba(16, 185, 129, 0.2)';
-
-                    if (metric === 'calories') {
-                        height = Math.min(40, (val / 4000) * 40);
-                    } else if (metric === 'workouts') {
-                        height = Math.min(40, (val / 10) * 40); // Max 10 workouts per week
-                        color = 'rgba(59, 130, 246, 0.4)';
-                    } else if (metric === 'volume') {
-                        height = Math.min(40, (val / 20000) * 40); // Max 20 tons per week? 
-                        color = 'rgba(244, 63, 94, 0.4)';
+            {/* Extracted Modals */}
+            <ExerciseModal
+                isOpen={isExerciseModalOpen}
+                onClose={() => {
+                    setIsExerciseModalOpen(false);
+                    setEditingExerciseId(null);
+                }}
+                onSave={handleSmartAction}
+                smartInput={smartInput}
+                setSmartInput={setSmartInput}
+                effectiveExerciseType={effectiveExerciseType}
+                effectiveDuration={effectiveDuration}
+                effectiveIntensity={effectiveIntensity}
+                exerciseForm={exerciseForm}
+                setExerciseForm={setExerciseForm}
+                calculateCalories={calculateExerciseCalories}
+                isEditing={!!editingExerciseId}
+                onDelete={() => {
+                    if (editingExerciseId) {
+                        deleteExercise(editingExerciseId);
+                        setIsExerciseModalOpen(false);
+                        setEditingExerciseId(null);
                     }
+                }}
+            />
 
-                    return (
-                        <rect
-                            key={i}
-                            x={x}
-                            y={100 - height}
-                            width={1.5}
-                            height={height}
-                            fill={color}
-                            rx="0.5"
-                        />
-                    );
-                });
-            })()}
-
-            {/* Grid Lines (Months) */}
-            {Array.from({ length: 13 }).map((_, i) => {
-                const d = new Date(startDate);
-                d.setMonth(d.getMonth() + i);
-                const x = getX(d.toISOString().split('T')[0]);
-                // Only show if x is within bounds (0-100)
-                if (x < 0 || x > 100) return null;
-
-                return (
-                    <g key={i}>
-                        <line x1={x} y1="0" x2={x} y2="100" stroke="rgba(255,255,255,0.05)" strokeWidth="0.2" />
-                        <text x={x + 1} y="95" fontSize="2" fill="rgba(255,255,255,0.3)">{d.toLocaleDateString('sv-SE', { month: 'short' })}</text>
-                    </g>
-                );
-            })}
-
-            {/* Weight Line */}
-            {sortedWeights.length > 1 && (
-                <path
-                    d={weightPath}
-                    fill="none"
-                    stroke="#10b981"
-                    strokeWidth="0.5"
-                    vectorEffect="non-scaling-stroke"
-                    className="drop-shadow-glow"
-                />
-            )}
-
-            {/* Current Weight Indicator */}
-            {sortedWeights.length > 0 && (
-                <circle
-                    cx={getX(sortedWeights[sortedWeights.length - 1].date)}
-                    cy={getY(sortedWeights[sortedWeights.length - 1].weight)}
-                    r="1"
-                    fill="#10b981"
-                />
-            )}
-        </svg>
+            <WeightModal
+                isOpen={isWeightModalOpen}
+                onClose={() => setIsWeightModalOpen(false)}
+                weightInput={weightInput}
+                setWeightInput={setWeightInput}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                onSave={handleAddWeight}
+            />
+        </div>
     );
 }

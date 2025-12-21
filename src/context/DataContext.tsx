@@ -211,10 +211,11 @@ export function DataProvider({ children }: DataProviderProps) {
                 dailyVitals,
                 exerciseEntries,
                 weightEntries,
-                competitions
+                competitions,
+                trainingCycles
             });
         }
-    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions]);
+    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions, trainingCycles]);
 
     // ============================================
     // Pantry CRUD

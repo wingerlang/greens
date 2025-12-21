@@ -287,6 +287,7 @@ export interface ExerciseEntry {
     notes?: string;
     subType?: ExerciseSubType;
     tonnage?: number;   // total kg lifted
+    distance?: number;  // km
     createdAt: string;
 }
 
