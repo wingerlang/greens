@@ -480,12 +480,27 @@
     grid-template-columns: repeat(3, 1fr);
 }
 
+.form-row-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
 .checkbox-inline {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    padding-top: 1.5rem;
+    padding-top: 1rem;
     cursor: pointer;
+}
+
+.checkbox-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.checkbox-grid .checkbox-inline {
+    padding-top: 0;
 }
 
 .checkbox-inline input {

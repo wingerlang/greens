@@ -23,6 +23,9 @@ import { RecipeSelectionModal } from '../components/RecipeSelectionModal.tsx';
 import { ShoppingListView } from '../components/ShoppingListView.tsx';
 import { useShoppingList } from '../hooks/useShoppingList.ts';
 import { useRandomizer } from '../hooks/useRandomizer.ts';
+import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
+import { CommandCenter } from '../components/weekly/CommandCenter.tsx';
+import SmartAnalysisPanel from '../components/weekly/SmartAnalysisPanel.tsx';
 import './WeeklyPage.css';
 
 // ============================================
@@ -71,6 +74,8 @@ export function WeeklyPage() {
         pantryQuantities,
         togglePantryItem,
         setPantryQuantity,
+        updateVitals,
+        getVitalsForDate,
     } = useData();
 
     const { settings } = useSettings();
@@ -82,6 +87,10 @@ export function WeeklyPage() {
     const [editingSlot, setEditingSlot] = useState<{ day: Weekday; meal: MealType } | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [hasLoaded, setHasLoaded] = useState(false);
+    const [showSmartAnalysis, setShowSmartAnalysis] = useState(() => {
+        const saved = localStorage.getItem('greens-show-analysis');
+        return saved === null ? true : saved === 'true';
+    });
 
     // Ref to track if we're currently loading (to prevent save during load)
     const isLoadingRef = React.useRef(false);
@@ -110,6 +119,11 @@ export function WeeklyPage() {
         }, 100);
     }, [currentWeekStart, weeklyPlans]);
 
+    // Persist analysis toggle
+    useEffect(() => {
+        localStorage.setItem('greens-show-analysis', String(showSmartAnalysis));
+    }, [showSmartAnalysis]);
+
     // Save on change - only after initial load and not during loading
     useEffect(() => {
         if (weekPlan && hasLoaded && !isLoadingRef.current) {
@@ -135,6 +149,23 @@ export function WeeklyPage() {
     );
 
     const { getRandomRecipe, getSuggestions, randomizeDay } = useRandomizer(recipes, weekPlan);
+
+    const { analyzePlan, getOptimizationSuggestion } = useSmartPlanner(recipes, foodItems);
+
+    const planAnalysis = useMemo(() => {
+        if (!weekPlan) return null;
+
+        // Convert weekPlan state to the full WeeklyPlan model for analysis
+        const fullPlan: WeeklyPlan = {
+            id: 'current',
+            weekStartDate: currentWeekStart,
+            meals: weekPlan,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        return analyzePlan(fullPlan);
+    }, [weekPlan, analyzePlan, currentWeekStart]);
 
     // Derived values
     const weekNumber = getWeekNumber(currentWeekStart);
@@ -232,6 +263,30 @@ export function WeeklyPage() {
         });
     };
 
+    const handleMagicWand = (day: Weekday, meal: MealType) => {
+        if (!weekPlan) return;
+
+        // Create full plan for analysis
+        const fullPlan: WeeklyPlan = {
+            id: 'current',
+            weekStartDate: currentWeekStart,
+            meals: weekPlan,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+
+        const suggestion = getOptimizationSuggestion(fullPlan, day, meal);
+        if (suggestion) {
+            setWeekPlan(prev => ({
+                ...prev!,
+                [day]: {
+                    ...prev![day],
+                    [meal]: { recipeId: suggestion.id, servings: suggestion.servings || 4 }
+                }
+            }));
+        }
+    };
+
     const handleDragStart = (e: React.DragEvent, day: Weekday, meal: MealType, recipeId: string) => {
         e.dataTransfer.setData('application/json', JSON.stringify({ day, meal, recipeId }));
         e.dataTransfer.effectAllowed = 'move';
@@ -293,6 +348,31 @@ export function WeeklyPage() {
                 onRandomizeWeek={handleRandomizeWeek}
             />
 
+            <CommandCenter />
+
+            {/* Smart Analysis Panel Toggle */}
+            <div className="flex justify-end mb-2">
+                <button
+                    onClick={() => setShowSmartAnalysis(!showSmartAnalysis)}
+                    className="text-[10px] uppercase tracking-widest font-bold text-slate-500 hover:text-slate-300 transition-colors flex items-center gap-1"
+                >
+                    {showSmartAnalysis ? '🙈 Dölj Analys' : '👁️ Visa Analys'}
+                </button>
+            </div>
+
+            {/* Smart Analysis Panel */}
+            {planAnalysis && showSmartAnalysis && (
+                <div className="mb-8 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <SmartAnalysisPanel
+                        analysis={planAnalysis}
+                        onOptimize={() => {
+                            console.log('Optimizing plan...');
+                            // Optimization logic will be added here
+                        }}
+                    />
+                </div>
+            )}
+
             {/* Days Grid */}
             <div className="days-grid">
                 {WEEKDAYS.map((day, index) => {
@@ -319,6 +399,7 @@ export function WeeklyPage() {
                             isPast={isPast}
                             isYesterday={isYesterday}
                             meals={weekPlan[day] || {}}
+                            dayAnalysis={planAnalysis?.dayAnalysis?.[day]}
                             visibleMeals={visibleMeals as MealType[]}
                             recipes={recipes}
                             foodItems={foodItems}
@@ -370,6 +451,9 @@ export function WeeklyPage() {
                             }}
                             onDragStart={(e, meal, recipeId) => handleDragStart(e, day, meal, recipeId)}
                             onDrop={(e, meal) => handleDrop(e, day, meal)}
+                            onMagicWand={(meal) => handleMagicWand(day, meal)}
+                            vitals={getVitalsForDate(getISODate(dayDate))}
+                            onUpdateVitals={(updates) => updateVitals(getISODate(dayDate), updates)}
                         />
                     );
                 })}

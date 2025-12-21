@@ -31,11 +31,20 @@ const EMPTY_FORM: FoodItemFormData = {
     pricePerUnit: 0,
     co2PerUnit: 0,
     containsGluten: false,
+    iron: 0,
+    calcium: 0,
+    zinc: 0,
+    vitaminB12: 0,
+    isCompleteProtein: false,
+    missingAminoAcids: [],
+    complementaryCategories: [],
+    proteinCategory: undefined,
+    seasons: [],
 };
 
 type ViewMode = 'grid' | 'list';
 
-export function DatabasePage() {
+export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const { foodItems, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
@@ -67,6 +76,15 @@ export function DatabasePage() {
                 pricePerUnit: item.pricePerUnit || 0,
                 co2PerUnit: item.co2PerUnit || 0,
                 containsGluten: item.containsGluten || false,
+                iron: item.iron || 0,
+                calcium: item.calcium || 0,
+                zinc: item.zinc || 0,
+                vitaminB12: item.vitaminB12 || 0,
+                isCompleteProtein: item.isCompleteProtein || false,
+                missingAminoAcids: item.missingAminoAcids || [],
+                complementaryCategories: item.complementaryCategories || [],
+                proteinCategory: item.proteinCategory,
+                seasons: item.seasons || [],
             });
         } else {
             setEditingItem(null);
@@ -104,33 +122,35 @@ export function DatabasePage() {
 
     return (
         <div className="database-page">
-            <header className="page-header">
-                <div>
-                    <h1>Matdatabas</h1>
-                    <p className="page-subtitle">Hantera råvaror och näringsvärden</p>
-                </div>
-                <div className="header-actions">
-                    <div className="view-toggle">
-                        <button
-                            className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                            onClick={() => setViewMode('grid')}
-                            title="Rutnät"
-                        >
-                            ⊞
-                        </button>
-                        <button
-                            className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
-                            onClick={() => setViewMode('list')}
-                            title="Lista"
-                        >
-                            ☰
+            {!headless && (
+                <header className="page-header">
+                    <div>
+                        <h1>Matdatabas</h1>
+                        <p className="page-subtitle">Hantera råvaror och näringsvärden</p>
+                    </div>
+                    <div className="header-actions">
+                        <div className="view-toggle">
+                            <button
+                                className={`toggle-btn ${viewMode === 'grid' ? 'active' : ''}`}
+                                onClick={() => setViewMode('grid')}
+                                title="Rutnät"
+                            >
+                                ⊞
+                            </button>
+                            <button
+                                className={`toggle-btn ${viewMode === 'list' ? 'active' : ''}`}
+                                onClick={() => setViewMode('list')}
+                                title="Lista"
+                            >
+                                ☰
+                            </button>
+                        </div>
+                        <button className="btn btn-primary" onClick={() => handleOpenForm()}>
+                            + Lägg till
                         </button>
                     </div>
-                    <button className="btn btn-primary" onClick={() => handleOpenForm()}>
-                        + Lägg till
-                    </button>
-                </div>
-            </header>
+                </header>
+            )}
 
             <div className="filters">
                 <input
@@ -150,6 +170,11 @@ export function DatabasePage() {
                         <option key={key} value={key}>{label}</option>
                     ))}
                 </select>
+                {headless && (
+                    <button className="btn btn-primary" onClick={() => handleOpenForm()}>
+                        + Ny
+                    </button>
+                )}
             </div>
 
             {filteredItems.length === 0 ? (
@@ -428,6 +453,139 @@ export function DatabasePage() {
                                         value={formData.fiber}
                                         onChange={(e) => setFormData({ ...formData, fiber: Number(e.target.value) })}
                                     />
+                                </div>
+                            </div>
+
+                            <h3 className="form-section-title">Vitaminer & Mineraler (per 100g)</h3>
+                            <div className="form-row form-row-4">
+                                <div className="form-group">
+                                    <label htmlFor="iron">Järn (mg)</label>
+                                    <input
+                                        type="number"
+                                        id="iron"
+                                        min="0"
+                                        step="0.1"
+                                        value={formData.iron || 0}
+                                        onChange={(e) => setFormData({ ...formData, iron: Number(e.target.value) })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="calcium">Kalcium (mg)</label>
+                                    <input
+                                        type="number"
+                                        id="calcium"
+                                        min="0"
+                                        value={formData.calcium || 0}
+                                        onChange={(e) => setFormData({ ...formData, calcium: Number(e.target.value) })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="zinc">Zink (mg)</label>
+                                    <input
+                                        type="number"
+                                        id="zinc"
+                                        min="0"
+                                        step="0.1"
+                                        value={formData.zinc || 0}
+                                        onChange={(e) => setFormData({ ...formData, zinc: Number(e.target.value) })}
+                                    />
+                                </div>
+                                <div className="form-group">
+                                    <label htmlFor="vitaminB12">B12 (µg)</label>
+                                    <input
+                                        type="number"
+                                        id="vitaminB12"
+                                        min="0"
+                                        step="0.1"
+                                        value={formData.vitaminB12 || 0}
+                                        onChange={(e) => setFormData({ ...formData, vitaminB12: Number(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+
+                            <h3 className="form-section-title">Proteinkvalitet</h3>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label className="checkbox-inline">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.isCompleteProtein || false}
+                                            onChange={(e) => setFormData({ ...formData, isCompleteProtein: e.target.checked })}
+                                        />
+                                        Fullvärdigt protein (innehåller alla essentiella aminosyror)
+                                    </label>
+                                </div>
+                            </div>
+                            {!formData.isCompleteProtein && (
+                                <div className="form-group">
+                                    <label>Kompletterande kategorier (behövs för fullvärdigt protein)</label>
+                                    <div className="checkbox-grid">
+                                        {['grains', 'legumes', 'nuts', 'seeds'].map(cat => (
+                                            <label key={cat} className="checkbox-inline">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={formData.complementaryCategories?.includes(cat as FoodCategory)}
+                                                    onChange={(e) => {
+                                                        const cats = formData.complementaryCategories || [];
+                                                        if (e.target.checked) {
+                                                            setFormData({ ...formData, complementaryCategories: [...cats, cat as FoodCategory] });
+                                                        } else {
+                                                            setFormData({ ...formData, complementaryCategories: cats.filter(c => c !== cat) });
+                                                        }
+                                                    }}
+                                                />
+                                                {CATEGORY_LABELS[cat as FoodCategory] || cat}
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <h3 className="form-section-title">Smart Plan Data</h3>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label htmlFor="proteinCategory">Proteinkategori (för aminosyra-balans)</label>
+                                    <select
+                                        id="proteinCategory"
+                                        value={formData.proteinCategory || ''}
+                                        onChange={(e) => setFormData({ ...formData, proteinCategory: e.target.value as any || undefined })}
+                                    >
+                                        <option value="">Ingen (ej proteinfokus)</option>
+                                        <option value="legume">Baljväxt (Bönor/Linser)</option>
+                                        <option value="grain">Spannmål (Ris/Vete)</option>
+                                        <option value="soy_quinoa">Fullvärdig (Sojaprodukter/Quinoa)</option>
+                                        <option value="seed">Frö (Solros/Pumpa)</option>
+                                        <option value="nut">Nöt (Mandel/Valnöt)</option>
+                                        <option value="vegetable">Grönsak (Broccoli/Spenat)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>Säsonger (när är den bäst?)</label>
+                                <div className="checkbox-grid">
+                                    {[
+                                        { id: 'winter', label: 'Vinter ❄️' },
+                                        { id: 'spring', label: 'Vår 🌱' },
+                                        { id: 'summer', label: 'Sommar ☀️' },
+                                        { id: 'autumn', label: 'Höst 🍂' }
+                                    ].map(s => (
+                                        <label key={s.id} className="checkbox-inline">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.seasons?.includes(s.id as any)}
+                                                onChange={(e) => {
+                                                    const current = formData.seasons || [];
+                                                    if (e.target.checked) {
+                                                        setFormData({ ...formData, seasons: [...current, s.id as any] });
+                                                    } else {
+                                                        setFormData({ ...formData, seasons: current.filter(c => c !== s.id) });
+                                                    }
+                                                }}
+                                            />
+                                            {s.label}
+                                        </label>
+                                    ))}
                                 </div>
                             </div>
 

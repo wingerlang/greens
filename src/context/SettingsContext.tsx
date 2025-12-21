@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { type Theme, type UserSettings, type MealType, DEFAULT_USER_SETTINGS } from '../models/types.ts';
+import { useData } from './DataContext.tsx';
 
 // ============================================
 // Settings Context
@@ -44,16 +45,29 @@ interface SettingsProviderProps {
 }
 
 export function SettingsProvider({ children }: SettingsProviderProps) {
-    const [settings, setSettings] = useState<UserSettings>(() => loadSettings());
+    const { currentUser, updateCurrentUser } = useData();
+    const [settings, setSettings] = useState<UserSettings>(() => currentUser?.settings || loadSettings());
+
+    // Sync from currentUser
+    useEffect(() => {
+        if (currentUser?.settings) {
+            setSettings(currentUser.settings);
+        }
+    }, [currentUser?.id]);
 
     // Apply theme to document
     useEffect(() => {
         document.documentElement.setAttribute('data-theme', settings.theme);
     }, [settings.theme]);
 
-    // Save settings on change
+    // Push to currentUser (Data Context) on change
     useEffect(() => {
-        saveSettings(settings);
+        if (currentUser) {
+            // Only update if settings actually changed from what's in currentUser
+            if (JSON.stringify(currentUser.settings) !== JSON.stringify(settings)) {
+                updateCurrentUser({ settings });
+            }
+        }
     }, [settings]);
 
     const setTheme = (theme: Theme) => {

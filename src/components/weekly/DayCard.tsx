@@ -13,6 +13,9 @@ import {
 } from '../../models/types.ts';
 import { MealSlot } from './MealSlot.tsx';
 import { calculateRecipeEstimate } from '../../utils/ingredientParser.ts';
+import { type DayAnalysis } from '../../hooks/useSmartPlanner.ts';
+import { DailyVitalsModule } from './DailyVitalsModule.tsx';
+import { type DailyVitals } from '../../models/types.ts';
 
 // Swedish day abbreviations matching reference design
 const DAY_ABBREV: Record<Weekday, string> = {
@@ -33,6 +36,7 @@ interface DayCardProps {
     isPast: boolean;          // Days before today
     isYesterday: boolean;     // Special styling for yesterday
     meals: Partial<Record<MealType, PlannedMeal>>;
+    dayAnalysis?: DayAnalysis;
     visibleMeals: MealType[];
     recipes: Recipe[];
     foodItems: FoodItem[];
@@ -45,6 +49,9 @@ interface DayCardProps {
     onQuickSelect?: (meal: MealType, recipeId: string) => void;
     onDragStart?: (e: React.DragEvent, meal: MealType, recipeId: string) => void;
     onDrop?: (e: React.DragEvent, meal: MealType) => void;
+    onMagicWand?: (meal: MealType) => void;
+    vitals?: DailyVitals;
+    onUpdateVitals?: (updates: Partial<DailyVitals>) => void;
 }
 
 export function DayCard({
@@ -55,6 +62,7 @@ export function DayCard({
     isPast,
     isYesterday,
     meals,
+    dayAnalysis,
     visibleMeals,
     recipes,
     foodItems,
@@ -67,6 +75,9 @@ export function DayCard({
     onQuickSelect,
     onDragStart,
     onDrop,
+    onMagicWand,
+    vitals,
+    onUpdateVitals,
 }: DayCardProps) {
     const [isFlipped, setIsFlipped] = useState(false);
 
@@ -137,6 +148,15 @@ export function DayCard({
                     <div className="day-info">
                         <span className="day-name">{DAY_ABBREV[day]}</span>
                         <span className="day-date">{dateStr}</span>
+                        {dayAnalysis?.isComplete && (
+                            <span className="health-status-icon" title="Fullvärdigt protein!">🛡️</span>
+                        )}
+                        {dayAnalysis?.tags.includes('seasonal') && (
+                            <span className="health-status-icon" title="Säsongsmat">☀️</span>
+                        )}
+                        {dayAnalysis?.synergies && dayAnalysis.synergies.length > 0 && (
+                            <span className="health-status-icon" title={dayAnalysis.synergies.map(s => s.name).join(', ')}>✨</span>
+                        )}
                     </div>
 
                     <div className="day-actions">
@@ -198,10 +218,19 @@ export function DayCard({
                                 onDragStart={(e) => planned?.recipeId && onDragStart?.(e, meal, planned.recipeId)}
                                 onDragOver={handleDragOver}
                                 onDrop={(e) => onDrop?.(e, meal)}
+                                onMagicWand={() => onMagicWand?.(meal)}
                             />
                         );
                     })}
                 </div>
+
+                {/* Daily Vitals */}
+                {vitals && onUpdateVitals && (
+                    <DailyVitalsModule
+                        vitals={vitals}
+                        onUpdate={onUpdateVitals}
+                    />
+                )}
             </div>
 
             {/* Back of card - flipped state */}

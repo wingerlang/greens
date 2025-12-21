@@ -20,6 +20,7 @@ interface MealSlotProps {
     onDragStart?: (e: React.DragEvent) => void;
     onDragOver?: (e: React.DragEvent) => void;
     onDrop?: (e: React.DragEvent) => void;
+    onMagicWand?: () => void;
 }
 
 export function MealSlot({
@@ -37,6 +38,7 @@ export function MealSlot({
     onDragStart,
     onDragOver,
     onDrop,
+    onMagicWand,
 }: MealSlotProps) {
     const [isHovered, setIsHovered] = useState(false);
     const hasRecipe = !!planned?.recipeId && !!recipe;
@@ -95,9 +97,24 @@ export function MealSlot({
             onDrop={onDrop}
         >
             <div className="meal-slot-header">
-                <span className={`meal-type ${colorClass}`}>
-                    {MEAL_TYPE_LABELS[meal]}
-                </span>
+                <div className="meal-type-row">
+                    <span className={`meal-type ${colorClass}`}>
+                        {MEAL_TYPE_LABELS[meal]}
+                    </span>
+                    {hasRecipe && (
+                        <div className="header-meta">
+                            <span>⏱{recipe!.cookTime || 0}'</span>
+                            <span>👥{planned?.servings || recipe!.servings || 4}</span>
+                            {proteinPerServing && <span className="protein-inline">🌱{proteinPerServing}g</span>}
+                            {recipe!.seasons?.includes(new Date().getMonth() >= 2 && new Date().getMonth() <= 4 ? 'spring' : new Date().getMonth() >= 5 && new Date().getMonth() <= 7 ? 'summer' : new Date().getMonth() >= 8 && new Date().getMonth() <= 10 ? 'autumn' : 'winter') && (
+                                <span className="health-status-icon-sm" title="I säsong">☀️</span>
+                            )}
+                            {recipe!.priceCategory === 'budget' && (
+                                <span className="health-status-icon-sm" title="Budgetpris">💰</span>
+                            )}
+                        </div>
+                    )}
+                </div>
                 <div className="slot-actions">
                     {hasRecipe && onRemove && (
                         <button
@@ -123,6 +140,18 @@ export function MealSlot({
                             🎲
                         </button>
                     )}
+                    {!hasRecipe && onMagicWand && (
+                        <button
+                            className="meal-magic-btn"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onMagicWand();
+                            }}
+                            title="Fyll med smart val"
+                        >
+                            🪄
+                        </button>
+                    )}
                 </div>
             </div>
 
@@ -133,12 +162,6 @@ export function MealSlot({
                             {recipe!.name.length > 25 ? recipe!.name.substring(0, 25) + '...' : recipe!.name}
                         </span>
                         {isCooked && <span className="cooked-badge">✓</span>}
-                    </div>
-
-                    <div className="recipe-meta">
-                        <span>⏱ {recipe!.cookTime || 0}m</span>
-                        <span>👥 {planned?.servings || recipe!.servings || 4}</span>
-                        {proteinPerServing && <span>🌱 {proteinPerServing}g</span>}
                     </div>
 
                     {hasSwaps && (
@@ -176,5 +199,3 @@ export function MealSlot({
 }
 
 export default MealSlot;
-
-

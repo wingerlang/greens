@@ -24,6 +24,14 @@ export interface MatchedIngredient extends ParsedIngredient {
     co2?: number;
 }
 
+export interface SynergyResult {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    impact: 'absorption' | 'efficiency' | 'unlock';
+}
+
 export interface RecipeEstimate {
     calories: number;
     protein: number;
@@ -34,6 +42,10 @@ export interface RecipeEstimate {
     co2: number;
     matchedCount: number;
     totalCount: number;
+    proteinCategories: string[]; // e.g. ['legume', 'grain']
+    isCompleteProtein: boolean;
+    tags: string[];           // e.g. ['seasonal-powerhouse', 'budget-win']
+    synergies: SynergyResult[];
 }
 
 // ============================================
@@ -209,6 +221,15 @@ export function calculateRecipeEstimate(
     let totalPrice = 0;
     let totalCo2 = 0;
     let matchedCount = 0;
+    const proteinCategories = new Set<string>();
+    const seasons = new Set<string>();
+
+    // Season detection
+    const month = new Date().getMonth();
+    let currentSeason: string = 'winter';
+    if (month >= 2 && month <= 4) currentSeason = 'spring';
+    else if (month >= 5 && month <= 7) currentSeason = 'summer';
+    else if (month >= 8 && month <= 10) currentSeason = 'autumn';
 
     for (const ingredient of parsed) {
         let foodItem = matchToFoodItem(ingredient, foodItems);
@@ -233,7 +254,113 @@ export function calculateRecipeEstimate(
             totalPrice += price;
             totalCo2 += co2;
             matchedCount++;
+
+            if (foodItem.proteinCategory) {
+                proteinCategories.add(foodItem.proteinCategory);
+            }
+            if (foodItem.seasons) {
+                foodItem.seasons.forEach(s => seasons.add(s));
+            }
         }
+    }
+
+    const categories = Array.from(proteinCategories);
+    const isComplete =
+        categories.includes('soy_quinoa') ||
+        (categories.includes('legume') && categories.includes('grain'));
+
+    const tags: string[] = [];
+    if (isComplete) tags.push('complete-protein');
+    if (seasons.has(currentSeason)) tags.push('seasonal-powerhouse');
+    if (totalPrice < 30) tags.push('budget-win');
+
+    // Synergy Detection
+    const synergies: SynergyResult[] = [];
+
+    // 1. Iron + Vitamin C Synergy
+    let totalIron = 0;
+    let totalVitC = 0;
+    let totalVitA = 0;
+    let totalZinc = 0;
+    let hasTurmeric = false;
+    let hasBlackPepper = false;
+    let hasCruciferous = false;
+    let hasMyrosinase = false;
+    let hasAlliums = false;
+
+    parsed.forEach(ing => {
+        const item = matchToFoodItem(ing, foodItems);
+        if (item) {
+            const factor = ((UNIT_TO_GRAMS[ing.unit] || 100) * ing.quantity) / 100;
+            totalIron += (item.iron || 0) * factor;
+            totalVitC += (item.vitaminC || 0) * factor;
+            totalVitA += (item.vitaminA || 0) * factor;
+            totalZinc += (item.zinc || 0) * factor;
+
+            const name = item.name.toLowerCase();
+            if (name.includes('gurkmeja')) hasTurmeric = true;
+            if (name.includes('svartpeppar') || name.includes('peppar')) hasBlackPepper = true;
+            if (['broccoli', 'grönkål', 'blomkål', 'brysselkål', 'svartkål'].some(c => name.includes(c))) hasCruciferous = true;
+            if (['senap', 'rädisa', 'pepparrot', 'rucola'].some(m => name.includes(m))) hasMyrosinase = true;
+            if (['vitlök', 'lök', 'purjolök'].some(a => name.includes(a))) hasAlliums = true;
+        }
+    });
+
+    // --- Synergies ---
+
+    // Iron + VitC
+    if (totalIron > 2 && totalVitC > 20) {
+        synergies.push({
+            id: 'iron-vitc',
+            name: 'Järnupptag-Boost',
+            description: 'Vitamin C ökar upptaget av järn från plantbaserade källor.',
+            icon: '🍋+🌿',
+            impact: 'absorption'
+        });
+    }
+
+    // Fat + VitA (Fat Soluble Unlock)
+    if (totalVitA > 500 && totalFat > 10) {
+        synergies.push({
+            id: 'fat-vita',
+            name: 'Närings-Unlock',
+            description: 'Hälsosamma fetter behövs för att ta upp fettlösligt Vitamin A (betakaroten).',
+            icon: '🥑+🥕',
+            impact: 'unlock'
+        });
+    }
+
+    // Turmeric + Black Pepper
+    if (hasTurmeric && hasBlackPepper) {
+        synergies.push({
+            id: 'turmeric-pepper',
+            name: 'Bio-Boost',
+            description: 'Piperin i svartpeppar ökar upptaget av kurkumin med upp till 2000%.',
+            icon: '🧂+🌿',
+            impact: 'efficiency'
+        });
+    }
+
+    // Sulforaphane Activation (Cruciferous + Myrosinase)
+    if (hasCruciferous && hasMyrosinase) {
+        synergies.push({
+            id: 'sulforaphane',
+            name: 'Sulforafan-Aktivering',
+            description: 'Senapsfrö eller rucola hjälper till att aktivera det cancerförebyggande sulforafanet i kål.',
+            icon: '🥦+🧂',
+            impact: 'efficiency'
+        });
+    }
+
+    // Mineral Bridge (Allium + Minerals)
+    if (hasAlliums && (totalIron > 3 || totalZinc > 3)) { // Zinc/Iron focused
+        synergies.push({
+            id: 'allium-minerals',
+            name: 'Mineral-Brygga',
+            description: 'Svavelföreningar i lök och vitlök ökar biotillgängligheten hos järn och zink.',
+            icon: '🧄+🍛',
+            impact: 'absorption'
+        });
     }
 
     return {
@@ -246,6 +373,10 @@ export function calculateRecipeEstimate(
         co2: Math.round(totalCo2 * 100) / 100,
         matchedCount,
         totalCount: parsed.length,
+        proteinCategories: categories,
+        isCompleteProtein: isComplete,
+        tags,
+        synergies
     };
 }
 

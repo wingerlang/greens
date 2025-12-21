@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useCooking } from '../context/CookingModeProvider.tsx';
-import { type Recipe, type MealType, MEAL_TYPE_LABELS, generateId } from '../models/types.ts';
+import { type Recipe, type MealType, type PriceCategory, type Season, MEAL_TYPE_LABELS, generateId } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import './RecipesPage.css';
 
@@ -15,6 +15,8 @@ interface RecipeFormState {
     ingredientsText: string;
     instructionsText: string;
     totalWeight: number;
+    priceCategory: PriceCategory;
+    seasons: Season[];
 }
 
 const EMPTY_FORM: RecipeFormState = {
@@ -27,6 +29,8 @@ const EMPTY_FORM: RecipeFormState = {
     ingredientsText: '',
     instructionsText: '',
     totalWeight: 0,
+    priceCategory: 'medium',
+    seasons: [],
 };
 
 export function RecipesPage() {
@@ -61,6 +65,8 @@ export function RecipesPage() {
                 ingredientsText: recipe.ingredientsText || '',
                 instructionsText: recipe.instructionsText || recipe.instructions.join('\n'),
                 totalWeight: recipe.totalWeight || 0,
+                priceCategory: recipe.priceCategory || 'medium',
+                seasons: recipe.seasons || [],
             });
         } else {
             setEditingRecipe(null);
@@ -88,6 +94,8 @@ export function RecipesPage() {
             ingredientsText: formData.ingredientsText,
             instructionsText: formData.instructionsText,
             totalWeight: formData.totalWeight || liveEstimate.calories * 2,
+            priceCategory: formData.priceCategory,
+            seasons: formData.seasons,
             ingredients: [],
             instructions: formData.instructionsText.split('\n').filter(line => line.trim()),
         };
@@ -314,6 +322,50 @@ Stek tofun gyllene i olja på hög värme. Lägg åt sidan.
 I samma panna: tillsätt grönsaker och pressad vitlök.`}
                                     rows={5}
                                 />
+                            </div>
+
+                            <h3 className="form-section-title">Smart Plan Data</h3>
+                            <div className="form-row">
+                                <div className="form-group">
+                                    <label>PRISNIVÅ</label>
+                                    <select
+                                        value={formData.priceCategory}
+                                        onChange={(e) => setFormData({ ...formData, priceCategory: e.target.value as PriceCategory })}
+                                        className="price-select"
+                                    >
+                                        <option value="budget">💰 Budget (Billig)</option>
+                                        <option value="medium">⚖️ Medium (Normal)</option>
+                                        <option value="premium">💎 Premium (Dyr)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label>PASSAR I SÄSONG</label>
+                                <div className="checkbox-grid">
+                                    {([
+                                        { id: 'winter', label: 'Vinter ❄️' },
+                                        { id: 'spring', label: 'Vår 🌱' },
+                                        { id: 'summer', label: 'Sommar ☀️' },
+                                        { id: 'autumn', label: 'Höst 🍂' }
+                                    ] as const).map(s => (
+                                        <label key={s.id} className="checkbox-inline">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.seasons.includes(s.id)}
+                                                onChange={(e) => {
+                                                    const current = formData.seasons;
+                                                    if (e.target.checked) {
+                                                        setFormData({ ...formData, seasons: [...current, s.id as Season] });
+                                                    } else {
+                                                        setFormData({ ...formData, seasons: current.filter(c => c !== s.id) as Season[] });
+                                                    }
+                                                }}
+                                            />
+                                            {s.label}
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
 
                             <div className="form-actions">

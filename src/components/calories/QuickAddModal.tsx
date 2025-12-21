@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { type MealType, MEAL_TYPE_LABELS } from '../../models/types.ts';
 
 interface QuickAddModalProps {
@@ -9,6 +9,7 @@ interface QuickAddModalProps {
     searchQuery: string;
     setSearchQuery: (query: string) => void;
     searchResults: any[];
+    proposals: any[];
     quickAddServings: number;
     setQuickAddServings: (val: number) => void;
     handleQuickAdd: (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number) => void;
@@ -22,10 +23,21 @@ export function QuickAddModal({
     searchQuery,
     setSearchQuery,
     searchResults,
+    proposals,
     quickAddServings,
     setQuickAddServings,
     handleQuickAdd,
 }: QuickAddModalProps) {
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        if (isOpen) {
+            window.addEventListener('keydown', handleKeyDown);
+        }
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isOpen, onClose]);
+
     if (!isOpen) return null;
 
     return (
@@ -62,8 +74,37 @@ export function QuickAddModal({
                     />
                 </div>
 
+                {/* Proposals (Most/Recently Used) */}
+                {!searchQuery && proposals.length > 0 && (
+                    <div className="search-results proposals-results">
+                        <p className="text-[10px] text-slate-500 uppercase font-bold mb-2 tracking-wider">Ofta använda</p>
+                        {proposals.map((result: any) => (
+                            <div
+                                key={`prop-${result.type}-${result.id}`}
+                                className="search-result-item"
+                            >
+                                <div className="result-info">
+                                    <span className="result-type">{result.type === 'recipe' ? '🍳' : '🥕'}</span>
+                                    <div>
+                                        <strong>{result.name}</strong>
+                                        <small>{result.subtitle}</small>
+                                    </div>
+                                </div>
+                                <div className="result-actions">
+                                    <button
+                                        className="btn btn-primary btn-sm"
+                                        onClick={() => handleQuickAdd(result.type, result.id, (result as any).defaultPortion)}
+                                    >
+                                        + Lägg till
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
                 {/* Search Results */}
-                {searchResults.length > 0 && (
+                {searchQuery && searchResults.length > 0 && (
                     <div className="search-results">
                         {searchResults.map((result: any) => (
                             <div

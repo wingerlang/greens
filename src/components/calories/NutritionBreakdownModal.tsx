@@ -46,6 +46,13 @@ export function NutritionBreakdownModal({
                 protein: matched ? Math.round((matched.protein / 100) * scaledGrams * 10) / 10 : 0,
                 carbs: matched ? Math.round((matched.carbs / 100) * scaledGrams * 10) / 10 : 0,
                 fat: matched ? Math.round((matched.fat / 100) * scaledGrams * 10) / 10 : 0,
+                iron: matched ? ((matched.iron || 0) / 100) * scaledGrams : 0,
+                calcium: matched ? ((matched.calcium || 0) / 100) * scaledGrams : 0,
+                zinc: matched ? ((matched.zinc || 0) / 100) * scaledGrams : 0,
+                vitaminB12: matched ? ((matched.vitaminB12 || 0) / 100) * scaledGrams : 0,
+                isComplete: matched?.isCompleteProtein,
+                missingAminoAcids: matched?.missingAminoAcids,
+                complementaryCategories: matched?.complementaryCategories,
             };
         })
         : [];
@@ -59,6 +66,13 @@ export function NutritionBreakdownModal({
         protein: Math.round((foodItem.protein / 100) * servings * 10) / 10,
         carbs: Math.round((foodItem.carbs / 100) * servings * 10) / 10,
         fat: Math.round((foodItem.fat / 100) * servings * 10) / 10,
+        iron: ((foodItem.iron || 0) / 100) * servings,
+        calcium: ((foodItem.calcium || 0) / 100) * servings,
+        zinc: ((foodItem.zinc || 0) / 100) * servings,
+        vitaminB12: ((foodItem.vitaminB12 || 0) / 100) * servings,
+        isComplete: foodItem.isCompleteProtein,
+        missingAminoAcids: foodItem.missingAminoAcids,
+        complementaryCategories: foodItem.complementaryCategories,
     }] : [];
 
     const breakdown = isRecipe ? ingredients : foodBreakdown;
@@ -67,7 +81,27 @@ export function NutritionBreakdownModal({
         protein: acc.protein + bItem.protein,
         carbs: acc.carbs + bItem.carbs,
         fat: acc.fat + bItem.fat,
-    }), { calories: 0, protein: 0, carbs: 0, fat: 0 });
+        iron: acc.iron + (bItem.iron || 0),
+        calcium: acc.calcium + (bItem.calcium || 0),
+        zinc: acc.zinc + (bItem.zinc || 0),
+        vitaminB12: acc.vitaminB12 + (bItem.vitaminB12 || 0),
+    }), { calories: 0, protein: 0, carbs: 0, fat: 0, iron: 0, calcium: 0, zinc: 0, vitaminB12: 0 });
+
+    // Protein quality logic
+    const hasCompleteProtein = breakdown.some(b => b.isComplete) ||
+        (breakdown.some(b => b.complementaryCategories?.includes('grains')) &&
+            breakdown.some(b => b.complementaryCategories?.includes('legumes')));
+
+    const missingAminos = breakdown.reduce((acc, b) => {
+        if (!b.isComplete && b.missingAminoAcids) {
+            b.missingAminoAcids.forEach(a => acc.add(a));
+        }
+        return acc;
+    }, new Set<string>());
+
+    // If it's a "combined" protein (grains + legumes), we clear the missing aminos
+    const isCombinedComplete = breakdown.some(b => b.complementaryCategories?.includes('grains')) &&
+        breakdown.some(b => b.complementaryCategories?.includes('legumes'));
 
     return (
         <div className="modal-overlay" onClick={onClose}>
@@ -107,22 +141,68 @@ export function NutritionBreakdownModal({
                     </div>
                 </div>
 
+                {/* Protein Quality & Micronutrients */}
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-slate-800/30 p-3 rounded-lg border border-slate-700/50">
+                        <h3 className="text-[10px] text-slate-500 uppercase font-bold mb-2">Proteinkvalitet</h3>
+                        {hasCompleteProtein ? (
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                                    ✓ Fullvärdigt {isCombinedComplete && <span className="text-[10px] opacity-70">(kombinerat)</span>}
+                                </span>
+                                <span className="text-[10px] text-slate-400">Innehåller alla essentiella aminosyror.</span>
+                            </div>
+                        ) : (
+                            <div className="flex flex-col gap-1">
+                                <span className="text-xs text-amber-400 font-medium">! Inkomplett protein</span>
+                                {missingAminos.size > 0 && (
+                                    <span className="text-[10px] text-slate-400">Lågt på: {[...missingAminos].join(', ')}</span>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-slate-800/30 p-3 rounded-lg border border-slate-700/50">
+                        <h3 className="text-[10px] text-slate-500 uppercase font-bold mb-2">Mikronäring</h3>
+                        <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-xs">
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Järn:</span>
+                                <span className="text-slate-200">{totals.iron.toFixed(1)}mg</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Zink:</span>
+                                <span className="text-slate-200">{totals.zinc.toFixed(1)}mg</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">Kalcium:</span>
+                                <span className="text-slate-200">{Math.round(totals.calcium)}mg</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-400">B12:</span>
+                                <span className="text-slate-200">{totals.vitaminB12.toFixed(1)}µg</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {/* Ingredient List */}
-                <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
-                    <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 text-[10px] text-slate-500 uppercase font-bold px-2 pb-1 border-b border-slate-700">
+                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                    <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 text-[10px] text-slate-500 uppercase font-bold px-2 pb-1 border-b border-slate-700 sticky top-0 bg-slate-900">
                         <span>Ingrediens</span>
                         <span className="w-14 text-right">Mängd</span>
                         <span className="w-12 text-right">Kcal</span>
                         <span className="w-10 text-right">P</span>
-                        <span className="w-10 text-right">F</span>
+                        <span className="w-10 text-right">Mikro</span>
                     </div>
                     {breakdown.map((bItem, idx) => (
                         <div key={idx} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 text-sm py-1.5 px-2 hover:bg-slate-800/50 rounded">
-                            <span className="text-slate-300 truncate">{bItem.name}</span>
+                            <span className="text-slate-300 truncate" title={bItem.name}>{bItem.name}</span>
                             <span className="w-14 text-right text-slate-400">{bItem.amount}{bItem.unit}</span>
                             <span className="w-12 text-right text-emerald-400">{bItem.calories}</span>
                             <span className="w-10 text-right text-violet-400">{bItem.protein}</span>
-                            <span className="w-10 text-right text-rose-400">{bItem.fat}</span>
+                            <span className="w-10 text-right text-slate-400 text-[10px]">
+                                {bItem.iron > 0.5 ? 'Fe ' : ''}
+                                {bItem.calcium > 10 ? 'Ca ' : ''}
+                            </span>
                         </div>
                     ))}
                 </div>

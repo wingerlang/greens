@@ -5,7 +5,7 @@
  */
 
 import { type AppData, type WeeklyPlan } from '../models/types.ts';
-import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES } from '../data/sampleData.ts';
+import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 
 // ============================================
 // Storage Interface
@@ -32,6 +32,10 @@ const getDefaultData = (): AppData => ({
     mealEntries: [],
     weeklyPlans: [],
     pantryItems: [], // Default empty pantry
+    users: SAMPLE_USERS,
+    currentUserId: SAMPLE_USERS[0].id,
+    exerciseEntries: [],
+    weightEntries: []
 });
 
 export class LocalStorageService implements StorageService {
@@ -47,6 +51,22 @@ export class LocalStorageService implements StorageService {
                 // Ensure pantryItems exists (migration)
                 if (!data.pantryItems) {
                     data.pantryItems = [];
+                }
+                // Migration for users
+                if (!data.users) {
+                    data.users = SAMPLE_USERS;
+                    data.currentUserId = SAMPLE_USERS[0].id;
+                }
+                // Migration for dailyVitals
+                if (!data.dailyVitals) {
+                    data.dailyVitals = {};
+                }
+                // Migration for training
+                if (!data.exerciseEntries) {
+                    data.exerciseEntries = [];
+                }
+                if (!data.weightEntries) {
+                    data.weightEntries = [];
                 }
                 return data;
             }

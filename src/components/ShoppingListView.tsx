@@ -144,18 +144,18 @@ export function ShoppingListView({
                                             className="group flex items-center justify-between p-2.5 bg-slate-800/40 border border-transparent hover:border-cyan-500/30 hover:bg-slate-800/60 rounded-xl transition-all"
                                         >
                                             <div
-                                                className="flex flex-col cursor-pointer flex-1"
+                                                className="flex items-center gap-2 cursor-pointer flex-1 min-w-0"
                                                 onClick={(e) => handleNameClick(item, e)}
                                                 title="Klicka för att se var och när ingrediensen används"
                                             >
-                                                <span className="text-sm text-slate-200 font-medium pl-1 hover:text-cyan-400 transition-colors">{item.name}</span>
-                                                <div className="flex gap-2 pl-1">
+                                                <span className="text-sm text-slate-200 font-medium pl-1 truncate hover:text-cyan-400 transition-colors">{item.name}</span>
+                                                <div className="flex gap-1.5 whitespace-nowrap overflow-hidden">
                                                     {qty && (
-                                                        <span className="text-xs text-slate-500">Behöver: {qty}</span>
+                                                        <span className="text-[10px] text-slate-500 font-semibold">{qty}</span>
                                                     )}
                                                     {owned && (
-                                                        <span className="text-xs text-emerald-500">
-                                                            Har: {owned.quantity} {owned.unit}
+                                                        <span className="text-[10px] text-emerald-500 font-semibold">
+                                                            (Har: {owned.quantity})
                                                         </span>
                                                     )}
                                                 </div>

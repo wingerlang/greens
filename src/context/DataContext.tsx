@@ -4,6 +4,7 @@ import {
     type Recipe,
     type MealEntry,
     type WeeklyPlan,
+    type User,
     type PlannedMeal,
     type MealType,
     type AppData,
@@ -17,6 +18,12 @@ import {
     generateId,
     getWeekStartDate,
     getWeekdayFromDate,
+    getISODate,
+    type DailyVitals,
+    type ExerciseEntry,
+    type WeightEntry,
+    type ExerciseType,
+    type ExerciseIntensity,
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
@@ -34,6 +41,13 @@ interface DataContextType {
     pantryItems: string[]; // Legacy: items marked as "have at home"
     pantryQuantities: Record<string, { quantity: number; unit: string }>; // New: quantity tracking
     userSettings: AppSettings;
+    users: User[];
+    currentUser: User | null;
+
+    // User CRUD
+    setCurrentUser: (user: User | null) => void;
+    updateCurrentUser: (updates: Partial<User>) => void;
+    addUser: (user: User) => void;
 
     // Pantry CRUD
     togglePantryItem: (item: string) => void;
@@ -68,6 +82,25 @@ interface DataContextType {
     // Computed
     calculateRecipeNutrition: (recipe: Recipe) => NutritionSummary;
     calculateDailyNutrition: (date: string) => NutritionSummary;
+    calculateBMR: () => number;
+    calculateExerciseCalories: (type: ExerciseType, duration: number, intensity: ExerciseIntensity) => number;
+
+    // Vitals CRUD
+    dailyVitals: Record<string, DailyVitals>;
+    updateVitals: (date: string, updates: Partial<DailyVitals>) => void;
+    getVitalsForDate: (date: string) => DailyVitals;
+
+    // Exercise CRUD
+    exerciseEntries: ExerciseEntry[];
+    addExercise: (data: Omit<ExerciseEntry, 'id' | 'createdAt'>) => ExerciseEntry;
+    deleteExercise: (id: string) => void;
+    getExercisesForDate: (date: string) => ExerciseEntry[];
+
+    // Weight CRUD
+    weightEntries: WeightEntry[];
+    addWeightEntry: (weight: number, date?: string) => WeightEntry;
+    deleteWeightEntry: (id: string) => void;
+    getLatestWeight: () => number;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -90,6 +123,11 @@ export function DataProvider({ children }: DataProviderProps) {
     const [userSettings, setUserSettings] = useState<AppSettings>({
         visibleMeals: ['breakfast', 'lunch', 'dinner', 'snack']
     });
+    const [users, setUsers] = useState<User[]>([]);
+    const [currentUser, setCurrentUserState] = useState<User | null>(null);
+    const [dailyVitals, setDailyVitals] = useState<Record<string, DailyVitals>>({});
+    const [exerciseEntries, setExerciseEntries] = useState<ExerciseEntry[]>([]);
+    const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from storage on mount
@@ -102,8 +140,30 @@ export function DataProvider({ children }: DataProviderProps) {
             setWeeklyPlans(data.weeklyPlans || []);
             setPantryItems(data.pantryItems || []);
             setPantryQuantitiesState(data.pantryQuantities || {});
+
+            // Handle Users
+            const loadedUsers = data.users || [];
+            setUsers(loadedUsers);
+
+            if (data.currentUserId) {
+                const current = loadedUsers.find(u => u.id === data.currentUserId);
+                if (current) setCurrentUserState(current);
+            } else if (loadedUsers.length > 0) {
+                setCurrentUserState(loadedUsers[0]);
+            }
+
             if (data.userSettings) {
                 setUserSettings(data.userSettings);
+            }
+
+            if (data.dailyVitals) {
+                setDailyVitals(data.dailyVitals);
+            }
+            if (data.exerciseEntries) {
+                setExerciseEntries(data.exerciseEntries);
+            }
+            if (data.weightEntries) {
+                setWeightEntries(data.weightEntries);
             }
             setIsLoaded(true);
         };
@@ -113,9 +173,22 @@ export function DataProvider({ children }: DataProviderProps) {
     // Save to storage on changes
     useEffect(() => {
         if (isLoaded) {
-            storageService.save({ foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings });
+            storageService.save({
+                foodItems,
+                recipes,
+                mealEntries,
+                weeklyPlans,
+                pantryItems,
+                pantryQuantities,
+                userSettings,
+                users,
+                currentUserId: currentUser?.id,
+                dailyVitals,
+                exerciseEntries,
+                weightEntries
+            });
         }
-    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, isLoaded]);
+    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries]);
 
     // ============================================
     // Pantry CRUD
@@ -159,6 +232,27 @@ export function DataProvider({ children }: DataProviderProps) {
     const getPantryQuantity = useCallback((itemName: string): { quantity: number; unit: string } | undefined => {
         return pantryQuantities[itemName.toLowerCase()];
     }, [pantryQuantities]);
+
+    // ============================================
+    // User Management
+    // ============================================
+
+    const setCurrentUser = useCallback((user: User | null) => {
+        setCurrentUserState(user);
+    }, []);
+
+    const addUser = useCallback((user: User) => {
+        setUsers(prev => [...prev, user]);
+    }, []);
+
+    const updateCurrentUser = useCallback((updates: Partial<User>) => {
+        if (!currentUser) return;
+
+        const updatedUser = { ...currentUser, ...updates };
+        setCurrentUserState(updatedUser);
+
+        setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
+    }, [currentUser]);
 
 
     // ============================================
@@ -323,6 +417,85 @@ export function DataProvider({ children }: DataProviderProps) {
         setMealEntries((prev: MealEntry[]) => prev.filter((entry: MealEntry) => entry.id !== id));
     }, []);
 
+    // ============================================
+    // Exercise & Weight Management
+    // ============================================
+
+    const addExercise = useCallback((data: Omit<ExerciseEntry, 'id' | 'createdAt'>): ExerciseEntry => {
+        const newEntry: ExerciseEntry = {
+            ...data,
+            id: generateId(),
+            createdAt: new Date().toISOString(),
+        };
+        setExerciseEntries(prev => [...prev, newEntry]);
+        return newEntry;
+    }, []);
+
+    const deleteExercise = useCallback((id: string) => {
+        setExerciseEntries(prev => prev.filter(e => e.id !== id));
+    }, []);
+
+    const getExercisesForDate = useCallback((date: string): ExerciseEntry[] => {
+        return exerciseEntries.filter(e => e.date === date);
+    }, [exerciseEntries]);
+
+    const addWeightEntry = useCallback((weight: number, date: string = getISODate()): WeightEntry => {
+        const newEntry: WeightEntry = {
+            id: generateId(),
+            weight,
+            date,
+            createdAt: new Date().toISOString(),
+        };
+        setWeightEntries(prev => {
+            const next = [...prev, newEntry];
+            return next.sort((a, b) => b.date.localeCompare(a.date)); // Sort descending
+        });
+        return newEntry;
+    }, []);
+
+    const deleteWeightEntry = useCallback((id: string) => {
+        setWeightEntries(prev => prev.filter(w => w.id !== id));
+    }, []);
+
+    const getLatestWeight = useCallback((): number => {
+        if (weightEntries.length === 0) return 70; // Default
+        return weightEntries[0].weight; // Already sorted
+    }, [weightEntries]);
+
+    const calculateBMR = useCallback((): number => {
+        if (!currentUser?.settings) return 2000;
+        const s = currentUser.settings;
+        const weight = getLatestWeight();
+        const height = s.height || 175;
+        const age = s.age || 30;
+        const gender = s.gender || 'other';
+
+        let bmr = (10 * weight) + (6.25 * height) - (5 * age);
+        if (gender === 'male') bmr += 5;
+        else if (gender === 'female') bmr -= 161;
+        else bmr -= 78; // Average/other
+
+        return Math.round(bmr);
+    }, [currentUser, getLatestWeight]);
+
+    const calculateExerciseCalories = useCallback((type: ExerciseType, duration: number, intensity: ExerciseIntensity): number => {
+        const weight = getLatestWeight();
+
+        // MET values
+        const METS: Record<ExerciseType, Record<ExerciseIntensity, number>> = {
+            running: { low: 6, moderate: 8, high: 11, ultra: 14 },
+            cycling: { low: 4, moderate: 6, high: 10, ultra: 12 },
+            strength: { low: 3, moderate: 4, high: 6, ultra: 8 },
+            walking: { low: 2.5, moderate: 3.5, high: 4.5, ultra: 5.5 },
+            swimming: { low: 5, moderate: 7, high: 10, ultra: 12 },
+            yoga: { low: 2, moderate: 2.5, high: 3.5, ultra: 4 },
+            other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
+        };
+
+        const met = METS[type][intensity];
+        return Math.round(met * weight * (duration / 60));
+    }, [getLatestWeight]);
+
     const getMealEntriesForDate = useCallback((date: string): MealEntry[] => {
         return mealEntries.filter(entry => entry.date === date);
     }, [mealEntries]);
@@ -349,7 +522,7 @@ export function DataProvider({ children }: DataProviderProps) {
                         summary.protein += nutrition.protein * multiplier;
                         summary.carbs += nutrition.carbs * multiplier;
                         summary.fat += nutrition.fat * multiplier;
-                        summary.fiber += nutrition.fiber * multiplier;
+                        summary.fiber += (nutrition.fiber || 0) * multiplier;
                     }
                 } else {
                     const foodItem = foodItems.find(f => f.id === item.referenceId);
@@ -365,14 +538,20 @@ export function DataProvider({ children }: DataProviderProps) {
             }
         }
 
+        // Subtract exercise calories
+        const exercises = getExercisesForDate(date);
+        for (const ex of exercises) {
+            summary.calories -= ex.caloriesBurned;
+        }
+
         return {
-            calories: Math.round(summary.calories),
+            calories: Math.max(0, Math.round(summary.calories)),
             protein: Math.round(summary.protein * 10) / 10,
             carbs: Math.round(summary.carbs * 10) / 10,
             fat: Math.round(summary.fat * 10) / 10,
             fiber: Math.round(summary.fiber * 10) / 10,
         };
-    }, [getMealEntriesForDate, recipes, foodItems, calculateRecipeNutrition]);
+    }, [getMealEntriesForDate, recipes, foodItems, calculateRecipeNutrition, getExercisesForDate]);
 
     // ============================================
     // Weekly Plan CRUD
@@ -436,6 +615,36 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [weeklyPlans]);
 
     // ============================================
+    // Vitals Management
+    // ============================================
+
+    const updateVitals = useCallback((date: string, updates: Partial<DailyVitals>) => {
+        setDailyVitals(prev => {
+            const existing = prev[date] || {
+                water: 0,
+                sleep: 0,
+                updatedAt: new Date().toISOString()
+            };
+            return {
+                ...prev,
+                [date]: {
+                    ...existing,
+                    ...updates,
+                    updatedAt: new Date().toISOString()
+                }
+            };
+        });
+    }, []);
+
+    const getVitalsForDate = useCallback((date: string): DailyVitals => {
+        return dailyVitals[date] || {
+            water: 0,
+            sleep: 0,
+            updatedAt: new Date().toISOString()
+        };
+    }, [dailyVitals]);
+
+    // ============================================
     // Context Value
     // ============================================
 
@@ -469,6 +678,24 @@ export function DataProvider({ children }: DataProviderProps) {
         getPantryQuantity,
         calculateRecipeNutrition,
         calculateDailyNutrition,
+        users,
+        currentUser,
+        setCurrentUser,
+        updateCurrentUser,
+        addUser,
+        dailyVitals,
+        updateVitals,
+        getVitalsForDate,
+        exerciseEntries,
+        addExercise,
+        deleteExercise,
+        getExercisesForDate,
+        weightEntries,
+        addWeightEntry,
+        deleteWeightEntry,
+        getLatestWeight,
+        calculateBMR,
+        calculateExerciseCalories,
     };
 
     return (

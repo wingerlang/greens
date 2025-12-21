@@ -1,0 +1,160 @@
+.command-center {
+    position: relative;
+    max-width: 800px;
+    margin: 0 auto 2rem;
+    z-index: 50;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.omnibox-wrapper {
+    display: flex;
+    align-items: center;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    padding: 0.5rem 1.5rem;
+    height: 64px;
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+.command-center.is-active .omnibox-wrapper {
+    background: rgba(15, 23, 42, 0.8);
+    border-color: rgba(16, 185, 129, 0.3);
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1), 0 20px 40px -20px rgba(0, 0, 0, 0.6);
+    transform: translateY(-2px);
+}
+
+.omnibox-icon {
+    font-size: 1.5rem;
+    margin-right: 1rem;
+    filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.4));
+}
+
+.omnibox-wrapper input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 500;
+    outline: none;
+    padding: 1rem 0;
+}
+
+.omnibox-wrapper input::placeholder {
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.omnibox-shortcut {
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    pointer-events: none;
+}
+
+/* Suggestion Panel */
+.suggestion-panel {
+    position: absolute;
+    top: calc(100% + 12px);
+    left: 0;
+    right: 0;
+    background: rgba(15, 23, 42, 0.95);
+    backdrop-filter: blur(30px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 0.75rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8);
+}
+
+.suggestion-card {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+    padding: 1rem;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s ease;
+}
+
+.suggestion-card:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.card-icon {
+    font-size: 2rem;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+}
+
+.card-content {
+    flex: 1;
+}
+
+.card-content h3 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 0.25rem;
+}
+
+.card-content p {
+    font-size: 1rem;
+    font-weight: 600;
+    color: white;
+}
+
+.confirm-btn {
+    background: #10b981;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.6rem 1.25rem;
+    font-weight: 700;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.confirm-btn:hover {
+    background: #059669;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.confirm-btn:active {
+    transform: translateY(0);
+}
+
+/* Specific Card Colors */
+.exercise-card {
+    border-left: 4px solid #10b981;
+}
+
+.weight-card {
+    border-left: 4px solid #3b82f6;
+}
+
+.food-card {
+    border-left: 4px solid #f59e0b;
+}
+
+.search-card {
+    border-left: 4px solid #6366f1;
+}

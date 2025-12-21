@@ -32,6 +32,22 @@ export type FoodStorageType = 'fresh' | 'pantry' | 'frozen';
 /** Theme type */
 export type Theme = 'light' | 'dark';
 
+/** Protein supplement type for complementary amino acids */
+export type ProteinCategory =
+    | 'legume'      // Bönor, linser (rich in lysine, low in methionine)
+    | 'grain'       // Ris, vete, havre (rich in methionine, low in lysine)
+    | 'seed'        // Solrosfrön, pumpakärnor
+    | 'nut'         // Valnötter, mandlar
+    | 'vegetable'   // Broccoli, spenat
+    | 'soy_quinoa'; // Complete protein sources
+
+/** Seasonality for ingredients */
+export type Season = 'winter' | 'spring' | 'summer' | 'autumn';
+
+/** Price category for budgeting */
+export type PriceCategory = 'budget' | 'medium' | 'premium';
+
+
 // ============================================
 // User Settings
 // ============================================
@@ -44,6 +60,29 @@ export interface UserSettings {
     dailyProteinGoal: number;
     dailyCarbsGoal: number;
     dailyFatGoal: number;
+    // Physical Profile
+    age?: number;
+    height?: number; // cm
+    gender?: 'male' | 'female' | 'other';
+    trainingGoal?: 'neutral' | 'deff' | 'bulk';
+}
+
+/** User roles for permissions */
+export type UserRole = 'admin' | 'user';
+
+/** Subscription plans for monetization */
+export type SubscriptionPlan = 'free' | 'evergreen';
+
+/** User model */
+export interface User {
+    id: string;
+    name: string;
+    email: string;
+    role: UserRole;
+    plan: SubscriptionPlan;
+    settings: UserSettings;
+    householdId?: string; // For shared plans
+    createdAt: string;
 }
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
@@ -84,6 +123,19 @@ export interface FoodItem {
     gramsPerDl?: number;        // Weight in grams for 1 dl
     yieldFactor?: number;       // Cooked weight / Raw weight (e.g. 2.5 for rice)
     linkedItemId?: string;      // ID of the corresponding raw/cooked version
+    // Micronutrients (per 100g)
+    iron?: number;              // mg
+    calcium?: number;           // mg
+    zinc?: number;              // mg
+    vitaminB12?: number;        // µg
+    vitaminC?: number;          // mg
+    vitaminA?: number;          // µg (RAE)
+    // Protein Quality
+    isCompleteProtein?: boolean;
+    missingAminoAcids?: string[]; // e.g., ['lysine', 'methionine']
+    complementaryCategories?: FoodCategory[]; // Categories that complete the protein
+    proteinCategory?: ProteinCategory;        // For amino acid balancing
+    seasons?: Season[];                       // Best seasons for this item
     createdAt: string;
     updatedAt: string;
 }
@@ -115,6 +167,8 @@ export interface Recipe {
     instructionsText?: string; // Free-form instructions, one per line
     // For weighted portion calculation
     totalWeight?: number; // Total weight in grams for portion calculation
+    priceCategory?: PriceCategory; // Estimated cost level
+    seasons?: Season[];            // Best seasons for this recipe
     createdAt: string;
     updatedAt: string;
 }
@@ -165,6 +219,57 @@ export interface PlannedMeal {
     cookedAt?: string;
     /** Whether logged to CaloriesPage */
     loggedToCalories?: boolean;
+}
+
+// ============================================
+// Daily Vitality Tracking
+// ============================================
+
+/** Daily health and vitality metrics */
+export interface DailyVitals {
+    water: number;       // Glasses (approx 250ml)
+    sleep: number;       // Hours
+    updatedAt: string;
+}
+
+// ============================================
+// Training & Exercise
+// ============================================
+
+/** Training goals for calorie adjustments */
+export type TrainingGoal = 'neutral' | 'deff' | 'bulk';
+
+/** Available exercise categories */
+export type ExerciseType =
+    | 'running'
+    | 'cycling'
+    | 'strength'
+    | 'walking'
+    | 'swimming'
+    | 'yoga'
+    | 'other';
+
+/** Intensity levels for exercise */
+export type ExerciseIntensity = 'low' | 'moderate' | 'high' | 'ultra';
+
+/** Exercise tracking entry */
+export interface ExerciseEntry {
+    id: string;
+    date: string; // ISO date string (YYYY-MM-DD)
+    type: ExerciseType;
+    durationMinutes: number;
+    intensity: ExerciseIntensity;
+    caloriesBurned: number;
+    notes?: string;
+    createdAt: string;
+}
+
+/** Weight tracking entry */
+export interface WeightEntry {
+    id: string;
+    date: string; // ISO date string (YYYY-MM-DD)
+    weight: number; // kg
+    createdAt: string;
 }
 
 /** Weekly meal plan structure */
@@ -222,6 +327,11 @@ export interface AppData {
     pantryItems?: string[]; // Legacy: List of ingredient names user has at home
     pantryQuantities?: PantryQuantities; // New: Item name -> quantity at home
     userSettings?: AppSettings;
+    users?: User[];
+    currentUserId?: string;
+    dailyVitals?: Record<string, DailyVitals>; // Key is YYYY-MM-DD
+    exerciseEntries?: ExerciseEntry[];
+    weightEntries?: WeightEntry[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */
@@ -237,9 +347,11 @@ export const generateId = (): string => {
     return `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 };
 
-/** Get ISO date string (YYYY-MM-DD) */
+/** Get ISO date string (YYYY-MM-DD) in local time */
 export const getISODate = (date: Date = new Date()): string => {
-    return date.toISOString().split('T')[0];
+    const d = new Date(date);
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().split('T')[0];
 };
 
 /** Get the Monday of the week for a given date */

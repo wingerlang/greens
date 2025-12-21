@@ -7,13 +7,15 @@ import './DocumentationPage.css';
  * Explains system rules, unit logic, and parsing behavior.
  * Derived from system constants and logic.
  */
-export function DocumentationPage() {
+export function DocumentationPage({ headless = false }: { headless?: boolean }) {
     return (
         <div className="documentation-page">
-            <header className="doc-header">
-                <h1>📚 Systemdokumentation & Regler</h1>
-                <p>Här hittar du reglerna som styr hur recept tolkas, timers skapas och enheter omvandlas.</p>
-            </header>
+            {!headless && (
+                <header className="doc-header">
+                    <h1>📚 Systemdokumentation & Regler</h1>
+                    <p>Här hittar du reglerna som styr hur recept tolkas, timers skapas och enheter omvandlas.</p>
+                </header>
+            )}
 
             <main className="doc-content">
                 <section className="doc-section">

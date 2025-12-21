@@ -13,6 +13,7 @@ import { MacroSummary } from '../components/calories/MacroSummary.tsx';
 import { MealTimeline } from '../components/calories/MealTimeline.tsx';
 import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
+import { NutritionInsights } from '../components/calories/NutritionInsights.tsx';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
@@ -28,6 +29,7 @@ export function CaloriesPage() {
         getRecipeWithNutrition,
         getFoodItem,
         getPlannedMealsForDate,
+        getExercisesForDate,
     } = useData();
 
     const { settings } = useSettings();
@@ -58,6 +60,11 @@ export function CaloriesPage() {
     const dailyEntries = useMemo(
         () => getMealEntriesForDate(selectedDate),
         [getMealEntriesForDate, selectedDate]
+    );
+
+    const dailyExercises = useMemo(
+        () => getExercisesForDate(selectedDate),
+        [getExercisesForDate, selectedDate]
     );
 
     const dailyNutrition = useMemo(
@@ -102,13 +109,56 @@ export function CaloriesPage() {
         return [...recipeResults, ...foodResults].slice(0, 8);
     }, [searchQuery, recipes, foodItems]);
 
+    const proposals = useMemo(() => {
+        const counts: Record<string, { type: 'recipe' | 'foodItem'; id: string; count: number; lastUsed: number }> = {};
+
+        // Analyze last 30 days of entries (or all for simplicity)
+        mealEntries.forEach(entry => {
+            const time = new Date(entry.createdAt || entry.date).getTime();
+            entry.items.forEach(item => {
+                const key = `${item.type}-${item.referenceId}`;
+                if (!counts[key]) {
+                    counts[key] = { type: item.type, id: item.referenceId, count: 0, lastUsed: time };
+                }
+                counts[key].count++;
+                counts[key].lastUsed = Math.max(counts[key].lastUsed, time);
+            });
+        });
+
+        return Object.values(counts)
+            .sort((a, b) => {
+                // Combine frequency and recency
+                // Score = count * factor + recency_bonus
+                const aRecency = a.lastUsed;
+                const bRecency = b.lastUsed;
+                if (a.count !== b.count) return b.count - a.count;
+                return bRecency - aRecency;
+            })
+            .slice(0, 10)
+            .map(p => {
+                if (p.type === 'recipe') {
+                    const r = recipes.find(rec => rec.id === p.id);
+                    return { type: 'recipe' as const, id: p.id, name: r?.name || 'Okänt recept', subtitle: 'Ofta använd' };
+                } else {
+                    const f = foodItems.find(fi => fi.id === p.id);
+                    return { type: 'foodItem' as const, id: p.id, name: f?.name || 'Okänd råvara', subtitle: 'Ofta använd', defaultPortion: f?.defaultPortionGrams };
+                }
+            });
+    }, [mealEntries, recipes, foodItems]);
+
     const handleQuickAdd = (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number) => {
         let servingsValue = quickAddServings;
 
-        if (type === 'foodItem' && portionMode === 'st' && defaultPortion) {
-            servingsValue = defaultPortion * quickAddServings;
-        } else if (type === 'foodItem' && portionMode === 'grams') {
-            servingsValue = quickAddServings;
+        if (type === 'foodItem') {
+            if (portionMode === 'st' && defaultPortion) {
+                servingsValue = defaultPortion * quickAddServings;
+            } else if (portionMode === 'grams') {
+                servingsValue = quickAddServings;
+            } else {
+                // Default 'portions' mode for food items
+                // Use defaultPortion if available, otherwise assume 100g serving
+                servingsValue = (defaultPortion || 100) * quickAddServings;
+            }
         }
 
         addMealEntry({
@@ -209,6 +259,8 @@ export function CaloriesPage() {
         fat: settings.dailyFatGoal,
     };
 
+    const [showInsights, setShowInsights] = useState(false);
+
     return (
         <div className="calories-page">
             <header className="page-header">
@@ -216,9 +268,17 @@ export function CaloriesPage() {
                     <h1>Kalorier</h1>
                     <p className="page-subtitle">Logga måltider och följ dina makron</p>
                 </div>
-                <button className="btn btn-primary" onClick={() => setIsFormOpen(true)}>
-                    + Logga måltid
-                </button>
+                <div className="flex gap-2">
+                    <button
+                        className={`btn ${showInsights ? 'btn-primary' : 'btn-secondary'} btn-sm shadow-sm`}
+                        onClick={() => setShowInsights(!showInsights)}
+                    >
+                        {showInsights ? '📉 Dölj Insikter' : '📈 Visa Trender'}
+                    </button>
+                    <button className="btn btn-primary" onClick={() => setIsFormOpen(true)}>
+                        + Logga måltid
+                    </button>
+                </div>
             </header>
 
             <div className="flex justify-center gap-2 mb-4">
@@ -273,7 +333,11 @@ export function CaloriesPage() {
                 </div>
             )}
 
-            <MacroSummary nutrition={dailyNutrition} goals={goals} viewMode={viewMode} />
+            {showInsights ? (
+                <NutritionInsights onDateSelect={setSelectedDate} />
+            ) : (
+                <MacroSummary nutrition={dailyNutrition} goals={goals} viewMode={viewMode} />
+            )}
 
             <MealTimeline
                 viewMode={viewMode}
@@ -288,6 +352,26 @@ export function CaloriesPage() {
                 setBreakdownItem={setBreakdownItem}
             />
 
+            {dailyExercises.length > 0 && (
+                <section className="mt-8">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 px-2">Träningspass</h3>
+                    <div className="space-y-2">
+                        {dailyExercises.map(ex => (
+                            <div key={ex.id} className="flex items-center justify-between p-4 bg-slate-900/50 border border-white/5 rounded-2xl">
+                                <div className="flex items-center gap-4">
+                                    <span className="text-xl">🏋️</span>
+                                    <div>
+                                        <div className="font-bold text-slate-200">{ex.type === 'running' ? 'Löpning' : ex.type === 'cycling' ? 'Cykling' : ex.type === 'strength' ? 'Styrka' : ex.type === 'walking' ? 'Promenad' : ex.type === 'swimming' ? 'Simning' : ex.type === 'yoga' ? 'Yoga' : 'Annat'}</div>
+                                        <div className="text-[10px] text-slate-500">{ex.durationMinutes} min • {ex.intensity}</div>
+                                    </div>
+                                </div>
+                                <span className="text-rose-400 font-black">-{ex.caloriesBurned} kcal</span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
             <QuickAddModal
                 isOpen={isFormOpen}
                 onClose={() => setIsFormOpen(false)}
@@ -296,6 +380,7 @@ export function CaloriesPage() {
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 searchResults={searchResults}
+                proposals={proposals}
                 quickAddServings={quickAddServings}
                 setQuickAddServings={setQuickAddServings}
                 handleQuickAdd={handleQuickAdd}
