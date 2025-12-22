@@ -4,6 +4,7 @@ import { type MealType, MEAL_TYPE_LABELS } from '../models/types.ts';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { LoginStat } from '../api/db.ts';
+import { StravaConnectionCard } from '../components/integrations/StravaConnectionCard.tsx';
 import './ProfilePage.css';
 
 const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -38,6 +39,15 @@ export function ProfilePage() {
                     </div>
                 </div>
             </header>
+
+            {/* Connections Section */}
+            <section className="settings-section">
+                <h2>Kopplingar</h2>
+                <div className="grid gap-4">
+                    <StravaConnectionCard />
+                    {/* Garmin card will go here */}
+                </div>
+            </section>
 
             {/* Theme Section */}
             <section className="settings-section">

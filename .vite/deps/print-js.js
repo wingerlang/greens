@@ -1,6 +1,6 @@
 import {
   __commonJS
-} from "./chunk-5WRI5ZAA.js";
+} from "./chunk-G3PMV62Z.js";
 
 // node_modules/.deno/print-js@1.6.0/node_modules/print-js/dist/print.js
 var require_print = __commonJS({

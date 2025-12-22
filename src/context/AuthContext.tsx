@@ -5,6 +5,7 @@ import { User, LoginStat } from '../api/db.ts';
 interface AuthContextType {
     user: User | null;
     loading: boolean;
+    token: string | null;
     login: (username: string, password: string) => Promise<void>;
     register: (username: string, password: string, email?: string) => Promise<void>;
     logout: () => void;
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [token, setToken] = useState<string | null>(localStorage.getItem('auth_token'));
 
     // Initial check
     useEffect(() => {
@@ -103,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, login, register, logout, error, fetchStats }}>
+        <AuthContext.Provider value={{ user, loading, token, login, register, logout, error, fetchStats }}>
             {children}
         </AuthContext.Provider>
     );

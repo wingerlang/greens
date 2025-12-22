@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PerformanceGoal, PerformanceGoalType, GoalPeriod, GoalTarget, ExerciseType } from '../../models/types.ts';
 
 interface CycleDetailModalProps {
     isOpen: boolean;
@@ -8,6 +9,7 @@ interface CycleDetailModalProps {
     onDelete: (cycleId: string) => void;
     exercises: any[];
     nutrition: any[];
+    onAddGoal?: (goal: Omit<PerformanceGoal, 'id' | 'createdAt'>) => void;
 }
 
 export function CycleDetailModal({
@@ -17,7 +19,8 @@ export function CycleDetailModal({
     onSave,
     onDelete,
     exercises,
-    nutrition
+    nutrition,
+    onAddGoal
 }: CycleDetailModalProps) {
     const [form, setForm] = useState({
         name: '',
@@ -152,6 +155,74 @@ export function CycleDetailModal({
                             <div className="text-[9px] uppercase text-slate-500 font-bold">Ton</div>
                         </div>
                     </div>
+
+                    {/* Quick Goal Add */}
+                    {onAddGoal && (
+                        <div className="bg-emerald-500/5 rounded-xl p-4 border border-emerald-500/20">
+                            <label className="text-[10px] uppercase font-bold text-emerald-400 block mb-2">
+                                ✨ Lägg till Mål för denna Period
+                            </label>
+                            <div className="flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="t.ex. '3x styrka/vecka' eller '50km/vecka'"
+                                    className="flex-1 bg-slate-950 border border-emerald-500/30 rounded-xl p-3 text-white text-sm outline-none focus:border-emerald-500"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            const input = (e.target as HTMLInputElement).value.trim().toLowerCase();
+                                            if (!input) return;
+
+                                            let goalType: PerformanceGoalType = 'frequency';
+                                            let period: GoalPeriod = 'weekly';
+                                            let exType: ExerciseType = 'strength';
+                                            let count = 3;
+                                            let value = 0;
+                                            let unit = 'sessions';
+
+                                            const freqMatch = input.match(/(\d+)\s*x?\s*(löpning|styrka|cykling|promenad|simning|yoga)/);
+                                            if (freqMatch) {
+                                                count = parseInt(freqMatch[1]);
+                                                const typeMap: Record<string, ExerciseType> = {
+                                                    'löpning': 'running', 'styrka': 'strength', 'cykling': 'cycling',
+                                                    'promenad': 'walking', 'simning': 'swimming', 'yoga': 'yoga'
+                                                };
+                                                exType = typeMap[freqMatch[2]] || 'strength';
+                                            }
+
+                                            const volMatch = input.match(/(\d+(?:[.,]\d+)?)\s*(km|ton|kcal)/);
+                                            if (volMatch) {
+                                                value = parseFloat(volMatch[1].replace(',', '.'));
+                                                unit = volMatch[2];
+                                                if (unit === 'km') goalType = 'distance';
+                                                else if (unit === 'ton') goalType = 'tonnage';
+                                                else if (unit === 'kcal') goalType = 'calories';
+                                            }
+
+                                            if (input.includes('/dag') || input.includes('om dagen')) period = 'daily';
+
+                                            onAddGoal({
+                                                name: input,
+                                                type: goalType,
+                                                period,
+                                                targets: [{
+                                                    exerciseType: goalType === 'frequency' ? exType : undefined,
+                                                    count: goalType === 'frequency' ? count : undefined,
+                                                    value: goalType !== 'frequency' ? value : undefined,
+                                                    unit
+                                                }],
+                                                cycleId: cycle.id,
+                                                startDate: cycle.startDate
+                                            });
+
+                                            (e.target as HTMLInputElement).value = '';
+                                        }
+                                    }}
+                                />
+                            </div>
+                            <p className="text-[9px] text-slate-500 mt-2">Tryck Enter för att lägga till. Målet kopplas automatiskt till perioden.</p>
+                        </div>
+                    )}
 
                     <div className="flex gap-3 pt-2">
                         <button

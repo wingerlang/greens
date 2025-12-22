@@ -12,9 +12,10 @@ import {
 interface OmniboxProps {
     isOpen: boolean;
     onClose: () => void;
+    onOpenTraining?: (defaults: { type?: ExerciseType; input?: string }) => void;
 }
 
-export function Omnibox({ isOpen, onClose }: OmniboxProps) {
+export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     const navigate = useNavigate();
     const [input, setInput] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
@@ -50,19 +51,17 @@ export function Omnibox({ isOpen, onClose }: OmniboxProps) {
             onClose();
             // Show toast? relying on global toast or implicit success for now.
         } else if (intent.type === 'exercise') {
+            if (onOpenTraining) {
+                onOpenTraining({
+                    type: intent.data.exerciseType,
+                    input: input
+                });
+                onClose();
+                return;
+            }
+
             const data = intent.data;
             if (data.exerciseType && data.duration && data.intensity) {
-                // We need more data like calories.
-                // In TrainingPage we calculate it. Here we might need a helper or use generic calc.
-                // For now, let's redirect to training page with pre-filled state? 
-                // Or implementing basic add using helper.
-                // Re-using `calculateExerciseCalories` from useData would be best but hooks rules...
-                // useData is already imported.
-                // We need to access `addExercise` which takes `ExerciseEntry`.
-                // But `addExercise` expects full object.
-                // Let's defer complex exercise logging to "Redirect to Training" or improved logic later.
-                // Actually, let's just navigate to training page with query param?
-                // Or support simple cases.
                 navigate('/training');
                 onClose();
             }
@@ -112,7 +111,21 @@ export function Omnibox({ isOpen, onClose }: OmniboxProps) {
                             {intent.type === 'exercise' && (
                                 <div className="flex items-center gap-3 text-emerald-400">
                                     <span>🏋️</span>
-                                    <span>Gå till Träning för att logga <span className="font-bold">{input}</span></span>
+                                    <span>Logga: <span className="font-bold capitalize">{intent.data.exerciseType}</span> • {intent.data.duration} min • {intent.data.intensity}{intent.data.distance ? ` • ${intent.data.distance} km` : ''}{intent.data.tonnage ? ` • ${Math.round(intent.data.tonnage / 1000)}t` : ''}</span>
+                                </div>
+                            )}
+                            {intent.type === 'vitals' && (
+                                <div className="flex items-center gap-3 text-emerald-400">
+                                    <span>{intent.data.vitalType === 'sleep' ? '😴' : intent.data.vitalType === 'steps' ? '👟' : intent.data.vitalType === 'water' ? '💧' : '☕'}</span>
+                                    <span>
+                                        Logga: <span className="font-bold">
+                                            {intent.data.vitalType === 'sleep' && `${intent.data.amount}h sömn`}
+                                            {intent.data.vitalType === 'steps' && `${intent.data.amount.toLocaleString()} steg`}
+                                            {intent.data.vitalType === 'water' && `${intent.data.amount} glas vatten`}
+                                            {(intent.data.vitalType === 'coffee' || intent.data.vitalType === 'nocco' || intent.data.vitalType === 'energy') &&
+                                                `${intent.data.amount}x ${intent.data.vitalType}${intent.data.caffeine ? ` (${intent.data.caffeine}mg koffein)` : ''}`}
+                                        </span>
+                                    </span>
                                 </div>
                             )}
                             {intent.type === 'search' && (

@@ -28,6 +28,7 @@ import {
     type CompetitionRule,
     type CompetitionParticipant,
     type TrainingCycle,
+    type PerformanceGoal,
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
@@ -118,6 +119,13 @@ interface DataContextType {
     addTrainingCycle: (data: Omit<TrainingCycle, 'id'>) => TrainingCycle;
     updateTrainingCycle: (id: string, updates: Partial<TrainingCycle>) => void;
     deleteTrainingCycle: (id: string) => void;
+
+    // Performance Goals CRUD
+    performanceGoals: PerformanceGoal[];
+    addGoal: (data: Omit<PerformanceGoal, 'id' | 'createdAt'>) => PerformanceGoal;
+    updateGoal: (id: string, updates: Partial<PerformanceGoal>) => void;
+    deleteGoal: (id: string) => void;
+    getGoalsForCycle: (cycleId: string) => PerformanceGoal[];
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -147,6 +155,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
     const [competitions, setCompetitions] = useState<Competition[]>([]);
     const [trainingCycles, setTrainingCycles] = useState<TrainingCycle[]>([]);
+    const [performanceGoals, setPerformanceGoals] = useState<PerformanceGoal[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from storage on mount
@@ -190,6 +199,9 @@ export function DataProvider({ children }: DataProviderProps) {
             if (data.trainingCycles) {
                 setTrainingCycles(data.trainingCycles || []);
             }
+            if (data.performanceGoals) {
+                setPerformanceGoals(data.performanceGoals || []);
+            }
             setIsLoaded(true);
         };
         loadData();
@@ -212,10 +224,11 @@ export function DataProvider({ children }: DataProviderProps) {
                 exerciseEntries,
                 weightEntries,
                 competitions,
-                trainingCycles
+                trainingCycles,
+                performanceGoals
             });
         }
-    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions, trainingCycles]);
+    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions, trainingCycles, performanceGoals]);
 
     // ============================================
     // Pantry CRUD
@@ -825,7 +838,28 @@ export function DataProvider({ children }: DataProviderProps) {
             if (!comp) return 0;
             // Logic for calculating points based on rules will be implemented in a service/util
             return 0; // Placeholder
-        }, [competitions])
+        }, [competitions]),
+
+        // Performance Goals CRUD
+        performanceGoals,
+        addGoal: useCallback((data) => {
+            const newGoal: PerformanceGoal = {
+                ...data,
+                id: generateId(),
+                createdAt: new Date().toISOString()
+            };
+            setPerformanceGoals(prev => [...prev, newGoal]);
+            return newGoal;
+        }, []),
+        updateGoal: useCallback((id, updates) => {
+            setPerformanceGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+        }, []),
+        deleteGoal: useCallback((id) => {
+            setPerformanceGoals(prev => prev.filter(g => g.id !== id));
+        }, []),
+        getGoalsForCycle: useCallback((cycleId) => {
+            return performanceGoals.filter(g => g.cycleId === cycleId);
+        }, [performanceGoals])
     };
 
     return (

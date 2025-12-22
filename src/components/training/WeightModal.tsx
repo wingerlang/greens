@@ -41,6 +41,11 @@ export function WeightModal({
                                 onChange={e => setWeightInput(e.target.value)}
                                 className="w-full bg-slate-950 border border-white/10 rounded-2xl p-8 text-5xl font-black text-center text-emerald-400 focus:border-emerald-500/50 transition-all outline-none placeholder-slate-800"
                                 placeholder="0.0"
+                                style={{
+                                    MozAppearance: 'textfield',
+                                    WebkitAppearance: 'none',
+                                    appearance: 'textfield'
+                                }}
                             />
                             <span className="absolute right-8 top-1/2 -translate-y-1/2 text-slate-700 font-black text-xl pointer-events-none">KG</span>
                         </div>

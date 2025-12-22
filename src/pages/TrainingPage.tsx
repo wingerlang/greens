@@ -18,6 +18,9 @@ import { CycleYearChart } from '../components/training/CycleYearChart.tsx';
 import { ExerciseModal, EXERCISE_TYPES, INTENSITIES } from '../components/training/ExerciseModal.tsx';
 import { WeightModal } from '../components/training/WeightModal.tsx';
 import { CycleDetailModal } from '../components/training/CycleDetailModal.tsx';
+import { GoalCard } from '../components/training/GoalCard.tsx';
+import { GoalModal } from '../components/training/GoalModal.tsx';
+import type { PerformanceGoal } from '../models/types.ts';
 import './TrainingPage.css';
 
 export function TrainingPage() {
@@ -36,12 +39,20 @@ export function TrainingPage() {
         mealEntries,
         foodItems,
         recipes,
-        updateTrainingCycle // Add this if available
+        updateTrainingCycle, // Add this if available
+        performanceGoals,
+        addGoal,
+        updateGoal,
+        deleteGoal
     } = useData();
 
     // Handlers for Chart Interaction
     const [selectedCycle, setSelectedCycle] = useState<any>(null);
     const [isCycleDetailOpen, setIsCycleDetailOpen] = useState(false);
+
+    // Goal Modal State
+    const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
+    const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
 
     const handleEditCycle = (cycle: any) => {
         setSelectedCycle(cycle);
@@ -254,14 +265,14 @@ export function TrainingPage() {
 
     return (
         <div className="training-page">
-            <header className="page-header flex-col md:flex-row gap-6">
+            <header className="page-header flex-col md:flex-row gap-8 mb-8">
                 <div className="flex-1">
                     <h1>Träning & Fysik</h1>
                     <p className="page-subtitle">Optimera din förbränning och följ din trend</p>
                 </div>
 
                 {/* Permanent Smart Input Header */}
-                <div className="flex-1 max-w-xl w-full">
+                <div className="flex-1 max-w-xl w-full space-y-3">
                     <div className="relative group">
                         <div className="flex items-center gap-2 mb-2">
                             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Snabb-logga pass</span>
@@ -317,9 +328,7 @@ export function TrainingPage() {
                             </div>
                         )}
                     </div>
-                </div>
 
-                <div className="flex gap-2">
                     <button className="btn btn-secondary !rounded-2xl" onClick={() => setIsWeightModalOpen(true)}>
                         ⚖️ Logga Vikt
                     </button>
@@ -639,6 +648,7 @@ export function TrainingPage() {
                         onDelete={deleteTrainingCycle}
                         exercises={exerciseEntries}
                         nutrition={dailyNutrition}
+                        onAddGoal={addGoal}
                     />
 
                     {/* Exercise Log */}
@@ -677,7 +687,7 @@ export function TrainingPage() {
                                             <span className="text-rose-400 font-bold text-sm">-{ex.caloriesBurned} kcal</span>
                                             <button
                                                 className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-all"
-                                                onClick={() => deleteExercise(ex.id)}
+                                                onClick={(e) => { e.stopPropagation(); deleteExercise(ex.id); }}
                                             >
                                                 🗑️
                                             </button>
@@ -690,82 +700,174 @@ export function TrainingPage() {
                         </div>
                     </div>
                 </div>
-                {/* Data Analysis Section - Final Polish */}
-                <div className="content-card mt-6">
-                    <h3 className="section-title mb-4">Djupanalys & Statistik</h3>
+            </div>
 
-                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                        {/* Stat 1: Total Tonnage */}
-                        <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
-                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Totalt Tonnage</div>
-                            <div className="text-2xl font-black text-rose-400">
-                                {Math.round(exerciseEntries.reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000)} <span className="text-sm text-slate-500 font-bold">ton</span>
-                            </div>
-                        </div>
+            {/* Data Analysis Section - Full Width */}
+            <div className="content-card mt-6">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="section-title">Djupanalys & Statistik</h3>
+                    <a
+                        href="#mina-mal"
+                        className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold rounded-lg text-xs uppercase transition-all flex items-center gap-2"
+                    >
+                        🎯 Mina Mål
+                    </a>
+                </div>
 
-                        {/* Stat 2: Total Distance */}
-                        <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
-                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Distans</div>
-                            <div className="text-2xl font-black text-sky-400">
-                                {Math.round(exerciseEntries.reduce((sum, e) => sum + (e.distance || 0), 0))} <span className="text-sm text-slate-500 font-bold">km</span>
-                            </div>
-                        </div>
-
-                        {/* Stat 3: Avg Intensity (Proxy) */}
-                        <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
-                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Snittduration</div>
-                            <div className="text-2xl font-black text-emerald-400">
-                                {Math.round(exerciseEntries.length > 0 ? exerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / exerciseEntries.length : 0)} <span className="text-sm text-slate-500 font-bold">min</span>
-                            </div>
-                        </div>
-
-                        {/* Stat 4: Total Time */}
-                        <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
-                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Träningstid</div>
-                            <div className="text-2xl font-black text-indigo-400">
-                                {Math.round(exerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / 60)} <span className="text-sm text-slate-500 font-bold">h</span>
-                            </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    {/* Stat 1: Total Tonnage */}
+                    <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Totalt Tonnage</div>
+                        <div className="text-2xl font-black text-rose-400">
+                            {Math.round(exerciseEntries.reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000)} <span className="text-sm text-slate-500 font-bold">ton</span>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        {/* Top Activities Table */}
-                        <div>
-                            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Topplista Aktiviteter</h4>
-                            <div className="space-y-2">
-                                {Object.entries(exerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
-                                    .sort((a, b) => b[1] - a[1])
-                                    .slice(0, 5)
-                                    .map(([type, count]) => (
-                                        <div key={type} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
-                                            <div className="flex items-center gap-3">
-                                                <span className="text-xl">{EXERCISE_TYPES.find(t => t.type === type)?.icon}</span>
-                                                <span className="text-xs font-bold capitalize text-slate-300">{EXERCISE_TYPES.find(t => t.type === type)?.label}</span>
-                                            </div>
-                                            <div className="text-sm font-black text-white">{count} <span className="text-[10px] text-slate-500 font-normal">pass</span></div>
-                                        </div>
-                                    ))}
-                            </div>
+                    {/* Stat 2: Total Distance */}
+                    <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Distans</div>
+                        <div className="text-2xl font-black text-sky-400">
+                            {Math.round(exerciseEntries.reduce((sum, e) => sum + (e.distance || 0), 0))} <span className="text-sm text-slate-500 font-bold">km</span>
                         </div>
+                    </div>
 
-                        {/* Recent Records (Mock/Real) */}
-                        <div>
-                            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Senaste PB & MIstolpar</h4>
-                            <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 text-center mb-4">
-                                <span className="text-4xl">🏆</span>
-                                <h5 className="text-sm font-bold text-emerald-400 mt-2">Nytt Volymrekord!</h5>
-                                <p className="text-[10px] text-slate-400 mt-1">Du lyfte {Math.round(Math.max(...exerciseEntries.filter(e => e.tonnage).map(e => e.tonnage || 0)) || 0)} kg som mest i ett pass.</p>
-                            </div>
-                            <div className="p-6 rounded-2xl bg-gradient-to-br from-sky-500/10 to-transparent border border-sky-500/20 text-center">
-                                <span className="text-4xl">👟</span>
-                                <h5 className="text-sm font-bold text-sky-400 mt-2">Distanstopp</h5>
-                                <p className="text-[10px] text-slate-400 mt-1">Längsta passet var {Math.max(...exerciseEntries.filter(e => e.distance).map(e => e.distance || 0)) || 0} km.</p>
-                            </div>
+                    {/* Stat 3: Avg Intensity (Proxy) */}
+                    <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Snittduration</div>
+                        <div className="text-2xl font-black text-emerald-400">
+                            {Math.round(exerciseEntries.length > 0 ? exerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / exerciseEntries.length : 0)} <span className="text-sm text-slate-500 font-bold">min</span>
+                        </div>
+                    </div>
+
+                    {/* Stat 4: Total Time */}
+                    <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                        <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Träningstid</div>
+                        <div className="text-2xl font-black text-indigo-400">
+                            {Math.round(exerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / 60)} <span className="text-sm text-slate-500 font-bold">h</span>
                         </div>
                     </div>
                 </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Top Activities Table */}
+                    <div>
+                        <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Topplista Aktiviteter</h4>
+                        <div className="space-y-2">
+                            {Object.entries(exerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
+                                .sort((a, b) => b[1] - a[1])
+                                .slice(0, 5)
+                                .map(([type, count]) => (
+                                    <div key={type} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-xl">{EXERCISE_TYPES.find(t => t.type === type)?.icon}</span>
+                                            <span className="text-xs font-bold capitalize text-slate-300">{EXERCISE_TYPES.find(t => t.type === type)?.label}</span>
+                                        </div>
+                                        <div className="text-sm font-black text-white">{count} <span className="text-[10px] text-slate-500 font-normal">pass</span></div>
+                                    </div>
+                                ))}
+                        </div>
+                    </div>
+
+                    {/* Recent Records - Only show if there's data */}
+                    {(exerciseEntries.some(e => e.tonnage) || exerciseEntries.some(e => e.distance)) && (
+                        <div>
+                            <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Senaste PB & Milstolpar</h4>
+                            {exerciseEntries.some(e => e.tonnage) && (
+                                <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 text-center mb-4">
+                                    <span className="text-4xl">🏆</span>
+                                    <h5 className="text-sm font-bold text-emerald-400 mt-2">Nytt Volymrekord!</h5>
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        Du lyfte {Math.round(Math.max(...exerciseEntries.filter(e => e.tonnage).map(e => e.tonnage || 0)))} kg som mest i ett pass.
+                                    </p>
+                                </div>
+                            )}
+                            {exerciseEntries.some(e => e.distance) && (
+                                <div className="p-6 rounded-2xl bg-gradient-to-br from-sky-500/10 to-transparent border border-sky-500/20 text-center">
+                                    <span className="text-4xl">👟</span>
+                                    <h5 className="text-sm font-bold text-sky-400 mt-2">Distanstopp</h5>
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        Längsta passet var {Math.max(...exerciseEntries.filter(e => e.distance).map(e => e.distance || 0))} km.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
+
+            {/* Goals Section */}
+            <div id="mina-mal" className="content-card mt-6 scroll-mt-24">
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="section-title">🎯 Mina Mål</h3>
+                    <button
+                        onClick={() => { setEditingGoal(null); setIsGoalModalOpen(true); }}
+                        className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs uppercase transition-all"
+                    >
+                        + Nytt Mål
+                    </button>
+                </div>
+
+                {performanceGoals.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {performanceGoals.map(goal => {
+                            // Calculate progress
+                            const now = new Date();
+                            const weekStart = new Date(now);
+                            weekStart.setDate(now.getDate() - now.getDay() + 1);
+                            const weekStartStr = weekStart.toISOString().split('T')[0];
+
+                            let current = 0;
+                            if (goal.type === 'frequency' && goal.targets[0]?.exerciseType) {
+                                current = exerciseEntries.filter(e =>
+                                    e.type === goal.targets[0].exerciseType &&
+                                    e.date >= weekStartStr
+                                ).length;
+                            } else if (goal.type === 'distance') {
+                                current = exerciseEntries
+                                    .filter(e => e.date >= weekStartStr)
+                                    .reduce((sum, e) => sum + (e.distance || 0), 0);
+                            } else if (goal.type === 'tonnage') {
+                                current = exerciseEntries
+                                    .filter(e => e.date >= weekStartStr)
+                                    .reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000;
+                            }
+
+                            const target = goal.targets[0]?.count || goal.targets[0]?.value || 1;
+                            const percentage = (current / target) * 100;
+
+                            return (
+                                <GoalCard
+                                    key={goal.id}
+                                    goal={goal}
+                                    progress={{ current, target, percentage }}
+                                    onEdit={() => { setEditingGoal(goal); setIsGoalModalOpen(true); }}
+                                    onDelete={() => deleteGoal(goal.id)}
+                                />
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="text-center py-12 text-slate-600">
+                        <span className="text-4xl block mb-3">🎯</span>
+                        <p className="text-sm">Inga mål ännu. Skapa ett för att börja spåra din framgång!</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Goal Modal */}
+            <GoalModal
+                isOpen={isGoalModalOpen}
+                onClose={() => setIsGoalModalOpen(false)}
+                onSave={(goalData) => {
+                    if (editingGoal) {
+                        updateGoal(editingGoal.id, goalData);
+                    } else {
+                        addGoal(goalData);
+                    }
+                }}
+                cycles={trainingCycles}
+                editingGoal={editingGoal}
+            />
 
             {/* Extracted Modals */}
             <ExerciseModal

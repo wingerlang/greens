@@ -1,16 +1,45 @@
 import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType } from '../models/types.ts';
 
 export type OmniboxIntent =
-    | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number }; date?: string }
+    | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number; distance?: number }; date?: string }
     | { type: 'food'; data: { query: string; quantity?: number; unit?: string; mealType?: MealType }; date?: string }
     | { type: 'weight'; data: { weight: number }; date?: string }
-    | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy'; amount: number }; date?: string }
+    | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy' | 'steps'; amount: number; caffeine?: number }; date?: string }
     | { type: 'navigate'; data: { path: string }; date?: string }
     | { type: 'search'; data: { query: string }; date?: string };
 
 /**
- * Parses a natural language string into a structured intent
+ * Calculate calories burned for an exercise.
  */
+export function calculateCalories(type: ExerciseType, duration: number, intensity: ExerciseIntensity, weight: number = 75): number {
+    const METS: Record<ExerciseType, Record<ExerciseIntensity, number>> = {
+        running: { low: 7, moderate: 9, high: 12, ultra: 16 },
+        cycling: { low: 5, moderate: 7, high: 10, ultra: 14 },
+        strength: { low: 3, moderate: 4.5, high: 6, ultra: 8 },
+        walking: { low: 2.5, moderate: 3.5, high: 4.5, ultra: 6 },
+        swimming: { low: 6, moderate: 8, high: 10, ultra: 12 },
+        yoga: { low: 2, moderate: 3, high: 4, ultra: 5 },
+        other: { low: 4, moderate: 6, high: 8, ultra: 10 }
+    };
+    const met = METS[type]?.[intensity] || METS.other.moderate;
+    return Math.round((met * 3.5 * weight / 200) * duration);
+}
+
+/**
+ * Parse training string and return exercise data.
+ */
+export function parseTrainingString(input: string): { type: ExerciseType; duration: number; intensity: ExerciseIntensity } | null {
+    const intent = parseExercise(input);
+    if (intent && intent.type === 'exercise') {
+        return {
+            type: intent.data.exerciseType,
+            duration: intent.data.duration,
+            intensity: intent.data.intensity
+        };
+    }
+    return null;
+}
+
 /**
  * Parses a natural language string into a structured intent
  */
@@ -183,26 +212,60 @@ export function parseCycleString(input: string): SmartCycle | null {
 }
 
 function parseVitals(input: string): OmniboxIntent | null {
-    // Sleep: "7h sömn", "sömn 8", "8.5 timmar sömn"
-    const sleepMatch = input.match(/(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)?\s*sömn/i) ||
-        input.match(/sömn\s*(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)?/i);
+    const lower = input.toLowerCase();
+
+    // Sleep: "7h sömn", "sömn 8", "8.5 timmar sömn", "sova 7h", "7h sova"
+    const sleepMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)?\s*(?:sömn|sova)/i) ||
+        lower.match(/(?:sömn|sova)\s*(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)?/i);
     if (sleepMatch) {
         return { type: 'vitals', data: { vitalType: 'sleep', amount: parseFloat(sleepMatch[1].replace(',', '.')) } };
     }
 
-    // Multiplier vitals: "3 kaffe", "2 vatten", "nocco"
-    const multiplierMatch = input.match(/(\d+)?\s*(kaffe|vatten|water|nocco|energydryck|energy|energidryck)/i);
-    if (multiplierMatch) {
-        const amount = parseInt(multiplierMatch[1] || '1');
-        const term = multiplierMatch[2].toLowerCase();
+    // Steps: "10000 steg", "steg 8000"
+    const stepsMatch = lower.match(/(\d+)\s*steg/i) || lower.match(/steg\s*(\d+)/i);
+    if (stepsMatch) {
+        return { type: 'vitals', data: { vitalType: 'steps', amount: parseInt(stepsMatch[1]) } };
+    }
 
-        let type: 'water' | 'coffee' | 'nocco' | 'energy' = 'water';
-        if (term.includes('kaffe')) type = 'coffee';
-        else if (term.includes('nocco')) type = 'nocco';
-        else if (term.includes('energy') || term.includes('energi')) type = 'energy';
-        else if (term.includes('vatten') || term.includes('water')) type = 'water';
+    // Caffeine with custom mg: "105 caf", "200mg koffein", "koffein 150"
+    const caffeineMatch = lower.match(/(\d+)\s*(?:mg)?\s*(?:caf|koffein|caffeine)/i) ||
+        lower.match(/(?:koffein|caffeine)\s*(\d+)\s*(?:mg)?/i);
+    if (caffeineMatch) {
+        const caffeineMg = parseInt(caffeineMatch[1]);
+        return { type: 'vitals', data: { vitalType: 'coffee', amount: 1, caffeine: caffeineMg } };
+    }
 
-        return { type: 'vitals', data: { vitalType: type, amount } };
+    // Coffee with intensity: "svag kaffe" (60mg), "kaffe" (100mg), "stark kaffe" (150mg)
+    // Also: "2 kaffe", "stark kaffe", "svag kaffe"
+    const coffeeMatch = lower.match(/(\d+)?\s*(svag|stark|starkt)?\s*kaffe/i);
+    if (coffeeMatch) {
+        const amount = parseInt(coffeeMatch[1] || '1');
+        const intensity = coffeeMatch[2]?.toLowerCase();
+        let caffeine = 100; // Default: normal coffee
+        if (intensity === 'svag') caffeine = 60;
+        else if (intensity === 'stark' || intensity === 'starkt') caffeine = 150;
+        return { type: 'vitals', data: { vitalType: 'coffee', amount, caffeine: caffeine * amount } };
+    }
+
+    // Energy drinks: "nocco" (~180mg), "energidryck" (~80mg)
+    const energyMatch = lower.match(/(\d+)?\s*(nocco|energydryck|energy|energidryck)/i);
+    if (energyMatch) {
+        const amount = parseInt(energyMatch[1] || '1');
+        const term = energyMatch[2].toLowerCase();
+        let type: 'nocco' | 'energy' = 'energy';
+        let caffeine = 80; // Default energy drink
+        if (term.includes('nocco')) {
+            type = 'nocco';
+            caffeine = 180;
+        }
+        return { type: 'vitals', data: { vitalType: type, amount, caffeine: caffeine * amount } };
+    }
+
+    // Water: "3 vatten", "vatten"
+    const waterMatch = lower.match(/(\d+)?\s*(vatten|water)/i);
+    if (waterMatch) {
+        const amount = parseInt(waterMatch[1] || '1');
+        return { type: 'vitals', data: { vitalType: 'water', amount } };
     }
 
     return null;
@@ -297,9 +360,51 @@ function parseExercise(input: string): OmniboxIntent | null {
     }
 
     let intensity: ExerciseIntensity = 'moderate';
-    if (input.includes('lätt') || input.includes('låg') || input.includes('slow')) intensity = 'low';
-    else if (input.includes('hög') || input.includes('hårt') || input.includes('hard') || input.includes('tuff')) intensity = 'high';
+    if (input.includes('lätt') || input.includes('låg') || input.includes('lugnt') || input.includes('lugn') || input.includes('slow') || input.includes('easy')) intensity = 'low';
+    else if (input.includes('hög') || input.includes('hårt') || input.includes('hard') || input.includes('tuff') || input.includes('snabb') || input.includes('snabbt') || input.includes('fast')) intensity = 'high';
     else if (input.includes('max') || input.includes('ultra')) intensity = 'ultra';
+
+    // Distance detection (km) and smart duration estimation
+    let distance: number | undefined;
+    const distanceMatch = input.match(/(\d+(?:[.,]\d+)?)\s*km/i);
+    if (distanceMatch) {
+        distance = parseFloat(distanceMatch[1].replace(',', '.'));
+    }
+
+    // Pace detection and smart duration calculation for running
+    // Supports: "@ 5:00", "@5:00", "5:00 min/km", "5 min/km", "tempo 5:00"
+    let pace: number | undefined; // pace in seconds per km
+    const paceMatch = input.match(/@?\s*(\d+):(\d+)(?:\s*(?:min)?\/km)?/i)
+        || input.match(/tempo\s*(\d+):(\d+)/i)
+        || input.match(/(\d+)\s*min\/km/i);
+
+    if (paceMatch) {
+        if (paceMatch[2]) {
+            // Format: 5:30 (min:sec per km)
+            pace = parseInt(paceMatch[1]) * 60 + parseInt(paceMatch[2]);
+        } else {
+            // Format: 5 min/km (just minutes)
+            pace = parseInt(paceMatch[1]) * 60;
+        }
+    }
+
+    // If we have distance but no explicit duration, estimate duration
+    const hasExplicitDuration = inputForDuration.match(/\d+\s*(min|h|t|m)(?!\s*\/)/);
+    if (distance && !hasExplicitDuration) {
+        if (pace) {
+            // Use provided pace
+            duration = Math.round((distance * pace) / 60);
+        } else {
+            // Default paces by intensity
+            const defaultPace: Record<ExerciseIntensity, number> = {
+                low: 7 * 60,     // 7:00 min/km (easy jog)
+                moderate: 6 * 60, // 6:00 min/km (normal run)
+                high: 5 * 60,     // 5:00 min/km (fast run)
+                ultra: 4.5 * 60   // 4:30 min/km (race pace)
+            };
+            duration = Math.round((distance * defaultPace[intensity]) / 60);
+        }
+    }
 
     // Sub-types for running
     if (type === 'running') {
@@ -325,7 +430,8 @@ function parseExercise(input: string): OmniboxIntent | null {
             intensity,
             notes: input.length > 20 ? input : undefined,
             subType,
-            tonnage
+            tonnage,
+            distance
         }
     };
 }

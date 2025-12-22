@@ -35,6 +35,11 @@ export function HealthPage() {
     const insights = useMemo(() => {
         const list: { type: 'tip' | 'warning' | 'positive' | 'goal'; text: string; icon: string }[] = [];
 
+        // Don't show any insights if there's almost no data
+        if (stats.loggingConsistency < 10 || snapshots.filter(s => !s.isUntracked).length < 2) {
+            return list;
+        }
+
         if (stats.loggingConsistency < 50) {
             list.push({ type: 'warning', text: `Din loggningsfrekvens är låg (${stats.loggingConsistency}%). För mer precis analys behövs mer data.`, icon: '📊' });
         }

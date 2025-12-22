@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { encodeBase64 } from "jsr:@std/encoding/base64";
+import * as strava from './strava.ts';
 
 // ==========================================
 // Types
@@ -282,6 +283,175 @@ export async function startServer(port: number) {
             }
         }
 
+        // --- STRAVA INTEGRATION ROUTES ---
+
+        // Get Strava auth URL
+        if (url.pathname === "/api/strava/auth" && method === "GET") {
+            if (!strava.isStravaConfigured()) {
+                return new Response(JSON.stringify({ error: "Strava not configured. Set STRAVA_CLIENT_ID and STRAVA_CLIENT_SECRET environment variables." }), { status: 500, headers });
+            }
+            const state = url.searchParams.get('state') || undefined;
+            const authUrl = strava.getStravaAuthUrl(state);
+            return new Response(JSON.stringify({ authUrl }), { headers });
+        }
+
+        // Handle OAuth callback
+        if (url.pathname === "/api/strava/callback" && method === "GET") {
+            try {
+                const code = url.searchParams.get('code');
+                const error = url.searchParams.get('error');
+                const origin = url.origin;
+
+                console.log(`[Strava Callback] code=${code} error=${error} origin=${origin}`);
+
+                if (error) {
+                    console.log(`[Strava Callback] Strava error: ${error}`);
+                    return Response.redirect(new URL('/profile?strava_error=' + error, origin).toString(), 302);
+                }
+
+                if (!code) {
+                    return new Response(JSON.stringify({ error: "No authorization code" }), { status: 400, headers });
+                }
+
+                console.log(`[Strava Callback] Exchanging code...`);
+                const tokens = await strava.exchangeStravaCode(code);
+                if (!tokens) {
+                    console.log(`[Strava Callback] Token exchange failed`);
+                    return Response.redirect(new URL('/profile?strava_error=token_exchange_failed', origin).toString(), 302);
+                }
+
+                // Get user from state or session
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "") || url.searchParams.get('state');
+                console.log(`[Strava Callback] User token/state: ${token}`);
+                if (token) {
+                    const session = await getSession(token);
+                    console.log(`[Strava Callback] Session found: ${!!session}`);
+                    if (session) {
+                        // Save tokens for this user
+                        await saveStravaTokens(session.userId, tokens);
+                        console.log(`[Strava Callback] Tokens saved for user: ${session.userId}`);
+                    }
+                }
+
+                // Redirect to profile with success
+                return Response.redirect(new URL('/profile?strava_connected=true', origin).toString(), 302);
+            } catch (err) {
+                console.error(`[Strava Callback] CRASH:`, err);
+                return new Response(JSON.stringify({ error: "Internal Server Error", details: err.message }), { status: 500, headers });
+            }
+        }
+
+        // Get Strava connection status
+        if (url.pathname === "/api/strava/status" && method === "GET") {
+            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+            const session = await getSession(token);
+            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+            const stravaTokens = await getStravaTokens(session.userId);
+            if (!stravaTokens) {
+                return new Response(JSON.stringify({ connected: false }), { headers });
+            }
+
+            // Check if token is expired and refresh if needed
+            let accessToken = stravaTokens.accessToken;
+            if (Date.now() > stravaTokens.expiresAt) {
+                const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
+                if (refreshed) {
+                    accessToken = refreshed.accessToken;
+                    await saveStravaTokens(session.userId, {
+                        ...stravaTokens,
+                        accessToken: refreshed.accessToken,
+                        refreshToken: refreshed.refreshToken,
+                        expiresAt: refreshed.expiresAt,
+                    });
+                } else {
+                    // Token refresh failed, disconnect
+                    await deleteStravaTokens(session.userId);
+                    return new Response(JSON.stringify({ connected: false, error: "Token expired" }), { headers });
+                }
+            }
+
+            // Get athlete info
+            const athlete = await strava.getStravaAthlete(accessToken);
+            const stats = stravaTokens.athleteId ? await strava.getStravaAthleteStats(stravaTokens.athleteId, accessToken) : null;
+
+            return new Response(JSON.stringify({
+                connected: true,
+                athlete: athlete ? {
+                    id: athlete.id,
+                    name: `${athlete.firstname} ${athlete.lastname}`,
+                    avatar: athlete.profile,
+                    city: athlete.city,
+                    country: athlete.country,
+                    premium: athlete.premium,
+                } : null,
+                stats: stats ? {
+                    allTimeRuns: stats.all_run_totals.count,
+                    allTimeRides: stats.all_ride_totals.count,
+                    allTimeSwims: stats.all_swim_totals.count,
+                    ytdDistance: Math.round((stats.ytd_run_totals.distance + stats.ytd_ride_totals.distance) / 1000),
+                } : null,
+                lastSync: stravaTokens.lastSync,
+            }), { headers });
+        }
+
+        // Fetch Strava activities
+        if (url.pathname === "/api/strava/activities" && method === "GET") {
+            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+            const session = await getSession(token);
+            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+            const stravaTokens = await getStravaTokens(session.userId);
+            if (!stravaTokens) {
+                return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
+            }
+
+            // Check/refresh token
+            let accessToken = stravaTokens.accessToken;
+            if (Date.now() > stravaTokens.expiresAt) {
+                const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
+                if (!refreshed) {
+                    return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
+                }
+                accessToken = refreshed.accessToken;
+                await saveStravaTokens(session.userId, {
+                    ...stravaTokens,
+                    accessToken: refreshed.accessToken,
+                    refreshToken: refreshed.refreshToken,
+                    expiresAt: refreshed.expiresAt,
+                });
+            }
+
+            // Parse query params
+            const after = url.searchParams.get('after') ? parseInt(url.searchParams.get('after')!) : undefined;
+            const before = url.searchParams.get('before') ? parseInt(url.searchParams.get('before')!) : undefined;
+            const page = parseInt(url.searchParams.get('page') || '1');
+
+            const activities = await strava.getStravaActivities(accessToken, { after, before, page, perPage: 50 });
+            const mapped = activities.map(strava.mapStravaActivityToExercise);
+
+            // Update last sync time
+            await saveStravaTokens(session.userId, { ...stravaTokens, lastSync: new Date().toISOString() });
+
+            return new Response(JSON.stringify({
+                activities: mapped,
+                count: mapped.length,
+            }), { headers });
+        }
+
+        // Disconnect Strava
+        if (url.pathname === "/api/strava/disconnect" && method === "POST") {
+            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+            const session = await getSession(token);
+            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+            await deleteStravaTokens(session.userId);
+            return new Response(JSON.stringify({ success: true }), { headers });
+        }
+
         return new Response("Not Found", { status: 404, headers });
     });
 }
@@ -302,4 +472,30 @@ async function saveUserData(userId: string, data: any) {
 function sanitizeUser(u: User) {
     const { passHash, salt, ...rest } = u;
     return rest;
+}
+
+// ==========================================
+// Strava Token Storage
+// ==========================================
+
+interface StoredStravaTokens {
+    accessToken: string;
+    refreshToken: string;
+    expiresAt: number;
+    athleteId: number;
+    athleteName: string;
+    lastSync?: string;
+}
+
+async function saveStravaTokens(userId: string, tokens: StoredStravaTokens) {
+    await kv.set(['strava_tokens', userId], tokens);
+}
+
+async function getStravaTokens(userId: string): Promise<StoredStravaTokens | null> {
+    const entry = await kv.get(['strava_tokens', userId]);
+    return entry.value as StoredStravaTokens | null;
+}
+
+async function deleteStravaTokens(userId: string) {
+    await kv.delete(['strava_tokens', userId]);
 }

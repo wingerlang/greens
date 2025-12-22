@@ -260,6 +260,37 @@ export interface TrainingCycle {
     notes?: string;
 }
 
+// ============================================
+// Performance Goals (Detailed Goal Tracking)
+// ============================================
+
+/** Goal types for performance tracking */
+export type PerformanceGoalType = 'frequency' | 'distance' | 'tonnage' | 'calories' | 'combination';
+
+/** Period for goal measurement */
+export type GoalPeriod = 'daily' | 'weekly';
+
+/** Individual target within a goal */
+export interface GoalTarget {
+    exerciseType?: ExerciseType;  // e.g., 'strength', 'running'
+    count?: number;               // For frequency goals (sessions)
+    value?: number;               // For volume/calorie goals
+    unit?: string;                // 'km', 'ton', 'kcal', 'sessions'
+}
+
+/** Performance goal for detailed tracking */
+export interface PerformanceGoal {
+    id: string;
+    name: string;
+    type: PerformanceGoalType;
+    period: GoalPeriod;
+    targets: GoalTarget[];        // Supports combination goals
+    cycleId?: string;             // Link to TrainingCycle (optional)
+    startDate: string;
+    endDate?: string;             // Undefined = "tills vidare"
+    createdAt: string;
+}
+
 /** Available exercise categories */
 export type ExerciseType =
     | 'running'
@@ -289,6 +320,12 @@ export interface ExerciseEntry {
     tonnage?: number;   // total kg lifted
     distance?: number;  // km
     createdAt: string;
+    // Integration fields (Strava/Garmin)
+    externalId?: string;          // e.g., "strava_123456"
+    platform?: 'strava' | 'garmin';
+    heartRateAvg?: number;
+    heartRateMax?: number;
+    elevationGain?: number;       // meters
 }
 
 /** Weight tracking entry */
@@ -401,6 +438,7 @@ export interface AppData {
     weightEntries?: WeightEntry[];
     competitions?: Competition[];
     trainingCycles?: TrainingCycle[];
+    performanceGoals?: PerformanceGoal[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */

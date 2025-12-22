@@ -75,16 +75,29 @@ const SmartAnalysisPanel: React.FC<SmartAnalysisPanelProps> = ({ analysis, onOpt
             <div className="mb-8">
                 <h3 className="text-gray-400 font-bold text-[10px] uppercase tracking-widest mb-3 px-1">Veckostatus</h3>
                 <div className="grid grid-cols-7 gap-2">
-                    {WEEKDAYS.map(day => {
+                    {WEEKDAYS.map((day, index) => {
                         const da = analysis.dayAnalysis[day];
                         const hasContent = da.proteinCategories.length > 0;
+
+                        // Determine if this is today
+                        const todayIndex = (new Date().getDay() + 6) % 7; // Convert Sun=0 to Mon=0
+                        const isToday = index === todayIndex;
 
                         return (
                             <div
                                 key={day}
-                                className={`p-2 rounded-xl border ${hasContent ? 'bg-white/5 border-white/10' : 'bg-transparent border-white/5 opacity-30'} flex flex-col items-center gap-1.5`}
+                                className={`p-2 rounded-xl border ${isToday
+                                        ? 'bg-emerald-500/20 border-emerald-500/50 ring-2 ring-emerald-500/30'
+                                        : hasContent
+                                            ? 'bg-white/5 border-white/10'
+                                            : 'bg-transparent border-white/5 opacity-30'
+                                    } flex flex-col items-center gap-1.5 relative`}
                             >
-                                <span className="text-[10px] font-bold text-gray-500 uppercase">{DAY_ABBREV[day]}</span>
+                                {/* Today indicator dot */}
+                                {isToday && (
+                                    <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-slate-900" />
+                                )}
+                                <span className={`text-[10px] font-bold uppercase ${isToday ? 'text-emerald-400' : 'text-gray-500'}`}>{DAY_ABBREV[day]}</span>
                                 <div className="flex gap-1">
                                     <StatusDot active={da.isComplete} icon="🛡️" label="Protein" />
                                     <StatusDot active={da.tags.includes('seasonal')} icon="☀️" label="Säsong" />

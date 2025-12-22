@@ -2,60 +2,66 @@
   "hash": "93476811",
   "configHash": "4375a2a7",
   "lockfileHash": "e3b0c442",
-  "browserHash": "76a97436",
+  "browserHash": "4a5c831e",
   "optimized": {
     "react": {
       "src": "../../node_modules/.deno/react@18.3.1/node_modules/react/index.js",
       "file": "react.js",
-      "fileHash": "fa8e0b29",
+      "fileHash": "067a1293",
       "needsInterop": true
     },
     "react-dom": {
       "src": "../../node_modules/.deno/react-dom@18.3.1/node_modules/react-dom/index.js",
       "file": "react-dom.js",
-      "fileHash": "5ac6c198",
+      "fileHash": "73015211",
       "needsInterop": true
     },
     "react/jsx-dev-runtime": {
       "src": "../../node_modules/.deno/react@18.3.1/node_modules/react/jsx-dev-runtime.js",
       "file": "react_jsx-dev-runtime.js",
-      "fileHash": "6c09c190",
+      "fileHash": "f584554d",
       "needsInterop": true
     },
     "react/jsx-runtime": {
       "src": "../../node_modules/.deno/react@18.3.1/node_modules/react/jsx-runtime.js",
       "file": "react_jsx-runtime.js",
-      "fileHash": "de03d34a",
+      "fileHash": "7a82e054",
       "needsInterop": true
     },
     "react-dom/client": {
       "src": "../../node_modules/.deno/react-dom@18.3.1/node_modules/react-dom/client.js",
       "file": "react-dom_client.js",
-      "fileHash": "7dbb4308",
+      "fileHash": "34269b98",
       "needsInterop": true
     },
     "react-router-dom": {
       "src": "../../node_modules/.deno/react-router-dom@7.10.1/node_modules/react-router-dom/dist/index.mjs",
       "file": "react-router-dom.js",
-      "fileHash": "4d93ba57",
+      "fileHash": "85f15b98",
       "needsInterop": false
     },
     "print-js": {
       "src": "../../node_modules/.deno/print-js@1.6.0/node_modules/print-js/dist/print.js",
       "file": "print-js.js",
-      "fileHash": "87ef2336",
+      "fileHash": "405bd481",
       "needsInterop": true
+    },
+    "recharts": {
+      "src": "../../node_modules/.deno/recharts@2.15.4/node_modules/recharts/es6/index.js",
+      "file": "recharts.js",
+      "fileHash": "f3df78bb",
+      "needsInterop": false
     }
   },
   "chunks": {
-    "chunk-OPTW7C3H": {
-      "file": "chunk-OPTW7C3H.js"
+    "chunk-NQAYZCVY": {
+      "file": "chunk-NQAYZCVY.js"
     },
-    "chunk-GKTGAG25": {
-      "file": "chunk-GKTGAG25.js"
+    "chunk-D46NJTKN": {
+      "file": "chunk-D46NJTKN.js"
     },
-    "chunk-5WRI5ZAA": {
-      "file": "chunk-5WRI5ZAA.js"
+    "chunk-G3PMV62Z": {
+      "file": "chunk-G3PMV62Z.js"
     }
   }
 }

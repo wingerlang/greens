@@ -38,7 +38,8 @@ const getDefaultData = (): AppData => ({
     exerciseEntries: [],
     weightEntries: [],
     competitions: [],
-    trainingCycles: []
+    trainingCycles: [],
+    performanceGoals: []
 });
 
 // Helper to get token (if any)
