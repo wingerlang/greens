@@ -383,7 +383,104 @@ export interface CoachConfig {
         weightGoal?: number; // Target weight for performance/health
     };
     goals: CoachGoal[];
+    fineTuning?: FineTuningConfig;
 }
+
+// ============================================
+// Phase 1: Fine-Tuning Configuration
+// ============================================
+
+export interface FineTuningConfig {
+    sessionsPerWeek: number;           // 2-7
+    loadIndex: number;                 // 1-10 intensity scale
+    longRunPercentage: number;         // 15-40% of weekly volume
+    easyPaceAdjustmentSec: number;     // +/- seconds per km for easy pace
+    qualitySessionRatio: number;       // 0.1-0.4 (% of sessions that are hard)
+    includeStrength: boolean;
+    strengthDays: number[];            // 0-6 for days of week
+    longRunMaxKm?: number;             // Cap for long run distance
+    tempoIntensity?: 'conservative' | 'moderate' | 'aggressive';
+}
+
+export const DEFAULT_FINE_TUNING: FineTuningConfig = {
+    sessionsPerWeek: 4,
+    loadIndex: 5,
+    longRunPercentage: 30,
+    easyPaceAdjustmentSec: 0,
+    qualitySessionRatio: 0.25,
+    includeStrength: false,
+    strengthDays: [],
+    tempoIntensity: 'moderate'
+};
+
+// ============================================
+// Phase 2: Strength & Cross-Training
+// ============================================
+
+export type StrengthMuscleGroup = 'legs' | 'core' | 'upper' | 'full_body' | 'mobility';
+
+export interface StrengthExercise {
+    id: string;
+    name: string;
+    muscleGroups: StrengthMuscleGroup[];
+    sets: number;
+    reps: number;
+    weight?: number;
+    notes?: string;
+}
+
+export interface StrengthSession {
+    id: string;
+    date: string;
+    title: string;
+    muscleGroups: StrengthMuscleGroup[];
+    exercises: StrengthExercise[];
+    durationMinutes: number;
+    estimatedCalories: number;
+    source?: 'manual' | 'strengthlog' | 'imported';
+    externalId?: string; // For Strengthlog API integration
+}
+
+export type NutritionWarningType =
+    | 'leg_run_conflict'      // Leg day + run on same day
+    | 'calorie_deficit'       // Not enough fuel for workout
+    | 'recovery_needed'       // High volume without rest
+    | 'hydration_reminder'    // Long run hydration
+    | 'post_run_nutrition';   // Recovery fuel needed
+
+export interface NutritionWarning {
+    id: string;
+    type: NutritionWarningType;
+    date: string;
+    message: string;
+    severity: 'info' | 'warning' | 'critical';
+    dismissed?: boolean;
+    suggestedAction?: string;
+    relatedActivityId?: string;
+}
+
+export interface QuickNutritionItem {
+    id: string;
+    name: string;
+    type: 'gel' | 'drink' | 'recovery' | 'snack';
+    calories: number;
+    carbs: number;
+    protein?: number;
+    caffeine?: number;
+    timing: 'pre' | 'during' | 'post';
+}
+
+export const QUICK_NUTRITION_ITEMS: QuickNutritionItem[] = [
+    { id: 'gel1', name: 'Energigel', type: 'gel', calories: 100, carbs: 25, caffeine: 25, timing: 'during' },
+    { id: 'gel2', name: 'Iso-gel (koffeinfri)', type: 'gel', calories: 90, carbs: 22, timing: 'during' },
+    { id: 'drink1', name: 'Sportdryck 500ml', type: 'drink', calories: 140, carbs: 34, timing: 'during' },
+    { id: 'drink2', name: 'Elektrolytvatten', type: 'drink', calories: 20, carbs: 4, timing: 'during' },
+    { id: 'recover1', name: 'Proteinshake', type: 'recovery', calories: 200, carbs: 15, protein: 30, timing: 'post' },
+    { id: 'recover2', name: 'Chokladmjölk', type: 'recovery', calories: 180, carbs: 26, protein: 8, timing: 'post' },
+    { id: 'snack1', name: 'Banan', type: 'snack', calories: 105, carbs: 27, timing: 'pre' },
+    { id: 'snack2', name: 'Dadlar (3st)', type: 'snack', calories: 70, carbs: 18, timing: 'pre' }
+];
+
 
 export interface PlannedActivity {
     id: string;

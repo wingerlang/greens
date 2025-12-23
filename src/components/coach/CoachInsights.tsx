@@ -121,6 +121,13 @@ export function CoachInsights() {
             }
         }[currentPhase];
 
+        // 9. Session Count by Type
+        const sessionCount = {
+            easy: relevantActivities.filter(a => a.category === 'EASY').length,
+            long: relevantActivities.filter(a => a.category === 'LONG_RUN').length,
+            quality: relevantActivities.filter(a => a.category === 'INTERVALS' || a.category === 'TEMPO').length
+        };
+
         return {
             startVdot,
             currentVdot,

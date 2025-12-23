@@ -2,6 +2,8 @@ import React from 'react';
 import { useData } from '../../context/DataContext.tsx';
 import { CoachConfig, getISODate, StravaActivity } from '../../models/types.ts';
 import { PlannedActivityCard } from './PlannedActivityCard.tsx';
+import { TrainingWeeklyOverview } from './TrainingWeeklyOverview.tsx';
+import { CompressedActivityList } from './CompressedActivityList.tsx';
 import { Link } from 'react-router-dom';
 import { calculateVDOT, assessGoalFeasibility } from '../../utils/runningCalculator.ts';
 import './SmartCoachDashboard.css';
@@ -12,6 +14,7 @@ interface SmartCoachDashboardProps {
 
 export function SmartCoachDashboard({ stravaHistory }: SmartCoachDashboardProps) {
     const { coachConfig, plannedActivities, generateCoachPlan } = useData();
+    const [viewMode, setViewMode] = React.useState<'list' | 'overview' | 'compact'>('list');
 
     const handleGenerate = () => {
         generateCoachPlan(stravaHistory);
@@ -37,14 +40,16 @@ export function SmartCoachDashboard({ stravaHistory }: SmartCoachDashboardProps)
         );
     }
 
+    const activeGoal = React.useMemo(() => coachConfig?.goals.find(g => g.isActive) || coachConfig?.goals[0], [coachConfig]);
+
     const probability = React.useMemo(() => {
-        if (!coachConfig) return null;
+        if (!coachConfig || !activeGoal) return null;
         const currentVdot = coachConfig.userProfile.recentRaceTime ? calculateVDOT(coachConfig.userProfile.recentRaceTime.distance, coachConfig.userProfile.recentRaceTime.timeSeconds) : 35;
-        const dist = coachConfig.goal.type === 'MARATHON' ? 42.195 : coachConfig.goal.type === 'HALF_MARATHON' ? 21.097 : coachConfig.goal.type === '10K' ? 10 : 5;
-        const targetVdot = calculateVDOT(dist, coachConfig.goal.targetTimeSeconds || 3000);
-        const weeks = Math.ceil((new Date(coachConfig.goal.targetDate).getTime() - new Date().getTime()) / (7 * 24 * 60 * 60 * 1000));
+        const dist = activeGoal.type === 'MARATHON' ? 42.195 : activeGoal.type === 'HALF_MARATHON' ? 21.097 : activeGoal.type === '10K' ? 10 : 5;
+        const targetVdot = calculateVDOT(dist, activeGoal.targetTimeSeconds || 3000);
+        const weeks = Math.ceil((new Date(activeGoal.targetDate).getTime() - new Date().getTime()) / (7 * 24 * 60 * 60 * 1000));
         return assessGoalFeasibility(currentVdot, targetVdot, weeks).probability;
-    }, [coachConfig]);
+    }, [coachConfig, activeGoal]);
 
     const nextActivity = plannedActivities.length > 0 ? plannedActivities[0] : null;
 
@@ -60,6 +65,29 @@ export function SmartCoachDashboard({ stravaHistory }: SmartCoachDashboardProps)
                 </div>
             </div>
 
+            {plannedActivities.length > 0 && (
+                <div className="flex bg-slate-950/40 p-1 rounded-xl mb-6 border border-white/5 w-fit">
+                    <button
+                        onClick={() => setViewMode('list')}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        Idag
+                    </button>
+                    <button
+                        onClick={() => setViewMode('compact')}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'compact' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        Tabell
+                    </button>
+                    <button
+                        onClick={() => setViewMode('overview')}
+                        className={`px-4 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${viewMode === 'overview' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        Veckor
+                    </button>
+                </div>
+            )}
+
             {plannedActivities.length === 0 ? (
                 <div className="text-center py-8">
                     <p className="text-slate-400 text-xs mb-4">Ingen träningsplan genererad än.</p>
@@ -72,11 +100,26 @@ export function SmartCoachDashboard({ stravaHistory }: SmartCoachDashboardProps)
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {nextActivity && (
-                        <div className="next-session">
-                            <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest block mb-2">Nästa Pass</span>
-                            <PlannedActivityCard activity={nextActivity} />
-                        </div>
+                    {viewMode === 'list' ? (
+                        <>
+                            {nextActivity && (
+                                <div className="next-session">
+                                    <span className="text-[9px] font-black text-emerald-400 uppercase tracking-widest block mb-1">Nästa Pass</span>
+                                    <PlannedActivityCard activity={nextActivity} />
+                                </div>
+                            )}
+
+                            <div className="space-y-4">
+                                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Kommande</span>
+                                {plannedActivities.slice(1, 4).map(a => (
+                                    <PlannedActivityCard key={a.id} activity={a} compact />
+                                ))}
+                            </div>
+                        </>
+                    ) : viewMode === 'compact' ? (
+                        <CompressedActivityList activities={plannedActivities} />
+                    ) : (
+                        <TrainingWeeklyOverview activities={plannedActivities} />
                     )}
 
                     <div className="flex justify-between items-center bg-white/5 p-4 rounded-2xl">

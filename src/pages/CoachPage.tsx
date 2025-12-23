@@ -1,51 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
+import { useSearchParams } from 'react-router-dom';
 import { CoachCalendar } from '../components/coach/CoachCalendar.tsx';
 import { CoachSetup } from '../components/coach/CoachSetup.tsx';
 import { CoachFeasibility } from '../components/coach/CoachFeasibility.tsx';
 import { CoachInsights } from '../components/coach/CoachInsights.tsx';
 import './CoachPage.css';
 
+type TabType = 'plan' | 'setup' | 'analysis' | 'progress';
+
 export function CoachPage() {
     const { coachConfig, plannedActivities } = useData();
-    const [activeTab, setActiveTab] = useState<'plan' | 'setup' | 'analysis' | 'progress'>('plan');
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const tabFromUrl = searchParams.get('tab') as TabType | null;
+    const [activeTab, setActiveTab] = useState<TabType>(tabFromUrl || 'plan');
+
+    useEffect(() => {
+        if (tabFromUrl && ['plan', 'setup', 'analysis', 'progress'].includes(tabFromUrl)) {
+            setActiveTab(tabFromUrl);
+        }
+    }, [tabFromUrl]);
+
+    const handleTabChange = (tab: TabType) => {
+        setActiveTab(tab);
+        setSearchParams({ tab });
+    };
 
     return (
-        <div className="coach-page min-h-screen bg-slate-950 text-white p-4 md:p-8">
+        <div className="coach-page min-h-screen bg-slate-950 text-white p-2 md:p-6">
             {/* Header Area */}
-            <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-12 max-w-7xl mx-auto">
+            <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-8 max-w-7xl mx-auto">
                 <div>
-                    <h1 className="text-4xl font-black tracking-tighter mb-2">
+                    <h1 className="text-2xl md:text-3xl font-black tracking-tighter mb-1">
                         Smart <span className="coach-logo-italic">Coach</span> 🧠
                     </h1>
-                    <p className="text-slate-400 max-w-xl text-sm leading-relaxed opacity-80 font-medium">
-                        Din personliga, algoritmiska löpcoach. Baserad på Jack Daniels VDOT, 80/20-regeln och adaptiv progression.
+                    <p className="text-slate-400 max-w-xl text-[11px] leading-relaxed opacity-80 font-medium">
+                        Din personliga, algoritmiska löpcoach. Jack Daniels VDOT, 80/20-regeln & adaptiv progression.
                     </p>
                 </div>
 
-                <div className="flex gap-2 p-1 bg-slate-900/40 rounded-2xl border border-white/5 backdrop-blur-2xl shadow-2xl">
+                <div className="flex gap-1 p-1 bg-slate-900/40 rounded-xl border border-white/5 backdrop-blur-2xl shadow-2xl">
                     <button
-                        onClick={() => setActiveTab('plan')}
-                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'plan' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        onClick={() => handleTabChange('plan')}
+                        className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'plan' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
                     >
-                        Träningsplan
+                        Plan
                     </button>
                     <button
-                        onClick={() => setActiveTab('setup')}
-                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'setup' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        onClick={() => handleTabChange('setup')}
+                        className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'setup' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
                     >
-                        Inställningar
+                        Setup
                     </button>
                     <button
-                        onClick={() => setActiveTab('analysis')}
-                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'analysis' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        onClick={() => handleTabChange('analysis')}
+                        className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'analysis' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
                     >
-                        Bedömning
+                        Analys
                     </button>
                     <button
-                        onClick={() => setActiveTab('progress')}
-                        className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === 'progress' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                        onClick={() => handleTabChange('progress')}
+                        className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'progress' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
                     >
                         Progress
                     </button>
@@ -53,16 +70,16 @@ export function CoachPage() {
             </header>
 
             <main className="max-w-7xl mx-auto">
-                {!coachConfig ? (
-                    <div className="flex flex-col items-center justify-center py-24 text-center">
-                        <div className="w-24 h-24 mb-8 bg-emerald-500/10 rounded-full flex items-center justify-center text-5xl">🔭</div>
-                        <h2 className="text-2xl font-black mb-4">Dags att bygga din plan</h2>
-                        <p className="text-slate-400 mb-8 max-w-sm">Berätta för coachen om din nuvarande form och dina mål för att generera ditt program.</p>
+                {!coachConfig && activeTab !== 'setup' ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                        <div className="w-20 h-20 mb-6 bg-emerald-500/10 rounded-full flex items-center justify-center text-4xl">🔭</div>
+                        <h2 className="text-xl font-black mb-3">Dags att bygga din plan</h2>
+                        <p className="text-slate-400 mb-6 max-w-sm text-sm">Berätta för coachen om din nuvarande form och mål.</p>
                         <button
-                            onClick={() => setActiveTab('setup')}
-                            className="px-12 py-4 bg-emerald-500 text-slate-950 font-black rounded-2xl hover:bg-emerald-400 transition-all shadow-2xl shadow-emerald-500/20 uppercase tracking-widest"
+                            onClick={() => handleTabChange('setup')}
+                            className="px-8 py-3 bg-emerald-500 text-slate-950 font-black rounded-xl hover:bg-emerald-400 transition-all shadow-lg shadow-emerald-500/20 uppercase tracking-widest text-[10px]"
                         >
-                            Konfigurera Coachen
+                            Konfigurera
                         </button>
                     </div>
                 ) : (

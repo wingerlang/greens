@@ -16,17 +16,17 @@
 .calendar-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 12px;
+    gap: 8px;
 }
 
 .calendar-day-header {
     text-align: center;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 3px;
+    letter-spacing: 2px;
     color: #94a3b8;
-    padding-bottom: 16px;
+    padding-bottom: 12px;
     opacity: 0.6;
 }
 
@@ -34,7 +34,7 @@
     aspect-ratio: 1;
     background: rgba(15, 23, 42, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.04);
-    border-radius: 20px;
+    border-radius: 12px;
     position: relative;
     overflow: hidden;
     transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);

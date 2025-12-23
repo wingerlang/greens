@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { PlannedActivity } from '../../models/types.ts';
 import { useData } from '../../context/DataContext.tsx';
+import { parseTimeToSeconds, formatSecondsToTime } from '../../utils/timeParser.ts';
+import { useEffect } from 'react';
 
 interface PlannedActivityCardProps {
     activity: PlannedActivity;
@@ -12,6 +14,17 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
     const [showFeedback, setShowFeedback] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [editDate, setEditDate] = useState(activity.date);
+    const [isExpanded, setIsExpanded] = useState(!compact);
+    const [timeInputValue, setTimeInputValue] = useState(formatSecondsToTime(activity.actualTimeSeconds || 0));
+
+    useEffect(() => {
+        if (!isEditing) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setIsEditing(false);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isEditing]);
 
     if (compact) {
         return (
@@ -36,21 +49,30 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
         setShowFeedback(false);
     };
 
-    const handlePianoMode = () => {
-        const factor = 0.85;
+    const adjustWorkout = (type: 'DIST' | 'PACE' | 'REPS', delta: number) => {
         const updatedStructure = {
             ...activity.structure,
-            mainSet: activity.structure.mainSet.map(s => ({
-                ...s,
-                distKm: Math.round(s.distKm * factor * 10) / 10
-            }))
+            mainSet: activity.structure.mainSet.map(s => {
+                if (type === 'REPS') return { ...s, reps: Math.max(1, s.reps + delta) };
+                if (type === 'DIST') return { ...s, distKm: Math.round(Math.max(0.1, s.distKm * delta) * 10) / 10 };
+                // Pace is a bit harder since it's a string "MM:SS"
+                if (type === 'PACE') {
+                    const secs = parseTimeToSeconds(s.pace);
+                    if (secs) {
+                        const newSecs = Math.round(secs * delta);
+                        return { ...s, pace: formatSecondsToTime(newSecs) };
+                    }
+                }
+                return s;
+            })
         };
-        const updatedDist = Math.round(activity.estimatedDistance * factor * 10) / 10;
+
+        const newTotalDist = updatedStructure.mainSet.reduce((sum, s) => sum + (s.reps * s.distKm), 0) + activity.structure.warmupKm + activity.structure.cooldownKm;
+
         updatePlannedActivity(activity.id, {
             structure: updatedStructure,
-            estimatedDistance: updatedDist,
-            title: activity.title.includes('🎹') ? activity.title : `${activity.title} 🎹`,
-            customScalingFactor: (activity.customScalingFactor || 1) * factor
+            estimatedDistance: Math.round(newTotalDist * 10) / 10,
+            title: activity.title.includes('⚙️') ? activity.title : `${activity.title} ⚙️`
         });
     };
 
@@ -63,7 +85,7 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
     return (
         <div className={`relative group glass-card p-4 transition-all overflow-hidden ${activity.status === 'COMPLETED' ? 'opacity-90' : 'hover:scale-[1.01]'} ${activity.category === 'LONG_RUN' ? 'border-amber-500/30 bg-amber-500/[0.02]' : ''}`}>
             {/* PR and Achievement Badges */}
-            <div className="absolute top-4 right-4 flex gap-2 z-10">
+            <div className="absolute top-4 right-4 flex gap-2 z-10 items-center">
                 {activity.isVolumePR && (
                     <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-slate-950 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-xl shadow-amber-500/20 animate-bounce">
                         🔥 Mängdrekord
@@ -102,8 +124,12 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                                 />
                             </div>
                         </div>
-                        <h3 className="text-xl md:text-3xl font-black text-white group-hover:text-emerald-400 transition-colors uppercase italic tracking-tighter leading-none mb-3">
+                        <h3
+                            className="text-xl md:text-3xl font-black text-white group-hover:text-emerald-400 transition-colors uppercase italic tracking-tighter leading-none mb-3 cursor-pointer flex items-center gap-3"
+                            onClick={() => setIsExpanded(!isExpanded)}
+                        >
                             {activity.title}
+                            <span className={`text-sm transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}>▼</span>
                         </h3>
 
                         {activity.scientificBenefit && (
@@ -177,11 +203,11 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                                         Färdig!
                                     </button>
                                     <button
-                                        onClick={handlePianoMode}
+                                        onClick={() => setIsEditing(true)}
                                         className="px-4 py-2 bg-slate-800 text-white/70 hover:text-white font-black rounded-xl hover:bg-slate-700 transition-all uppercase tracking-widest text-[9px] border border-white/5"
-                                        title="Ta det lite piano (Skala ner passet 15%)"
+                                        title="Justera passet (Tempo/Distans)"
                                     >
-                                        Piano 🎹
+                                        Justera ⚙️
                                     </button>
                                 </div>
                             ) : (
@@ -200,9 +226,9 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                     ) : (
                         <button
                             onClick={() => setIsEditing(true)}
-                            className="px-4 py-2 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 font-black rounded-xl transition-all uppercase tracking-widest text-[10px] border border-indigo-500/20"
+                            className="px-6 py-4 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 font-black rounded-2xl transition-all uppercase tracking-widest text-xs border border-indigo-500/20 shadow-xl shadow-indigo-500/5"
                         >
-                            Ändra 🛠️
+                            Redigera ⚙️
                         </button>
                     )}
                     <button
@@ -214,8 +240,7 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                 </div>
             </div>
 
-            {/* Workout Structure Breakdown */}
-            <div className="mt-6 space-y-3">
+            <div className={`transition-all duration-500 overflow-hidden ${isExpanded ? 'max-h-[2000px] opacity-100 mt-6' : 'max-h-0 opacity-0'}`}>
                 {activity.structure.warmupKm > 0 && (
                     <div className="flex items-center gap-4 p-3 rounded-xl bg-blue-500/5 border border-blue-500/10">
                         <span className="w-24 text-[9px] font-black uppercase text-blue-400 tracking-wider">Uppvärmning</span>
@@ -295,54 +320,126 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
 
             {/* Edit Modal for Completed Sessions */}
             {isEditing && (
-                <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 w-full max-w-md shadow-2xl">
-                        <h4 className="text-xl font-black text-white uppercase italic tracking-tighter mb-6">Redigera Pass</h4>
+                <div
+                    className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+                    onClick={() => setIsEditing(false)}
+                >
+                    <div
+                        className="bg-slate-900 border border-white/10 rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-in zoom-in duration-200 max-h-[90vh] flex flex-col"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex justify-between items-center mb-6 shrink-0">
+                            <h4 className="text-xl font-black text-white uppercase italic tracking-tighter">Redigera & Justera</h4>
+                            <button onClick={() => setIsEditing(false)} className="text-slate-500 hover:text-white text-xl p-2 transition-colors">✕</button>
+                        </div>
 
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Faktisk Distans (km)</label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    defaultValue={activity.actualDistance || activity.estimatedDistance}
-                                    onChange={(e) => updatePlannedActivity(activity.id, { actualDistance: parseFloat(e.target.value) })}
-                                    className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-white font-bold"
-                                />
+                        <div className="space-y-6 overflow-y-auto pr-2 custom-scrollbar flex-1 pb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Faktisk Distans (km)</label>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            defaultValue={activity.actualDistance || activity.estimatedDistance}
+                                            onChange={(e) => updatePlannedActivity(activity.id, { actualDistance: parseFloat(e.target.value) })}
+                                            className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-white font-bold focus:border-indigo-500/50 outline-none transition-colors"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Faktisk Tid</label>
+                                        <input
+                                            type="text"
+                                            value={timeInputValue}
+                                            onChange={(e) => {
+                                                setTimeInputValue(e.target.value);
+                                                const secs = parseTimeToSeconds(e.target.value);
+                                                if (secs !== null) {
+                                                    updatePlannedActivity(activity.id, { actualTimeSeconds: secs });
+                                                }
+                                            }}
+                                            className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-white font-bold focus:border-indigo-500/50 outline-none transition-colors"
+                                            placeholder="t.ex. 45:30"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Feedback</label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {(['EASY', 'PERFECT', 'HARD', 'TOO_HARD'] as const).map(f => (
+                                                <button
+                                                    key={f}
+                                                    type="button"
+                                                    onClick={() => updatePlannedActivity(activity.id, { feedback: f })}
+                                                    className={`py-3 rounded-xl text-[10px] font-black uppercase transition-all ${activity.feedback === f ? 'bg-emerald-500 text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5'}`}
+                                                >
+                                                    {f === 'TOO_HARD' ? 'För Tufft' :
+                                                        f === 'HARD' ? 'Hårt' :
+                                                            f === 'PERFECT' ? 'Perfekt' : 'Lätt'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
-                            <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Faktisk Tid (sekunder)</label>
-                                <input
-                                    type="number"
-                                    defaultValue={activity.actualTimeSeconds || 0}
-                                    onChange={(e) => updatePlannedActivity(activity.id, { actualTimeSeconds: parseInt(e.target.value) })}
-                                    className="w-full bg-slate-950 border border-white/5 rounded-xl px-4 py-3 text-white font-bold"
-                                />
-                            </div>
+                            {['INTERVALS', 'REPETITION'].includes(activity.category) && (
+                                <div>
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Antal Repitioner</label>
+                                    <div className="flex items-center gap-4">
+                                        <button type="button" onClick={() => adjustWorkout('REPS', -1)} className="w-12 h-12 bg-slate-950 border border-white/5 rounded-xl flex items-center justify-center text-white font-black hover:bg-white/10 active:scale-90">-</button>
+                                        <div className="text-xl font-black text-white">{activity.structure.mainSet[0]?.reps || 1}</div>
+                                        <button type="button" onClick={() => adjustWorkout('REPS', 1)} className="w-12 h-12 bg-slate-950 border border-white/5 rounded-xl flex items-center justify-center text-white font-black hover:bg-white/10 active:scale-90">+</button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div>
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-2">Feedback</label>
-                                <div className="flex gap-2">
-                                    {(['EASY', 'PERFECT', 'HARD', 'TOO_HARD'] as const).map(f => (
-                                        <button
-                                            key={f}
-                                            onClick={() => updatePlannedActivity(activity.id, { feedback: f })}
-                                            className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all ${activity.feedback === f ? 'bg-emerald-500 text-slate-950' : 'bg-white/5 text-slate-400 hover:bg-white/10'}`}
-                                        >
-                                            {f}
-                                        </button>
-                                    ))}
+                                <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-3">Snabb-justering ⚙️</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => adjustWorkout('DIST', 0.9)}
+                                        className="py-3 bg-slate-950 border border-white/5 rounded-xl text-[10px] font-black text-slate-400 uppercase hover:text-white transition-all active:scale-95"
+                                    >
+                                        Minska Distans (-10%)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => adjustWorkout('DIST', 1.1)}
+                                        className="py-3 bg-slate-950 border border-white/5 rounded-xl text-[10px] font-black text-slate-400 uppercase hover:text-white transition-all active:scale-95"
+                                    >
+                                        Öka Distans (+10%)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => adjustWorkout('PACE', 1.05)}
+                                        className="py-3 bg-slate-950 border border-white/5 rounded-xl text-[10px] font-black text-slate-400 uppercase hover:text-white transition-all active:scale-95"
+                                    >
+                                        Lugnare Tempo (+5%)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => adjustWorkout('PACE', 0.95)}
+                                        className="py-3 bg-slate-950 border border-white/5 rounded-xl text-[10px] font-black text-slate-400 uppercase hover:text-white transition-all active:scale-95"
+                                    >
+                                        Tuffare Tempo (-5%)
+                                    </button>
                                 </div>
                             </div>
                         </div>
 
-                        <button
-                            onClick={() => setIsEditing(false)}
-                            className="w-full mt-8 bg-emerald-500 text-slate-950 font-black py-4 rounded-2xl hover:bg-emerald-400 transition-all uppercase tracking-widest text-xs shadow-xl shadow-emerald-500/20"
-                        >
-                            Spara Ändringar
-                        </button>
+                        <div className="pt-6 border-t border-white/5 shrink-0">
+                            <button
+                                onClick={() => setIsEditing(false)}
+                                className="w-full bg-emerald-500 text-slate-950 font-black py-4 rounded-2xl hover:bg-emerald-400 transition-all uppercase tracking-widest text-xs shadow-xl shadow-emerald-500/20 active:scale-[0.98]"
+                            >
+                                Spara Ändringar & Stäng
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

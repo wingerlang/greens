@@ -933,9 +933,9 @@ export function DataProvider({ children }: DataProviderProps) {
                 ...goalData,
                 id: generateId(),
                 createdAt: new Date().toISOString(),
-                isActive: (coachConfig?.goals.length || 0) === 0 // First goal is active
+                isActive: (coachConfig?.goals?.length || 0) === 0 // First goal is active
             };
-            setCoachConfig(prev => prev ? { ...prev, goals: [...prev.goals, newGoal] } : {
+            setCoachConfig(prev => prev ? { ...prev, goals: [...(prev.goals || []), newGoal] } : {
                 userProfile: { maxHr: 190, restingHr: 60 },
                 preferences: { weeklyVolumeKm: 30, longRunDay: 'Sunday', intervalDay: 'Tuesday', trainingDays: [2, 4, 0] },
                 goals: [newGoal]
