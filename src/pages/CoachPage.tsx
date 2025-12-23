@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSearchParams } from 'react-router-dom';
@@ -7,13 +7,43 @@ import { CoachSetup } from '../components/coach/CoachSetup.tsx';
 import { CoachFeasibility } from '../components/coach/CoachFeasibility.tsx';
 import { CoachInsights } from '../components/coach/CoachInsights.tsx';
 import { CoachPlanSummary } from '../components/coach/CoachPlanSummary.tsx';
+import { useUniversalActivities } from '../hooks/useUniversalActivities.ts';
+import { UniversalActivity, PlannedActivity } from '../models/types.ts';
 import './CoachPage.css';
 
 type TabType = 'plan' | 'summary' | 'setup' | 'analysis' | 'progress';
 
+// Helper to map Universal -> PlannedActivity (for UI compatibility)
+function mapUniversalToPlanned(u: UniversalActivity): PlannedActivity {
+    return {
+        id: u.id,
+        date: u.date,
+        // If it has a plan, use it. If it's pure Strava, make it a "Completed Plan"
+        type: (u.plan?.activityType || 'RUN') as 'RUN', // Defaulting for now
+        category: u.plan?.activityCategory || (u.performance?.source?.source === 'strava' ? 'EASY' : 'EASY'),
+        title: u.plan?.title || u.performance?.notes || 'Importerat Pass',
+        description: u.plan?.description || '',
+        structure: u.plan?.structure || { warmupKm: 0, mainSet: [], cooldownKm: 0 },
+        targetPace: u.plan?.targetPace || '',
+        targetHrZone: u.plan?.targetHrZone || 0,
+        estimatedDistance: u.plan?.distanceKm || u.performance?.distanceKm || 0,
+
+        status: u.status as PlannedActivity['status'],
+        actualDistance: u.performance?.distanceKm,
+        actualTimeSeconds: u.performance?.durationMinutes ? u.performance.durationMinutes * 60 : undefined,
+    };
+}
+
 export function CoachPage() {
-    const { coachConfig, plannedActivities } = useData();
+    const { coachConfig } = useData();
+    const { activities: universalActivities } = useUniversalActivities(365);
     const [searchParams, setSearchParams] = useSearchParams();
+
+    // Merge Server Data into the UI
+    // We prefer the server data over the local context 'plannedActivities' for the Coach View
+    const displayActivities = useMemo(() => {
+        return universalActivities.map(mapUniversalToPlanned);
+    }, [universalActivities]);
 
     const tabFromUrl = searchParams.get('tab') as TabType | null;
     const [activeTab, setActiveTab] = useState<TabType>(tabFromUrl || 'plan');
@@ -91,8 +121,8 @@ export function CoachPage() {
                     </div>
                 ) : (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        {activeTab === 'plan' && <CoachCalendar activities={plannedActivities || []} />}
-                        {activeTab === 'summary' && <CoachPlanSummary activities={plannedActivities || []} />}
+                        {activeTab === 'plan' && <CoachCalendar activities={displayActivities} />}
+                        {activeTab === 'summary' && <CoachPlanSummary activities={displayActivities} />}
                         {activeTab === 'setup' && <CoachSetup />}
                         {activeTab === 'analysis' && <CoachFeasibility />}
                         {activeTab === 'progress' && <CoachInsights />}

@@ -440,8 +440,8 @@ export async function startServer(port: number) {
             const activities = await strava.getStravaActivities(accessToken, { after, before, page, perPage: 50 });
             const mapped = activities.map(strava.mapStravaActivityToExercise);
 
-            // Update last sync time
-            await saveStravaTokens(session.userId, { ...stravaTokens, lastSync: new Date().toISOString() });
+            // Update last sync time - REMOVED to prevent breaking the Sync logic
+            // await saveStravaTokens(session.userId, { ...stravaTokens, lastSync: new Date().toISOString() });
 
             return new Response(JSON.stringify({
                 activities: mapped,
@@ -558,7 +558,9 @@ export async function startServer(port: number) {
                 }
 
                 // Fetch last 30 activities (or use 'after' param based on lastSync)
-                const lastSyncDate = stravaTokens.lastSync ? new Date(stravaTokens.lastSync).getTime() / 1000 : undefined;
+                // If ?full=true is passed, we ignore lastSync to force a full re-scan
+                const fullSync = url.searchParams.get('full') === 'true';
+                const lastSyncDate = (!fullSync && stravaTokens.lastSync) ? new Date(stravaTokens.lastSync).getTime() / 1000 : undefined;
 
                 // Fetch from Strava
                 const activities = await strava.getStravaActivities(accessToken, {

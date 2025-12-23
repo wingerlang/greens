@@ -1,9 +1,40 @@
 import React, { useMemo } from 'react';
 import { useData } from '../../context/DataContext.tsx';
 import { calculateVDOT, predictRaceTime, formatSeconds } from '../../utils/runningCalculator.ts';
+import { useUniversalActivities } from '../../hooks/useUniversalActivities.ts';
+import { UniversalActivity, ExerciseEntry } from '../../models/types.ts';
+
+// Helper to map UniversalActivity -> ExerciseEntry (Legacy Support)
+function mapToLegacyEntry(a: UniversalActivity): ExerciseEntry | null {
+    if (!a.performance) return null;
+    return {
+        id: a.id,
+        date: a.date,
+        type: (a.plan?.activityType || a.performance.source?.source === 'strava' ? 'running' : 'other') as any, // Only defaulting running for now based on Strava context
+        durationMinutes: a.performance.durationMinutes,
+        intensity: 'moderate', // default
+        caloriesBurned: a.performance.calories,
+        distance: a.performance.distanceKm,
+        createdAt: a.createdAt,
+        externalId: a.performance.source?.externalId,
+        platform: a.performance.source?.source === 'strava' ? 'strava' : undefined,
+        heartRateAvg: a.performance.avgHeartRate,
+        heartRateMax: a.performance.maxHeartRate,
+        elevationGain: a.performance.elevationGain,
+        subType: a.plan?.activityCategory === 'INTERVALS' ? 'interval' : undefined
+    };
+}
 
 export function CoachInsights() {
-    const { coachConfig, plannedActivities, exerciseEntries } = useData();
+    const { coachConfig, plannedActivities } = useData();
+    const { activities: universalActivities } = useUniversalActivities(365); // Fetch last year
+
+    // Convert to legacy format for compatibility with existing charts
+    const exerciseEntries = useMemo(() => {
+        return universalActivities
+            .map(mapToLegacyEntry)
+            .filter((e): e is ExerciseEntry => e !== null);
+    }, [universalActivities]);
 
     const stats = useMemo(() => {
         if (!coachConfig || !coachConfig.goals) return null;

@@ -92,7 +92,7 @@ export function StravaConnectionCard() {
         if (!token) return;
         setConnecting(true); // Reuse connecting state for basic loading indication
         try {
-            const res = await fetch('/api/strava/sync', {
+            const res = await fetch('/api/strava/sync?full=true', {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` }
             });
