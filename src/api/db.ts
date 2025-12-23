@@ -582,6 +582,108 @@ export async function startServer(port: number) {
             }
         }
 
+        // ==========================================
+        // Social API Routes 🌍
+        // ==========================================
+
+        // POST /api/social/follow/:targetId
+        if (url.pathname.startsWith("/api/social/follow/") && method === "POST") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const targetId = url.pathname.split('/').pop();
+                if (!targetId) return new Response(JSON.stringify({ error: "Missing target ID" }), { status: 400, headers });
+
+                await SocialRepository.followUser(session.userId, targetId);
+                return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // POST /api/social/unfollow/:targetId
+        if (url.pathname.startsWith("/api/social/unfollow/") && method === "POST") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const targetId = url.pathname.split('/').pop();
+                if (!targetId) return new Response(JSON.stringify({ error: "Missing target ID" }), { status: 400, headers });
+
+                await SocialRepository.unfollowUser(session.userId, targetId);
+                return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/u/:handle (Public Profile)
+        if (url.pathname.startsWith("/api/u/") && method === "GET") {
+            try {
+                const handle = url.pathname.split('/api/u/')[1].toLowerCase();
+                const userId = await SocialRepository.getUserIdByHandle(handle);
+
+                if (!userId) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+                const user = await getUser(userId);
+                if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+                // Construct Safe Public Profile adhering to privacy
+                const privacy = user.privacy || { isPublic: true, allowFollowers: true, showWeight: false, showAge: false, showHeight: false, showDetailedTraining: false, showSleep: false, showCalories: false, showNutrition: false, showRunning: true, showLifting: true }; // Should use Default but locally defined here
+
+                const publicProfile: Partial<User> & { isFollowing?: boolean } = {
+                    id: user.id,
+                    name: user.name,
+                    handle: user.handle,
+                    bio: user.bio,
+                    location: user.location,
+                    avatarUrl: user.avatarUrl,
+                    privacy: user.privacy,
+                    followersCount: user.followersCount || 0,
+                    followingCount: user.followingCount || 0,
+                    createdAt: user.createdAt,
+
+                    // Conditionally included fields based on privacy
+                    settings: {
+                        ...user.settings,
+                        // Mask settings if needed or just don't send full settings
+                    } as UserSettings
+                };
+
+                // If the viewing user is authenticated, we could check "isFollowing" here, but for now client does it separately or we parse token if present.
+                // Let's keep it simple: Public profile returns safe user object.
+
+                return new Response(JSON.stringify(publicProfile), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+
+        // GET /api/social/is-following/:targetId
+        if (url.pathname.startsWith("/api/social/is-following/") && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ isFollowing: false }), { status: 200, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const targetId = url.pathname.split('/').pop();
+                if (!targetId) return new Response(JSON.stringify({ error: "Missing target ID" }), { status: 400, headers });
+
+                const isFollowing = await SocialRepository.isFollowing(session.userId, targetId);
+                return new Response(JSON.stringify({ isFollowing }), { status: 200, headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+
         // Disconnect Strava
         if (url.pathname === "/api/strava/disconnect" && method === "POST") {
             const token = req.headers.get("Authorization")?.replace("Bearer ", "");

@@ -28,6 +28,9 @@ import { TrainingLoadCorrelation } from '../components/training/TrainingLoadCorr
 import type { PerformanceGoal } from '../models/types.ts';
 import './TrainingPage.css';
 
+import { TrainingOverview } from '../components/training/TrainingOverview.tsx';
+import { HealthScoreCard } from '../components/dashboard/HealthScoreCard.tsx';
+
 export function TrainingPage() {
     const {
         exerciseEntries: legacyExerciseEntries,
@@ -361,6 +364,9 @@ export function TrainingPage() {
                 </div>
             </header>
 
+            {/* Dashboard Overview */}
+            <TrainingOverview exercises={exerciseEntries} />
+
             {/* Cycle Manager (Replaces Goal Selector) */}
             <section className="mb-8">
                 {activeCycle && !isCycleCreatorOpen ? (
@@ -554,185 +560,129 @@ export function TrainingPage() {
                 )}
             </section>
 
-            <div className="training-grid">
-                {/* Stats Dashboard */}
-                <div className="stats-panel space-y-4">
-                    <div className="stat-card premium-card">
-                        <span className="stat-label">Dagens Kaloribehov</span>
-                        <div className="stat-value-group">
-                            <span className="stat-value text-emerald-400">{tdee}</span>
-                            <span className="stat-unit">kcal</span>
-                        </div>
-                        <div className="stat-breakdown">
-                            <span>BMR: {bmr}</span>
-                            {dailyBurned > 0 && <span>+ Träning: {dailyBurned}</span>}
-                            {goalAdjustment !== 0 && <span>+ Mål: {goalAdjustment}</span>}
-                        </div>
-                    </div>
+            {/* Full Width Layout for Charts */}
+            {/* Full Width Layout for Charts */}
+            <div className="space-y-6">
 
-                    {/* New Training Stats */}
-                    <div className="stat-card bg-slate-900/50 border-white/5">
-                        <span className="stat-label">Veckans Träning</span>
-                        <div className="flex justify-between items-end mt-2">
-                            <div>
-                                <div className="text-lg font-black text-white">{exerciseEntries.filter(e => {
-                                    const d = new Date(e.date);
-                                    const now = new Date();
-                                    const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay() + 1));
-                                    return d >= startOfWeek;
-                                }).length} pass</div>
-                                <div className="text-[9px] text-slate-500 font-bold uppercase">Denna vecka</div>
+                {/* NEW: Health Score Card - Replaces old "Goal Cards" visually or sits above */}
+                <HealthScoreCard
+                    exercises={exerciseEntries}
+                    meals={mealEntries}
+                    userSettings={{ bmr: calculateBMR('male', 75, 180, 30) }} // Fallback/Estimate
+                />
+
+                {/* Year Visualization */}
+                <div className="content-card">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="section-title">Årsöversikt & Utveckling</h3>
+                        <div className="flex gap-2">
+                            <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
+                                {[
+                                    { id: 'calories', label: 'Kcal', icon: '🔥' },
+                                    { id: 'volume', label: 'Volym', icon: '⚖️' },
+                                    { id: 'workouts', label: 'Pass', icon: '💪' }
+                                ].map(m => (
+                                    <button
+                                        key={m.id}
+                                        onClick={() => setVisibleMetrics(prev => ({ ...prev, [m.id]: !prev[m.id as keyof typeof prev] }))}
+                                        className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${visibleMetrics[m.id as keyof typeof visibleMetrics]
+                                            ? 'bg-emerald-500 text-slate-950'
+                                            : 'text-slate-400 hover:text-white'
+                                            }`}
+                                    >
+                                        <span>{m.icon}</span>
+                                        <span className="hidden sm:inline">{m.label}</span>
+                                    </button>
+                                ))}
                             </div>
-                            <div className="text-right">
-                                <div className="text-lg font-black text-emerald-400">
-                                    {Math.round(exerciseEntries.reduce((sum, e) => sum + e.caloriesBurned, 0) / (exerciseEntries.length || 1))}
-                                </div>
-                                <div className="text-[9px] text-slate-500 font-bold uppercase">Snitt kcal/pass</div>
-                            </div>
-                        </div>
-                        <div className="mt-4 pt-4 border-t border-white/5">
-                            <div className="text-[9px] text-slate-500 font-bold uppercase mb-2">Topp-aktivitet</div>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xl">
-                                    {EXERCISE_TYPES.find(t => t.type === (
-                                        Object.entries(exerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
-                                            .sort((a, b) => b[1] - a[1])[0]?.[0] as ExerciseType || 'other'
-                                    ))?.icon}
-                                </span>
-                                <span className="text-xs font-bold text-white uppercase tracking-widest">
-                                    {EXERCISE_TYPES.find(t => t.type === (
-                                        Object.entries(exerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
-                                            .sort((a, b) => b[1] - a[1])[0]?.[0] as ExerciseType || 'other'
-                                    ))?.label || 'Ingen data'}
-                                </span>
+                            <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
+                                <button onClick={() => setZoomLevel(z => Math.min(12, z + 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">-</button>
+                                <span className="px-2 flex items-center text-[10px] font-mono text-slate-500">{zoomLevel}m</span>
+                                <button onClick={() => setZoomLevel(z => Math.max(2, z - 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">+</button>
                             </div>
                         </div>
                     </div>
-
-                    <div className="stat-card">
-                        <span className="stat-label">Nuvarande Vikt</span>
-                        <div className="stat-value-group">
-                            <span className="stat-value">{getLatestWeight()}</span>
-                            <span className="stat-unit">kg</span>
-                        </div>
-                        <p className="text-[10px] text-slate-500 mt-2">Senast uppdaterad: {weightEntries[0]?.date || 'Aldrig'}</p>
+                    <div className="h-64 bg-slate-900/30 rounded-xl border border-white/5 relative overflow-hidden mt-4">
+                        <CycleYearChart
+                            cycles={trainingCycles}
+                            weightEntries={weightEntries}
+                            nutrition={dailyNutrition}
+                            exercises={exerciseEntries}
+                            zoomMonths={zoomLevel}
+                            visibleMetrics={visibleMetrics}
+                            onEditCycle={handleEditCycle}
+                            onCreateCycleAfter={handleCreateCycleAfter}
+                        />
                     </div>
                 </div>
 
-                {/* Log & Trends */}
-                <div className="main-panel space-y-6">
-                    {/* Year Visualization */}
-                    <div className="content-card">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="section-title">Årsöversikt & Utveckling</h3>
-                            <div className="flex gap-2">
-                                <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
-                                    {[
-                                        { id: 'calories', label: 'Kcal', icon: '🔥' },
-                                        { id: 'volume', label: 'Volym', icon: '⚖️' },
-                                        { id: 'workouts', label: 'Pass', icon: '💪' }
-                                    ].map(m => (
-                                        <button
-                                            key={m.id}
-                                            onClick={() => setVisibleMetrics(prev => ({ ...prev, [m.id]: !prev[m.id as keyof typeof prev] }))}
-                                            className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${visibleMetrics[m.id as keyof typeof visibleMetrics]
-                                                ? 'bg-emerald-500 text-slate-950'
-                                                : 'text-slate-400 hover:text-white'
-                                                }`}
-                                        >
-                                            <span>{m.icon}</span>
-                                            <span className="hidden sm:inline">{m.label}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                                <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
-                                    <button onClick={() => setZoomLevel(z => Math.min(12, z + 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">-</button>
-                                    <span className="px-2 flex items-center text-[10px] font-mono text-slate-500">{zoomLevel}m</span>
-                                    <button onClick={() => setZoomLevel(z => Math.max(2, z - 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">+</button>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="h-64 bg-slate-900/30 rounded-xl border border-white/5 relative overflow-hidden mt-4">
-                            <CycleYearChart
-                                cycles={trainingCycles}
-                                weightEntries={weightEntries}
-                                nutrition={dailyNutrition}
-                                exercises={exerciseEntries}
-                                zoomMonths={zoomLevel}
-                                visibleMetrics={visibleMetrics}
-                                onEditCycle={handleEditCycle}
-                                onCreateCycleAfter={handleCreateCycleAfter}
-                            />
-                        </div>
+                <CycleDetailModal
+                    isOpen={isCycleDetailOpen}
+                    onClose={() => setIsCycleDetailOpen(false)}
+                    cycle={selectedCycle}
+                    onSave={updateTrainingCycle}
+                    onDelete={deleteTrainingCycle}
+                    exercises={exerciseEntries}
+                    nutrition={dailyNutrition}
+                    onAddGoal={addGoal}
+                />
+
+                {/* Training Load & Weight Correlation Dashboard */}
+                <TrainingLoadCorrelation
+                    exercises={exerciseEntries}
+                    weightEntries={weightEntries}
+                />
+
+                {/* Exercise Log */}
+                <div className="content-card">
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="section-title">Träningsdagbok</h3>
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="bg-slate-800 border-none rounded-lg text-xs p-2 text-white"
+                        />
                     </div>
 
-                    <CycleDetailModal
-                        isOpen={isCycleDetailOpen}
-                        onClose={() => setIsCycleDetailOpen(false)}
-                        cycle={selectedCycle}
-                        onSave={updateTrainingCycle}
-                        onDelete={deleteTrainingCycle}
-                        exercises={exerciseEntries}
-                        nutrition={dailyNutrition}
-                        onAddGoal={addGoal}
-                    />
-
-                    {/* Training Load & Weight Correlation Dashboard */}
-                    <TrainingLoadCorrelation
-                        exercises={exerciseEntries}
-                        weightEntries={weightEntries}
-                    />
-
-                    {/* Exercise Log */}
-                    <div className="content-card">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="section-title">Träningsdagbok</h3>
-                            <input
-                                type="date"
-                                value={selectedDate}
-                                onChange={(e) => setSelectedDate(e.target.value)}
-                                className="bg-slate-800 border-none rounded-lg text-xs p-2 text-white"
-                            />
-                        </div>
-
-                        <div className="exercise-list space-y-2">
-                            {dailyExercises.length > 0 ? (
-                                dailyExercises.map(ex => (
-                                    <div
-                                        key={ex.id}
-                                        className="exercise-row p-3 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between group hover:bg-white/10 transition-all cursor-pointer"
-                                        onClick={() => handleEditExercise(ex)}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-2xl">{EXERCISE_TYPES.find(t => t.type === ex.type)?.icon}</span>
-                                            <div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold text-sm">{EXERCISE_TYPES.find(t => t.type === ex.type)?.label}</span>
-                                                    <span className={`text-[10px] font-bold uppercase ${INTENSITIES.find(i => i.value === ex.intensity)?.color}`}>
-                                                        {INTENSITIES.find(i => i.value === ex.intensity)?.label}
-                                                    </span>
-                                                </div>
-                                                <div className="text-xs text-slate-500">{ex.durationMinutes} min • {ex.notes || 'Inga anteckningar'}</div>
+                    <div className="exercise-list space-y-2">
+                        {dailyExercises.length > 0 ? (
+                            dailyExercises.map(ex => (
+                                <div
+                                    key={ex.id}
+                                    className="exercise-row p-3 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between group hover:bg-white/10 transition-all cursor-pointer"
+                                    onClick={() => handleEditExercise(ex)}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-2xl">{EXERCISE_TYPES.find(t => t.type === ex.type)?.icon}</span>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-bold text-sm">{EXERCISE_TYPES.find(t => t.type === ex.type)?.label}</span>
+                                                <span className={`text-[10px] font-bold uppercase ${INTENSITIES.find(i => i.value === ex.intensity)?.color}`}>
+                                                    {INTENSITIES.find(i => i.value === ex.intensity)?.label}
+                                                </span>
                                             </div>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <span className="text-rose-400 font-bold text-sm">-{ex.caloriesBurned} kcal</span>
-                                            <button
-                                                className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-all"
-                                                onClick={(e) => { e.stopPropagation(); deleteExercise(ex.id); }}
-                                            >
-                                                🗑️
-                                            </button>
+                                            <div className="text-xs text-slate-500">{ex.durationMinutes} min • {ex.notes || 'Inga anteckningar'}</div>
                                         </div>
                                     </div>
-                                ))
-                            ) : (
-                                <div className="text-center py-8 text-slate-600 italic text-sm">Ingen träning loggad för {selectedDate}</div>
-                            )}
-                        </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="text-rose-400 font-bold text-sm">-{ex.caloriesBurned} kcal</span>
+                                        <button
+                                            className="opacity-0 group-hover:opacity-100 p-1 hover:text-rose-500 transition-all"
+                                            onClick={(e) => { e.stopPropagation(); deleteExercise(ex.id); }}
+                                        >
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="text-center py-8 text-slate-600 italic text-sm">Ingen träning loggad för {selectedDate}</div>
+                        )}
                     </div>
                 </div>
             </div>
+
 
             {/* Data Analysis Section - Full Width */}
             <div className="content-card mt-6">
@@ -936,6 +886,6 @@ export function TrainingPage() {
                 setSelectedDate={setSelectedDate}
                 onSave={handleAddWeight}
             />
-        </div>
+        </div >
     );
 }

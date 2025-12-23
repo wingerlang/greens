@@ -330,13 +330,13 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
         },
         distanceKm: activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
         durationMinutes: Math.round(activity.moving_time / 60),
-        elapsedDurationMinutes: Math.round(activity.elapsed_time / 60),
         calories: activity.calories || Math.round((activity.moving_time / 60) * 8), // Rough estimate fallback
 
         avgHeartRate: activity.average_heartrate,
         maxHeartRate: activity.max_heartrate,
         elevationGain: activity.total_elevation_gain,
 
+        activityType: mapStravaType(activity.type),
         notes: activity.name
     };
 }

@@ -21,6 +21,7 @@ import { CompetitionPage } from './pages/CompetitionPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { RegisterPage } from './pages/RegisterPage.tsx';
 import { CoachPage } from './pages/CoachPage.tsx';
+import { PublicProfilePage } from './pages/PublicProfilePage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -72,6 +73,7 @@ export function App() {
                                                 <Route path="admin" element={<AdminPage />} />
                                                 <Route path="api" element={<ApiPage />} />
                                                 <Route path="docs" element={<DocumentationPage />} />
+                                                <Route path="u/:handle" element={<PublicProfilePage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

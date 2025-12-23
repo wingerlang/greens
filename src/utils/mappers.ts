@@ -5,7 +5,7 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
     return {
         id: a.id,
         date: a.date,
-        type: (a.plan?.activityType || a.performance.source?.source === 'strava' ? 'running' : 'other') as any,
+        type: (a.performance?.activityType || a.plan?.activityType || (a.performance?.source?.source === 'strava' ? 'running' : 'other')) as any,
         durationMinutes: a.performance.durationMinutes,
         intensity: 'moderate', // default
         caloriesBurned: a.performance.calories,

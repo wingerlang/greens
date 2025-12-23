@@ -87,7 +87,50 @@ export interface User {
     settings: UserSettings;
     householdId?: string; // For shared plans
     createdAt: string;
+
+    // Social & Privacy (Phase 6)
+    handle?: string; // Unique @handle
+    bio?: string;
+    location?: string;
+    avatarUrl?: string; // Explicit field for social
+    followersCount?: number;
+    followingCount?: number;
+    privacy?: UserPrivacy;
 }
+
+export interface UserPrivacy {
+    isPublic: boolean; // If false, only followers can see
+    allowFollowers: boolean; // If false, no one can follow
+
+    // Visibility Toggles
+    showWeight: boolean; // Hide sensitive metrics
+    showHeight: boolean;
+    showAge: boolean;
+
+    showDetailedTraining: boolean; // Show exact workouts vs just summary
+    showSleep: boolean;
+    showCalories: boolean;
+    showNutrition: boolean; // Show macro breakdown
+
+    // Activity Types
+    showRunning: boolean;
+    showLifting: boolean;
+}
+
+export const DEFAULT_PRIVACY: UserPrivacy = {
+    isPublic: true,
+    allowFollowers: true,
+    showWeight: false,
+    showHeight: false,
+    showAge: false,
+    showDetailedTraining: true,
+    showSleep: false,
+    showCalories: false,
+    showNutrition: false,
+    showRunning: true,
+    showLifting: true
+};
+
 
 export const DEFAULT_USER_SETTINGS: UserSettings = {
     theme: 'dark',
@@ -696,12 +739,13 @@ export interface ActivityPlanSection {
  * Defines what was actually done.
  */
 export interface ActivityPerformanceSection {
-    source: DataSourceInfo;
+    // Provenance
+    source?: DataSourceInfo;
 
-    // Actual Metrics
-    distanceKm: number;
-    durationMinutes: number; // Moving time
-    elapsedDurationMinutes?: number; // Total time
+    // Core Metrics
+    activityType?: ExerciseType; // Captures actual performed type (e.g. walked instead of ran)
+    durationMinutes: number;
+    distanceKm?: number;
     calories: number;
 
     // Physiological
