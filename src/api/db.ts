@@ -684,6 +684,120 @@ export async function startServer(port: number) {
         }
 
 
+        // ==========================================
+        // User Profile API Routes 👤
+        // ==========================================
+
+        // GET /api/user/profile - Get current user's full profile
+        if (url.pathname === "/api/user/profile" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const user = await getUserById(session.userId);
+                if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+                const profile = await getUserProfile(session.userId);
+                return new Response(JSON.stringify({
+                    ...sanitizeUser(user),
+                    ...profile,
+                    streak: await calculateStreak(session.userId)
+                }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // PATCH /api/user/profile - Update profile fields
+        if (url.pathname === "/api/user/profile" && method === "PATCH") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const body = await req.json();
+                const allowedFields = ['name', 'bio', 'location', 'handle', 'birthdate', 'avatarUrl', 'website', 'phone'];
+                const updates: Record<string, any> = {};
+
+                for (const field of allowedFields) {
+                    if (body[field] !== undefined) {
+                        updates[field] = body[field];
+                    }
+                }
+
+                // Handle uniqueness check
+                if (updates.handle) {
+                    const existingUser = await kv.get(['users_by_handle', updates.handle.toLowerCase()]);
+                    if (existingUser.value && existingUser.value !== session.userId) {
+                        return new Response(JSON.stringify({ error: "Handle taken" }), { status: 409, headers });
+                    }
+                    // Reserve handle
+                    await kv.set(['users_by_handle', updates.handle.toLowerCase()], session.userId);
+                }
+
+                await updateUserProfile(session.userId, updates);
+                return new Response(JSON.stringify({ success: true, ...updates }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/user/check-handle/:handle - Check if handle is available
+        if (url.pathname.startsWith("/api/user/check-handle/") && method === "GET") {
+            try {
+                const handle = url.pathname.split('/').pop()?.toLowerCase();
+                if (!handle || handle.length < 3) {
+                    return new Response(JSON.stringify({ available: false, reason: "Too short" }), { headers });
+                }
+                if (!/^[a-z0-9_]+$/.test(handle)) {
+                    return new Response(JSON.stringify({ available: false, reason: "Invalid characters" }), { headers });
+                }
+
+                const existing = await kv.get(['users_by_handle', handle]);
+                const available = !existing.value;
+                return new Response(JSON.stringify({ available, handle }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // PATCH /api/user/privacy - Update privacy settings
+        if (url.pathname === "/api/user/privacy" && method === "PATCH") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const body = await req.json();
+                const profile = await getUserProfile(session.userId);
+                const newPrivacy = { ...(profile?.privacy || {}), ...body };
+
+                await updateUserProfile(session.userId, { privacy: newPrivacy });
+                return new Response(JSON.stringify({ success: true, privacy: newPrivacy }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/user/streak - Get current streak
+        if (url.pathname === "/api/user/streak" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const streak = await calculateStreak(session.userId);
+                return new Response(JSON.stringify({ streak }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
         // Disconnect Strava
         if (url.pathname === "/api/strava/disconnect" && method === "POST") {
             const token = req.headers.get("Authorization")?.replace("Bearer ", "");
@@ -741,4 +855,89 @@ async function getStravaTokens(userId: string): Promise<StoredStravaTokens | nul
 
 async function deleteStravaTokens(userId: string) {
     await kv.delete(['strava_tokens', userId]);
+}
+
+// ==========================================
+// User Profile Storage
+// ==========================================
+
+interface UserProfile {
+    name?: string;
+    bio?: string;
+    location?: string;
+    handle?: string;
+    birthdate?: string;
+    avatarUrl?: string;
+    website?: string;
+    phone?: string;
+    privacy?: {
+        isPublic?: boolean;
+        allowFollowers?: boolean;
+        showWeight?: boolean;
+        showAge?: boolean;
+        showCalories?: boolean;
+        showDetailedTraining?: boolean;
+        showSleep?: boolean;
+    };
+}
+
+async function getUserProfile(userId: string): Promise<UserProfile | null> {
+    const entry = await kv.get(['user_profiles', userId]);
+    return entry.value as UserProfile | null;
+}
+
+async function updateUserProfile(userId: string, updates: Partial<UserProfile>) {
+    const existing = await getUserProfile(userId) || {};
+    const merged = { ...existing, ...updates };
+    await kv.set(['user_profiles', userId], merged);
+}
+
+// ==========================================
+// Streak Calculation
+// ==========================================
+
+async function calculateStreak(userId: string): Promise<number> {
+    // Get all activities for user, sorted by date desc
+    const activities: { date: string }[] = [];
+    const iter = kv.list({ prefix: ['activities', userId] }, { limit: 365, reverse: true });
+
+    for await (const entry of iter) {
+        const activity = entry.value as { date: string };
+        if (activity?.date) {
+            activities.push(activity);
+        }
+    }
+
+    if (activities.length === 0) return 0;
+
+    // Get unique dates
+    const uniqueDates = [...new Set(activities.map(a => a.date.split('T')[0]))].sort().reverse();
+
+    // Calculate consecutive days from today
+    let streak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < uniqueDates.length; i++) {
+        const activityDate = new Date(uniqueDates[i]);
+        activityDate.setHours(0, 0, 0, 0);
+
+        const expectedDate = new Date(today);
+        expectedDate.setDate(today.getDate() - i);
+
+        if (activityDate.getTime() === expectedDate.getTime()) {
+            streak++;
+        } else if (activityDate.getTime() === expectedDate.getTime() - 86400000) {
+            // Allow 1 day gap for "yesterday" on first check
+            if (i === 0) {
+                streak++;
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+
+    return streak;
 }

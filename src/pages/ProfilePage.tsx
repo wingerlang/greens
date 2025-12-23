@@ -6,16 +6,10 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { LoginStat } from '../api/db.ts';
 import { StravaConnectionCard } from '../components/integrations/StravaConnectionCard.tsx';
 import { ActivityInbox } from '../components/integrations/ActivityInbox.tsx';
+import { profileService, ProfileData } from '../services/profileService.ts';
 import './ProfilePage.css';
 
 const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
-
-// Mock function to check handle availability
-async function checkHandleAvailable(handle: string): Promise<boolean> {
-    const taken = ['admin', 'winger', 'test', 'greens', 'support'];
-    await new Promise(r => setTimeout(r, 300));
-    return !taken.includes(handle.toLowerCase());
-}
 
 // Collapsible section wrapper
 function CollapsibleSection({ id, title, icon, defaultOpen = true, children }: {
@@ -52,7 +46,7 @@ export function ProfilePage() {
     const { currentUser } = useData();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Profile data state (would come from backend in production)
+    // Profile data state
     const [profile, setProfile] = useState({
         name: currentUser?.name || 'Admin Anders',
         handle: currentUser?.handle || 'admin_anders',
@@ -63,6 +57,7 @@ export function ProfilePage() {
         phone: '',
         website: '',
         avatarUrl: currentUser?.avatarUrl || '',
+        streak: 0,
 
         // Physical
         weight: 75,
@@ -85,20 +80,62 @@ export function ProfilePage() {
         // Preferences
         preferredUnits: 'metric' as 'metric' | 'imperial',
         language: 'sv',
-        weekStartsOn: 1, // Monday
+        weekStartsOn: 1,
+
+        // Privacy
+        privacy: {
+            isPublic: true,
+            allowFollowers: true,
+            showWeight: false,
+            showAge: false,
+            showCalories: false,
+            showDetailedTraining: true,
+            showSleep: false,
+        }
     });
 
     const [editingField, setEditingField] = useState<string | null>(null);
     const [handleStatus, setHandleStatus] = useState<'idle' | 'checking' | 'available' | 'taken'>('idle');
+    const [saving, setSaving] = useState(false);
 
-    const updateProfile = (field: string, value: any) => {
+    // Fetch profile from backend on mount
+    useEffect(() => {
+        profileService.getProfile().then(data => {
+            if (data) {
+                setProfile(prev => ({ ...prev, ...data }));
+            }
+        });
+    }, []);
+
+    // Save profile field to backend (debounced)
+    const saveField = async (field: string, value: any) => {
+        setSaving(true);
+        await profileService.updateProfile({ [field]: value });
+        setSaving(false);
+    };
+
+    const updateProfile = async (field: string, value: any) => {
         setProfile(prev => ({ ...prev, [field]: value }));
+
         if (field === 'handle') {
             setHandleStatus('checking');
-            checkHandleAvailable(value).then(available => {
-                setHandleStatus(available ? 'available' : 'taken');
-            });
+            const result = await profileService.checkHandle(value);
+            setHandleStatus(result.available ? 'available' : 'taken');
         }
+    };
+
+    const commitField = (field: string) => {
+        setEditingField(null);
+        const value = (profile as any)[field];
+        if (value !== undefined) {
+            saveField(field, value);
+        }
+    };
+
+    const updatePrivacy = async (key: string, value: boolean) => {
+        const newPrivacy = { ...profile.privacy, [key]: value };
+        setProfile(prev => ({ ...prev, privacy: newPrivacy }));
+        await profileService.updatePrivacy({ [key]: value });
     };
 
     const handleAvatarClick = () => fileInputRef.current?.click();
@@ -151,13 +188,13 @@ export function ProfilePage() {
                                 value={profile.name}
                                 isEditing={editingField === 'name'}
                                 onEdit={() => setEditingField('name')}
-                                onBlur={() => setEditingField(null)}
+                                onBlur={() => commitField('name')}
                                 onChange={(v) => updateProfile('name', v)}
                                 className="text-3xl font-black text-white"
                             />
                             <span className={`text-[10px] px-2.5 py-1 rounded-full uppercase tracking-widest font-bold ${currentUser?.plan === 'evergreen'
-                                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
                                 }`}>
                                 {currentUser?.plan === 'evergreen' ? '🌲 Evergreen' : '⭐ Pro'}
                             </span>
@@ -170,7 +207,7 @@ export function ProfilePage() {
                                 value={profile.handle}
                                 isEditing={editingField === 'handle'}
                                 onEdit={() => setEditingField('handle')}
-                                onBlur={() => setEditingField(null)}
+                                onBlur={() => commitField('handle')}
                                 onChange={(v) => updateProfile('handle', v.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                                 className="text-emerald-400 font-mono text-sm"
                             />
@@ -184,7 +221,7 @@ export function ProfilePage() {
                             value={profile.bio}
                             isEditing={editingField === 'bio'}
                             onEdit={() => setEditingField('bio')}
-                            onBlur={() => setEditingField(null)}
+                            onBlur={() => commitField('bio')}
                             onChange={(v) => updateProfile('bio', v)}
                             placeholder="Lägg till din bio... 🏃‍♂️💪"
                         />
@@ -200,7 +237,7 @@ export function ProfilePage() {
                         <div className="flex gap-6 justify-center md:justify-start text-xs pt-2">
                             <StatBadge value={currentUser?.followersCount || 42} label="följare" />
                             <StatBadge value={currentUser?.followingCount || 18} label="följer" />
-                            <StatBadge value="🔥 127" label="streak" />
+                            <StatBadge value={`🔥 ${profile.streak}`} label="streak" />
                             {calculateAge(profile.birthdate) && <StatBadge value={calculateAge(profile.birthdate)!} label="år" />}
                         </div>
 
@@ -293,14 +330,13 @@ export function ProfilePage() {
 
                 <CollapsibleSection id="privacy" title="Integritet" icon="🔒">
                     <div className="grid md:grid-cols-2 gap-3">
-                        <PrivacyToggle label="Publik Profil" desc="Syns i sök" active={currentUser?.privacy?.isPublic ?? true} onToggle={() => { }} />
-                        <PrivacyToggle label="Tillåt Följare" active={currentUser?.privacy?.allowFollowers ?? true} onToggle={() => { }} />
-                        <PrivacyToggle label="Visa Vikt" active={currentUser?.privacy?.showWeight ?? false} onToggle={() => { }} />
-                        <PrivacyToggle label="Visa Ålder" active={currentUser?.privacy?.showAge ?? false} onToggle={() => { }} />
-                        <PrivacyToggle label="Visa Kalorier" active={currentUser?.privacy?.showCalories ?? false} onToggle={() => { }} />
-                        <PrivacyToggle label="Visa Träning" active={currentUser?.privacy?.showDetailedTraining ?? true} onToggle={() => { }} />
-                        <PrivacyToggle label="Visa Sömn" active={currentUser?.privacy?.showSleep ?? false} onToggle={() => { }} />
-                        <PrivacyToggle label="Visa PRs" active={true} onToggle={() => { }} />
+                        <PrivacyToggle label="Publik Profil" desc="Syns i sök" active={profile.privacy.isPublic} onToggle={() => updatePrivacy('isPublic', !profile.privacy.isPublic)} />
+                        <PrivacyToggle label="Tillåt Följare" active={profile.privacy.allowFollowers} onToggle={() => updatePrivacy('allowFollowers', !profile.privacy.allowFollowers)} />
+                        <PrivacyToggle label="Visa Vikt" active={profile.privacy.showWeight} onToggle={() => updatePrivacy('showWeight', !profile.privacy.showWeight)} />
+                        <PrivacyToggle label="Visa Ålder" active={profile.privacy.showAge} onToggle={() => updatePrivacy('showAge', !profile.privacy.showAge)} />
+                        <PrivacyToggle label="Visa Kalorier" active={profile.privacy.showCalories} onToggle={() => updatePrivacy('showCalories', !profile.privacy.showCalories)} />
+                        <PrivacyToggle label="Visa Träning" active={profile.privacy.showDetailedTraining} onToggle={() => updatePrivacy('showDetailedTraining', !profile.privacy.showDetailedTraining)} />
+                        <PrivacyToggle label="Visa Sömn" active={profile.privacy.showSleep} onToggle={() => updatePrivacy('showSleep', !profile.privacy.showSleep)} />
                     </div>
                 </CollapsibleSection>
 
@@ -325,8 +361,8 @@ export function ProfilePage() {
                                 {ALL_MEALS.map(meal => (
                                     <button key={meal} onClick={() => toggleMealVisibility(meal)}
                                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${settings.visibleMeals.includes(meal)
-                                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                                                : 'bg-slate-800 text-slate-500'
+                                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                            : 'bg-slate-800 text-slate-500'
                                             }`}
                                     >{MEAL_TYPE_LABELS[meal]}</button>
                                 ))}
