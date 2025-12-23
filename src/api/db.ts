@@ -1,7 +1,9 @@
-
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { encodeBase64 } from "jsr:@std/encoding/base64";
 import * as strava from './strava.ts';
+import { activityRepo } from './repositories/activityRepository.ts';
+import { UniversalActivity } from '../models/types.ts';
+import { reconciliationService } from './services/reconciliationService.ts';
 
 // ==========================================
 // Types
@@ -35,7 +37,13 @@ export interface Session {
 // Database Logic (Deno KV)
 // ==========================================
 
-const kv = await Deno.openKv();
+// ==========================================
+// Database Logic (Deno KV)
+// ==========================================
+
+import { kv } from './kv.ts';
+
+// const kv = await Deno.openKv(); // REPLACED with shared instance
 
 async function createUser(username: string, password: string, email?: string): Promise<User | null> {
     // Check if exists
@@ -439,6 +447,137 @@ export async function startServer(port: number) {
                 activities: mapped,
                 count: mapped.length,
             }), { headers });
+        }
+
+        // --- ACTIVITY ROUTES (Universal Model) ---
+
+        // GET /api/activities?start=2024-01-01&end=2024-01-31
+        if (url.pathname === "/api/activities" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const startDate = url.searchParams.get('start');
+                const endDate = url.searchParams.get('end');
+
+                if (!startDate || !endDate) {
+                    return new Response(JSON.stringify({ error: "Missing start/end date params" }), { status: 400, headers });
+                }
+
+                const activities = await activityRepo.getActivitiesByDateRange(session.userId, startDate, endDate);
+                return new Response(JSON.stringify({ activities }), { headers });
+            } catch (e) {
+                console.error("GET /api/activities error:", e);
+                return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+            }
+        }
+
+        // POST /api/activities (Create/Update)
+        if (url.pathname === "/api/activities" && method === "POST") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const activity = await req.json() as UniversalActivity;
+
+                // Security check: Ensure userId matches session
+                if (activity.userId !== session.userId) {
+                    return new Response(JSON.stringify({ error: "UserId mismatch" }), { status: 403, headers });
+                }
+
+                await activityRepo.saveActivity(activity);
+                return new Response(JSON.stringify({ success: true, id: activity.id }), { status: 200, headers });
+            } catch (e) {
+                console.error("POST /api/activities error:", e);
+                return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+            }
+        }
+
+        // DELETE /api/activities/:id/:date
+        // Note: We need the date for the key, so pass it in query or path
+        // url pattern: /api/activities/123?date=2024-01-01
+        if (url.pathname.startsWith("/api/activities/") && method === "DELETE") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const parts = url.pathname.split('/');
+                const activityId = parts[3];
+                const date = url.searchParams.get('date');
+
+                if (!activityId || !date) {
+                    return new Response(JSON.stringify({ error: "Missing ID or Date" }), { status: 400, headers });
+                }
+
+                // Verify ownership before delete
+                const activity = await activityRepo.getActivity(session.userId, date, activityId);
+                if (!activity) {
+                    return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
+                }
+
+                await activityRepo.deleteActivity(activity);
+                return new Response(JSON.stringify({ success: true }), { status: 200, headers });
+
+            } catch (e) {
+                console.error("DELETE /api/activities error:", e);
+                return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+            }
+        }
+
+        // Sync Strava Activities (Trigger Reconciliation)
+        if (url.pathname === "/api/strava/sync" && method === "POST") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const stravaTokens = await getStravaTokens(session.userId);
+                if (!stravaTokens) {
+                    return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
+                }
+
+                // Check/refresh token (reuse logic? ideally extract into helper)
+                let accessToken = stravaTokens.accessToken;
+                if (Date.now() > stravaTokens.expiresAt) {
+                    const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
+                    if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
+                    accessToken = refreshed.accessToken;
+                    await saveStravaTokens(session.userId, {
+                        ...stravaTokens,
+                        accessToken: refreshed.accessToken,
+                        refreshToken: refreshed.refreshToken,
+                        expiresAt: refreshed.expiresAt
+                    });
+                }
+
+                // Fetch last 30 activities (or use 'after' param based on lastSync)
+                const lastSyncDate = stravaTokens.lastSync ? new Date(stravaTokens.lastSync).getTime() / 1000 : undefined;
+
+                // Fetch from Strava
+                const activities = await strava.getStravaActivities(accessToken, {
+                    after: lastSyncDate,
+                    perPage: 30
+                });
+
+                // Reconcile
+                const result = await reconciliationService.reconcileStravaActivities(session.userId, activities);
+
+                // Update last sync
+                await saveStravaTokens(session.userId, { ...stravaTokens, lastSync: new Date().toISOString() });
+
+                return new Response(JSON.stringify({ success: true, result }), { headers });
+
+            } catch (e) {
+                console.error("POST /api/strava/sync error:", e);
+                return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
+            }
         }
 
         // Disconnect Strava

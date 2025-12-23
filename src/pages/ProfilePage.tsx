@@ -5,6 +5,7 @@ import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { LoginStat } from '../api/db.ts';
 import { StravaConnectionCard } from '../components/integrations/StravaConnectionCard.tsx';
+import { ActivityInbox } from '../components/integrations/ActivityInbox.tsx';
 import './ProfilePage.css';
 
 const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -45,6 +46,7 @@ export function ProfilePage() {
                 <h2>Kopplingar</h2>
                 <div className="grid gap-4">
                     <StravaConnectionCard />
+                    <ActivityInbox />
                     {/* Garmin card will go here */}
                 </div>
             </section>

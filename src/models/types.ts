@@ -646,6 +646,117 @@ export interface LeaderboardEntry {
 }
 
 // ============================================
+// Phase 6: Universal Activity Model (Database Overhaul)
+// ============================================
+
+export type ActivityStatus = 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'MISSED';
+export type ActivitySource = 'manual' | 'strava' | 'garmin' | 'apple_health';
+
+/**
+ * The Data Source for a specific part of the activity.
+ * e.g., Plan came from "Coach", Performance came from "Strava"
+ */
+export interface DataSourceInfo {
+    source: ActivitySource;
+    externalId?: string;
+    importedAt?: string;
+}
+
+/**
+ * Phase 1: The Plan
+ * Defines what was intended to be done.
+ */
+export interface ActivityPlanSection {
+    // Core Identity
+    title: string;
+    description?: string;
+    activityType: ExerciseType; // 'running', 'cycling', etc.
+    activityCategory?: PlannedActivity['category']; // 'LONG_RUN', 'INTERVALS' etc.
+
+    // Usage in Coach Logic
+    templateId?: string; // If this came from a reusable plan template
+    trainingPlanId?: string; // ID of the specific active plan instance
+
+    // Planned Metrics
+    distanceKm: number;
+    durationMinutes?: number;
+    targetPace?: string;   // e.g. "5:30/km"
+    targetHrZone?: number; // 1-5
+
+    // Structured Workout Data
+    structure?: {
+        warmupKm: number;
+        mainSet: { reps: number; distKm: number; pace: string; restMin: number }[];
+        cooldownKm: number;
+    };
+}
+
+/**
+ * Phase 2: The Performance (Execution)
+ * Defines what was actually done.
+ */
+export interface ActivityPerformanceSection {
+    source: DataSourceInfo;
+
+    // Actual Metrics
+    distanceKm: number;
+    durationMinutes: number; // Moving time
+    elapsedDurationMinutes?: number; // Total time
+    calories: number;
+
+    // Physiological
+    avgHeartRate?: number;
+    maxHeartRate?: number;
+    elevationGain?: number;
+
+    // Advanced Data (Streams)
+    paceCurve?: number[]; // Pace at different distances? Or stream ref?
+    hrCurve?: number[];
+
+    // Qualitative (RPE/Feel) - Moved to Analysis or here? 
+    // Usually RPE is subjective 'performance' data.
+    rpe?: number; // 1-10
+    feel?: 'good' | 'average' | 'bad';
+    notes?: string;
+}
+
+/**
+ * Phase 3: Analysis & Insights
+ * Computed derived values.
+ */
+export interface ActivityAnalysisSection {
+    complianceScore?: number; // 0-100% match with Plan
+    effortScore?: number; // e.g. Relative Effort
+    trainingLoad?: {
+        score: number; // TSS
+        type: 'hr' | 'pace' | 'power';
+    };
+    benefits?: string[]; // "Improved Aerobic Base"
+    badges?: string[]; // "Fastest 5k this year"
+}
+
+/**
+ * Universal Activity Entity
+ * Merges PlannedActivity and ExerciseEntry into one Source of Truth.
+ */
+export interface UniversalActivity {
+    id: string;
+    userId: string;
+    date: string; // ISO YYYY-MM-DD
+
+    // High-level status
+    status: ActivityStatus;
+
+    // The Three Pillars
+    plan?: ActivityPlanSection;
+    performance?: ActivityPerformanceSection;
+    analysis?: ActivityAnalysisSection;
+
+    createdAt: string;
+    updatedAt: string;
+}
+
+// ============================================
 // Phase 6: Analytics & AI Insights
 // ============================================
 

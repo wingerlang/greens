@@ -1,7 +1,9 @@
-/**
- * Strava Integration Service
- * OAuth 2.0 flow and activity data fetching
- */
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import {
+    UniversalActivity,
+    ActivityPerformanceSection,
+    ActivitySource
+} from '../models/types.ts';
 
 // Environment variables (set these in your deployment)
 const STRAVA_CLIENT_ID = Deno.env.get('STRAVA_CLIENT_ID') || '';
@@ -310,4 +312,48 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
 
 export function isStravaConfigured(): boolean {
     return Boolean(STRAVA_CLIENT_ID && STRAVA_CLIENT_SECRET);
+}
+
+// ==========================================
+// Universal Activity Mapping (Database Overhaul)
+// ==========================================
+
+/**
+ * Convert Strava activity to Universal Activity Performance Section
+ */
+export function mapStravaToPerformance(activity: StravaActivity): ActivityPerformanceSection {
+    return {
+        source: {
+            source: 'strava',
+            externalId: activity.id.toString(),
+            importedAt: new Date().toISOString()
+        },
+        distanceKm: activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
+        durationMinutes: Math.round(activity.moving_time / 60),
+        elapsedDurationMinutes: Math.round(activity.elapsed_time / 60),
+        calories: activity.calories || Math.round((activity.moving_time / 60) * 8), // Rough estimate fallback
+
+        avgHeartRate: activity.average_heartrate,
+        maxHeartRate: activity.max_heartrate,
+        elevationGain: activity.total_elevation_gain,
+
+        notes: activity.name
+    };
+}
+
+/**
+ * Create a new Universal Activity from a Strava Activity (Unplanned)
+ */
+export function createUniversalFromStrava(activity: StravaActivity, userId: string): UniversalActivity {
+    const performance = mapStravaToPerformance(activity);
+
+    return {
+        id: crypto.randomUUID(),
+        userId,
+        date: activity.start_date_local.split('T')[0],
+        status: 'COMPLETED',
+        performance,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
 }

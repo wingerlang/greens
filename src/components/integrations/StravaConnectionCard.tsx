@@ -88,6 +88,31 @@ export function StravaConnectionCard() {
         }
     };
 
+    const handleSync = async () => {
+        if (!token) return;
+        setConnecting(true); // Reuse connecting state for basic loading indication
+        try {
+            const res = await fetch('/api/strava/sync', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                const { imported, merged, skipped } = data.result;
+                alert(`Synk klar!\n📥 ${imported} nya pass\n🔄 ${merged} matchade pass\n⏭️ ${skipped} redan synkade`);
+                checkStatus(); // Refresh last sync time
+            } else {
+                alert('Synk misslyckades: ' + (data.error || 'Okänt fel'));
+            }
+        } catch (err) {
+            console.error(err);
+            alert('Kunde inte nå servern');
+        } finally {
+            setConnecting(false);
+        }
+    };
+
     const handleDisconnect = async () => {
         if (!confirm('Är du säker på att du vill koppla bort Strava?')) return;
 
@@ -132,8 +157,8 @@ export function StravaConnectionCard() {
 
                 {/* Status Badge */}
                 <div className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${status?.connected
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-slate-800 text-slate-400 border border-white/10'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'bg-slate-800 text-slate-400 border border-white/10'
                     }`}>
                     {status?.connected ? '✓ Kopplad' : 'Ej kopplad'}
                 </div>
@@ -196,7 +221,7 @@ export function StravaConnectionCard() {
                             Koppla Bort
                         </button>
                         <button
-                            onClick={checkStatus}
+                            onClick={handleSync}
                             className="flex-1 py-3 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 font-bold text-xs uppercase tracking-wider transition-all border border-orange-500/30"
                         >
                             Synka Nu
