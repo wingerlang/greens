@@ -10,8 +10,11 @@ export interface ScoreBreakdown {
     nutrition: number;
     activity: number;
     vitals: number;
+    vitality: number;
     messages: string[];
 }
+
+import { calculateAdaptiveGoals } from './performanceEngine.ts';
 
 /**
  * Calculates a daily score (0-100) based on how well goals were met.
@@ -22,18 +25,28 @@ export function calculateDailyScore(
     exercises: ExerciseEntry[],
     settings: UserSettings
 ): ScoreBreakdown {
+    const goals = calculateAdaptiveGoals(settings, exercises);
     let nutritionScore = 0;
     let activityScore = 0;
     let vitalsScore = 0;
+    let vitalityScore = 0;
     const messages: string[] = [];
 
+    // RDA values for vitality scoring (Iron, B12, Calcium, Zinc)
+    const RDAs = {
+        iron: 14,
+        vitaminB12: 4,
+        calcium: 800,
+        zinc: 10
+    };
+
     // 1. Nutrition (40 points)
-    const kcalGoal = settings.dailyCalorieGoal || 2000;
+    const kcalGoal = goals.calories;
     const kcalDiff = Math.abs(nutrition.calories - kcalGoal);
     const kcalAccuracy = Math.max(0, 1 - (kcalDiff / (kcalGoal * 0.3)));
     nutritionScore += kcalAccuracy * 20;
 
-    const proteinGoal = settings.dailyProteinGoal || 150;
+    const proteinGoal = goals.protein;
     const proteinAccuracy = Math.min(1, nutrition.protein / proteinGoal);
     nutritionScore += proteinAccuracy * 20;
 
@@ -74,13 +87,34 @@ export function calculateDailyScore(
     if (vitals.sleep < sleepGoal) messages.push(`Sikta på 😴 ${sleepGoal - vitals.sleep}h mer sömn inatt.`);
     if (vitals.water >= waterGoal && vitals.sleep >= sleepGoal) messages.push('Vitals är på topp! 💎');
 
-    const total = Math.round(nutritionScore + activityScore + vitalsScore);
+    // 4. Vitality (Micro-nutrients) (20 points - Bonus/Top-off)
+    // We calculate coverage for key vegan nutrients
+    const ironCoverage = Math.min(1.5, (nutrition.iron || 0) / RDAs.iron);
+    const b12Coverage = Math.min(1.5, (nutrition.vitaminB12 || 0) / RDAs.vitaminB12);
+    const calciumCoverage = Math.min(1.5, (nutrition.calcium || 0) / RDAs.calcium);
+    const zincCoverage = Math.min(1.5, (nutrition.zinc || 0) / RDAs.zinc);
+
+    const avgVitality = (ironCoverage + b12Coverage + calciumCoverage + zincCoverage) / 4;
+    vitalityScore = Math.round(Math.min(20, avgVitality * 20));
+
+    if (avgVitality > 0.9) {
+        messages.push('Fantastisk mikronäring idag! 🛡️');
+    } else if (avgVitality < 0.4 && nutrition.calories > 500) {
+        messages.push('Glöm inte mikronäringen! Sikta på mer färgstark mat. 🥦');
+    }
+
+    const total = Math.round((nutritionScore * 0.4) + (activityScore * 1.0) + (vitalsScore * 1.0) + vitalityScore);
+    // Adjusting total weight: Nutrition (20+20=40), Activity (30), Vitals (30), Vitality (20) = 120 potential
+    // Let's keep it simple: sum them up but cap at 100 for display or just let it be a "Pro" score.
+    // For now, let's normalize to 100.
+    const normalizedTotal = Math.min(100, Math.round((nutritionScore + activityScore + vitalsScore + vitalityScore) / 1.2));
 
     return {
-        total,
+        total: normalizedTotal,
         nutrition: Math.round(nutritionScore),
         activity: Math.round(activityScore),
         vitals: Math.round(vitalsScore),
+        vitality: vitalityScore,
         messages
     };
 }

@@ -275,3 +275,116 @@
 .circle {
     animation: dash 1.5s ease-out forwards;
 }
+
+/* Vegan Vitality Dashboard */
+.vitality-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.05) 0%, rgba(16, 185, 129, 0.02) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.1) !important;
+}
+
+.vitality-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.vitality-shield {
+    width: 48px;
+    height: 48px;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+}
+
+.nutrient-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+.nutrient-item {
+    background: rgba(255, 255, 255, 0.02);
+    padding: 1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+    transition: all 0.3s ease;
+}
+
+.nutrient-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.nutrient-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+}
+
+.nutrient-name {
+    font-size: 0.65rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #64748b;
+}
+
+.nutrient-percent {
+    font-size: 0.85rem;
+    font-weight: 900;
+    color: white;
+}
+
+.coverage-track {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 99px;
+    overflow: hidden;
+}
+
+.coverage-bar {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.coverage-bar.low {
+    background: #f43f5e;
+    box-shadow: 0 0 10px rgba(244, 63, 94, 0.3);
+}
+
+.coverage-bar.mid {
+    background: #f59e0b;
+    box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+}
+
+.coverage-bar.optimal {
+    background: #10b981;
+    box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+}
+
+.coverage-bar.super {
+    background: #0ea5e9;
+    box-shadow: 0 0 10px rgba(14, 165, 233, 0.3);
+}
+
+.vitality-summary {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    background: rgba(16, 185, 129, 0.04);
+    padding: 0.75rem 1rem;
+    border-radius: 14px;
+    margin-top: 1.5rem;
+    font-size: 0.75rem;
+    color: #10b981;
+    font-weight: 600;
+    border: 1px dashed rgba(16, 185, 129, 0.1);
+}

@@ -274,23 +274,85 @@ export function HealthPage() {
                     </div>
 
                     <div className="side-grid">
+                        <div className="health-card glass vitality-card">
+                            <div className="vitality-header">
+                                <div className="card-header">
+                                    <h2 className="text-emerald-400">Vegan Vitality</h2>
+                                    <p className="text-[10px]">Kritiska mikronäringsämnen</p>
+                                </div>
+                                <div className="vitality-shield">🛡️</div>
+                            </div>
+
+                            <div className="nutrient-grid">
+                                {Object.entries(stats.vitaminCoverage)
+                                    .filter(([key]) => ['iron', 'vitaminB12', 'calcium', 'zinc'].includes(key))
+                                    .map(([key, val]) => {
+                                        const getColorClass = (v: number) => {
+                                            if (v < 50) return 'low';
+                                            if (v < 90) return 'mid';
+                                            if (v < 150) return 'optimal';
+                                            return 'super';
+                                        };
+
+                                        const labels: Record<string, string> = {
+                                            iron: 'Järn',
+                                            vitaminB12: 'B12',
+                                            calcium: 'Kalcium',
+                                            zinc: 'Zink'
+                                        };
+
+                                        return (
+                                            <div key={key} className="nutrient-item">
+                                                <div className="nutrient-meta">
+                                                    <span className="nutrient-name">{labels[key] || key}</span>
+                                                    <span className="nutrient-percent">{val}%</span>
+                                                </div>
+                                                <div className="coverage-track">
+                                                    <div
+                                                        className={`coverage-bar ${getColorClass(val)}`}
+                                                        style={{ width: `${Math.min(100, (val / 150) * 100)}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                            </div>
+
+                            <div className="vitality-summary">
+                                <span className="text-lg">✨</span>
+                                <div>
+                                    Ditt "Greens Shield" är på {
+                                        Math.round(
+                                            (stats.vitaminCoverage.iron +
+                                                stats.vitaminCoverage.vitaminB12 +
+                                                stats.vitaminCoverage.calcium +
+                                                stats.vitaminCoverage.zinc) / 4
+                                        )
+                                    }%.
+                                    {(stats.vitaminCoverage.vitaminB12 < 50) && " Kom ihåg B12-tillskott!"}
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="health-card glass">
                             <div className="card-header">
-                                <h2>Mikronäring</h2>
+                                <h2>Övriga värden</h2>
                                 <p>Täckningsgrad av RDA.</p>
                             </div>
                             <div className="space-y-3">
-                                {Object.entries(stats.vitaminCoverage).map(([key, val]) => (
-                                    <div key={key} className="space-y-1">
-                                        <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400">
-                                            <span>{key}</span>
-                                            <span>{val}%</span>
+                                {Object.entries(stats.vitaminCoverage)
+                                    .filter(([key]) => !['iron', 'vitaminB12', 'calcium', 'zinc'].includes(key))
+                                    .map(([key, val]) => (
+                                        <div key={key} className="space-y-1">
+                                            <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400">
+                                                <span>{key === 'vitaminC' ? 'Vitamin C' : key === 'vitaminA' ? 'Vitamin A' : key}</span>
+                                                <span>{val}%</span>
+                                            </div>
+                                            <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                                                <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.min(100, val)}%` }} />
+                                            </div>
                                         </div>
-                                        <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
-                                            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${Math.min(100, val)}%` }} />
-                                        </div>
-                                    </div>
-                                ))}
+                                    ))}
                             </div>
                         </div>
                         <div className="health-card glass">

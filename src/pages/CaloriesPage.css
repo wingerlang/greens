@@ -516,3 +516,24 @@
     background: linear-gradient(135deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
     border-color: rgba(239, 68, 68, 0.2);
 }
+
+/* Adaptive Target Styles */
+.adapted-glow {
+    border-color: rgba(16, 185, 129, 0.4) !important;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.1);
+    animation: pulse-glow 2s infinite ease-in-out;
+}
+
+@keyframes pulse-glow {
+    0% {
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+    }
+
+    50% {
+        box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+    }
+
+    100% {
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+    }
+}

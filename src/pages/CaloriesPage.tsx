@@ -9,11 +9,13 @@ import {
     getISODate,
 } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
+import { calculateAdaptiveGoals } from '../utils/performanceEngine.ts';
 import { MacroSummary } from '../components/calories/MacroSummary.tsx';
 import { MealTimeline } from '../components/calories/MealTimeline.tsx';
 import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
 import { NutritionInsights } from '../components/calories/NutritionInsights.tsx';
+import { MacroDistribution } from '../components/calories/MacroDistribution.tsx';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
@@ -252,12 +254,9 @@ export function CaloriesPage() {
         });
     };
 
-    const goals = {
-        calories: settings.dailyCalorieGoal,
-        protein: settings.dailyProteinGoal,
-        carbs: settings.dailyCarbsGoal,
-        fat: settings.dailyFatGoal,
-    };
+    const goals = useMemo(() => {
+        return calculateAdaptiveGoals(settings as any, dailyExercises);
+    }, [settings, dailyExercises]);
 
     const [showInsights, setShowInsights] = useState(false);
 
@@ -333,10 +332,37 @@ export function CaloriesPage() {
                 </div>
             )}
 
+            {goals.isAdapted && (
+                <div className="mx-4 mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-between animate-in slide-in-from-top duration-500">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center text-xl">⚡</div>
+                        <div>
+                            <div className="text-sm font-black text-emerald-400">Performance Buffer Aktiv</div>
+                            <div className="text-[10px] text-emerald-500/70 uppercase font-black tracking-widest">
+                                {goals.extraCalories} extra kcal för återhämtning
+                            </div>
+                        </div>
+                    </div>
+                    <div className="text-right">
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">Ökad återhämtning</div>
+                        <div className="text-xs font-bold text-white">+{Math.round(goals.extraCalories * 0.15 / 4)}g Protein</div>
+                    </div>
+                </div>
+            )}
+
             {showInsights ? (
                 <NutritionInsights onDateSelect={setSelectedDate} />
             ) : (
-                <MacroSummary nutrition={dailyNutrition} goals={goals} viewMode={viewMode} />
+                <>
+                    <MacroSummary nutrition={dailyNutrition} goals={goals} viewMode={viewMode} />
+                    {dailyEntries.length > 0 && (
+                        <MacroDistribution
+                            entries={dailyEntries}
+                            foodItems={foodItems}
+                            recipes={recipes}
+                        />
+                    )}
+                </>
             )}
 
             <MealTimeline

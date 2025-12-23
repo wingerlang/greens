@@ -1,0 +1,121 @@
+.coach-page {
+    font-family: 'Outfit', 'Inter', sans-serif;
+    line-height: 1.6;
+}
+
+.coach-logo-italic {
+    background: linear-gradient(135deg, #10b981, #34d399, #60a5fa);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-style: italic;
+    filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.2));
+}
+
+/* Calendar Grid */
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 12px;
+}
+
+.calendar-day-header {
+    text-align: center;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #94a3b8;
+    padding-bottom: 16px;
+    opacity: 0.6;
+}
+
+.calendar-cell {
+    aspect-ratio: 1;
+    background: rgba(15, 23, 42, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 20px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.calendar-cell:hover {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.08);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+.calendar-cell.has-activity {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Workout Indicators */
+.workout-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.workout-label {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+/* Setup Wizard */
+.setup-step {
+    animation: slideIn 0.4s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Glassmorphism Classes */
+.glass-card {
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    transition: all 0.3s ease;
+}
+
+.glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Mini Statistics */
+.mini-stat {
+    padding: 16px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.mini-stat label {
+    display: block;
+    font-size: 9px;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: #64748b;
+    margin-bottom: 4px;
+}
+
+.mini-stat value {
+    font-size: 18px;
+    font-weight: 900;
+    color: white;
+}

@@ -20,6 +20,7 @@ import { HealthPage } from './pages/HealthPage.tsx';
 import { CompetitionPage } from './pages/CompetitionPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { RegisterPage } from './pages/RegisterPage.tsx';
+import { CoachPage } from './pages/CoachPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -65,6 +66,7 @@ export function App() {
                                                 <Route path="profile" element={<ProfilePage />} />
                                                 <Route path="health" element={<HealthPage />} />
                                                 <Route path="halsa" element={<HealthPage />} />
+                                                <Route path="coach" element={<CoachPage />} />
                                                 <Route path="competition" element={<CompetitionPage />} />
                                                 <Route path="tävling" element={<CompetitionPage />} />
                                                 <Route path="admin" element={<AdminPage />} />

@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import {
     type ExerciseType,
@@ -20,6 +21,7 @@ import { WeightModal } from '../components/training/WeightModal.tsx';
 import { CycleDetailModal } from '../components/training/CycleDetailModal.tsx';
 import { GoalCard } from '../components/training/GoalCard.tsx';
 import { GoalModal } from '../components/training/GoalModal.tsx';
+import { TrainingLoadCorrelation } from '../components/training/TrainingLoadCorrelation.tsx';
 import type { PerformanceGoal } from '../models/types.ts';
 import './TrainingPage.css';
 
@@ -135,6 +137,7 @@ export function TrainingPage() {
     const [smartInput, setSmartInput] = useState('');
     const [weightInput, setWeightInput] = useState(getLatestWeight().toString());
     const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
+
     const [exerciseForm, setExerciseForm] = useState<{
         type: ExerciseType;
         duration: string;
@@ -649,6 +652,12 @@ export function TrainingPage() {
                         exercises={exerciseEntries}
                         nutrition={dailyNutrition}
                         onAddGoal={addGoal}
+                    />
+
+                    {/* Training Load & Weight Correlation Dashboard */}
+                    <TrainingLoadCorrelation
+                        exercises={exerciseEntries}
+                        weightEntries={weightEntries}
                     />
 
                     {/* Exercise Log */}

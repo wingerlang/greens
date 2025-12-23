@@ -39,7 +39,8 @@ const getDefaultData = (): AppData => ({
     weightEntries: [],
     competitions: [],
     trainingCycles: [],
-    performanceGoals: []
+    performanceGoals: [],
+    plannedActivities: []
 });
 
 // Helper to get token (if any)
@@ -98,6 +99,7 @@ export class LocalStorageService implements StorageService {
             if (!data.competitions) data.competitions = [];
             if (!data.trainingCycles) data.trainingCycles = [];
             if (!data.pantryQuantities) data.pantryQuantities = {};
+            if (!data.plannedActivities) data.plannedActivities = [];
         }
 
         return data;

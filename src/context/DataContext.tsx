@@ -29,9 +29,14 @@ import {
     type CompetitionParticipant,
     type TrainingCycle,
     type PerformanceGoal,
+    type CoachConfig,
+    type CoachGoal,
+    type PlannedActivity,
+    type StravaActivity,
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
+import { generateTrainingPlan } from '../services/coach/planGenerator.ts';
 
 // ============================================
 // Context Types
@@ -126,6 +131,18 @@ interface DataContextType {
     updateGoal: (id: string, updates: Partial<PerformanceGoal>) => void;
     deleteGoal: (id: string) => void;
     getGoalsForCycle: (cycleId: string) => PerformanceGoal[];
+
+    // Smart Coach CRUD
+    coachConfig: CoachConfig | undefined;
+    plannedActivities: PlannedActivity[];
+    updateCoachConfig: (updates: Partial<CoachConfig>) => void;
+    generateCoachPlan: (stravaHistory: StravaActivity[], configOverride?: CoachConfig) => void;
+    deletePlannedActivity: (id: string) => void;
+    updatePlannedActivity: (id: string, updates: Partial<PlannedActivity>) => void;
+    completePlannedActivity: (activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => void;
+    addCoachGoal: (goal: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => void;
+    activateCoachGoal: (goalId: string) => void;
+    deleteCoachGoal: (goalId: string) => void;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -156,6 +173,8 @@ export function DataProvider({ children }: DataProviderProps) {
     const [competitions, setCompetitions] = useState<Competition[]>([]);
     const [trainingCycles, setTrainingCycles] = useState<TrainingCycle[]>([]);
     const [performanceGoals, setPerformanceGoals] = useState<PerformanceGoal[]>([]);
+    const [coachConfig, setCoachConfig] = useState<CoachConfig | undefined>(undefined);
+    const [plannedActivities, setPlannedActivities] = useState<PlannedActivity[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from storage on mount
@@ -202,6 +221,12 @@ export function DataProvider({ children }: DataProviderProps) {
             if (data.performanceGoals) {
                 setPerformanceGoals(data.performanceGoals || []);
             }
+            if (data.coachConfig) {
+                setCoachConfig(data.coachConfig);
+            }
+            if (data.plannedActivities) {
+                setPlannedActivities(data.plannedActivities || []);
+            }
             setIsLoaded(true);
         };
         loadData();
@@ -225,10 +250,12 @@ export function DataProvider({ children }: DataProviderProps) {
                 weightEntries,
                 competitions,
                 trainingCycles,
-                performanceGoals
+                performanceGoals,
+                coachConfig,
+                plannedActivities
             });
         }
-    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions, trainingCycles, performanceGoals]);
+    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions, trainingCycles, performanceGoals, coachConfig, plannedActivities]);
 
     // ============================================
     // Pantry CRUD
@@ -634,12 +661,6 @@ export function DataProvider({ children }: DataProviderProps) {
             }
         }
 
-        // Subtract exercise calories
-        const exercises = getExercisesForDate(date);
-        for (const ex of exercises) {
-            summary.calories -= ex.caloriesBurned;
-        }
-
         return {
             calories: Math.max(0, Math.round(summary.calories)),
             protein: Math.round(summary.protein * 10) / 10,
@@ -859,7 +880,86 @@ export function DataProvider({ children }: DataProviderProps) {
         }, []),
         getGoalsForCycle: useCallback((cycleId) => {
             return performanceGoals.filter(g => g.cycleId === cycleId);
-        }, [performanceGoals])
+        }, [performanceGoals]),
+
+        // Smart Coach Implementation
+        coachConfig,
+        plannedActivities,
+        updateCoachConfig: useCallback((updates) => {
+            setCoachConfig(prev => prev ? { ...prev, ...updates } : updates as CoachConfig);
+        }, []),
+        generateCoachPlan: useCallback((stravaHistory, configOverride) => {
+            const config = configOverride || coachConfig;
+            if (!config) return;
+            const newPlan = generateTrainingPlan(config, stravaHistory, plannedActivities);
+            setPlannedActivities(newPlan);
+        }, [coachConfig, plannedActivities]),
+        deletePlannedActivity: useCallback((id) => {
+            setPlannedActivities(prev => prev.filter(a => a.id !== id));
+        }, []),
+        updatePlannedActivity: useCallback((id, updates) => {
+            setPlannedActivities(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+        }, []),
+        completePlannedActivity: useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
+            setPlannedActivities(prev => prev.map(a => {
+                if (a.id === activityId) {
+                    const completed: PlannedActivity = {
+                        ...a,
+                        status: 'COMPLETED',
+                        feedback,
+                        completedDate: getISODate(),
+                        actualDistance: actualDist || a.estimatedDistance,
+                        actualTimeSeconds: actualTime
+                    };
+
+                    // Automatically add to exercise log
+                    addExercise({
+                        date: completed.completedDate!,
+                        type: 'running',
+                        durationMinutes: Math.round((actualTime || (a.estimatedDistance * 300)) / 60), // fallback to 5min/km
+                        intensity: feedback === 'HARD' || feedback === 'TOO_HARD' ? 'high' : 'moderate',
+                        caloriesBurned: calculateExerciseCalories('running', (actualTime || (a.estimatedDistance * 300)) / 60, 'moderate'),
+                        distance: actualDist || a.estimatedDistance,
+                        notes: `Coached Session: ${a.title}. Feedback: ${feedback || 'None'}`
+                    });
+
+                    return completed;
+                }
+                return a;
+            }));
+        }, [addExercise, calculateExerciseCalories]),
+        addCoachGoal: useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
+            const newGoal: CoachGoal = {
+                ...goalData,
+                id: generateId(),
+                createdAt: new Date().toISOString(),
+                isActive: (coachConfig?.goals.length || 0) === 0 // First goal is active
+            };
+            setCoachConfig(prev => prev ? { ...prev, goals: [...prev.goals, newGoal] } : {
+                userProfile: { maxHr: 190, restingHr: 60 },
+                preferences: { weeklyVolumeKm: 30, longRunDay: 'Sunday', intervalDay: 'Tuesday', trainingDays: [2, 4, 0] },
+                goals: [newGoal]
+            });
+        }, [coachConfig]),
+        activateCoachGoal: useCallback((goalId: string) => {
+            setCoachConfig(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    goals: prev.goals.map(g => ({ ...g, isActive: g.id === goalId }))
+                };
+            });
+            // Note: Plan regeneration should be triggered by the UI if needed
+        }, []),
+        deleteCoachGoal: useCallback((goalId: string) => {
+            setCoachConfig(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    goals: prev.goals.filter(g => g.id !== goalId)
+                };
+            });
+        }, [])
     };
 
     return (

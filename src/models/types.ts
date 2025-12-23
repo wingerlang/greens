@@ -326,6 +326,92 @@ export interface ExerciseEntry {
     heartRateAvg?: number;
     heartRateMax?: number;
     elevationGain?: number;       // meters
+    prCount?: number;
+    kudosCount?: number;
+}
+
+/**
+ * Raw Strava activity from API
+ */
+export interface StravaActivity {
+    id: number;
+    name: string;
+    type: string;
+    sport_type: string;
+    start_date: string;
+    start_date_local: string;
+    elapsed_time: number;      // seconds
+    moving_time: number;       // seconds
+    distance: number;          // meters
+    total_elevation_gain: number; // meters
+    average_heartrate?: number;
+    max_heartrate?: number;
+    calories?: number;
+    average_speed: number;     // m/s
+    max_speed: number;         // m/s
+    has_heartrate: boolean;
+    pr_count: number;
+    kudos_count: number;
+    achievement_count: number;
+}
+
+// ============================================
+// Smart Coach Types
+// ============================================
+
+export interface CoachGoal {
+    id: string;
+    type: 'MARATHON' | 'HALF_MARATHON' | '10K' | '5K' | 'MAINTENANCE';
+    targetDate: string; // ISO date string
+    targetTimeSeconds?: number;
+    isActive: boolean;
+    createdAt: string;
+}
+
+export interface CoachConfig {
+    userProfile: {
+        maxHr: number;
+        restingHr: number;
+        recentRaceTime?: { distance: number; timeSeconds: number }; // Used for VDOT
+        currentForm?: { distanceKm: number; timeSeconds: number }; // User's assessment of current 5k/10k form
+    };
+    preferences: {
+        weeklyVolumeKm: number; // Target volume
+        longRunDay: string;
+        intervalDay: string;
+        trainingDays: number[]; // 0-6 (Sun-Sat)
+        weightGoal?: number; // Target weight for performance/health
+    };
+    goals: CoachGoal[];
+}
+
+export interface PlannedActivity {
+    id: string;
+    goalId?: string; // Link to a specific CoachGoal
+    date: string; // ISO Date (YYYY-MM-DD)
+    type: 'RUN';
+    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION';
+    title: string;
+    description: string;
+    structure: {
+        warmupKm: number;
+        mainSet: { reps: number; distKm: number; pace: string; restMin: number }[];
+        cooldownKm: number;
+    };
+    targetPace: string;
+    targetHrZone: number;
+    estimatedDistance: number;
+    // Progress Tracking
+    status: 'PLANNED' | 'COMPLETED' | 'SKIPPED';
+    feedback?: 'EASY' | 'PERFECT' | 'HARD' | 'TOO_HARD' | 'INJURY';
+    completedDate?: string;
+    actualDistance?: number;
+    actualTimeSeconds?: number;
+    // Phase 2 enhancements
+    scientificBenefit?: string;
+    isVolumePR?: boolean;
+    isLongestInPlan?: boolean;
+    customScalingFactor?: number; // Scale target distances/paces (e.g. 0.85 for "piano")
 }
 
 /** Weight tracking entry */
@@ -433,6 +519,8 @@ export interface AppData {
     userSettings?: AppSettings;
     users?: User[];
     currentUserId?: string;
+    coachConfig?: CoachConfig;
+    plannedActivities?: PlannedActivity[];
     dailyVitals?: Record<string, DailyVitals>; // Key is YYYY-MM-DD
     exerciseEntries?: ExerciseEntry[];
     weightEntries?: WeightEntry[];
