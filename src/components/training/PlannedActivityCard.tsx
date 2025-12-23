@@ -83,7 +83,7 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
     };
 
     return (
-        <div className={`relative group glass-card p-4 transition-all overflow-hidden ${activity.status === 'COMPLETED' ? 'opacity-90' : 'hover:scale-[1.01]'} ${activity.category === 'LONG_RUN' ? 'border-amber-500/30 bg-amber-500/[0.02]' : ''}`}>
+        <div className={`relative group glass-card p-4 transition-all overflow-hidden ${activity.status === 'COMPLETED' ? 'opacity-60 grayscale-[30%]' : 'hover:scale-[1.01]'} ${activity.category === 'LONG_RUN' ? 'border-amber-500/30 bg-amber-500/[0.02]' : ''}`}>
             {/* PR and Achievement Badges */}
             <div className="absolute top-4 right-4 flex gap-2 z-10 items-center">
                 {activity.isVolumePR && (
@@ -96,11 +96,7 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                         👑 Längsta Passet
                     </div>
                 )}
-                {activity.status === 'COMPLETED' && (
-                    <div className="bg-emerald-500 text-slate-950 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20">
-                        Klar ✓
-                    </div>
-                )}
+
             </div>
 
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
@@ -182,10 +178,11 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                             <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Pulszon</div>
                             <div className="text-lg font-black text-white tracking-tight">Zon {activity.targetHrZone}</div>
                         </div>
-                        <div className="p-3.5 rounded-2xl bg-slate-900/50 border border-white/5 group-hover:border-indigo-500/20 transition-colors">
+                        <div className={`p-3.5 rounded-2xl border transition-colors ${activity.status === 'COMPLETED' ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/50 border-white/5 group-hover:border-indigo-500/20'}`}>
                             <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1.5">Status</div>
-                            <div className={`text-base font-black ${activity.status === 'COMPLETED' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                {activity.status === 'COMPLETED' ? 'Klar' : 'Planerad'}
+                            <div className={`text-base font-black flex items-center gap-2 ${activity.status === 'COMPLETED' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                {activity.status === 'COMPLETED' ? '✓ Klar' : 'Planerad'}
+                                {activity.status === 'COMPLETED' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />}
                             </div>
                         </div>
                     </div>
@@ -398,21 +395,24 @@ export function PlannedActivityCard({ activity, compact = false }: PlannedActivi
                             )}
 
                             <div>
-                                <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-3">Snabb-justering ⚙️</label>
+                                <div className="flex justify-between items-center mb-3">
+                                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Snabb-justering ⚙️</label>
+                                    <span className="text-xs font-black text-white bg-slate-800 px-2 py-1 rounded-lg">{activity.estimatedDistance} km</span>
+                                </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <button
                                         type="button"
                                         onClick={() => adjustWorkout('DIST', 0.9)}
                                         className="py-3 bg-slate-950 border border-white/5 rounded-xl text-[10px] font-black text-slate-400 uppercase hover:text-white transition-all active:scale-95"
                                     >
-                                        Minska Distans (-10%)
+                                        → {Math.round(activity.estimatedDistance * 0.9 * 10) / 10} km (-10%)
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => adjustWorkout('DIST', 1.1)}
                                         className="py-3 bg-slate-950 border border-white/5 rounded-xl text-[10px] font-black text-slate-400 uppercase hover:text-white transition-all active:scale-95"
                                     >
-                                        Öka Distans (+10%)
+                                        → {Math.round(activity.estimatedDistance * 1.1 * 10) / 10} km (+10%)
                                     </button>
                                     <button
                                         type="button"

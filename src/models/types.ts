@@ -72,7 +72,7 @@ export interface UserSettings {
 }
 
 /** User roles for permissions */
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'user' | 'coach' | 'athlete';
 
 /** Subscription plans for monetization */
 export type SubscriptionPlan = 'free' | 'evergreen';
@@ -481,6 +481,108 @@ export const QUICK_NUTRITION_ITEMS: QuickNutritionItem[] = [
     { id: 'snack2', name: 'Dadlar (3st)', type: 'snack', calories: 70, carbs: 18, timing: 'pre' }
 ];
 
+// ============================================
+// Phase 3: Feedback & Adaptation
+// ============================================
+
+export type RPE = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
+export interface FeedbackEntry {
+    id: string;
+    activityId: string;
+    date: string;
+    // Core metrics
+    rpe: RPE;
+    perceivedDifficulty: 'EASY' | 'PERFECT' | 'HARD' | 'TOO_HARD';
+    // Body state
+    sleepQuality?: 1 | 2 | 3 | 4 | 5;
+    stressLevel?: 1 | 2 | 3 | 4 | 5;
+    musclesSoreness?: 'none' | 'mild' | 'moderate' | 'severe';
+    injuryFlag?: boolean;
+    injuryLocation?: string;
+    // Qualitative
+    notes?: string;
+    mood?: 'great' | 'good' | 'neutral' | 'low' | 'terrible';
+    createdAt: string;
+}
+
+export interface FatigueTrend {
+    date: string;
+    fatigueScore: number;    // 0-100, computed from RPE, sleep, stress
+    acuteLoad: number;       // Rolling 7-day load
+    chronicLoad: number;     // Rolling 28-day load
+    trainingStressBalance: number; // TSB = CTL - ATL
+}
+
+export interface AdaptationSuggestion {
+    id: string;
+    type: 'reduce_volume' | 'add_recovery' | 'reduce_intensity' | 'injury_risk' | 'overtraining_risk';
+    severity: 'info' | 'warning' | 'critical';
+    message: string;
+    suggestedAction?: string;
+    affectedDates?: string[];
+    createdAt: string;
+    dismissed?: boolean;
+}
+
+// ============================================
+// Phase 4: Coach-Athlete Mode
+// ============================================
+
+export interface CoachAthleteRelation {
+    id: string;
+    coachId: string;
+    athleteId: string;
+    coachName?: string;
+    athleteName?: string;
+    status: 'pending' | 'active' | 'declined' | 'removed';
+    sharedPlanIds: string[];
+    permissions: {
+        canViewPlan: boolean;
+        canEditPlan: boolean;
+        canViewProgress: boolean;
+        canComment: boolean;
+    };
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface Comment {
+    id: string;
+    parentId?: string;        // For nested replies
+    targetType: 'activity' | 'plan' | 'goal';
+    targetId: string;
+    authorId: string;
+    authorName: string;
+    authorRole: 'coach' | 'athlete';
+    content: string;
+    reactions?: { emoji: string; count: number; userIds: string[] }[];
+    createdAt: string;
+    updatedAt?: string;
+    isEdited?: boolean;
+}
+
+export interface Notification {
+    id: string;
+    userId: string;
+    type: 'comment' | 'feedback' | 'plan_shared' | 'plan_updated' | 'invitation' | 'reminder';
+    title: string;
+    message: string;
+    relatedId?: string;
+    relatedType?: 'activity' | 'plan' | 'goal' | 'athlete';
+    isRead: boolean;
+    createdAt: string;
+}
+
+export interface SharedPlan {
+    id: string;
+    planOwnerId: string;
+    sharedWithIds: string[];
+    visibility: 'private' | 'shared' | 'public';
+    allowComments: boolean;
+    allowForks: boolean;
+    createdAt: string;
+}
 
 export interface PlannedActivity {
     id: string;
