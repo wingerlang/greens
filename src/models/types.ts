@@ -584,6 +584,111 @@ export interface SharedPlan {
     createdAt: string;
 }
 
+// ============================================
+// Phase 5: Social & Community Features
+// ============================================
+
+export type PlanDifficulty = 'beginner' | 'intermediate' | 'advanced' | 'elite';
+export type PlanGoalType = '5K' | '10K' | 'half_marathon' | 'marathon' | 'ultra' | 'base_building' | 'custom';
+
+export interface PlanTemplate {
+    id: string;
+    title: string;
+    description: string;
+    creatorId: string;
+    creatorName: string;
+    // Plan metadata
+    goalType: PlanGoalType;
+    difficulty: PlanDifficulty;
+    durationWeeks: number;
+    weeklyVolumeRange: { min: number; max: number };
+    sessionsPerWeek: number;
+    // Template structure (relative days, not absolute dates)
+    weekTemplates: {
+        weekNumber: number;
+        phase: 'base' | 'build' | 'peak' | 'taper';
+        targetVolumeKm: number;
+        sessions: {
+            dayOfWeek: number; // 0-6
+            category: PlannedActivity['category'];
+            title: string;
+            description: string;
+            distanceKm: number;
+            paceDescription: string;
+        }[];
+    }[];
+    // Social
+    visibility: 'private' | 'public';
+    forkCount: number;
+    likeCount: number;
+    rating?: number;
+    tags: string[];
+    version: number;
+    changelog?: string[];
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface LeaderboardEntry {
+    userId: string;
+    userName: string;
+    avatarUrl?: string;
+    rank: number;
+    // Stats
+    weeklyVolumeKm: number;
+    monthlyVolumeKm: number;
+    currentStreak: number;
+    prCount: number;
+    completionRate: number;
+    // Badges
+    badges: { type: string; name: string; icon: string }[];
+    lastActiveDate: string;
+}
+
+// ============================================
+// Phase 6: Analytics & AI Insights
+// ============================================
+
+export interface TrainingLoadData {
+    date: string;
+    // Training Impulse (TRIMP)
+    trimp: number;
+    // Training Stress Score (TSS-like)
+    tss: number;
+    // Chronic Training Load (fitness)
+    ctl: number;
+    // Acute Training Load (fatigue)
+    atl: number;
+    // Training Stress Balance (form)
+    tsb: number;
+    // Activity details
+    distanceKm: number;
+    durationMinutes: number;
+    avgHeartRate?: number;
+    category?: PlannedActivity['category'];
+}
+
+export interface PerformanceTrend {
+    date: string;
+    pacePerKm: number;
+    avgHeartRate: number;
+    efficiency: number; // pace / HR ratio
+    vdot?: number;
+}
+
+export interface AICoachTip {
+    id: string;
+    type: 'insight' | 'warning' | 'celebration' | 'suggestion';
+    category: 'volume' | 'intensity' | 'recovery' | 'nutrition' | 'form' | 'motivation';
+    title: string;
+    message: string;
+    actionable?: { label: string; action: string };
+    priority: number;
+    createdAt: string;
+    expiresAt?: string;
+    dismissed?: boolean;
+}
+
 export interface PlannedActivity {
     id: string;
     goalId?: string; // Link to a specific CoachGoal
