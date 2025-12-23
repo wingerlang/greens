@@ -109,5 +109,195 @@ export const profileService = {
         if (!res.ok) return null;
         const data = await res.json();
         return data.avatarUrl;
+    },
+
+    // ==========================================
+    // Weight History
+    // ==========================================
+
+    async logWeight(weight: number, date?: string): Promise<boolean> {
+        const res = await fetch(`${API_BASE}/user/weight`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ weight, date })
+        });
+        return res.ok;
+    },
+
+    async getWeightHistory(): Promise<{ weight: number, date: string }[]> {
+        const res = await fetch(`${API_BASE}/user/weight`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.history || [];
+    },
+
+    // ==========================================
+    // Personal Records
+    // ==========================================
+
+    async getPRs(): Promise<any[]> {
+        const res = await fetch(`${API_BASE}/user/prs`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.prs || [];
+    },
+
+    async detectPRs(): Promise<any[]> {
+        const res = await fetch(`${API_BASE}/user/prs/detect`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.detected || [];
+    },
+
+    async savePR(pr: { category: string, time: string, date?: string, activityId?: string, isManual?: boolean }): Promise<boolean> {
+        const res = await fetch(`${API_BASE}/user/prs`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(pr)
+        });
+        return res.ok;
+    },
+
+    async deletePR(category: string): Promise<boolean> {
+        const res = await fetch(`${API_BASE}/user/prs/${encodeURIComponent(category)}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        return res.ok;
+    },
+
+    // ==========================================
+    // Data Export
+    // ==========================================
+
+    async exportData(): Promise<any> {
+        const res = await fetch(`${API_BASE}/user/export`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return null;
+        return res.json();
+    },
+
+    downloadExport(data: any) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `greens-export-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    },
+
+    // ==========================================
+    // HR Zones
+    // ==========================================
+
+    async detectHRZones(): Promise<any> {
+        const res = await fetch(`${API_BASE}/user/hr-zones/detect`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return null;
+        return res.json();
+    },
+
+    async getHRZones(): Promise<any> {
+        const res = await fetch(`${API_BASE}/user/hr-zones`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return null;
+        return res.json();
+    },
+
+    async saveHRZones(zones: any): Promise<boolean> {
+        const res = await fetch(`${API_BASE}/user/hr-zones`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(zones)
+        });
+        return res.ok;
+    },
+
+    // ==========================================
+    // Activity Statistics
+    // ==========================================
+
+    async getActivityStats(): Promise<any> {
+        const res = await fetch(`${API_BASE}/user/stats`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return null;
+        return res.json();
+    },
+
+    // ==========================================
+    // Notification Settings
+    // ==========================================
+
+    async getNotifications(): Promise<any> {
+        const res = await fetch(`${API_BASE}/user/notifications`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return null;
+        return res.json();
+    },
+
+    async updateNotifications(settings: any): Promise<any> {
+        const res = await fetch(`${API_BASE}/user/notifications`, {
+            method: 'PATCH',
+            headers: getHeaders(),
+            body: JSON.stringify(settings)
+        });
+        if (!res.ok) return null;
+        return res.json();
+    },
+
+    // ==========================================
+    // Session Management
+    // ==========================================
+
+    async getSessions(): Promise<any[]> {
+        const res = await fetch(`${API_BASE}/user/sessions`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return [];
+        const data = await res.json();
+        return data.sessions || [];
+    },
+
+    async revokeSession(sessionToken: string): Promise<boolean> {
+        const res = await fetch(`${API_BASE}/user/sessions/${encodeURIComponent(sessionToken)}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        return res.ok;
+    },
+
+    async revokeAllOtherSessions(): Promise<boolean> {
+        const res = await fetch(`${API_BASE}/user/sessions`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        return res.ok;
+    },
+
+    // ==========================================
+    // Social Counts
+    // ==========================================
+
+    async getSocialCounts(): Promise<{ followers: number, following: number }> {
+        const res = await fetch(`${API_BASE}/user/social-counts`, {
+            headers: getHeaders()
+        });
+        if (!res.ok) return { followers: 0, following: 0 };
+        return res.json();
     }
 };
+

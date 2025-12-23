@@ -798,15 +798,364 @@ export async function startServer(port: number) {
             }
         }
 
-        // Disconnect Strava
-        if (url.pathname === "/api/strava/disconnect" && method === "POST") {
-            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
-            const session = await getSession(token);
-            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+        // ==========================================
+        // Weight History & Data Export API 📊
+        // ==========================================
 
-            await deleteStravaTokens(session.userId);
-            return new Response(JSON.stringify({ success: true }), { headers });
+        // POST /api/user/weight - Log a weight entry
+        if (url.pathname === "/api/user/weight" && method === "POST") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const body = await req.json();
+                const weight = Number(body.weight);
+                const date = body.date || new Date().toISOString().split('T')[0];
+
+                if (!weight || weight < 20 || weight > 500) {
+                    return new Response(JSON.stringify({ error: "Invalid weight" }), { status: 400, headers });
+                }
+
+                await kv.set(['weight_history', session.userId, date], { weight, date, timestamp: Date.now() });
+                return new Response(JSON.stringify({ success: true, weight, date }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/user/weight - Get weight history
+        if (url.pathname === "/api/user/weight" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const entries: { weight: number, date: string }[] = [];
+                const iter = kv.list({ prefix: ['weight_history', session.userId] }, { limit: 365 });
+                for await (const entry of iter) {
+                    entries.push(entry.value as { weight: number, date: string });
+                }
+                entries.sort((a, b) => a.date.localeCompare(b.date));
+                return new Response(JSON.stringify({ history: entries }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/user/export - Export all user data as JSON
+        if (url.pathname === "/api/user/export" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const user = await getUserById(session.userId);
+                const profile = await getUserProfile(session.userId);
+
+                // Get weight history
+                const weightHistory: any[] = [];
+                const weightIter = kv.list({ prefix: ['weight_history', session.userId] });
+                for await (const entry of weightIter) weightHistory.push(entry.value);
+
+                // Get activities
+                const activities: any[] = [];
+                const actIter = kv.list({ prefix: ['activities', session.userId] });
+                for await (const entry of actIter) activities.push(entry.value);
+
+                // Get PRs
+                const prs = await getUserPRs(session.userId);
+
+                // Get app data
+                const appData = await getUserData(session.userId);
+
+                const exportData = {
+                    exportedAt: new Date().toISOString(),
+                    user: user ? sanitizeUser(user) : null,
+                    profile,
+                    weightHistory,
+                    activities,
+                    personalRecords: prs,
+                    appData
+                };
+
+                return new Response(JSON.stringify(exportData, null, 2), {
+                    headers: {
+                        ...Object.fromEntries(headers.entries()),
+                        'Content-Disposition': 'attachment; filename="greens-export.json"'
+                    }
+                });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // ==========================================
+        // Personal Records (PR) API 🏆
+        // ==========================================
+
+        // GET /api/user/prs - Get all PRs
+        if (url.pathname === "/api/user/prs" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const prs = await getUserPRs(session.userId);
+                return new Response(JSON.stringify({ prs }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/user/prs/detect - Detect potential PRs from activities
+        if (url.pathname === "/api/user/prs/detect" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const detected = await detectPotentialPRs(session.userId);
+                return new Response(JSON.stringify({ detected }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // POST /api/user/prs - Save a PR (manual or approved)
+        if (url.pathname === "/api/user/prs" && method === "POST") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const body = await req.json();
+                const { category, time, date, activityId, isManual } = body;
+
+                if (!category || !time) {
+                    return new Response(JSON.stringify({ error: "Missing category or time" }), { status: 400, headers });
+                }
+
+                const pr = {
+                    category,
+                    time,
+                    date: date || new Date().toISOString().split('T')[0],
+                    activityId: activityId || null,
+                    isManual: isManual ?? true,
+                    createdAt: new Date().toISOString()
+                };
+
+                await kv.set(['prs', session.userId, category], pr);
+                return new Response(JSON.stringify({ success: true, pr }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // DELETE /api/user/prs/:category - Delete a PR
+        if (url.pathname.startsWith("/api/user/prs/") && method === "DELETE") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const category = decodeURIComponent(url.pathname.split('/').pop() || '');
+                await kv.delete(['prs', session.userId, category]);
+                return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // ==========================================
+        // HR Zone Detection & Activity Stats 💓
+        // ==========================================
+
+        // GET /api/user/hr-zones/detect - Auto-detect HR zones from activities
+        if (url.pathname === "/api/user/hr-zones/detect" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const detected = await detectHRZones(session.userId);
+                return new Response(JSON.stringify(detected), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // POST /api/user/hr-zones - Save HR zones
+        if (url.pathname === "/api/user/hr-zones" && method === "POST") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const body = await req.json();
+                await kv.set(['hr_zones', session.userId], { ...body, savedAt: new Date().toISOString() });
+                return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/user/hr-zones - Get saved HR zones
+        if (url.pathname === "/api/user/hr-zones" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const entry = await kv.get(['hr_zones', session.userId]);
+                return new Response(JSON.stringify(entry.value || null), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/user/stats - Get activity statistics (weekly/monthly/yearly)
+        if (url.pathname === "/api/user/stats" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const stats = await calculateActivityStats(session.userId);
+                return new Response(JSON.stringify(stats), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+        // ==========================================
+        // Notification Settings 🔔
+        // ==========================================
+
+        // GET /api/user/notifications - Get notification settings
+        if (url.pathname === "/api/user/notifications" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const entry = await kv.get(['notifications', session.userId]);
+                const defaults = {
+                    emailDigest: true,
+                    pushWorkouts: true,
+                    pushGoals: true,
+                    pushSocial: false,
+                    pushReminders: true,
+                    weeklyReport: true,
+                    marketingEmails: false
+                };
+                return new Response(JSON.stringify(entry.value || defaults), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // PATCH /api/user/notifications - Update notification settings
+        if (url.pathname === "/api/user/notifications" && method === "PATCH") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const body = await req.json();
+                const current = (await kv.get(['notifications', session.userId])).value || {};
+                const updated = { ...current, ...body, updatedAt: new Date().toISOString() };
+                await kv.set(['notifications', session.userId], updated);
+                return new Response(JSON.stringify(updated), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // ==========================================
+        // Session Management 📱
+        // ==========================================
+
+        // GET /api/user/sessions - Get all active sessions
+        if (url.pathname === "/api/user/sessions" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const sessions = await getUserSessions(session.userId);
+                // Mark current session
+                const sessionsWithCurrent = sessions.map(s => ({
+                    ...s,
+                    isCurrent: s.token === token
+                }));
+                return new Response(JSON.stringify({ sessions: sessionsWithCurrent }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // DELETE /api/user/sessions/:sessionId - Revoke a session
+        if (url.pathname.startsWith("/api/user/sessions/") && method === "DELETE") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const sessionId = url.pathname.split('/').pop() || '';
+                await revokeSession(session.userId, sessionId);
+                return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // DELETE /api/user/sessions - Revoke all other sessions
+        if (url.pathname === "/api/user/sessions" && method === "DELETE") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                await revokeAllSessionsExcept(session.userId, token);
+                return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // ==========================================
+        // Social Counts 👥
+        // ==========================================
+
+        // GET /api/user/social-counts - Get follower/following counts
+        if (url.pathname === "/api/user/social-counts" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const counts = await getSocialCounts(session.userId);
+                return new Response(JSON.stringify(counts), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
         }
 
         return new Response("Not Found", { status: 404, headers });
@@ -940,4 +1289,453 @@ async function calculateStreak(userId: string): Promise<number> {
     }
 
     return streak;
+}
+
+// ==========================================
+// Personal Records (PR) Helpers
+// ==========================================
+
+interface PersonalRecord {
+    category: string;
+    time: string;
+    date: string;
+    activityId?: string | null;
+    isManual: boolean;
+    createdAt: string;
+}
+
+async function getUserPRs(userId: string): Promise<PersonalRecord[]> {
+    const prs: PersonalRecord[] = [];
+    const iter = kv.list({ prefix: ['prs', userId] });
+    for await (const entry of iter) {
+        prs.push(entry.value as PersonalRecord);
+    }
+    return prs;
+}
+
+// PR categories and distance thresholds in meters
+const PR_CATEGORIES = [
+    { name: '1 km', distance: 1000, tolerance: 100 },
+    { name: '5 km', distance: 5000, tolerance: 250 },
+    { name: '10 km', distance: 10000, tolerance: 500 },
+    { name: 'Halvmarathon', distance: 21097, tolerance: 500 },
+    { name: 'Marathon', distance: 42195, tolerance: 1000 },
+];
+
+function formatDuration(seconds: number): string {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    if (h > 0) {
+        return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function parseDuration(time: string): number {
+    const parts = time.split(':').map(Number);
+    if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    return parts[0] * 60 + (parts[1] || 0);
+}
+
+interface DetectedPR {
+    category: string;
+    time: string;
+    timeSeconds: number;
+    date: string;
+    activityId: string;
+    activityName: string;
+    isBetterThanCurrent: boolean;
+    currentTime?: string;
+}
+
+async function detectPotentialPRs(userId: string): Promise<DetectedPR[]> {
+    // Get current PRs
+    const currentPRs = await getUserPRs(userId);
+    const prMap = new Map(currentPRs.map(pr => [pr.category, pr]));
+
+    // Get all running activities
+    const activities: any[] = [];
+    const iter = kv.list({ prefix: ['activities', userId] }, { limit: 1000 });
+    for await (const entry of iter) {
+        const act = entry.value as any;
+        // Only consider running activities with distance and time
+        if (act && act.type === 'Run' && act.distance && act.duration) {
+            activities.push(act);
+        }
+    }
+
+    const detected: DetectedPR[] = [];
+
+    for (const act of activities) {
+        const distance = act.distance; // in meters
+        const duration = act.duration; // in seconds
+
+        for (const cat of PR_CATEGORIES) {
+            // Check if activity distance matches this category
+            if (Math.abs(distance - cat.distance) <= cat.tolerance) {
+                const timeStr = formatDuration(duration);
+                const timeSeconds = duration;
+
+                const currentPR = prMap.get(cat.name);
+                let isBetter = true;
+
+                if (currentPR) {
+                    const currentSeconds = parseDuration(currentPR.time);
+                    isBetter = timeSeconds < currentSeconds;
+                }
+
+                // Only add if it's better or there's no current PR
+                if (isBetter || !currentPR) {
+                    // Check if we already have a better one detected
+                    const existing = detected.find(d => d.category === cat.name);
+                    if (!existing || timeSeconds < existing.timeSeconds) {
+                        // Remove existing if any
+                        const idx = detected.findIndex(d => d.category === cat.name);
+                        if (idx >= 0) detected.splice(idx, 1);
+
+                        detected.push({
+                            category: cat.name,
+                            time: timeStr,
+                            timeSeconds,
+                            date: act.date?.split('T')[0] || new Date().toISOString().split('T')[0],
+                            activityId: act.id || '',
+                            activityName: act.name || `Run on ${act.date}`,
+                            isBetterThanCurrent: isBetter && !!currentPR,
+                            currentTime: currentPR?.time
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by distance (category order)
+    detected.sort((a, b) => {
+        const aIdx = PR_CATEGORIES.findIndex(c => c.name === a.category);
+        const bIdx = PR_CATEGORIES.findIndex(c => c.name === b.category);
+        return aIdx - bIdx;
+    });
+
+    return detected;
+}
+
+// ==========================================
+// HR Zone Detection from Activities
+// ==========================================
+
+interface HRZoneDetection {
+    maxHR: number;
+    maxHRActivity: { name: string, date: string } | null;
+    estimatedRestingHR: number;
+    estimatedLTHR: number;
+    zones: {
+        zone1: { min: number, max: number, name: string };
+        zone2: { min: number, max: number, name: string };
+        zone3: { min: number, max: number, name: string };
+        zone4: { min: number, max: number, name: string };
+        zone5: { min: number, max: number, name: string };
+    };
+    activitiesAnalyzed: number;
+    confidence: 'low' | 'medium' | 'high';
+}
+
+async function detectHRZones(userId: string): Promise<HRZoneDetection> {
+    const activities: any[] = [];
+    const iter = kv.list({ prefix: ['activities', userId] }, { limit: 500 });
+
+    for await (const entry of iter) {
+        const act = entry.value as any;
+        if (act && (act.maxHeartrate || act.averageHeartrate)) {
+            activities.push(act);
+        }
+    }
+
+    if (activities.length === 0) {
+        // Default zones based on age-estimated max HR (assume age 30)
+        const defaultMax = 190;
+        return generateZones(defaultMax, 60, null, 0, 'low');
+    }
+
+    // Find max HR across all activities
+    let maxHR = 0;
+    let maxHRActivity: { name: string, date: string } | null = null;
+
+    for (const act of activities) {
+        const actMax = act.maxHeartrate || 0;
+        if (actMax > maxHR) {
+            maxHR = actMax;
+            maxHRActivity = { name: act.name || 'Unknown', date: act.date || '' };
+        }
+    }
+
+    // Estimate resting HR from lowest average HR in easy activities
+    const avgHRs = activities
+        .filter(a => a.averageHeartrate && a.averageHeartrate > 40)
+        .map(a => a.averageHeartrate)
+        .sort((a, b) => a - b);
+
+    // Estimate resting HR as ~60% of lowest observed average (rough estimate)
+    const lowestAvgHR = avgHRs[0] || 120;
+    const estimatedRestingHR = Math.max(40, Math.round(lowestAvgHR * 0.5));
+
+    // Estimate LTHR (typically 85-90% of max HR)
+    const estimatedLTHR = Math.round(maxHR * 0.88);
+
+    const confidence = activities.length >= 20 ? 'high' : activities.length >= 5 ? 'medium' : 'low';
+
+    return generateZones(maxHR, estimatedRestingHR, maxHRActivity, activities.length, confidence);
+}
+
+function generateZones(
+    maxHR: number,
+    restingHR: number,
+    maxHRActivity: { name: string, date: string } | null,
+    activitiesAnalyzed: number,
+    confidence: 'low' | 'medium' | 'high'
+): HRZoneDetection {
+    // Using Karvonen formula: Target HR = ((Max HR - Resting HR) × %Intensity) + Resting HR
+    // But simplified using % of max HR for zone boundaries
+
+    return {
+        maxHR,
+        maxHRActivity,
+        estimatedRestingHR: restingHR,
+        estimatedLTHR: Math.round(maxHR * 0.88),
+        zones: {
+            zone1: { min: Math.round(maxHR * 0.50), max: Math.round(maxHR * 0.60), name: 'Återhämtning' },
+            zone2: { min: Math.round(maxHR * 0.60), max: Math.round(maxHR * 0.70), name: 'Uthållighet' },
+            zone3: { min: Math.round(maxHR * 0.70), max: Math.round(maxHR * 0.80), name: 'Tempo' },
+            zone4: { min: Math.round(maxHR * 0.80), max: Math.round(maxHR * 0.90), name: 'Tröskel' },
+            zone5: { min: Math.round(maxHR * 0.90), max: maxHR, name: 'VO2max' },
+        },
+        activitiesAnalyzed,
+        confidence
+    };
+}
+
+// ==========================================
+// Activity Statistics Calculator
+// ==========================================
+
+interface ActivityStats {
+    thisWeek: PeriodStats;
+    lastWeek: PeriodStats;
+    thisMonth: PeriodStats;
+    lastMonth: PeriodStats;
+    thisYear: PeriodStats;
+    allTime: PeriodStats;
+    byType: { [key: string]: { count: number, distance: number, duration: number } };
+    recentActivities: any[];
+}
+
+interface PeriodStats {
+    activities: number;
+    totalDistance: number; // meters
+    totalDuration: number; // seconds
+    totalCalories: number;
+    avgPace?: number; // seconds per km
+    longestRun?: number; // meters
+}
+
+async function calculateActivityStats(userId: string): Promise<ActivityStats> {
+    const activities: any[] = [];
+    const iter = kv.list({ prefix: ['activities', userId] });
+
+    for await (const entry of iter) {
+        const act = entry.value as any;
+        if (act) activities.push(act);
+    }
+
+    // Sort by date desc
+    activities.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    const now = new Date();
+    const startOfWeek = getStartOfWeek(now);
+    const startOfLastWeek = new Date(startOfWeek);
+    startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+    const byType: { [key: string]: { count: number, distance: number, duration: number } } = {};
+
+    const thisWeek = createEmptyPeriodStats();
+    const lastWeek = createEmptyPeriodStats();
+    const thisMonth = createEmptyPeriodStats();
+    const lastMonth = createEmptyPeriodStats();
+    const thisYear = createEmptyPeriodStats();
+    const allTime = createEmptyPeriodStats();
+
+    for (const act of activities) {
+        const actDate = new Date(act.date || '');
+        const distance = act.distance || 0;
+        const duration = act.duration || 0;
+        const calories = act.calories || 0;
+        const type = act.type || 'Other';
+
+        // By type
+        if (!byType[type]) byType[type] = { count: 0, distance: 0, duration: 0 };
+        byType[type].count++;
+        byType[type].distance += distance;
+        byType[type].duration += duration;
+
+        // All time
+        addToStats(allTime, distance, duration, calories);
+
+        // This year
+        if (actDate >= startOfYear) {
+            addToStats(thisYear, distance, duration, calories);
+        }
+
+        // This month
+        if (actDate >= startOfMonth) {
+            addToStats(thisMonth, distance, duration, calories);
+        }
+
+        // Last month
+        if (actDate >= startOfLastMonth && actDate < startOfMonth) {
+            addToStats(lastMonth, distance, duration, calories);
+        }
+
+        // This week
+        if (actDate >= startOfWeek) {
+            addToStats(thisWeek, distance, duration, calories);
+        }
+
+        // Last week
+        if (actDate >= startOfLastWeek && actDate < startOfWeek) {
+            addToStats(lastWeek, distance, duration, calories);
+        }
+    }
+
+    // Calculate avg pace for each period (for running activities)
+    [thisWeek, lastWeek, thisMonth, lastMonth, thisYear, allTime].forEach(stats => {
+        if (stats.totalDistance > 0 && stats.totalDuration > 0) {
+            stats.avgPace = Math.round((stats.totalDuration / (stats.totalDistance / 1000)));
+        }
+    });
+
+    return {
+        thisWeek,
+        lastWeek,
+        thisMonth,
+        lastMonth,
+        thisYear,
+        allTime,
+        byType,
+        recentActivities: activities.slice(0, 10)
+    };
+}
+
+function getStartOfWeek(date: Date): Date {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+    return new Date(d.setDate(diff));
+}
+
+function createEmptyPeriodStats(): PeriodStats {
+    return { activities: 0, totalDistance: 0, totalDuration: 0, totalCalories: 0 };
+}
+
+function addToStats(stats: PeriodStats, distance: number, duration: number, calories: number) {
+    stats.activities++;
+    stats.totalDistance += distance;
+    stats.totalDuration += duration;
+    stats.totalCalories += calories;
+    if (distance > (stats.longestRun || 0)) {
+        stats.longestRun = distance;
+    }
+}
+
+// ==========================================
+// Session Management Helpers
+// ==========================================
+
+interface UserSession {
+    token: string;
+    userId: string;
+    createdAt: string;
+    lastActive?: string;
+    userAgent?: string;
+    ip?: string;
+}
+
+async function getUserSessions(userId: string): Promise<UserSession[]> {
+    const sessions: UserSession[] = [];
+    const iter = kv.list({ prefix: ['sessions'] });
+
+    for await (const entry of iter) {
+        const session = entry.value as UserSession;
+        if (session && session.userId === userId) {
+            // Don't expose full token, just first/last chars
+            sessions.push({
+                ...session,
+                token: session.token.substring(0, 4) + '...' + session.token.substring(session.token.length - 4)
+            });
+        }
+    }
+
+    return sessions.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+}
+
+async function revokeSession(userId: string, sessionTokenPartial: string): Promise<void> {
+    const iter = kv.list({ prefix: ['sessions'] });
+
+    for await (const entry of iter) {
+        const session = entry.value as UserSession;
+        if (session && session.userId === userId) {
+            const partial = session.token.substring(0, 4) + '...' + session.token.substring(session.token.length - 4);
+            if (partial === sessionTokenPartial) {
+                await kv.delete(entry.key);
+                break;
+            }
+        }
+    }
+}
+
+async function revokeAllSessionsExcept(userId: string, keepToken: string): Promise<number> {
+    let count = 0;
+    const iter = kv.list({ prefix: ['sessions'] });
+
+    for await (const entry of iter) {
+        const session = entry.value as UserSession;
+        if (session && session.userId === userId && session.token !== keepToken) {
+            await kv.delete(entry.key);
+            count++;
+        }
+    }
+
+    return count;
+}
+
+// ==========================================
+// Social Counts Helper
+// ==========================================
+
+interface SocialCounts {
+    followers: number;
+    following: number;
+}
+
+async function getSocialCounts(userId: string): Promise<SocialCounts> {
+    let followers = 0;
+    let following = 0;
+
+    // Count followers
+    const followerIter = kv.list({ prefix: ['followers', userId] });
+    for await (const _ of followerIter) {
+        followers++;
+    }
+
+    // Count following
+    const followingIter = kv.list({ prefix: ['following', userId] });
+    for await (const _ of followingIter) {
+        following++;
+    }
+
+    return { followers, following };
 }
