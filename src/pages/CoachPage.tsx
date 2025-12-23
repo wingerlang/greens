@@ -6,9 +6,10 @@ import { CoachCalendar } from '../components/coach/CoachCalendar.tsx';
 import { CoachSetup } from '../components/coach/CoachSetup.tsx';
 import { CoachFeasibility } from '../components/coach/CoachFeasibility.tsx';
 import { CoachInsights } from '../components/coach/CoachInsights.tsx';
+import { CoachPlanSummary } from '../components/coach/CoachPlanSummary.tsx';
 import './CoachPage.css';
 
-type TabType = 'plan' | 'setup' | 'analysis' | 'progress';
+type TabType = 'plan' | 'summary' | 'setup' | 'analysis' | 'progress';
 
 export function CoachPage() {
     const { coachConfig, plannedActivities } = useData();
@@ -18,7 +19,7 @@ export function CoachPage() {
     const [activeTab, setActiveTab] = useState<TabType>(tabFromUrl || 'plan');
 
     useEffect(() => {
-        if (tabFromUrl && ['plan', 'setup', 'analysis', 'progress'].includes(tabFromUrl)) {
+        if (tabFromUrl && ['plan', 'summary', 'setup', 'analysis', 'progress'].includes(tabFromUrl)) {
             setActiveTab(tabFromUrl);
         }
     }, [tabFromUrl]);
@@ -47,6 +48,12 @@ export function CoachPage() {
                         className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'plan' ? 'bg-emerald-500 text-slate-950' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
                     >
                         Plan
+                    </button>
+                    <button
+                        onClick={() => handleTabChange('summary')}
+                        className={`px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${activeTab === 'summary' ? 'bg-indigo-500 text-white' : 'text-slate-500 hover:text-white hover:bg-white/5'}`}
+                    >
+                        📊 Översikt
                     </button>
                     <button
                         onClick={() => handleTabChange('setup')}
@@ -85,6 +92,7 @@ export function CoachPage() {
                 ) : (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                         {activeTab === 'plan' && <CoachCalendar activities={plannedActivities || []} />}
+                        {activeTab === 'summary' && <CoachPlanSummary activities={plannedActivities || []} />}
                         {activeTab === 'setup' && <CoachSetup />}
                         {activeTab === 'analysis' && <CoachFeasibility />}
                         {activeTab === 'progress' && <CoachInsights />}
