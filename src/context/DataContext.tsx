@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import {
     type FoodItem,
     type Recipe,
@@ -140,9 +140,12 @@ interface DataContextType {
     deletePlannedActivity: (id: string) => void;
     updatePlannedActivity: (id: string, updates: Partial<PlannedActivity>) => void;
     completePlannedActivity: (activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => void;
-    addCoachGoal: (goal: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => void;
+    addCoachGoal: (goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => void;
     activateCoachGoal: (goalId: string) => void;
     deleteCoachGoal: (goalId: string) => void;
+
+    // System
+    refreshData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -177,64 +180,75 @@ export function DataProvider({ children }: DataProviderProps) {
     const [plannedActivities, setPlannedActivities] = useState<PlannedActivity[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
+    // Optimization: Skip auto-save for atomic updates that are handled by dedicated API calls
+    const skipAutoSave = useRef(false);
+
     // Load from storage on mount
-    useEffect(() => {
-        const loadData = async () => {
-            const data = await storageService.load();
-            setFoodItems(data.foodItems);
-            setRecipes(data.recipes);
-            setMealEntries(data.mealEntries);
-            setWeeklyPlans(data.weeklyPlans || []);
-            setPantryItems(data.pantryItems || []);
-            setPantryQuantitiesState(data.pantryQuantities || {});
+    const refreshData = useCallback(async () => {
+        setIsLoaded(false);
+        const data = await storageService.load();
+        setFoodItems(data.foodItems || []);
+        setRecipes(data.recipes || []);
+        setMealEntries(data.mealEntries || []);
+        setWeeklyPlans(data.weeklyPlans || []);
+        setPantryItems(data.pantryItems || []);
+        setPantryQuantitiesState(data.pantryQuantities || {});
 
-            // Handle Users
-            const loadedUsers = data.users || [];
-            setUsers(loadedUsers);
+        // Handle Users
+        const loadedUsers = data.users || [];
+        setUsers(loadedUsers);
 
-            if (data.currentUserId) {
-                const current = loadedUsers.find(u => u.id === data.currentUserId);
-                if (current) setCurrentUserState(current);
-            } else if (loadedUsers.length > 0) {
-                setCurrentUserState(loadedUsers[0]);
-            }
+        if (data.currentUserId) {
+            const current = loadedUsers.find(u => u.id === data.currentUserId);
+            if (current) setCurrentUserState(current);
+        } else if (loadedUsers.length > 0) {
+            setCurrentUserState(loadedUsers[0]);
+        }
 
-            if (data.userSettings) {
-                setUserSettings(data.userSettings);
-            }
+        if (data.userSettings) {
+            setUserSettings(data.userSettings);
+        }
 
-            if (data.dailyVitals) {
-                setDailyVitals(data.dailyVitals);
-            }
-            if (data.exerciseEntries) {
-                setExerciseEntries(data.exerciseEntries);
-            }
-            if (data.weightEntries) {
-                setWeightEntries(data.weightEntries || []);
-            }
-            if (data.competitions) {
-                setCompetitions(data.competitions || []);
-            }
-            if (data.trainingCycles) {
-                setTrainingCycles(data.trainingCycles || []);
-            }
-            if (data.performanceGoals) {
-                setPerformanceGoals(data.performanceGoals || []);
-            }
-            if (data.coachConfig) {
-                setCoachConfig(data.coachConfig);
-            }
-            if (data.plannedActivities) {
-                setPlannedActivities(data.plannedActivities || []);
-            }
-            setIsLoaded(true);
-        };
-        loadData();
+        if (data.dailyVitals) {
+            setDailyVitals(data.dailyVitals);
+        }
+        if (data.exerciseEntries) {
+            setExerciseEntries(data.exerciseEntries);
+        }
+        if (data.weightEntries) {
+            setWeightEntries(data.weightEntries || []);
+        }
+        if (data.competitions) {
+            setCompetitions(data.competitions || []);
+        }
+        if (data.trainingCycles) {
+            setTrainingCycles(data.trainingCycles || []);
+        }
+        if (data.performanceGoals) {
+            setPerformanceGoals(data.performanceGoals || []);
+        }
+        if (data.coachConfig) {
+            setCoachConfig(data.coachConfig);
+        }
+        if (data.plannedActivities) {
+            setPlannedActivities(data.plannedActivities || []);
+        }
+        setIsLoaded(true);
     }, []);
+
+    useEffect(() => {
+        refreshData();
+    }, [refreshData]);
 
     // Save to storage on changes
     useEffect(() => {
         if (isLoaded) {
+            const shouldSkipApi = skipAutoSave.current;
+            if (shouldSkipApi) {
+                console.log("Optimizing auto-save: Skipping API sync for atomic update");
+                skipAutoSave.current = false;
+            }
+
             storageService.save({
                 foodItems,
                 recipes,
@@ -253,7 +267,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 performanceGoals,
                 coachConfig,
                 plannedActivities
-            });
+            }, { skipApi: shouldSkipApi });
         }
     }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions, trainingCycles, performanceGoals, coachConfig, plannedActivities]);
 
@@ -540,6 +554,7 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString(),
         };
 
+
         // Optimistic UI Update
         setWeightEntries(prev => {
             const next = [...prev, newEntry];
@@ -551,6 +566,9 @@ export function DataProvider({ children }: DataProviderProps) {
         });
 
         // Use new optimized API call (fire and forget)
+        // CRITICAL: Skip the next global auto-save to prevent overwriting or sending full payload
+        skipAutoSave.current = true;
+
         storageService.addWeightEntry(weight, date).catch(err => {
             console.error("Failed to sync weight:", err);
             // Optionally revert optimistic update here if critical
@@ -603,6 +621,7 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [getLatestWeight]);
 
     const getMealEntriesForDate = useCallback((date: string): MealEntry[] => {
+        if (!Array.isArray(mealEntries)) return [];
         return mealEntries.filter(entry => entry.date === date);
     }, [mealEntries]);
 
@@ -968,7 +987,8 @@ export function DataProvider({ children }: DataProviderProps) {
                     goals: prev.goals.filter(g => g.id !== goalId)
                 };
             });
-        }, [])
+        }, []),
+        refreshData
     };
 
     return (

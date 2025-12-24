@@ -101,7 +101,7 @@ export function useRandomizer(
 
     // Get random recipe for a slot
     const getRandomRecipe = useCallback((mealType: MealType): Recipe | null => {
-        if (recipes.length === 0) return null;
+        if (!Array.isArray(recipes) || recipes.length === 0) return null;
 
         // Score all recipes
         const scored = recipes.map(r => ({
@@ -132,7 +132,7 @@ export function useRandomizer(
 
     // Get multiple suggestions for a slot
     const getSuggestions = useCallback((mealType: MealType, count: number = 3): Recipe[] => {
-        if (recipes.length === 0) return [];
+        if (!Array.isArray(recipes) || recipes.length === 0) return [];
 
         const scored = recipes
             .map(r => ({ recipe: r, score: scoreRecipe(r, mealType) }))

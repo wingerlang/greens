@@ -1,35 +1,43 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../../../context/AuthContext.tsx';
+import { useData } from '../../../context/DataContext.tsx';
 import { profileService } from '../../../services/profileService.ts';
 
 export function DangerZoneSection() {
     const { logout } = useAuth();
+    const { refreshData } = useData();
     const [confirmInput, setConfirmInput] = useState('');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isResetting, setIsResetting] = useState(false);
 
-    const handleReset = async (type: 'meals' | 'exercises' | 'weight') => {
-        const labels = {
-            meals: 'måltidshistorik',
-            exercises: 'träningspass',
-            weight: 'vikthistorik'
-        };
+    // Track which granular reset is being confirmed
+    const [pendingReset, setPendingReset] = useState<'meals' | 'exercises' | 'weight' | null>(null);
+    const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
-        if (!confirm(`Är du säker på att du vill rensa all ${labels[type]}? Detta går inte att ångra.`)) return;
+    const labels = {
+        meals: 'måltidshistorik',
+        exercises: 'träningspass',
+        weight: 'vikthistorik'
+    };
+
+    const handleReset = async () => {
+        if (!pendingReset) return;
 
         setIsResetting(true);
         try {
-            const success = await profileService.resetData(type);
+            const success = await profileService.resetData(pendingReset);
             if (success) {
-                alert(`✅ ${labels[type]} har rensats.`);
-                window.location.reload(); // Quick refresh to clear state
+                await refreshData();
+                setFeedbackMessage(`✅ ${labels[pendingReset]} har rensats.`);
+                setPendingReset(null);
+                setTimeout(() => setFeedbackMessage(null), 3000);
             } else {
-                alert('Fel vid rensning.');
+                setFeedbackMessage('❌ Fel vid rensning.');
             }
         } catch (e) {
             console.error(e);
-            alert('Kunde inte nå servern.');
+            setFeedbackMessage('❌ Kunde inte nå servern.');
         } finally {
             setIsResetting(false);
         }
@@ -42,13 +50,13 @@ export function DangerZoneSection() {
         try {
             const success = await profileService.resetData('all');
             if (success) {
-                alert('Ditt konto har tagits bort. Hejdå! 👋');
-                logout();
+                logout(); // Logout redirects to login usually
             } else {
-                alert('Fel vid borttagning av konto.');
+                setFeedbackMessage('❌ Fel vid borttagning av konto.');
             }
         } catch (e) {
             console.error(e);
+            setFeedbackMessage('❌ Kunde inte nå servern.');
         } finally {
             setIsResetting(false);
         }
@@ -60,33 +68,51 @@ export function DangerZoneSection() {
                 ☢️ Danger Zone
             </h3>
 
+            {feedbackMessage && (
+                <div className="mb-6 p-4 bg-red-950/50 border border-red-500/30 rounded-xl text-red-200 animate-in fade-in slide-in-from-top-2">
+                    {feedbackMessage}
+                </div>
+            )}
+
             <div className="grid md:grid-cols-2 gap-4 mb-8">
-                <button
-                    disabled={isResetting}
-                    onClick={() => handleReset('meals')}
-                    className="p-4 bg-red-950/30 border border-red-900/30 rounded-xl text-red-400 hover:bg-red-900/20 text-left transition-all"
-                >
-                    <div className="font-bold mb-1">🧹 Rensa Måltider</div>
-                    <div className="text-xs opacity-70">Tar bort alla loggade måltider</div>
-                </button>
-
-                <button
-                    disabled={isResetting}
-                    onClick={() => handleReset('exercises')}
-                    className="p-4 bg-red-950/30 border border-red-900/30 rounded-xl text-red-400 hover:bg-red-900/20 text-left transition-all"
-                >
-                    <div className="font-bold mb-1">🏋️ Rensa Träningspass</div>
-                    <div className="text-xs opacity-70">Tar bort all träningshistorik</div>
-                </button>
-
-                <button
-                    disabled={isResetting}
-                    onClick={() => handleReset('weight')}
-                    className="p-4 bg-red-950/30 border border-red-900/30 rounded-xl text-red-400 hover:bg-red-900/20 text-left transition-all"
-                >
-                    <div className="font-bold mb-1">⚖️ Rensa Vikt</div>
-                    <div className="text-xs opacity-70">Nollställer din viktresa</div>
-                </button>
+                {(['meals', 'exercises', 'weight'] as const).map(type => (
+                    <div key={type} className="relative">
+                        {pendingReset === type ? (
+                            <div className="absolute inset-0 bg-red-950 border border-red-500 rounded-xl p-4 flex flex-col justify-center items-center gap-3 z-10 animate-in zoom-in-95">
+                                <p className="text-sm text-red-200 font-bold">Rensa {labels[type]}?</p>
+                                <div className="flex gap-2 w-full">
+                                    <button
+                                        onClick={handleReset}
+                                        disabled={isResetting}
+                                        className="flex-1 bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 rounded transition-colors"
+                                    >
+                                        JA, RENSA
+                                    </button>
+                                    <button
+                                        onClick={() => setPendingReset(null)}
+                                        disabled={isResetting}
+                                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 rounded transition-colors"
+                                    >
+                                        AVBRYT
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            <button
+                                disabled={isResetting || !!pendingReset}
+                                onClick={() => setPendingReset(type)}
+                                className="w-full h-full p-4 bg-red-950/30 border border-red-900/30 rounded-xl text-red-400 hover:bg-red-900/20 text-left transition-all disabled:opacity-50"
+                            >
+                                <div className="font-bold mb-1 capital">
+                                    🧹 Rensa {type === 'meals' ? 'Måltider' : type === 'exercises' ? 'Träningspass' : 'Vikt'}
+                                </div>
+                                <div className="text-xs opacity-70">
+                                    Tar bort all {labels[type]}
+                                </div>
+                            </button>
+                        )}
+                    </div>
+                ))}
             </div>
 
             <div className="bg-red-950/20 border border-red-500/20 rounded-xl p-6">
@@ -97,8 +123,9 @@ export function DangerZoneSection() {
 
                 {!showDeleteConfirm ? (
                     <button
+                        disabled={isResetting || !!pendingReset}
                         onClick={() => setShowDeleteConfirm(true)}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-sm transition-colors"
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg text-sm transition-colors disabled:opacity-50"
                     >
                         Ta bort mitt konto
                     </button>

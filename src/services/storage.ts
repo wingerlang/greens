@@ -13,7 +13,7 @@ import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleD
 
 export interface StorageService {
     load(): Promise<AppData>;
-    save(data: AppData): Promise<void>;
+    save(data: AppData, options?: { skipApi?: boolean }): Promise<void>;
     // Individual entity operations for future database support
     getWeeklyPlan(weekStartDate: string): Promise<WeeklyPlan | undefined>;
     saveWeeklyPlan(plan: WeeklyPlan): Promise<void>;
@@ -25,8 +25,9 @@ export interface StorageService {
 // LocalStorage Implementation
 // ============================================
 
+
 const STORAGE_KEY = 'greens-app-data';
-const ENABLE_CLOUD_SYNC = false; // Set to true if running backend server
+const ENABLE_CLOUD_SYNC = true; // Set to true if running backend server
 
 const getDefaultData = (): AppData => ({
     foodItems: SAMPLE_FOOD_ITEMS,
@@ -91,6 +92,9 @@ export class LocalStorageService implements StorageService {
             data = getDefaultData();
         } else {
             // Run migrations
+            if (!data.foodItems) data.foodItems = [];
+            if (!data.recipes) data.recipes = [];
+            if (!data.mealEntries) data.mealEntries = [];
             if (!data.weeklyPlans) data.weeklyPlans = [];
             if (!data.pantryItems) data.pantryItems = [];
             if (!data.users) { data.users = SAMPLE_USERS; data.currentUserId = SAMPLE_USERS[0].id; }
@@ -106,15 +110,17 @@ export class LocalStorageService implements StorageService {
         return data;
     }
 
-    async save(data: AppData): Promise<void> {
+    async save(data: AppData, options?: { skipApi?: boolean }): Promise<void> {
         try {
             // 1. Save Local
-            console.log('[Storage] Saving to localStorage:', { weeklyPlansCount: data.weeklyPlans?.length });
+            // console.log('[Storage] Saving to localStorage:', { weeklyPlansCount: data.weeklyPlans?.length });
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
-            // 2. Sync to API if logged in
+            // 2. Sync to API if logged in (and not skipped)
+            if (options?.skipApi) return;
+
             const token = getToken();
-            if (token) {
+            if (token && ENABLE_CLOUD_SYNC) {
                 // Fire and forget (don't await to avoid UI lag, but catch errors)
                 fetch('http://localhost:8000/api/data', {
                     method: 'POST',
