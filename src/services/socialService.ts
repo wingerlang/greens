@@ -45,5 +45,23 @@ export const socialService = {
         if (!res.ok) return false;
         const data = await res.json();
         return data.isFollowing;
+    },
+
+    async getCommunityUsers(): Promise<User[]> {
+        const res = await fetch(`${API_BASE}/users`, {
+            headers: await getHeaders()
+        });
+        if (!res.ok) throw new Error('Failed to fetch community users');
+        const data = await res.json();
+        return data.users || [];
+    },
+
+    async getFollowing(): Promise<string[]> {
+        const res = await fetch(`${API_BASE}/user/following`, {
+            headers: await getHeaders()
+        });
+        if (!res.ok) throw new Error('Failed to fetch following list');
+        const data = await res.json();
+        return data.followingIds || [];
     }
 };

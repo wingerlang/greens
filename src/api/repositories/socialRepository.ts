@@ -1,4 +1,4 @@
-import { db } from '../kv.ts'; // Assuming shared KV instance
+import { kv as db } from '../kv.ts'; // Renaming to db to match existing code usage
 import { User } from '../../models/types.ts';
 
 /**

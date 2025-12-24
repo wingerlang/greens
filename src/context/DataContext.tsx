@@ -539,6 +539,8 @@ export function DataProvider({ children }: DataProviderProps) {
             date,
             createdAt: new Date().toISOString(),
         };
+
+        // Optimistic UI Update
         setWeightEntries(prev => {
             const next = [...prev, newEntry];
             return next.sort((a, b) => {
@@ -547,6 +549,13 @@ export function DataProvider({ children }: DataProviderProps) {
                 return b.createdAt.localeCompare(a.createdAt);
             });
         });
+
+        // Use new optimized API call (fire and forget)
+        storageService.addWeightEntry(weight, date).catch(err => {
+            console.error("Failed to sync weight:", err);
+            // Optionally revert optimistic update here if critical
+        });
+
         return newEntry;
     }, []);
 

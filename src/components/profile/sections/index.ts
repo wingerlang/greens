@@ -8,3 +8,4 @@ export { NotificationSettingsSection } from './NotificationSettingsSection.tsx';
 export { SessionsSection } from './SessionsSection.tsx';
 export { WeightHistorySection } from './WeightHistorySection.tsx';
 export { PrivacySettingsSection } from './PrivacySettingsSection.tsx';
+export { DangerZoneSection } from './DangerZoneSection.tsx';

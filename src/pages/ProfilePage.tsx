@@ -28,6 +28,7 @@ import {
     SessionsSection,
     WeightHistorySection,
     PrivacySettingsSection,
+    DangerZoneSection
 } from '../components/profile/sections/index.ts';
 
 import './ProfilePage.css';
@@ -58,6 +59,16 @@ export function ProfilePage() {
     useEffect(() => {
         loadProfile();
     }, []);
+
+    const { weightEntries, getLatestWeight } = useData();
+
+    // Sync weight from DataContext (for immediate updates from Command Palette/Modal)
+    useEffect(() => {
+        const latest = getLatestWeight();
+        if (latest > 0 && latest !== profile.weight) {
+            setProfile(prev => ({ ...prev, weight: latest }));
+        }
+    }, [weightEntries, getLatestWeight]);
 
     const loadProfile = async () => {
         setIsLoading(true);
@@ -298,6 +309,8 @@ export function ProfilePage() {
                         ]} onChange={(v) => updateProfile('preferredUnits', v)} />
                     </div>
                 </CollapsibleSection>
+
+                <DangerZoneSection />
             </div>
         </div>
     );

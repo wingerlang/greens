@@ -151,6 +151,12 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             </div>
                         </div>
 
+                        {/* Community */}
+                        <NavLink to="/community" className={linkClasses}>
+                            <span>👥</span>
+                            <span className="hidden xl:inline">Community</span>
+                        </NavLink>
+
                         {/* Tävling */}
                         <NavLink to="/tävling" className={linkClasses}>
                             <span>🏆</span>
@@ -333,6 +339,18 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         </NavLink>
                     </div>
 
+                    {/* Mobile Community */}
+                    <div className="space-y-1">
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Gemenskap</div>
+                        <NavLink to="/community" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                            <span className="text-xl">👥</span>
+                            <div className="flex flex-col">
+                                <span className="font-bold text-slate-100">Community</span>
+                                <span className="text-[10px] text-slate-500 font-medium">Hitta vänner</span>
+                            </div>
+                        </NavLink>
+                    </div>
+
                     {/* Mobile Tävling */}
                     <div className="space-y-1">
                         <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Utmaningar</div>
@@ -356,8 +374,8 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             <span>Databas</span>
                         </NavLink>
                     </div>
-                </div>
+                </div >
             )}
-        </nav>
+        </nav >
     );
 }

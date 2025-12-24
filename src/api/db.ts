@@ -9,14 +9,16 @@ import { reconciliationService } from './services/reconciliationService.ts';
 // Types
 // ==========================================
 
-export interface User {
-    id: string;
-    username: string;
+import { User as SharedUser, UserSettings, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY } from '../models/types.ts';
+import { SocialRepository } from './repositories/socialRepository.ts';
+
+// ==========================================
+// Types
+// ==========================================
+
+export interface User extends SharedUser {
     passHash: string;
     salt: string;
-    role: 'admin' | 'user';
-    createdAt: string;
-    email?: string;
 }
 
 export interface LoginStat {
@@ -59,8 +61,15 @@ async function createUser(username: string, password: string, email?: string): P
         passHash,
         salt,
         role: 'user', // Default role
+        plan: 'free',
         createdAt: new Date().toISOString(),
-        email
+        email: email || '',
+        name: username, // Default name
+        handle: username.toLowerCase(), // Default handle
+        settings: DEFAULT_USER_SETTINGS,
+        privacy: DEFAULT_PRIVACY,
+        followersCount: 0,
+        followingCount: 0
     };
 
     // Atomic transaction
@@ -84,26 +93,88 @@ async function getUserById(id: string): Promise<User | null> {
     return entry.value as User;
 }
 
-async function createSession(userId: string): Promise<string> {
+export async function createSession(userId: string): Promise<string> {
     const sessionId = crypto.randomUUID();
+    // 30 days
+    const expires = Date.now() + 1000 * 60 * 60 * 24 * 30;
     const session: Session = {
         id: sessionId,
         userId,
-        expiresAt: Date.now() + 1000 * 60 * 60 * 24 * 7 // 7 days
+        start: new Date().toISOString(),
+        expires
     };
-    await kv.set(['sessions', sessionId], session);
+
+    const primaryKey = ["sessions", sessionId];
+    const userSessionKey = ["user_sessions", userId, sessionId];
+
+    const res = await kv.atomic()
+        .set(primaryKey, session)
+        .set(userSessionKey, session)
+        .commit();
+
+    if (!res.ok) throw new Error("Failed to create session");
     return sessionId;
 }
 
-async function getSession(sessionId: string): Promise<Session | null> {
-    const entry = await kv.get(['sessions', sessionId]);
-    const session = entry.value as Session;
-    if (!session) return null;
-    if (Date.now() > session.expiresAt) {
-        await kv.delete(['sessions', sessionId]);
-        return null;
+export async function getSession(sessionId: string): Promise<Session | null> {
+    const res = await kv.get<Session>(["sessions", sessionId]);
+    if (!res.value) return null;
+    if (Date.now() > res.value.expires) {
+        await kv.delete(["sessions", sessionId]);
+        return null; // Expired
     }
-    return session;
+    return res.value;
+}
+
+export async function revokeAllUserSessions(userId: string, keepSessionId?: string): Promise<void> {
+    const sessions = await getUserSessions(userId);
+    let atomic = kv.atomic();
+    for (const s of sessions) {
+        if (s.id !== keepSessionId) {
+            atomic = atomic
+                .delete(["sessions", s.id])
+                .delete(["user_sessions", userId, s.id]);
+        }
+    }
+    await atomic.commit();
+}
+
+
+// ==========================================
+// Data Reset
+// ==========================================
+
+export async function resetUserData(userId: string, type: 'meals' | 'exercises' | 'weight' | 'all'): Promise<void> {
+    if (type === 'all') {
+        const user = await getUserById(userId);
+        if (user) {
+            await kv.atomic()
+                .delete(["users", userId])
+                .delete(["user_profiles", userId])
+                .delete(["users_by_username", user.username])
+                .delete(["users_by_handle", user.handle || ""])
+                .commit();
+
+            // Also cleanup sessions
+            await revokeAllUserSessions(userId);
+        }
+        return;
+    }
+
+    const data = await getUserData(userId);
+    if (!data) return;
+
+    if (type === 'meals') {
+        data.mealEntries = [];
+    } else if (type === 'exercises') {
+        data.exerciseEntries = [];
+        data.trainingCycles = [];
+        data.plannedActivities = [];
+    } else if (type === 'weight') {
+        data.weightEntries = [];
+    }
+
+    await saveUserData(userId, data);
 }
 
 async function logLoginAttempt(userId: string, success: boolean, ip: string, userAgent: string) {
@@ -168,7 +239,7 @@ async function hashPassword(password: string, salt: string): Promise<string> {
 // ==========================================
 
 export async function startServer(port: number) {
-    Deno.serve({ port }, async (req) => {
+    Deno.serve({ port }, async (req: Request) => {
         const url = new URL(req.url);
         const method = req.method;
 
@@ -177,7 +248,7 @@ export async function startServer(port: number) {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*", // Configure for prod later
             "Access-Control-Allow-Headers": "Content-Type, Authorization",
-            "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+            "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         });
 
         if (method === "OPTIONS") {
@@ -264,6 +335,71 @@ export async function startServer(port: number) {
             return new Response(JSON.stringify({ users: users.map(sanitizeUser) }), { headers });
         }
 
+
+        // ==========================================
+        // Session Routes
+        // ==========================================
+
+        if (url.pathname === "/api/user/sessions" && method === "GET") {
+            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+            const session = await getSession(token);
+            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+            const sessions = await getUserSessions(session.userId);
+            const clientSessions = sessions.map(s => ({
+                token: s.id,
+                userId: s.userId,
+                createdAt: s.start,
+                isCurrent: s.id === session.id
+            }));
+
+            return new Response(JSON.stringify({ sessions: clientSessions }), { headers });
+        }
+
+        if (url.pathname === "/api/user/sessions" && method === "DELETE") {
+            // Revoke ALL OTHER sessions
+            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+            const session = await getSession(token);
+            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+            await revokeAllUserSessions(session.userId, session.id);
+            return new Response(JSON.stringify({ success: true }), { headers });
+        }
+
+        if (url.pathname.startsWith("/api/user/sessions/") && method === "DELETE") {
+            const tokenToRevoke = url.pathname.split("/").pop();
+            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+            const session = await getSession(token);
+            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+            if (tokenToRevoke) {
+                await revokeSession(tokenToRevoke, session.userId);
+            }
+            return new Response(JSON.stringify({ success: true }), { headers });
+        }
+
+        if (url.pathname === "/api/user/reset" && method === "POST") {
+            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+            const session = await getSession(token);
+            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+            try {
+                const body = await req.json();
+                if (!['meals', 'exercises', 'weight', 'all'].includes(body.type)) {
+                    return new Response(JSON.stringify({ error: "Invalid type" }), { status: 400, headers });
+                }
+
+                await resetUserData(session.userId, body.type as any);
+                return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e.message || "Failed" }), { status: 500, headers });
+            }
+        }
+
         // --- DATA SYNC ROUTES ---
 
         if (url.pathname === "/api/data" && method === "GET") {
@@ -288,6 +424,45 @@ export async function startServer(port: number) {
                 return new Response(JSON.stringify({ success: true, timestamp: new Date() }), { headers });
             } catch (e) {
                 return new Response(JSON.stringify({ error: "Invalid data" }), { status: 400, headers });
+            }
+        }
+
+
+        if (url.pathname === "/api/user/weight" && method === "POST") {
+            const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+            if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+            const session = await getSession(token);
+            if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+            try {
+                const body = await req.json();
+                if (!body.weight || !body.date) throw new Error("Missing weight or date");
+
+                // Get current data to update only weightEntries
+                // Note: In a real DB we'd append solely to a separate table
+                // Here we fetch, append, save. 
+                // Optimization: We could have a separate key for weight entries if we redesigned fully,
+                // but to keep compat with "getUserData", we update the big blob field 'weightEntries'.
+
+                const currentData = await getUserData(session.userId) || { weightEntries: [] };
+                const newEntry = {
+                    id: crypto.randomUUID(),
+                    weight: Number(body.weight),
+                    date: body.date,
+                    createdAt: new Date().toISOString()
+                };
+
+                const updatedEntries = [...(currentData.weightEntries || []), newEntry]
+                    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+                await saveUserData(session.userId, {
+                    ...currentData,
+                    weightEntries: updatedEntries
+                });
+
+                return new Response(JSON.stringify({ success: true, entry: newEntry }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e.message || "Failed to save weight" }), { status: 400, headers });
             }
         }
 
@@ -617,6 +792,66 @@ export async function startServer(port: number) {
 
                 await SocialRepository.unfollowUser(session.userId, targetId);
                 return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/user/following - Get IDs of users I follow
+        if (url.pathname === "/api/user/following" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const followingIds: string[] = [];
+                const iter = kv.list({ prefix: ['following', session.userId] });
+                for await (const entry of iter) {
+                    followingIds.push(entry.key[2] as string);
+                }
+
+                return new Response(JSON.stringify({ followingIds }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
+        }
+
+        // GET /api/users - List community users (Public/Admin view)
+        if (url.pathname === "/api/users" && method === "GET") {
+            try {
+                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
+                const session = await getSession(token);
+                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+
+                const currentUser = await getUserById(session.userId);
+                const isAdmin = currentUser?.role === 'admin';
+
+                const users: any[] = [];
+                const iter = kv.list({ prefix: ['users'] });
+
+                for await (const entry of iter) {
+                    const u = entry.value as any; // Cast to any to access all fields safely
+                    if (isAdmin) {
+                        users.push(u);
+                    } else {
+                        // Public view - Sanitize
+                        users.push({
+                            id: u.id,
+                            username: u.username,
+                            name: u.name,
+                            handle: u.handle,
+                            avatarUrl: u.avatarUrl,
+                            role: u.role,
+                            createdAt: u.createdAt,
+                            // Include stats for sorting if available on user object (or we fetch them separately?
+                            // Ideally these are aggregated, but for now basic info)
+                        });
+                    }
+                }
+
+                return new Response(JSON.stringify({ users }), { headers });
             } catch (e) {
                 return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
             }
@@ -1085,61 +1320,6 @@ export async function startServer(port: number) {
         }
 
         // ==========================================
-        // Session Management 📱
-        // ==========================================
-
-        // GET /api/user/sessions - Get all active sessions
-        if (url.pathname === "/api/user/sessions" && method === "GET") {
-            try {
-                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
-                const session = await getSession(token);
-                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
-
-                const sessions = await getUserSessions(session.userId);
-                // Mark current session
-                const sessionsWithCurrent = sessions.map(s => ({
-                    ...s,
-                    isCurrent: s.token === token
-                }));
-                return new Response(JSON.stringify({ sessions: sessionsWithCurrent }), { headers });
-            } catch (e) {
-                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
-            }
-        }
-
-        // DELETE /api/user/sessions/:sessionId - Revoke a session
-        if (url.pathname.startsWith("/api/user/sessions/") && method === "DELETE") {
-            try {
-                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
-                const session = await getSession(token);
-                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
-
-                const sessionId = url.pathname.split('/').pop() || '';
-                await revokeSession(session.userId, sessionId);
-                return new Response(JSON.stringify({ success: true }), { headers });
-            } catch (e) {
-                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
-            }
-        }
-
-        // DELETE /api/user/sessions - Revoke all other sessions
-        if (url.pathname === "/api/user/sessions" && method === "DELETE") {
-            try {
-                const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-                if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
-                const session = await getSession(token);
-                if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
-
-                await revokeAllSessionsExcept(session.userId, token);
-                return new Response(JSON.stringify({ success: true }), { headers });
-            } catch (e) {
-                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
-            }
-        }
-
-        // ==========================================
         // Social Counts 👥
         // ==========================================
 
@@ -1235,10 +1415,75 @@ async function getUserProfile(userId: string): Promise<UserProfile | null> {
     return entry.value as UserProfile | null;
 }
 
+// Update both the separate profile and the core user object
 async function updateUserProfile(userId: string, updates: Partial<UserProfile>) {
-    const existing = await getUserProfile(userId) || {};
-    const merged = { ...existing, ...updates };
-    await kv.set(['user_profiles', userId], merged);
+    const profileKey = ['user_profiles', userId];
+    const userKey = ['users', userId];
+
+    const existingProfile = await getUserProfile(userId) || {};
+    const mergedProfile = { ...existingProfile, ...updates };
+
+    // Get core user to sync basic fields
+    const userEntry = await kv.get(userKey);
+    const user = userEntry.value as User;
+
+    if (!user) {
+        // Should not happen, but saving profile anyway
+        await kv.set(profileKey, mergedProfile);
+        return;
+    }
+
+    const tx = kv.atomic();
+    tx.set(profileKey, mergedProfile);
+
+    // Sync fields to core User object
+    let userChanged = false;
+
+    // 1. Handle
+    if (updates.handle && updates.handle !== user.handle) {
+        // Handle uniqueness check should have been done by caller or we trust SocialRepo, 
+        // but here we are committing. 
+        // We need to update the index.
+        const oldHandle = user.handle; // technically User might not have handle set yet if legacy
+
+        // Remove old index
+        if (oldHandle) {
+            tx.delete(['users_by_handle', oldHandle.toLowerCase()]);
+        }
+        // Set new index
+        tx.set(['users_by_handle', updates.handle.toLowerCase()], userId);
+
+        user.handle = updates.handle;
+        userChanged = true;
+    }
+
+    // 2. Name
+    if (updates.name && updates.name !== user.name) {
+        user.name = updates.name;
+        userChanged = true;
+    }
+
+    // 3. Avatar
+    if (updates.avatarUrl && updates.avatarUrl !== user.avatarUrl) {
+        user.avatarUrl = updates.avatarUrl;
+        userChanged = true;
+    }
+
+    // 4. Privacy (Sync specific privacy fields that might be useful on User object, though UserPrivacy matches)
+    if (updates.privacy) {
+        // Merge privacy
+        user.privacy = { ...user.privacy, ...updates.privacy } as any;
+        userChanged = true;
+    }
+
+    if (userChanged) {
+        tx.set(userKey, user);
+
+        // Also update users_by_username index if name changed? No, that's username based.
+        // But if this was username, we'd have a bigger problem.
+    }
+
+    await tx.commit();
 }
 
 // ==========================================

@@ -298,6 +298,19 @@ export const profileService = {
         });
         if (!res.ok) return { followers: 0, following: 0 };
         return res.json();
+    },
+
+    // ==========================================
+    // Danger Zone
+    // ==========================================
+
+    async resetData(type: 'meals' | 'exercises' | 'weight' | 'all'): Promise<boolean> {
+        const res = await fetch(`${API_BASE}/user/reset`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ type })
+        });
+        return res.ok;
     }
 };
 

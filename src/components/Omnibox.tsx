@@ -24,6 +24,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     // For now, keep it simple: Input -> Action.
 
     const intent = parseOmniboxInput(input);
+    const [showFeedback, setShowFeedback] = useState(false);
+
+    useEffect(() => {
+        if (showFeedback) {
+            const timer = setTimeout(() => setShowFeedback(false), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [showFeedback]);
 
     useEffect(() => {
         if (isOpen && inputRef.current) {
@@ -48,8 +56,16 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             onClose();
         } else if (intent.type === 'weight') {
             addWeightEntry(intent.data.weight, new Date().toISOString().split('T')[0]);
-            onClose();
-            // Show toast? relying on global toast or implicit success for now.
+            // Snappy feedback
+            setShowFeedback(true);
+            setInput('');
+            // Don't close immediately if showing feedback? Or close and show toast?
+            // User asked for snappy feedback. Keeping it open for a beat or just closing?
+            // "Snappy" usually implies instant action. Let's keep it open to show "Saved" then close or simple close + feedback elsewhere.
+            // Current code closes on intent execution. Let's adjust.
+            // If weight, show feedback, clear input, wait 500ms then close?
+            setTimeout(() => onClose(), 800);
+            return;
         } else if (intent.type === 'exercise') {
             if (onOpenTraining) {
                 onOpenTraining({
@@ -85,6 +101,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleExecute()}
                     />
+                    {showFeedback && (
+                        <div className="absolute right-16 px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full animate-in fade-in zoom-in duration-300">
+                            ✨ Sparat!
+                        </div>
+                    )}
                     <div className="flex gap-2">
                         <kbd className="hidden md:inline-flex h-6 items-center gap-1 rounded border border-white/10 bg-white/5 px-2 font-mono text-[10px] font-medium text-slate-400">
                             ESC

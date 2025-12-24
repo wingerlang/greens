@@ -18,6 +18,7 @@ export interface StorageService {
     getWeeklyPlan(weekStartDate: string): Promise<WeeklyPlan | undefined>;
     saveWeeklyPlan(plan: WeeklyPlan): Promise<void>;
     deleteWeeklyPlan(id: string): Promise<void>;
+    addWeightEntry(weight: number, date: string): Promise<void>;
 }
 
 // ============================================
@@ -154,6 +155,33 @@ export class LocalStorageService implements StorageService {
         const data = await this.load();
         data.weeklyPlans = data.weeklyPlans?.filter(p => p.id !== id) || [];
         await this.save(data);
+    }
+
+    async addWeightEntry(weight: number, date: string): Promise<void> {
+        // 1. API Optimization: Send ONLY weight entry
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('http://localhost:8000/api/user/weight', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ weight, date })
+                });
+
+                if (!res.ok) throw new Error('API sync failed');
+
+                console.log('[Storage] Weight synced via Patch API');
+            } catch (e) {
+                console.error('[Storage] Fallback to full sync due to error:', e);
+                // Fallback to full sync happens because DataContext updates state
+                // and triggers the main save() effect. 
+                // However, we want to try to prevent that effect if we could, 
+                // but for now, this method just ensures the API gets the data directly.
+            }
+        }
     }
 }
 

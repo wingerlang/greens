@@ -564,11 +564,10 @@ export function TrainingPage() {
             {/* Full Width Layout for Charts */}
             <div className="space-y-6">
 
-                {/* NEW: Health Score Card - Replaces old "Goal Cards" visually or sits above */}
                 <HealthScoreCard
-                    exercises={exerciseEntries}
+                    exercises={legacyExerciseEntries}
                     meals={mealEntries}
-                    userSettings={{ bmr: calculateBMR('male', 75, 180, 30) }} // Fallback/Estimate
+                    userSettings={{ bmr: calculateBMR() }}
                 />
 
                 {/* Year Visualization */}
