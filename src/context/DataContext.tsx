@@ -307,7 +307,14 @@ export function DataProvider({ children }: DataProviderProps) {
                 universalActivities
             }, { skipApi: shouldSkipApi });
         }
-    }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions, trainingCycles, performanceGoals, coachConfig, plannedActivities]);
+    }, [
+        foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities,
+        userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries,
+        weightEntries, competitions, trainingCycles, performanceGoals,
+        coachConfig, plannedActivities,
+        // Phase 8
+        sleepSessions, intakeLogs, universalActivities
+    ]);
 
     // ============================================
     // Pantry CRUD

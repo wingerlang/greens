@@ -139,6 +139,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                         <span className="w-5 text-center">🏋️</span>
                                         <span>Träning</span>
                                     </NavLink>
+                                    <NavLink to="/logg" className={linkClasses}>
+                                        <span className="w-5 text-center">📜</span>
+                                        <span>Aktivitetslogg</span>
+                                    </NavLink>
                                     <NavLink to="/coach" className={linkClasses}>
                                         <span className="w-5 text-center">🧠</span>
                                         <span>Smart Coach</span>
@@ -221,15 +225,28 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             </Link>
 
                             <div className="absolute top-full right-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
-                                <div className="grid gap-1">
-                                    <button
-                                        onClick={logout}
-                                        className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 font-bold text-xs hover:text-rose-400 hover:bg-rose-500/10 transition-all w-full text-left"
-                                    >
-                                        <span className="w-5 text-center">🚪</span>
-                                        <span>Logga ut</span>
-                                    </button>
-                                </div>
+                                <NavLink
+                                    to="/settings"
+                                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all w-full text-left ${isActive ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <span className="w-5 text-center">⚙️</span>
+                                    <span>Inställningar</span>
+                                </NavLink>
+                                <NavLink
+                                    to="/sync"
+                                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all w-full text-left ${isActive ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                                >
+                                    <span className="w-5 text-center">🔄</span>
+                                    <span>Synkningar</span>
+                                </NavLink>
+                                <div className="h-px bg-white/5 my-1" />
+                                <button
+                                    onClick={logout}
+                                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 font-bold text-xs hover:text-rose-400 hover:bg-rose-500/10 transition-all w-full text-left"
+                                >
+                                    <span className="w-5 text-center">🚪</span>
+                                    <span>Logga ut</span>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -256,126 +273,128 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
             </div>
 
             {/* Mobile Menu */}
-            {isMenuOpen && (
-                <div className="lg:hidden border-t border-white/5 bg-slate-950 px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
-                    <NavLink to="/" end className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                        <span className="text-xl">📅</span>
-                        <div className="flex flex-col">
-                            <span className="font-bold text-slate-100">Veckan</span>
-                            <span className="text-[10px] text-slate-500 font-medium">Översikt</span>
+            {
+                isMenuOpen && (
+                    <div className="lg:hidden border-t border-white/5 bg-slate-950 px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
+                        <NavLink to="/" end className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                            <span className="text-xl">📅</span>
+                            <div className="flex flex-col">
+                                <span className="font-bold text-slate-100">Veckan</span>
+                                <span className="text-[10px] text-slate-500 font-medium">Översikt</span>
+                            </div>
+                        </NavLink>
+
+                        {/* Mobile Mat */}
+                        <div className="space-y-1">
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Mat</div>
+                            <NavLink to="/planera" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">✨</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Planera</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Måltider & Pass</span>
+                                </div>
+                            </NavLink>
+                            {user && (
+                                <div className="px-4 py-2">
+                                    <div className="text-[10px] text-slate-500 font-bold mb-1 flex justify-between">
+                                        <span>ENERGIBALANS</span>
+                                        <span>{Math.round(dailyCaloriesConsumed)} / {targetCalories} kcal</span>
+                                    </div>
+                                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full ${dailyCaloriesConsumed > targetCalories ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                                            style={{ width: `${Math.min(100, (dailyCaloriesConsumed / targetCalories) * 100)}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                            <NavLink to="/pantry" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">🏠</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Skafferi</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Hantera ingredienser</span>
+                                </div>
+                            </NavLink>
+                            <NavLink to="/recipes" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">📖</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Recept</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Hitta & skapa</span>
+                                </div>
+                            </NavLink>
                         </div>
-                    </NavLink>
 
-                    {/* Mobile Mat */}
-                    <div className="space-y-1">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Mat</div>
-                        <NavLink to="/planera" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">✨</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Planera</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Måltider & Pass</span>
-                            </div>
-                        </NavLink>
-                        {user && (
-                            <div className="px-4 py-2">
-                                <div className="text-[10px] text-slate-500 font-bold mb-1 flex justify-between">
-                                    <span>ENERGIBALANS</span>
-                                    <span>{Math.round(dailyCaloriesConsumed)} / {targetCalories} kcal</span>
+                        {/* Mobile Hälsa */}
+                        <div className="space-y-1">
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Hälsa & Träning</div>
+                            <NavLink to="/health" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">📊</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Översikt</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Trender & Insikter</span>
                                 </div>
-                                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full ${dailyCaloriesConsumed > targetCalories ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                        style={{ width: `${Math.min(100, (dailyCaloriesConsumed / targetCalories) * 100)}%` }}
-                                    />
+                            </NavLink>
+                            <NavLink to="/training" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">🏋️</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Träning</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Logga pass</span>
                                 </div>
-                            </div>
-                        )}
-                        <NavLink to="/pantry" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">🏠</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Skafferi</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Hantera ingredienser</span>
-                            </div>
-                        </NavLink>
-                        <NavLink to="/recipes" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">📖</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Recept</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Hitta & skapa</span>
-                            </div>
-                        </NavLink>
-                    </div>
+                            </NavLink>
+                            <NavLink to="/coach" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">🧠</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Smart Coach</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Planera & Analysera</span>
+                                </div>
+                            </NavLink>
+                            <NavLink to="/calories" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">🔥</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Kalorier</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Logga mat</span>
+                                </div>
+                            </NavLink>
+                        </div>
 
-                    {/* Mobile Hälsa */}
-                    <div className="space-y-1">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Hälsa & Träning</div>
-                        <NavLink to="/health" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">📊</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Översikt</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Trender & Insikter</span>
-                            </div>
-                        </NavLink>
-                        <NavLink to="/training" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">🏋️</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Träning</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Logga pass</span>
-                            </div>
-                        </NavLink>
-                        <NavLink to="/coach" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">🧠</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Smart Coach</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Planera & Analysera</span>
-                            </div>
-                        </NavLink>
-                        <NavLink to="/calories" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">🔥</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Kalorier</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Logga mat</span>
-                            </div>
-                        </NavLink>
-                    </div>
+                        {/* Mobile Community */}
+                        <div className="space-y-1">
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Gemenskap</div>
+                            <NavLink to="/community" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">👥</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Community</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Hitta vänner</span>
+                                </div>
+                            </NavLink>
+                        </div>
 
-                    {/* Mobile Community */}
-                    <div className="space-y-1">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Gemenskap</div>
-                        <NavLink to="/community" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">👥</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Community</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Hitta vänner</span>
-                            </div>
-                        </NavLink>
-                    </div>
+                        {/* Mobile Tävling */}
+                        <div className="space-y-1">
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Utmaningar</div>
+                            <NavLink to="/tävling" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">🏆</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Tävling</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Utmana & Vinn</span>
+                                </div>
+                            </NavLink>
+                        </div>
 
-                    {/* Mobile Tävling */}
-                    <div className="space-y-1">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Utmaningar</div>
-                        <NavLink to="/tävling" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">🏆</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Tävling</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Utmana & Vinn</span>
-                            </div>
-                        </NavLink>
-                    </div>
-
-                    <div className="space-y-1">
-                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">System & Verktyg</div>
-                        <NavLink to="/admin?tab=audit" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
-                            <span className="w-5 text-center">⚙️</span>
-                            <span>Dashboard</span>
-                        </NavLink>
-                        <NavLink to="/admin?tab=database" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
-                            <span className="w-5 text-center">📦</span>
-                            <span>Databas</span>
-                        </NavLink>
-                    </div>
-                </div >
-            )}
+                        <div className="space-y-1">
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">System & Verktyg</div>
+                            <NavLink to="/admin?tab=audit" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
+                                <span className="w-5 text-center">⚙️</span>
+                                <span>Dashboard</span>
+                            </NavLink>
+                            <NavLink to="/admin?tab=database" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
+                                <span className="w-5 text-center">📦</span>
+                                <span>Databas</span>
+                            </NavLink>
+                        </div>
+                    </div >
+                )
+            }
         </nav >
     );
 }

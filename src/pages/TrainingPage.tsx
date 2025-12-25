@@ -12,7 +12,7 @@ import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
 import { UniversalActivity, ExerciseEntry } from '../models/types.ts';
 import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate } from '../models/types.ts';
-import { useUniversalActivities } from '../hooks/useUniversalActivities.ts';
+// import { useUniversalActivities } from '../hooks/useUniversalActivities.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import {
     parseOmniboxInput,
@@ -51,11 +51,12 @@ export function TrainingPage() {
         performanceGoals,
         addGoal,
         updateGoal,
-        deleteGoal
+        deleteGoal,
+        universalActivities // Get from Context (Phase 9/11)
     } = useData();
 
-    // Fetch Universal Activities from Server
-    const { activities: universalActivities } = useUniversalActivities(365);
+    // Fetch Universal Activities from Server - REMOVED (Handled by DataContext now)
+    // const { activities: universalActivities } = useUniversalActivities(365);
 
     // Merge Data
     const exerciseEntries = useMemo(() => {

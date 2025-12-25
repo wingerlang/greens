@@ -19,7 +19,8 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
             await saveUserData(session.userId, body);
             return new Response(JSON.stringify({ success: true, timestamp: new Date() }), { headers });
         } catch (e) {
-            return new Response(JSON.stringify({ error: "Invalid data" }), { status: 400, headers });
+            console.error("[POST /api/data] Error:", e);
+            return new Response(JSON.stringify({ error: "Invalid data", details: String(e) }), { status: 400, headers });
         }
     }
 

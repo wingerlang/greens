@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useData } from '../../context/DataContext.tsx';
 
 interface StravaAthlete {
     id: number;
@@ -27,6 +28,7 @@ interface StravaStatus {
 
 export function StravaConnectionCard() {
     const { token } = useAuth();
+    const { refreshData } = useData();
     const [status, setStatus] = useState<StravaStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [connecting, setConnecting] = useState(false);
@@ -102,6 +104,7 @@ export function StravaConnectionCard() {
                 const { imported, merged, skipped } = data.result;
                 alert(`Synk klar!\n📥 ${imported} nya pass\n🔄 ${merged} matchade pass\n⏭️ ${skipped} redan synkade`);
                 checkStatus(); // Refresh last sync time
+                await refreshData(); // Refresh app data to show new activities
             } else {
                 alert('Synk misslyckades: ' + (data.error || 'Okänt fel'));
             }
