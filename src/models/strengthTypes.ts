@@ -143,6 +143,8 @@ export interface PersonalBest {
     date: string;
     workoutId: string;
     workoutName?: string;
+    isBodyweight?: boolean;
+    extraWeight?: number;
 
     // Computed
     estimated1RM?: number;           // Epley/Brzycki formula

@@ -97,7 +97,9 @@ export function App() {
                                                 <Route path="activities" element={<ActivitiesPage />} />
                                                 <Route path="logg" element={<ActivitiesPage />} />
                                                 <Route path="strength" element={<StrengthPage />} />
+                                                <Route path="strength/:exerciseName" element={<StrengthPage />} />
                                                 <Route path="styrka" element={<StrengthPage />} />
+                                                <Route path="styrka/:exerciseName" element={<StrengthPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

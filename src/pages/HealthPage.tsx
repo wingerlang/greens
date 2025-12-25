@@ -5,6 +5,8 @@ import { useSettings } from '../context/SettingsContext.tsx';
 import { aggregateHealthData, calculateHealthStats } from '../utils/healthAggregator.ts';
 import { HealthOverview } from './Health/HealthOverview.tsx';
 import { MetricFocusView } from './Health/MetricFocusView.tsx';
+import { StyrkaView } from './Health/StyrkaView.tsx';
+import { KonditionView } from './Health/KonditionView.tsx';
 import './HealthPage.css';
 
 type TimeFrame = 7 | 30 | 90;
@@ -12,7 +14,7 @@ type TimeFrame = 7 | 30 | 90;
 export function HealthPage() {
     const { metric } = useParams<{ metric?: string }>();
     const navigate = useNavigate();
-    const { dailyVitals, weightEntries, mealEntries, exerciseEntries, calculateDailyNutrition } = useData();
+    const { dailyVitals, weightEntries, mealEntries, exerciseEntries, calculateDailyNutrition, universalActivities } = useData();
     const { settings } = useSettings();
 
     // Map metric aliases and defaults
@@ -21,6 +23,8 @@ export function HealthPage() {
         if (!m || m === 'overview' || m === 'översikt') return 'overview';
         if (m === 'weight' || m === 'vikt') return 'weight';
         if (m === 'sleep' || m === 'sömn') return 'sleep';
+        if (m === 'strength' || m === 'styrka') return 'strength';
+        if (m === 'cardio' || m === 'kondition') return 'cardio';
         return 'overview';
     }, [metric]);
 
@@ -60,6 +64,8 @@ export function HealthPage() {
         if (isSwedishPath) {
             if (tab === 'weight') path = 'vikt';
             if (tab === 'sleep') path = 'sömn';
+            if (tab === 'strength') path = 'styrka';
+            if (tab === 'cardio') path = 'kondition';
         }
 
         navigate(`${basePath}/${path}`);
@@ -75,6 +81,8 @@ export function HealthPage() {
                         <button className={`tab-link ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => handleTabChange('overview')}>Översikt</button>
                         <button className={`tab-link ${activeTab === 'sleep' ? 'active' : ''}`} onClick={() => handleTabChange('sleep')}>Sömn</button>
                         <button className={`tab-link ${activeTab === 'weight' ? 'active' : ''}`} onClick={() => handleTabChange('weight')}>Vikt</button>
+                        <button className={`tab-link ${activeTab === 'strength' ? 'active' : ''}`} onClick={() => handleTabChange('strength')}>💪 Styrka</button>
+                        <button className={`tab-link ${activeTab === 'cardio' ? 'active' : ''}`} onClick={() => handleTabChange('cardio')}>🏃 Kondition</button>
                     </div>
                 </div>
                 <div className="flex items-center gap-6">
@@ -114,6 +122,12 @@ export function HealthPage() {
                 )}
                 {activeTab === 'weight' && (
                     <MetricFocusView type="weight" snapshots={snapshots} stats={stats} days={timeframe} />
+                )}
+                {activeTab === 'strength' && (
+                    <StyrkaView days={timeframe} />
+                )}
+                {activeTab === 'cardio' && (
+                    <KonditionView days={timeframe} exerciseEntries={exerciseEntries} universalActivities={universalActivities} />
                 )}
             </main>
         </div>
