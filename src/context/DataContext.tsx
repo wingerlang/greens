@@ -109,6 +109,7 @@ interface DataContextType {
     // Weight CRUD
     weightEntries: WeightEntry[];
     addWeightEntry: (weight: number, date?: string) => WeightEntry;
+    updateWeightEntry: (id: string, weight: number, date: string) => void;
     deleteWeightEntry: (id: string) => void;
     getLatestWeight: () => number;
 
@@ -613,6 +614,14 @@ export function DataProvider({ children }: DataProviderProps) {
         return newEntry;
     }, []);
 
+    const updateWeightEntry = useCallback((id: string, weight: number, date: string) => {
+        setWeightEntries(prev => {
+            const next = prev.map(w => w.id === id ? { ...w, weight, date } : w);
+            // Re-sort in case date changed
+            return next.sort((a, b) => b.date.localeCompare(a.date));
+        });
+    }, []);
+
     const deleteWeightEntry = useCallback((id: string) => {
         setWeightEntries(prev => prev.filter(w => w.id !== id));
     }, []);
@@ -881,6 +890,7 @@ export function DataProvider({ children }: DataProviderProps) {
         getExercisesForDate,
         weightEntries,
         addWeightEntry,
+        updateWeightEntry,
         deleteWeightEntry,
         getLatestWeight,
         calculateBMR,

@@ -67,7 +67,11 @@ export function App() {
                                                 <Route path="training" element={<TrainingPage />} />
                                                 <Route path="profile" element={<ProfilePage />} />
                                                 <Route path="health" element={<HealthPage />} />
+                                                <Route path="health/:metric" element={<HealthPage />} />
                                                 <Route path="halsa" element={<HealthPage />} />
+                                                <Route path="halsa/:metric" element={<HealthPage />} />
+                                                <Route path="hälsa" element={<HealthPage />} />
+                                                <Route path="hälsa/:metric" element={<HealthPage />} />
                                                 <Route path="coach" element={<CoachPage />} />
                                                 <Route path="competition" element={<CompetitionPage />} />
                                                 <Route path="tävling" element={<CompetitionPage />} />

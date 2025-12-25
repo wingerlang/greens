@@ -461,6 +461,52 @@
     transition: all 0.3s ease;
 }
 
+/* History Table Styles */
+.history-section {
+    margin-top: 1rem;
+}
+
+.history-section table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.history-section th {
+    color: #64748b;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+}
+
+.history-section tr:last-child td {
+    border-bottom: none;
+}
+
+.history-section input {
+    font-family: inherit;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
+.history-section input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+}
+
+.history-section button {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+/* Metric Focus View Adjustments */
+.metric-focus-view {
+    max-width: 1000px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.h-80-md {
+    height: 20rem;
+}
+
 /* Responsive Overrides */
 @media (max-width: 768px) {
     .health-header {
@@ -479,5 +525,13 @@
 
     .tab-nav::-webkit-scrollbar {
         display: none;
+    }
+
+    .header-content h1 {
+        font-size: 2.25rem;
+    }
+
+    .stats-row {
+        grid-template-columns: 1fr;
     }
 }
