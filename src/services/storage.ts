@@ -62,12 +62,27 @@ export class LocalStorageService implements StorageService {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {
-                    const cloudData = await res.json();
-                    if (cloudData && Object.keys(cloudData).length > 0) {
-                        data = cloudData;
+                    const cloudData = await res.json() as AppData;
+                    // CRITICAL: Only accept cloud data if it seems complete or at least exists
+                    if (cloudData && Object.keys(cloudData).length > 2) {
                         console.log('[Storage] Loaded data from API');
+
+                        // Safety merge: If cloud has NO recipes but local does, keep local recipes
+                        const localStored = localStorage.getItem(STORAGE_KEY);
+                        if (localStored) {
+                            const localData = JSON.parse(localStored) as AppData;
+                            if (localData.recipes?.length > 0 && (!cloudData.recipes || cloudData.recipes.length === 0)) {
+                                console.warn('[Storage] Cloud has no recipes but local does. Merging.');
+                                cloudData.recipes = localData.recipes;
+                                if (!cloudData.foodItems || cloudData.foodItems.length < 5) cloudData.foodItems = localData.foodItems;
+                            }
+                        }
+
+                        data = cloudData;
                         // Update local mirror
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                    } else {
+                        console.log('[Storage] Cloud data empty or invalid, fallback to local');
                     }
                 }
             } catch (e) {
@@ -91,9 +106,22 @@ export class LocalStorageService implements StorageService {
         if (!data) {
             data = getDefaultData();
         } else {
-            // Run migrations
-            if (!data.foodItems) data.foodItems = [];
-            if (!data.recipes) data.recipes = [];
+            // Run migrations & ensure data richness
+            if (!data.foodItems || data.foodItems.length < SAMPLE_FOOD_ITEMS.length) {
+                // If we have fewer food items than our sample set, merge them in to ensure data richness
+                const existingIds = new Set(data.foodItems?.map(f => f.id) || []);
+                const newItems = SAMPLE_FOOD_ITEMS.filter(f => !existingIds.has(f.id));
+                data.foodItems = [...(data.foodItems || []), ...newItems];
+            }
+
+            if (!data.recipes || data.recipes.length < 10) {
+                // RECOVERY: If recipes are lost, restore from sample data
+                console.log('[Storage] Restoring missing recipes from sample set');
+                const existingIds = new Set(data.recipes?.map(r => r.id) || []);
+                const missingRecipes = SAMPLE_RECIPES.filter(r => !existingIds.has(r.id));
+                data.recipes = [...(data.recipes || []), ...missingRecipes];
+            }
+
             if (!data.mealEntries) data.mealEntries = [];
             if (!data.weeklyPlans) data.weeklyPlans = [];
             if (!data.pantryItems) data.pantryItems = [];

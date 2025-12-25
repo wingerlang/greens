@@ -183,10 +183,24 @@ export function DataProvider({ children }: DataProviderProps) {
     // Optimization: Skip auto-save for atomic updates that are handled by dedicated API calls
     const skipAutoSave = useRef(false);
 
-    // Load from storage on mount
+    // Guard: Prevent async refresh from overwriting local state after initial load
+    // Using a counter to track latest valid load
+    const refreshCounterRef = useRef(0);
+
+    // Load from storage on mount - only runs once, does not overwrite after isLoaded=true
     const refreshData = useCallback(async () => {
+        const currentLoadId = ++refreshCounterRef.current;
+
+        // If already loaded, this is a background refresh. We should be careful.
         setIsLoaded(false);
         const data = await storageService.load();
+
+        // If a new load or local update started while we were fetching, DISCARD these results
+        if (currentLoadId !== refreshCounterRef.current) {
+            console.log('[DataContext] Discarding stale load results');
+            return;
+        }
+
         setFoodItems(data.foodItems || []);
         setRecipes(data.recipes || []);
         setMealEntries(data.mealEntries || []);
@@ -554,15 +568,38 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString(),
         };
 
-
-        // Optimistic UI Update
+        // Optimistic UI Update - use functional update to get latest state
         setWeightEntries(prev => {
             const next = [...prev, newEntry];
-            return next.sort((a, b) => {
+
+            // ROBUST SORTING: Date (desc), CreatedAt (desc), ID (desc)
+            const sorted = next.sort((a, b) => {
                 const dateCompare = b.date.localeCompare(a.date);
                 if (dateCompare !== 0) return dateCompare;
-                return b.createdAt.localeCompare(a.createdAt);
+
+                // Tiebreaker 1: CreatedAt
+                const timeA = a.createdAt || "";
+                const timeB = b.createdAt || "";
+                const timeCompare = timeB.localeCompare(timeA);
+                if (timeCompare !== 0) return timeCompare;
+
+                // Tiebreaker 2: ID (absolute stability)
+                return (b.id || "").localeCompare(a.id || "");
             });
+
+            // Immediately persist to localStorage to prevent any race conditions
+            try {
+                const currentData = localStorage.getItem('greens-app-data');
+                if (currentData) {
+                    const parsed = JSON.parse(currentData);
+                    parsed.weightEntries = sorted;
+                    localStorage.setItem('greens-app-data', JSON.stringify(parsed));
+                }
+            } catch (e) {
+                console.error('[WeightEntry] Failed to immediately persist:', e);
+            }
+
+            return sorted;
         });
 
         // Use new optimized API call (fire and forget)
@@ -571,7 +608,6 @@ export function DataProvider({ children }: DataProviderProps) {
 
         storageService.addWeightEntry(weight, date).catch(err => {
             console.error("Failed to sync weight:", err);
-            // Optionally revert optimistic update here if critical
         });
 
         return newEntry;

@@ -101,16 +101,23 @@ function parseDate(input: string): { date?: string; remaining: string } {
     const today = new Date();
     const getISODate = (d: Date) => d.toISOString().split('T')[0];
 
-    if (input.includes('idag')) return { date: getISODate(today), remaining: input.replace('idag', '') };
-    if (input.includes('igår')) {
+    // Handle relative dates in Swedish and English
+    // Use regex to catch 'i' optional before 'förrgår'
+    if (input.includes('idag') || input.includes('today')) {
+        return { date: getISODate(today), remaining: input.replace(/idag|today/g, '').trim() };
+    }
+
+    if (input.includes('igår') || input.includes('yesterday')) {
         const d = new Date(today);
         d.setDate(d.getDate() - 1);
-        return { date: getISODate(d), remaining: input.replace('igår', '') };
+        return { date: getISODate(d), remaining: input.replace(/igår|yesterday/g, '').trim() };
     }
-    if (input.includes('förrgår')) {
+
+    if (input.includes('förrgår') || input.includes('day before yesterday')) {
         const d = new Date(today);
         d.setDate(d.getDate() - 2);
-        return { date: getISODate(d), remaining: input.replace('förrgår', '') };
+        // Match 'i förrgår' or just 'förrgår'
+        return { date: getISODate(d), remaining: input.replace(/(i\s*)?förrgår|day before yesterday/g, '').trim() };
     }
 
     // ISO Date Match (YYYY-MM-DD or MM-DD)
@@ -119,9 +126,8 @@ function parseDate(input: string): { date?: string; remaining: string } {
         let year = dateMatch[1] ? dateMatch[1].replace('-', '') : today.getFullYear();
         let month = dateMatch[2].padStart(2, '0');
         let day = dateMatch[3].padStart(2, '0');
-        return { date: `${year}-${month}-${day}`, remaining: input.replace(dateMatch[0], '') };
+        return { date: `${year}-${month}-${day}`, remaining: input.replace(dateMatch[0], '').trim() };
     }
-
 
     return { remaining: input };
 }

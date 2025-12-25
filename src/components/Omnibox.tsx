@@ -19,7 +19,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     const navigate = useNavigate();
     const [input, setInput] = useState('');
     const inputRef = useRef<HTMLInputElement>(null);
-    const { addWeightEntry, addExercise } = useData();
+    const { addWeightEntry, addExercise, updateVitals, getVitalsForDate } = useData();
     // We can use health data here if we want to show current status in the box?
     // For now, keep it simple: Input -> Action.
 
@@ -55,15 +55,31 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             navigate(intent.data.path);
             onClose();
         } else if (intent.type === 'weight') {
-            addWeightEntry(intent.data.weight, new Date().toISOString().split('T')[0]);
-            // Snappy feedback
+            const date = intent.date || new Date().toISOString().split('T')[0];
+            addWeightEntry(intent.data.weight, date);
+
             setShowFeedback(true);
             setInput('');
-            // Don't close immediately if showing feedback? Or close and show toast?
-            // User asked for snappy feedback. Keeping it open for a beat or just closing?
-            // "Snappy" usually implies instant action. Let's keep it open to show "Saved" then close or simple close + feedback elsewhere.
-            // Current code closes on intent execution. Let's adjust.
-            // If weight, show feedback, clear input, wait 500ms then close?
+            setTimeout(() => onClose(), 800);
+            return;
+        } else if (intent.type === 'vitals') {
+            const date = intent.date || new Date().toISOString().split('T')[0];
+            const updates: any = { updatedAt: new Date().toISOString() };
+
+            if (intent.data.vitalType === 'sleep') updates.sleep = intent.data.amount;
+            if (intent.data.vitalType === 'water') {
+                const existing = getVitalsForDate(date);
+                updates.water = (existing.water || 0) + intent.data.amount;
+            }
+            if (intent.data.vitalType === 'coffee' || intent.data.vitalType === 'nocco' || intent.data.vitalType === 'energy') {
+                const existing = getVitalsForDate(date);
+                updates.caffeine = (existing.caffeine || 0) + (intent.data.caffeine || 0);
+            }
+            if (intent.data.vitalType === 'steps') updates.steps = intent.data.amount;
+
+            updateVitals(date, updates);
+            setShowFeedback(true);
+            setInput('');
             setTimeout(() => onClose(), 800);
             return;
         } else if (intent.type === 'exercise') {
@@ -126,7 +142,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                             {intent.type === 'weight' && (
                                 <div className="flex items-center gap-3 text-emerald-400">
                                     <span>⚖️</span>
-                                    <span>Logga vikt: <span className="font-bold">{intent.data.weight} kg</span></span>
+                                    <span>Logga vikt: <span className="font-bold">{intent.data.weight} kg</span> {intent.date && <span className="ml-1 text-slate-500 font-normal">({intent.date})</span>}</span>
                                 </div>
                             )}
                             {intent.type === 'exercise' && (
@@ -136,17 +152,26 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                 </div>
                             )}
                             {intent.type === 'vitals' && (
-                                <div className="flex items-center gap-3 text-emerald-400">
-                                    <span>{intent.data.vitalType === 'sleep' ? '😴' : intent.data.vitalType === 'steps' ? '👟' : intent.data.vitalType === 'water' ? '💧' : '☕'}</span>
-                                    <span>
-                                        Logga: <span className="font-bold">
-                                            {intent.data.vitalType === 'sleep' && `${intent.data.amount}h sömn`}
-                                            {intent.data.vitalType === 'steps' && `${intent.data.amount.toLocaleString()} steg`}
-                                            {intent.data.vitalType === 'water' && `${intent.data.amount} glas vatten`}
-                                            {(intent.data.vitalType === 'coffee' || intent.data.vitalType === 'nocco' || intent.data.vitalType === 'energy') &&
-                                                `${intent.data.amount}x ${intent.data.vitalType}${intent.data.caffeine ? ` (${intent.data.caffeine}mg koffein)` : ''}`}
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-3 text-emerald-400">
+                                        <span>{intent.data.vitalType === 'sleep' ? '😴' : intent.data.vitalType === 'steps' ? '👟' : intent.data.vitalType === 'water' ? '💧' : '☕'}</span>
+                                        <span>
+                                            Logga: <span className="font-bold">
+                                                {intent.data.vitalType === 'sleep' && `${intent.data.amount}h sömn`}
+                                                {intent.data.vitalType === 'steps' && `${intent.data.amount.toLocaleString()} steg`}
+                                                {intent.data.vitalType === 'water' && `${intent.data.amount} glas vatten`}
+                                                {(intent.data.vitalType === 'coffee' || intent.data.vitalType === 'nocco' || intent.data.vitalType === 'energy') &&
+                                                    `${intent.data.amount}x ${intent.data.vitalType}${intent.data.caffeine ? ` (${intent.data.caffeine}mg koffein)` : ''}`}
+                                            </span>
+                                            {intent.date && <span className="ml-2 text-slate-500 font-normal">({intent.date})</span>}
                                         </span>
-                                    </span>
+                                    </div>
+                                    {intent.data.vitalType === 'sleep' && intent.date && getVitalsForDate(intent.date).sleep > 0 && (
+                                        <div className="flex items-center gap-2 text-rose-400 text-xs font-bold pl-8">
+                                            <span>⚠️</span>
+                                            <span>Du har redan loggat sömn för detta datum ({getVitalsForDate(intent.date).sleep}h).</span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             {intent.type === 'search' && (

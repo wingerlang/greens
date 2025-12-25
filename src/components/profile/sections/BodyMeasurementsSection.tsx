@@ -128,7 +128,7 @@ export function BodyMeasurementsSection({ targetWeight, height }: BodyMeasuremen
                 </div>
                 <div className="bg-slate-800/50 rounded-xl p-4">
                     <div className="text-slate-500 text-xs uppercase font-bold">Målvikt</div>
-                    <div className="text-amber-400 text-2xl font-black">{targetWeight} <span className="text-sm text-slate-400">kg</span></div>
+                    <div className="text-amber-400 text-2xl font-black">{targetWeight ? targetWeight : '—'} <span className="text-sm text-slate-400">{targetWeight ? 'kg' : ''}</span></div>
                 </div>
             </div>
 
@@ -140,8 +140,8 @@ export function BodyMeasurementsSection({ targetWeight, height }: BodyMeasuremen
                         <a href="#weight-history" className="text-emerald-400 text-xs hover:underline">Visa all historik →</a>
                     </div>
                     <div className="space-y-1">
-                        {history.slice(-5).reverse().map((h, i) => (
-                            <div key={h.date} className={`flex items-center justify-between p-2 rounded-lg ${i === 0 ? 'bg-emerald-500/10' : 'bg-slate-800/30'}`}>
+                        {history.slice(0, 5).map((h, i) => (
+                            <div key={`${h.date}-${h.createdAt || i}`} className={`flex items-center justify-between p-2 rounded-lg ${i === 0 ? 'bg-emerald-500/10' : 'bg-slate-800/30'}`}>
                                 <span className="text-slate-400 text-sm">{formatSwedishDate(h.date)}</span>
                                 <span className={`font-bold ${i === 0 ? 'text-emerald-400' : 'text-white'}`}>{h.weight} kg</span>
                             </div>
