@@ -280,7 +280,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                                     {/* Trend Line (Solid) */}
                                     {graphMeta.trendPoints.length > 1 && (
                                         <path
-                                            d={`M ${graphMeta.trendPoints.map(p => `${getX(p.i)}% ${getY(p.val)}%`).join(' L ')}`}
+                                            d={`M ${graphMeta.trendPoints.map(p => `${getX(p.i)} ${getY(p.val)}`).join(' L ')}`}
                                             fill="none"
                                             stroke={themeColor}
                                             strokeWidth="4"
@@ -293,7 +293,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                                     {/* Raw Data Line (Dashed) */}
                                     <path
                                         d={graphMeta.points.length > 1 ?
-                                            `M ${graphMeta.points.map(p => `${getX(p.i)}% ${getY(p.val)}%`).join(' L ')}`
+                                            `M ${graphMeta.points.map(p => `${getX(p.i)} ${getY(p.val)}`).join(' L ')}`
                                             : ''}
                                         fill="none"
                                         stroke={themeColor}

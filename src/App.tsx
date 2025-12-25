@@ -27,6 +27,7 @@ import { GarminPage } from './pages/GarminPage.tsx';
 import { SettingsPage } from './pages/SettingsPage.tsx';
 import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
 import { ActivitiesPage } from './pages/ActivitiesPage.tsx';
+import { StrengthPage } from './pages/StrengthPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -95,6 +96,8 @@ export function App() {
                                                 <Route path="installningar" element={<SettingsPage />} />
                                                 <Route path="activities" element={<ActivitiesPage />} />
                                                 <Route path="logg" element={<ActivitiesPage />} />
+                                                <Route path="strength" element={<StrengthPage />} />
+                                                <Route path="styrka" element={<StrengthPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>
