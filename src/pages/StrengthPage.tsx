@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { StrengthWorkout, StrengthLogImportResult, PersonalBest, StrengthStats, calculate1RM } from '../models/strengthTypes.ts';
+import { StrengthWorkout, StrengthLogImportResult, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName } from '../models/strengthTypes.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 
 // ============================================
@@ -151,14 +151,59 @@ export function StrengthPage() {
         });
     }, [workouts, startDate, endDate]);
 
-    // Filter PBs by date range
+    // Derive Personal Bests from workout history (ensures bodyweight-aware logic is applied to existing data)
+    const derivedPersonalBests = React.useMemo(() => {
+        const pbsByExercise = new Map<string, PersonalBest>();
+
+        // Sort by date ascending to process records in order
+        const sortedWorkouts = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
+
+        sortedWorkouts.forEach(w => {
+            w.exercises.forEach(ex => {
+                const exId = `ex-${normalizeExerciseName(ex.exerciseName).replace(/\s/g, '-')}`;
+                ex.sets.forEach(set => {
+                    const isBW = !!set.isBodyweight || set.weight === 0;
+                    const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
+                    if (calcWeight <= 0 && !isBW) return;
+
+                    const est1RM = calculate1RM(calcWeight, set.reps);
+                    const existing = pbsByExercise.get(exId);
+
+                    if (!existing || est1RM > existing.value) {
+                        pbsByExercise.set(exId, {
+                            id: `pb-${exId}`,
+                            exerciseId: exId,
+                            exerciseName: ex.exerciseName,
+                            userId: w.userId,
+                            type: '1rm',
+                            value: est1RM,
+                            weight: set.weight,
+                            reps: set.reps,
+                            isBodyweight: isBW,
+                            extraWeight: set.extraWeight,
+                            date: w.date,
+                            workoutId: w.id,
+                            workoutName: w.name,
+                            estimated1RM: est1RM,
+                            createdAt: w.date,
+                            previousBest: existing?.value
+                        });
+                    }
+                });
+            });
+        });
+
+        return Array.from(pbsByExercise.values()).sort((a, b) => b.value - a.value);
+    }, [workouts]);
+
+    // Filter PBs by date range (using derived PBs to fix data issues)
     const filteredPBs = React.useMemo(() => {
-        return personalBests.filter(pb => {
+        return derivedPersonalBests.filter(pb => {
             if (startDate && pb.date < startDate) return false;
             if (endDate && pb.date > endDate) return false;
             return true;
         });
-    }, [personalBests, startDate, endDate]);
+    }, [derivedPersonalBests, startDate, endDate]);
 
     // Top Workouts (Best of all time in specific categories)
     const bestWorkouts = React.useMemo(() => {
@@ -322,7 +367,13 @@ export function StrengthPage() {
                                                             <p className="text-xl font-black text-white group-hover:text-amber-400 transition-colors">{singlePb.value} kg</p>
                                                         </div>
                                                         <div className="text-right">
-                                                            <p className="text-[10px] text-slate-500">{singlePb.reps} × {singlePb.weight} kg</p>
+                                                            <p className="text-[10px] text-slate-500">
+                                                                {singlePb.reps} × {singlePb.isBodyweight ? (
+                                                                    <span className="bg-slate-800 text-slate-400 px-1 rounded text-[9px] py-0.5">KV{singlePb.extraWeight ? `+${singlePb.extraWeight}` : ''}</span>
+                                                                ) : (
+                                                                    `${singlePb.weight} kg`
+                                                                )}
+                                                            </p>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -345,17 +396,20 @@ export function StrengthPage() {
                     </div>
 
                     {/* Aggregate Trend Line */}
-                    <div className="mt-6 bg-slate-900/30 border border-white/5 rounded-2xl p-4">
+                    <div className="mt-6 bg-slate-900/40 border border-white/5 rounded-2xl p-5 overflow-hidden group">
                         <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Övergripande rekord-trend</h3>
+                            <div>
+                                <h3 className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Övergripande rekord-trend</h3>
+                                <p className="text-[9px] text-slate-600 mt-1 uppercase font-bold italic">Din totala styrka (Summan av alla personbästa 1eRM)</p>
+                            </div>
                             <div className="flex items-center gap-4">
                                 <span className="flex items-center gap-1.5 text-[10px] text-amber-500 font-bold uppercase">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)]"></span>
-                                    1RM-styrka
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)] border border-white/20"></span>
+                                    Totalstyrka (1RM index)
                                 </span>
                             </div>
                         </div>
-                        <div className="h-16 w-full opacity-60">
+                        <div className="h-24 w-full relative">
                             <RecordTrendLine pbs={filteredPBs} />
                         </div>
                     </div>
@@ -617,10 +671,11 @@ function WorkoutDetailModal({
                                 <span className="text-xs text-emerald-400">{exercise.totalVolume ? `${(exercise.totalVolume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} ton` : ''}</span>
                             </div>
                             <div className="space-y-1">
-                                <div className="grid grid-cols-4 gap-2 text-[10px] text-slate-500 font-black uppercase mb-2 px-3 border-b border-white/5 pb-1">
+                                <div className="grid grid-cols-5 gap-2 text-[10px] text-slate-500 font-black uppercase mb-2 px-3 border-b border-white/5 pb-1">
                                     <span className="pl-1">Set</span>
                                     <span>Reps</span>
                                     <span>Vikt</span>
+                                    <span className="text-right">e1RM</span>
                                     <span className="text-right pr-2">Volym</span>
                                 </div>
                                 {(() => {
@@ -645,7 +700,7 @@ function WorkoutDetailModal({
                                         return (
                                             <div
                                                 key={j}
-                                                className={`grid grid-cols-4 gap-2 text-xs py-1.5 px-3 rounded-lg border border-transparent transition-colors ${isPR ? 'bg-amber-500/20 border-amber-500/30' : 'hover:bg-slate-800/40'}`}
+                                                className={`grid grid-cols-5 gap-2 text-xs py-1.5 px-3 rounded-lg border border-transparent transition-colors ${isPR ? 'bg-amber-500/20 border-amber-500/30' : 'hover:bg-slate-800/40'}`}
                                             >
                                                 <span className="text-slate-400 flex items-center">{set.setNumber}</span>
                                                 <span className="text-white font-bold flex items-center">{set.reps} st</span>
@@ -663,11 +718,8 @@ function WorkoutDetailModal({
                                                     {isBest1eRM && (
                                                         <span className="text-cyan-400 text-[10px] flex-shrink-0" title="Passets högsta 1eRM (kvalitetstopp!)">⚡</span>
                                                     )}
-                                                    {/* Hover tooltip for 1eRM */}
-                                                    <div className="absolute left-full ml-2 opacity-0 group-hover/set:opacity-100 transition-opacity bg-slate-950 text-[9px] text-slate-300 py-0.5 px-1.5 rounded border border-white/10 z-20 pointer-events-none whitespace-nowrap shadow-xl">
-                                                        1eRM: {est1RM} kg
-                                                    </div>
                                                 </div>
+                                                <span className="text-slate-500 flex items-center justify-end font-mono">{est1RM}<span className="text-[9px] ml-0.5 opacity-40">kg</span></span>
                                                 <span className="text-slate-400 flex items-center justify-end font-mono">{Math.round(set.reps * (set.isBodyweight ? (workout.bodyWeight || 0) + (set.extraWeight || 0) : set.weight))}<span className="text-[9px] ml-0.5 opacity-50">kg</span></span>
                                             </div>
                                         );
@@ -712,27 +764,33 @@ function WeeklyVolumeBars({ workouts }: { workouts: StrengthWorkout[] }) {
 
         return Object.entries(weeks)
             .sort((a, b) => a[0].localeCompare(b[0]))
-            .slice(-8) // Last 8 weeks
+            .slice(-12) // Show last 12 weeks (a full quarter)
             .map(([week, volume]) => ({ week, volume }));
     }, [workouts]);
 
-    const maxVolume = Math.max(...weeklyData.map(d => d.volume), 1);
+    const maxVolume = Math.max(...weeklyData.map(d => d.volume), 1) * 1.1; // 10% buffer
 
     if (weeklyData.length === 0) return <p className="text-slate-500">Inte nog med data för att visa trend.</p>;
 
     return (
-        <div className="flex items-end gap-2 h-32">
+        <div className="flex items-end gap-1 md:gap-2 h-40">
             {weeklyData.map(({ week, volume }, i) => {
                 const height = (volume / maxVolume) * 100;
                 const weekLabel = new Date(week).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+                const isCurrentWeek = i === weeklyData.length - 1;
+
                 return (
-                    <div key={week} className="flex-1 flex flex-col items-center gap-1">
-                        <span className="text-[10px] text-emerald-400 font-bold">{Math.round(volume / 1000)}t</span>
+                    <div key={week} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
+                        <span className={`text-[9px] font-bold transition-opacity ${isCurrentWeek ? 'text-emerald-400 opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100'}`}>
+                            {(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t
+                        </span>
                         <div
-                            className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-lg transition-all"
-                            style={{ height: `${height}%`, minHeight: '4px' }}
+                            className={`w-full rounded-t-md transition-all duration-500 border-t border-white/10 ${isCurrentWeek ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.2)]' : 'bg-slate-700/50 group-hover:bg-slate-700'}`}
+                            style={{ height: `${height}%`, minHeight: '2px' }}
                         />
-                        <span className="text-[9px] text-slate-500">{weekLabel}</span>
+                        <div className="h-4 flex items-center">
+                            <span className={`text-[8px] whitespace-nowrap ${isCurrentWeek ? 'text-white font-bold' : 'text-slate-600'}`}>{weekLabel}</span>
+                        </div>
                     </div>
                 );
             })}
@@ -1175,7 +1233,7 @@ function ExerciseDetailModal({
                                                     </p>
                                                     <div className="flex items-end gap-1 h-16">
                                                         {weightChartData.map((p, i) => {
-                                                            const h = ((p.weight - weightChartMin) / (weightChartMax - weightChartMin)) * 100;
+                                                            const h = (((p.weight || 0) - weightChartMin) / (weightChartMax - weightChartMin)) * 100;
                                                             return (
                                                                 <div key={i} className="flex-1 group relative h-full flex items-end">
                                                                     <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 text-[9px] text-white py-0.5 px-1.5 rounded border border-white/10 z-20 whitespace-nowrap">
@@ -1270,9 +1328,17 @@ function ExerciseDetailModal({
                                                                                                 <span className="text-cyan-400 text-[10px]" title="Högsta 1eRM för passet!">⚡</span>
                                                                                             )}
                                                                                         </div>
-                                                                                        {(pr.percentIncrease !== undefined && pr.percentIncrease > 0) && (
-                                                                                            <p className="text-[9px] text-emerald-400 font-bold mt-0.5">
-                                                                                                +{pr.percentIncrease.toFixed(1)}%
+                                                                                        {((pr.percentIncrease !== undefined && pr.percentIncrease > 0) || pr.daysSinceLast !== undefined) && (
+                                                                                            <p className="text-[9px] text-slate-500 font-bold mt-0.5 flex items-center gap-1.5">
+                                                                                                {pr.percentIncrease !== undefined && pr.percentIncrease > 0 && (
+                                                                                                    <span className="text-emerald-400">+{pr.percentIncrease.toFixed(1)}%</span>
+                                                                                                )}
+                                                                                                {pr.percentIncrease !== undefined && pr.percentIncrease > 0 && pr.daysSinceLast !== undefined && (
+                                                                                                    <span className="opacity-20">•</span>
+                                                                                                )}
+                                                                                                {pr.daysSinceLast !== undefined && (
+                                                                                                    <span>{pr.daysSinceLast}d sedan</span>
+                                                                                                )}
                                                                                             </p>
                                                                                         )}
                                                                                     </div>
@@ -1289,14 +1355,26 @@ function ExerciseDetailModal({
                                                                 {!isMulti && (
                                                                     <div className="text-right flex items-center gap-4">
                                                                         <div className="text-right">
-                                                                            <p className="text-xs font-bold text-emerald-400 leading-none">{((prs[0].weight || 0) * (prs[0].reps || 0)).toLocaleString()}kg</p>
-                                                                            <p className="text-[8px] text-slate-600 font-mono mt-0.5">
-                                                                                1eRM: {(() => {
-                                                                                    const isBW = prs[0].isBodyweight || prs[0].weight === 0;
-                                                                                    const calcWeight = isBW ? (prs[0].extraWeight || 0) : (prs[0].weight || 0);
-                                                                                    return calculate1RM(calcWeight, prs[0].reps || 0);
-                                                                                })()}kg
-                                                                            </p>
+                                                                            <p className="text-xs font-bold text-white leading-none">{((prs[0].weight || 0) * (prs[0].reps || 0)).toLocaleString()}kg</p>
+                                                                            <div className="flex flex-col items-end mt-1">
+                                                                                <p className="text-[8px] text-slate-500 font-mono">
+                                                                                    1eRM: {(() => {
+                                                                                        const isBW = prs[0].isBodyweight || prs[0].weight === 0;
+                                                                                        const calcWeight = isBW ? (prs[0].extraWeight || 0) : (prs[0].weight || 0);
+                                                                                        return calculate1RM(calcWeight, prs[0].reps || 0);
+                                                                                    })()}kg
+                                                                                </p>
+                                                                                {((prs[0].percentIncrease !== undefined && prs[0].percentIncrease > 0) || prs[0].daysSinceLast !== undefined) && (
+                                                                                    <p className="text-[8px] text-slate-600 font-bold flex items-center gap-1">
+                                                                                        {prs[0].percentIncrease !== undefined && prs[0].percentIncrease > 0 && (
+                                                                                            <span className="text-emerald-500/70">+{prs[0].percentIncrease.toFixed(1)}%</span>
+                                                                                        )}
+                                                                                        {prs[0].daysSinceLast !== undefined && (
+                                                                                            <span>{prs[0].daysSinceLast}d</span>
+                                                                                        )}
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
                                                                         </div>
                                                                         <button
                                                                             onClick={() => onSelectWorkout?.(prs[0].workout)}
@@ -1361,7 +1439,7 @@ function RecordTrendLine({ pbs }: { pbs: PersonalBest[] }) {
 
     const width = 1000;
     const height = 100;
-    const padding = 5;
+    const padding = 10;
 
     const points = displaySlots.map((s, i) => {
         const x = (i / (displaySlots.length - 1)) * width;
@@ -1369,30 +1447,75 @@ function RecordTrendLine({ pbs }: { pbs: PersonalBest[] }) {
         return `${x},${y}`;
     }).join(' ');
 
+    const lastSlot = displaySlots[displaySlots.length - 1];
+    const firstSlot = displaySlots[0];
+
     return (
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full" preserveAspectRatio="none">
-            <defs>
-                <linearGradient id="trendGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="rgba(245, 158, 11, 0)" />
-                    <stop offset="20%" stopColor="rgba(245, 158, 11, 0.5)" />
-                    <stop offset="100%" stopColor="rgba(245, 158, 11, 1)" />
-                </linearGradient>
-            </defs>
-            <polyline
-                fill="none"
-                stroke="url(#trendGradient)"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                points={points}
-            />
-            {displaySlots.map((s, i) => {
-                const x = (i / (displaySlots.length - 1)) * width;
-                const y = height - ((s.value - minVal) / valRange) * (height - padding * 2) - padding;
-                return (
-                    <circle key={i} cx={x} cy={y} r="2" fill="#f59e0b" className="opacity-40" />
-                );
-            })}
-        </svg>
+        <div className="relative w-full h-full flex items-center pr-12">
+            {/* Y-Axis Labels */}
+            <div className="absolute -left-2 top-0 bottom-0 flex flex-col justify-between text-[8px] text-slate-600 font-mono z-10 py-1">
+                <span className="opacity-80 font-bold">{Math.round(maxVal)}</span>
+                <span className="opacity-40">{Math.round(minVal)}</span>
+            </div>
+
+            <div className="w-full h-full relative group/chart">
+                <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="trendGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stopColor="rgba(245, 158, 11, 0)" />
+                            <stop offset="20%" stopColor="rgba(245, 158, 11, 0.5)" />
+                            <stop offset="100%" stopColor="rgba(245, 158, 11, 1)" />
+                        </linearGradient>
+                        <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stopColor="rgba(245, 158, 11, 0.1)" />
+                            <stop offset="100%" stopColor="rgba(245, 158, 11, 0)" />
+                        </linearGradient>
+                    </defs>
+
+                    {/* Area under curve */}
+                    <path
+                        d={`M 0,${height} ${points} L ${width},${height} Z`}
+                        fill="url(#areaGradient)"
+                    />
+
+                    {/* Grid line at current value */}
+                    <line
+                        x1="0" y1={height - ((lastSlot.value - minVal) / valRange) * (height - padding * 2) - padding}
+                        x2={width} y2={height - ((lastSlot.value - minVal) / valRange) * (height - padding * 2) - padding}
+                        stroke="rgba(245,158,11,0.1)"
+                        strokeDasharray="4 4"
+                    />
+
+                    <polyline
+                        fill="none"
+                        stroke="url(#trendGradient)"
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={points}
+                    />
+
+                    {/* End point dot */}
+                    <circle
+                        cx={width}
+                        cy={height - ((lastSlot.value - minVal) / valRange) * (height - padding * 2) - padding}
+                        r="4"
+                        fill="#f59e0b"
+                        className="animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.8)]"
+                    />
+                </svg>
+
+                {/* X-Axis Labels */}
+                <div className="absolute -bottom-1 left-0 right-0 flex justify-between text-[7px] text-slate-700 font-mono uppercase tracking-tighter">
+                    <span>{firstSlot.date}</span>
+                    <span>{lastSlot.date}</span>
+                </div>
+            </div>
+
+            {/* Current Value Pill */}
+            <div className="absolute -right-2 top-1/2 -translate-y-1/2 bg-amber-500 text-slate-950 px-2 py-1 rounded-lg text-[10px] font-black shadow-[0_0_15px_rgba(245,158,11,0.4)] border border-amber-400">
+                {Math.round(lastSlot.value)}
+            </div>
+        </div>
     );
 }

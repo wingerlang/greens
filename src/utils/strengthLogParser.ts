@@ -290,9 +290,14 @@ function finalizeWorkout(ctx: ParserContext) {
 }
 
 function trackPersonalBest(ctx: ParserContext, exercise: StrengthExercise, set: StrengthSet) {
-    if (set.weight <= 0 || set.reps <= 0) return;
+    if (set.reps <= 0) return;
 
-    const estimated1RM = calculate1RM(set.weight, set.reps);
+    const isBW = !!set.isBodyweight;
+    const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
+
+    if (calcWeight <= 0 && !isBW) return;
+
+    const estimated1RM = calculate1RM(calcWeight, set.reps);
     const pbKey = `${exercise.id}-1rm`;
 
     const existing = ctx.personalBests.get(pbKey);
@@ -306,6 +311,8 @@ function trackPersonalBest(ctx: ParserContext, exercise: StrengthExercise, set: 
             value: estimated1RM,
             weight: set.weight,
             reps: set.reps,
+            isBodyweight: isBW,
+            extraWeight: set.extraWeight,
             date: ctx.currentWorkout!.date,
             workoutId: ctx.currentWorkout!.id,
             workoutName: ctx.currentWorkout!.name,
