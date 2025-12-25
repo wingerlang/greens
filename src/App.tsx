@@ -23,6 +23,7 @@ import { RegisterPage } from './pages/RegisterPage.tsx';
 import { CoachPage } from './pages/CoachPage.tsx';
 import { PublicProfilePage } from './pages/PublicProfilePage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
+import { GarminPage } from './pages/GarminPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -80,6 +81,11 @@ export function App() {
                                                 <Route path="docs" element={<DocumentationPage />} />
                                                 <Route path="community" element={<UsersPage />} />
                                                 <Route path="u/:handle" element={<PublicProfilePage />} />
+                                                <Route path="api" element={<ApiPage />} />
+                                                <Route path="docs" element={<DocumentationPage />} />
+                                                <Route path="community" element={<UsersPage />} />
+                                                <Route path="u/:handle" element={<PublicProfilePage />} />
+                                                <Route path="garmin" element={<GarminPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

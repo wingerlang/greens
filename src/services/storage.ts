@@ -42,7 +42,11 @@ const getDefaultData = (): AppData => ({
     competitions: [],
     trainingCycles: [],
     performanceGoals: [],
-    plannedActivities: []
+    plannedActivities: [],
+    // Phase 8: Data Persistence & Integration
+    sleepSessions: [],
+    intakeLogs: [],
+    universalActivities: []
 });
 
 // Helper to get token (if any)
@@ -133,6 +137,10 @@ export class LocalStorageService implements StorageService {
             if (!data.trainingCycles) data.trainingCycles = [];
             if (!data.pantryQuantities) data.pantryQuantities = {};
             if (!data.plannedActivities) data.plannedActivities = [];
+
+            // Phase 8
+            if (!data.intakeLogs) data.intakeLogs = [];
+            if (!data.universalActivities) data.universalActivities = [];
         }
 
         return data;

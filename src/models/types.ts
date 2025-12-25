@@ -987,6 +987,10 @@ export interface AppData {
     competitions?: Competition[];
     trainingCycles?: TrainingCycle[];
     performanceGoals?: PerformanceGoal[];
+    // Phase 8
+    sleepSessions?: SleepSession[];
+    intakeLogs?: IntakeLog[];
+    universalActivities?: UniversalActivity[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */
@@ -1098,5 +1102,38 @@ export function getWeekdayFromDate(date: string): Weekday | null {
     // Convert to Monday-first index: 0=Mon, 1=Tue, ..., 6=Sun
     const weekdayIndex = jsDay === 0 ? 6 : jsDay - 1;
     return WEEKDAYS[weekdayIndex];
+}
+
+// ============================================
+// Phase 8: Data Persistence & Deep Integration (Garmin/Strava)
+// ============================================
+
+export type SleepStage = 'deep' | 'light' | 'rem' | 'awake';
+
+export interface SleepSession {
+    id: string;
+    date: string; // YYYY-MM-DD
+    startTime: string; // ISO
+    endTime: string; // ISO
+    durationSeconds: number;
+    score?: number; // 0-100
+    source: ActivitySource;
+    stages?: {
+        deepSeconds: number;
+        lightSeconds: number;
+        remSeconds: number;
+        awakeSeconds: number;
+    };
+    efficiency?: number; // 0-100%
+}
+
+export interface IntakeLog {
+    id: string;
+    userId: string;
+    type: 'caffeine' | 'water' | 'alcohol' | 'medication';
+    amount: number;
+    unit: string;
+    timestamp: string; // ISO
+    source: ActivitySource;
 }
 

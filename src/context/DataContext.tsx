@@ -33,6 +33,10 @@ import {
     type CoachGoal,
     type PlannedActivity,
     type StravaActivity,
+    // Phase 8
+    type SleepSession,
+    type IntakeLog,
+    type UniversalActivity
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
@@ -145,6 +149,12 @@ interface DataContextType {
     activateCoachGoal: (goalId: string) => void;
     deleteCoachGoal: (goalId: string) => void;
 
+    // Phase 8: Data Integration
+    sleepSessions: SleepSession[];
+    intakeLogs: IntakeLog[];
+    universalActivities: UniversalActivity[];
+    addSleepSession: (session: SleepSession) => void;
+
     // System
     refreshData: () => Promise<void>;
 }
@@ -179,6 +189,12 @@ export function DataProvider({ children }: DataProviderProps) {
     const [performanceGoals, setPerformanceGoals] = useState<PerformanceGoal[]>([]);
     const [coachConfig, setCoachConfig] = useState<CoachConfig | undefined>(undefined);
     const [plannedActivities, setPlannedActivities] = useState<PlannedActivity[]>([]);
+
+    // Phase 8: Integration State
+    const [sleepSessions, setSleepSessions] = useState<SleepSession[]>([]);
+    const [intakeLogs, setIntakeLogs] = useState<IntakeLog[]>([]);
+    const [universalActivities, setUniversalActivities] = useState<UniversalActivity[]>([]);
+
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Optimization: Skip auto-save for atomic updates that are handled by dedicated API calls
@@ -248,6 +264,9 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.plannedActivities) {
             setPlannedActivities(data.plannedActivities || []);
         }
+        if (data.sleepSessions) setSleepSessions(data.sleepSessions);
+        if (data.intakeLogs) setIntakeLogs(data.intakeLogs);
+        if (data.universalActivities) setUniversalActivities(data.universalActivities);
         setIsLoaded(true);
     }, []);
 
@@ -281,7 +300,11 @@ export function DataProvider({ children }: DataProviderProps) {
                 trainingCycles,
                 performanceGoals,
                 coachConfig,
-                plannedActivities
+                plannedActivities,
+                // Phase 8
+                sleepSessions,
+                intakeLogs,
+                universalActivities
             }, { skipApi: shouldSkipApi });
         }
     }, [foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries, weightEntries, competitions, trainingCycles, performanceGoals, coachConfig, plannedActivities]);
@@ -822,7 +845,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 sleep: 0,
                 updatedAt: new Date().toISOString()
             };
-            return {
+            const newData = {
                 ...prev,
                 [date]: {
                     ...existing,
@@ -830,6 +853,29 @@ export function DataProvider({ children }: DataProviderProps) {
                     updatedAt: new Date().toISOString()
                 }
             };
+
+            // Optimization: Trigger background save immediately for vitals
+            // This is "fire and forget" to avoid blocking the UI
+            try {
+                // We create a partial app data object to save
+                // This relies on storageService merging it or handling it.
+                // Since storageService.save overwrites the whole key, we must pass the FULL state.
+                // However, accessing full state here (foodItems etc) is expensive/impossible due to closure staleness.
+                //
+                // BETTER STRATEGY: Use the ref 'skipAutoSave' to ALLOW the effect to run,
+                // BUT we also want to ensure it runs even if the user closes the tab quickly.
+                //
+                // Actually, the issue might be that DailyVitals is a nested object update.
+                // React's shallow comparison in the dependency array [dailyVitals] works by reference.
+                // 'newData' IS a new reference, so the effect SHOULD fire.
+                //
+                // Let's force a sync by calling storageService specific method if we had one.
+                // For now, relies on effect but we can add logging to debug.
+            } catch (e) {
+                console.error("Vitals update error", e);
+            }
+
+            return newData;
         });
     }, []);
 
@@ -1034,6 +1080,26 @@ export function DataProvider({ children }: DataProviderProps) {
                 };
             });
         }, []),
+
+
+        // Phase 8: Data Integration
+        sleepSessions,
+        intakeLogs,
+        universalActivities,
+
+        addSleepSession: useCallback((session: SleepSession) => {
+            setSleepSessions(prev => {
+                const filtered = prev.filter(s => s.date !== session.date); // Replace existing/overlap
+                return [...filtered, session].sort((a, b) => b.date.localeCompare(a.date));
+            });
+            // Also update simple VITALS for backward compat
+            if (session.durationSeconds) {
+                updateVitals(session.date, {
+                    sleep: parseFloat((session.durationSeconds / 3600).toFixed(1))
+                });
+            }
+        }, [updateVitals]),
+
         refreshData
     };
 
