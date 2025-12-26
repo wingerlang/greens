@@ -817,6 +817,7 @@ export interface ActivityPerformanceSection {
     rpe?: number; // 1-10
     feel?: 'good' | 'average' | 'bad';
     notes?: string;
+    subType?: ExerciseSubType;
 }
 
 /**

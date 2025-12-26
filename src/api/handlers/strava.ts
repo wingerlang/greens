@@ -120,7 +120,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
             const fullSync = url.searchParams.get('full') === 'true';
             const lastSyncDate = (!fullSync && stravaTokens.lastSync) ? new Date(stravaTokens.lastSync).getTime() / 1000 : undefined;
 
-            const activities = await strava.getStravaActivities(accessToken, { after: lastSyncDate, perPage: 30 });
+            const activities = await strava.getStravaActivities(accessToken, { after: lastSyncDate, perPage: 200 });
             const result = await reconciliationService.reconcileStravaActivities(session.userId, activities);
 
             await saveStravaTokens(session.userId, { ...stravaTokens, lastSync: new Date().toISOString() });

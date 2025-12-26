@@ -16,7 +16,7 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         heartRateAvg: a.performance.avgHeartRate,
         heartRateMax: a.performance.maxHeartRate,
         elevationGain: a.performance.elevationGain,
-        subType: a.plan?.activityCategory === 'INTERVALS' ? 'interval' : undefined,
+        subType: a.performance.subType || (a.plan?.activityCategory === 'INTERVALS' ? 'interval' : undefined),
         tonnage: undefined, // UniversalActivity doesn't strictly track tonnage yet in performance
         notes: a.performance.notes
     };

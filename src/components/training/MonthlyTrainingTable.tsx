@@ -70,7 +70,8 @@ export function MonthlyTrainingTable({ exercises }: MonthlyTrainingTableProps) {
         if (min === 0) return '-';
         const h = Math.floor(min / 60);
         const m = Math.round(min % 60);
-        return `${h}:${m.toString().padStart(2, '0')}`;
+        if (h === 0) return `${m}m`;
+        return `${h}h ${m}m`;
     };
 
     const fmtDist = (km: number) => km > 0 ? km.toFixed(1).replace('.', ',') + ' km' : '-';
@@ -202,13 +203,22 @@ export function MonthlyTrainingTable({ exercises }: MonthlyTrainingTableProps) {
                             }
 
                             // Render Data Row
+                            // Check if month has race
+                            const hasRace = exercises.some(e =>
+                                new Date(e.date).getFullYear() === currentYear &&
+                                new Date(e.date).getMonth() === i &&
+                                e.subType === 'race'
+                            );
+
                             rows.push(
                                 <div
                                     key={months[i]}
                                     onClick={() => setSelectedMonth(i)}
-                                    className="grid grid-cols-[100px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100"
+                                    className={`grid grid-cols-[100px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${hasRace ? 'bg-amber-500/5' : ''
+                                        }`}
                                 >
                                     <div className="p-3 text-slate-400 font-medium group-hover:text-white flex items-center gap-2">
+                                        {hasRace && <span className="text-amber-400 animate-pulse text-xs">🏆</span>}
                                         {months[i]}
                                         <span className="opacity-0 group-hover:opacity-100 text-[10px] text-sky-400 transition-opacity">↗</span>
                                     </div>

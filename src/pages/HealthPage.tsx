@@ -120,7 +120,7 @@ export function HealthPage() {
         return undefined; // Default
     }, [metric]);
 
-    const [timeframe, setTimeframe] = useState<TimeFrame>('30d');
+    const [timeframe, setTimeframe] = useState<TimeFrame>('year');
 
     const days = useMemo(() => {
         switch (timeframe) {
@@ -194,38 +194,6 @@ export function HealthPage() {
                 </div>
 
                 {/* Score & Time Selector */}
-                <div className="flex items-center gap-6">
-                    <div className="score-circle">
-                        <svg viewBox="0 0 36 36" className="circular-chart">
-                            <path className="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                            <path
-                                className="circle"
-                                stroke={goalTheme.primary}
-                                strokeDasharray={`${healthScore}, 100`}
-                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                            />
-                            <text x="18" y="20.35" className="percentage">{healthScore}</text>
-                        </svg>
-                        <div className="score-label">Health Score</div>
-                    </div>
-                    <div className="tf-selector">
-                        {(['7d', '30d', '3m', '6m', '9m', 'year', 'all'] as TimeFrame[]).map(tf => (
-                            <button
-                                key={tf}
-                                className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
-                                onClick={() => setTimeframe(tf)}
-                            >
-                                {tf === '7d' && '7D'}
-                                {tf === '30d' && '30D'}
-                                {tf === '3m' && '3Mån'}
-                                {tf === '6m' && '6Mån'}
-                                {tf === '9m' && '9Mån'}
-                                {tf === 'year' && 'I År'}
-                                {tf === 'all' && 'ALLA'}
-                            </button>
-                        ))}
-                    </div>
-                </div>
             </header>
 
             <main className="health-grid">

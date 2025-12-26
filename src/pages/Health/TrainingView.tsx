@@ -3,16 +3,17 @@ import { TrainingOverview } from '../../components/training/TrainingOverview.tsx
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { StyrkaView } from './StyrkaView.tsx';
 import { KonditionView } from './KonditionView.tsx';
+import { RaceList } from '../../components/training/RaceList.tsx';
 
 interface TrainingViewProps {
     exerciseEntries: ExerciseEntry[];
     days: number;
     universalActivities: UniversalActivity[];
-    initialTab?: 'overview' | 'strength' | 'cardio';
+    initialTab?: 'overview' | 'strength' | 'cardio' | 'races';
 }
 
 export function TrainingView({ exerciseEntries, days, universalActivities, initialTab = 'overview' }: TrainingViewProps) {
-    const [subTab, setSubTab] = useState<'overview' | 'strength' | 'cardio'>(initialTab);
+    const [subTab, setSubTab] = useState<'overview' | 'strength' | 'cardio' | 'races'>(initialTab);
 
     // Sync if initialTab changes (e.g. navigation from parent)
     useEffect(() => {
@@ -50,6 +51,13 @@ export function TrainingView({ exerciseEntries, days, universalActivities, initi
                     >
                         Kondition
                     </button>
+                    <button
+                        onClick={() => setSubTab('races')}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${subTab === 'races' ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25' : 'text-slate-500 hover:text-slate-300'
+                            }`}
+                    >
+                        Tävlingar
+                    </button>
                 </div>
             </header>
 
@@ -66,6 +74,11 @@ export function TrainingView({ exerciseEntries, days, universalActivities, initi
                         exerciseEntries={exerciseEntries}
                         universalActivities={universalActivities}
                     />
+                )}
+                {subTab === 'races' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <RaceList exercises={exerciseEntries} />
+                    </div>
                 )}
             </div>
         </div>

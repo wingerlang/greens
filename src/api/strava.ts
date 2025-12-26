@@ -37,6 +37,7 @@ export interface StravaActivity {
     moving_time: number;       // seconds
     distance: number;          // meters
     total_elevation_gain: number; // meters
+    workout_type?: number;    // 0=default, 1=race, 2=long run, 3=intervals (Run)
     average_heartrate?: number;
     max_heartrate?: number;
     calories?: number;
@@ -285,6 +286,28 @@ export function estimateIntensity(activity: StravaActivity): ExerciseIntensity {
 }
 
 /**
+ * Map Strava workout type to app sub-type
+ */
+export function mapStravaSubType(type: string, workoutType?: number): any {
+    if (workoutType === undefined) return undefined;
+
+    // Running
+    if (type === 'Run') {
+        if (workoutType === 1) return 'race';
+        if (workoutType === 2) return 'long-run';
+        if (workoutType === 3) return 'interval';
+    }
+
+    // Cycling
+    if (type === 'Ride') {
+        if (workoutType === 11) return 'race';
+        if (workoutType === 12) return 'interval'; // Generic workout -> interval?
+    }
+
+    return undefined;
+}
+
+/**
  * Convert Strava activity to app exercise entry format
  */
 export function mapStravaActivityToExercise(activity: StravaActivity) {
@@ -303,6 +326,7 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
         elevationGain: activity.total_elevation_gain,
         prCount: activity.pr_count,
         kudosCount: activity.kudos_count,
+        subType: mapStravaSubType(activity.type, activity.workout_type),
     };
 }
 
@@ -337,7 +361,8 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
         elevationGain: activity.total_elevation_gain,
 
         activityType: mapStravaType(activity.type),
-        notes: activity.name
+        notes: activity.name,
+        subType: mapStravaSubType(activity.type, activity.workout_type)
     };
 }
 

@@ -139,8 +139,8 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                                             <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
                                                 <div
                                                     className={`h-full rounded-full ${type.includes('running') ? 'bg-emerald-500' :
-                                                            type === 'strength' ? 'bg-indigo-500' :
-                                                                type === 'cycling' ? 'bg-sky-500' : 'bg-slate-400'
+                                                        type === 'strength' ? 'bg-indigo-500' :
+                                                            type === 'cycling' ? 'bg-sky-500' : 'bg-slate-400'
                                                         }`}
                                                     style={{ width: `${percent}%` }}
                                                 />
@@ -170,17 +170,21 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                             const hasExercise = date.exercises.length > 0;
                             const isHeavyDay = date.exercises.some(e => e.type === 'strength' && (e.tonnage || 0) > 5000);
                             const isLongRun = date.exercises.some(e => (e.type === 'running' && (e.distance || 0) > 5));
+                            const isRace = date.exercises.some(e => e.subType === 'race');
 
                             return (
                                 <div key={date.day} className={`
                                     relative p-2 rounded-xl border transition-all duration-300 group
-                                    ${hasExercise
-                                        ? 'bg-slate-800 border-white/10 hover:border-white/30 hover:bg-slate-700 hover:scale-105 shadow-lg'
-                                        : 'bg-white/[0.02] border-transparent hover:bg-white/5 opacity-50 hover:opacity-100'}
+                                    ${isRace ? 'bg-amber-500/10 border-amber-500/50 hover:bg-amber-500/20 shadow-amber-500/20' :
+                                        hasExercise
+                                            ? 'bg-slate-800 border-white/10 hover:border-white/30 hover:bg-slate-700 hover:scale-105 shadow-lg'
+                                            : 'bg-white/[0.02] border-transparent hover:bg-white/5 opacity-50 hover:opacity-100'}
                                 `}>
-                                    <span className={`text-xs font-bold leading-none ${hasExercise ? 'text-white' : 'text-slate-600'}`}>
+                                    <span className={`text-xs font-bold leading-none ${isRace ? 'text-amber-400' : hasExercise ? 'text-white' : 'text-slate-600'}`}>
                                         {date.day}
                                     </span>
+
+                                    {isRace && <div className="absolute top-1 right-1 text-xs animate-pulse">🏆</div>}
 
                                     <div className="flex flex-wrap content-end gap-1 mt-2">
                                         {date.exercises.map(ex => {
@@ -194,6 +198,10 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                                             if (type.includes('walk') || type.includes('prom')) { icon = '🚶'; color = 'text-amber-400'; }
                                             if (type.includes('swim') || type.includes('sim')) { icon = '🏊'; color = 'text-cyan-400'; }
 
+                                            // Override for race
+                                            if (ex.subType === 'race') { icon = '🏆'; color = 'text-amber-400 font-bold'; }
+                                            else if (ex.subType === 'interval') { icon = '⚡'; color = 'text-red-400'; }
+
                                             return (
                                                 <div key={ex.id} title={`${ex.type} - ${ex.durationMinutes}m`} className="hover:scale-125 transition-transform cursor-help">
                                                     <span className={`text-sm ${color}`}>{icon}</span>
@@ -204,11 +212,16 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
 
                                     {/* Tooltip on Hover */}
                                     {hasExercise && (
-                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-950 border border-white/10 rounded-lg p-3 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 hidden md:block">
-                                            <div className="text-[10px] text-slate-500 font-bold mb-1 border-b border-white/5 pb-1">{date.day} {monthName}</div>
+                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-950 border border-white/10 rounded-lg p-3 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 hidden md:block z-[60]">
+                                            <div className="text-[10px] text-slate-500 font-bold mb-1 border-b border-white/5 pb-1 flex justify-between">
+                                                <span>{date.day} {monthName}</span>
+                                                {isRace && <span className="text-amber-400">TÄVLING</span>}
+                                            </div>
                                             {date.exercises.map((e, idx) => (
                                                 <div key={idx} className="flex justify-between items-center text-xs mb-1 last:mb-0">
-                                                    <span className="text-white capitalize">{e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}</span>
+                                                    <span className={`capitalize ${e.subType === 'race' ? 'text-amber-400 font-bold' : 'text-white'}`}>
+                                                        {e.subType === 'race' ? '🏆 ' : ''}{e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                    </span>
                                                     <span className="text-slate-400 font-mono">
                                                         {e.distance ? `${e.distance}km` : e.tonnage ? `${(e.tonnage / 1000).toFixed(1)}t` : `${e.durationMinutes}m`}
                                                     </span>
@@ -218,8 +231,8 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                                     )}
 
                                     {/* Visual Flair for notable days */}
-                                    {isHeavyDay && <div className="absolute inset-0 bg-indigo-500/5 rounded-xl pointer-events-none" />}
-                                    {isLongRun && <div className="absolute inset-0 bg-emerald-500/5 rounded-xl pointer-events-none" />}
+                                    {isHeavyDay && !isRace && <div className="absolute inset-0 bg-indigo-500/5 rounded-xl pointer-events-none" />}
+                                    {isLongRun && !isRace && <div className="absolute inset-0 bg-emerald-500/5 rounded-xl pointer-events-none" />}
                                 </div>
                             );
                         })}
