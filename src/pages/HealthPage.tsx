@@ -57,10 +57,8 @@ export function HealthPage() {
     // Unified Exercise Entries
     const unifiedExerciseEntries = useMemo(() => {
         const manual = manualExerciseEntries;
-        const strava = fetchedUniversalActivities
-            .map(mapUniversalToLegacyEntry)
-            .filter((e): e is ExerciseEntry => e !== null);
 
+        // 1. Prepare Strength Workouts
         const strength = strengthWorkouts.map((w): ExerciseEntry => ({
             id: w.id,
             date: w.date,
@@ -72,6 +70,21 @@ export function HealthPage() {
             notes: w.name,
             createdAt: w.createdAt
         }));
+
+        // 2. Prepare Strava Activities (filtered)
+        const strava = fetchedUniversalActivities
+            .map(mapUniversalToLegacyEntry)
+            .filter((e): e is ExerciseEntry => e !== null)
+            .filter(e => {
+                // Remove Strava strength activities if we already have a dedicated strength workout on that day
+                // Cast to string to handle raw Strava types like 'WeightTraining' that might not be in our strict type definition yet
+                const t = e.type as string;
+                if (t === 'strength' || t === 'WeightTraining') {
+                    const hasDedicatedWorkout = strength.some(s => s.date.split('T')[0] === e.date.split('T')[0]);
+                    return !hasDedicatedWorkout;
+                }
+                return true;
+            });
 
         const combined = [...manual, ...strava, ...strength];
         const unique = new Map<string, ExerciseEntry>();

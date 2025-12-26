@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
 
 interface MonthlyCalendarModalProps {
@@ -10,6 +10,15 @@ interface MonthlyCalendarModalProps {
 
 export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: MonthlyCalendarModalProps) {
     const monthName = new Date(year, monthIndex).toLocaleString('sv-SE', { month: 'long' });
+
+    // ESC key listener
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [onClose]);
 
     // Filter exercises for this month
     const monthData = useMemo(() => {
@@ -54,13 +63,17 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
         const count = monthData.length;
         const tonnage = monthData.reduce((sum, e) => sum + (e.tonnage || 0), 0);
 
-        // Deduced types
-        const types = monthData.reduce((acc, e) => {
-            acc[e.type] = (acc[e.type] || 0) + 1;
+        // Pass per week (approximate)
+        const weeks = 4.33; // Average weeks per month
+        const perWeek = count > 0 ? (count / weeks).toFixed(1) : '0';
+
+        // Distribution by Time (Request: "fördelning av tiden")
+        const timeDist = monthData.reduce((acc, e) => {
+            acc[e.type] = (acc[e.type] || 0) + e.durationMinutes;
             return acc;
         }, {} as Record<string, number>);
 
-        return { distance, duration, count, tonnage, types };
+        return { distance, duration, count, tonnage, timeDist, perWeek };
     }, [monthData]);
 
     if (monthIndex < 0) return null;
@@ -68,20 +81,31 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300" onClick={onClose}>
             <div
-                className="bg-slate-900 border border-white/10 rounded-3xl p-0 shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300"
+                className="bg-slate-900 border border-white/10 rounded-3xl p-0 shadow-2xl w-full max-w-6xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300 max-h-[90vh]"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Side Panel: Summary */}
-                <div className="md:w-80 bg-slate-950/50 border-r border-white/5 p-8 flex flex-col gap-6">
+                <div className="md:w-96 bg-slate-950/50 border-r border-white/5 p-8 flex flex-col gap-6 overflow-y-auto">
                     <div>
                         <h2 className="text-3xl font-black text-white capitalize mb-1">{monthName}</h2>
                         <p className="text-slate-500 font-bold uppercase tracking-wider text-xs">{year}</p>
                     </div>
 
                     <div className="space-y-4">
+                        <div className="bg-slate-800/40 p-4 rounded-xl border border-white/5 grid grid-cols-2 gap-4">
+                            <div>
+                                <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Pass Totalt</p>
+                                <p className="text-3xl font-black text-white">{stats.count} <span className="text-sm font-medium text-slate-400">st</span></p>
+                            </div>
+                            <div>
+                                <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Pass / Vecka</p>
+                                <p className="text-3xl font-black text-sky-400">{stats.perWeek}</p>
+                            </div>
+                        </div>
+
                         <div className="bg-slate-800/40 p-4 rounded-xl border border-white/5">
-                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Pass Totalt</p>
-                            <p className="text-3xl font-black text-white">{stats.count} <span className="text-sm font-medium text-slate-400">st</span></p>
+                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-1">Total Tid</p>
+                            <p className="text-3xl font-black text-white">{Math.floor(stats.duration / 60)}h {Math.round(stats.duration % 60)}m</p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -96,27 +120,41 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                         </div>
 
                         <div className="bg-slate-800/40 p-4 rounded-xl border border-white/5">
-                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2">Fördelning</p>
-                            <div className="space-y-2">
-                                {Object.entries(stats.types).sort((a, b) => b[1] - a[1]).map(([type, c]) => (
-                                    <div key={type} className="flex justify-between text-sm">
-                                        <span className="text-slate-300 capitalize flex items-center gap-2">
-                                            {type.includes('running') || type.includes('run') ? '🏃 Löpning' :
-                                                type === 'strength' ? '🏋️ Styrka' :
-                                                    type === 'cycling' ? '🚴 Cykling' :
-                                                        type === 'walking' ? '🚶 Promenad' :
-                                                            type}
-                                        </span>
-                                        <span className="font-mono font-bold text-white">{c}</span>
-                                    </div>
-                                ))}
+                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-3">Tidsfördelning</p>
+                            <div className="space-y-3">
+                                {Object.entries(stats.timeDist).sort((a, b) => b[1] - a[1]).map(([type, mins]) => {
+                                    const percent = Math.round((mins / stats.duration) * 100);
+                                    return (
+                                        <div key={type} className="text-sm">
+                                            <div className="flex justify-between mb-1">
+                                                <span className="text-slate-300 capitalize flex items-center gap-2 text-xs font-bold">
+                                                    {type.includes('running') || type.includes('run') ? '🏃 Löpning' :
+                                                        type === 'strength' ? '🏋️ Styrka' :
+                                                            type === 'cycling' ? '🚴 Cykling' :
+                                                                type === 'walking' ? '🚶 Promenad' :
+                                                                    type}
+                                                </span>
+                                                <span className="font-mono font-bold text-white text-xs">{percent}% <span className="text-slate-500">({Math.round(mins)}m)</span></span>
+                                            </div>
+                                            <div className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full ${type.includes('running') ? 'bg-emerald-500' :
+                                                            type === 'strength' ? 'bg-indigo-500' :
+                                                                type === 'cycling' ? 'bg-sky-500' : 'bg-slate-400'
+                                                        }`}
+                                                    style={{ width: `${percent}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>
                 </div>
 
                 {/* Main Content: Calendar Grid */}
-                <div className="flex-1 p-8 bg-gradient-to-br from-slate-900 to-slate-800/50">
+                <div className="flex-1 p-8 bg-gradient-to-br from-slate-900 to-slate-800/50 overflow-y-auto">
                     <div className="grid grid-cols-7 gap-1 mb-2">
                         {['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'].map(d => (
                             <div key={d} className="text-center text-[10px] uppercase font-bold text-slate-600 tracking-wider">
@@ -125,7 +163,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-7 gap-2 auto-rows-[80px]">
+                    <div className="grid grid-cols-7 gap-2 auto-rows-[100px]">
                         {calendarDays.map((date, i) => {
                             if (!date) return <div key={`empty-${i}`} className="bg-transparent" />;
 
