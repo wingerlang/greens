@@ -173,9 +173,19 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
                     let gapBuffer: number[] = [];
                     let pendingYearMarkers: { index: number, year: number }[] = [];
 
+                    // Calculate Ranks (Gold, Silver, Bronze)
+                    // We treat current week normally for ranking, or exclude it? usually include.
+                    const sortedByVol = [...weeklyData]
+                        .map((d, i) => ({ ...d, originalIndex: i }))
+                        .filter(d => d.volume > 0)
+                        .sort((a, b) => b.volume - a.volume);
+
+                    const goldIdx = sortedByVol[0]?.originalIndex;
+                    const silverIdx = sortedByVol[1]?.originalIndex;
+                    const bronzeIdx = sortedByVol[2]?.originalIndex;
+
                     const renderGap = (indices: number[], yearMarkers: { index: number, year: number }[]) => {
                         if (indices.length === 0) {
-                            // If no gap but we have year markers, render them now
                             yearMarkers.forEach(ym => {
                                 items.push(
                                     <div key={`year-${ym.year}`} className="flex-shrink-0 w-[1px] h-full bg-blue-500/20 relative mx-0.5">
@@ -195,7 +205,6 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
                         if (indices.length >= 4) {
                             items.push(
                                 <div key={`break-${indices[0]}`} className="flex-shrink-0 flex flex-col items-center justify-center min-w-[32px] md:min-w-[40px] h-full border-x border-white/5 bg-slate-800/10 rounded-sm relative group/break">
-                                    {/* Year Markers inside long gaps */}
                                     {yearMarkers.map(ym => {
                                         const relIndex = ym.index - indices[0];
                                         const leftPos = (relIndex / indices.length) * 100;
@@ -229,7 +238,6 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
                             );
                         } else {
                             indices.forEach((idx, iInGap) => {
-                                // Check if a year marker belongs BEFORE this index
                                 const marker = yearMarkers.find(ym => ym.index === idx);
                                 if (marker) {
                                     items.push(
@@ -290,14 +298,64 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
                             // Render Bar
                             const heightPercentage = Math.min((volume / maxVolume) * 100, 100);
                             const avgHeight = (rollingAvg / maxVolume) * 100;
-                            const weekLabel = dateObj.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+
+                            // Format date range for tooltips
+                            const endDate = new Date(dateObj);
+                            endDate.setDate(endDate.getDate() + 6);
+                            const startStr = dateObj.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+                            const endStr = endDate.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+                            const fullLabel = `${startStr} – ${endStr}`;
+
+                            // Ranking Logic
+                            const rank = i === goldIdx ? 1 : i === silverIdx ? 2 : i === bronzeIdx ? 3 : null;
+                            const isGold = rank === 1;
+                            const isSilver = rank === 2;
+                            const isBronze = rank === 3;
+
+                            let barColorClass = "bg-gradient-to-t from-emerald-500/80 to-emerald-400";
+                            let ringClass = ""; // For glow effects
+
+                            if (isGold) {
+                                barColorClass = "bg-gradient-to-t from-amber-500 to-yellow-300 shadow-[0_0_15px_rgba(245,158,11,0.5)]";
+                                ringClass = "ring-1 ring-yellow-300/50";
+                            } else if (isSilver) {
+                                barColorClass = "bg-gradient-to-t from-slate-400 to-slate-200 shadow-[0_0_15px_rgba(148,163,184,0.5)]";
+                                ringClass = "ring-1 ring-slate-300/50";
+                            } else if (isBronze) {
+                                barColorClass = "bg-gradient-to-t from-orange-700 to-orange-400 shadow-[0_0_15px_rgba(234,88,12,0.5)]";
+                                ringClass = "ring-1 ring-orange-400/50";
+                            } else if (isCurrentWeek) {
+                                barColorClass = "bg-gradient-to-t from-purple-500 to-purple-400 animate-pulse";
+                            }
 
                             items.push(
-                                <div key={`bar-${i}`} className="flex-1 min-w-[4px] max-w-[40px] flex flex-col items-center h-full justify-end group relative z-10">
+                                <div key={`bar-${i}`} className="flex-1 min-w-[4px] max-w-[40px] flex flex-col items-center h-full justify-end group relative z-10 transition-all hover:z-50">
                                     {/* Tooltip */}
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 p-2.5 rounded-xl shadow-2xl z-50 pointer-events-none whitespace-nowrap">
-                                        <p className="font-black text-white text-lg leading-none">{(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
-                                        <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">{weekLabel}</p>
+                                    <div className="opacity-0 group-hover:opacity-100 transition-all duration-200 absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 p-3 rounded-xl shadow-2xl pointer-events-none whitespace-nowrap min-w-[120px] scale-95 group-hover:scale-100 origin-bottom">
+                                        <div className="flex justify-between items-center mb-1 gap-4">
+                                            <span className="text-[10px] text-slate-400 font-bold uppercase">{fullLabel}</span>
+                                            {rank && <span className={`text-[10px] font-black uppercase px-1.5 rounded ${isGold ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
+                                                    isSilver ? 'bg-slate-500/20 text-slate-300 border border-slate-500/30' :
+                                                        'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                                }`}>
+                                                #{rank}
+                                            </span>}
+                                        </div>
+                                        <div className="flex items-baseline gap-1">
+                                            <p className="font-black text-white text-2xl leading-none">{(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}</p>
+                                            <span className="text-xs text-slate-500 font-medium">ton</span>
+                                        </div>
+                                        {rollingAvg > 0 && (
+                                            <div className="mt-1 pt-1 border-t border-white/5 flex items-center justify-between text-[10px]">
+                                                <span className="text-slate-500">Snitt (4v):</span>
+                                                <span className="font-mono text-blue-400">{(rollingAvg / 1000).toFixed(1)}t</span>
+                                            </div>
+                                        )}
+                                        {isCurrentWeek && (
+                                            <div className="mt-1 text-[10px] text-purple-400 font-bold text-center animate-pulse">
+                                                Nuvarande vecka
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Invisible Trend Hover Area */}
@@ -308,24 +366,31 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
                                     >
                                         <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-4 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
                                             <p className="text-[10px] font-black text-blue-400">Trend: {(rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
-                                            <p className="text-[8px] text-slate-500 font-bold">{weekLabel}</p>
+                                            <p className="text-[8px] text-slate-500 font-bold">{fullLabel}</p>
                                         </div>
                                         <div className="w-1.5 h-1.5 rounded-full bg-blue-400 opacity-0 group-hover/trend:opacity-100 shadow-[0_0_8px_rgba(59,130,246,1)] transition-opacity" />
                                     </div>
 
                                     {/* Bar */}
                                     <div
-                                        className="w-full bg-gradient-to-t from-emerald-500/80 to-emerald-400 rounded-t-[1px] hover:from-emerald-400 hover:to-emerald-300 transition-all duration-300 relative"
+                                        className={`w-full rounded-t-[2px] transition-all duration-300 relative group-hover:scale-x-110 ${barColorClass} ${ringClass}`}
                                         style={{ height: `${heightPercentage}%` }}
                                     >
                                         {/* Reflection/Shine */}
-                                        <div className="absolute top-0 left-0 right-0 h-[10%] bg-gradient-to-b from-white/20 to-transparent" />
+                                        <div className="absolute top-0 left-0 right-0 h-[30%] bg-gradient-to-b from-white/30 to-transparent" />
+
+                                        {/* Rank Trophy */}
+                                        {(isGold || isSilver || isBronze) && (
+                                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[8px] drop-shadow-md filter">
+                                                {isGold ? '🥇' : isSilver ? '🥈' : '🥉'}
+                                            </div>
+                                        )}
                                     </div>
 
-                                    {/* X-axis Label (only for sparse views or first/last) */}
-                                    {(containerWidth < 20 || i % Math.ceil(containerWidth / 8) === 0) && (
-                                        <div className="absolute top-full mt-2 text-[8px] font-bold text-slate-500 whitespace-nowrap">
-                                            {weekLabel}
+                                    {/* X-axis Label */}
+                                    {(isCurrentWeek || i === 0 || (containerWidth < 20 && i % 2 === 0)) && (
+                                        <div className={`absolute top-full mt-2 text-[8px] font-bold whitespace-nowrap ${isCurrentWeek ? 'text-purple-400' : 'text-slate-500'}`}>
+                                            {isCurrentWeek ? 'V.NU' : startStr}
                                         </div>
                                     )}
                                 </div>
