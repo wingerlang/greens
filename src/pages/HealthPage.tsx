@@ -9,7 +9,7 @@ import { StyrkaView } from './Health/StyrkaView.tsx';
 import { KonditionView } from './Health/KonditionView.tsx';
 import './HealthPage.css';
 
-type TimeFrame = 7 | 30 | 90;
+type TimeFrame = '7d' | '30d' | '3m' | '6m' | '9m' | 'year' | 'all';
 
 export function HealthPage() {
     const { metric } = useParams<{ metric?: string }>();
@@ -28,18 +28,36 @@ export function HealthPage() {
         return 'overview';
     }, [metric]);
 
-    const [timeframe, setTimeframe] = useState<TimeFrame>(30);
+    const [timeframe, setTimeframe] = useState<TimeFrame>('30d');
+
+    const days = useMemo(() => {
+        switch (timeframe) {
+            case '7d': return 7;
+            case '30d': return 30;
+            case '3m': return 90;
+            case '6m': return 180;
+            case '9m': return 270;
+            case 'year': {
+                const now = new Date();
+                const startOfYear = new Date(now.getFullYear(), 0, 1);
+                const diff = now.getTime() - startOfYear.getTime();
+                return Math.ceil(diff / (1000 * 60 * 60 * 24));
+            }
+            case 'all': return 3650; // ~10 years
+            default: return 30;
+        }
+    }, [timeframe]);
 
     const snapshots = useMemo(() => {
         return aggregateHealthData(
-            timeframe,
+            days,
             dailyVitals,
             weightEntries,
             mealEntries,
             exerciseEntries,
             calculateDailyNutrition
         );
-    }, [timeframe, dailyVitals, weightEntries, mealEntries, exerciseEntries, calculateDailyNutrition]);
+    }, [days, dailyVitals, weightEntries, mealEntries, exerciseEntries, calculateDailyNutrition]);
 
     const stats = useMemo(() => calculateHealthStats(snapshots), [snapshots]);
 
@@ -100,13 +118,19 @@ export function HealthPage() {
                         <div className="score-label">Health Score</div>
                     </div>
                     <div className="tf-selector">
-                        {([7, 30, 90] as TimeFrame[]).map(tf => (
+                        {(['7d', '30d', '3m', '6m', '9m', 'year', 'all'] as TimeFrame[]).map(tf => (
                             <button
                                 key={tf}
                                 className={`tf-btn ${timeframe === tf ? 'active' : ''}`}
                                 onClick={() => setTimeframe(tf)}
                             >
-                                {tf === 90 ? 'ALL' : `${tf}D`}
+                                {tf === '7d' && '7D'}
+                                {tf === '30d' && '30D'}
+                                {tf === '3m' && '3Mån'}
+                                {tf === '6m' && '6Mån'}
+                                {tf === '9m' && '9Mån'}
+                                {tf === 'year' && 'I År'}
+                                {tf === 'all' && 'ALLA'}
                             </button>
                         ))}
                     </div>
@@ -115,19 +139,19 @@ export function HealthPage() {
 
             <main className="health-grid">
                 {activeTab === 'overview' && (
-                    <HealthOverview snapshots={snapshots} stats={stats} timeframe={timeframe} />
+                    <HealthOverview snapshots={snapshots} stats={stats} timeframe={days} />
                 )}
                 {activeTab === 'sleep' && (
-                    <MetricFocusView type="sleep" snapshots={snapshots} stats={stats} days={timeframe} />
+                    <MetricFocusView type="sleep" snapshots={snapshots} stats={stats} days={days} />
                 )}
                 {activeTab === 'weight' && (
-                    <MetricFocusView type="weight" snapshots={snapshots} stats={stats} days={timeframe} />
+                    <MetricFocusView type="weight" snapshots={snapshots} stats={stats} days={days} />
                 )}
                 {activeTab === 'strength' && (
-                    <StyrkaView days={timeframe} />
+                    <StyrkaView days={days} />
                 )}
                 {activeTab === 'cardio' && (
-                    <KonditionView days={timeframe} exerciseEntries={exerciseEntries} universalActivities={universalActivities} />
+                    <KonditionView days={days} exerciseEntries={exerciseEntries} universalActivities={universalActivities} />
                 )}
             </main>
         </div>
