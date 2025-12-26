@@ -248,16 +248,23 @@ export function StrengthPage() {
 
     // Top Workouts (Best of all time in specific categories)
     const bestWorkouts = React.useMemo(() => {
-        if (workouts.length === 0) return null;
+        if (filteredWorkouts.length === 0) return null;
 
         return {
-            volume: [...workouts].sort((a, b) => b.totalVolume - a.totalVolume)[0],
-            duration: [...workouts].sort((a, b) => (b.duration || 0) - (a.duration || 0))[0],
-            sets: [...workouts].sort((a, b) => b.totalSets - a.totalSets)[0],
-            reps: [...workouts].sort((a, b) => b.totalReps - a.totalReps)[0],
-            exercises: [...workouts].sort((a, b) => b.uniqueExercises - a.uniqueExercises)[0],
+            volume: [...filteredWorkouts].sort((a, b) => b.totalVolume - a.totalVolume)[0],
+            duration: [...filteredWorkouts].sort((a, b) => (b.duration || 0) - (a.duration || 0))[0],
+            sets: [...filteredWorkouts].sort((a, b) => b.totalSets - a.totalSets)[0],
+            reps: [...filteredWorkouts].sort((a, b) => b.totalReps - a.totalReps)[0],
+            exercises: [...filteredWorkouts].sort((a, b) => b.uniqueExercises - a.uniqueExercises)[0],
         };
-    }, [workouts]);
+    }, [filteredWorkouts]);
+
+    // Period-based stats
+    const periodStats = React.useMemo(() => {
+        const count = filteredWorkouts.length;
+        const volume = filteredWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
+        return { count, volume };
+    }, [filteredWorkouts]);
 
     // Reset date filter
     const resetDateFilter = () => {
@@ -375,8 +382,8 @@ export function StrengthPage() {
                             <label className="text-[9px] text-slate-500 uppercase font-black mb-3 block text-center tracking-widest opacity-60">Tidsaxel</label>
                             <div className="relative h-1.5 bg-slate-900 rounded-full border border-white/5">
                                 {(() => {
-                                    const min = new Date(dateRange.min).getTime();
-                                    const max = new Date(dateRange.max).getTime();
+                                    const min = Math.min(new Date(dateRange.min).getTime(), new Date(startDate || dateRange.min).getTime());
+                                    const max = Math.max(new Date(dateRange.max).getTime(), new Date(endDate || dateRange.max).getTime());
                                     const start = new Date(startDate || dateRange.min).getTime();
                                     const end = new Date(endDate || dateRange.max).getTime();
                                     const left = ((start - min) / (max - min)) * 100;
@@ -391,26 +398,26 @@ export function StrengthPage() {
                                 })()}
                                 <input
                                     type="range"
-                                    min={new Date(dateRange.min).getTime()}
-                                    max={new Date(dateRange.max).getTime()}
+                                    min={Math.min(new Date(dateRange.min).getTime(), new Date(startDate || dateRange.min).getTime())}
+                                    max={Math.max(new Date(dateRange.max).getTime(), new Date(endDate || dateRange.max).getTime())}
                                     value={new Date(startDate || dateRange.min).getTime()}
                                     onChange={(e) => {
                                         const newStart = Math.min(parseInt(e.target.value), new Date(endDate || dateRange.max).getTime() - 86400000);
                                         setStartDate(new Date(newStart).toISOString().split('T')[0]);
                                     }}
-                                    className="absolute inset-0 w-full appearance-none bg-transparent cursor-pointer z-30 slider-thumb-dual"
+                                    className={`absolute inset-0 w-full appearance-none bg-transparent cursor-pointer slider-thumb-dual ${new Date(startDate || dateRange.min).getTime() > (new Date(dateRange.max).getTime() + new Date(dateRange.min).getTime()) / 2 ? 'z-30' : 'z-20'}`}
                                     style={{ pointerEvents: 'auto' }}
                                 />
                                 <input
                                     type="range"
-                                    min={new Date(dateRange.min).getTime()}
-                                    max={new Date(dateRange.max).getTime()}
+                                    min={Math.min(new Date(dateRange.min).getTime(), new Date(startDate || dateRange.min).getTime())}
+                                    max={Math.max(new Date(dateRange.max).getTime(), new Date(endDate || dateRange.max).getTime())}
                                     value={new Date(endDate || dateRange.max).getTime()}
                                     onChange={(e) => {
                                         const newEnd = Math.max(parseInt(e.target.value), new Date(startDate || dateRange.min).getTime() + 86400000);
                                         setEndDate(new Date(newEnd).toISOString().split('T')[0]);
                                     }}
-                                    className="absolute inset-0 w-full appearance-none bg-transparent cursor-pointer z-20 slider-thumb-dual"
+                                    className={`absolute inset-0 w-full appearance-none bg-transparent cursor-pointer slider-thumb-dual ${new Date(endDate || dateRange.max).getTime() <= (new Date(dateRange.max).getTime() + new Date(dateRange.min).getTime()) / 2 ? 'z-30' : 'z-20'}`}
                                     style={{ pointerEvents: 'auto' }}
                                 />
                             </div>
@@ -452,9 +459,9 @@ export function StrengthPage() {
             {/* Stats Cards */}
             {stats && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard label="Totalt pass" value={stats.totalWorkouts} />
+                    <StatCard label="Totalt pass" value={hasDateFilter ? periodStats.count : stats.totalWorkouts} />
                     <StatCard label="Pass denna vecka" value={stats.workoutsThisWeek} />
-                    <StatCard label="Total volym" value={`${Math.round(stats.totalVolume / 1000)}t`} />
+                    <StatCard label="Total volym" value={hasDateFilter ? `${Math.round(periodStats.volume / 1000)}t` : `${Math.round(stats.totalVolume / 1000)}t`} />
                     <StatCard label="Volym denna månad" value={`${Math.round(stats.volumeThisMonth / 1000)}t`} />
                 </div>
             )}
@@ -578,16 +585,22 @@ export function StrengthPage() {
                     <section>
                         <h2 className="text-xl font-bold text-white mb-4">📈 Volym per vecka</h2>
                         <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
-                            <WeeklyVolumeBars workouts={filteredWorkouts} />
+                            <WeeklyVolumeBars workouts={workouts} setStartDate={setStartDate} setEndDate={setEndDate} />
                         </div>
                     </section>
                 )
             }
 
+            {/* Training Quality & Continuity */}
+            <div className="space-y-12">
+                <TrainingBreaks workouts={workouts} filterRange={{ start: startDate, end: endDate }} />
+                <LongestStreaks workouts={filteredWorkouts} />
+            </div>
+
             {/* Best Workouts / Records Section */}
             {bestWorkouts && (
                 <section>
-                    <h2 className="text-xl font-bold text-white mb-4">🏅 Rekordpass (Alla tider)</h2>
+                    <h2 className="text-xl font-bold text-white mb-4">🏅 Rekordpass {hasDateFilter ? '(Perioden)' : '(Alla tider)'}</h2>
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                         <button
                             onClick={() => setSelectedWorkout(bestWorkouts.volume)}
@@ -914,56 +927,442 @@ function WorkoutDetailModal({
 // Weekly Volume Chart
 // ============================================
 
-function WeeklyVolumeBars({ workouts }: { workouts: StrengthWorkout[] }) {
-    // Group workouts by week
-    const weeklyData = React.useMemo(() => {
-        const weeks: Record<string, number> = {};
+function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
+    workouts: StrengthWorkout[];
+    setStartDate?: (d: string | null) => void;
+    setEndDate?: (d: string | null) => void;
+}) {
+    const [range, setRange] = React.useState<'3m' | '6m' | '12m' | '2025' | 'all'>('12m');
+    const containerRef = React.useRef<HTMLDivElement>(null);
+    const [pathData, setPathData] = React.useState<string>('');
+    const dotRefs = React.useRef<Map<number, HTMLDivElement>>(new Map());
+    const [, forceUpdate] = React.useState({});
 
+    // Group workouts by week and FILL GAPS
+    const weeklyData = React.useMemo(() => {
+        if (workouts.length === 0) return [];
+
+        const weeks: Record<string, number> = {};
+        const sortedWorkouts = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
+
+        // Calculate bounds based on range
+        const now = new Date();
+        let minDate: Date;
+        let maxDate = new Date(sortedWorkouts[sortedWorkouts.length - 1].date);
+
+        if (range === '3m') {
+            minDate = new Date(now);
+            minDate.setMonth(now.getMonth() - 3);
+        } else if (range === '6m') {
+            minDate = new Date(now);
+            minDate.setMonth(now.getMonth() - 6);
+        } else if (range === '12m') {
+            minDate = new Date(now);
+            minDate.setMonth(now.getMonth() - 12);
+        } else if (range === '2025') {
+            minDate = new Date('2025-01-01');
+            const eoy = new Date('2025-12-31');
+            maxDate = now < eoy ? now : eoy;
+        } else {
+            minDate = new Date(sortedWorkouts[0].date);
+        }
+
+        // Adjust minDate to start of week (Sunday)
+        minDate.setDate(minDate.getDate() - minDate.getDay());
+
+        // Ensure maxDate is at least today if we are looking at recent trends
+        if (range !== 'all' && range !== '2025' && maxDate < now) maxDate = now;
+
+        // Fill initially with 0s
+        let current = new Date(minDate);
+        while (current <= maxDate) {
+            const key = current.toISOString().split('T')[0];
+            weeks[key] = 0;
+            current.setDate(current.getDate() + 7);
+        }
+
+        // Add actual volume
         workouts.forEach(w => {
             const date = new Date(w.date);
             const weekStart = new Date(date);
             weekStart.setDate(date.getDate() - date.getDay());
             const weekKey = weekStart.toISOString().split('T')[0];
-            weeks[weekKey] = (weeks[weekKey] || 0) + w.totalVolume;
+            if (weeks[weekKey] !== undefined) {
+                weeks[weekKey] += w.totalVolume;
+            }
         });
 
-        return Object.entries(weeks)
+        const data = Object.entries(weeks)
             .sort((a, b) => a[0].localeCompare(b[0]))
-            .slice(-48) // Show last 48 weeks (approx 12 months)
             .map(([week, volume]) => ({ week, volume }));
-    }, [workouts]);
 
-    const maxVolume = Math.max(...weeklyData.map(d => d.volume), 1) * 1.1; // 10% buffer
+        // Calculate rolling average (4 weeks)
+        return data.map((d, idx) => {
+            const prev4 = data.slice(Math.max(0, idx - 3), idx + 1);
+            const avg = prev4.reduce((sum, item) => sum + item.volume, 0) / prev4.length;
+            return { ...d, rollingAvg: avg };
+        });
+    }, [workouts, range]);
+
+    // Calculate Trend Line Path
+    React.useLayoutEffect(() => {
+        if (!containerRef.current) return;
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const pts: { x: number, y: number }[] = [];
+
+        // Find center of each bar relative to container
+        weeklyData.forEach((d, i) => {
+            if (d.volume === 0) return; // Optional: include/exclude 0s. User wants "continuous line between points".
+            const dot = dotRefs.current.get(i);
+            if (dot) {
+                const rect = dot.getBoundingClientRect();
+                const x = rect.left - containerRect.left + rect.width / 2;
+                const y = rect.top - containerRect.top + rect.height / 2;
+                pts.push({ x, y });
+            }
+        });
+
+        if (pts.length > 1) {
+            setPathData(`M ${pts.map(p => `${p.x} ${p.y}`).join(' L ')}`);
+        } else {
+            setPathData('');
+        }
+    }, [weeklyData, range, workouts]); // Re-run when data or range changes
+
+    // Update path on resize
+    React.useEffect(() => {
+        const obs = new ResizeObserver(() => forceUpdate({}));
+        if (containerRef.current) obs.observe(containerRef.current);
+        return () => obs.disconnect();
+    }, []);
+
+    const maxVolume = Math.max(...weeklyData.map(d => d.volume), 1) * 1.15;
+    const sortedByVolume = [...weeklyData].sort((a, b) => b.volume - a.volume);
+    const top3Volumes = sortedByVolume.slice(0, 3).map(d => d.volume).filter(v => v > 0);
 
     if (weeklyData.length === 0) return <p className="text-slate-500">Inte nog med data för att visa trend.</p>;
 
-    return (
-        <div className="flex items-end gap-0.5 md:gap-1 h-32">
-            {weeklyData.map(({ week, volume }, i) => {
-                const height = (volume / maxVolume) * 100;
-                const weekLabel = new Date(week).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
-                const isCurrentWeek = i === weeklyData.length - 1;
+    const currentYear = new Date().getFullYear();
 
-                return (
-                    <div key={week} className="flex-1 flex flex-col items-center h-full justify-end group/bar relative">
-                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-slate-900 border border-white/10 p-2 rounded-lg z-30 shadow-2xl pointer-events-none whitespace-nowrap">
-                            <p className="text-[10px] font-black text-white">{weekLabel}</p>
-                            <p className="text-[10px] font-bold text-emerald-400">{(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} ton</p>
-                        </div>
-                        <span className={`text-[7px] font-bold transition-opacity mb-1 ${isCurrentWeek ? 'text-emerald-400 opacity-100' : 'text-slate-500 opacity-0 group-hover/bar:opacity-100'}`}>
-                            {(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}
-                        </span>
-                        <div
-                            className={`w-full rounded-t-[2px] transition-all duration-500 border-t border-white/5 ${isCurrentWeek ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' : 'bg-slate-700/40 group-hover/bar:bg-slate-700'}`}
-                            style={{ height: `${height}%`, minHeight: '1px' }}
-                        />
-                        <div className="h-4 flex items-center">
-                            <span className={`text-[8px] whitespace-nowrap ${isCurrentWeek ? 'text-white font-bold' : 'text-slate-600'}`}>{weekLabel}</span>
-                        </div>
-                    </div>
-                );
-            })}
+    const containerWidth = weeklyData.length;
+    const barGapClass = containerWidth > 150 ? 'gap-0.5' : containerWidth > 75 ? 'gap-1' : 'gap-1.5 md:gap-2';
+
+    return (
+        <div className="space-y-6">
+            <div className="flex gap-2 mb-2">
+                {[
+                    { id: '3m', label: '3 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().split('T')[0]; } },
+                    { id: '6m', label: '6 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 6); return d.toISOString().split('T')[0]; } },
+                    { id: '12m', label: '12 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 12); return d.toISOString().split('T')[0]; } },
+                    { id: '2025', label: '2025', start: () => '2025-01-01', end: () => '2025-12-31' },
+                    { id: 'all', label: 'Alla', start: () => null, end: () => null }
+                ].map(p => (
+                    <button
+                        key={p.id}
+                        onClick={() => {
+                            setRange(p.id as any);
+                            setStartDate?.(p.start());
+                            setEndDate?.(p.end?.() || null);
+                        }}
+                        className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg border transition-all ${range === p.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-white/5 text-slate-500 hover:border-white/10'}`}
+                    >
+                        {p.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className={`w-full h-40 flex items-end relative ${barGapClass} overflow-hidden`} ref={containerRef}>
+                {/* Rolling Average Continuous Dashed Line */}
+                <svg className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
+                    <path
+                        d={pathData}
+                        stroke="rgba(59,130,246,0.5)"
+                        strokeWidth="2.5"
+                        fill="none"
+                        strokeDasharray="8 6"
+                        strokeLinecap="round"
+                        className="transition-all duration-700"
+                    />
+                </svg>
+
+                {(() => {
+                    const items: React.ReactNode[] = [];
+                    let gapBuffer: number[] = [];
+
+                    const renderGap = (indices: number[]) => {
+                        if (indices.length === 0) return;
+                        const hasBarsBefore = items.some(item => React.isValidElement(item) && String(item.key).includes('bar'));
+                        if (!hasBarsBefore) return;
+
+                        if (indices.length >= 4) {
+                            // Render a break area
+                            items.push(
+                                <div key={`break-${indices[0]}`} className="flex-shrink-0 flex flex-col items-center justify-center min-w-[32px] md:min-w-[40px] h-full border-x border-white/5 bg-slate-800/10 rounded-sm relative group/break">
+                                    <div className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest whitespace-nowrap z-10">
+                                        ← {indices.length} v →
+                                    </div>
+                                    {/* Invisible dots for trend continuity within break */}
+                                    {indices.map((idx, step) => {
+                                        const d = weeklyData[idx];
+                                        const avgHeight = (d.rollingAvg / maxVolume) * 100;
+                                        return (
+                                            <div 
+                                                key={`break-dot-${idx}`}
+                                                ref={el => { if (el) dotRefs.current.set(idx, el); }}
+                                                className="absolute w-1 h-1 pointer-events-none opacity-0"
+                                                style={{ 
+                                                    bottom: `${avgHeight}%`, 
+                                                    marginBottom: '16px', 
+                                                    left: `${(step / (indices.length - 1 || 1)) * 100}%` 
+                                                }}
+                                            />
+                                        );
+                                    })}
+                                    <div className="h-4" />
+                                </div>
+                            );
+                        } else {
+                            // Render individual crosses
+                            indices.forEach(idx => {
+                                const d = weeklyData[idx];
+                                const avgHeight = (d.rollingAvg / maxVolume) * 100;
+                                const dateObj = new Date(d.week);
+                                const weekLabel = dateObj.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+                                
+                                items.push(
+                                    <div key={`cross-${idx}`} className="flex-1 min-w-[2px] max-w-[40px] flex flex-col items-center h-full justify-end group/cross relative">
+                                        <div
+                                            ref={el => { if (el) dotRefs.current.set(idx, el); }}
+                                            className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend"
+                                            style={{ bottom: `${avgHeight}%`, marginBottom: '16px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
+                                        >
+                                            <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-2 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
+                                                <p className="text-[10px] font-black text-blue-400">Trend: {(d.rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
+                                                <p className="text-[8px] text-slate-500 font-bold">{weekLabel}</p>
+                                            </div>
+                                            <div className="w-1 h-1 rounded-full bg-blue-400 opacity-0 group-hover/trend:opacity-100" />
+                                        </div>
+                                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover/cross:opacity-100 transition-opacity bg-slate-900 border border-white/10 p-1.5 rounded text-[8px] text-slate-400 z-50 whitespace-nowrap pointer-events-none shadow-2xl">
+                                            Ingen träning registrerad
+                                        </div>
+                                        <div className="h-4 flex items-center justify-center">
+                                            <span className="text-[10px] text-red-500/30 font-bold group-hover/cross:text-red-500 transition-colors">×</span>
+                                        </div>
+                                    </div>
+                                );
+                            });
+                        }
+                    };
+
+                    weeklyData.forEach(({ week, volume, rollingAvg }, i) => {
+                        const isCurrentWeek = i === weeklyData.length - 1;
+                        const dateObj = new Date(week);
+                        const currYear = dateObj.getFullYear();
+                        const prevYear = i > 0 ? new Date(weeklyData[i - 1].week).getFullYear() : currYear;
+                        const isYearBreak = currYear !== prevYear;
+
+                        if (isYearBreak) {
+                            renderGap(gapBuffer);
+                            gapBuffer = [];
+                            items.push(
+                                <div key={`year-${currYear}`} className="flex-shrink-0 w-[1px] h-full bg-blue-500/20 relative mx-0.5">
+                                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-black text-blue-500/50 px-1 bg-blue-500/10 rounded">{currYear}</span>
+                                </div>
+                            );
+                        }
+
+                        if (volume === 0 && !isCurrentWeek) {
+                            gapBuffer.push(i);
+                        } else {
+                            renderGap(gapBuffer);
+                            gapBuffer = [];
+                            
+                            const height = (volume / maxVolume) * 100;
+                            const avgHeight = (rollingAvg / maxVolume) * 100;
+                            const weekLabel = dateObj.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+                            const fullLabel = currYear !== currentYear ? `${weekLabel} ${currYear}` : weekLabel;
+                            const rank = top3Volumes.indexOf(volume);
+                            const isTop = rank !== -1 && volume > 0;
+                            const topColors = ['bg-[#BFAE48]/85', 'bg-[#9E9E9E]/90', 'bg-[#A0785A]/90'];
+
+                            items.push(
+                                <div key={`bar-${week}`} className="flex-1 min-w-[2px] max-w-[40px] flex flex-col items-center h-full justify-end group/bar relative">
+                                    <div
+                                        ref={el => { if (el) dotRefs.current.set(i, el); }}
+                                        className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend"
+                                        style={{ bottom: `${avgHeight}%`, marginBottom: '16px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
+                                    >
+                                        <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-2 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
+                                            <p className="text-[10px] font-black text-blue-400">Trend: {(rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
+                                            <p className="text-[8px] text-slate-500 font-bold">{fullLabel}</p>
+                                        </div>
+                                        <div className="w-1 h-1 rounded-full bg-blue-400 opacity-0 group-hover/trend:opacity-100" />
+                                    </div>
+
+                                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-slate-900 border border-white/10 p-2 rounded-lg z-40 shadow-2xl pointer-events-none whitespace-nowrap">
+                                        <p className="text-[10px] font-black text-white">{fullLabel}</p>
+                                        <p className="text-[10px] font-bold text-emerald-400">{(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} ton</p>
+                                        <p className="text-[8px] text-blue-400 font-bold">Trend: {(rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
+                                    </div>
+                                    
+                                    <span className={`text-[7px] font-black transition-opacity mb-1 ${isCurrentWeek || isTop ? 'opacity-100' : 'text-slate-500 opacity-0 group-hover/bar:opacity-100'} ${isTop ? 'text-white' : 'text-emerald-400/80'}`}>
+                                        {(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}
+                                    </span>
+                                    <div
+                                        className={`w-full rounded-t-[2px] transition-all duration-300 border-t border-white/5 flex-shrink-0 ${volume > 0 ? (isTop ? `${topColors[rank]} shadow-none` : (isCurrentWeek ? 'bg-gradient-to-t from-emerald-600 to-emerald-400' : 'bg-slate-700/40 group-hover/bar:bg-slate-700')) : 'bg-slate-950/20 border-none'}`}
+                                        style={{ height: `${Math.max(height, volume > 0 ? 1 : 0)}%`, minHeight: volume > 0 ? '1px' : '0px' }}
+                                    />
+                                    <div className="h-4 flex items-center">
+                                        {(i % 4 === 0 || isCurrentWeek) && (
+                                            <span className={`text-[8px] whitespace-nowrap ${isCurrentWeek ? 'text-white font-bold' : 'text-slate-600'}`}>{weekLabel}</span>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        }
+                    });
+
+                    renderGap(gapBuffer);
+                    return items;
+                })()}
+            </div>
         </div>
+    );
+}
+
+function LongestStreaks({ workouts }: { workouts: StrengthWorkout[] }) {
+    const streaks = React.useMemo(() => {
+        if (workouts.length === 0) return [];
+
+        // Group by week key
+        const weeksSet = new Set<string>();
+        workouts.forEach(w => {
+            const d = new Date(w.date);
+            d.setDate(d.getDate() - d.getDay()); // Start of week
+            weeksSet.add(d.toISOString().split('T')[0]);
+        });
+
+        const sortedWeeks = Array.from(weeksSet).sort();
+        const results: { start: string, end: string, count: number }[] = [];
+
+        if (sortedWeeks.length === 0) return [];
+
+        let currentStreak = [sortedWeeks[0]];
+
+        for (let i = 1; i < sortedWeeks.length; i++) {
+            const prev = new Date(sortedWeeks[i - 1]);
+            const curr = new Date(sortedWeeks[i]);
+            const diffDays = Math.floor((curr.getTime() - prev.getTime()) / (1000 * 60 * 60 * 24));
+
+            if (diffDays <= 7) { // Consecutive week
+                currentStreak.push(sortedWeeks[i]);
+            } else {
+                if (currentStreak.length >= 2) {
+                    results.push({
+                        start: currentStreak[0],
+                        end: currentStreak[currentStreak.length - 1],
+                        count: currentStreak.length
+                    });
+                }
+                currentStreak = [sortedWeeks[i]];
+            }
+        }
+
+        if (currentStreak.length >= 2) {
+            results.push({
+                start: currentStreak[0],
+                end: currentStreak[currentStreak.length - 1],
+                count: currentStreak.length
+            });
+        }
+
+        return results.sort((a, b) => b.count - a.count);
+    }, [workouts]);
+
+    if (streaks.length === 0) return null;
+
+    return (
+        <section>
+            <h2 className="text-xl font-bold text-white mb-4">🔥 Längsta streaks</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {streaks.slice(0, 3).map((s, i) => (
+                    <div key={i} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 flex items-center justify-between group hover:border-emerald-500/20 transition-all">
+                        <div>
+                            <p className="text-[10px] text-slate-500 font-black uppercase mb-1">Streak</p>
+                            <p className="text-xl font-black text-white group-hover:text-emerald-400 transition-colors">{s.count} veckor i rad</p>
+                            <p className="text-[11px] text-emerald-500/60 mt-1 font-black uppercase tracking-wider">
+                                {new Date(s.start).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })} — {new Date(s.end).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            </p>
+                        </div>
+                        <div className="text-2xl opacity-20 group-hover:opacity-100 transition-opacity">⚡</div>
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function TrainingBreaks({ workouts, filterRange }: { workouts: StrengthWorkout[], filterRange?: { start: string | null, end: string | null } }) {
+    const breaks = React.useMemo(() => {
+        if (workouts.length < 2) return [];
+        const sorted = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
+        const res: { start: string, end: string, days: number }[] = [];
+
+        for (let i = 0; i < sorted.length - 1; i++) {
+            const d1 = new Date(sorted[i].date);
+            const d2 = new Date(sorted[i + 1].date);
+            const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+
+            if (diffDays >= 28) { // Gap of 4+ weeks
+                // Check if break overlaps with current filter
+                const s = filterRange?.start;
+                const e = filterRange?.end;
+                const bStart = sorted[i].date;
+                const bEnd = sorted[i + 1].date;
+
+                let include = true;
+                if (s && bEnd < s) include = false;
+                if (e && bStart > e) include = false;
+
+                if (include) {
+                    res.push({
+                        start: bStart,
+                        end: bEnd,
+                        days: diffDays
+                    });
+                }
+            }
+        }
+        return res.sort((a, b) => b.days - a.days); // Longest breaks first
+    }, [workouts, filterRange]);
+
+    if (breaks.length === 0) return null;
+
+    return (
+        <section>
+            <h2 className="text-xl font-bold text-white mb-4">⏸️ Träningsuppehåll</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {breaks.slice(0, 6).map((b, i) => {
+                    const formatDateStr = (dStr: string) => {
+                        const d = new Date(dStr);
+                        const year = d.getFullYear();
+                        return `${d.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })} ${year}`;
+                    };
+                    return (
+                        <div key={i} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 flex items-center justify-between group hover:border-amber-500/20 transition-all">
+                            <div>
+                                <p className="text-[10px] text-slate-500 font-black uppercase mb-1">Uppehåll</p>
+                                <p className="text-xl font-black text-white group-hover:text-amber-400 transition-colors">{b.days} dagar</p>
+                                <p className="text-[11px] text-blue-400 mt-1 font-black uppercase tracking-wider">
+                                    {formatDateStr(b.start)} — {formatDateStr(b.end)}
+                                </p>
+                            </div>
+                            <div className="text-2xl opacity-20 group-hover:opacity-100 transition-opacity">💤</div>
+                        </div>
+                    );
+                })}
+            </div>
+        </section>
     );
 }
 
