@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
+import { MonthlyCalendarModal } from './MonthlyCalendarModal.tsx';
 
 interface MonthlyTrainingTableProps {
     exercises: ExerciseEntry[];
@@ -9,6 +10,7 @@ type TabType = 'running' | 'strength' | 'cycling' | 'swimming' | 'other';
 
 export function MonthlyTrainingTable({ exercises }: MonthlyTrainingTableProps) {
     const [activeTab, setActiveTab] = useState<TabType>('running');
+    const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
     const months = useMemo(() => [
         'Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',
@@ -117,8 +119,8 @@ export function MonthlyTrainingTable({ exercises }: MonthlyTrainingTableProps) {
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as TabType)}
                         className={`px-4 py-1.5 rounded-full text-sm font-bold transition-all ${activeTab === tab.id
-                                ? `${tab.color} text-white shadow-lg shadow-${tab.color}/20`
-                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                            ? `${tab.color} text-white shadow-lg shadow-${tab.color}/20`
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                             }`}
                     >
                         {tab.label}
@@ -171,43 +173,96 @@ export function MonthlyTrainingTable({ exercises }: MonthlyTrainingTableProps) {
                 </div>
             </div>
 
-            {/* Rows */}
+            {/* Rows with Collapsed Empty Months */}
             <div className="divide-y divide-white/5">
-                {data.map((row, i) => (
-                    <div key={months[i]} className="grid grid-cols-[100px_1fr] text-sm group hover:bg-white/[0.02] transition-colors">
-                        <div className="p-3 text-slate-400 font-medium">{months[i]}</div>
-                        <div className="grid grid-cols-2 divide-x divide-white/5">
-                            {/* Specific Data */}
-                            <div className={`grid ${activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
-                                {activeTab === 'strength' ? (
-                                    <>
-                                        <div className="p-3 text-right text-indigo-300 font-mono">{fmtTon(row.selected.tonnage)}</div>
-                                        <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                        <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">st</span></div>
-                                        <div className="p-3 text-right text-slate-400 font-mono">
-                                            {row.selected.count > 0 ? ((row.selected.tonnage / 1000) / row.selected.count).toFixed(1) + ' t' : '-'}
+                {(() => {
+                    const rows = [];
+                    let emptyStart: number | null = null;
+
+                    for (let i = 0; i < 12; i++) {
+                        const row = data[i];
+                        const isEmpty = row.total.count === 0 && row.selected.count === 0;
+
+                        if (isEmpty) {
+                            if (emptyStart === null) emptyStart = i;
+                        } else {
+                            // Flush any pending empty rows
+                            if (emptyStart !== null) {
+                                const end = i - 1;
+                                const label = emptyStart === end
+                                    ? months[emptyStart]
+                                    : `${months[emptyStart]} – ${months[end]}`;
+
+                                rows.push(
+                                    <div key={`empty-${emptyStart}`} className="text-xs text-slate-600 bg-black/20 p-3 italic text-center">
+                                        Ingen träning registrerad under {label}
+                                    </div>
+                                );
+                                emptyStart = null;
+                            }
+
+                            // Render Data Row
+                            rows.push(
+                                <div
+                                    key={months[i]}
+                                    onClick={() => setSelectedMonth(i)}
+                                    className="grid grid-cols-[100px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100"
+                                >
+                                    <div className="p-3 text-slate-400 font-medium group-hover:text-white flex items-center gap-2">
+                                        {months[i]}
+                                        <span className="opacity-0 group-hover:opacity-100 text-[10px] text-sky-400 transition-opacity">↗</span>
+                                    </div>
+                                    <div className="grid grid-cols-2 divide-x divide-white/5 pointer-events-none">
+                                        {/* Specific Data */}
+                                        <div className={`grid ${activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                                            {activeTab === 'strength' ? (
+                                                <>
+                                                    <div className="p-3 text-right text-indigo-300 font-mono">{fmtTon(row.selected.tonnage)}</div>
+                                                    <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
+                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">st</span></div>
+                                                    <div className="p-3 text-right text-slate-400 font-mono">
+                                                        {row.selected.count > 0 ? ((row.selected.tonnage / 1000) / row.selected.count).toFixed(1) + ' t' : '-'}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="p-3 text-right text-emerald-300 font-mono">{fmtDist(row.selected.distance)}</div>
+                                                    <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
+                                                    <div className="p-3 text-right text-slate-400 font-mono">{fmtPace(row.selected.distance, row.selected.duration)}</div>
+                                                    <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">st</span></div>
+                                                    <div className="p-3 text-right text-slate-400 font-mono">
+                                                        {row.selected.count > 0 ? (row.selected.distance / row.selected.count).toFixed(1) + ' km' : '-'}
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="p-3 text-right text-emerald-300 font-mono">{fmtDist(row.selected.distance)}</div>
-                                        <div className="p-3 text-right font-mono">{fmtDur(row.selected.duration)}</div>
-                                        <div className="p-3 text-right text-slate-400 font-mono">{fmtPace(row.selected.distance, row.selected.duration)}</div>
-                                        <div className="p-3 text-right font-mono">{row.selected.count || '-'} <span className="text-xs text-slate-600">st</span></div>
-                                        <div className="p-3 text-right text-slate-400 font-mono">
-                                            {row.selected.count > 0 ? (row.selected.distance / row.selected.count).toFixed(1) + ' km' : '-'}
+                                        {/* Total Data */}
+                                        <div className="grid grid-cols-2 bg-slate-900/30">
+                                            <div className="p-3 text-right font-mono text-slate-300">{row.total.count || '-'} <span className="text-xs text-slate-600">st</span></div>
+                                            <div className="p-3 text-right font-mono text-slate-300">{fmtDur(row.total.duration)}</div>
                                         </div>
-                                    </>
-                                )}
+                                    </div>
+                                </div>
+                            );
+                        }
+                    }
+
+                    // Flush trailing empty rows
+                    if (emptyStart !== null) {
+                        const end = 11;
+                        const label = emptyStart === end
+                            ? months[emptyStart]
+                            : `${months[emptyStart]} – ${months[end]}`;
+
+                        rows.push(
+                            <div key={`empty-${emptyStart}`} className="text-xs text-slate-600 bg-black/20 p-3 italic text-center">
+                                Ingen träning registrerad under {label}
                             </div>
-                            {/* Total Data */}
-                            <div className="grid grid-cols-2 bg-slate-900/30">
-                                <div className="p-3 text-right font-mono text-slate-300">{row.total.count || '-'} <span className="text-xs text-slate-600">st</span></div>
-                                <div className="p-3 text-right font-mono text-slate-300">{fmtDur(row.total.duration)}</div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                        );
+                    }
+
+                    return rows;
+                })()}
 
                 {/* Footer Totals */}
                 <div className="grid grid-cols-[100px_1fr] text-sm font-bold bg-white/5 border-t border-white/10">
@@ -242,6 +297,15 @@ export function MonthlyTrainingTable({ exercises }: MonthlyTrainingTableProps) {
                     </div>
                 </div>
             </div>
+
+            {selectedMonth !== null && (
+                <MonthlyCalendarModal
+                    monthIndex={selectedMonth}
+                    year={currentYear}
+                    exercises={exercises}
+                    onClose={() => setSelectedMonth(null)}
+                />
+            )}
         </div>
     );
 }

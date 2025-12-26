@@ -75,7 +75,10 @@ export function TrainingOverview({ exercises }: TrainingOverviewProps) {
                 {/* Year Stats */}
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6 relative overflow-hidden group hover:border-emerald-500/20 transition-all">
                     <div className="absolute top-0 right-0 p-4 opacity-[0.03] text-[100px] leading-none select-none group-hover:opacity-[0.06] transition-opacity">📅</div>
-                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Årsvolym {new Date().getFullYear()}</h3>
+                    <div className="flex items-center gap-2 mb-4">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Årsvolym {new Date().getFullYear()}</h3>
+                        <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-white/5">ALLA AKTIVITETER</span>
+                    </div>
                     <div className="space-y-4">
                         <div>
                             <div className="text-3xl font-black text-white">{stats.year.distance} <span className="text-sm font-bold text-slate-500">km</span></div>
