@@ -140,6 +140,15 @@ export function StrengthPage() {
         return { min: dates[0], max: dates[dates.length - 1] };
     }, [workouts]);
 
+    const availableYears = React.useMemo(() => {
+        const years = new Set<number>();
+        workouts.forEach(w => {
+            const year = new Date(w.date).getFullYear();
+            if (!isNaN(year)) years.add(year);
+        });
+        return Array.from(years).sort((a, b) => b - a);
+    }, [workouts]);
+
     // Date filter state (null = show all)
     const [startDate, setStartDate] = React.useState<string | null>(null);
     const [endDate, setEndDate] = React.useState<string | null>(null);
@@ -293,49 +302,138 @@ export function StrengthPage() {
                 </div>
             </header>
 
-            {/* Date Range Slider */}
+            {/* Advanced Temporal Controls */}
             {workouts.length > 0 && (
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-4">
-                    <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-sm font-bold text-slate-400 uppercase">📅 Datumfilter</h3>
+                <div className="bg-slate-900/50 border border-white/5 rounded-3xl p-6 shadow-xl space-y-6">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <span className="text-xl">📅</span>
+                            <div>
+                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Datumfilter</h3>
+                                <p className="text-[10px] text-slate-600 font-bold uppercase">Begränsa analysen till en specifik tidsperiod</p>
+                            </div>
+                        </div>
                         {hasDateFilter && (
                             <button
                                 onClick={resetDateFilter}
-                                className="text-xs text-emerald-400 hover:text-emerald-300 font-bold"
+                                className="text-[10px] bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 px-4 py-1.5 rounded-full font-black uppercase transition-all"
                             >
-                                ✕ Visa alla
+                                ✕ Återställ
                             </button>
                         )}
                     </div>
-                    <div className="flex gap-4 items-center">
-                        <div className="flex-1">
-                            <label className="text-[10px] text-slate-500 uppercase block mb-1">Från</label>
+
+                    {/* Year Presets */}
+                    <div className="flex flex-wrap gap-2">
+                        {availableYears.map(year => (
+                            <button
+                                key={year}
+                                onClick={() => {
+                                    setStartDate(`${year}-01-01`);
+                                    setEndDate(`${year}-12-31`);
+                                }}
+                                className={`text-[11px] font-black uppercase px-6 py-2 rounded-xl border transition-all ${startDate?.startsWith(year.toString()) && endDate?.startsWith(year.toString())
+                                    ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
+                                    : 'bg-slate-950 border-white/5 text-slate-500 hover:border-white/10'
+                                    }`}
+                            >
+                                {year}
+                            </button>
+                        ))}
+                        <button
+                            onClick={() => {
+                                const now = new Date();
+                                const sixMonthsAgo = new Date();
+                                sixMonthsAgo.setMonth(now.getMonth() - 6);
+                                setStartDate(sixMonthsAgo.toISOString().split('T')[0]);
+                                setEndDate(now.toISOString().split('T')[0]);
+                            }}
+                            className={`text-[11px] font-black uppercase px-6 py-2 rounded-xl border transition-all ${!startDate?.startsWith(new Date().getFullYear().toString()) && hasDateFilter
+                                ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
+                                : 'bg-slate-950 border-white/5 text-slate-500 hover:border-white/10'
+                                }`}
+                        >
+                            Senaste 6 mån
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                        <div className="md:col-span-3">
+                            <label className="text-[10px] text-slate-500 uppercase font-black mb-2 block">Från</label>
                             <input
                                 type="date"
                                 value={startDate || dateRange.min}
                                 min={dateRange.min}
                                 max={endDate || dateRange.max}
                                 onChange={(e) => setStartDate(e.target.value || null)}
-                                className="w-full bg-slate-800 border border-white/10 text-white px-3 py-2 rounded-lg text-sm"
+                                className="w-full bg-slate-950 border border-white/5 text-white px-4 py-3 rounded-xl text-sm font-mono focus:border-blue-500/50 outline-none transition-colors"
                             />
                         </div>
-                        <div className="text-slate-600 pt-5">→</div>
-                        <div className="flex-1">
-                            <label className="text-[10px] text-slate-500 uppercase block mb-1">Till</label>
+
+                        {/* Visual Range Slider */}
+                        <div className="md:col-span-6 px-4">
+                            <label className="text-[10px] text-slate-500 uppercase font-black mb-4 block text-center">Tidsaxel</label>
+                            <div className="relative h-2 bg-slate-950 rounded-full border border-white/5">
+                                {(() => {
+                                    const min = new Date(dateRange.min).getTime();
+                                    const max = new Date(dateRange.max).getTime();
+                                    const start = new Date(startDate || dateRange.min).getTime();
+                                    const end = new Date(endDate || dateRange.max).getTime();
+                                    const left = ((start - min) / (max - min)) * 100;
+                                    const width = ((end - start) / (max - min)) * 100;
+
+                                    return (
+                                        <div
+                                            className="absolute h-full bg-blue-500/40 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                                            style={{ left: `${left}%`, width: `${width}%` }}
+                                        />
+                                    );
+                                })()}
+                                <input
+                                    type="range"
+                                    min={new Date(dateRange.min).getTime()}
+                                    max={new Date(dateRange.max).getTime()}
+                                    value={new Date(startDate || dateRange.min).getTime()}
+                                    onChange={(e) => {
+                                        const newStart = new Date(parseInt(e.target.value)).toISOString().split('T')[0];
+                                        setStartDate(newStart);
+                                    }}
+                                    className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                                />
+                                <input
+                                    type="range"
+                                    min={new Date(dateRange.min).getTime()}
+                                    max={new Date(dateRange.max).getTime()}
+                                    value={new Date(endDate || dateRange.max).getTime()}
+                                    onChange={(e) => {
+                                        const newEnd = new Date(parseInt(e.target.value)).toISOString().split('T')[0];
+                                        setEndDate(newEnd);
+                                    }}
+                                    className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                                />
+                                <div className="absolute -bottom-6 left-0 text-[8px] text-slate-700 font-mono">{dateRange.min}</div>
+                                <div className="absolute -bottom-6 right-0 text-[8px] text-slate-700 font-mono">{dateRange.max}</div>
+                            </div>
+                        </div>
+
+                        <div className="md:col-span-3">
+                            <label className="text-[10px] text-slate-500 uppercase font-black mb-2 block text-right">Till</label>
                             <input
                                 type="date"
                                 value={endDate || dateRange.max}
                                 min={startDate || dateRange.min}
                                 max={dateRange.max}
                                 onChange={(e) => setEndDate(e.target.value || null)}
-                                className="w-full bg-slate-800 border border-white/10 text-white px-3 py-2 rounded-lg text-sm"
+                                className="w-full bg-slate-950 border border-white/5 text-white px-4 py-3 rounded-xl text-sm font-mono text-right focus:border-blue-500/50 outline-none transition-colors"
                             />
                         </div>
                     </div>
+
                     {hasDateFilter && (
-                        <p className="text-xs text-emerald-400 mt-2">
-                            Visar {filteredWorkouts.length} av {workouts.length} pass
-                        </p>
+                        <div className="pt-2 flex justify-between items-center text-[10px] font-black uppercase text-emerald-400">
+                            <span>Siktet inställt på: {new Date(startDate || dateRange.min).toLocaleDateString('sv-SE')} → {new Date(endDate || dateRange.max).toLocaleDateString('sv-SE')}</span>
+                            <span className="bg-emerald-500/10 px-3 py-1 rounded-full">{filteredWorkouts.length} pass fångade</span>
+                        </div>
                     )}
                 </div>
             )}
@@ -369,67 +467,85 @@ export function StrengthPage() {
                     {/* PB Grouped Cards */}
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {(() => {
-                            // Group PBs by workoutId
+                            // Group PBs by exerciseName
                             const grouped = filteredPBs.reduce((acc, pb) => {
-                                const key = pb.workoutId || pb.date;
+                                const key = pb.exerciseName;
                                 if (!acc[key]) acc[key] = [];
                                 acc[key].push(pb);
                                 return acc;
                             }, {} as Record<string, PersonalBest[]>);
 
-                            return Object.values(grouped).slice(0, 8).map(pbs => {
-                                const pb = pbs[0];
-                                const pbWorkout = filteredWorkouts.find(w => w.id === pb.workoutId);
-                                const timeAgoText = formatDateRelative(pb.date);
+                            // Sort groups by the date of their most recent PR
+                            return Object.values(grouped)
+                                .sort((a, b) => b[0].date.localeCompare(a[0].date))
+                                .slice(0, 12) // Show more groups now that they are exercise-based
+                                .map(pbs => {
+                                    const latestPb = pbs[0];
+                                    const exName = latestPb.exerciseName;
 
-                                return (
-                                    <div
-                                        key={pb.workoutId || pb.date}
-                                        className={`bg-slate-900/40 border border-white/5 rounded-2xl p-4 transition-all hover:border-white/10 hover:bg-slate-900/60 group`}
-                                    >
-                                        <div className="mb-3">
-                                            <p className="text-[10px] text-slate-500 font-mono uppercase leading-none">{pb.date}</p>
-                                            <p className="text-[9px] text-emerald-500 font-bold mt-1 opacity-80">{timeAgoText}</p>
-                                        </div>
+                                    return (
+                                        <div
+                                            key={exName}
+                                            className={`bg-slate-900/40 border border-white/5 rounded-2xl p-5 transition-all hover:border-blue-500/30 hover:bg-slate-900/60 group relative overflow-hidden`}
+                                        >
+                                            {/* Glow effect */}
+                                            <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-500/5 blur-2xl group-hover:bg-blue-500/10 transition-all rounded-full" />
 
-                                        <div className="space-y-3">
-                                            {pbs.map(singlePb => (
-                                                <div
-                                                    key={singlePb.id}
-                                                    className="cursor-pointer"
-                                                    onClick={() => navigate(`/styrka/${encodeURIComponent(singlePb.exerciseName)}`)}
-                                                >
-                                                    <div className="flex justify-between items-end">
-                                                        <div>
-                                                            <p className="text-xs text-amber-500 uppercase font-black truncate max-w-[120px]">{singlePb.exerciseName}</p>
-                                                            <p className="text-xl font-black text-white group-hover:text-amber-400 transition-colors">{singlePb.value} kg</p>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <p className="text-[10px] text-slate-500">
-                                                                {singlePb.reps} × {singlePb.isBodyweight ? (
-                                                                    <span className="bg-slate-800 text-slate-400 px-1 rounded text-[9px] py-0.5">KV{singlePb.extraWeight ? `+${singlePb.extraWeight}` : ''}</span>
-                                                                ) : (
-                                                                    `${singlePb.weight} kg`
-                                                                )}
-                                                            </p>
+                                            <div className="mb-4 flex justify-between items-start relative">
+                                                <div className="flex-1 min-w-0">
+                                                    <h3 className="text-sm font-black text-blue-400 uppercase truncate pr-4">{exName}</h3>
+                                                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">Senaste: {latestPb.date}</p>
+                                                </div>
+                                                <span className="bg-slate-800 text-slate-500 text-[9px] font-black px-2 py-1 rounded-full border border-white/5">
+                                                    {pbs.length} REKORD
+                                                </span>
+                                            </div>
+
+                                            <div className="space-y-4 relative">
+                                                {pbs.slice(0, 3).map((singlePb, idx) => (
+                                                    <div
+                                                        key={singlePb.id}
+                                                        className={`cursor-pointer pb-3 ${idx < Math.min(pbs.length, 3) - 1 ? 'border-b border-white/5' : ''}`}
+                                                        onClick={() => navigate(`/styrka/${encodeURIComponent(singlePb.exerciseName)}`)}
+                                                    >
+                                                        <div className="flex justify-between items-center">
+                                                            <div>
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className="text-xl font-black text-white group-hover:text-amber-400 transition-colors">{singlePb.weight} kg</p>
+                                                                    {singlePb.isHighestWeight && <span className="text-[8px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">NY TOPP</span>}
+                                                                </div>
+                                                                <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                                                    {singlePb.reps} reps • {singlePb.estimated1RM} kg e1RM
+                                                                </p>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className="text-[9px] text-slate-600 font-black uppercase">{idx === 0 ? 'Aktuellt' : 'Tidigare'}</p>
+                                                                <p className="text-[9px] text-slate-500 font-mono">{singlePb.date.split('-').slice(1).join('-')}</p>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                                                ))}
 
-                                        {pbWorkout && (
+                                                {pbs.length > 3 && (
+                                                    <button
+                                                        onClick={() => navigate(`/styrka/${encodeURIComponent(exName)}`)}
+                                                        className="w-full text-center py-2 text-[9px] text-slate-600 hover:text-white font-black uppercase transition-colors"
+                                                    >
+                                                        + {pbs.length - 3} fler rekord i historiken
+                                                    </button>
+                                                )}
+                                            </div>
+
                                             <button
-                                                onClick={() => setSelectedWorkout(pbWorkout)}
-                                                className="w-full mt-4 pt-3 border-t border-white/5 text-[10px] text-slate-500 hover:text-white flex justify-between items-center transition-colors"
+                                                onClick={() => navigate(`/styrka/${encodeURIComponent(exName)}`)}
+                                                className="w-full mt-4 flex justify-between items-center text-[10px] font-black uppercase text-slate-500 group-hover:text-blue-400 transition-colors"
                                             >
-                                                <span>{pbWorkout.name}</span>
-                                                <span className="text-emerald-500">Visa pass →</span>
+                                                <span>Fullständig Analys</span>
+                                                <span className="transition-transform group-hover:translate-x-1">→</span>
                                             </button>
-                                        )}
-                                    </div>
-                                );
-                            });
+                                        </div>
+                                    );
+                                });
                         })()}
                     </div>
 
@@ -811,7 +927,7 @@ function WeeklyVolumeBars({ workouts }: { workouts: StrengthWorkout[] }) {
 
         return Object.entries(weeks)
             .sort((a, b) => a[0].localeCompare(b[0]))
-            .slice(-12) // Show last 12 weeks (a full quarter)
+            .slice(-24) // Show last 24 weeks (approx 6 months)
             .map(([week, volume]) => ({ week, volume }));
     }, [workouts]);
 
@@ -820,20 +936,20 @@ function WeeklyVolumeBars({ workouts }: { workouts: StrengthWorkout[] }) {
     if (weeklyData.length === 0) return <p className="text-slate-500">Inte nog med data för att visa trend.</p>;
 
     return (
-        <div className="flex items-end gap-1 md:gap-2 h-40">
+        <div className="flex items-end gap-0.5 md:gap-1 h-32">
             {weeklyData.map(({ week, volume }, i) => {
                 const height = (volume / maxVolume) * 100;
                 const weekLabel = new Date(week).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
                 const isCurrentWeek = i === weeklyData.length - 1;
 
                 return (
-                    <div key={week} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group">
-                        <span className={`text-[9px] font-bold transition-opacity ${isCurrentWeek ? 'text-emerald-400 opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100'}`}>
-                            {(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t
+                    <div key={week} className="flex-1 flex flex-col items-center h-full justify-end group">
+                        <span className={`text-[8px] font-bold transition-opacity mb-1 ${isCurrentWeek ? 'text-emerald-400 opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100'}`}>
+                            {(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}
                         </span>
                         <div
-                            className={`w-full rounded-t-md transition-all duration-500 border-t border-white/10 ${isCurrentWeek ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_15px_rgba(52,211,153,0.2)]' : 'bg-slate-700/50 group-hover:bg-slate-700'}`}
-                            style={{ height: `${height}%`, minHeight: '2px' }}
+                            className={`w-full rounded-t-[2px] transition-all duration-500 border-t border-white/5 ${isCurrentWeek ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' : 'bg-slate-700/40 group-hover:bg-slate-700'}`}
+                            style={{ height: `${height}%`, minHeight: '1px' }}
                         />
                         <div className="h-4 flex items-center">
                             <span className={`text-[8px] whitespace-nowrap ${isCurrentWeek ? 'text-white font-bold' : 'text-slate-600'}`}>{weekLabel}</span>
@@ -850,13 +966,27 @@ function WeeklyVolumeBars({ workouts }: { workouts: StrengthWorkout[] }) {
 // ============================================
 
 function TopExercisesTable({ workouts, onSelectExercise }: { workouts: StrengthWorkout[]; onSelectExercise?: (name: string) => void }) {
+    const [sortBy, setSortBy] = React.useState<'name' | 'count' | 'sets' | 'reps' | 'volume'>('volume');
+    const [sortOrder, setSortOrder] = React.useState<'asc' | 'desc'>('desc');
+    const [filter, setFilter] = React.useState<'all' | 'bw' | 'weighted'>('all');
+
+    const handleSort = (field: typeof sortBy) => {
+        if (sortBy === field) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(field);
+            setSortOrder('desc');
+        }
+    };
+
     const exerciseStats = React.useMemo(() => {
-        const stats: Record<string, { name: string; sets: number; reps: number; volume: number; count: number }> = {};
+        const stats: Record<string, { name: string; sets: number; reps: number; volume: number; count: number, isBW: boolean }> = {};
 
         workouts.forEach(w => {
             w.exercises.forEach(ex => {
                 if (!stats[ex.exerciseName]) {
-                    stats[ex.exerciseName] = { name: ex.exerciseName, sets: 0, reps: 0, volume: 0, count: 0 };
+                    const isBW = ex.sets.every(s => s.isBodyweight || s.weight === 0);
+                    stats[ex.exerciseName] = { name: ex.exerciseName, sets: 0, reps: 0, volume: 0, count: 0, isBW };
                 }
                 stats[ex.exerciseName].sets += ex.sets.length;
                 stats[ex.exerciseName].reps += ex.sets.reduce((sum, s) => sum + s.reps, 0);
@@ -865,45 +995,87 @@ function TopExercisesTable({ workouts, onSelectExercise }: { workouts: StrengthW
             });
         });
 
-        return Object.values(stats)
-            .sort((a, b) => b.volume - a.volume)
-            .slice(0, 10);
-    }, [workouts]);
+        let result = Object.values(stats);
+
+        // Apply equipment filter
+        if (filter === 'bw') {
+            result = result.filter(ex => ex.isBW);
+        } else if (filter === 'weighted') {
+            result = result.filter(ex => !ex.isBW);
+        }
+
+        // Apply sorting
+        return result.sort((a, b) => {
+            let mult = sortOrder === 'asc' ? 1 : -1;
+            if (sortBy === 'name') return mult * a.name.localeCompare(b.name);
+            return mult * (a[sortBy] - b[sortBy]);
+        });
+    }, [workouts, sortBy, sortOrder, filter]);
 
     if (exerciseStats.length === 0) return null;
 
     return (
-        <div className="bg-slate-900/50 border border-white/5 rounded-2xl overflow-hidden">
-            <table className="w-full text-sm">
-                <thead className="bg-slate-950 text-xs text-slate-500 uppercase">
-                    <tr>
-                        <th className="px-4 py-3 text-left">Övning</th>
-                        <th className="px-4 py-3 text-right">Gånger</th>
-                        <th className="px-4 py-3 text-right">Set</th>
-                        <th className="px-4 py-3 text-right">Reps</th>
-                        <th className="px-4 py-3 text-right">Total volym</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                    {exerciseStats.map((ex, i) => (
-                        <tr
-                            key={ex.name}
-                            className={`hover:bg-slate-800/30 ${onSelectExercise ? 'cursor-pointer' : ''}`}
-                            onClick={() => onSelectExercise?.(ex.name)}
-                        >
-                            <td className="px-4 py-3 text-white font-medium">
-                                <span className="text-slate-600 mr-2">#{i + 1}</span>
-                                {ex.name}
-                                {onSelectExercise && <span className="text-slate-600 ml-2">→</span>}
-                            </td>
-                            <td className="px-4 py-3 text-right text-slate-400">{ex.count}×</td>
-                            <td className="px-4 py-3 text-right text-slate-400">{ex.sets}</td>
-                            <td className="px-4 py-3 text-right text-blue-400">{ex.reps}</td>
-                            <td className="px-4 py-3 text-right text-emerald-400 font-bold">{Math.round(ex.volume / 1000)}t kg</td>
+        <div className="space-y-4">
+            {/* Filters */}
+            <div className="flex gap-2">
+                {[
+                    { id: 'all', label: 'Alla övningar' },
+                    { id: 'bw', label: 'Bara kroppsvikt' },
+                    { id: 'weighted', label: 'Fria vikter / Maskin' }
+                ].map(f => (
+                    <button
+                        key={f.id}
+                        onClick={() => setFilter(f.id as any)}
+                        className={`text-[10px] font-black uppercase px-4 py-2 rounded-full border transition-all ${filter === f.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900 border-white/5 text-slate-500 hover:border-white/10'}`}
+                    >
+                        {f.label}
+                    </button>
+                ))}
+            </div>
+
+            <div className="bg-slate-900/50 border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
+                <table className="w-full text-sm">
+                    <thead className="bg-slate-950 text-[10px] text-slate-500 uppercase font-black">
+                        <tr>
+                            <th className="px-4 py-4 text-left cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
+                                Övning {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            </th>
+                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('count')}>
+                                Gånger {sortBy === 'count' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            </th>
+                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('sets')}>
+                                Set {sortBy === 'sets' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            </th>
+                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('reps')}>
+                                Reps {sortBy === 'reps' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            </th>
+                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('volume')}>
+                                Total volym {sortBy === 'volume' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            </th>
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {exerciseStats.map((ex, i) => (
+                            <tr
+                                key={ex.name}
+                                className={`hover:bg-slate-800/30 ${onSelectExercise ? 'cursor-pointer' : ''}`}
+                                onClick={() => onSelectExercise?.(ex.name)}
+                            >
+                                <td className="px-4 py-4 text-white font-black group">
+                                    <span className="text-slate-700 mr-2 font-mono">#{i + 1}</span>
+                                    {ex.name}
+                                    {ex.isBW && <span className="ml-2 text-[8px] bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded tracking-widest">BW</span>}
+                                    {onSelectExercise && <span className="text-slate-700 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">→</span>}
+                                </td>
+                                <td className="px-4 py-4 text-right text-slate-400 font-mono">{ex.count}×</td>
+                                <td className="px-4 py-4 text-right text-slate-400 font-mono">{ex.sets}</td>
+                                <td className="px-4 py-4 text-right text-blue-400 font-bold font-mono">{ex.reps.toLocaleString()}</td>
+                                <td className="px-4 py-4 text-right text-emerald-400 font-black font-mono">{(ex.volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
         </div>
     );
 }
