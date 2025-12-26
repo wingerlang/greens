@@ -36,7 +36,9 @@ import {
     // Phase 8
     type SleepSession,
     type IntakeLog,
-    type UniversalActivity
+    type UniversalActivity,
+    type InjuryLog, // Phase 7
+    type RecoveryMetric // Phase 7
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
@@ -155,6 +157,14 @@ interface DataContextType {
     universalActivities: UniversalActivity[];
     addSleepSession: (session: SleepSession) => void;
 
+    // Phase 7: Physio-AI
+    injuryLogs: InjuryLog[];
+    recoveryMetrics: RecoveryMetric[];
+    addInjuryLog: (log: Omit<InjuryLog, 'id' | 'createdAt' | 'updatedAt'>) => InjuryLog;
+    updateInjuryLog: (id: string, updates: Partial<InjuryLog>) => void;
+    deleteInjuryLog: (id: string) => void;
+    addRecoveryMetric: (metric: Omit<RecoveryMetric, 'id'>) => RecoveryMetric;
+
     // System
     refreshData: () => Promise<void>;
 }
@@ -194,6 +204,10 @@ export function DataProvider({ children }: DataProviderProps) {
     const [sleepSessions, setSleepSessions] = useState<SleepSession[]>([]);
     const [intakeLogs, setIntakeLogs] = useState<IntakeLog[]>([]);
     const [universalActivities, setUniversalActivities] = useState<UniversalActivity[]>([]);
+
+    // Phase 7: Physio-AI State
+    const [injuryLogs, setInjuryLogs] = useState<InjuryLog[]>([]);
+    const [recoveryMetrics, setRecoveryMetrics] = useState<RecoveryMetric[]>([]);
 
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -267,6 +281,8 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.sleepSessions) setSleepSessions(data.sleepSessions);
         if (data.intakeLogs) setIntakeLogs(data.intakeLogs);
         if (data.universalActivities) setUniversalActivities(data.universalActivities);
+        if (data.injuryLogs) setInjuryLogs(data.injuryLogs);
+        if (data.recoveryMetrics) setRecoveryMetrics(data.recoveryMetrics);
         setIsLoaded(true);
     }, []);
 
@@ -304,7 +320,9 @@ export function DataProvider({ children }: DataProviderProps) {
                 // Phase 8
                 sleepSessions,
                 intakeLogs,
-                universalActivities
+                universalActivities,
+                injuryLogs,
+                recoveryMetrics
             }, { skipApi: shouldSkipApi });
         }
     }, [
@@ -313,7 +331,9 @@ export function DataProvider({ children }: DataProviderProps) {
         weightEntries, competitions, trainingCycles, performanceGoals,
         coachConfig, plannedActivities,
         // Phase 8
-        sleepSessions, intakeLogs, universalActivities
+        sleepSessions, intakeLogs, universalActivities,
+        // Phase 7
+        injuryLogs, recoveryMetrics
     ]);
 
     // ============================================
@@ -899,6 +919,45 @@ export function DataProvider({ children }: DataProviderProps) {
     // Context Value
     // ============================================
 
+    // ============================================
+    // Phase 7: Physio-AI CRUD
+    // ============================================
+
+    const addInjuryLog = useCallback((data: Omit<InjuryLog, 'id' | 'createdAt' | 'updatedAt'>) => {
+        const newLog: InjuryLog = {
+            ...data,
+            id: generateId(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        setInjuryLogs(prev => [...prev, newLog]);
+        return newLog;
+    }, []);
+
+    const updateInjuryLog = useCallback((id: string, updates: Partial<InjuryLog>) => {
+        setInjuryLogs(prev => prev.map(log =>
+            log.id === id ? { ...log, ...updates, updatedAt: new Date().toISOString() } : log
+        ));
+    }, []);
+
+    const deleteInjuryLog = useCallback((id: string) => {
+        setInjuryLogs(prev => prev.filter(log => log.id !== id));
+    }, []);
+
+    const addRecoveryMetric = useCallback((metric: Omit<RecoveryMetric, 'id'>) => {
+        const newMetric: RecoveryMetric = {
+            ...metric,
+            id: generateId()
+        };
+        setRecoveryMetrics(prev => {
+            // Ensure only one metric per day per user? Or just append?
+            // Let's replace if exists for same date to keep it clean
+            const filtered = prev.filter(m => m.date !== metric.date);
+            return [...filtered, newMetric];
+        });
+        return newMetric;
+    }, []);
+
     const value: DataContextType = {
         foodItems,
         recipes,
@@ -1106,6 +1165,14 @@ export function DataProvider({ children }: DataProviderProps) {
                 });
             }
         }, [updateVitals]),
+
+        // Phase 7: Physio-AI
+        injuryLogs,
+        recoveryMetrics,
+        addInjuryLog,
+        updateInjuryLog,
+        deleteInjuryLog,
+        addRecoveryMetric,
 
         refreshData
     };

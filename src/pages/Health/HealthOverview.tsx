@@ -59,13 +59,7 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries }:
                         <span className="text-xs text-slate-500">L</span>
                     </div>
                 </div>
-                <div className={`glass border-l-4 p-3 rounded-lg flex flex-col justify-center ${isGoalAchieved('calories') ? 'border-indigo-500' : 'border-slate-700'}`}>
-                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Energi / dag</div>
-                    <div className="flex items-baseline gap-1">
-                        <span className="text-xl font-black text-white">{Math.round(stats.totalCalories / (snapshots.length || 1))}</span>
-                        <span className="text-xs text-slate-500">kcal</span>
-                    </div>
-                </div>
+
                 <div className="glass border-l-4 border-rose-500/50 p-3 rounded-lg flex flex-col justify-center">
                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-0.5">Vikttrend</div>
                     <div className="flex items-baseline gap-1">

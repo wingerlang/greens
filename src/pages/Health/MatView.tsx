@@ -1,13 +1,41 @@
 import React from 'react';
-import { HealthStats } from '../../utils/healthAggregator.ts';
+import { HealthStats, DaySnapshot } from '../../utils/healthAggregator.ts';
+import { useSettings } from '../../context/SettingsContext.tsx';
 
 interface MatViewProps {
     stats: HealthStats;
+    snapshots: DaySnapshot[];
 }
 
-export function MatView({ stats }: MatViewProps) {
+export function MatView({ stats, snapshots }: MatViewProps) {
+    const { settings } = useSettings();
+
+    const isGoalAchieved = (type: 'calories') => {
+        const goal = settings.dailyCalorieGoal || 2000;
+        const diff = Math.abs((stats.totalCalories / (snapshots.length || 1)) - goal);
+        return diff < goal * 0.15;
+    };
+
+    const caloriesPerDay = Math.round(stats.totalCalories / (snapshots.length || 1));
+
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
+            {/* Energy Overview Card */}
+            <div className={`glass border-l-4 p-6 rounded-2xl flex items-center justify-between ${isGoalAchieved('calories') ? 'border-indigo-500 bg-indigo-500/10' : 'border-slate-700 bg-slate-900/50'}`}>
+                <div>
+                    <h2 className="text-2xl font-black text-white mb-1">Energi & Kalorier</h2>
+                    <p className="text-xs text-slate-400 uppercase font-bold">Genomsnittligt intag</p>
+                </div>
+                <div className="text-right">
+                    <div className="flex items-baseline gap-2 justify-end">
+                        <span className="text-4xl font-black text-white">{caloriesPerDay}</span>
+                        <span className="text-sm font-bold text-slate-500">kcal / dag</span>
+                    </div>
+                    {settings.dailyCalorieGoal && (
+                        <p className="text-xs text-slate-500 mt-1">Mål: {settings.dailyCalorieGoal} kcal</p>
+                    )}
+                </div>
+            </div>
             {/* Vegan Vitality Card */}
             <div className="bg-slate-900/50 border border-emerald-500/20 rounded-2xl p-6 relative overflow-hidden">
                 <div className="flex justify-between items-start mb-6">

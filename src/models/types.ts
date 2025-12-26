@@ -695,7 +695,56 @@ export interface LeaderboardEntry {
 }
 
 // ============================================
-// Phase 6: Universal Activity Model (Database Overhaul)
+// Phase 7: Recovery & Injury Hub ("The Physio-AI")
+// ============================================
+
+export type BodyPart =
+    | 'neck' | 'shoulders' | 'upper_back' | 'lower_back' | 'chest' | 'abs'
+    | 'glutes' | 'hips' | 'quads' | 'hamstrings' | 'calves' | 'shins' | 'adductors' | 'abductors'
+    | 'knees' | 'ankles' | 'feet'
+    | 'biceps' | 'triceps' | 'forearms' | 'wrist' | 'hands';
+
+export type InjuryType = 'pain' | 'soreness' | 'tightness' | 'injury' | 'fatigue';
+export type InjuryStatus = 'active' | 'recovering' | 'healed' | 'chronic';
+export type PainLevel = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
+export interface InjuryLog {
+    id: string;
+    userId: string;
+    date: string; // ISO date
+    bodyPart: BodyPart;
+    side: 'left' | 'right' | 'both' | 'center';
+    type: InjuryType;
+    severity: PainLevel;
+    status: InjuryStatus;
+    notes?: string;
+
+    // Correlated Activity (e.g., "Hände ont efter Marklyft")
+    relatedActivityId?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface RecoveryMetric {
+    id: string;
+    userId: string;
+    date: string;
+
+    // Subjective Scores (1-10)
+    sorenessScore: number; // 1 = Fresh, 10 = Broken
+    fatigueScore: number;  // 1 = Energetic, 10 = Exhausted
+    sleepQuality: number;  // 1 = Terrible, 10 = Perfect
+    stressLevel: number;   // 1 = Zen, 10 = Panic
+    mood: number;          // 1 = Depressed, 10 = Euphoric
+
+    // Calculated
+    readinessScore?: number; // 0-100 (Computed from above + Training Load)
+
+    notes?: string;
+}
+
+// ============================================
+// Universal Activity Model (Database Overhaul)
 // ============================================
 
 export type ActivityStatus = 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'MISSED';
@@ -996,6 +1045,9 @@ export interface AppData {
     sleepSessions?: SleepSession[];
     intakeLogs?: IntakeLog[];
     universalActivities?: UniversalActivity[];
+    // Phase 7: Physio-AI
+    injuryLogs?: InjuryLog[];
+    recoveryMetrics?: RecoveryMetric[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */
@@ -1142,3 +1194,26 @@ export interface IntakeLog {
     source: ActivitySource;
 }
 
+
+// ============================================
+// Phase 9: Physio-AI / Rehab Content
+// ============================================
+
+export interface RehabExercise {
+    id: string;
+    name: string;
+    description: string;
+    reps: string; // "3x10" or "2 min"
+    videoUrl?: string; // YouTube ID or similar
+    difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface RehabRoutine {
+    id: string;
+    title: string;
+    description: string;
+    tags: BodyPart[]; // Which parts this helps
+    condition?: InjuryType; // e.g., 'tightness', 'pain'
+    exercises: RehabExercise[];
+    estimatedDurationMin: number;
+}

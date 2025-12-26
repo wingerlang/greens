@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
@@ -6,19 +7,18 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { useUniversalActivities } from '../hooks/useUniversalActivities.ts';
 import { aggregateHealthData, calculateHealthStats } from '../utils/healthAggregator.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
-import { StrengthWorkout } from '../models/strengthTypes.ts'; // Import StrengthWorkout
+import { StrengthWorkout } from '../models/strengthTypes.ts';
 import { ExerciseEntry } from '../models/types.ts';
 import { HealthOverview } from './Health/HealthOverview.tsx';
-import { MetricFocusView } from './Health/MetricFocusView.tsx';
-import { StyrkaView } from './Health/StyrkaView.tsx';
-import { KonditionView } from './Health/KonditionView.tsx';
 import { MatView } from './Health/MatView.tsx';
 import { TrainingView } from './Health/TrainingView.tsx';
+import { RecoveryPage } from './Health/RecoveryPage.tsx';
+import { BodyView } from './Health/BodyView.tsx';
 import './HealthPage.css';
 
 type TimeFrame = '7d' | '30d' | '3m' | '6m' | '9m' | 'year' | 'all';
 
-const API_BASE = 'http://localhost:8000'; // Or use relative path /api
+const API_BASE = 'http://localhost:8000';
 
 export function HealthPage() {
     const { metric } = useParams<{ metric?: string }>();
@@ -28,18 +28,15 @@ export function HealthPage() {
     const { settings } = useSettings();
 
     // Fetch Universal Activities (Strava/Garmin)
-    const { activities: fetchedUniversalActivities, loading: loadingActivities } = useUniversalActivities(365); // Fetch last year
+    const { activities: fetchedUniversalActivities, loading: loadingActivities } = useUniversalActivities(365);
 
     // Fetch Strength Workouts
     const [strengthWorkouts, setStrengthWorkouts] = useState<StrengthWorkout[]>([]);
 
     useEffect(() => {
         if (!token) return;
-
         async function fetchStrength() {
             try {
-                // Fetch reasonably far back to support "ALL" view somewhat, or rely on date filtering later
-                // Fetching 3 years back to cover most recent history
                 const start = new Date();
                 start.setFullYear(start.getFullYear() - 3);
                 const startStr = start.toISOString().split('T')[0];
@@ -49,9 +46,7 @@ export function HealthPage() {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const data = await res.json();
-                if (data.workouts) {
-                    setStrengthWorkouts(data.workouts);
-                }
+                if (data.workouts) setStrengthWorkouts(data.workouts);
             } catch (e) {
                 console.error("Failed to fetch strength workouts in HealthPage", e);
             }
@@ -61,55 +56,55 @@ export function HealthPage() {
 
     // Unified Exercise Entries
     const unifiedExerciseEntries = useMemo(() => {
-        // 1. Manual Entries
         const manual = manualExerciseEntries;
-
-        // 2. Mapped Universal Activities (Strava)
         const strava = fetchedUniversalActivities
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null);
 
-        // 3. Mapped Strength Workouts
         const strength = strengthWorkouts.map((w): ExerciseEntry => ({
             id: w.id,
             date: w.date,
             type: 'strength',
-            durationMinutes: w.duration || (w.exercises.length * 4) + (w.totalSets * 1.5) || 45, // Rough estimate if missing
+            durationMinutes: w.duration || (w.exercises.length * 4) + (w.totalSets * 1.5) || 45,
             intensity: 'high',
-            caloriesBurned: w.totalVolume ? Math.round(w.totalVolume * 0.05) : 300, // Very rough estimate
+            caloriesBurned: w.totalVolume ? Math.round(w.totalVolume * 0.05) : 300,
             tonnage: w.totalVolume,
             notes: w.name,
             createdAt: w.createdAt
         }));
 
-        // Deduplicate by ID and Date/Type/Time to avoid double counting if manual logs exist for same activity
         const combined = [...manual, ...strava, ...strength];
         const unique = new Map<string, ExerciseEntry>();
-
-        combined.forEach(e => {
-            // Prefer external source entries over manual if duplicates might exist?
-            // Simple key: date-type
-            // Actually, let's keep all for now, assuming users don't double log. 
-            // Better to show duplicates than hide real data.
-            // But let's use ID as unique key if available.
-            unique.set(e.id, e);
-        });
+        combined.forEach(e => unique.set(e.id, e));
 
         return Array.from(unique.values()).sort((a, b) => b.durationMinutes - a.durationMinutes).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
     }, [manualExerciseEntries, fetchedUniversalActivities, strengthWorkouts]);
 
-    // Map metric aliases and defaults
-    const activeTab = useMemo(() => {
+    // MAP URL PARAM TO NEW TABS
+    const activeView = useMemo(() => {
         const m = metric?.toLowerCase();
         if (!m || m === 'overview' || m === 'översikt') return 'overview';
         if (m === 'food' || m === 'mat') return 'food';
-        if (m === 'training' || m === 'träning') return 'training';
-        if (m === 'weight' || m === 'vikt') return 'weight';
-        if (m === 'sleep' || m === 'sömn') return 'sleep';
+
+        // Training Hub
+        if (['training', 'träning', 'strength', 'styrka', 'cardio', 'kondition'].includes(m)) return 'training';
+
+        // Body Hub
+        if (['weight', 'vikt', 'sleep', 'sömn'].includes(m)) return 'body';
+
+        if (m === 'recovery' || m === 'rehab') return 'recovery';
+
+        return 'overview';
+    }, [metric]);
+
+    // DERIVE SUB-TAB for complex views
+    const subTab = useMemo(() => {
+        const m = metric?.toLowerCase();
         if (m === 'strength' || m === 'styrka') return 'strength';
         if (m === 'cardio' || m === 'kondition') return 'cardio';
-        return 'overview';
+        if (m === 'weight' || m === 'vikt') return 'weight';
+        if (m === 'sleep' || m === 'sömn') return 'sleep';
+        return undefined; // Default
     }, [metric]);
 
     const [timeframe, setTimeframe] = useState<TimeFrame>('30d');
@@ -127,20 +122,13 @@ export function HealthPage() {
                 const diff = now.getTime() - startOfYear.getTime();
                 return Math.ceil(diff / (1000 * 60 * 60 * 24));
             }
-            case 'all': return 3650; // ~10 years
+            case 'all': return 3650;
             default: return 30;
         }
     }, [timeframe]);
 
     const snapshots = useMemo(() => {
-        return aggregateHealthData(
-            days,
-            dailyVitals,
-            weightEntries,
-            mealEntries,
-            unifiedExerciseEntries, // Use unified entries here!
-            calculateDailyNutrition
-        );
+        return aggregateHealthData(days, dailyVitals, weightEntries, mealEntries, unifiedExerciseEntries, calculateDailyNutrition);
     }, [days, dailyVitals, weightEntries, mealEntries, unifiedExerciseEntries, calculateDailyNutrition]);
 
     const stats = useMemo(() => calculateHealthStats(snapshots), [snapshots]);
@@ -158,18 +146,18 @@ export function HealthPage() {
     }, [stats, settings]);
 
     const handleTabChange = (tab: string) => {
-        // Use Swedish alias if the user is currently on a Swedish path
         const isSwedishPath = window.location.pathname.includes('/hälsa') || window.location.pathname.includes('/halsa');
         const basePath = isSwedishPath ? '/hälsa' : '/health';
 
+        // Map abstract tabs to URLs
         let path = tab;
         if (isSwedishPath) {
-            if (tab === 'weight') path = 'vikt';
-            if (tab === 'sleep') path = 'sömn';
-            if (tab === 'strength') path = 'styrka';
-            if (tab === 'cardio') path = 'kondition';
+            if (tab === 'body') path = 'vikt'; // Default to weight for Body tab
             if (tab === 'food') path = 'mat';
             if (tab === 'training') path = 'träning';
+            if (tab === 'recovery') path = 'rehab';
+        } else {
+            if (tab === 'body') path = 'weight';
         }
 
         navigate(`${basePath}/${path}`);
@@ -181,16 +169,18 @@ export function HealthPage() {
                 <div className="header-content">
                     <span className={`header-badge ${goalTheme.text}`} style={{ backgroundColor: goalTheme.bg }}>{goalTheme.label}</span>
                     <h1>Din Hälsa</h1>
+
+                    {/* SIMPLIFIED NAVIGATION */}
                     <div className="tab-nav">
-                        <button className={`tab-link ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => handleTabChange('overview')}>Översikt</button>
-                        <button className={`tab-link ${activeTab === 'food' ? 'active' : ''}`} onClick={() => handleTabChange('food')}>🥗 Mat</button>
-                        <button className={`tab-link ${activeTab === 'training' ? 'active' : ''}`} onClick={() => handleTabChange('training')}>⚡ Träning</button>
-                        <button className={`tab-link ${activeTab === 'sleep' ? 'active' : ''}`} onClick={() => handleTabChange('sleep')}>Sömn</button>
-                        <button className={`tab-link ${activeTab === 'weight' ? 'active' : ''}`} onClick={() => handleTabChange('weight')}>Vikt</button>
-                        <button className={`tab-link ${activeTab === 'strength' ? 'active' : ''}`} onClick={() => handleTabChange('strength')}>💪 Styrka</button>
-                        <button className={`tab-link ${activeTab === 'cardio' ? 'active' : ''}`} onClick={() => handleTabChange('cardio')}>🏃 Kondition</button>
+                        <button className={`tab-link ${activeView === 'overview' ? 'active' : ''}`} onClick={() => handleTabChange('overview')}>Översikt</button>
+                        <button className={`tab-link ${activeView === 'food' ? 'active' : ''}`} onClick={() => handleTabChange('food')}>🥗 Mat</button>
+                        <button className={`tab-link ${activeView === 'training' ? 'active' : ''}`} onClick={() => handleTabChange('training')}>⚡ Träning</button>
+                        <button className={`tab-link ${activeView === 'recovery' ? 'active' : ''}`} onClick={() => handleTabChange('recovery')}>🩹 Recovery</button>
+                        <button className={`tab-link ${activeView === 'body' ? 'active' : ''}`} onClick={() => handleTabChange('body')}>🧬 Kropp</button>
                     </div>
                 </div>
+
+                {/* Score & Time Selector */}
                 <div className="flex items-center gap-6">
                     <div className="score-circle">
                         <svg viewBox="0 0 36 36" className="circular-chart">
@@ -226,26 +216,30 @@ export function HealthPage() {
             </header>
 
             <main className="health-grid">
-                {activeTab === 'overview' && (
+                {activeView === 'overview' && (
                     <HealthOverview snapshots={snapshots} stats={stats} timeframe={days} exerciseEntries={unifiedExerciseEntries} />
                 )}
-                {activeTab === 'food' && (
-                    <MatView stats={stats} />
+                {activeView === 'food' && (
+                    <MatView stats={stats} snapshots={snapshots} />
                 )}
-                {activeTab === 'training' && (
-                    <TrainingView exerciseEntries={unifiedExerciseEntries} />
+                {activeView === 'training' && (
+                    <TrainingView
+                        exerciseEntries={unifiedExerciseEntries}
+                        days={days}
+                        universalActivities={fetchedUniversalActivities}
+                        initialTab={subTab as any}
+                    />
                 )}
-                {activeTab === 'sleep' && (
-                    <MetricFocusView type="sleep" snapshots={snapshots} stats={stats} days={days} />
+                {activeView === 'body' && (
+                    <BodyView
+                        snapshots={snapshots}
+                        stats={stats}
+                        days={days}
+                        initialTab={subTab as any}
+                    />
                 )}
-                {activeTab === 'weight' && (
-                    <MetricFocusView type="weight" snapshots={snapshots} stats={stats} days={days} />
-                )}
-                {activeTab === 'strength' && (
-                    <StyrkaView days={days} />
-                )}
-                {activeTab === 'cardio' && (
-                    <KonditionView days={days} exerciseEntries={unifiedExerciseEntries} universalActivities={fetchedUniversalActivities} />
+                {activeView === 'recovery' && (
+                    <RecoveryPage />
                 )}
             </main>
         </div>
