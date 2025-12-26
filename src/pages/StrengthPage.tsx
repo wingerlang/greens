@@ -1071,7 +1071,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                 ))}
             </div>
 
-            <div className={`w-full h-40 flex items-end relative ${barGapClass} overflow-hidden`} ref={containerRef}>
+            <div className={`w-full h-40 flex items-end relative ${barGapClass} overflow-visible`} ref={containerRef}>
                 {/* Rolling Average Continuous Dashed Line */}
                 <svg className="absolute inset-0 w-full h-full pointer-events-none z-20 overflow-visible">
                     <path
@@ -1095,13 +1095,11 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                         if (!hasBarsBefore) return;
 
                         if (indices.length >= 4) {
-                            // Render a break area
                             items.push(
                                 <div key={`break-${indices[0]}`} className="flex-shrink-0 flex flex-col items-center justify-center min-w-[32px] md:min-w-[40px] h-full border-x border-white/5 bg-slate-800/10 rounded-sm relative group/break">
                                     <div className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest whitespace-nowrap z-10">
                                         ← {indices.length} v →
                                     </div>
-                                    {/* Invisible dots for trend continuity within break */}
                                     {indices.map((idx, step) => {
                                         const d = weeklyData[idx];
                                         const avgHeight = (d.rollingAvg / maxVolume) * 100;
@@ -1122,7 +1120,6 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                 </div>
                             );
                         } else {
-                            // Render individual crosses
                             indices.forEach(idx => {
                                 const d = weeklyData[idx];
                                 const avgHeight = (d.rollingAvg / maxVolume) * 100;
@@ -1133,14 +1130,14 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                     <div key={`cross-${idx}`} className="flex-1 min-w-[2px] max-w-[40px] flex flex-col items-center h-full justify-end group/cross relative">
                                         <div
                                             ref={el => { if (el) dotRefs.current.set(idx, el); }}
-                                            className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend"
+                                            className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend hover:bg-blue-400/5 transition-colors"
                                             style={{ bottom: `${avgHeight}%`, marginBottom: '16px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
                                         >
-                                            <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-2 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
+                                            <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-4 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
                                                 <p className="text-[10px] font-black text-blue-400">Trend: {(d.rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
                                                 <p className="text-[8px] text-slate-500 font-bold">{weekLabel}</p>
                                             </div>
-                                            <div className="w-1 h-1 rounded-full bg-blue-400 opacity-0 group-hover/trend:opacity-100" />
+                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 opacity-20 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
                                         </div>
                                         <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover/cross:opacity-100 transition-opacity bg-slate-900 border border-white/10 p-1.5 rounded text-[8px] text-slate-400 z-50 whitespace-nowrap pointer-events-none shadow-2xl">
                                             Ingen träning registrerad
@@ -1183,23 +1180,31 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                             const fullLabel = currYear !== currentYear ? `${weekLabel} ${currYear}` : weekLabel;
                             const rank = top3Volumes.indexOf(volume);
                             const isTop = rank !== -1 && volume > 0;
-                            const topColors = ['bg-[#BFAE48]/85', 'bg-[#9E9E9E]/90', 'bg-[#A0785A]/90'];
+                            const topColors = ['bg-[#CFAF50]', 'bg-[#AAAAAA]', 'bg-[#AA8060]'];
 
                             items.push(
                                 <div key={`bar-${week}`} className="flex-1 min-w-[2px] max-w-[40px] flex flex-col items-center h-full justify-end group/bar relative">
                                     <div
                                         ref={el => { if (el) dotRefs.current.set(i, el); }}
-                                        className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend"
+                                        className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend hover:bg-blue-400/5 transition-colors"
                                         style={{ bottom: `${avgHeight}%`, marginBottom: '16px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
                                     >
-                                        <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-2 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
+                                        <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-4 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
                                             <p className="text-[10px] font-black text-blue-400">Trend: {(rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
                                             <p className="text-[8px] text-slate-500 font-bold">{fullLabel}</p>
                                         </div>
-                                        <div className="w-1 h-1 rounded-full bg-blue-400 opacity-0 group-hover/trend:opacity-100" />
+                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400 opacity-20 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
                                     </div>
 
-                                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-slate-900 border border-white/10 p-2 rounded-lg z-40 shadow-2xl pointer-events-none whitespace-nowrap">
+                                    <div 
+                                        className="absolute z-50 opacity-0 group-hover/bar:opacity-100 transition-all pointer-events-none whitespace-nowrap bg-slate-900 border border-white/10 p-2 rounded-lg shadow-2xl"
+                                        style={{ 
+                                            bottom: `${height}%`, 
+                                            marginBottom: '24px', 
+                                            left: '50%',
+                                            transform: 'translateX(-50%)'
+                                        }}
+                                    >
                                         <p className="text-[10px] font-black text-white">{fullLabel}</p>
                                         <p className="text-[10px] font-bold text-emerald-400">{(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} ton</p>
                                         <p className="text-[8px] text-blue-400 font-bold">Trend: {(rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
