@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { StrengthWorkout, StrengthLogImportResult, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName } from '../models/strengthTypes.ts';
 import { useAuth } from '../context/AuthContext.tsx';
+import { PRResearchCenter } from '../components/training/PRResearchCenter.tsx';
 
 // ============================================
 // Strength Page - Main Component
@@ -35,6 +36,7 @@ export function StrengthPage() {
     const [importResult, setImportResult] = useState<StrengthLogImportResult | null>(null);
     const [selectedWorkout, setSelectedWorkout] = useState<StrengthWorkout | null>(null);
     const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+    const [isResearchCenterOpen, setIsResearchCenterOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Sync selectedExercise with URL
@@ -151,27 +153,45 @@ export function StrengthPage() {
         });
     }, [workouts, startDate, endDate]);
 
+    // Prevent background scroll when Research Center is open
+    React.useEffect(() => {
+        if (isResearchCenterOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => { document.body.style.overflow = ''; };
+    }, [isResearchCenterOpen]);
+
     // Derive Personal Bests from workout history (ensures bodyweight-aware logic is applied to existing data)
     const derivedPersonalBests = React.useMemo(() => {
-        const pbsByExercise = new Map<string, PersonalBest>();
+        const allPRs: PersonalBest[] = [];
+        const currentE1RMBests = new Map<string, number>();
+        const currentWeightBests = new Map<string, number>();
 
         // Sort by date ascending to process records in order
         const sortedWorkouts = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
 
         sortedWorkouts.forEach(w => {
-            w.exercises.forEach(ex => {
-                const exId = `ex-${normalizeExerciseName(ex.exerciseName).replace(/\s/g, '-')}`;
-                ex.sets.forEach(set => {
+            w.exercises.forEach((ex, exIdx) => {
+                const exName = normalizeExerciseName(ex.exerciseName);
+                const exId = `ex-${exName.replace(/\s/g, '-')}`;
+
+                ex.sets.forEach((set, setIdx) => {
                     const isBW = !!set.isBodyweight || set.weight === 0;
                     const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
                     if (calcWeight <= 0 && !isBW) return;
 
                     const est1RM = calculate1RM(calcWeight, set.reps);
-                    const existing = pbsByExercise.get(exId);
+                    const existingE1RMBest = currentE1RMBests.get(exName) || 0;
+                    const existingWeightBest = currentWeightBests.get(exName) || 0;
 
-                    if (!existing || est1RM > existing.value) {
-                        pbsByExercise.set(exId, {
-                            id: `pb-${exId}`,
+                    const isE1RMPR = est1RM > existingE1RMBest;
+                    const isWeightPR = calcWeight > existingWeightBest;
+
+                    if (isE1RMPR || isWeightPR) {
+                        const newPR: PersonalBest = {
+                            id: `pb-${exId}-${w.id}-${allPRs.length}`,
                             exerciseId: exId,
                             exerciseName: ex.exerciseName,
                             userId: w.userId,
@@ -186,14 +206,26 @@ export function StrengthPage() {
                             workoutName: w.name,
                             estimated1RM: est1RM,
                             createdAt: w.date,
-                            previousBest: existing?.value
-                        });
+                            previousBest: existingE1RMBest > 0 ? existingE1RMBest : undefined,
+                            orderIndex: (exIdx * 100) + setIdx,
+                            isActual1RM: set.reps === 1,
+                            isHighestWeight: isWeightPR
+                        };
+                        allPRs.push(newPR);
+
+                        if (isE1RMPR) currentE1RMBests.set(exName, est1RM);
+                        if (isWeightPR) currentWeightBests.set(exName, calcWeight);
                     }
                 });
             });
         });
 
-        return Array.from(pbsByExercise.values()).sort((a, b) => b.value - a.value);
+        // Return all PRs sorted by date descending, then by orderIndex ascending for intra-workout accuracy
+        return allPRs.sort((a, b) => {
+            const dateComp = b.date.localeCompare(a.date);
+            if (dateComp !== 0) return dateComp;
+            return (a.orderIndex || 0) - (b.orderIndex || 0);
+        });
     }, [workouts]);
 
     // Filter PBs by date range (using derived PBs to fix data issues)
@@ -235,6 +267,12 @@ export function StrengthPage() {
                     <p className="text-slate-400">Dina pass, övningar och personliga rekord.</p>
                 </div>
                 <div className="flex gap-3 items-center">
+                    <button
+                        onClick={() => setIsResearchCenterOpen(true)}
+                        className="bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 active:scale-95"
+                    >
+                        <span>⚛️</span> Research Center
+                    </button>
                     <input
                         ref={fileInputRef}
                         type="file"
@@ -553,6 +591,15 @@ export function StrengthPage() {
                     />
                 )
             }
+
+            {isResearchCenterOpen && (
+                <PRResearchCenter
+                    workouts={workouts}
+                    personalBests={derivedPersonalBests}
+                    onClose={() => setIsResearchCenterOpen(false)}
+                    onSelectWorkout={(w) => setSelectedWorkout(w)}
+                />
+            )}
         </div >
     );
 }

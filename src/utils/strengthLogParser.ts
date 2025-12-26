@@ -238,6 +238,12 @@ function parseSetData(values: string[], bodyWeight?: number): StrengthSet {
             case 'rpm':
                 set.rpm = parseInt(value) || 0;
                 break;
+            case 'warmup':
+                set.isWarmup = value === '1' || value.toLowerCase() === 'true';
+                break;
+            case 'rpe':
+                set.rpe = parseFloat(value) || undefined;
+                break;
             case 'time-per-500':
                 // Rowing pace, skip for now
                 break;

@@ -145,6 +145,9 @@ export interface PersonalBest {
     workoutName?: string;
     isBodyweight?: boolean;
     extraWeight?: number;
+    orderIndex?: number;            // For chronological sorting within same day
+    isActual1RM?: boolean;          // reps === 1
+    isHighestWeight?: boolean;       // Highest absolute weight to date
 
     // Computed
     estimated1RM?: number;           // Epley/Brzycki formula
