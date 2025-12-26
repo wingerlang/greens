@@ -4,16 +4,17 @@ import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { StyrkaView } from './StyrkaView.tsx';
 import { KonditionView } from './KonditionView.tsx';
 import { RaceList } from '../../components/training/RaceList.tsx';
+import { HyroxDashboard } from '../../components/hyrox/HyroxDashboard.tsx';
 
 interface TrainingViewProps {
     exerciseEntries: ExerciseEntry[];
     days: number;
     universalActivities: UniversalActivity[];
-    initialTab?: 'overview' | 'strength' | 'cardio' | 'races';
+    initialTab?: 'overview' | 'strength' | 'cardio' | 'races' | 'hyrox';
 }
 
 export function TrainingView({ exerciseEntries, days, universalActivities, initialTab = 'overview' }: TrainingViewProps) {
-    const [subTab, setSubTab] = useState<'overview' | 'strength' | 'cardio' | 'races'>(initialTab);
+    const [subTab, setSubTab] = useState<'overview' | 'strength' | 'cardio' | 'races' | 'hyrox'>(initialTab);
 
     // Sync if initialTab changes (e.g. navigation from parent)
     useEffect(() => {
@@ -58,6 +59,13 @@ export function TrainingView({ exerciseEntries, days, universalActivities, initi
                     >
                         Tävlingar
                     </button>
+                    <button
+                        onClick={() => setSubTab('hyrox')}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${subTab === 'hyrox' ? 'bg-slate-100 text-slate-900 shadow-lg' : 'text-slate-500 hover:text-slate-300'
+                            }`}
+                    >
+                        🏴 Hyrox
+                    </button>
                 </div>
             </header>
 
@@ -78,6 +86,11 @@ export function TrainingView({ exerciseEntries, days, universalActivities, initi
                 {subTab === 'races' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                         <RaceList exerciseEntries={exerciseEntries} universalActivities={universalActivities} />
+                    </div>
+                )}
+                {subTab === 'hyrox' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <HyroxDashboard />
                     </div>
                 )}
             </div>

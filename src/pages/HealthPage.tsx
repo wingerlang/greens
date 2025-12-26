@@ -100,7 +100,7 @@ export function HealthPage() {
         if (m === 'food' || m === 'mat') return 'food';
 
         // Training Hub
-        if (['training', 'träning', 'strength', 'styrka', 'cardio', 'kondition'].includes(m)) return 'training';
+        if (['training', 'träning', 'strength', 'styrka', 'cardio', 'kondition', 'hyrox'].includes(m)) return 'training';
 
         // Body Hub
         if (['weight', 'vikt', 'sleep', 'sömn'].includes(m)) return 'body';
@@ -117,6 +117,7 @@ export function HealthPage() {
         if (m === 'cardio' || m === 'kondition') return 'cardio';
         if (m === 'weight' || m === 'vikt') return 'weight';
         if (m === 'sleep' || m === 'sömn') return 'sleep';
+        if (m === 'hyrox') return 'hyrox';
         return undefined; // Default
     }, [metric]);
 

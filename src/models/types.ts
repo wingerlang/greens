@@ -377,6 +377,26 @@ export interface ExerciseEntry {
     elevationGain?: number;       // meters
     prCount?: number;
     kudosCount?: number;
+
+    // Hyrox Specifics (Phase 8)
+    hyroxStats?: HyroxActivityStats;
+}
+
+export type HyroxStation =
+    | 'ski_erg'
+    | 'sled_push'
+    | 'sled_pull'
+    | 'burpee_broad_jumps'
+    | 'rowing'
+    | 'farmers_carry'
+    | 'sandbag_lunges'
+    | 'wall_balls'
+    | 'run_1km';
+
+export interface HyroxActivityStats {
+    totalTime?: number;
+    stations?: Partial<Record<HyroxStation, number>>; // time in seconds
+    runSplits?: number[]; // 8 x 1km splits
 }
 
 /**
