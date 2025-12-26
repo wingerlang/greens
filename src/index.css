@@ -302,4 +302,44 @@
         border-radius: 3px;
         transition: width 1s ease-out;
     }
+
+    /* Range Slider Dual Thumbs - "Pluppar" */
+    .slider-thumb-dual {
+        pointer-events: none;
+    }
+
+    .slider-thumb-dual::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        background: #3b82f6;
+        border: 2px solid white;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+        transition: transform 0.1s ease;
+        position: relative;
+        z-index: 30;
+        pointer-events: auto;
+    }
+
+    .slider-thumb-dual::-webkit-slider-thumb:hover {
+        transform: scale(1.2);
+    }
+
+    .slider-thumb-dual::-webkit-slider-thumb:active {
+        background: white;
+        border-color: #3b82f6;
+    }
+
+    .slider-thumb-dual::-moz-range-thumb {
+        width: 14px;
+        height: 14px;
+        background: #3b82f6;
+        border: 2px solid white;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+    }
 }

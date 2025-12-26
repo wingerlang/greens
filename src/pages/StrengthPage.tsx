@@ -268,7 +268,7 @@ export function StrengthPage() {
     const hasDateFilter = startDate !== null || endDate !== null;
 
     return (
-        <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
+        <div className="pt-2 md:pt-4 p-4 md:p-8 max-w-7xl mx-auto space-y-8">
             {/* Header */}
             <header className="flex items-center justify-between flex-wrap gap-4">
                 <div>
@@ -348,7 +348,7 @@ export function StrengthPage() {
                                 setStartDate(sixMonthsAgo.toISOString().split('T')[0]);
                                 setEndDate(now.toISOString().split('T')[0]);
                             }}
-                            className={`text-[11px] font-black uppercase px-6 py-2 rounded-xl border transition-all ${!startDate?.startsWith(new Date().getFullYear().toString()) && hasDateFilter
+                            className={`text-[11px] font-black uppercase px-6 py-2 rounded-xl border transition-all ${hasDateFilter && !availableYears.some(y => startDate?.startsWith(y.toString()) && endDate?.startsWith(y.toString()))
                                 ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
                                 : 'bg-slate-950 border-white/5 text-slate-500 hover:border-white/10'
                                 }`}
@@ -357,23 +357,23 @@ export function StrengthPage() {
                         </button>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                        <div className="md:col-span-3">
-                            <label className="text-[10px] text-slate-500 uppercase font-black mb-2 block">Från</label>
+                    <div className="flex flex-col md:flex-row items-center gap-4 bg-slate-950/40 p-4 rounded-2xl border border-white/5">
+                        <div className="w-full md:w-40 flex-shrink-0">
+                            <label className="text-[9px] text-slate-500 uppercase font-black mb-1.5 block">Från</label>
                             <input
                                 type="date"
                                 value={startDate || dateRange.min}
                                 min={dateRange.min}
                                 max={endDate || dateRange.max}
                                 onChange={(e) => setStartDate(e.target.value || null)}
-                                className="w-full bg-slate-950 border border-white/5 text-white px-4 py-3 rounded-xl text-sm font-mono focus:border-blue-500/50 outline-none transition-colors"
+                                className="w-full bg-slate-900 border border-white/5 text-white px-3 py-2 rounded-xl text-xs font-mono focus:border-blue-500/50 outline-none transition-colors"
                             />
                         </div>
 
                         {/* Visual Range Slider */}
-                        <div className="md:col-span-6 px-4">
-                            <label className="text-[10px] text-slate-500 uppercase font-black mb-4 block text-center">Tidsaxel</label>
-                            <div className="relative h-2 bg-slate-950 rounded-full border border-white/5">
+                        <div className="flex-1 w-full px-2">
+                            <label className="text-[9px] text-slate-500 uppercase font-black mb-3 block text-center tracking-widest opacity-60">Tidsaxel</label>
+                            <div className="relative h-1.5 bg-slate-900 rounded-full border border-white/5">
                                 {(() => {
                                     const min = new Date(dateRange.min).getTime();
                                     const max = new Date(dateRange.max).getTime();
@@ -384,7 +384,7 @@ export function StrengthPage() {
 
                                     return (
                                         <div
-                                            className="absolute h-full bg-blue-500/40 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+                                            className="absolute h-full bg-gradient-to-r from-blue-600 to-emerald-500 rounded-full shadow-[0_0_10px_rgba(59,130,246,0.3)]"
                                             style={{ left: `${left}%`, width: `${width}%` }}
                                         />
                                     );
@@ -395,10 +395,11 @@ export function StrengthPage() {
                                     max={new Date(dateRange.max).getTime()}
                                     value={new Date(startDate || dateRange.min).getTime()}
                                     onChange={(e) => {
-                                        const newStart = new Date(parseInt(e.target.value)).toISOString().split('T')[0];
-                                        setStartDate(newStart);
+                                        const newStart = Math.min(parseInt(e.target.value), new Date(endDate || dateRange.max).getTime() - 86400000);
+                                        setStartDate(new Date(newStart).toISOString().split('T')[0]);
                                     }}
-                                    className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                                    className="absolute inset-0 w-full appearance-none bg-transparent cursor-pointer z-30 slider-thumb-dual"
+                                    style={{ pointerEvents: 'auto' }}
                                 />
                                 <input
                                     type="range"
@@ -406,25 +407,24 @@ export function StrengthPage() {
                                     max={new Date(dateRange.max).getTime()}
                                     value={new Date(endDate || dateRange.max).getTime()}
                                     onChange={(e) => {
-                                        const newEnd = new Date(parseInt(e.target.value)).toISOString().split('T')[0];
-                                        setEndDate(newEnd);
+                                        const newEnd = Math.max(parseInt(e.target.value), new Date(startDate || dateRange.min).getTime() + 86400000);
+                                        setEndDate(new Date(newEnd).toISOString().split('T')[0]);
                                     }}
-                                    className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
+                                    className="absolute inset-0 w-full appearance-none bg-transparent cursor-pointer z-20 slider-thumb-dual"
+                                    style={{ pointerEvents: 'auto' }}
                                 />
-                                <div className="absolute -bottom-6 left-0 text-[8px] text-slate-700 font-mono">{dateRange.min}</div>
-                                <div className="absolute -bottom-6 right-0 text-[8px] text-slate-700 font-mono">{dateRange.max}</div>
                             </div>
                         </div>
 
-                        <div className="md:col-span-3">
-                            <label className="text-[10px] text-slate-500 uppercase font-black mb-2 block text-right">Till</label>
+                        <div className="w-full md:w-40 flex-shrink-0">
+                            <label className="text-[9px] text-slate-500 uppercase font-black mb-1.5 block text-right">Till</label>
                             <input
                                 type="date"
                                 value={endDate || dateRange.max}
                                 min={startDate || dateRange.min}
                                 max={dateRange.max}
                                 onChange={(e) => setEndDate(e.target.value || null)}
-                                className="w-full bg-slate-950 border border-white/5 text-white px-4 py-3 rounded-xl text-sm font-mono text-right focus:border-blue-500/50 outline-none transition-colors"
+                                className="w-full bg-slate-900 border border-white/5 text-white px-3 py-2 rounded-xl text-xs font-mono text-right focus:border-blue-500/50 outline-none transition-colors"
                             />
                         </div>
                     </div>
@@ -493,8 +493,17 @@ export function StrengthPage() {
 
                                             <div className="mb-4 flex justify-between items-start relative">
                                                 <div className="flex-1 min-w-0">
-                                                    <h3 className="text-sm font-black text-blue-400 uppercase truncate pr-4">{exName}</h3>
-                                                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">Senaste: {latestPb.date}</p>
+                                                    <h3
+                                                        className="text-sm font-black text-blue-400 uppercase truncate pr-4 cursor-pointer hover:text-blue-300 transition-colors"
+                                                        onClick={() => navigate(`/styrka/${encodeURIComponent(exName)}`)}
+                                                        title={exName}
+                                                    >
+                                                        {exName}
+                                                    </h3>
+                                                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                                        Senaste: {latestPb.date}
+                                                        <span className="ml-1 opacity-60">({formatDateRelative(latestPb.date)})</span>
+                                                    </p>
                                                 </div>
                                                 <span className="bg-slate-800 text-slate-500 text-[9px] font-black px-2 py-1 rounded-full border border-white/5">
                                                     {pbs.length} REKORD
@@ -536,13 +545,6 @@ export function StrengthPage() {
                                                 )}
                                             </div>
 
-                                            <button
-                                                onClick={() => navigate(`/styrka/${encodeURIComponent(exName)}`)}
-                                                className="w-full mt-4 flex justify-between items-center text-[10px] font-black uppercase text-slate-500 group-hover:text-blue-400 transition-colors"
-                                            >
-                                                <span>Fullständig Analys</span>
-                                                <span className="transition-transform group-hover:translate-x-1">→</span>
-                                            </button>
                                         </div>
                                     );
                                 });
@@ -578,16 +580,6 @@ export function StrengthPage() {
                         <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                             <WeeklyVolumeBars workouts={filteredWorkouts} />
                         </div>
-                    </section>
-                )
-            }
-
-            {/* Top Exercises by Volume */}
-            {
-                filteredWorkouts.length > 0 && (
-                    <section>
-                        <h2 className="text-xl font-bold text-white mb-4">🔥 Mest tränade övningar</h2>
-                        <TopExercisesTable workouts={filteredWorkouts} onSelectExercise={(name) => navigate(`/styrka/${encodeURIComponent(name)}`)} />
                     </section>
                 )
             }
@@ -657,6 +649,16 @@ export function StrengthPage() {
                     </div>
                 </section>
             )}
+
+            {/* Top Exercises by Volume */}
+            {
+                filteredWorkouts.length > 0 && (
+                    <section>
+                        <h2 className="text-xl font-bold text-white mb-4">🔥 Mest tränade övningar</h2>
+                        <TopExercisesTable workouts={filteredWorkouts} onSelectExercise={(name) => navigate(`/styrka/${encodeURIComponent(name)}`)} />
+                    </section>
+                )
+            }
 
             {/* Workouts List */}
             <section>
@@ -927,7 +929,7 @@ function WeeklyVolumeBars({ workouts }: { workouts: StrengthWorkout[] }) {
 
         return Object.entries(weeks)
             .sort((a, b) => a[0].localeCompare(b[0]))
-            .slice(-24) // Show last 24 weeks (approx 6 months)
+            .slice(-48) // Show last 48 weeks (approx 12 months)
             .map(([week, volume]) => ({ week, volume }));
     }, [workouts]);
 
@@ -943,12 +945,16 @@ function WeeklyVolumeBars({ workouts }: { workouts: StrengthWorkout[] }) {
                 const isCurrentWeek = i === weeklyData.length - 1;
 
                 return (
-                    <div key={week} className="flex-1 flex flex-col items-center h-full justify-end group">
-                        <span className={`text-[8px] font-bold transition-opacity mb-1 ${isCurrentWeek ? 'text-emerald-400 opacity-100' : 'text-slate-500 opacity-0 group-hover:opacity-100'}`}>
+                    <div key={week} className="flex-1 flex flex-col items-center h-full justify-end group/bar relative">
+                        <div className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-slate-900 border border-white/10 p-2 rounded-lg z-30 shadow-2xl pointer-events-none whitespace-nowrap">
+                            <p className="text-[10px] font-black text-white">{weekLabel}</p>
+                            <p className="text-[10px] font-bold text-emerald-400">{(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} ton</p>
+                        </div>
+                        <span className={`text-[7px] font-bold transition-opacity mb-1 ${isCurrentWeek ? 'text-emerald-400 opacity-100' : 'text-slate-500 opacity-0 group-hover/bar:opacity-100'}`}>
                             {(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}
                         </span>
                         <div
-                            className={`w-full rounded-t-[2px] transition-all duration-500 border-t border-white/5 ${isCurrentWeek ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' : 'bg-slate-700/40 group-hover:bg-slate-700'}`}
+                            className={`w-full rounded-t-[2px] transition-all duration-500 border-t border-white/5 ${isCurrentWeek ? 'bg-gradient-to-t from-emerald-600 to-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.2)]' : 'bg-slate-700/40 group-hover/bar:bg-slate-700'}`}
                             style={{ height: `${height}%`, minHeight: '1px' }}
                         />
                         <div className="h-4 flex items-center">
@@ -1338,7 +1344,7 @@ function ExerciseDetailModal({
                                                 : (h as any).weight === maxEver;
 
                                             return (
-                                                <div key={i} className="flex-1 flex flex-col items-center gap-2 group relative h-full">
+                                                <div key={i} className="flex-1 flex flex-col justify-end items-center gap-2 group relative h-full">
                                                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] py-1 px-2 rounded-md z-20 pointer-events-none border border-white/10 shadow-xl whitespace-nowrap">
                                                         <p className="font-bold">{val} kg {isHistory ? '(1eRM)' : '(Vikt)'}</p>
                                                         <p className="text-[9px] text-slate-400">{h.date}</p>
@@ -1444,32 +1450,7 @@ function ExerciseDetailModal({
 
                                     return (
                                         <div className="space-y-4">
-                                            {/* Small line graph for weights */}
-                                            {prProgression.length > 1 && (
-                                                <div className="bg-slate-800/20 rounded-2xl border border-white/5 p-4 mb-4">
-                                                    <p className="text-[10px] text-slate-500 uppercase font-bold mb-3 flex items-center gap-2">
-                                                        <span>📊 Faktiska PR-vikter (Trend)</span>
-                                                    </p>
-                                                    <div className="flex items-end gap-1 h-16">
-                                                        {weightChartData.map((p, i) => {
-                                                            const h = (((p.weight || 0) - weightChartMin) / (weightChartMax - weightChartMin)) * 100;
-                                                            return (
-                                                                <div key={i} className="flex-1 group relative h-full flex items-end">
-                                                                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-950 text-[9px] text-white py-0.5 px-1.5 rounded border border-white/10 z-20 whitespace-nowrap">
-                                                                        {p.weight || 0} kg
-                                                                    </div>
-                                                                    <div
-                                                                        className="w-full bg-emerald-500/40 group-hover:bg-emerald-400/80 rounded-t-sm transition-all"
-                                                                        style={{ height: `${Math.max(h, 15)}%`, minWidth: '4px' }}
-                                                                    />
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                            <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                                                 {groups.reverse().map((prs, groupIdx) => {
                                                     const sortedPrs = [...prs].sort((a, b) => (b.weight || 0) - (a.weight || 0));
                                                     const isMulti = prs.length > 1;
