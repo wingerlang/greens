@@ -77,7 +77,7 @@ export function TrainingView({ exerciseEntries, days, universalActivities, initi
                 )}
                 {subTab === 'races' && (
                     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <RaceList exercises={exerciseEntries} />
+                        <RaceList exerciseEntries={exerciseEntries} universalActivities={universalActivities} />
                     </div>
                 )}
             </div>

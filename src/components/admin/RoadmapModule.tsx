@@ -37,6 +37,42 @@ const ROADMAP_ITEMS = [
         description: 'Skriv ut din veckoplan eller enskilda recept med snygg layout för köksväggen.',
         status: 'in-progress',
         tags: ['Utilities']
+    },
+    {
+        title: 'AI Readiness Score',
+        description: 'Daglig "Ready-to-Train"-analys som kombinerar din sömnkvalitet, HRV och gårdagens kaloribalans för att rekommendera vila eller personbästa.',
+        status: 'research',
+        tags: ['AI', 'Health', 'Analytics']
+    },
+    {
+        title: 'Skadeprevention Shield',
+        description: 'Varnar dig när "Acute Training Load" ökar för snabbt i relation till din "Chronic Load" och sömnstatus. Håll dig skadefri.',
+        status: 'planned',
+        tags: ['Health', 'Training']
+    },
+    {
+        title: 'Metabolisk Koststyrning',
+        description: 'Dynamiska makromål: Justerar automatiskt kolhydratsintaget inför tunga löppass och ökar proteinet under styrkeperioder.',
+        status: 'research',
+        tags: ['Nutrition', 'Training', 'AI']
+    },
+    {
+        title: 'Hyrox Race Predictor',
+        description: 'Unik algoritm som väger samman din löpkapacitet med dina styrkelyft för att estimera din sluttid i Hyrox och Crossfit-event.',
+        status: 'planned',
+        tags: ['Competition', 'Analytics']
+    },
+    {
+        title: 'Sleep-to-Gains Analys',
+        description: 'Datadriven insikt som visar exakt hur mycket snabbare du springer eller tyngre du lyfter efter 8h sömn jämfört med 6h.',
+        status: 'planned',
+        tags: ['Health', 'Analytics']
+    },
+    {
+        title: 'Smart Periodisering',
+        description: 'Synkar automatiskt dina kostfaser (Bulk/Cut) med din träningscykel (Grundträning/Toppning) för maximal effekt.',
+        status: 'planned',
+        tags: ['Planning', 'Training']
     }
 ];
 

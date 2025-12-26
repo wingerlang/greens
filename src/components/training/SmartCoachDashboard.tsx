@@ -6,6 +6,7 @@ import { TrainingWeeklyOverview } from './TrainingWeeklyOverview.tsx';
 import { CompressedActivityList } from './CompressedActivityList.tsx';
 import { Link } from 'react-router-dom';
 import { calculateVDOT, assessGoalFeasibility } from '../../utils/runningCalculator.ts';
+import { SleepGainsAnalysis } from './SleepGainsAnalysis.tsx';
 import './SmartCoachDashboard.css';
 
 interface SmartCoachDashboardProps {
@@ -13,7 +14,7 @@ interface SmartCoachDashboardProps {
 }
 
 export function SmartCoachDashboard({ stravaHistory }: SmartCoachDashboardProps) {
-    const { coachConfig, plannedActivities, generateCoachPlan } = useData();
+    const { coachConfig, plannedActivities, generateCoachPlan, exerciseEntries, dailyVitals } = useData();
     const [viewMode, setViewMode] = React.useState<'list' | 'overview' | 'compact'>('list');
 
     const handleGenerate = () => {
@@ -137,6 +138,13 @@ export function SmartCoachDashboard({ stravaHistory }: SmartCoachDashboardProps)
                         >
                             Visa Allt →
                         </Link>
+                    </div>
+
+                    <div className="animate-in fade-in slide-in-from-bottom-8 duration-700 delay-100">
+                        <SleepGainsAnalysis
+                            exerciseEntries={exerciseEntries}
+                            dailyVitals={dailyVitals}
+                        />
                     </div>
                 </div>
             )}
