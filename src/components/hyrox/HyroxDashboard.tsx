@@ -3,8 +3,10 @@ import { useData } from '../../context/DataContext.tsx';
 import { parseHyroxStats } from '../../utils/hyroxParser.ts';
 import { predictHyroxTime, HyroxPrediction, HyroxClass, HYROX_STANDARDS } from '../../utils/hyroxPredictor.ts';
 import { HyroxStation } from '../../models/types.ts';
+import { HyroxStationDetailModal } from './HyroxStationDetailModal.tsx';
 
 import { HYROX_WORKOUTS, DEEP_TIPS, HyroxWorkout } from '../../utils/hyroxWorkouts.ts';
+import { HYROX_ENCYCLOPEDIA } from '../../utils/hyroxEncyclopedia.ts';
 import { HyroxDuoLab } from './HyroxDuoLab.tsx';
 
 // Feature 1: Class Selector Options
@@ -31,23 +33,37 @@ const STATION_TIPS: Record<HyroxStation, string> = {
     run_1km: "Detta är din 'vila'. Hitta en rytm. Gå inte i Roxzone.",
 };
 
-// Feature 12: Doubles Config
-// Default: You do 50% of the work. Or specific stations.
-// Simplification: Toggle which ones YOU do.
+// Feature 7.0: Elite Splits (Mock/Approximate)
+const ELITE_SPLITS = {
+    ski_erg: 215, // 3:35
+    sled_push: 120, // 2:00
+    sled_pull: 180, // 3:00
+    burpee_broad_jumps: 150, // 2:30
+    rowing: 220, // 3:40
+    farmers_carry: 60, // 1:00
+    sandbag_lunges: 180, // 3:00
+    wall_balls: 180, // 3:00
+    run_1km: 180, // 3:00 (avg)
+    roxzone: 240 // 4:00 (total)
+};
+
 const ALL_STATIONS: HyroxStation[] = ['ski_erg', 'sled_push', 'sled_pull', 'burpee_broad_jumps', 'rowing', 'farmers_carry', 'sandbag_lunges', 'wall_balls'];
 
 export function HyroxDashboard() {
     const { exerciseEntries, coachConfig } = useData();
 
     const [selectedClass, setSelectedClass] = useState<HyroxClass>('MEN_OPEN');
-    const [viewMode, setViewMode] = useState<'status' | 'simulate' | 'goals' | 'training' | 'guide' | 'duo'>('status');
+    // Feature 7.0: 'pro_stats' tab
+    const [viewMode, setViewMode] = useState<'status' | 'simulate' | 'goals' | 'training' | 'guide' | 'duo' | 'pro_stats'>('status');
     const [runImprovement, setRunImprovement] = useState(0);
     const [stationEfficiency, setStationEfficiency] = useState(0);
-    const [roxzoneImprovement, setRoxzoneImprovement] = useState(0); // Feature 15: Roxzone slider
+    const [roxzoneImprovement, setRoxzoneImprovement] = useState(0);
     const [goalTime, setGoalTime] = useState("01:30");
 
+    // Feature 6.0: Encyclopedia Modal
+    const [selectedStation, setSelectedStation] = useState<HyroxStation | null>(null);
+
     // Feature 11: Doubles Strategy
-    // Map of Station -> 'ME' | 'PARTNER' | 'SPLIT'
     const [doublesStrategy, setDoublesStrategy] = useState<Record<string, 'ME' | 'PARTNER' | 'SPLIT'>>({});
 
     const isDoubles = selectedClass.includes('DOUBLES') || selectedClass === 'RELAY';
@@ -66,17 +82,21 @@ export function HyroxDashboard() {
         return "22:30";
     }, [coachConfig]);
 
-    // 3. Generate Prediction
-    const prediction: HyroxPrediction | null = useMemo(() => {
-        const averagedStats: Partial<Record<HyroxStation, number>> = {};
+    // 2. Calculate Averages
+    const averageStats = useMemo(() => {
+        const statsObj: Partial<Record<HyroxStation, number>> = {};
         ALL_STATIONS.forEach(station => {
             const history = stats[station];
             if (history.length > 0) {
-                averagedStats[station] = history.reduce((a, b) => a + b, 0) / history.length;
+                statsObj[station] = history.reduce((a, b) => a + b, 0) / history.length;
             }
         });
+        return statsObj;
+    }, [stats]);
 
-        const pred = predictHyroxTime(recent5k, averagedStats, selectedClass, {
+    // 3. Generate Prediction
+    const prediction: HyroxPrediction | null = useMemo(() => {
+        const pred = predictHyroxTime(recent5k, averageStats, selectedClass, {
             runGlobalImprovement: runImprovement,
             stationGlobalImprovement: stationEfficiency
         });
@@ -127,6 +147,43 @@ export function HyroxDashboard() {
 
     const standards = HYROX_STANDARDS[selectedClass];
 
+    // ------------------------------------------------------------------
+    // FEATURE 7.0 LOGIC: ARCHETYPE & STATS
+    // ------------------------------------------------------------------
+    const runnerType = useMemo(() => {
+        if (!prediction) return { title: 'Unknown', desc: 'No prediction data.', weakness: 'N/A' };
+        const runRatio = prediction.runTotal / prediction.totalTimeSeconds;
+        if (runRatio < 0.45) return { title: 'The Sled Dog 🐕', desc: 'Station Dominant. Your engine overcomes your running.', weakness: 'Pure Running Speed' };
+        if (runRatio > 0.55) return { title: 'The Gazelle 🦌', desc: 'Running Dominant. You fly on the track but struggle with weights.', weakness: 'Heavy Sleds' };
+        return { title: 'The Hybrid 🤖', desc: 'Perfectly Balanced. You are the ideal Hyrox athlete.', weakness: 'None (Jack of all trades)' };
+    }, [prediction]);
+
+    const pacingTargets = useMemo(() => {
+        if (!prediction) return [];
+        // Base pace from 5k form or prediction? Let's use prediction avg run pace
+        const avgRunSec = prediction.runTotal / 8;
+        // Coefficients of fatigue
+        const mods = [0.95, 0.98, 1.05, 1.02, 1.00, 0.98, 1.10, 1.15];
+        // 1 (fresh), 2 (ski), 3 (sled push - dead), 4 (sled pull - ok), 5 (bbj - ok), 6 (row - fresh legs), 7 (lunges - hell), 8 (wb - zombie)
+
+        return mods.map((m, i) => ({
+            run: i + 1,
+            target: avgRunSec * m,
+            note: i === 2 ? 'Post-Sled Survival' : i === 6 ? 'The Lunge Shuffle' : 'Steady'
+        }));
+    }, [prediction]);
+
+    const fuelPlan = useMemo(() => {
+        const totalMin = prediction.totalTimeSeconds / 60;
+        const plan = [];
+        if (totalMin > 70) plan.push({ at: 'Roxzone 4 (Post-BBJ)', what: '💧 Gel + Water', why: 'Halvvägs-boost' });
+        if (totalMin > 90) plan.push({ at: 'Roxzone 6 (Post-Farm)', what: '⚡ Caffeine / Carb Drink', why: 'Kick inför Lunges' });
+        plan.push({ at: 'Start', what: '🧂 Elektrolyter', why: 'Pre-load' });
+        return plan.sort((a, b) => a.at === 'Start' ? -1 : 1);
+    }, [prediction]);
+
+    // ...
+
     return (
         <div className="space-y-6 max-w-5xl mx-auto text-slate-200">
 
@@ -176,16 +233,102 @@ export function HyroxDashboard() {
                     <TabBtn label="🔮 Simulator" active={viewMode === 'simulate'} onClick={() => setViewMode('simulate')} color="amber" />
                     <TabBtn label="🎯 Mål & Splits" active={viewMode === 'goals'} onClick={() => setViewMode('goals')} color="emerald" />
                     <TabBtn label="🏋️ Workouts" active={viewMode === 'training'} onClick={() => setViewMode('training')} color="rose" />
-                    <TabBtn label="🧠 Strategy Guide" active={viewMode === 'guide'} onClick={() => setViewMode('guide')} color="sky" />
+                    <TabBtn label="🧠 Strategy" active={viewMode === 'guide'} onClick={() => setViewMode('guide')} color="sky" />
                     <TabBtn label="⚔️ Duo Lab" active={viewMode === 'duo'} onClick={() => setViewMode('duo')} color="cyan" />
+                    <TabBtn label="📊 Pro Stats" active={viewMode === 'pro_stats'} onClick={() => setViewMode('pro_stats')} color="indigo" />
                 </div>
             </div>
 
             {/* MAIN CONTENT AREA */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-                {/* NEW TABS: TRAINING & GUIDE TAKEOVER FULL GRID OR HALF? */}
-                {/* For Status/Simulate/Goals we keep split view. For Training/Guide we might want full width or distinct layout. */}
+                {/* ... existing views ... */}
+
+                {viewMode === 'pro_stats' && (
+                    <>
+                        {/* LEFT COLUMN: IDENTITY & ELITE COMPARE */}
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+
+                            {/* ARCHETYPE CARD */}
+                            <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 relative overflow-hidden group">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl select-none group-hover:opacity-20 transition-opacity">
+                                    {runnerType.title.split(' ')[2]}
+                                </div>
+                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-4">Athlete Identity</h3>
+                                <div className="relative z-10">
+                                    <div className="text-4xl font-black text-white italic tracking-tighter mb-2">{runnerType.title}</div>
+                                    <p className="text-sm text-slate-400 mb-4">{runnerType.desc}</p>
+                                    <div className="inline-block bg-rose-500/10 border border-rose-500/20 px-3 py-1 rounded text-xs text-rose-400 font-bold uppercase">
+                                        Weakness: {runnerType.weakness}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* ELITE COMPARISON */}
+                            <div className="bg-slate-900 border border-white/10 rounded-3xl p-6">
+                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6">The Ghost Protocol (vs Elite)</h3>
+                                <div className="space-y-4">
+                                    {['ski_erg', 'sled_push', 'burpee_broad_jumps', 'wall_balls'].map(st => (
+                                        <div key={st}>
+                                            <div className="flex justify-between text-xs font-bold mb-1 uppercase">
+                                                <span className="text-slate-300">{st.replace(/_/g, ' ')}</span>
+                                                <span className="text-slate-500">Elite: {fmtSec(ELITE_SPLITS[st as HyroxStation])}</span>
+                                            </div>
+                                            <div className="h-2 bg-slate-800 rounded-full overflow-hidden flex">
+                                                <div className="h-full bg-amber-500" style={{ width: `${(ELITE_SPLITS[st as HyroxStation] / prediction.splits[st as HyroxStation]) * 100}%` }}></div>
+                                            </div>
+                                            <div className="text-right text-[10px] text-rose-400 font-mono mt-0.5">
+                                                +{fmtSec(prediction.splits[st as HyroxStation] - ELITE_SPLITS[st as HyroxStation])}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* RIGHT COLUMN: STRATEGY & PACING */}
+                        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-6">
+
+                            {/* PACING TABLE */}
+                            <div className="bg-slate-900 border border-white/10 rounded-3xl p-6">
+                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <span>⏱️</span> Compromised Pacing
+                                </h3>
+                                <div className="grid gap-2">
+                                    {pacingTargets.map((pt, i) => (
+                                        <div key={i} className="flex items-center justify-between p-3 bg-slate-950/50 rounded-xl border border-white/5">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-black text-slate-600 w-4">#{pt.run}</span>
+                                                <span className="text-xs font-bold text-slate-400">{pt.note}</span>
+                                            </div>
+                                            <div className={`font-mono font-bold ${i === 2 || i === 6 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                                                {fmtSec(pt.target)} /km
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* FUEL PLAN */}
+                            <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2">
+                                    <span>⛽</span> Fuel Strategy
+                                </h3>
+                                <div className="relative border-l-2 border-emerald-500/20 ml-2 space-y-6">
+                                    {fuelPlan.map((step, i) => (
+                                        <div key={i} className="pl-6 relative">
+                                            <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-slate-900 border-2 border-emerald-500"></div>
+                                            <div className="text-xs font-black text-emerald-500 uppercase tracking-wider mb-1">{step.at}</div>
+                                            <div className="text-lg font-bold text-white mb-0.5">{step.what}</div>
+                                            <p className="text-xs text-slate-400 italic">"{step.why}"</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </>
+                )}
 
                 {(viewMode === 'status' || viewMode === 'simulate' || viewMode === 'goals') && (
                     <>
@@ -193,7 +336,7 @@ export function HyroxDashboard() {
                         <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 shadow-xl">
                             <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 border-b border-white/5 pb-2">Race Breakdown</h3>
 
-                            {/* FEATURE 12: PACE DECAY GRAPH (Mini) */}
+                            {/* PACE DECAY GRAPH */}
                             <div className="mb-6 bg-slate-950/50 p-4 rounded-xl border border-white/5">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2 block">Pace Decay Analysis</span>
                                 <div className="flex items-end h-16 gap-1">
@@ -220,23 +363,24 @@ export function HyroxDashboard() {
 
                                 {ALL_STATIONS.map((station, idx) => (
                                     <div key={station} className="group relative">
-                                        <div className={`flex justify-between items-center p-2.5 rounded-lg border transition-all ${prediction.weakestStation === station ? 'bg-rose-500/10 border-rose-500/20' :
-                                            prediction.strongestStation === station ? 'bg-emerald-500/10 border-emerald-500/20' :
-                                                'bg-transparent border-transparent hover:bg-white/5'
-                                            }`}>
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 text-[9px] font-mono text-slate-400">
-                                                    {idx + 1}
+                                        <div
+                                            key={station}
+                                            onClick={() => setSelectedStation(station)}
+                                            className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-slate-900/50 hover:bg-slate-800 hover:border-amber-500/30 transition-all cursor-pointer group relative overflow-hidden"
+                                        >
+                                            <div className="flex items-center gap-3 relative z-10">
+                                                <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center text-lg border border-amber-500/20 group-hover:scale-110 transition-transform">
+                                                    {HYROX_ENCYCLOPEDIA[station]?.icon}
                                                 </div>
-                                                <div className="flex flex-col">
-                                                    <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                                                        {station.replace(/_/g, ' ')}
+                                                <div className="relative">
+                                                    <span className="text-sm font-bold text-slate-300 group-hover:text-white transition-colors">
+                                                        {HYROX_ENCYCLOPEDIA[station]?.title}
                                                     </span>
 
-                                                    {/* Feature 11: DOUBLES SELECTOR INLINE */}
+                                                    {/* Doubles/Relay Strategy Badge */}
                                                     {isDoubles && (
-                                                        <div className="flex gap-1 mt-1">
-                                                            {['MY', 'PARTNER', 'SPLIT'].map(type => (
+                                                        <div className="absolute -right-2 top-full mt-1 flex gap-1 items-center">
+                                                            {['ME', 'PARTNER', 'SPLIT'].map(type => (
                                                                 <button
                                                                     key={type}
                                                                     onClick={(e) => {
@@ -257,10 +401,15 @@ export function HyroxDashboard() {
 
                                                 {/* Hover Tip */}
                                                 <span className="text-[9px] text-slate-500 hidden group-hover:inline-block absolute left-4 -bottom-2 bg-slate-900 px-2 py-0.5 border border-white/10 rounded-full z-10 whitespace-nowrap shadow-xl">
-                                                    💡 {STATION_TIPS[station]}
+                                                    ℹ️ Klicka för detaljer & stats
                                                 </span>
                                             </div>
-                                            <span className="font-mono font-bold text-slate-200 text-sm">{fmtSec(prediction.splits[station])}</span>
+                                            <div className="flex flex-col items-end">
+                                                <span className="font-mono font-bold text-white text-sm group-hover:text-amber-400 transition-colors">
+                                                    {fmtSec(prediction.splits[station])}
+                                                </span>
+                                                {/* Show difference from average if available? No, keep simple for now */}
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -273,42 +422,89 @@ export function HyroxDashboard() {
                             {viewMode === 'simulate' && (
                                 <div className="bg-slate-900 border border-amber-500/20 rounded-3xl p-6 animate-in slide-in-from-right-4 fade-in">
                                     <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/5">
-                                        <span className="text-2xl">🔮</span>
+                                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-2xl border border-amber-500/20">
+                                            🧪
+                                        </div>
                                         <div>
-                                            <h3 className="text-sm font-black text-white uppercase tracking-widest">Simulator Lab</h3>
-                                            <p className="text-[10px] text-slate-400">Dra i spakarna för att se din potential</p>
+                                            <h3 className="text-sm font-black text-white uppercase tracking-widest">Simulator Lab <span className="text-amber-500 text-[10px] ml-1">v2.0</span></h3>
+                                            <p className="text-[10px] text-slate-400">Avancerad scenarioanalys</p>
                                         </div>
                                     </div>
 
                                     <div className="space-y-8">
-                                        <Slider
-                                            label="Löpa snabbare"
-                                            value={runImprovement}
-                                            onChange={setRunImprovement}
-                                            max={20}
-                                            color="text-emerald-400"
-                                            desc={`Sparar ${fmtSec(prediction.runTotal * (runImprovement / 100))} totalt`}
-                                        />
-                                        <Slider
-                                            label="Stationsteknik"
-                                            value={stationEfficiency}
-                                            onChange={setStationEfficiency}
-                                            max={25}
-                                            color="text-amber-400"
-                                            desc="Effektivitet i burpees/wallballs"
-                                        />
-                                        <Slider
-                                            label="Snabbare Roxzone"
-                                            value={roxzoneImprovement}
-                                            onChange={setRoxzoneImprovement}
-                                            max={50}
-                                            color="text-indigo-400"
-                                            desc="Jogga mellan stationerna"
-                                        />
+                                        {/* Run Engine */}
+                                        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 space-y-4">
+                                            <div className="flex justify-between items-end">
+                                                <label className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest">🏃 Löpkapacitet</label>
+                                                <span className="text-xs font-mono font-bold text-white">{runImprovement}% snabbare</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min="0" max="25" step="1"
+                                                value={runImprovement}
+                                                onChange={(e) => setRunImprovement(Number(e.target.value))}
+                                                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                            />
+                                            <p className="text-[10px] text-slate-500 italic">Simulerar bättre kondition och högre tröskel.</p>
+                                        </div>
 
-                                        <div className="bg-slate-950 p-4 rounded-xl border border-white/5 text-center mt-6">
-                                            <span className="text-[10px] text-slate-500 uppercase tracking-widest block mb-1">Simulerad Sluttid</span>
-                                            <span className="text-4xl font-black text-white">{prediction.totalTimeFormatted}</span>
+                                        {/* Station Technician */}
+                                        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 space-y-4">
+                                            <div className="flex justify-between items-end">
+                                                <label className="text-[10px] font-bold text-amber-400 uppercase tracking-widest">🏋️ Stationseffektivitet</label>
+                                                <span className="text-xs font-mono font-bold text-white">{stationEfficiency}% effektivare</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min="0" max="30" step="1"
+                                                value={stationEfficiency}
+                                                onChange={(e) => setStationEfficiency(Number(e.target.value))}
+                                                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                            />
+                                            <p className="text-[10px] text-slate-500 italic">Snabbare burpees, wallballs och utfall utan extra puls.</p>
+                                        </div>
+
+                                        {/* Roxzone Master */}
+                                        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 space-y-4">
+                                            <div className="flex justify-between items-end">
+                                                <label className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest">⚡ Roxzone Speed</label>
+                                                <span className="text-xs font-mono font-bold text-white">{roxzoneImprovement}% snabbare</span>
+                                            </div>
+                                            <input
+                                                type="range"
+                                                min="0" max="60" step="1"
+                                                value={roxzoneImprovement}
+                                                onChange={(e) => setRoxzoneImprovement(Number(e.target.value))}
+                                                className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                            />
+                                            <p className="text-[10px] text-slate-500 italic">Minimera "dötid" och gåvila mellan stationerna.</p>
+                                        </div>
+
+                                        {/* RESULT */}
+                                        <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-2xl border border-amber-500/20 text-center relative overflow-hidden group">
+                                            <div className="absolute inset-0 bg-amber-500/5 group-hover:bg-amber-500/10 transition-colors" />
+                                            <span className="text-[10px] text-slate-400 uppercase tracking-widest block mb-2 relative z-10">Simulerad Sluttid</span>
+                                            <span className="text-5xl font-black text-white relative z-10 tracking-tighter">
+                                                {prediction.totalTimeFormatted}
+                                            </span>
+                                            {(() => {
+                                                // Calculate baseline with 0% improvement
+                                                const baseline = predictHyroxTime(
+                                                    recent5k,
+                                                    averageStats,
+                                                    selectedClass,
+                                                    { runGlobalImprovement: 0, stationGlobalImprovement: 0 }
+                                                )?.totalTimeSeconds || 0;
+
+                                                const diff = baseline - prediction.totalTimeSeconds;
+                                                if (diff <= 30) return null; // Only show if meaningful difference
+
+                                                return (
+                                                    <div className="mt-2 text-xs text-emerald-400 font-bold relative z-10">
+                                                        -{fmtSec(diff)} mot nuvarande
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
@@ -362,83 +558,109 @@ export function HyroxDashboard() {
                             )}
                         </div>
                     </>
-                )}
+                )
+                }
 
-                {/* NEW FULL WIDTH MODES: TRAINING & GUIDE */}
-                {viewMode === 'training' && (
-                    <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {HYROX_WORKOUTS.map(workout => (
-                                <div key={workout.id} className="bg-slate-900 border border-white/5 rounded-3xl p-6 hover:border-amber-500/30 transition-all group">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${workout.category === 'SIMULATION' ? 'bg-amber-500 text-black' :
-                                            workout.category === 'COMPROMISED' ? 'bg-rose-500 text-white' :
-                                                'bg-slate-800 text-slate-300'
-                                            }`}>{workout.category}</span>
-                                        <span className="text-[10px] text-slate-500 font-mono">{workout.duration}</span>
+                {
+                    viewMode === 'training' && (
+                        <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {HYROX_WORKOUTS.map(workout => (
+                                    <div key={workout.id} className="bg-slate-900 border border-white/5 rounded-3xl p-6 hover:border-amber-500/30 transition-all group">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${workout.category === 'SIMULATION' ? 'bg-amber-500 text-black' :
+                                                workout.category === 'COMPROMISED' ? 'bg-rose-500 text-white' :
+                                                    'bg-slate-800 text-slate-300'
+                                                }`}>{workout.category}</span>
+                                            <span className="text-[10px] text-slate-500 font-mono">{workout.duration}</span>
+                                        </div>
+                                        <h3 className="text-lg font-black text-white mb-2 group-hover:text-amber-500 transition-colors">{workout.title}</h3>
+                                        <p className="text-xs text-slate-400 mb-4 line-clamp-2">{workout.description}</p>
+
+                                        <div className="bg-slate-950 p-4 rounded-xl border border-white/5 mb-4 space-y-1">
+                                            {workout.structure.slice(0, 4).map((line, i) => (
+                                                <div key={i} className="text-[10px] text-slate-300 font-mono border-b border-white/5 last:border-0 pb-1 last:pb-0">{line}</div>
+                                            ))}
+                                            {workout.structure.length > 4 && <div className="text-[9px] text-slate-600 pt-1">... +{workout.structure.length - 4} more</div>}
+                                        </div>
+
+                                        <button className="w-full py-2 bg-white/5 hover:bg-amber-500 hover:text-black rounded-lg text-xs font-bold uppercase tracking-widest transition-all">
+                                            Visa pass
+                                        </button>
                                     </div>
-                                    <h3 className="text-lg font-black text-white mb-2 group-hover:text-amber-500 transition-colors">{workout.title}</h3>
-                                    <p className="text-xs text-slate-400 mb-4 line-clamp-2">{workout.description}</p>
+                                ))}
+                            </div>
+                        </div>
+                    )
+                }
 
-                                    <div className="bg-slate-950 p-4 rounded-xl border border-white/5 mb-4 space-y-1">
-                                        {workout.structure.slice(0, 4).map((line, i) => (
-                                            <div key={i} className="text-[10px] text-slate-300 font-mono border-b border-white/5 last:border-0 pb-1 last:pb-0">{line}</div>
+                {
+                    viewMode === 'guide' && (
+                        <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="bg-slate-900 border border-sky-500/20 rounded-3xl p-8 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl">🍌</div>
+                                    <h3 className="text-xl font-black text-white mb-6 relative z-10">{DEEP_TIPS.nutrition.title}</h3>
+                                    <ul className="space-y-4 relative z-10">
+                                        {DEEP_TIPS.nutrition.points.map((p, i) => (
+                                            <li key={i} className="flex gap-4">
+                                                <span className="bg-sky-500/20 text-sky-400 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
+                                                <p className="text-sm text-slate-300 leading-relaxed">{p}</p>
+                                            </li>
                                         ))}
-                                        {workout.structure.length > 4 && <div className="text-[9px] text-slate-600 pt-1">... +{workout.structure.length - 4} more</div>}
-                                    </div>
-
-                                    <button className="w-full py-2 bg-white/5 hover:bg-amber-500 hover:text-black rounded-lg text-xs font-bold uppercase tracking-widest transition-all">
-                                        Visa pass
-                                    </button>
+                                    </ul>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
 
-                {viewMode === 'guide' && (
-                    <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            <div className="bg-slate-900 border border-sky-500/20 rounded-3xl p-8 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl">🍌</div>
-                                <h3 className="text-xl font-black text-white mb-6 relative z-10">{DEEP_TIPS.nutrition.title}</h3>
-                                <ul className="space-y-4 relative z-10">
-                                    {DEEP_TIPS.nutrition.points.map((p, i) => (
-                                        <li key={i} className="flex gap-4">
-                                            <span className="bg-sky-500/20 text-sky-400 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
-                                            <p className="text-sm text-slate-300 leading-relaxed">{p}</p>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-
-                            <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-8 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl">⏱️</div>
-                                <h3 className="text-xl font-black text-white mb-6 relative z-10">{DEEP_TIPS.pacing.title}</h3>
-                                <ul className="space-y-4 relative z-10">
-                                    {DEEP_TIPS.pacing.points.map((p, i) => (
-                                        <li key={i} className="flex gap-4">
-                                            <span className="bg-emerald-500/20 text-emerald-400 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
-                                            <p className="text-sm text-slate-300 leading-relaxed">{p}</p>
-                                        </li>
-                                    ))}
-                                </ul>
+                                <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-8 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl">⏱️</div>
+                                    <h3 className="text-xl font-black text-white mb-6 relative z-10">{DEEP_TIPS.pacing.title}</h3>
+                                    <ul className="space-y-4 relative z-10">
+                                        {DEEP_TIPS.pacing.points.map((p, i) => (
+                                            <li key={i} className="flex gap-4">
+                                                <span className="bg-emerald-500/20 text-emerald-400 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0">{i + 1}</span>
+                                                <p className="text-sm text-slate-300 leading-relaxed">{p}</p>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )
+                }
 
-                {viewMode === 'duo' && (
-                    <div className="col-span-1 lg:col-span-2">
-                        <HyroxDuoLab />
-                    </div>
-                )}
-            </div>
-        </div>
+                {
+                    viewMode === 'duo' && (
+                        <div className="col-span-1 lg:col-span-2">
+                            <HyroxDuoLab />
+                        </div>
+                    )
+                }
+            </div >
+
+            {/* MODAL */}
+            {selectedStation && (
+                <HyroxStationDetailModal
+                    stationId={selectedStation}
+                    onClose={() => setSelectedStation(null)}
+                    stats={(() => {
+                        // Assuming 'stats' is a Record<HyroxStation, number[]> available in this scope
+                        // For example, it could be a state variable like:
+                        // const [stats, setStats] = useState<Record<HyroxStation, number[]>>({});
+                        // Or derived from props/context.
+                        const history = stats[selectedStation] || [];
+                        if (history.length === 0) return undefined;
+                        return {
+                            pb: Math.min(...history),
+                            history: history,
+                            average: Math.round(history.reduce((a, b) => a + b, 0) / (history.length || 1))
+                        };
+                    })()}
+                />
+            )}
+        </div >
     );
 }
 
-// Subcomponents
 const TabBtn = ({ label, active, onClick, color }: any) => (
     <button onClick={onClick} className={`px-5 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${active ? `bg-${color}-500 text-white shadow-lg shadow-${color}-500/20` : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
         {label}

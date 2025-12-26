@@ -20,6 +20,7 @@ import { HealthPage } from './pages/HealthPage.tsx';
 import { CompetitionPage } from './pages/CompetitionPage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { RegisterPage } from './pages/RegisterPage.tsx';
+import { WorkoutsPage } from './pages/WorkoutsPage.tsx';
 import { CoachPage } from './pages/CoachPage.tsx';
 import { PublicProfilePage } from './pages/PublicProfilePage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
@@ -100,6 +101,10 @@ export function App() {
                                                 <Route path="strength/:exerciseName" element={<StrengthPage />} />
                                                 <Route path="styrka" element={<StrengthPage />} />
                                                 <Route path="styrka/:exerciseName" element={<StrengthPage />} />
+                                                <Route path="styrka/:exerciseName" element={<StrengthPage />} />
+                                                <Route path="hyrox" element={<Navigate to="/health/hyrox" replace />} />
+                                                <Route path="pass" element={<WorkoutsPage />} />
+                                                <Route path="workouts" element={<WorkoutsPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

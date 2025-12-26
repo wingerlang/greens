@@ -28,45 +28,67 @@ export function parseHyroxStats(activities: ExerciseEntry[]): Record<HyroxStatio
     };
 
     activities.forEach(a => {
-        const text = (a.notes || '').toLowerCase();
+        const text = (a.notes || '' + ' ' + (a as any).name || '').toLowerCase();
 
-        // Simple regex parsing for specific stations mentioned in notes
-        // Format expectations: "Sled Push: 3:00", "Wall Balls: 4:30"
+        // 1. Individual Station Parsing (from notes like "Ski: 4:30")
+        parseTimeForStation(text, ['ski', 'ski erg'], stats.ski_erg);
+        parseTimeForStation(text, ['sled push', 'push'], stats.sled_push);
+        parseTimeForStation(text, ['sled pull', 'pull'], stats.sled_pull);
+        parseTimeForStation(text, ['burpee', 'bbj'], stats.burpee_broad_jumps);
+        parseTimeForStation(text, ['row', 'rowing'], stats.rowing);
+        parseTimeForStation(text, ['farmers', 'carry'], stats.farmers_carry);
+        parseTimeForStation(text, ['lunge', 'sandbag'], stats.sandbag_lunges);
+        parseTimeForStation(text, ['wall', 'wall ball', 'wb'], stats.wall_balls);
 
-        parseTimeForStation(text, 'ski', stats.ski_erg);
-        parseTimeForStation(text, 'sled push', stats.sled_push);
-        parseTimeForStation(text, 'sled pull', stats.sled_pull);
-        parseTimeForStation(text, 'burpee', stats.burpee_broad_jumps);
-        parseTimeForStation(text, 'row', stats.rowing);
-        parseTimeForStation(text, 'farmers', stats.farmers_carry);
-        parseTimeForStation(text, 'lunge', stats.sandbag_lunges);
-        parseTimeForStation(text, 'wall ball', stats.wall_balls);
-
-        // Running splits are harder to extract from unstructured text without more strict logging 
-        // or lap data. For now, we rely on dedicated 1km intervals if identified.
+        // 2. Run Parsing
+        // A) Dedicated 1km Intervals (strict distance check)
         if (a.type === 'running' && a.distance && Math.abs(a.distance - 1.0) < 0.1) {
             stats.run_1km.push(a.durationMinutes * 60);
         }
+        // B) Splits inside a Hyrox Note (e.g., "Run 1: 4:00", "Run 8: 5:30")
+        parseRunSplits(text, stats.run_1km);
     });
 
     return stats;
 }
 
-function parseTimeForStation(text: string, keyword: string, targetArray: number[]) {
-    if (!text.includes(keyword)) return;
+function parseTimeForStation(text: string, keywords: string[], targetArray: number[]) {
+    // Try each keyword
+    for (const keyword of keywords) {
+        // Look for patterns like "Ski: 4:30", "Ski 4m30s", "Ski - 4:15"
+        // Regex explanation:
+        // keyword
+        // [^\\d]*  -> skip non-digits (colon, space, dash)
+        // (\\d+)   -> Capture Minutes
+        // (:|m|\\s|\\.) -> Separator (colon, 'm', space, dot)
+        // (\\d+)?  -> Capture Seconds (optional)
+        const regex = new RegExp(`${keyword}[^\\d\\r\\n]*(\\d+)(:|m|\\s|\\.)(\\d{2})?`, 'i');
+        const match = text.match(regex);
 
-    // Look for patterns like "Ski: 4:30" or "Ski 4m30s"
-    const regex = new RegExp(`${keyword}[^\\d]*(\\d+)(:|m|\\s)(\\d+)?`, 'i');
-    const match = text.match(regex);
+        if (match) {
+            const minutes = parseInt(match[1]);
+            const seconds = match[3] ? parseInt(match[3]) : 0;
+            const totalSeconds = minutes * 60 + seconds;
 
-    if (match) {
+            // Sanity check (60s to 12 mins)
+            if (totalSeconds > 45 && totalSeconds < 900) {
+                targetArray.push(totalSeconds);
+                return; // Found a match, stop checking other keywords for this station
+            }
+        }
+    }
+}
+
+function parseRunSplits(text: string, targetArray: number[]) {
+    // Look for "Run X: 4:30"
+    const regex = /run\s*\d*[^\\d]*(\d+)(:|m|\s|\.)(\d{2})/gi;
+    let match;
+    while ((match = regex.exec(text)) !== null) {
         const minutes = parseInt(match[1]);
         const seconds = match[3] ? parseInt(match[3]) : 0;
-        const totalSeconds = minutes * 60 + seconds;
-
-        // Sanity check (e.g. Ski Erg shouldn't take 50 mins or 10 seconds for a full station)
-        if (totalSeconds > 60 && totalSeconds < 600) {
-            targetArray.push(totalSeconds);
+        const total = minutes * 60 + seconds;
+        if (total > 150 && total < 600) { // 2:30 to 10:00 range
+            targetArray.push(total);
         }
     }
 }

@@ -131,6 +131,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             </button>
                             <div className="absolute top-full left-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
                                 <div className="grid gap-1">
+                                    <NavLink to="/hyrox" className={linkClasses}>
+                                        <span className="w-5 text-center">🏁</span>
+                                        <span>Hyrox</span>
+                                    </NavLink>
                                     <NavLink to="/health" className={linkClasses}>
                                         <span className="w-5 text-center">📊</span>
                                         <span>Översikt</span>
@@ -138,6 +142,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                     <NavLink to="/training" className={linkClasses}>
                                         <span className="w-5 text-center">🏋️</span>
                                         <span>Träning</span>
+                                    </NavLink>
+                                    <NavLink to="/pass" className={linkClasses}>
+                                        <span className="w-5 text-center">📚</span>
+                                        <span>Passbank</span>
                                     </NavLink>
                                     <NavLink to="/logg" className={linkClasses}>
                                         <span className="w-5 text-center">📜</span>
