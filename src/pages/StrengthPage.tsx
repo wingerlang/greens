@@ -936,7 +936,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
     const containerRef = React.useRef<HTMLDivElement>(null);
     const [pathData, setPathData] = React.useState<string>('');
     const dotRefs = React.useRef<Map<number, HTMLDivElement>>(new Map());
-    const [, forceUpdate] = React.useState({});
+    const [layoutTick, setLayoutTick] = React.useState(0);
 
     // Group workouts by week and FILL GAPS
     const weeklyData = React.useMemo(() => {
@@ -945,10 +945,32 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
         const weeks: Record<string, number> = {};
         const sortedWorkouts = [...workouts].sort((a, b) => a.date.localeCompare(b.date));
 
-        // Calculate bounds based on range
-        const now = new Date();
+        const getLocalMidnight = (d: string | Date) => {
+            const date = new Date(d);
+            if (typeof d === 'string' && d.length === 10) {
+                const [y, m, day] = d.split('-').map(Number);
+                return new Date(y, m - 1, day);
+            }
+            return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        };
+
+        const getDateKey = (date: Date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        const getSundayMidnight = (d: Date) => {
+            const res = new Date(d);
+            res.setDate(res.getDate() - res.getDay());
+            res.setHours(0, 0, 0, 0);
+            return res;
+        };
+
+        const now = getLocalMidnight(new Date());
         let minDate: Date;
-        let maxDate = new Date(sortedWorkouts[sortedWorkouts.length - 1].date);
+        let maxDate = getLocalMidnight(sortedWorkouts[sortedWorkouts.length - 1].date);
 
         if (range === '3m') {
             minDate = new Date(now);
@@ -960,33 +982,24 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
             minDate = new Date(now);
             minDate.setMonth(now.getMonth() - 12);
         } else if (range === '2025') {
-            minDate = new Date('2025-01-01');
-            const eoy = new Date('2025-12-31');
+            minDate = new Date(2025, 0, 1);
+            const eoy = new Date(2025, 11, 31);
             maxDate = now < eoy ? now : eoy;
         } else {
-            minDate = new Date(sortedWorkouts[0].date);
+            minDate = getLocalMidnight(sortedWorkouts[0].date);
         }
 
-        // Adjust minDate to start of week (Sunday)
-        minDate.setDate(minDate.getDate() - minDate.getDay());
-
-        // Ensure maxDate is at least today if we are looking at recent trends
-        if (range !== 'all' && range !== '2025' && maxDate < now) maxDate = now;
-
-        // Fill initially with 0s
-        let current = new Date(minDate);
+        const startOfFirstWeek = getSundayMidnight(minDate);
+        let current = new Date(startOfFirstWeek);
         while (current <= maxDate) {
-            const key = current.toISOString().split('T')[0];
-            weeks[key] = 0;
+            weeks[getDateKey(current)] = 0;
             current.setDate(current.getDate() + 7);
         }
 
-        // Add actual volume
         workouts.forEach(w => {
-            const date = new Date(w.date);
-            const weekStart = new Date(date);
-            weekStart.setDate(date.getDate() - date.getDay());
-            const weekKey = weekStart.toISOString().split('T')[0];
+            const date = getLocalMidnight(w.date);
+            const weekStart = getSundayMidnight(date);
+            const weekKey = getDateKey(weekStart);
             if (weeks[weekKey] !== undefined) {
                 weeks[weekKey] += w.totalVolume;
             }
@@ -996,7 +1009,6 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([week, volume]) => ({ week, volume }));
 
-        // Calculate rolling average (4 weeks)
         return data.map((d, idx) => {
             const prev4 = data.slice(Math.max(0, idx - 3), idx + 1);
             const avg = prev4.reduce((sum, item) => sum + item.volume, 0) / prev4.length;
@@ -1010,9 +1022,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
         const containerRect = containerRef.current.getBoundingClientRect();
         const pts: { x: number, y: number }[] = [];
 
-        // Find center of each bar relative to container
         weeklyData.forEach((d, i) => {
-            if (d.volume === 0) return; // Optional: include/exclude 0s. User wants "continuous line between points".
             const dot = dotRefs.current.get(i);
             if (dot) {
                 const rect = dot.getBoundingClientRect();
@@ -1027,11 +1037,11 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
         } else {
             setPathData('');
         }
-    }, [weeklyData, range, workouts]); // Re-run when data or range changes
+    }, [weeklyData, range, workouts, layoutTick]);
 
     // Update path on resize
     React.useEffect(() => {
-        const obs = new ResizeObserver(() => forceUpdate({}));
+        const obs = new ResizeObserver(() => setLayoutTick(t => t + 1));
         if (containerRef.current) obs.observe(containerRef.current);
         return () => obs.disconnect();
     }, []);
@@ -1087,16 +1097,42 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
 
                 {(() => {
                     const items: React.ReactNode[] = [];
+                    dotRefs.current.clear();
                     let gapBuffer: number[] = [];
+                    let pendingYearMarkers: { index: number, year: number }[] = [];
 
-                    const renderGap = (indices: number[]) => {
-                        if (indices.length === 0) return;
+                    const renderGap = (indices: number[], yearMarkers: { index: number, year: number }[]) => {
+                        if (indices.length === 0) {
+                            // If no gap but we have year markers, render them now
+                            yearMarkers.forEach(ym => {
+                                items.push(
+                                    <div key={`year-${ym.year}`} className="flex-shrink-0 w-[1px] h-full bg-blue-500/20 relative mx-0.5">
+                                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-black text-blue-500/50 px-1 bg-blue-500/10 rounded">{ym.year}</span>
+                                    </div>
+                                );
+                            });
+                            return;
+                        }
+                        
                         const hasBarsBefore = items.some(item => React.isValidElement(item) && String(item.key).includes('bar'));
-                        if (!hasBarsBefore) return;
+                        const isLeadingGap = !hasBarsBefore;
+                        const shouldSuppress = isLeadingGap && (range === 'all' || range === '12m' || range === '3m' || range === '6m');
+                        
+                        if (shouldSuppress) return;
 
                         if (indices.length >= 4) {
                             items.push(
                                 <div key={`break-${indices[0]}`} className="flex-shrink-0 flex flex-col items-center justify-center min-w-[32px] md:min-w-[40px] h-full border-x border-white/5 bg-slate-800/10 rounded-sm relative group/break">
+                                    {/* Year Markers inside long gaps */}
+                                    {yearMarkers.map(ym => {
+                                        const relIndex = ym.index - indices[0];
+                                        const leftPos = (relIndex / indices.length) * 100;
+                                        return (
+                                            <div key={`year-inner-${ym.year}`} className="absolute top-0 bottom-0 w-[1px] bg-blue-500/20 z-0" style={{ left: `${leftPos}%` }}>
+                                                <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-black text-blue-500/30 px-1 bg-blue-500/5 rounded">{ym.year}</span>
+                                            </div>
+                                        );
+                                    })}
                                     <div className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest whitespace-nowrap z-10">
                                         ← {indices.length} v →
                                     </div>
@@ -1120,7 +1156,17 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                 </div>
                             );
                         } else {
-                            indices.forEach(idx => {
+                            indices.forEach((idx, iInGap) => {
+                                // Check if a year marker belongs BEFORE this index
+                                const marker = yearMarkers.find(ym => ym.index === idx);
+                                if (marker) {
+                                    items.push(
+                                        <div key={`year-${marker.year}`} className="flex-shrink-0 w-[1px] h-full bg-blue-500/20 relative mx-0.5">
+                                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-black text-blue-500/50 px-1 bg-blue-500/10 rounded">{marker.year}</span>
+                                        </div>
+                                    );
+                                }
+
                                 const d = weeklyData[idx];
                                 const avgHeight = (d.rollingAvg / maxVolume) * 100;
                                 const dateObj = new Date(d.week);
@@ -1133,7 +1179,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                             className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend hover:bg-blue-400/5 transition-colors"
                                             style={{ bottom: `${avgHeight}%`, marginBottom: '16px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
                                         >
-                                            <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-4 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
+                                            <div className="opacity-0 group-hover/trend:opacity-100 group-hover/cross:hidden transition-opacity absolute bottom-full mb-4 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
                                                 <p className="text-[10px] font-black text-blue-400">Trend: {(d.rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
                                                 <p className="text-[8px] text-slate-500 font-bold">{weekLabel}</p>
                                             </div>
@@ -1159,20 +1205,15 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                         const isYearBreak = currYear !== prevYear;
 
                         if (isYearBreak) {
-                            renderGap(gapBuffer);
-                            gapBuffer = [];
-                            items.push(
-                                <div key={`year-${currYear}`} className="flex-shrink-0 w-[1px] h-full bg-blue-500/20 relative mx-0.5">
-                                    <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-black text-blue-500/50 px-1 bg-blue-500/10 rounded">{currYear}</span>
-                                </div>
-                            );
+                            pendingYearMarkers.push({ index: i, year: currYear });
                         }
 
                         if (volume === 0 && !isCurrentWeek) {
                             gapBuffer.push(i);
                         } else {
-                            renderGap(gapBuffer);
+                            renderGap(gapBuffer, pendingYearMarkers);
                             gapBuffer = [];
+                            pendingYearMarkers = [];
                             
                             const height = (volume / maxVolume) * 100;
                             const avgHeight = (rollingAvg / maxVolume) * 100;
@@ -1189,7 +1230,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                         className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend hover:bg-blue-400/5 transition-colors"
                                         style={{ bottom: `${avgHeight}%`, marginBottom: '16px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
                                     >
-                                        <div className="opacity-0 group-hover/trend:opacity-100 transition-opacity absolute bottom-full mb-4 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
+                                        <div className="opacity-0 group-hover/trend:opacity-100 group-hover/bar:hidden transition-opacity absolute bottom-full mb-4 bg-slate-900 border border-blue-500/30 p-2 rounded-lg shadow-2xl z-50 pointer-events-none whitespace-nowrap">
                                             <p className="text-[10px] font-black text-blue-400">Trend: {(rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
                                             <p className="text-[8px] text-slate-500 font-bold">{fullLabel}</p>
                                         </div>
@@ -1227,7 +1268,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                         }
                     });
 
-                    renderGap(gapBuffer);
+                    renderGap(gapBuffer, pendingYearMarkers);
                     return items;
                 })()}
             </div>
