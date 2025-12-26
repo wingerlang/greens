@@ -38,7 +38,10 @@ import {
     type IntakeLog,
     type UniversalActivity,
     type InjuryLog, // Phase 7
-    type RecoveryMetric // Phase 7
+    type RecoveryMetric, // Phase 7
+    type StrengthSession, // Phase 12
+    type StrengthMuscleGroup,
+    type StrengthExercise
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
@@ -132,6 +135,12 @@ interface DataContextType {
     updateTrainingCycle: (id: string, updates: Partial<TrainingCycle>) => void;
     deleteTrainingCycle: (id: string) => void;
 
+    // Strength Sessions CRUD
+    strengthSessions: StrengthSession[];
+    addStrengthSession: (session: Omit<StrengthSession, 'id'>) => StrengthSession;
+    updateStrengthSession: (id: string, updates: Partial<StrengthSession>) => void;
+    deleteStrengthSession: (id: string) => void;
+
     // Performance Goals CRUD
     performanceGoals: PerformanceGoal[];
     addGoal: (data: Omit<PerformanceGoal, 'id' | 'createdAt'>) => PerformanceGoal;
@@ -196,6 +205,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
     const [competitions, setCompetitions] = useState<Competition[]>([]);
     const [trainingCycles, setTrainingCycles] = useState<TrainingCycle[]>([]);
+    const [strengthSessions, setStrengthSessions] = useState<StrengthSession[]>([]);
     const [performanceGoals, setPerformanceGoals] = useState<PerformanceGoal[]>([]);
     const [coachConfig, setCoachConfig] = useState<CoachConfig | undefined>(undefined);
     const [plannedActivities, setPlannedActivities] = useState<PlannedActivity[]>([]);
@@ -269,6 +279,9 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.trainingCycles) {
             setTrainingCycles(data.trainingCycles || []);
         }
+        if (data.strengthSessions) {
+            setStrengthSessions(data.strengthSessions || []);
+        }
         if (data.performanceGoals) {
             setPerformanceGoals(data.performanceGoals || []);
         }
@@ -314,6 +327,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 weightEntries,
                 competitions,
                 trainingCycles,
+                strengthSessions,
                 performanceGoals,
                 coachConfig,
                 plannedActivities,
@@ -328,7 +342,7 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [
         foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities,
         userSettings, users, currentUser, isLoaded, dailyVitals, exerciseEntries,
-        weightEntries, competitions, trainingCycles, performanceGoals,
+        weightEntries, competitions, trainingCycles, strengthSessions, performanceGoals,
         coachConfig, plannedActivities,
         // Phase 8
         sleepSessions, intakeLogs, universalActivities,
@@ -680,6 +694,27 @@ export function DataProvider({ children }: DataProviderProps) {
         if (weightEntries.length === 0) return 70; // Default
         return weightEntries[0].weight; // Already sorted
     }, [weightEntries]);
+
+    // ============================================
+    // Strength Session CRUD (Phase 12)
+    // ============================================
+
+    const addStrengthSession = useCallback((session: Omit<StrengthSession, 'id'>): StrengthSession => {
+        const newSession: StrengthSession = {
+            ...session,
+            id: generateId(),
+        };
+        setStrengthSessions(prev => [...prev, newSession]);
+        return newSession;
+    }, []);
+
+    const updateStrengthSession = useCallback((id: string, updates: Partial<StrengthSession>): void => {
+        setStrengthSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    }, []);
+
+    const deleteStrengthSession = useCallback((id: string): void => {
+        setStrengthSessions(prev => prev.filter(s => s.id !== id));
+    }, []);
 
     const calculateBMR = useCallback((): number => {
         if (!currentUser?.settings) return 2000;
@@ -1147,6 +1182,11 @@ export function DataProvider({ children }: DataProviderProps) {
             });
         }, []),
 
+
+        strengthSessions,
+        addStrengthSession,
+        updateStrengthSession,
+        deleteStrengthSession,
 
         // Phase 8: Data Integration
         sleepSessions,

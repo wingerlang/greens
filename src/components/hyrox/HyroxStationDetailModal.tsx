@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HYROX_ENCYCLOPEDIA } from '../../utils/hyroxEncyclopedia.ts';
 import { HyroxStation } from '../../models/types.ts';
 
@@ -23,6 +23,14 @@ const fmtSec = (s: number) => {
 export function HyroxStationDetailModal({ stationId, onClose, stats }: Props) {
     const data = HYROX_ENCYCLOPEDIA[stationId];
     const [activeTab, setActiveTab] = useState<'info' | 'mechanics' | 'tips' | 'stats'>('stats');
+
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [onClose]);
 
     if (!data) return null;
 

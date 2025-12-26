@@ -90,20 +90,44 @@ export function HyroxDuoLab() {
         const cutoff = new Date();
         cutoff.setDate(now.getDate() - 60);
 
-        const recent = exerciseEntries.filter(e => new Date(e.date) >= cutoff);
+        // Ensure date parsing is safe (handle YYYY-MM-DD)
+        const recent = exerciseEntries.filter(e => {
+            if (!e.date) return false;
+            const d = new Date(e.date);
+            return d >= cutoff;
+        });
 
         const sessions = new Set(recent.map(e => e.date)).size;
-        const tonnage = recent.reduce((sum, e) => sum + (e.tonnage || 0), 0);
-        const runDist = recent.filter(e => e.type === 'running')
-            .reduce((sum, e) => sum + (e.distance || 0), 0);
 
-        // Improve Hyrox detection - look for notes or type 
-        const hyroxSessions = recent.filter(e =>
-            e.notes?.toLowerCase().includes('hyrox') ||
-            (e.type === 'strength' && (e.subType as any) === 'hyrox') // Casting if subType missing in type definition but present in data
-        ).length;
+        let tonnage = 0;
+        let runDist = 0;
+        let hyroxCount = 0;
 
-        return { sessions, tonnage: Math.round(tonnage / 1000) + 't', runDist: Math.round(runDist) + 'km', hyroxSessions };
+        recent.forEach(e => {
+            // Tonnage
+            if (e.tonnage) tonnage += e.tonnage;
+
+            // Running Distance (Include Runs and Hyrox runs if parsed)
+            if (e.distance && (e.type === 'running' || (e.type as any) === 'hyrox' || (e.notes && e.notes.toLowerCase().includes('run')))) {
+                runDist += e.distance;
+            }
+
+            // Hyrox Sessions
+            const isHyrox =
+                (e.type as any) === 'hyrox' ||
+                (e.notes || '').toLowerCase().includes('hyrox') ||
+                (e.subType as any) === 'hyrox' ||
+                ((e as any).title || '').toLowerCase().includes('hyrox'); // Check title too
+
+            if (isHyrox) hyroxCount++;
+        });
+
+        return {
+            sessions,
+            tonnage: tonnage > 1000 ? (Math.round(tonnage / 1000) + 't') : (tonnage + 'kg'),
+            runDist: Math.round(runDist) + 'km',
+            hyroxSessions: hyroxCount
+        };
     }, [exerciseEntries]);
 
     // User Stats (Mocked for now, in real app load from profile)

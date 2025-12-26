@@ -50,7 +50,7 @@ const ELITE_SPLITS = {
 const ALL_STATIONS: HyroxStation[] = ['ski_erg', 'sled_push', 'sled_pull', 'burpee_broad_jumps', 'rowing', 'farmers_carry', 'sandbag_lunges', 'wall_balls'];
 
 export function HyroxDashboard() {
-    const { exerciseEntries, coachConfig } = useData();
+    const { exerciseEntries, coachConfig, strengthSessions } = useData();
 
     const [selectedClass, setSelectedClass] = useState<HyroxClass>('MEN_OPEN');
     // Feature 7.0: 'pro_stats' tab
@@ -69,7 +69,7 @@ export function HyroxDashboard() {
     const isDoubles = selectedClass.includes('DOUBLES') || selectedClass === 'RELAY';
 
     // 1. Gather Data & 5k Form
-    const stats = useMemo(() => parseHyroxStats(exerciseEntries), [exerciseEntries]);
+    const stats = useMemo(() => parseHyroxStats(exerciseEntries, strengthSessions), [exerciseEntries, strengthSessions]);
     const recent5k = useMemo(() => {
         if (coachConfig?.userProfile?.recentRaceTime) {
             const { distance, timeSeconds } = coachConfig.userProfile.recentRaceTime;
@@ -545,15 +545,73 @@ export function HyroxDashboard() {
                             )}
                             {viewMode === 'goals' && (
                                 <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-6 animate-in fade-in slide-in-from-right-4">
-                                    {/* ... Goals UI ... */}
-                                    <div className="flex items-center gap-2 mb-6"> <span className="text-2xl">🎯</span> <h3 className="text-sm font-black text-white uppercase tracking-widest">Goal Pacing</h3> </div>
-                                    <div className="mb-6"> <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Sätt ditt mål (hh:mm)</label> <input type="text" value={goalTime} onChange={(e) => setGoalTime(e.target.value)} className="bg-slate-950 text-white font-mono text-xl p-3 rounded-xl border border-white/10 w-full focus:border-emerald-500 outline-none text-center" /> </div>
-                                    <div className="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/10 space-y-3">
-                                        <p className="text-xs text-slate-300 leading-relaxed"> För att klara <span className="text-white font-bold">{goalTime}</span> måste du snitta: </p>
-                                        <div className="flex justify-between items-center border-b border-white/5 pb-2"> <span className="text-xs text-slate-400">Löpning (x8)</span> <span className="font-mono text-emerald-400 font-bold">5:15 /km</span> </div>
-                                        <div className="flex justify-between items-center border-b border-white/5 pb-2"> <span className="text-xs text-slate-400">Roxzone (Total)</span> <span className="font-mono text-amber-400 font-bold">Max 4 min</span> </div>
-                                        <div className="flex justify-between items-center"> <span className="text-xs text-slate-400">Stationer (Snitt)</span> <span className="font-mono text-slate-200 font-bold">4:00 /stn</span> </div>
+                                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-white/5">
+                                        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-2xl border border-emerald-500/20">
+                                            🎯
+                                        </div>
+                                        <div>
+                                            <h3 className="text-sm font-black text-white uppercase tracking-widest">Goal Pacing <span className="text-emerald-500 text-[10px] ml-1">Calculator</span></h3>
+                                            <p className="text-[10px] text-slate-400">Vad krävs för att nå ditt mål?</p>
+                                        </div>
                                     </div>
+
+                                    <div className="mb-8">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Ditt Mål (hh:mm)</label>
+                                        <input
+                                            type="text"
+                                            value={goalTime}
+                                            onChange={(e) => setGoalTime(e.target.value)}
+                                            className="bg-slate-950 text-white font-mono text-3xl font-black p-4 rounded-xl border border-white/10 w-full focus:border-emerald-500 outline-none text-center tracking-tighter"
+                                        />
+                                    </div>
+
+                                    {/* Calculated Targets */}
+                                    {(() => {
+                                        const [h, m] = goalTime.split(':').map(Number);
+                                        if (isNaN(h) || isNaN(m)) return null;
+                                        const targetSeconds = (h * 60 * 60) + (m * 60);
+
+                                        // Simple Model: 50% Running, 45% Stations, 5% Roxzone (Hypothetical efficient race)
+                                        // Or better: use user's current ratio? 
+                                        // Let's use a standard "Balanced Athlete" distribution:
+                                        // Run: 54%, Stations: 40%, Rox: 6%
+                                        const targetRunTotal = targetSeconds * 0.54;
+                                        const targetStationTotal = targetSeconds * 0.40;
+                                        const targetRox = targetSeconds * 0.06;
+
+                                        const runPaceSec = targetRunTotal / 8; // per km
+                                        const stationAvg = targetStationTotal / 8; // per station
+
+                                        return (
+                                            <div className="grid gap-4">
+                                                <div className="bg-emerald-500/5 p-4 rounded-xl border border-emerald-500/10 space-y-4">
+                                                    <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-widest border-b border-emerald-500/10 pb-2">Kravspecifikation</h4>
+
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-slate-300">🏃 Löpsnitt (8x1km)</span>
+                                                        <span className="font-mono text-white font-bold">{fmtSec(runPaceSec)} /km</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-slate-300">🏋️ Stationssnitt</span>
+                                                        <span className="font-mono text-white font-bold">{fmtSec(stationAvg)} /stn</span>
+                                                    </div>
+                                                    <div className="flex justify-between items-center">
+                                                        <span className="text-xs text-slate-300">⚡ Roxzone (Total)</span>
+                                                        <span className="font-mono text-amber-400 font-bold max-w-[100px] text-right truncate">Max {Math.round(targetRox / 60)} min</span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-slate-950 p-4 rounded-xl border border-white/5">
+                                                    <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Split Strategy</h4>
+                                                    <div className="space-y-1 text-xs">
+                                                        <p className="text-slate-400"><strong className="text-white">Start:</strong> Gå ut i {fmtSec(runPaceSec - 5)} tempo första 2km.</p>
+                                                        <p className="text-slate-400"><strong className="text-white">Mitten:</strong> Håll {fmtSec(runPaceSec)} mellan Sled & Row.</p>
+                                                        <p className="text-slate-400"><strong className="text-white">Slutet:</strong> Överlev lunges, töm tanken på Wall Balls.</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -564,29 +622,41 @@ export function HyroxDashboard() {
                 {
                     viewMode === 'training' && (
                         <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                            <div className="flex justify-between items-center bg-slate-900/50 p-4 rounded-2xl border border-white/5">
+                                <div>
+                                    <h3 className="text-white font-bold">Övningsbank</h3>
+                                    <p className="text-xs text-slate-400">Sök bland alla dina övningar och Hyrox-stationer</p>
+                                </div>
+                                <a href="/exercises" className="px-5 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-bold uppercase tracking-widest transition-all">
+                                    Gå till databas
+                                </a>
+                            </div>
+
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {HYROX_WORKOUTS.map(workout => (
-                                    <div key={workout.id} className="bg-slate-900 border border-white/5 rounded-3xl p-6 hover:border-amber-500/30 transition-all group">
+                                    <div key={workout.id} className="bg-slate-900 border border-white/5 rounded-3xl p-6 hover:border-amber-500/30 transition-all group relative flex flex-col">
                                         <div className="flex justify-between items-start mb-4">
-                                            <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${workout.category === 'SIMULATION' ? 'bg-amber-500 text-black' :
-                                                workout.category === 'COMPROMISED' ? 'bg-rose-500 text-white' :
-                                                    'bg-slate-800 text-slate-300'
-                                                }`}>{workout.category}</span>
+                                            <div className="flex gap-2">
+                                                <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${workout.category === 'SIMULATION' ? 'bg-amber-500 text-black' :
+                                                    workout.category === 'COMPROMISED' ? 'bg-rose-500 text-white' :
+                                                        'bg-slate-800 text-slate-300'
+                                                    }`}>{workout.category}</span>
+                                            </div>
                                             <span className="text-[10px] text-slate-500 font-mono">{workout.duration}</span>
                                         </div>
                                         <h3 className="text-lg font-black text-white mb-2 group-hover:text-amber-500 transition-colors">{workout.title}</h3>
                                         <p className="text-xs text-slate-400 mb-4 line-clamp-2">{workout.description}</p>
 
-                                        <div className="bg-slate-950 p-4 rounded-xl border border-white/5 mb-4 space-y-1">
+                                        <div className="bg-slate-950 p-4 rounded-xl border border-white/5 mb-4 space-y-1 flex-1">
                                             {workout.structure.slice(0, 4).map((line, i) => (
                                                 <div key={i} className="text-[10px] text-slate-300 font-mono border-b border-white/5 last:border-0 pb-1 last:pb-0">{line}</div>
                                             ))}
                                             {workout.structure.length > 4 && <div className="text-[9px] text-slate-600 pt-1">... +{workout.structure.length - 4} more</div>}
                                         </div>
 
-                                        <button className="w-full py-2 bg-white/5 hover:bg-amber-500 hover:text-black rounded-lg text-xs font-bold uppercase tracking-widest transition-all">
+                                        <a href="/pass" className="w-full py-3 bg-white/5 hover:bg-amber-500 hover:text-black rounded-xl text-xs font-bold uppercase tracking-widest transition-all text-center block">
                                             Visa pass
-                                        </button>
+                                        </a>
                                     </div>
                                 ))}
                             </div>
@@ -598,6 +668,31 @@ export function HyroxDashboard() {
                     viewMode === 'guide' && (
                         <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="bg-slate-900 p-8 rounded-3xl border border-white/5">
+                                    <div className="text-4xl mb-4">🧟</div>
+                                    <h3 className="text-xl font-black text-white italic uppercase tracking-tighter mb-4">Compromised Running</h3>
+                                    <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                                        Det största misstaget är att starta för hårt efter en station.
+                                        Dina ben kommer vara stumma ("Compromised").
+                                    </p>
+                                    <ul className="space-y-2 text-sm text-slate-300">
+                                        <li>🚨 <strong className="text-white">Post-Sled:</strong> De första 200m kommer kännas som att du springer i lera. Acceptera det. Öka farten gradvis.</li>
+                                        <li>🚨 <strong className="text-white">Post-Lunges:</strong> "The Penguin Waddle". Ta korta steg. Försök inte sträcka ut steget förrän efter 400m.</li>
+                                    </ul>
+                                </div>
+
+                                <div className="bg-slate-900 p-8 rounded-3xl border border-white/5">
+                                    <div className="text-4xl mb-4">⚡</div>
+                                    <h3 className="text-xl font-black text-white italic uppercase tracking-tighter mb-4">Roxzone Mastery</h3>
+                                    <p className="text-slate-400 text-sm leading-relaxed mb-4">
+                                        Roxzone är där tävlingen förloras. Många går och dricker vatten. Gör inte det.
+                                    </p>
+                                    <ul className="space-y-2 text-sm text-slate-300">
+                                        <li>✅ <strong className="text-emerald-400">Gyllene Regeln:</strong> Ingen gåvila i Roxzone. Joggvila är 2x snabbare än gåvila.</li>
+                                        <li>✅ <strong className="text-emerald-400">Vatten:</strong> Drick ENDAST om du måste (max 2 ggr/lopp). Det kostar 10-15 sekunder per stopp.</li>
+                                    </ul>
+                                </div>
+
                                 <div className="bg-slate-900 border border-sky-500/20 rounded-3xl p-8 relative overflow-hidden">
                                     <div className="absolute top-0 right-0 p-4 opacity-10 text-9xl">🍌</div>
                                     <h3 className="text-xl font-black text-white mb-6 relative z-10">{DEEP_TIPS.nutrition.title}</h3>
@@ -625,39 +720,36 @@ export function HyroxDashboard() {
                                 </div>
                             </div>
                         </div>
-                    )
-                }
+                    )}
+                {viewMode === 'duo' && (
+                    <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                        <HyroxDuoLab />
+                    </div>
+                )}
 
-                {
-                    viewMode === 'duo' && (
-                        <div className="col-span-1 lg:col-span-2">
-                            <HyroxDuoLab />
-                        </div>
-                    )
-                }
-            </div >
+            </div>
+            {/* End of Main Grid */}
 
             {/* MODAL */}
-            {selectedStation && (
-                <HyroxStationDetailModal
-                    stationId={selectedStation}
-                    onClose={() => setSelectedStation(null)}
-                    stats={(() => {
-                        // Assuming 'stats' is a Record<HyroxStation, number[]> available in this scope
-                        // For example, it could be a state variable like:
-                        // const [stats, setStats] = useState<Record<HyroxStation, number[]>>({});
-                        // Or derived from props/context.
-                        const history = stats[selectedStation] || [];
-                        if (history.length === 0) return undefined;
-                        return {
-                            pb: Math.min(...history),
-                            history: history,
-                            average: Math.round(history.reduce((a, b) => a + b, 0) / (history.length || 1))
-                        };
-                    })()}
-                />
-            )}
+            {
+                selectedStation && (
+                    <HyroxStationDetailModal
+                        stationId={selectedStation}
+                        onClose={() => setSelectedStation(null)}
+                        stats={(() => {
+                            const history = stats[selectedStation] || [];
+                            if (history.length === 0) return undefined;
+                            return {
+                                pb: Math.min(...history),
+                                history: history,
+                                average: Math.round(history.reduce((a, b) => a + b, 0) / (history.length || 1))
+                            };
+                        })()}
+                    />
+                )
+            }
         </div >
+        // End of Main Container
     );
 }
 

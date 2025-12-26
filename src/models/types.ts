@@ -1069,6 +1069,8 @@ export interface AppData {
     // Phase 7: Physio-AI
     injuryLogs?: InjuryLog[];
     recoveryMetrics?: RecoveryMetric[];
+    // Phase 12: Strength Sessions
+    strengthSessions?: StrengthSession[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */
