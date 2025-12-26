@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { StrengthWorkout, StrengthLogImportResult, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName } from '../models/strengthTypes.ts';
+import { StrengthWorkout, StrengthWorkoutExercise, StrengthLogImportResult, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName } from '../models/strengthTypes.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 import { PRResearchCenter } from '../components/training/PRResearchCenter.tsx';
 
@@ -15,6 +15,9 @@ export function StrengthPage() {
     const [personalBests, setPersonalBests] = useState<PersonalBest[]>([]);
     const [stats, setStats] = useState<StrengthStats | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // Helpers
+    const slugify = (text: string) => text.trim().replace(/\s+/g, '-');
 
     const formatDateRelative = (dateStr: string) => {
         const daysAgo = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
@@ -35,20 +38,31 @@ export function StrengthPage() {
     const [importing, setImporting] = useState(false);
     const [importResult, setImportResult] = useState<StrengthLogImportResult | null>(null);
     const [selectedWorkout, setSelectedWorkout] = useState<StrengthWorkout | null>(null);
-    const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
     const [isResearchCenterOpen, setIsResearchCenterOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Sync selectedExercise with URL
-    useEffect(() => {
-        if (exerciseName) {
-            setSelectedExercise(decodeURIComponent(exerciseName));
-        } else {
-            setSelectedExercise(null);
-        }
-    }, [exerciseName]);
+    // Resolve selected exercise from URL (slug -> real name)
+    const selectedExercise = React.useMemo(() => {
+        if (!exerciseName) return null;
+        if (workouts.length === 0) return exerciseName.replace(/-/g, ' '); // Fallback
 
-    const handleCloseModal = useCallback(() => {
+        // Try to find exact match first (unlikely if slugified)
+        // Then try to match slugified names
+        for (const w of workouts) {
+            for (const e of w.exercises) {
+                if (slugify(e.exerciseName) === exerciseName) {
+                    return e.exerciseName;
+                }
+            }
+        }
+
+        // Final fallback: just deslugify with spaces
+        return exerciseName.replace(/-/g, ' ');
+    }, [exerciseName, workouts]);
+
+    // Handle modal close
+    const handleCloseExercise = useCallback(() => {
         navigate('/styrka');
     }, [navigate]);
 
@@ -502,7 +516,7 @@ export function StrengthPage() {
                                                 <div className="flex-1 min-w-0">
                                                     <h3
                                                         className="text-sm font-black text-blue-400 uppercase truncate pr-4 cursor-pointer hover:text-blue-300 transition-colors"
-                                                        onClick={() => navigate(`/styrka/${encodeURIComponent(exName)}`)}
+                                                        onClick={() => navigate(`/styrka/${slugify(exName)}`)}
                                                         title={exName}
                                                     >
                                                         {exName}
@@ -522,7 +536,7 @@ export function StrengthPage() {
                                                     <div
                                                         key={singlePb.id}
                                                         className={`cursor-pointer pb-3 ${idx < Math.min(pbs.length, 3) - 1 ? 'border-b border-white/5' : ''}`}
-                                                        onClick={() => navigate(`/styrka/${encodeURIComponent(singlePb.exerciseName)}`)}
+                                                        onClick={() => navigate(`/styrka/${slugify(singlePb.exerciseName)}`)}
                                                     >
                                                         <div className="flex justify-between items-center">
                                                             <div>
@@ -544,7 +558,7 @@ export function StrengthPage() {
 
                                                 {pbs.length > 3 && (
                                                     <button
-                                                        onClick={() => navigate(`/styrka/${encodeURIComponent(exName)}`)}
+                                                        onClick={() => navigate(`/styrka/${slugify(exName)}`)}
                                                         className="w-full text-center py-2 text-[9px] text-slate-600 hover:text-white font-black uppercase transition-colors"
                                                     >
                                                         + {pbs.length - 3} fler rekord i historiken
@@ -668,7 +682,7 @@ export function StrengthPage() {
                 filteredWorkouts.length > 0 && (
                     <section>
                         <h2 className="text-xl font-bold text-white mb-4">🔥 Mest tränade övningar</h2>
-                        <TopExercisesTable workouts={filteredWorkouts} onSelectExercise={(name) => navigate(`/styrka/${encodeURIComponent(name)}`)} />
+                        <TopExercisesTable workouts={filteredWorkouts} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} />
                     </section>
                 )
             }
@@ -696,17 +710,16 @@ export function StrengthPage() {
                 )}
             </section>
 
-            {
-                selectedExercise && (
-                    <ExerciseDetailModal
-                        exerciseName={selectedExercise}
-                        workouts={filteredWorkouts}
-                        onClose={handleCloseModal}
-                        onSelectWorkout={setSelectedWorkout}
-                        isWorkoutModalOpen={!!selectedWorkout}
-                    />
-                )
-            }
+            {/* Exercise Detail Modal */}
+            {selectedExercise && (
+                <ExerciseDetailModal
+                    exerciseName={selectedExercise}
+                    workouts={workouts}
+                    onClose={handleCloseExercise}
+                    onSelectWorkout={w => setSelectedWorkout(w)}
+                    isWorkoutModalOpen={!!selectedWorkout}
+                />
+            )}
 
             {/* Workout Detail Modal - last to be on top */}
             {
@@ -716,7 +729,7 @@ export function StrengthPage() {
                         onClose={() => setSelectedWorkout(null)}
                         onSelectExercise={(name) => {
                             setSelectedWorkout(null);
-                            navigate(`/styrka/${encodeURIComponent(name)}`);
+                            navigate(`/styrka/${slugify(name)}`);
                         }}
                         pbs={filteredPBs}
                     />
@@ -835,80 +848,102 @@ function WorkoutDetailModal({
                     <p className="text-sm text-slate-400">Kroppsvikt: {workout.bodyWeight} kg</p>
                 )}
 
-                {/* Exercises */}
                 <div className="space-y-4">
-                    {workout.exercises.map((exercise, i) => (
-                        <div key={i} className="bg-slate-800/30 rounded-xl p-4">
-                            <div className="flex justify-between items-center mb-3">
-                                <button
-                                    onClick={() => onSelectExercise?.(exercise.exerciseName)}
-                                    className="font-bold text-white hover:text-blue-400 hover:underline transition-colors"
-                                >
-                                    {exercise.exerciseName}
-                                </button>
-                                <span className="text-xs text-emerald-400">{exercise.totalVolume ? `${(exercise.totalVolume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} ton` : ''}</span>
-                            </div>
-                            <div className="space-y-1">
-                                <div className="grid grid-cols-5 gap-2 text-[10px] text-slate-500 font-black uppercase mb-2 px-3 border-b border-white/5 pb-1">
-                                    <span className="pl-1">Set</span>
-                                    <span>Reps</span>
-                                    <span>Vikt</span>
-                                    <span className="text-right">e1RM</span>
-                                    <span className="text-right pr-2">Volym</span>
-                                </div>
-                                {(() => {
-                                    const mappedSets = exercise.sets.map(s => {
-                                        const isBW = s.isBodyweight || s.weight === 0;
-                                        const calcWeight = isBW ? (s.extraWeight || 0) : s.weight;
-                                        const est1RM = calculate1RM(calcWeight, s.reps);
-                                        return { ...s, est1RM };
+                    {(() => {
+                        const aggregated: Record<string, StrengthWorkoutExercise> = {};
+                        workout.exercises.forEach(ex => {
+                            const exId = ex.exerciseId;
+                            if (!aggregated[exId]) {
+                                aggregated[exId] = { ...ex, sets: [...ex.sets] };
+                            } else {
+                                const current = aggregated[exId];
+                                const baseSetCount = current.sets.length;
+                                ex.sets.forEach((s, idx) => {
+                                    current.sets.push({
+                                        ...s,
+                                        setNumber: baseSetCount + idx + 1
                                     });
-                                    const maxEst1RM = Math.max(...mappedSets.map(s => s.est1RM));
+                                });
+                                current.totalVolume = (current.totalVolume || 0) + (ex.totalVolume || 0);
+                                if (ex.topSet && (!current.topSet || ex.topSet.weight > current.topSet.weight)) {
+                                    current.topSet = ex.topSet;
+                                }
+                            }
+                        });
 
-                                    return mappedSets.map((set, j) => {
-                                        const isPR = pbs.some(pb =>
-                                            pb.workoutId === workout.id &&
-                                            pb.exerciseName === exercise.exerciseName &&
-                                            pb.weight === set.weight &&
-                                            pb.reps === set.reps
-                                        );
-                                        const isBest1eRM = maxEst1RM > 0 && set.est1RM === maxEst1RM;
-                                        const est1RM = set.est1RM;
+                        return Object.values(aggregated).map((exercise, i) => (
+                            <div key={i} className="bg-slate-800/30 rounded-xl p-4">
+                                <div className="flex justify-between items-center mb-3">
+                                    <button
+                                        onClick={() => onSelectExercise?.(exercise.exerciseName)}
+                                        className="font-bold text-white hover:text-blue-400 hover:underline transition-colors text-left"
+                                    >
+                                        {exercise.exerciseName}
+                                    </button>
+                                    <span className="text-xs text-emerald-400">{exercise.totalVolume ? `${(exercise.totalVolume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} ton` : ''}</span>
+                                </div>
+                                <div className="space-y-1">
+                                    <div className="grid grid-cols-5 gap-2 text-[10px] text-slate-500 font-black uppercase mb-2 px-3 border-b border-white/5 pb-1">
+                                        <span className="pl-1">Set</span>
+                                        <span>Reps</span>
+                                        <span>Vikt</span>
+                                        <span className="text-right">e1RM</span>
+                                        <span className="text-right pr-2">Volym</span>
+                                    </div>
+                                    {(() => {
+                                        const mappedSets = exercise.sets.map(s => {
+                                            const isBW = s.isBodyweight || s.weight === 0;
+                                            const calcWeight = isBW ? (s.extraWeight || 0) : s.weight;
+                                            const est1RM = calculate1RM(calcWeight, s.reps);
+                                            return { ...s, est1RM };
+                                        });
+                                        const maxEst1RM = Math.max(...mappedSets.map(s => s.est1RM));
 
-                                        return (
-                                            <div
-                                                key={j}
-                                                className={`grid grid-cols-5 gap-2 text-xs py-1.5 px-3 rounded-lg border border-transparent transition-colors ${isPR ? 'bg-amber-500/20 border-amber-500/30' : 'hover:bg-slate-800/40'}`}
-                                            >
-                                                <span className="text-slate-400 flex items-center">{set.setNumber}</span>
-                                                <span className="text-white font-bold flex items-center">{set.reps} st</span>
-                                                <div className="flex items-center gap-1.5 group/set relative truncate">
-                                                    <span className="text-white truncate">
-                                                        {set.isBodyweight || set.weight === 0 ? (
-                                                            <span className="bg-slate-800 text-slate-400 px-1 rounded text-[10px] py-0.5">KV{set.extraWeight ? `+${set.extraWeight}` : ''}</span>
-                                                        ) : (
-                                                            `${set.weight} kg`
+                                        return mappedSets.map((set, j) => {
+                                            const isPR = pbs.some(pb =>
+                                                pb.workoutId === workout.id &&
+                                                pb.exerciseName === exercise.exerciseName &&
+                                                pb.weight === set.weight &&
+                                                pb.reps === set.reps
+                                            );
+                                            const isBest1eRM = maxEst1RM > 0 && set.est1RM === maxEst1RM;
+                                            const est1RM = set.est1RM;
+
+                                            return (
+                                                <div
+                                                    key={j}
+                                                    className={`grid grid-cols-5 gap-2 text-xs py-1.5 px-3 rounded-lg border border-transparent transition-colors ${isPR ? 'bg-amber-500/20 border-amber-500/30' : 'hover:bg-slate-800/40'}`}
+                                                >
+                                                    <span className="text-slate-400 flex items-center">{set.setNumber}</span>
+                                                    <span className="text-white font-bold flex items-center">{set.reps} st</span>
+                                                    <div className="flex items-center gap-1.5 group/set relative truncate">
+                                                        <span className="text-white truncate">
+                                                            {set.isBodyweight || set.weight === 0 ? (
+                                                                <span className="bg-slate-800 text-slate-400 px-1 rounded text-[10px] py-0.5">KV{set.extraWeight ? `+${set.extraWeight}` : ''}</span>
+                                                            ) : (
+                                                                `${set.weight} kg`
+                                                            )}
+                                                        </span>
+                                                        {isPR && (
+                                                            <span className="text-amber-500 text-[10px] flex-shrink-0" title="Personbästa!">⭐</span>
                                                         )}
-                                                    </span>
-                                                    {isPR && (
-                                                        <span className="text-amber-500 text-[10px] flex-shrink-0" title="Personbästa!">⭐</span>
-                                                    )}
-                                                    {isBest1eRM && (
-                                                        <span className="text-cyan-400 text-[10px] flex-shrink-0" title="Passets högsta 1eRM (kvalitetstopp!)">⚡</span>
-                                                    )}
+                                                        {isBest1eRM && (
+                                                            <span className="text-cyan-400 text-[10px] flex-shrink-0" title="Passets högsta 1eRM (kvalitetstopp!)">⚡</span>
+                                                        )}
+                                                    </div>
+                                                    <span className="text-slate-500 flex items-center justify-end font-mono">{est1RM}<span className="text-[9px] ml-0.5 opacity-40">kg</span></span>
+                                                    <span className="text-slate-400 flex items-center justify-end font-mono">{Math.round(set.reps * (set.isBodyweight ? (workout.bodyWeight || 0) + (set.extraWeight || 0) : set.weight))}<span className="text-[9px] ml-0.5 opacity-50">kg</span></span>
                                                 </div>
-                                                <span className="text-slate-500 flex items-center justify-end font-mono">{est1RM}<span className="text-[9px] ml-0.5 opacity-40">kg</span></span>
-                                                <span className="text-slate-400 flex items-center justify-end font-mono">{Math.round(set.reps * (set.isBodyweight ? (workout.bodyWeight || 0) + (set.extraWeight || 0) : set.weight))}<span className="text-[9px] ml-0.5 opacity-50">kg</span></span>
-                                            </div>
-                                        );
-                                    })
-                                })()}
+                                            );
+                                        });
+                                    })()}
+                                </div>
+                                {exercise.topSet && (
+                                    <p className="text-xs text-amber-400 mt-2">⭐ Top set: {exercise.topSet.reps} × {exercise.topSet.weight} kg</p>
+                                )}
                             </div>
-                            {exercise.topSet && (
-                                <p className="text-xs text-amber-400 mt-2">⭐ Top set: {exercise.topSet.reps} × {exercise.topSet.weight} kg</p>
-                            )}
-                        </div>
-                    ))}
+                        ));
+                    })()}
                 </div>
 
                 {/* Close Button */}
@@ -1113,11 +1148,11 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                             });
                             return;
                         }
-                        
+
                         const hasBarsBefore = items.some(item => React.isValidElement(item) && String(item.key).includes('bar'));
                         const isLeadingGap = !hasBarsBefore;
                         const shouldSuppress = isLeadingGap && (range === 'all' || range === '12m' || range === '3m' || range === '6m');
-                        
+
                         if (shouldSuppress) return;
 
                         if (indices.length >= 4) {
@@ -1140,14 +1175,14 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                         const d = weeklyData[idx];
                                         const avgHeight = (d.rollingAvg / maxVolume) * 100;
                                         return (
-                                            <div 
+                                            <div
                                                 key={`break-dot-${idx}`}
                                                 ref={el => { if (el) dotRefs.current.set(idx, el); }}
                                                 className="absolute w-1 h-1 pointer-events-none opacity-0"
-                                                style={{ 
-                                                    bottom: `${avgHeight}%`, 
-                                                    marginBottom: '16px', 
-                                                    left: `${(step / (indices.length - 1 || 1)) * 100}%` 
+                                                style={{
+                                                    bottom: `${avgHeight}%`,
+                                                    marginBottom: '16px',
+                                                    left: `${(step / (indices.length - 1 || 1)) * 100}%`
                                                 }}
                                             />
                                         );
@@ -1171,7 +1206,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                 const avgHeight = (d.rollingAvg / maxVolume) * 100;
                                 const dateObj = new Date(d.week);
                                 const weekLabel = dateObj.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
-                                
+
                                 items.push(
                                     <div key={`cross-${idx}`} className="flex-1 min-w-[2px] max-w-[40px] flex flex-col items-center h-full justify-end group/cross relative">
                                         <div
@@ -1214,7 +1249,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                             renderGap(gapBuffer, pendingYearMarkers);
                             gapBuffer = [];
                             pendingYearMarkers = [];
-                            
+
                             const height = (volume / maxVolume) * 100;
                             const avgHeight = (rollingAvg / maxVolume) * 100;
                             const weekLabel = dateObj.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
@@ -1237,11 +1272,11 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                         <div className="w-1.5 h-1.5 rounded-full bg-blue-400 opacity-20 shadow-[0_0_8px_rgba(59,130,246,0.4)]" />
                                     </div>
 
-                                    <div 
+                                    <div
                                         className="absolute z-50 opacity-0 group-hover/bar:opacity-100 transition-all pointer-events-none whitespace-nowrap bg-slate-900 border border-white/10 p-2 rounded-lg shadow-2xl"
-                                        style={{ 
-                                            bottom: `${height}%`, 
-                                            marginBottom: '24px', 
+                                        style={{
+                                            bottom: `${height}%`,
+                                            marginBottom: '24px',
                                             left: '50%',
                                             transform: 'translateX(-50%)'
                                         }}
@@ -1250,7 +1285,7 @@ function WeeklyVolumeBars({ workouts, setStartDate, setEndDate }: {
                                         <p className="text-[10px] font-bold text-emerald-400">{(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })} ton</p>
                                         <p className="text-[8px] text-blue-400 font-bold">Trend: {(rollingAvg / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</p>
                                     </div>
-                                    
+
                                     <span className={`text-[7px] font-black transition-opacity mb-1 ${isCurrentWeek || isTop ? 'opacity-100' : 'text-slate-500 opacity-0 group-hover/bar:opacity-100'} ${isTop ? 'text-white' : 'text-emerald-400/80'}`}>
                                         {(volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}
                                     </span>
@@ -1559,19 +1594,34 @@ function ExerciseDetailModal({
 
     const [viewMode, setViewMode] = React.useState<'history' | 'prs'>('history');
 
+    // Safe slugify helper
+    const slugify = (text: string) => text.trim().replace(/\s+/g, '-');
+
+    // Deslugify logic (try to match against real names)
+    // We don't have a list of all exercises here easily, BUT we can infer from properExerciseName passed in props OR derived
+
+    // Actually, ExerciseDetailModal receives the REAL name. The logic for decoding URL should be in the parent.
+    // So here we trust `exerciseName` is the real name.
+
     // Get all instances of this exercise across workouts
     const exerciseHistory = React.useMemo(() => {
         const history: { date: string; sets: number; reps: number; maxWeight: number; volume: number; est1RM: number; workout: StrengthWorkout }[] = [];
 
         workouts.forEach(w => {
-            const ex = w.exercises.find(e => e.exerciseName === exerciseName);
-            if (ex) {
-                const maxWeight = Math.max(...ex.sets.map(s => s.weight));
-                const totalReps = ex.sets.reduce((sum, s) => sum + s.reps, 0);
-                const volume = ex.totalVolume || 0;
+            // Robust matching: Check both exact and normalized
+            const exerciseEntries = w.exercises.filter(e =>
+                e.exerciseName === exerciseName ||
+                normalizeExerciseName(e.exerciseName) === normalizeExerciseName(exerciseName)
+            );
+
+            if (exerciseEntries.length > 0) {
+                const allSets = exerciseEntries.flatMap(e => e.sets);
+                const maxWeight = Math.max(...allSets.map(s => s.weight));
+                const totalReps = allSets.reduce((sum, s) => sum + s.reps, 0);
+                const volume = exerciseEntries.reduce((sum, e) => sum + (e.totalVolume || 0), 0);
 
                 // Find best set for 1RM estimate (bodyweight aware)
-                const est1RMs = ex.sets.map(s => {
+                const est1RMs = allSets.map(s => {
                     const isBW = s.isBodyweight || s.weight === 0;
                     const calcWeight = isBW ? (s.extraWeight || 0) : s.weight;
                     return calculate1RM(calcWeight, s.reps);
@@ -1580,7 +1630,7 @@ function ExerciseDetailModal({
 
                 history.push({
                     date: w.date,
-                    sets: ex.sets.length,
+                    sets: allSets.length,
                     reps: totalReps,
                     maxWeight,
                     volume,
@@ -1600,10 +1650,18 @@ function ExerciseDetailModal({
         let lastPrDate: Date | null = null;
 
         exerciseHistory.forEach(h => {
-            const ex = h.workout.exercises.find(e => e.exerciseName === exerciseName);
-            if (!ex) return;
+            // Robust matching: Check both exact and normalized
+            const exerciseEntries = h.workout.exercises.filter(e =>
+                e.exerciseName === exerciseName ||
+                normalizeExerciseName(e.exerciseName) === normalizeExerciseName(exerciseName)
+            );
 
-            ex.sets.forEach(set => {
+            if (exerciseEntries.length === 0) return;
+
+            // Flatten all sets from all entries in correct order
+            const allSets = exerciseEntries.flatMap(e => e.sets);
+
+            allSets.forEach(set => {
                 if (set.weight > currentMax) {
                     const currentDate = new Date(h.date);
                     let daysSinceLast: number | undefined;

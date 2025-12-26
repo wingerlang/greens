@@ -172,7 +172,11 @@ function parseExerciseSet(values: string[], ctx: ParserContext) {
     const exercise = ctx.exercises.get(normalizedName)!;
 
     // Check if we need to start a new exercise group in workout
-    if (!ctx.currentExercise || ctx.currentExercise.exerciseName !== exerciseName) {
+    const existingExercise = ctx.currentWorkout.exercises.find(ex => ex.exerciseId === exercise.id);
+
+    if (existingExercise) {
+        ctx.currentExercise = existingExercise;
+    } else {
         ctx.currentExercise = {
             exerciseId: exercise.id,
             exerciseName: exerciseName,
@@ -184,6 +188,10 @@ function parseExerciseSet(values: string[], ctx: ParserContext) {
     // Parse the set data
     // Format varies: Set,1,reps,25,weight,30 OR Set,1,reps,25,bodyweight,79.2,extraWeight,0
     const set = parseSetData(values, ctx.currentWorkout.bodyWeight);
+
+    // Ensure set numbers are sequential if we are merging
+    set.setNumber = ctx.currentExercise.sets.length + 1;
+
     ctx.currentExercise.sets.push(set);
 
     // Track personal bests
