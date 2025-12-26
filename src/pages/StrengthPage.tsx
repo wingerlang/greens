@@ -9,12 +9,15 @@ import { TrainingBreaks } from '../components/training/TrainingBreaks.tsx';
 import { TopExercisesTable } from '../components/training/TopExercisesTable.tsx';
 import { ExerciseDetailModal } from '../components/training/ExerciseDetailModal.tsx';
 import { WorkoutDetailModal } from '../components/training/WorkoutDetailModal.tsx';
+import { Tabs } from '../components/common/Tabs.tsx';
+import { CollapsibleSection } from '../components/common/CollapsibleSection.tsx';
+import { TrainingTimeStats } from '../components/training/TrainingTimeStats.tsx';
 
 // ============================================
 // Strength Page - Main Component
 // ============================================
 
-export default function StrengthPage() {
+export function StrengthPage() {
     const navigate = useNavigate();
     const [workouts, setWorkouts] = useState<StrengthWorkout[]>([]);
     const [stats, setStats] = useState<StrengthStats | null>(null);
@@ -483,130 +486,111 @@ export default function StrengthPage() {
                 </div>
             )}
 
+            {/* Training Time Analytics */}
+            <section className="mt-8">
+                <TrainingTimeStats workouts={filteredWorkouts} days={hasDateFilter ? 365 : 30} />
+            </section>
+
             {/* Personal Bests */}
-            {filteredPBs.length > 0 && (
-                <section>
-                    <h2 className="text-xl font-bold text-white mb-4">🏆 Personliga Rekord (1RM & 1eRM)</h2>
+            {/* Tabs for PBs and Trends */}
+            <section className="mt-8">
+                <Tabs
+                    items={[
+                        {
+                            id: 'latest-records',
+                            label: 'Senaste Rekord',
+                            icon: '🏆',
+                            content: (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    {(() => {
+                                        // Group PBs by exerciseName
+                                        const grouped = filteredPBs.reduce((acc, pb) => {
+                                            const key = pb.exerciseName;
+                                            if (!acc[key]) acc[key] = [];
+                                            acc[key].push(pb);
+                                            return acc;
+                                        }, {} as Record<string, PersonalBest[]>);
 
-                    {/* PB Grouped Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {(() => {
-                            // Group PBs by exerciseName
-                            const grouped = filteredPBs.reduce((acc, pb) => {
-                                const key = pb.exerciseName;
-                                if (!acc[key]) acc[key] = [];
-                                acc[key].push(pb);
-                                return acc;
-                            }, {} as Record<string, PersonalBest[]>);
+                                        // Sort groups by the date of their most recent PR
+                                        return Object.values(grouped)
+                                            .sort((a, b) => b[0].date.localeCompare(a[0].date))
+                                            .slice(0, 12)
+                                            .map(pbs => {
+                                                const latestPb = pbs[0];
+                                                const exName = latestPb.exerciseName;
 
-                            // Sort groups by the date of their most recent PR
-                            return Object.values(grouped)
-                                .sort((a, b) => b[0].date.localeCompare(a[0].date))
-                                .slice(0, 12) // Show more groups now that they are exercise-based
-                                .map(pbs => {
-                                    const latestPb = pbs[0];
-                                    const exName = latestPb.exerciseName;
-
-                                    return (
-                                        <div
-                                            key={exName}
-                                            className={`bg-slate-900/40 border border-white/5 rounded-2xl p-5 transition-all hover:border-blue-500/30 hover:bg-slate-900/60 group relative overflow-hidden`}
-                                        >
-                                            {/* Glow effect */}
-                                            <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-500/5 blur-2xl group-hover:bg-blue-500/10 transition-all rounded-full" />
-
-                                            <div className="mb-4 flex justify-between items-start relative">
-                                                <div className="flex-1 min-w-0">
-                                                    <h3
-                                                        className="text-sm font-black text-blue-400 uppercase truncate pr-4 cursor-pointer hover:text-blue-300 transition-colors"
-                                                        onClick={() => navigate(`/styrka/${slugify(exName)}`)}
-                                                        title={exName}
-                                                    >
-                                                        {exName}
-                                                    </h3>
-                                                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                                        Senaste: {latestPb.date}
-                                                        <span className="ml-1 opacity-60">({formatDateRelative(latestPb.date)})</span>
-                                                    </p>
-                                                </div>
-                                                <span className="bg-slate-800 text-slate-500 text-[9px] font-black px-2 py-1 rounded-full border border-white/5">
-                                                    {pbs.length} REKORD
-                                                </span>
-                                            </div>
-
-                                            <div className="space-y-4 relative">
-                                                {pbs.slice(0, 3).map((singlePb, idx) => (
+                                                return (
                                                     <div
-                                                        key={singlePb.id}
-                                                        className={`cursor-pointer pb-3 ${idx < Math.min(pbs.length, 3) - 1 ? 'border-b border-white/5' : ''}`}
-                                                        onClick={() => navigate(`/styrka/${slugify(singlePb.exerciseName)}`)}
+                                                        key={exName}
+                                                        className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 transition-all hover:border-blue-500/30 hover:bg-slate-900/60 group relative overflow-hidden cursor-pointer"
+                                                        onClick={() => navigate(`/styrka/${slugify(exName)}`)}
                                                     >
-                                                        <div className="flex justify-between items-center">
-                                                            <div>
-                                                                <div className="flex items-center gap-2">
-                                                                    <p className="text-xl font-black text-white group-hover:text-amber-400 transition-colors">{singlePb.weight} kg</p>
-                                                                    {singlePb.isHighestWeight && <span className="text-[8px] bg-emerald-500/10 text-emerald-500 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">NY TOPP</span>}
-                                                                </div>
-                                                                <p className="text-[10px] text-slate-500 font-bold mt-0.5">
-                                                                    {singlePb.reps} reps • {singlePb.estimated1RM} kg e1RM
+                                                        <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-500/5 blur-2xl group-hover:bg-blue-500/10 transition-all rounded-full" />
+                                                        <div className="flex justify-between items-start mb-3 relative">
+                                                            <div className="flex-1 min-w-0">
+                                                                <h3 className="text-sm font-black text-blue-400 uppercase truncate pr-4" title={exName}>
+                                                                    {exName}
+                                                                </h3>
+                                                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                                                    Senaste: {latestPb.date}
                                                                 </p>
                                                             </div>
-                                                            <div className="text-right">
-                                                                <p className="text-[9px] text-slate-600 font-black uppercase">{idx === 0 ? 'Aktuellt' : 'Tidigare'}</p>
-                                                                <p className="text-[9px] text-slate-500 font-mono">{singlePb.date.split('-').slice(1).join('-')}</p>
-                                                            </div>
+                                                            <span className="bg-slate-800 text-slate-500 text-[9px] font-black px-2 py-1 rounded-full border border-white/5">
+                                                                {pbs.length} REKORD
+                                                            </span>
+                                                        </div>
+                                                        <div className="space-y-2 relative">
+                                                            {pbs.slice(0, 3).map((singlePb, idx) => (
+                                                                <div key={singlePb.id} className="flex justify-between items-center text-xs">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className={`font-black ${idx === 0 ? 'text-white text-lg' : 'text-slate-400'}`}>{singlePb.weight} kg</span>
+                                                                        {singlePb.isHighestWeight && <span className="text-[8px] bg-emerald-500/10 text-emerald-500 px-1 rounded font-bold uppercase">TOPP</span>}
+                                                                    </div>
+                                                                    <div className="text-right">
+                                                                        <span className="text-slate-500">{singlePb.reps} reps</span>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
                                                         </div>
                                                     </div>
-                                                ))}
-
-                                                {pbs.length > 3 && (
-                                                    <button
-                                                        onClick={() => navigate(`/styrka/${slugify(exName)}`)}
-                                                        className="w-full text-center py-2 text-[9px] text-slate-600 hover:text-white font-black uppercase transition-colors"
-                                                    >
-                                                        + {pbs.length - 3} fler rekord i historiken
-                                                    </button>
-                                                )}
-                                            </div>
-
+                                                );
+                                            });
+                                    })()}
+                                </div>
+                            )
+                        },
+                        {
+                            id: 'trend-line',
+                            label: 'Trend',
+                            icon: '📈',
+                            content: (
+                                <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 overflow-hidden">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <h3 className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Övergripande rekord-trend</h3>
+                                            <p className="text-[9px] text-slate-600 mt-1 uppercase font-bold italic">Din totala styrka (Summan av alla personbästa 1eRM)</p>
                                         </div>
-                                    );
-                                });
-                        })()}
-                    </div>
-
-                    {/* Aggregate Trend Line */}
-                    <div className="mt-6 bg-slate-900/40 border border-white/5 rounded-2xl p-5 overflow-hidden group">
-                        <div className="flex items-center justify-between mb-4">
-                            <div>
-                                <h3 className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Övergripande rekord-trend</h3>
-                                <p className="text-[9px] text-slate-600 mt-1 uppercase font-bold italic">Din totala styrka (Summan av alla personbästa 1eRM)</p>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <span className="flex items-center gap-1.5 text-[10px] text-amber-500 font-bold uppercase">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_5px_rgba(245,158,11,0.5)] border border-white/20"></span>
-                                    Totalstyrka (1RM index)
-                                </span>
-                            </div>
-                        </div>
-                        <div className="h-24 w-full relative">
-                            <RecordTrendLine pbs={filteredPBs} />
-                        </div>
-                    </div>
-                </section>
-            )}
-
-            {/* Weekly Volume Trend */}
-            {
-                filteredWorkouts.length > 0 && (
-                    <section>
-                        <h2 className="text-xl font-bold text-white mb-4">📈 Volym per vecka</h2>
-                        <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
-                            <WeeklyVolumeChart workouts={workouts} setStartDate={setStartDate} setEndDate={setEndDate} />
-                        </div>
-                    </section>
-                )
-            }
+                                    </div>
+                                    <div className="h-48 w-full relative">
+                                        <RecordTrendLine pbs={filteredPBs} />
+                                    </div>
+                                </div>
+                            )
+                        },
+                        {
+                            id: 'volume-overview',
+                            label: 'Volym-Översikt',
+                            icon: '📊',
+                            content: (
+                                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                                    <h2 className="text-xl font-bold text-white mb-4">📈 Volym per vecka</h2>
+                                    <WeeklyVolumeChart workouts={workouts} setStartDate={setStartDate} setEndDate={setEndDate} />
+                                </div>
+                            )
+                        }
+                    ]}
+                />
+            </section>
 
             {/* Training Quality & Continuity */}
             <div className="space-y-12">
@@ -683,16 +667,25 @@ export default function StrengthPage() {
             {/* Top Exercises by Volume */}
             {
                 filteredWorkouts.length > 0 && (
-                    <section>
-                        <h2 className="text-xl font-bold text-white mb-4">🔥 Mest tränade övningar</h2>
+                    <CollapsibleSection
+                        id="top-exercises"
+                        title="Mest tränade övningar"
+                        icon="🔥"
+                        className="mb-8"
+                    >
                         <TopExercisesTable workouts={filteredWorkouts} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} />
-                    </section>
+                    </CollapsibleSection>
                 )
             }
 
             {/* Workouts List */}
-            <section>
-                <h2 className="text-xl font-bold text-white mb-4">📋 Träningspass</h2>
+            <CollapsibleSection
+                id="recent-workouts"
+                title="Träningspass"
+                icon="📋"
+                defaultOpen={true}
+                className="mb-8"
+            >
                 {loading ? (
                     <div className="text-center text-slate-500 py-12">Laddar...</div>
                 ) : filteredWorkouts.length === 0 ? (
@@ -711,7 +704,7 @@ export default function StrengthPage() {
                         ))}
                     </div>
                 )}
-            </section>
+            </CollapsibleSection>
 
             {/* Exercise Detail Modal */}
             {selectedExercise && (

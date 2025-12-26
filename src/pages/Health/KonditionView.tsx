@@ -1,6 +1,9 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
+import { WeeklyDistanceChart, WeeklyDistanceData } from '../../components/cardio/WeeklyDistanceChart.tsx';
+import { ActivityBreakdown } from '../../components/cardio/ActivityBreakdown.tsx';
+import { ConditioningStreaks } from '../../components/cardio/ConditioningStreaks.tsx';
 
 interface KonditionViewProps {
     days: number;
@@ -23,7 +26,7 @@ export function KonditionView({ days, exerciseEntries, universalActivities }: Ko
         const combined = [...exerciseEntries, ...stravaEntries];
         const seen = new Set<string>();
         return combined.filter(e => {
-            const key = `${e.date}-${e.type}`;
+            const key = `${e.date}-${e.type}-${e.distance}`;
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
@@ -33,33 +36,51 @@ export function KonditionView({ days, exerciseEntries, universalActivities }: Ko
     const filteredEntries = useMemo(() => {
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - days);
-        return allEntries.filter(e => {
-            const isCardio = cardioTypes.some(t => e.type.toLowerCase().includes(t));
-            const inRange = new Date(e.date) >= cutoff;
-            return isCardio && inRange;
-        });
+        return allEntries
+            .filter(e => {
+                const isCardio = cardioTypes.some(t => e.type.toLowerCase().includes(t));
+                const inRange = new Date(e.date) >= cutoff;
+                return isCardio && inRange;
+            })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [allEntries, days]);
 
-    // Weekly distance/duration data
+    // Format data for WeeklyDistanceChart
     const weeklyData = useMemo(() => {
-        const weeks: Record<string, { distance: number; duration: number; calories: number }> = {};
+        const weeks: Record<string, WeeklyDistanceData> = {};
+
         filteredEntries.forEach(e => {
             const date = new Date(e.date);
             const weekStart = new Date(date);
-            weekStart.setDate(date.getDate() - date.getDay());
+            weekStart.setDate(date.getDate() - date.getDay()); // Sunday start
+            weekStart.setHours(0, 0, 0, 0);
+
             const key = weekStart.toISOString().split('T')[0];
-            if (!weeks[key]) weeks[key] = { distance: 0, duration: 0, calories: 0 };
+
+            if (!weeks[key]) {
+                weeks[key] = { week: key, distance: 0, duration: 0, calories: 0, count: 0 };
+            }
+
             weeks[key].distance += e.distance || 0;
             weeks[key].duration += e.durationMinutes || 0;
             weeks[key].calories += e.caloriesBurned || 0;
+            weeks[key].count++;
         });
-        return Object.entries(weeks)
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .slice(-8)
-            .map(([week, data]) => ({ week, ...data }));
+
+        return Object.values(weeks).sort((a, b) => a.week.localeCompare(b.week));
     }, [filteredEntries]);
 
-    const maxDistance = Math.max(...weeklyData.map(d => d.distance), 1);
+    // Format data for ActivityBreakdown
+    const activityData = useMemo(() => {
+        return filteredEntries.map(e => ({
+            type: e.type,
+            distance: e.distance || 0,
+            duration: e.durationMinutes || 0
+        }));
+    }, [filteredEntries]);
+
+    // Get dates for Streaks
+    const dates = useMemo(() => filteredEntries.map(e => e.date), [filteredEntries]);
 
     // Summary stats
     const totalDistance = filteredEntries.reduce((s, e) => s + (e.distance || 0), 0);
@@ -67,25 +88,9 @@ export function KonditionView({ days, exerciseEntries, universalActivities }: Ko
     const totalCalories = filteredEntries.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
     const avgPace = totalDistance > 0 ? totalDuration / totalDistance : 0;
 
-    // Activity type breakdown
-    const activityBreakdown = useMemo(() => {
-        const types: Record<string, { count: number; distance: number; duration: number }> = {};
-        filteredEntries.forEach(e => {
-            const type = e.type.toLowerCase();
-            if (!types[type]) types[type] = { count: 0, distance: 0, duration: 0 };
-            types[type].count++;
-            types[type].distance += e.distance || 0;
-            types[type].duration += e.durationMinutes || 0;
-        });
-        return Object.entries(types)
-            .map(([type, data]) => ({ type, ...data }))
-            .sort((a, b) => b.duration - a.duration)
-            .slice(0, 5);
-    }, [filteredEntries]);
-
     return (
         <div className="space-y-6">
-            {/* Summary Cards */}
+            {/* Header / Summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
                     <p className="text-3xl font-black text-sky-400">{filteredEntries.length}</p>
@@ -96,8 +101,8 @@ export function KonditionView({ days, exerciseEntries, universalActivities }: Ko
                     <p className="text-xs text-slate-500 uppercase mt-1">Km totalt</p>
                 </div>
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
-                    <p className="text-3xl font-black text-white">{Math.round(totalDuration / 60)}</p>
-                    <p className="text-xs text-slate-500 uppercase mt-1">Timmar</p>
+                    <p className="text-3xl font-black text-white">{Math.round(totalDuration / 60)}h</p>
+                    <p className="text-xs text-slate-500 uppercase mt-1">Tid totalt</p>
                 </div>
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
                     <p className="text-3xl font-black text-rose-400">{Math.round(totalCalories / 1000)}k</p>
@@ -105,63 +110,41 @@ export function KonditionView({ days, exerciseEntries, universalActivities }: Ko
                 </div>
             </div>
 
-            {/* Pace Card (if running) */}
-            {avgPace > 0 && (
-                <div className="bg-sky-950/30 border border-sky-500/20 rounded-2xl p-5 flex items-center gap-6">
-                    <div className="text-4xl">🏃</div>
+            {/* Main Chart */}
+            <div className="bg-slate-900/50 border border-blue-500/10 rounded-3xl p-6 relative overflow-visible">
+                <div className="flex justify-between items-start mb-6">
                     <div>
-                        <p className="text-xs text-sky-400 uppercase font-bold">Snitt tempo</p>
-                        <p className="text-3xl font-black text-white">
-                            {Math.floor(avgPace)}:{String(Math.round((avgPace % 1) * 60)).padStart(2, '0')}
-                            <span className="text-sm text-slate-400 ml-1">min/km</span>
-                        </p>
+                        <h2 className="text-xl font-black text-white italic">WEEKLY DISTANCE</h2>
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Löpning & Cardio volym</p>
                     </div>
                 </div>
-            )}
 
-            {/* Weekly Distance Chart */}
-            {weeklyData.length > 0 && (
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase mb-4">📈 Distans per vecka</h3>
-                    <div className="flex items-end gap-2 h-32">
-                        {weeklyData.map((d) => {
-                            const height = (d.distance / maxDistance) * 100;
-                            return (
-                                <div key={d.week} className="flex-1 flex flex-col items-center gap-1 group">
-                                    <span className="text-[10px] text-sky-400 font-bold opacity-0 group-hover:opacity-100">{d.distance.toFixed(1)} km</span>
-                                    <div
-                                        className="w-full bg-gradient-to-t from-sky-600 to-sky-400 rounded-t hover:from-sky-500 hover:to-sky-300 transition-all"
-                                        style={{ height: `${Math.max(height, 5)}%` }}
-                                    />
-                                    <span className="text-[9px] text-slate-600">{d.week.slice(5)}</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+                <WeeklyDistanceChart data={weeklyData} />
+            </div>
 
-            {/* Activity Breakdown */}
-            {activityBreakdown.length > 0 && (
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5">
-                    <h3 className="text-sm font-bold text-slate-400 uppercase mb-4">🎯 Aktivitetstyper</h3>
-                    <div className="space-y-3">
-                        {activityBreakdown.map((act, i) => (
-                            <div key={act.type} className="flex items-center gap-3">
-                                <span className="text-lg font-black text-slate-600 w-6">{i + 1}</span>
-                                <div className="flex-1">
-                                    <p className="text-white font-bold capitalize">{act.type}</p>
-                                    <div className="flex gap-4 text-xs text-slate-500">
-                                        <span>{act.count} pass</span>
-                                        <span className="text-emerald-400">{act.distance.toFixed(1)} km</span>
-                                        <span className="text-sky-400">{Math.round(act.duration)} min</span>
-                                    </div>
-                                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-6">
+                    {/* Streaks */}
+                    <ConditioningStreaks dates={dates} />
+
+                    {/* Pace Card (if running) */}
+                    {avgPace > 0 && (
+                        <div className="bg-sky-950/30 border border-sky-500/20 rounded-2xl p-5 flex items-center gap-6">
+                            <div className="text-4xl">🏃</div>
+                            <div>
+                                <p className="text-xs text-sky-400 uppercase font-bold">Snitt tempo</p>
+                                <p className="text-3xl font-black text-white">
+                                    {Math.floor(avgPace)}:{String(Math.round((avgPace % 1) * 60)).padStart(2, '0')}
+                                    <span className="text-sm text-slate-400 ml-1">min/km</span>
+                                </p>
                             </div>
-                        ))}
-                    </div>
+                        </div>
+                    )}
                 </div>
-            )}
+
+                {/* Breakdown */}
+                <ActivityBreakdown activities={activityData} />
+            </div>
 
             {filteredEntries.length === 0 && (
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-12 text-center">
@@ -173,3 +156,4 @@ export function KonditionView({ days, exerciseEntries, universalActivities }: Ko
         </div>
     );
 }
+

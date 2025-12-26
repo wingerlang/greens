@@ -18,6 +18,8 @@ export interface HealthStats {
         races: number;
         totalTonnage: number;
         strengthSessions: number;
+        totalDistance: number;
+        totalCardioDuration: number;
     };
 }
 
@@ -44,7 +46,9 @@ export interface DaySnapshot {
         longRuns: number;
         races: number;
         tonnage: number;
-        isStrength: boolean;
+        isStrength: number; // 0 or 1
+        distance: number;
+        duration: number;
     };
 }
 
@@ -85,8 +89,10 @@ export function aggregateHealthData(
             longRuns: acc.longRuns + (e.subType === 'long-run' ? 1 : 0),
             races: acc.races + (e.subType === 'race' ? 1 : 0),
             tonnage: acc.tonnage + (e.tonnage || 0),
-            isStrength: acc.isStrength || e.type === 'strength'
-        }), { intervals: 0, longRuns: 0, races: 0, tonnage: 0, isStrength: false });
+            isStrength: acc.isStrength + (e.type === 'strength' ? 1 : 0),
+            distance: acc.distance + (e.distance || 0),
+            duration: acc.duration + (e.durationMinutes || 0)
+        }), { intervals: 0, longRuns: 0, races: 0, tonnage: 0, isStrength: 0, distance: 0, duration: 0 });
 
         snapshots.unshift({
             date: dateStr,
@@ -147,9 +153,11 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
         acc.longRuns += s.exerciseDeatils.longRuns;
         acc.races += s.exerciseDeatils.races;
         acc.totalTonnage += s.exerciseDeatils.tonnage;
-        if (s.exerciseDeatils.isStrength) acc.strengthSessions++;
+        acc.strengthSessions += s.exerciseDeatils.isStrength;
+        acc.totalDistance += s.exerciseDeatils.distance;
+        acc.totalCardioDuration += s.exerciseDeatils.duration;
         return acc;
-    }, { intervals: 0, longRuns: 0, races: 0, totalTonnage: 0, strengthSessions: 0 });
+    }, { intervals: 0, longRuns: 0, races: 0, totalTonnage: 0, strengthSessions: 0, totalDistance: 0, totalCardioDuration: 0 });
 
     return {
         avgSleep: totals.sleep / count,

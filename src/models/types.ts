@@ -69,6 +69,7 @@ export interface UserSettings {
     dailyWaterGoal?: number;
     showSleep?: boolean;
     showWater?: boolean;
+    expandedSections?: Record<string, boolean>; // Persisted UI state
 }
 
 /** User roles for permissions */
@@ -145,6 +146,10 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     dailyWaterGoal: 8,
     showSleep: true,
     showWater: true,
+    expandedSections: {
+        'recent-workouts': true,
+        'top-exercises': true
+    }
 };
 
 // ============================================

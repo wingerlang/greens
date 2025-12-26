@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { StrengthWorkout, StrengthStats, PersonalBest } from '../../models/strengthTypes.ts';
 import { WeeklyVolumeChart } from '../../components/training/WeeklyVolumeChart.tsx';
-import { TopExercisesTable } from '../../components/training/TopExercisesTable.tsx';
+import { TrainingTimeStats } from '../../components/training/TrainingTimeStats.tsx';
 
 interface StyrkaViewProps {
     days: number;
@@ -62,6 +62,12 @@ export function StyrkaView({ days }: StyrkaViewProps) {
         return workouts.filter(w => new Date(w.date) >= cutoff);
     }, [workouts, days]);
 
+    const filteredPbs = useMemo(() => {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        return pbs.filter(pb => new Date(pb.date) >= cutoff);
+    }, [pbs, days]);
+
 
 
     const totalVolume = filteredWorkouts.reduce((s, w) => s + (w.totalVolume || 0), 0);
@@ -88,33 +94,34 @@ export function StyrkaView({ days }: StyrkaViewProps) {
                     <p className="text-xs text-slate-500 uppercase mt-1">Ton lyft</p>
                 </div>
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 text-center">
-                    <p className="text-3xl font-black text-amber-400">{pbs.length}</p>
+                    <p className="text-3xl font-black text-amber-400">{filteredPbs.length}</p>
                     <p className="text-xs text-slate-500 uppercase mt-1">Personliga rekord</p>
                 </div>
             </div>
 
+            {/* Training Time */}
+            {filteredWorkouts.length > 0 && (
+                <div className="mb-6">
+                    <TrainingTimeStats workouts={filteredWorkouts} days={days} />
+                </div>
+            )}
+
             {/* Weekly Volume Chart */}
             {filteredWorkouts.length > 0 && (
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5">
+                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5 mb-6">
                     <h3 className="text-xl font-bold text-white mb-4">📈 Volym per vecka</h3>
                     <WeeklyVolumeChart workouts={filteredWorkouts} />
                 </div>
             )}
 
-            {/* Top Exercises */}
-            {filteredWorkouts.length > 0 && (
-                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5">
-                    <h3 className="text-xl font-bold text-white mb-4">🔥 Mest tränade övningar</h3>
-                    <TopExercisesTable workouts={filteredWorkouts} />
-                </div>
-            )}
+
 
             {/* Recent PBs */}
-            {pbs.length > 0 && (
+            {filteredPbs.length > 0 && (
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-5">
                     <h3 className="text-sm font-bold text-slate-400 uppercase mb-4">🏆 Senaste rekord</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {pbs.slice(0, 4).map(pb => (
+                        {filteredPbs.slice(0, 4).map(pb => (
                             <div key={pb.id} className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
                                 <p className="text-xs text-amber-400 uppercase font-bold truncate">{pb.exerciseName}</p>
                                 <p className="text-xl font-black text-white">{pb.value} kg</p>

@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
 import { EXERCISE_TYPES } from './ExerciseModal.tsx';
+import { MonthlyTrainingTable } from './MonthlyTrainingTable.tsx';
 
 interface TrainingOverviewProps {
     exercises: ExerciseEntry[];
@@ -191,6 +192,11 @@ export function TrainingOverview({ exercises }: TrainingOverviewProps) {
                     <span className="text-xl font-black text-rose-400">{(stats.year.calories / 1000).toFixed(0)} <span className="text-sm text-slate-500">kkcal</span></span>
                     <span className="text-[9px] text-slate-600 mt-1">Bränt i år</span>
                 </div>
+            </div>
+
+            {/* Monthly Training Table (Detailed Breakdown) */}
+            <div className="mb-0">
+                <MonthlyTrainingTable exercises={exercises} />
             </div>
         </>
     );
