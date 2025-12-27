@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ExerciseType, ExerciseIntensity, ExerciseSubType } from '../../models/types.ts';
+import { useNavigate } from 'react-router-dom';
 
 const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
     { type: 'running', icon: '🏃', label: 'Löpning' },
@@ -40,6 +41,7 @@ interface ExerciseModalProps {
     calculateCalories: (type: ExerciseType, duration: number, intensity: ExerciseIntensity) => number;
     isEditing?: boolean;
     onDelete?: () => void;
+    activityId?: string | null;
 }
 
 export function ExerciseModal({
@@ -55,8 +57,11 @@ export function ExerciseModal({
     setExerciseForm,
     calculateCalories,
     isEditing,
-    onDelete
+    onDelete,
+    activityId
 }: ExerciseModalProps) {
+    const navigate = useNavigate();
+
     if (!isOpen) return null;
 
     // Handle ESC key
@@ -219,15 +224,29 @@ export function ExerciseModal({
 
                     <div className="flex gap-3 pt-4">
                         {isEditing && (
-                            <button
-                                type="button"
-                                className="btn bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white"
-                                onClick={() => {
-                                    if (confirm('Ta bort detta pass?')) onDelete?.();
-                                }}
-                            >
-                                Radera
-                            </button>
+                            <>
+                                <button
+                                    type="button"
+                                    className="btn bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white"
+                                    onClick={() => {
+                                        if (confirm('Ta bort detta pass?')) onDelete?.();
+                                    }}
+                                >
+                                    Radera
+                                </button>
+                                {activityId && (
+                                    <button
+                                        type="button"
+                                        className="btn bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white"
+                                        onClick={() => {
+                                            onClose();
+                                            navigate(`/workouts/builder?fromActivity=${activityId}`);
+                                        }}
+                                    >
+                                        Skapa Pass
+                                    </button>
+                                )}
+                            </>
                         )}
                         <button type="button" className="btn btn-secondary flex-1" onClick={onClose}>Avbryt</button>
                         <button type="submit" className="btn btn-primary flex-1">{isEditing ? 'Spara Ändringar' : 'Spara Träning'}</button>

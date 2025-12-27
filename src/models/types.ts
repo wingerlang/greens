@@ -838,6 +838,15 @@ export interface ActivityPerformanceSection {
     feel?: 'good' | 'average' | 'bad';
     notes?: string;
     subType?: ExerciseSubType;
+    splits?: Array<{
+        split: number;
+        distance: number;
+        elapsedTime: number;
+        movingTime: number;
+        elevationDiff: number;
+        averageSpeed: number;
+        averageHeartrate?: number;
+    }>;
 }
 
 /**

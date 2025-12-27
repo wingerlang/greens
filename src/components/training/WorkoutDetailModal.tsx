@@ -1,4 +1,5 @@
 import React, { useMemo, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, calculate1RM } from '../../models/strengthTypes.ts';
 import { UniversalActivity } from '../../models/types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
@@ -12,6 +13,7 @@ interface WorkoutDetailModalProps {
 
 export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [] }: WorkoutDetailModalProps) {
     const { token } = useAuth();
+    const navigate = useNavigate();
     const [dailyActivities, setDailyActivities] = useState<UniversalActivity[]>([]);
     const [loadingActivities, setLoadingActivities] = useState(false);
 
@@ -280,10 +282,19 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                     ))}
                 </div>
 
-                <div className="pt-4 border-t border-white/10">
+                <div className="pt-4 border-t border-white/10 flex gap-3">
+                    <button
+                        onClick={() => {
+                            onClose();
+                            navigate(`/workouts/builder?fromActivity=${workout.id}`);
+                        }}
+                        className="flex-1 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white border border-indigo-500/20 font-bold py-3 rounded-xl transition-all"
+                    >
+                        📝 Använd som mall
+                    </button>
                     <button
                         onClick={onClose}
-                        className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors"
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors"
                     >
                         Stäng
                     </button>

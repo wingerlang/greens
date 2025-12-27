@@ -47,6 +47,16 @@ export interface StravaActivity {
     pr_count: number;
     kudos_count: number;
     achievement_count: number;
+    splits_metric?: Array<{
+        distance: number;
+        elapsed_time: number;
+        elevation_difference: number;
+        moving_time: number;
+        split: number;
+        average_speed: number;
+        average_heartrate?: number;
+        pace_zone?: number;
+    }>;
 }
 
 export interface StravaAthlete {
@@ -362,7 +372,16 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
 
         activityType: mapStravaType(activity.type),
         notes: activity.name,
-        subType: mapStravaSubType(activity.type, activity.workout_type)
+        subType: mapStravaSubType(activity.type, activity.workout_type),
+        splits: activity.splits_metric?.map(s => ({
+            split: s.split,
+            distance: s.distance,
+            elapsedTime: s.elapsed_time,
+            movingTime: s.moving_time,
+            elevationDiff: s.elevation_difference,
+            averageSpeed: s.average_speed,
+            averageHeartrate: s.average_heartrate
+        }))
     };
 }
 

@@ -7,6 +7,9 @@ import { ExerciseEntry, UniversalActivity } from '../models/types.ts';
 import { StrengthWorkout } from '../models/strengthTypes.ts';
 
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
+import { SmartFilter, parseSmartQuery, applySmartFilters } from '../utils/activityFilters.ts';
+import { formatDuration } from '../utils/dateUtils.ts';
+import { calculatePerformanceScore, calculateGAP } from '../utils/performanceEngine.ts';
 
 export function ActivitiesPage() {
     const { universalActivities, exerciseEntries: localEntries } = useData();
@@ -20,6 +23,8 @@ export function ActivitiesPage() {
 
     // Filter State
     const [searchQuery, setSearchQuery] = useState('');
+    const [activeSmartFilters, setActiveSmartFilters] = useState<SmartFilter[]>([]);
+    const [previewFilters, setPreviewFilters] = useState<SmartFilter[]>([]);
     const [sourceFilter, setSourceFilter] = useState<string>('all');
     // We now support preset filters: 'all', '7d', '30d', '6m', 'year' or specific year '2025'
     const [datePreset, setDatePreset] = useState<string>('all');
@@ -162,7 +167,9 @@ export function ActivitiesPage() {
 
     // 4. FILTER & SORT LOGIC
     const processedActivities = useMemo(() => {
-        let result = allActivities.filter(a => {
+        let result = applySmartFilters(allActivities, activeSmartFilters);
+
+        result = result.filter(a => {
             // Source Filter
             if (sourceFilter !== 'all' && a.source !== sourceFilter) return false;
 
@@ -191,13 +198,15 @@ export function ActivitiesPage() {
                 if (date.getFullYear() !== parseInt(datePreset)) return false;
             }
 
-            // Search
+            // Search (Combine active smart filters with live search text)
+            let currentFilters = activeSmartFilters;
             if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                const matchName = a.type.toLowerCase().includes(q);
-                const matchNotes = a.notes?.toLowerCase().includes(q) || false;
-                if (!matchName && !matchNotes) return false;
+                const { filters: liveFilters } = parseSmartQuery(searchQuery);
+                currentFilters = [...currentFilters, ...liveFilters];
             }
+
+            const matchesSmart = applySmartFilters([a], currentFilters).length > 0;
+            if (!matchesSmart) return false;
 
             // Advanced Ranges
             if (minDist && (a.distance || 0) < parseFloat(minDist)) return false;
@@ -210,8 +219,8 @@ export function ActivitiesPage() {
 
         // Sorting
         result.sort((a, b) => {
-            let valA: any = a[sortConfig.key as keyof ExerciseEntry];
-            let valB: any = b[sortConfig.key as keyof ExerciseEntry];
+            let valA: any = (a as any)[sortConfig.key];
+            let valB: any = (b as any)[sortConfig.key];
 
             // Special cases
             if (sortConfig.key === 'tonnage') {
@@ -264,15 +273,81 @@ export function ActivitiesPage() {
                 <div className="bg-slate-900 border border-white/10 rounded-2xl p-4 space-y-4">
                     <div className="flex flex-col md:flex-row gap-4">
                         {/* Search Input */}
-                        <div className="flex-1 relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
-                            <input
-                                type="text"
-                                placeholder="Sök på aktivitet, notering..."
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                className="w-full bg-slate-950 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-emerald-500/50 transition-colors"
-                            />
+                        <div className="flex-1 space-y-3">
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
+                                <input
+                                    type="text"
+                                    placeholder="Sök på aktivitet, eller prova '>10km', '<4:30/km'..."
+                                    value={searchQuery}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        setSearchQuery(val);
+
+                                        const { filters, remainingText } = parseSmartQuery(val);
+                                        setPreviewFilters(filters);
+
+                                        // Auto-detect triggers for committing
+                                        const hasUnitSuffix = val.match(/(km|m|t|min|h)\s*$/i);
+                                        const hasSpaceTrigger = val.endsWith(' ');
+                                        const hasYearTrigger = val.match(/\d{4}\s+$/);
+
+                                        // Commit if:
+                                        // 1. Space entered
+                                        // 2. Clear unit suffix entered (and it's not just a prefix like 'k')
+                                        if (hasSpaceTrigger || (hasUnitSuffix && hasUnitSuffix[1]?.length > 0 && !val.endsWith(' '))) {
+                                            if (filters.length > 0) {
+                                                setActiveSmartFilters(prev => {
+                                                    const existing = new Set(prev.map(f => f.originalQuery));
+                                                    const newFilters = filters.filter(f => !existing.has(f.originalQuery));
+                                                    return [...prev, ...newFilters];
+                                                });
+                                                setSearchQuery(remainingText);
+                                                setPreviewFilters([]);
+                                            }
+                                        }
+                                    }}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white focus:outline-none focus:border-emerald-500/50 transition-colors"
+                                />
+                            </div>
+
+                            {/* Smart Filter Tags & Previews */}
+                            <div className="flex flex-wrap gap-2 animate-in fade-in slide-in-from-left-2 duration-300">
+                                {activeSmartFilters.map(f => (
+                                    <div
+                                        key={f.id}
+                                        className="group flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider text-indigo-400 hover:bg-indigo-500/20 transition-all cursor-default"
+                                    >
+                                        <span className="opacity-50">{f.type === 'tonnage' ? '🏋️' : f.type === 'pace' ? '⚡' : f.type === 'distance' ? '🏃' : f.type === 'date' ? '📅' : '⏱️'}</span>
+                                        {f.label}
+                                        <button
+                                            onClick={() => setActiveSmartFilters(prev => prev.filter(x => x.id !== f.id))}
+                                            className="hover:text-white transition-colors ml-1 p-0.5"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+
+                                {previewFilters.map(f => (
+                                    <div
+                                        key={f.id}
+                                        className="flex items-center gap-2 bg-slate-800/50 border border-white/5 border-dashed px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wider text-slate-500 italic animate-pulse"
+                                    >
+                                        <span>Preview:</span>
+                                        {f.label}
+                                    </div>
+                                ))}
+
+                                {activeSmartFilters.length > 0 && (
+                                    <button
+                                        onClick={() => setActiveSmartFilters([])}
+                                        className="text-[9px] font-bold text-slate-600 hover:text-slate-400 uppercase tracking-widest px-2"
+                                    >
+                                        Rensa alla
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         {/* Source Toggles */}
@@ -393,6 +468,8 @@ export function ActivitiesPage() {
                                         setMinDist(''); setMaxDist('');
                                         setMinTime(''); setMaxTime('');
                                         setSearchQuery('');
+                                        setActiveSmartFilters([]);
+                                        setPreviewFilters([]);
                                         setSourceFilter('all');
                                     }}
                                     className="w-full bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-bold py-2.5 rounded-lg transition-colors"
@@ -421,14 +498,23 @@ export function ActivitiesPage() {
                             <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('durationMinutes')}>
                                 Tid <SortIcon colKey="durationMinutes" />
                             </th>
-                            <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('distance')}>
-                                Distans <SortIcon colKey="distance" />
-                            </th>
-                            <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('caloriesBurned')}>
-                                Kalorier <SortIcon colKey="caloriesBurned" />
-                            </th>
-                            <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('tonnage')}>
-                                Ton <SortIcon colKey="tonnage" />
+                            {processedActivities.some(a => a.distance) && (
+                                <>
+                                    <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('distance')}>
+                                        Dist <SortIcon colKey="distance" />
+                                    </th>
+                                    <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('pace')}>
+                                        Tempo <SortIcon colKey="pace" />
+                                    </th>
+                                </>
+                            )}
+                            {processedActivities.some(a => a.tonnage) && (
+                                <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('tonnage')}>
+                                    Ton <SortIcon colKey="tonnage" />
+                                </th>
+                            )}
+                            <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('score')}>
+                                Poäng <SortIcon colKey="score" />
                             </th>
                             <th className="px-6 py-4">Notering</th>
                         </tr>
@@ -477,18 +563,41 @@ export function ActivitiesPage() {
                                     )}
                                 </td>
                                 <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                    {activity.durationMinutes} min
+                                    {activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}
                                 </td>
-                                <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                    {activity.distance ? `${activity.distance.toFixed(1)} km` : '-'}
+                                {processedActivities.some(a => a.distance) && (
+                                    <>
+                                        <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                            {activity.distance ? `${activity.distance.toFixed(1)}` : '-'}
+                                        </td>
+                                        <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                            {activity.distance ? (
+                                                <div className="flex flex-col items-end">
+                                                    <span className="text-[10px] opacity-70">{(activity.durationMinutes / activity.distance).toFixed(2).replace('.', ':')} /km</span>
+                                                    {activity.elevationGain && activity.elevationGain > 0 && (
+                                                        <span className="text-[10px] text-indigo-400 font-bold" title="Grade Adjusted Pace (Lutningsjusterat tempo)">
+                                                            GAP: {(calculateGAP((activity.durationMinutes * 60) / activity.distance, activity.elevationGain, activity.distance) / 60).toFixed(2).replace('.', ':')}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : '-'}
+                                        </td>
+                                    </>
+                                )}
+                                {processedActivities.some(a => a.tonnage) && (
+                                    <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                        {activity.tonnage ? `${(activity.tonnage / 1000).toFixed(1)} t` : '-'}
+                                    </td>
+                                )}
+                                <td className="px-6 py-4 text-right">
+                                    <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-black text-[10px] border ${calculatePerformanceScore(activity) >= 80 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
+                                            calculatePerformanceScore(activity) >= 60 ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' :
+                                                'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                        }`}>
+                                        {calculatePerformanceScore(activity)}
+                                    </div>
                                 </td>
-                                <td className="px-6 py-4 text-right font-mono text-rose-400">
-                                    {activity.caloriesBurned || '-'}
-                                </td>
-                                <td className="px-6 py-4 text-right font-mono text-indigo-400">
-                                    {activity.tonnage ? (activity.tonnage / 1000).toFixed(1) + ' t' : '-'}
-                                </td>
-                                <td className="px-6 py-4 text-xs italic opacity-50 truncate max-w-[200px]">
+                                <td className="px-6 py-4 text-xs italic opacity-50 truncate max-w-[150px]">
                                     {activity.notes}
                                 </td>
                             </tr>
@@ -506,6 +615,7 @@ export function ActivitiesPage() {
                                 setMinDist(''); setMaxDist('');
                                 setMinTime(''); setMaxTime('');
                                 setSearchQuery('');
+                                setActiveSmartFilters([]);
                                 setSourceFilter('all');
                             }}
                             className="text-emerald-400 hover:underline text-sm font-bold"

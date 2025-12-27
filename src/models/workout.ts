@@ -5,6 +5,7 @@ export interface WorkoutDefinition {
     description: string;
     difficulty: 'Beginner' | 'Intermediate' | 'Advanced' | 'Elite';
     durationMin: number; // Approximate duration in minutes
+    subCategory?: string; // e.g. "Push", "Intervals"
     tags: string[];
     source: 'HYROX_DB' | 'COACH_AI' | 'USER_CUSTOM';
 

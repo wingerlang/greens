@@ -1,14 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WorkoutDefinition, WorkoutSection, WorkoutExercise } from '../models/workout.ts';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { ExerciseSelector } from '../components/workouts/ExerciseSelector.tsx';
 import { WorkoutAnalyzer } from '../components/workouts/WorkoutAnalyzer.tsx';
+import { WorkoutComparisonView } from '../components/workouts/WorkoutComparisonView.tsx';
+import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
+import { MUSCLE_MAP, BODY_PARTS } from '../data/muscleMap.ts';
 
-// Initial Empty State
+const SUBCATEGORIES: Record<string, string[]> = {
+    'STRENGTH': ['Push', 'Pull', 'Ben', 'Överkropp', 'Underkropp', 'Hela Kroppen'],
+    'RUNNING': ['Distans', 'Långpass', 'Intervall', 'Tempo', 'Backe', 'Återhämtning'],
+    'HYROX': ['Simulering', 'Intervaller', 'Styrke-EMOM', 'Återhämtning'],
+    'CROSSFIT': ['WOD', 'Metcon', 'Skills', 'Strength + WOD'],
+};
+
+// Initial Empty State (Swedish)
 const INITIAL_WORKOUT: WorkoutDefinition = {
     id: crypto.randomUUID(),
-    title: "New Workout",
+    title: "Nytt Träningspass",
     category: 'STRENGTH',
     difficulty: 'Intermediate',
     durationMin: 60,
@@ -16,265 +26,391 @@ const INITIAL_WORKOUT: WorkoutDefinition = {
     source: 'USER_CUSTOM',
     description: "",
     exercises: [
-        { id: crypto.randomUUID(), title: "Warmup", exercises: [] },
-        { id: crypto.randomUUID(), title: "Main Lift", exercises: [] },
+        { id: crypto.randomUUID(), title: "Uppvärmning", exercises: [] },
+        { id: crypto.randomUUID(), title: "Huvuddel", exercises: [] },
     ]
 };
 
 export function WorkoutBuilderPage() {
     const navigate = useNavigate();
-    const { exerciseEntries } = useData();
+    const [searchParams] = useSearchParams();
+    const { exerciseEntries, strengthSessions, universalActivities } = useData();
     const [workout, setWorkout] = useState<WorkoutDefinition>(INITIAL_WORKOUT);
-    const [activeTab, setActiveTab] = useState<'BUILD' | 'ANALYZE'>('BUILD');
+    const [activeTab, setActiveTab] = useState<'BUILD' | 'ANALYZE' | 'COMPARE'>('BUILD');
 
-    // Track which section receives new exercises
-    const [activeSectionId, setActiveSectionId] = useState<string>(INITIAL_WORKOUT.exercises![0].id);
+    // ACTION: Derive Muscles from Exercises
+    const deriveMuscles = (currentWorkout: WorkoutDefinition) => {
+        const muscles = new Set<string>();
+        currentWorkout.exercises?.forEach(section => {
+            section.exercises.forEach(ex => {
+                const map = MUSCLE_MAP[ex.name];
+                if (map) {
+                    muscles.add(map.primary);
+                    map.secondary.forEach(m => muscles.add(m));
+                }
+            });
+        });
+        const filtered = Array.from(muscles).filter(m => m !== 'Cardio');
+        setWorkout(prev => ({ ...prev, targetedMuscles: filtered }));
+    };
 
-    // HELPER: Update top-level fields
+    // IMPORT LOGIC
+    useEffect(() => {
+        const fromActivityId = searchParams.get('fromActivity') || searchParams.get('activityId');
+        if (fromActivityId) {
+            let activity = exerciseEntries.find(e => e.id === fromActivityId);
+            if (!activity) {
+                const ua = universalActivities.find(u => u.id === fromActivityId);
+                if (ua) activity = mapUniversalToLegacyEntry(ua) || undefined;
+            }
+
+            if (activity) {
+                const isRun = activity.type === 'running';
+                const intensityMap: Record<string, string> = { low: 'RPE 3', moderate: 'RPE 5', high: 'RPE 8', ultra: 'RPE 10' };
+                const rpe = intensityMap[activity.intensity as string] || 'RPE 5';
+
+                let title = isRun ? `Pass: ${activity.distance}km` : `${activity.type} Session`;
+                if (activity.subType && activity.subType !== 'default') {
+                    const sub = activity.subType.charAt(0).toUpperCase() + activity.subType.slice(1);
+                    title = `${sub}: ${activity.distance}km`;
+                }
+
+                const imported: WorkoutDefinition = {
+                    ...INITIAL_WORKOUT,
+                    id: crypto.randomUUID(),
+                    title: title,
+                    durationMin: activity.durationMinutes || 60,
+                    category: isRun ? 'RUNNING' : 'CROSSFIT',
+                    subCategory: isRun && activity.subType && activity.subType !== 'default' ? (activity.subType.charAt(0).toUpperCase() + activity.subType.slice(1)) : undefined,
+                    description: activity.notes || `Importerat från aktivitet den ${activity.date}`,
+                    exercises: isRun ? [
+                        { id: crypto.randomUUID(), title: "Uppvärmning", exercises: [] },
+                        {
+                            id: crypto.randomUUID(),
+                            title: "Löpning",
+                            exercises: [{
+                                id: crypto.randomUUID(),
+                                exerciseId: 'run',
+                                name: activity.subType === 'interval' ? 'Intervaller' : 'Löpning',
+                                sets: 1,
+                                reps: `${activity.distance} km`,
+                                weight: rpe,
+                                rest: 0
+                            }]
+                        },
+                        { id: crypto.randomUUID(), title: "Nedjogg", exercises: [] },
+                    ] : INITIAL_WORKOUT.exercises
+                };
+                setWorkout(imported);
+                setActiveTab('COMPARE');
+                return;
+            }
+
+            const strengthSession = strengthSessions.find(s => s.id === fromActivityId);
+            if (strengthSession) {
+                const sections: WorkoutSection[] = [];
+                const muscles = new Set<string>();
+                if (strengthSession.exercises && strengthSession.exercises.length > 0) {
+                    const mainSection: WorkoutSection = {
+                        id: crypto.randomUUID(),
+                        title: "Huvuddel",
+                        exercises: strengthSession.exercises.map(ex => {
+                            const map = MUSCLE_MAP[ex.name];
+                            if (map) { muscles.add(map.primary); map.secondary.forEach(m => muscles.add(m)); }
+                            return {
+                                id: crypto.randomUUID(),
+                                exerciseId: ex.name,
+                                name: ex.name,
+                                sets: ex.sets || 3,
+                                reps: ex.reps?.toString() || "10",
+                                weight: ex.weight ? `${ex.weight}kg` : "-",
+                                rest: 60
+                            };
+                        })
+                    };
+                    sections.push(mainSection);
+                } else {
+                    sections.push({ id: crypto.randomUUID(), title: "Styrka", exercises: [] });
+                }
+
+                const imported: WorkoutDefinition = {
+                    ...INITIAL_WORKOUT,
+                    id: crypto.randomUUID(),
+                    title: strengthSession.title || "Styrkepass",
+                    category: 'STRENGTH',
+                    subCategory: strengthSession.title?.toLowerCase().includes('push') ? 'Push' :
+                        strengthSession.title?.toLowerCase().includes('pull') ? 'Pull' :
+                            strengthSession.title?.toLowerCase().includes('ben') ? 'Ben' : undefined,
+                    durationMin: strengthSession.durationMinutes || 60,
+                    description: `Importerat från ${strengthSession.date}`,
+                    exercises: sections,
+                    targetedMuscles: Array.from(muscles).filter(m => m !== 'Cardio')
+                };
+                setWorkout(imported);
+                setActiveTab('COMPARE');
+            }
+        }
+    }, [searchParams, exerciseEntries, strengthSessions, universalActivities]);
+
+    const [activeSectionId, setActiveSectionId] = useState<string>(workout.exercises?.[0]?.id || INITIAL_WORKOUT.exercises![0].id);
+
+    const handleSubCategoryChange = (sub: string) => {
+        let updatedWorkout = { ...workout, subCategory: sub };
+        const totalEx = workout.exercises?.reduce((sum, s) => sum + s.exercises.length, 0) || 0;
+        if (totalEx <= 1) {
+            if (workout.category === 'RUNNING') {
+                const needsKm = ['Långpass', 'Intervall', 'Tempo', 'Backe'].includes(sub);
+                const warmupKm = needsKm ? "2 km" : "-";
+                updatedWorkout.exercises = [
+                    {
+                        id: crypto.randomUUID(), title: "Uppvärmning",
+                        exercises: [{ id: crypto.randomUUID(), exerciseId: 'run-wu', name: 'Löpning (Uppvärmning)', sets: 1, reps: warmupKm, weight: 'Lugnt', rest: 0 }]
+                    },
+                    {
+                        id: crypto.randomUUID(), title: sub === 'Intervall' ? "Intervaller" : "Huvuddel",
+                        exercises: [{ id: crypto.randomUUID(), exerciseId: 'run-main', name: sub === 'Intervall' ? 'Intervaller' : 'Löpning', sets: 1, reps: sub === 'Långpass' ? '15-20 km' : '5-10 km', weight: sub === 'Tempo' ? 'Progressiv' : 'RPE 5', rest: 0 }]
+                    },
+                    {
+                        id: crypto.randomUUID(), title: "Nedjogg",
+                        exercises: [{ id: crypto.randomUUID(), exerciseId: 'run-cd', name: 'Nerjogg', sets: 1, reps: warmupKm, weight: 'Lugnt', rest: 0 }]
+                    },
+                ];
+            }
+        }
+        setWorkout(updatedWorkout);
+    };
+
     const update = (field: keyof WorkoutDefinition, value: any) => {
         setWorkout(prev => ({ ...prev, [field]: value }));
     };
 
-    // ACTION: Add Exercise
     const addExercise = (name: string) => {
         if (!activeSectionId) return;
-
-        const newExercise: WorkoutExercise = {
-            id: crypto.randomUUID(),
-            exerciseId: name, // For now using name as ID
-            name: name,
-            sets: 3,
-            reps: "10",
-            weight: "RPE 7",
-            rest: 60,
-        };
-
-        const newSections = workout.exercises!.map(section => {
-            if (section.id === activeSectionId) {
-                return { ...section, exercises: [...section.exercises, newExercise] };
-            }
+        const newExercise: WorkoutExercise = { id: crypto.randomUUID(), exerciseId: name, name: name, sets: 3, reps: "10", weight: "RPE 7", rest: 60 };
+        const newSections = (workout.exercises || []).map(section => {
+            if (section.id === activeSectionId) return { ...section, exercises: [...section.exercises, newExercise] };
             return section;
         });
-
-        update('exercises', newSections);
+        const next = { ...workout, exercises: newSections };
+        setWorkout(next);
+        deriveMuscles(next);
     };
 
-    // ACTION: Remove Exercise
     const removeExercise = (sectionId: string, exerciseId: string) => {
         const newSections = workout.exercises!.map(section => {
-            if (section.id === sectionId) {
-                return { ...section, exercises: section.exercises.filter(e => e.id !== exerciseId) };
-            }
+            if (section.id === sectionId) return { ...section, exercises: section.exercises.filter(e => e.id !== exerciseId) };
             return section;
         });
-        update('exercises', newSections);
+        const next = { ...workout, exercises: newSections };
+        setWorkout(next);
+        deriveMuscles(next);
     }
 
     return (
-        <div className="h-full flex flex-col bg-slate-950 text-white overflow-hidden">
+        <div className="h-full flex flex-col bg-[#050510] text-white overflow-hidden font-sans">
             {/* HEADER TOOLBAR */}
-            <div className="h-16 border-b border-white/10 bg-slate-900/50 flex items-center justify-between px-6 backdrop-blur-md">
-                <div className="flex items-center gap-4">
-                    <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-white transition-colors">
-                        ← Back
+            <div className="h-20 border-b border-white/5 bg-slate-900/20 flex items-center justify-between px-8 backdrop-blur-2xl">
+                <div className="flex items-center gap-6">
+                    <button onClick={() => navigate(-1)} className="text-slate-400 hover:text-white transition-all hover:scale-110">
+                        <span className="text-2xl">←</span>
                     </button>
-                    <div className="h-6 w-px bg-white/10"></div>
-                    <input
-                        type="text"
-                        value={workout.title}
-                        onChange={(e) => update('title', e.target.value)}
-                        className="bg-transparent text-xl font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded px-2 -ml-2"
-                        placeholder="Workout Title"
-                    />
+                    <div className="h-8 w-px bg-white/10"></div>
+                    <div className="flex flex-col">
+                        <label className="text-[10px] font-black text-indigo-500 uppercase tracking-[0.2em] mb-1">Passets titel</label>
+                        <input
+                            type="text"
+                            value={workout.title}
+                            onChange={(e) => update('title', e.target.value)}
+                            className="bg-transparent text-2xl font-black focus:outline-none focus:ring-0 rounded placeholder-white/20"
+                            placeholder="Namnge ditt pass..."
+                        />
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                    <span className="text-xs font-mono text-slate-500 uppercase tracking-widest hidden md:inline">
-                        {workout.exercises?.reduce((sum, s) => sum + s.exercises.length, 0)} Exercises
-                    </span>
-                    <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg font-bold text-sm transition-all shadow-lg shadow-indigo-500/20">
-                        Save Workout
+                <div className="flex items-center gap-6">
+                    <div className="hidden md:flex flex-col items-end">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</span>
+                        <span className="text-xs font-mono text-emerald-400 font-bold uppercase">Redigerar</span>
+                    </div>
+                    <button className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-400 text-white px-8 py-3 rounded-2xl font-black text-sm transition-all shadow-xl shadow-indigo-500/20 active:scale-95">
+                        Spara Pass
                     </button>
                 </div>
             </div>
 
             {/* MAIN WORKSPACE */}
             <div className="flex-1 flex overflow-hidden">
+                {/* LEFT: CANVAS */}
+                <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
+                    <div className="max-w-4xl mx-auto space-y-12 pb-48">
 
-                {/* LEFT: CANVAS (SCROLLABLE) */}
-                <div className="flex-1 overflow-y-auto p-8 relative">
-                    <div className="max-w-3xl mx-auto space-y-8 pb-32">
+                        {/* PREMIUM METADATA CARD */}
+                        <div className="bg-slate-900/40 border border-white/10 rounded-[2.5rem] p-10 grid grid-cols-3 gap-10 relative overflow-hidden backdrop-blur-xl">
+                            <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none select-none">
+                                <span className="text-9xl text-white font-black italic tracking-tighter">GENUS</span>
+                            </div>
 
-                        {/* METADATA CARD */}
-                        <div className="bg-slate-900 border border-white/5 rounded-2xl p-6 grid grid-cols-2 gap-6">
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Category</label>
+                            <div className="space-y-3">
+                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Kategori</label>
                                 <select
                                     value={workout.category}
                                     onChange={(e) => update('category', e.target.value)}
-                                    className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-indigo-500 outline-none hover:bg-slate-950 transition-all cursor-pointer appearance-none"
                                 >
                                     {['STRENGTH', 'HYROX', 'RUNNING', 'HYBRID', 'CROSSFIT', 'RECOVERY'].map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Difficulty</label>
+
+                            <div className="space-y-3">
+                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Typ av pass</label>
+                                <select
+                                    value={workout.subCategory || ''}
+                                    onChange={(e) => handleSubCategoryChange(e.target.value)}
+                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-indigo-500 outline-none hover:bg-slate-950 transition-all cursor-pointer appearance-none"
+                                >
+                                    <option value="">Välj typ...</option>
+                                    {SUBCATEGORIES[workout.category]?.map(s => (
+                                        <option key={s} value={s}>{s}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="space-y-3">
+                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Nivå</label>
                                 <select
                                     value={workout.difficulty}
                                     onChange={(e) => update('difficulty', e.target.value)}
-                                    className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+                                    className="w-full bg-slate-950/50 border border-white/10 rounded-2xl px-5 py-4 text-sm font-bold focus:border-indigo-500 outline-none hover:bg-slate-950 transition-all cursor-pointer appearance-none"
                                 >
                                     {['Beginner', 'Intermediate', 'Advanced', 'Elite'].map(c => <option key={c} value={c}>{c}</option>)}
                                 </select>
                             </div>
-                            <div className="col-span-2 space-y-2">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Description</label>
+
+                            <div className="col-span-3 space-y-3">
+                                <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">Beskrivning & Mål</label>
                                 <textarea
                                     value={workout.description}
                                     onChange={(e) => update('description', e.target.value)}
-                                    className="w-full bg-slate-950 border border-white/10 rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none h-20 resize-none"
-                                    placeholder="What is the goal of this session?"
+                                    className="w-full bg-slate-950/50 border border-white/10 rounded-[2rem] px-6 py-5 text-sm leading-relaxed focus:border-indigo-500 outline-none min-h-[120px] resize-none hover:bg-slate-950 transition-all"
+                                    placeholder="Vad är målet med dagens pass?"
                                 />
+                            </div>
+
+                            <div className="col-span-3 flex flex-wrap gap-2 pt-2 border-t border-white/5">
+                                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest self-center mr-4">Tränar:</span>
+                                {workout.targetedMuscles && workout.targetedMuscles.length > 0 ? (
+                                    workout.targetedMuscles.map(m => (
+                                        <span key={m} className="px-4 py-1.5 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 text-[10px] font-black rounded-full uppercase tracking-wider">
+                                            {m}
+                                        </span>
+                                    ))
+                                ) : (
+                                    <span className="text-[10px] text-slate-600 italic">Lägg till övningar för att se muskelgrupper...</span>
+                                )}
                             </div>
                         </div>
 
                         {/* SECTIONS */}
-                        {workout.exercises?.map((section, idx) => (
-                            <div
-                                key={section.id}
-                                onClick={() => setActiveSectionId(section.id)}
-                                className={`animate-in fade-in slide-in-from-bottom-4 duration-500 transition-all border rounded-2xl p-4 ${activeSectionId === section.id ? 'border-indigo-500/50 bg-indigo-500/5 shadow-2xl shadow-indigo-500/10' : 'border-transparent hover:border-white/5'}`}
-                                style={{ animationDelay: `${idx * 100}ms` }}
-                            >
-                                <div className="flex items-center justify-between mb-4 group">
-                                    <input
-                                        value={section.title}
-                                        onChange={(e) => {
-                                            const newEx = [...(workout.exercises || [])];
-                                            newEx[idx].title = e.target.value;
-                                            update('exercises', newEx);
-                                        }}
-                                        className="bg-transparent text-lg font-black text-slate-300 focus:text-white focus:outline-none border-b border-transparent focus:border-indigo-500 transition-all w-full max-w-xs"
-                                    />
-                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                        <div className="space-y-8">
+                            {workout.exercises?.map((section, idx) => (
+                                <div
+                                    key={section.id}
+                                    onClick={() => setActiveSectionId(section.id)}
+                                    className={`group transition-all duration-500 rounded-[2.5rem] p-8 border ${activeSectionId === section.id ? 'border-indigo-500/40 bg-indigo-500/5 shadow-3xl shadow-indigo-500/10' : 'border-white/5 bg-slate-900/20'}`}
+                                >
+                                    <div className="flex items-center justify-between mb-8">
+                                        <div className="flex flex-col">
+                                            <input
+                                                value={section.title}
+                                                onChange={(e) => {
+                                                    const newEx = [...(workout.exercises || [])];
+                                                    newEx[idx].title = e.target.value;
+                                                    update('exercises', newEx);
+                                                }}
+                                                className="bg-transparent text-2xl font-black text-white focus:outline-none placeholder-white/10"
+                                            />
+                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Sektion {idx + 1}</span>
+                                        </div>
                                         <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const newEx = workout.exercises!.filter(s => s.id !== section.id);
-                                                update('exercises', newEx);
-                                            }}
-                                            className="p-1 hover:bg-white/5 rounded text-slate-500 hover:text-rose-400"
+                                            onClick={(e) => { e.stopPropagation(); const newEx = workout.exercises!.filter(s => s.id !== section.id); update('exercises', newEx); }}
+                                            className="opacity-0 group-hover:opacity-100 p-3 hover:bg-rose-500/20 rounded-2xl text-rose-500 transition-all"
                                         >
-                                            🗑️
+                                            <span className="font-bold">Ta bort</span>
                                         </button>
                                     </div>
-                                </div>
 
-                                {/* EXERCISE LIST */}
-                                <div className="space-y-2">
-                                    {section.exercises.map((ex, i) => (
-                                        <div key={ex.id} className="group flex items-center gap-3 bg-slate-900 border border-white/5 p-3 rounded-lg hover:border-white/20 transition-all">
-                                            <span className="text-slate-600 font-mono text-xs w-6">{i + 1}</span>
-                                            <div className="flex-1">
-                                                <div className="font-bold text-sm text-white">{ex.name}</div>
-                                                <div className="flex gap-4 text-[10px] text-slate-400 mt-1">
-                                                    <div className="flex gap-1 items-center">
-                                                        <span className="uppercase font-bold tracking-wider text-slate-600">Sets</span>
-                                                        <input
-                                                            className="w-8 bg-transparent border-b border-slate-700 text-center focus:border-indigo-500 outline-none text-white"
-                                                            defaultValue={ex.sets}
-                                                            onBlur={(e) => {
-                                                                const sIdx = workout.exercises!.findIndex(s => s.id === section.id);
-                                                                const eIdx = section.exercises.findIndex(x => x.id === ex.id);
-                                                                const newW = JSON.parse(JSON.stringify(workout));
-                                                                newW.exercises[sIdx].exercises[eIdx].sets = parseInt(e.target.value);
-                                                                setWorkout(newW);
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <div className="flex gap-1 items-center">
-                                                        <span className="uppercase font-bold tracking-wider text-slate-600">Reps</span>
-                                                        <input
-                                                            className="w-12 bg-transparent border-b border-slate-700 text-center focus:border-indigo-500 outline-none text-white"
-                                                            defaultValue={ex.reps}
-                                                            onBlur={(e) => {
-                                                                const sIdx = workout.exercises!.findIndex(s => s.id === section.id);
-                                                                const eIdx = section.exercises.findIndex(x => x.id === ex.id);
-                                                                const newW = JSON.parse(JSON.stringify(workout));
-                                                                newW.exercises[sIdx].exercises[eIdx].reps = e.target.value;
-                                                                setWorkout(newW);
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    <div className="flex gap-1 items-center">
-                                                        <span className="uppercase font-bold tracking-wider text-slate-600">Load</span>
-                                                        <input
-                                                            className="w-16 bg-transparent border-b border-slate-700 text-center focus:border-indigo-500 outline-none text-white"
-                                                            defaultValue={ex.weight}
-                                                            onBlur={(e) => {
-                                                                const sIdx = workout.exercises!.findIndex(s => s.id === section.id);
-                                                                const eIdx = section.exercises.findIndex(x => x.id === ex.id);
-                                                                const newW = JSON.parse(JSON.stringify(workout));
-                                                                newW.exercises[sIdx].exercises[eIdx].weight = e.target.value;
-                                                                setWorkout(newW);
-                                                            }}
-                                                        />
+                                    <div className="space-y-3">
+                                        {section.exercises.map((ex, i) => (
+                                            <div key={ex.id} className="flex items-center gap-6 bg-slate-950/40 border border-white/5 p-6 rounded-3xl hover:border-white/20 transition-all hover:translate-x-1 group/ex">
+                                                <div className="w-10 h-10 rounded-2xl bg-slate-900 flex items-center justify-center text-xs font-black text-slate-500 border border-white/5">
+                                                    {i + 1}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <div className="font-black text-lg text-white mb-1">{ex.name}</div>
+                                                    <div className="flex gap-8">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Set</span>
+                                                            <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.sets} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].sets = parseInt(e.target.value); setWorkout(newW); }} />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Rep / Sträcka</span>
+                                                            <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.reps} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].reps = e.target.value; setWorkout(newW); }} />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[9px] font-black text-slate-600 uppercase tracking-[0.1em] mb-1">Last / Tempo</span>
+                                                            <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.weight} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].weight = e.target.value; setWorkout(newW); }} />
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <button onClick={() => removeExercise(section.id, ex.id)} className="opacity-0 group-hover/ex:opacity-100 p-2 text-slate-600 hover:text-rose-500 transition-all">✕</button>
                                             </div>
-                                            <button onClick={() => removeExercise(section.id, ex.id)} className="opacity-0 group-hover:opacity-100 text-slate-600 hover:text-rose-500 p-2">✕</button>
-                                        </div>
-                                    ))}
-
-                                    {/* EMPTY STATE */}
-                                    {section.exercises.length === 0 && (
-                                        <div className="py-8 text-center border-2 border-dashed border-white/5 rounded-xl">
-                                            <p className="text-[10px] text-slate-500 mb-2">Section Empty</p>
-                                            <button className="text-xs text-indigo-400 font-bold uppercase tracking-widest">+ Select from Library</button>
-                                        </div>
-                                    )}
+                                        ))}
+                                        {section.exercises.length === 0 && (
+                                            <div className="py-12 text-center border-2 border-dashed border-white/5 rounded-[2.5rem] bg-slate-900/10">
+                                                <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mb-4">Sektionen är tom</p>
+                                                <button className="text-sm text-indigo-400 font-black uppercase tracking-widest hover:text-indigo-300 transition-colors">+ Sök i övningsarkivet</button>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            ))}
+                        </div>
 
-                        {/* ADD SECTION BTN */}
                         <button
-                            onClick={() => update('exercises', [...(workout.exercises || []), { id: crypto.randomUUID(), title: "New Section", exercises: [] }])}
-                            className="w-full py-4 border border-white/5 hover:border-white/20 hover:bg-white/5 rounded-xl border-dashed text-slate-500 hover:text-white transition-all font-bold uppercase tracking-widest text-xs"
+                            onClick={() => update('exercises', [...(workout.exercises || []), { id: crypto.randomUUID(), title: "Ny Sektion", exercises: [] }])}
+                            className="w-full py-8 border-2 border-dashed border-white/5 hover:border-white/10 hover:bg-white/5 rounded-[2.5rem] text-slate-500 hover:text-white transition-all font-black uppercase tracking-[0.2em] text-xs"
                         >
-                            + Add Section
+                            + Lägg till sektion
                         </button>
-
                     </div>
                 </div>
 
                 {/* RIGHT: SMART TOOLBOX */}
-                <div className="w-96 border-l border-white/10 bg-slate-900 hidden xl:flex flex-col">
-                    <div className="p-4 border-b border-white/5 flex gap-2">
-                        <button
-                            onClick={() => setActiveTab('BUILD')}
-                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors ${activeTab === 'BUILD' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 hover:text-slate-300'}`}
-                        >
-                            Builder Tools
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('ANALYZE')}
-                            className={`flex-1 py-2 text-[10px] font-bold uppercase tracking-widest rounded-lg transition-colors ${activeTab === 'ANALYZE' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-500 hover:text-slate-300'}`}
-                        >
-                            Smart Analysis
-                        </button>
+                <div className="w-[450px] border-l border-white/5 bg-[#080815] hidden xl:flex flex-col shadow-2xl">
+                    <div className="p-6 border-b border-white/5 flex gap-2">
+                        {[
+                            { id: 'BUILD', label: 'Bygg' },
+                            { id: 'ANALYZE', label: 'Analysera' },
+                            { id: 'COMPARE', label: 'Jämför' }
+                        ].map(t => (
+                            <button
+                                key={t.id}
+                                onClick={() => setActiveTab(t.id as any)}
+                                className={`flex-1 py-3 text-[11px] font-black uppercase tracking-widest rounded-2xl transition-all ${activeTab === t.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-slate-900/50 text-slate-500 hover:text-slate-300'}`}
+                            >
+                                {t.label}
+                            </button>
+                        ))}
                     </div>
 
-                    <div className="flex-1 overflow-y-auto">
-                        {activeTab === 'BUILD' ? (
-                            <ExerciseSelector onSelect={addExercise} />
-                        ) : (
-                            <WorkoutAnalyzer workout={workout} />
-                        )}
+                    <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {activeTab === 'BUILD' ? (<ExerciseSelector onSelect={addExercise} />)
+                            : activeTab === 'ANALYZE' ? (<WorkoutAnalyzer workout={workout} />)
+                                : (<WorkoutComparisonView workout={workout} />)}
                     </div>
-
                 </div>
             </div>
         </div>
     );
 }
+

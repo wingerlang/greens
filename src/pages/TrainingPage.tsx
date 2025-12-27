@@ -868,6 +868,7 @@ export function TrainingPage() {
                 setExerciseForm={setExerciseForm}
                 calculateCalories={calculateExerciseCalories}
                 isEditing={!!editingExerciseId}
+                activityId={editingExerciseId}
                 onDelete={() => {
                     if (editingExerciseId) {
                         deleteExercise(editingExerciseId);

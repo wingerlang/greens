@@ -16,11 +16,8 @@ export function WorkoutAnalyzer({ workout }: Props) {
         workout.exercises?.forEach(section => {
             section.exercises.forEach(ex => {
                 totalExercises++;
-                // Find mapping
-                // Try exact match or partial match
                 let map = MUSCLE_MAP[ex.name];
                 if (!map) {
-                    // Try to find partial match
                     const key = Object.keys(MUSCLE_MAP).find(k => ex.name.includes(k));
                     if (key) map = MUSCLE_MAP[key];
                 }
@@ -34,51 +31,52 @@ export function WorkoutAnalyzer({ workout }: Props) {
             });
         });
 
-        // Convert to array
         return Object.entries(stats)
-            .sort((a, b) => b[1] - a[1]) // Sort by count
-            .map(([muscle, score]) => ({ muscle, score, pct: (score / totalExercises) * 100 }));
+            .sort((a, b) => b[1] - a[1])
+            .map(([muscle, score]) => ({ muscle, score, pct: (score / (totalExercises || 1)) * 100 }));
     }, [workout]);
 
-    // ANALYZE: Coach Tips
+    // ANALYZE: Coach Tips (Swedish)
     const coachTips = useMemo(() => {
         const tips: string[] = [];
 
         const hasWarmup = workout.exercises?.some(s => s.title.toLowerCase().includes('warm') || s.title.toLowerCase().includes('uppvärmning'));
-        if (!hasWarmup) tips.push("⚠️ Missing Warmup: Consider adding a 5-10 min warmup section.");
+        if (!hasWarmup) tips.push("⚠️ Saknar uppvärmning: Överväg att lägga till 5-10 minuter för att minska skaderisken.");
 
         const pushes = (muscleStats.find(s => s.muscle === 'Chest')?.score || 0) + (muscleStats.find(s => s.muscle === 'Shoulders')?.score || 0) + (muscleStats.find(s => s.muscle === 'Quads')?.score || 0);
         const pulls = (muscleStats.find(s => s.muscle === 'Back')?.score || 0) + (muscleStats.find(s => s.muscle === 'Hamstrings')?.score || 0);
 
-        if (pushes > pulls + 2) tips.push("ℹ️ Push Dominant: Consider adding more pulling movements (Rows, Pullups, RDLs) for balance.");
-        if (pulls > pushes + 2) tips.push("ℹ️ Pull Dominant: A heavy pulling session detected.");
+        if (pushes > pulls + 2) tips.push("ℹ️ Push-dominant: Passet har mycket pressande rörelser. Lägg till fler dragövningar (rodd, pullups) för balans.");
+        if (pulls > pushes + 2) tips.push("ℹ️ Pull-dominant: Fokus ligger på dragrörelser och baksida.");
 
-        if (workout.durationMin > 90) tips.push("⏱️ Long Session: Ensure you have intra-workout nutrition for sessions over 90 mins.");
+        if (workout.durationMin > 90) tips.push("⏱️ Långt pass: Vid pass över 90 minuter bör du se över vätske- och energiintag under träningen.");
 
         return tips;
     }, [workout, muscleStats]);
 
     return (
-        <div className="space-y-6 p-4">
+        <div className="space-y-8 p-6 bg-[#080815]">
 
-            {/* HEATMAP REPLACEMENT: BARS */}
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                <h4 className="text-xs font-bold text-white mb-4 uppercase tracking-widest">Target Zones</h4>
+            {/* MUSCLE ZONES */}
+            <div className="bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-6">Målytor (Muskelgrupper)</h4>
 
                 {muscleStats.length === 0 ? (
-                    <div className="text-[10px] text-slate-500 italic text-center py-4">Add exercises to see analysis</div>
+                    <div className="text-[10px] text-slate-600 font-bold uppercase tracking-widest text-center py-8 italic">
+                        Lägg till övningar för att se analys
+                    </div>
                 ) : (
-                    <div className="space-y-3">
-                        {muscleStats.slice(0, 6).map(stat => (
-                            <div key={stat.muscle} className="space-y-1">
-                                <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400">
-                                    <span>{stat.muscle}</span>
-                                    <span>{stat.score.toFixed(1)} pts</span>
+                    <div className="space-y-4">
+                        {muscleStats.slice(0, 8).map(stat => (
+                            <div key={stat.muscle} className="group">
+                                <div className="flex justify-between text-[11px] font-black uppercase tracking-wider mb-2">
+                                    <span className="text-white">{stat.muscle}</span>
+                                    <span className="text-indigo-400 opacity-50">{stat.pct.toFixed(0)}%</span>
                                 </div>
-                                <div className="h-1.5 w-full bg-slate-900 rounded-full overflow-hidden">
+                                <div className="h-2 w-full bg-slate-950 rounded-full overflow-hidden border border-white/5">
                                     <div
-                                        className="h-full bg-gradient-to-r from-indigo-500 to-purple-500"
-                                        style={{ width: `${Math.min(100, (stat.score / 5) * 100)}%` }} // Normalized to ~5 exercises
+                                        className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
+                                        style={{ width: `${Math.min(100, stat.pct)}%` }}
                                     ></div>
                                 </div>
                             </div>
@@ -87,19 +85,26 @@ export function WorkoutAnalyzer({ workout }: Props) {
                 )}
             </div>
 
-            {/* COACH TIPS */}
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                <h4 className="text-xs font-bold text-emerald-400 mb-2 uppercase tracking-widest">Coach AI Insights</h4>
+            {/* AI COACH INSIGHTS */}
+            <div className="bg-slate-900/40 p-6 rounded-[2rem] border border-white/5 backdrop-blur-md relative overflow-hidden">
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-indigo-500/10 blur-[80px] pointer-events-none" />
+
+                <h4 className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.2em] mb-4">Coach AI Insikter</h4>
                 {coachTips.length === 0 ? (
-                    <div className="text-[10px] text-slate-500 italic">Looking good! No specific warnings.</div>
+                    <div className="text-[11px] text-slate-500 font-bold italic leading-relaxed">
+                        Ser balanserat och bra ut! Inga specifika varningar för detta upplägg.
+                    </div>
                 ) : (
-                    <ul className="space-y-2 text-xs text-slate-300">
+                    <div className="space-y-3">
                         {coachTips.map((tip, i) => (
-                            <li key={i}>{tip}</li>
+                            <div key={i} className="flex gap-3 text-[11px] font-bold text-slate-300 leading-relaxed p-3 rounded-2xl bg-white/5 border border-white/5">
+                                {tip}
+                            </div>
                         ))}
-                    </ul>
+                    </div>
                 )}
             </div>
         </div>
     );
 }
+
