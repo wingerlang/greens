@@ -30,6 +30,8 @@ import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
 import { ActivitiesPage } from './pages/ActivitiesPage.tsx';
 import { StrengthPage } from './pages/StrengthPage.tsx';
 import { ExercisesPage } from './pages/ExercisesPage.tsx';
+import { WorkoutBuilderPage } from './pages/WorkoutBuilderPage.tsx';
+import { WorkoutDetailPage } from './pages/WorkoutDetailPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -59,7 +61,7 @@ export function App() {
                                 <Route path="/register" element={<RegisterPage />} />
 
                                 {/* Protected Routes */}
-                                <Route path="/" element={
+                                <Route path="/*" element={
                                     <RequireAuth>
                                         <Layout>
                                             <Routes>
@@ -87,11 +89,6 @@ export function App() {
                                                 <Route path="docs" element={<DocumentationPage />} />
                                                 <Route path="community" element={<UsersPage />} />
                                                 <Route path="u/:handle" element={<PublicProfilePage />} />
-                                                <Route path="api" element={<ApiPage />} />
-                                                <Route path="docs" element={<DocumentationPage />} />
-                                                <Route path="community" element={<UsersPage />} />
-                                                <Route path="u/:handle" element={<PublicProfilePage />} />
-                                                <Route path="u/:handle" element={<PublicProfilePage />} />
                                                 <Route path="garmin" element={<GarminPage />} />
                                                 <Route path="settings" element={<SettingsPage />} />
                                                 <Route path="sync" element={<IntegrationsPage />} />
@@ -102,29 +99,28 @@ export function App() {
                                                 <Route path="strength/:exerciseName" element={<StrengthPage />} />
                                                 <Route path="styrka" element={<StrengthPage />} />
                                                 <Route path="styrka/:exerciseName" element={<StrengthPage />} />
-                                                <Route path="styrka/:exerciseName" element={<StrengthPage />} />
                                                 <Route path="hyrox" element={<Navigate to="/health/hyrox" replace />} />
+
                                                 <Route path="pass" element={<WorkoutsPage />} />
                                                 <Route path="workouts" element={<WorkoutsPage />} />
+                                                <Route path="workouts/builder" element={<WorkoutBuilderPage />} />
+                                                <Route path="workouts/:id" element={<WorkoutDetailPage />} />
                                                 <Route path="/exercises" element={<ExercisesPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>
-                                } /* /> */ >
-                                    {/* Catch-all for sub-routes handled above by nested router or simple layout wrapping? 
-                                      Actually, cleaner to not nest Routes inside Routes element prop if not using Outlet. 
-                                      Let's flatten standard pattern.
-                                  */ }
-                                    <Route path="/*" element={
-                                        <RequireAuth>
-                                            <Layout>
-                                                <Routes>
-                                                    <Route path="*" element={<Navigate to="/" />} />
-                                                </Routes>
-                                            </Layout>
-                                        </RequireAuth>
-                                    } />
-                                </Route>
+                                } />
+
+                                {/* Catch-all */}
+                                <Route path="/*" element={
+                                    <RequireAuth>
+                                        <Layout>
+                                            <Routes>
+                                                <Route path="*" element={<Navigate to="/" />} />
+                                            </Routes>
+                                        </Layout>
+                                    </RequireAuth>
+                                } />
                             </Routes>
                         </BrowserRouter>
                     </CookingModeProvider>

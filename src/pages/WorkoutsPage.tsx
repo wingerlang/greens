@@ -3,8 +3,10 @@ import { ALL_WORKOUTS } from '../data/workouts/index.ts';
 import { WorkoutCard } from '../components/workouts/WorkoutCard.tsx';
 import { WorkoutDetailModal } from '../components/workouts/WorkoutDetailModal.tsx';
 import { WorkoutDefinition } from '../models/workout.ts';
+import { useNavigate } from 'react-router-dom';
 
 export function WorkoutsPage() {
+    const navigate = useNavigate();
     const [selectedWorkout, setSelectedWorkout] = useState<WorkoutDefinition | null>(null);
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -36,6 +38,12 @@ export function WorkoutsPage() {
                         Välj ett pass, anpassa det och kör!
                     </p>
                 </div>
+                <button
+                    onClick={() => navigate('/workouts/builder')}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold uppercase tracking-widest text-sm shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all flex items-center gap-2"
+                >
+                    <span>⚡</span> Skapa Pass
+                </button>
             </div>
 
             {/* FILTERS */}
@@ -56,8 +64,8 @@ export function WorkoutsPage() {
                             key={cat}
                             onClick={() => setCategoryFilter(cat)}
                             className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-all whitespace-nowrap ${categoryFilter === cat
-                                    ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
-                                    : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                                ? 'bg-emerald-500 text-black shadow-lg shadow-emerald-500/20'
+                                : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
                                 }`}
                         >
                             {cat}
@@ -79,18 +87,10 @@ export function WorkoutsPage() {
                         <WorkoutCard
                             key={workout.id}
                             workout={workout}
-                            onClick={() => setSelectedWorkout(workout)}
+                            onClick={() => navigate(`/workouts/${workout.id}`)}
                         />
                     ))}
                 </div>
-            )}
-
-            {/* MODAL */}
-            {selectedWorkout && (
-                <WorkoutDetailModal
-                    workout={selectedWorkout}
-                    onClose={() => setSelectedWorkout(null)}
-                />
             )}
         </div>
     );
