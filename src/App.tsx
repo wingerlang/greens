@@ -6,6 +6,7 @@ import { CookingModeProvider } from './context/CookingModeProvider.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { Layout } from './components/Layout.tsx';
 import { WeeklyPage } from './pages/WeeklyPage.tsx';
+import { DashboardPage } from './pages/DashboardPage.tsx';
 import { DatabasePage } from './pages/DatabasePage.tsx';
 import { PantryPage } from './pages/PantryPage.tsx';
 import { RecipesPage } from './pages/RecipesPage.tsx';
@@ -65,7 +66,8 @@ export function App() {
                                     <RequireAuth>
                                         <Layout>
                                             <Routes>
-                                                <Route index element={<WeeklyPage />} />
+                                                <Route index element={<DashboardPage />} />
+                                                <Route path="veckan" element={<WeeklyPage />} />
                                                 <Route path="weekly" element={<WeeklyPage />} />
                                                 <Route path="vecka" element={<WeeklyPage />} />
                                                 <Route path="vecka/recept/:recipeId/*" element={<WeeklyPage />} />

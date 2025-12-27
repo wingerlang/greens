@@ -104,10 +104,49 @@ export function calculateGAP(paceSecPerKm: number, gainMeters: number, distanceK
  * For running: Based on GAP vs Heart Rate.
  * For strength: Based on Tonnage vs Duration.
  */
-export function calculatePerformanceScore(activity: any): number {
+export function calculatePerformanceScore(activity: any, history: any[] = []): number {
+    const breakdown = getPerformanceBreakdown(activity, history);
+    return breakdown.totalScore;
+}
+
+export interface ScoreComponent {
+    label: string;
+    value: string;
+    score: number;
+    max: number;
+    description: string;
+    icon: string;
+    color: string;
+    isPersonalBest?: boolean;
+}
+
+export interface PerformanceBreakdown {
+    totalScore: number;
+    type: 'cardio' | 'strength' | 'unknown';
+    components: ScoreComponent[];
+    summary: string;
+    isPersonalBest: boolean;
+}
+
+/**
+ * Provides a detailed breakdown of the Greens Score.
+ */
+export function getPerformanceBreakdown(activity: any, history: any[] = []): PerformanceBreakdown {
     const type = (activity.type || activity.activityType || '').toLowerCase();
     const isRunning = ['running', 'run', 'walking', 'walk', 'hiking', 'trail'].some(t => type.includes(t));
     const isStrength = ['strength', 'weightlifting', 'gym', 'styrka', 'bodybuilding', 'crossfit'].some(t => type.includes(t));
+
+    let components: ScoreComponent[] = [];
+    let summary = '';
+    let totalScore = 0;
+    let isPersonalBest = false;
+
+    // Filter history to current activity type and exclude current activity
+    const activityDate = new Date(activity.date).getTime();
+    const historyBefore = history.filter(h =>
+        h.id !== activity.id &&
+        new Date(h.date).getTime() < activityDate
+    );
 
     // 1. RUNNING / CARDIO
     if (isRunning) {
@@ -116,42 +155,162 @@ export function calculatePerformanceScore(activity: any): number {
         const hr = activity.heartRateAvg || activity.avgHeartRate || 0;
         const gain = activity.elevationGain || 0;
 
-        if (dist === 0 || dur === 0) return 0;
+        if (dist === 0 || dur === 0) {
+            return { totalScore: 0, type: 'cardio', components: [], summary: 'Ingen data för beräkning.', isPersonalBest: false };
+        }
 
         const paceSec = (dur * 60) / dist;
         const gapSec = calculateGAP(paceSec, gain, dist);
 
         if (hr === 0) {
-            // No HR data - score based on pace alone (less accurate)
-            return Math.min(100, Math.max(0, 120 - (gapSec / 5)));
+            totalScore = Math.min(100, Math.max(0, 120 - (gapSec / 5)));
+            summary = 'Poäng baserat enbart på tempo då puls saknas.';
+            components.push({
+                label: 'Tempo (GAP)',
+                value: `${Math.floor(gapSec / 60)}:${Math.round(gapSec % 60).toString().padStart(2, '0')}/km`,
+                score: totalScore,
+                max: 100,
+                description: 'Din hastighet justerad för backar.',
+                icon: '⚡',
+                color: 'text-indigo-400'
+            });
         }
 
         // Efficiency = Work (Distance/GAP) / Cost (HR)
         const efficiency = 1000000 / (gapSec * hr);
+        let baseScore = efficiency * 3.0;
 
-        // Normalize: We want 25 to be ~75 score.
-        let score = efficiency * 3.0;
+        totalScore = baseScore;
+        components.push({
+            label: 'Löpekonomi (idx)',
+            value: `${efficiency.toFixed(1)} idx`,
+            score: Math.min(100, baseScore),
+            max: 100,
+            description: 'Hur långt du kommer per hjärtslag. Högre är bättre.',
+            icon: '📈',
+            color: 'text-emerald-400'
+        });
 
-        // Long run bonus: Carrying a pace for a long time is harder (HR drift)
-        if (dist > 10) score *= 1.05;
-        if (dist > 21) score *= 1.1;
-        if (dist > 35) score *= 1.15;
+        if (dist > 10) {
+            const bonus = dist > 35 ? 1.15 : (dist > 21 ? 1.1 : 1.05);
+            const bonusPercent = Math.round((bonus - 1) * 100);
+            totalScore *= bonus;
+            components.push({
+                label: 'Uthållighet',
+                value: `+${bonusPercent}%`,
+                score: bonusPercent * 5,
+                max: 100,
+                description: 'Bonus för långdistans.',
+                icon: '🏃',
+                color: 'text-amber-400'
+            });
+        }
 
-        return Math.min(100, Math.round(score));
+        // --- PERSONALIZATION BONUSES ---
+        if (dur >= 60) {
+            totalScore += 10;
+            components.push({ label: 'Uthållighets-boost', value: '+10', score: 100, max: 100, description: 'Bonus för pass över 60 minuter.', icon: '⏱️', color: 'text-blue-400' });
+        } else if (dur >= 30) {
+            totalScore += 5;
+            components.push({ label: 'Uthållighets-boost', value: '+5', score: 50, max: 100, description: 'Bonus för pass över 30 minuter.', icon: '⏱️', color: 'text-blue-400' });
+        }
+
+        if (historyBefore.length > 0) {
+            const runningHistory = historyBefore.filter(h => {
+                const t = (h.type || h.activityType || '').toLowerCase();
+                return ['running', 'run'].some(tag => t.includes(tag));
+            });
+
+            if (runningHistory.length > 0) {
+                const maxDist = Math.max(...runningHistory.map(h => h.distance || 0));
+                if (dist > maxDist && dist > 2) {
+                    isPersonalBest = true;
+                    totalScore += 10;
+                    components.push({ label: 'PB Distans', value: '🏆', score: 100, max: 100, description: 'Ditt längsta löppass hittills!', icon: '🗺️', color: 'text-yellow-400', isPersonalBest: true });
+                }
+
+                const similarDistHistory = runningHistory.filter(h => (h.distance || 0) >= dist * 0.8 && (h.distance || 0) <= dist * 1.2);
+                if (similarDistHistory.length > 0) {
+                    const fastestPace = Math.min(...similarDistHistory.map(h => (h.durationMinutes * 60) / (h.distance || 1)));
+                    if (paceSec < fastestPace * 0.98) {
+                        isPersonalBest = true;
+                        totalScore += 10;
+                        components.push({ label: 'PB Tempo', value: '🏆', score: 100, max: 100, description: 'Ditt snabbaste tempo på denna distans!', icon: '💨', color: 'text-yellow-400', isPersonalBest: true });
+                    }
+                }
+            }
+        }
+
+        const roundedScore = Math.min(100, Math.round(totalScore));
+        summary = roundedScore > 85 ? 'Exceptionell prestation!' : (roundedScore > 65 ? 'Riktigt bra driv i passet.' : 'En stabil insats i banken.');
+
+        return { totalScore: roundedScore, type: 'cardio', components, summary, isPersonalBest };
     }
 
     // 2. STRENGTH
     if (isStrength) {
         const tonnage = activity.tonnage || 0;
         const dur = activity.durationMinutes || 0;
-        if (tonnage === 0 || dur === 0) return 0;
+        if (tonnage === 0 || dur === 0) return { totalScore: 0, type: 'strength', components: [], summary: 'Ingen tonnage-data tillgänglig.', isPersonalBest: false };
 
-        // Work rate = kg per minute
         const workRate = tonnage / dur;
+        let baseScore = workRate * 0.4;
+        totalScore = baseScore;
 
-        // Normalize: 250 kg/min (e.g. 15 tons in 60 min) is a "good" workout (100 pts).
-        return Math.min(100, Math.round(workRate * 0.4));
+        components.push({
+            label: 'Arbetsinsats',
+            value: `${Math.round(workRate)} kg/min`,
+            score: Math.min(100, baseScore),
+            max: 100,
+            description: 'Hur mycket vikt du flyttar per minut (intensitet).',
+            icon: '🔥',
+            color: 'text-purple-400'
+        });
+
+        components.push({
+            label: 'Totalvolym',
+            value: `${(tonnage / 1000).toFixed(1)} t`,
+            score: Math.min(100, (tonnage / 20000) * 100),
+            max: 100,
+            description: 'Total mängd flyttad vikt.',
+            icon: '🏋️',
+            color: 'text-blue-400'
+        });
+
+        // --- PERSONALIZATION BONUSES ---
+        if (dur >= 60) {
+            totalScore += 10;
+            components.push({ label: 'Volym-boost', value: '+10', score: 100, max: 100, description: 'Bonus för rejäl passlängd.', icon: '⏱️', color: 'text-indigo-400' });
+        }
+
+        if (historyBefore.length > 0) {
+            const strengthHistory = historyBefore.filter(h => {
+                const t = (h.type || h.activityType || '').toLowerCase();
+                return ['strength', 'weightlifting', 'gym', 'styrka'].some(tag => t.includes(tag));
+            });
+
+            if (strengthHistory.length > 0) {
+                const maxTonnage = Math.max(...strengthHistory.map(h => h.tonnage || 0));
+                if (tonnage > maxTonnage && tonnage > 1000) {
+                    isPersonalBest = true;
+                    totalScore += 15;
+                    components.push({ label: 'PB Tonnage', value: '🏆', score: 100, max: 100, description: 'Ditt tyngsta styrkepass någonsin!', icon: '💪', color: 'text-yellow-400', isPersonalBest: true });
+                }
+
+                const maxWorkRate = Math.max(...strengthHistory.map(h => (h.tonnage || 0) / (h.durationMinutes || 1)));
+                if (workRate > maxWorkRate && workRate > 50) {
+                    isPersonalBest = true;
+                    totalScore += 10;
+                    components.push({ label: 'PB Intensitet', value: '🏆', score: 100, max: 100, description: 'Ditt högsta arbetstempo hittills!', icon: '⚡', color: 'text-yellow-400', isPersonalBest: true });
+                }
+            }
+        }
+
+        const roundedScore = Math.min(100, Math.round(totalScore));
+        summary = roundedScore > 85 ? 'Massivt pass! Grym volym.' : (roundedScore > 65 ? 'Stabilt och intensivt pass.' : 'Bra tempo genom passet.');
+
+        return { totalScore: roundedScore, type: 'strength', components, summary, isPersonalBest };
     }
 
-    return 0;
+    return { totalScore: 0, type: 'unknown', components: [], summary: 'Okänd aktivitetstyp.', isPersonalBest: false };
 }

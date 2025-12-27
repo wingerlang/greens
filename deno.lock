@@ -6,6 +6,7 @@
     "npm:@types/react@^18.3.1": "18.3.27",
     "npm:@vitejs/plugin-react@^4.3.4": "4.7.0_vite@6.4.1__picomatch@4.0.3_@babel+core@7.28.5",
     "npm:autoprefixer@^10.4.0": "10.4.23_postcss@8.5.6",
+    "npm:lucide-react@0.469": "0.469.0_react@18.3.1",
     "npm:print-js@^1.6.0": "1.6.0",
     "npm:react-dom@^18.3.1": "18.3.1_react@18.3.1",
     "npm:react-router-dom@^7.0.2": "7.10.1_react@18.3.1_react-dom@18.3.1__react@18.3.1",
@@ -967,6 +968,12 @@
         "yallist"
       ]
     },
+    "lucide-react@0.469.0_react@18.3.1": {
+      "integrity": "sha512-28vvUnnKQ/dBwiCQtwJw7QauYnE7yd2Cyp4tTTJpvglX4EMpbflcdBgrgToX2j71B3YvugK/NH3BGUk+E/p/Fw==",
+      "dependencies": [
+        "react"
+      ]
+    },
     "merge2@1.4.1": {
       "integrity": "sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg=="
     },
@@ -1513,6 +1520,7 @@
     "dependencies": [
       "npm:@types/react-dom@^18.3.1",
       "npm:@types/react@^18.3.1",
+      "npm:lucide-react@0.469",
       "npm:print-js@^1.6.0",
       "npm:react-dom@^18.3.1",
       "npm:react-router-dom@^7.0.2",

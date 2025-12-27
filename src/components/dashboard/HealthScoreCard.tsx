@@ -32,14 +32,13 @@ export function HealthScoreCard({ exercises, meals, userSettings }: HealthScoreC
 
     return (
         <div className="content-card relative overflow-hidden">
-            {/* Background Glow */}
-            <div className={`absolute -top-10 -right-10 w-40 h-40 blur-[60px] rounded-full opacity-20 ${getScoreColor(health.totalScore).replace('text-', 'bg-')}`}></div>
+            {/* Background Glow - REMOVED for Minimalism */}
 
-            <div className="flex justify-between items-start mb-6">
+            <div className="flex justify-between items-center mb-8">
                 <div>
-                    <h3 className="section-title">Greens Health Score™</h3>
-                    <p className="text-xs text-slate-500 font-medium max-w-[200px]">
-                        Din dagliga bio-metriska status baserad på träning, kost & återhämtning.
+                    <h3 className="text-lg font-bold text-white tracking-tight">Health Score™</h3>
+                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wider mt-1">
+                        Dagsform
                     </p>
                 </div>
 
@@ -51,7 +50,7 @@ export function HealthScoreCard({ exercises, meals, userSettings }: HealthScoreC
                             cy="40"
                             r={radius}
                             className="stroke-slate-800"
-                            strokeWidth="6"
+                            strokeWidth="4"
                             fill="transparent"
                         />
                         <circle
@@ -59,7 +58,7 @@ export function HealthScoreCard({ exercises, meals, userSettings }: HealthScoreC
                             cy="40"
                             r={radius}
                             className={`${getRingColor(health.totalScore)} transition-all duration-1000 ease-out`}
-                            strokeWidth="6"
+                            strokeWidth="4"
                             strokeDasharray={circumference}
                             strokeDashoffset={offset}
                             strokeLinecap="round"
@@ -68,57 +67,55 @@ export function HealthScoreCard({ exercises, meals, userSettings }: HealthScoreC
                     </svg>
                     <div className="absolute inset-0 flex items-center justify-center flex-col">
                         <span className={`text-2xl font-black ${getScoreColor(health.totalScore)}`}>{health.totalScore}</span>
-                        <span className="text-[8px] uppercase font-bold text-slate-500">IDAG</span>
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Training Metric */}
-                <div className="bg-slate-900/40 rounded-xl p-3 border border-white/5 relative group">
-                    <div className="absolute top-2 right-2 flex gap-0.5">
-                        {[1, 2, 3, 4, 5].map(i => (
-                            <div key={i} className={`w-1 h-1 rounded-full ${i <= (health.training.score / 20) ? 'bg-sky-400' : 'bg-slate-800'}`}></div>
-                        ))}
+                <div className="rounded-xl p-3 border border-white/5 bg-white/[0.02] hover:bg-white/5 transition-colors">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Träning</div>
+                        <div className="text-xl">💪</div>
                     </div>
-                    <div className="text-xl mb-1">💪</div>
-                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Träningsbalans</div>
-                    <div className="text-sm font-bold text-white mb-0.5">{health.training.status}</div>
-                    <div className="text-[9px] text-slate-400 leading-tight">{health.training.details}</div>
-                    <div className="mt-2 text-[9px] font-mono text-sky-400 bg-sky-400/10 inline-block px-1.5 py-0.5 rounded">TSB: {health.training.tsb > 0 ? '+' : ''}{health.training.tsb}</div>
+                    <div className="text-sm font-bold text-white leading-tight mb-1">{health.training.status}</div>
+                    <div className="flex justify-between items-center">
+                        <div className="text-[9px] text-slate-400">{health.training.details}</div>
+                        <div className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${health.training.tsb > 0 ? 'text-emerald-400 bg-emerald-400/10' : 'text-slate-400 bg-slate-800'}`}>
+                            TSB {health.training.tsb > 0 ? '+' : ''}{health.training.tsb}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Nutrition Metric */}
-                <div className="bg-slate-900/40 rounded-xl p-3 border border-white/5 relative group">
-                    <div className="absolute top-2 right-2 flex gap-0.5">
-                        {[1, 2, 3, 4, 5].map(i => (
-                            <div key={i} className={`w-1 h-1 rounded-full ${i <= (health.nutrition.score / 20) ? 'bg-emerald-400' : 'bg-slate-800'}`}></div>
-                        ))}
+                <div className="rounded-xl p-3 border border-white/5 bg-white/[0.02] hover:bg-white/5 transition-colors">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="text-[10px] uppercase font-bold text-slate-500">KCAL</div>
+                        <div className="text-xl">🥗</div>
                     </div>
-                    <div className="text-xl mb-1">🥗</div>
-                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Nutrition</div>
-                    <div className="text-sm font-bold text-white mb-0.5">{health.nutrition.status}</div>
-                    <div className="text-[9px] text-slate-400 leading-tight">
-                        {Math.abs(health.nutrition.caloriesDiff)} kcal {health.nutrition.status === 'Surplus' ? 'överskott' : 'underskott'}.
-                    </div>
-                    <div className="mt-2 text-[9px] font-mono text-emerald-400 bg-emerald-400/10 inline-block px-1.5 py-0.5 rounded">
-                        {health.nutrition.proteinMet ? 'Protein OK ✅' : 'Lågt Protein ⚠️'}
+                    <div className="text-sm font-bold text-white leading-tight mb-1">{health.nutrition.status}</div>
+                    <div className="flex justify-between items-center">
+                        <div className="text-[9px] text-slate-400">
+                            {Math.abs(health.nutrition.caloriesDiff)} kcal {health.nutrition.status === 'Surplus' ? 'plus' : 'minus'}
+                        </div>
+                        <div className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${health.nutrition.proteinMet ? 'text-emerald-400 bg-emerald-400/10' : 'text-amber-400 bg-amber-400/10'}`}>
+                            {health.nutrition.proteinMet ? 'Protein OK' : 'Lågt Protein'}
+                        </div>
                     </div>
                 </div>
 
                 {/* Consistency Metric */}
-                <div className="bg-slate-900/40 rounded-xl p-3 border border-white/5 relative group">
-                    <div className="absolute top-2 right-2 flex gap-0.5">
-                        {[1, 2, 3, 4, 5].map(i => (
-                            <div key={i} className={`w-1 h-1 rounded-full ${i <= (health.consistency.score / 20) ? 'bg-indigo-400' : 'bg-slate-800'}`}></div>
-                        ))}
+                <div className="rounded-xl p-3 border border-white/5 bg-white/[0.02] hover:bg-white/5 transition-colors">
+                    <div className="flex justify-between items-center mb-2">
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Streak</div>
+                        <div className="text-xl">🔥</div>
                     </div>
-                    <div className="text-xl mb-1">🔥</div>
-                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Kontinuitet</div>
-                    <div className="text-sm font-bold text-white mb-0.5">{health.consistency.status}</div>
-                    <div className="text-[9px] text-slate-400 leading-tight">Streak på {health.consistency.streak} dagar.</div>
-                    <div className="mt-2 text-[9px] font-mono text-indigo-400 bg-indigo-400/10 inline-block px-1.5 py-0.5 rounded">
-                        {health.consistency.streak >= 4 ? 'Momentum 🚀' : 'Kom igen!'}
+                    <div className="text-sm font-bold text-white leading-tight mb-1">{health.consistency.status}</div>
+                    <div className="flex justify-between items-center">
+                        <div className="text-[9px] text-slate-400">{health.consistency.streak} dagar i rad</div>
+                        <div className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${health.consistency.streak >= 4 ? 'text-indigo-400 bg-indigo-400/10' : 'text-slate-400 bg-slate-800'}`}>
+                            {health.consistency.streak >= 4 ? 'Momentum' : 'Starta nu'}
+                        </div>
                     </div>
                 </div>
             </div>

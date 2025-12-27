@@ -226,6 +226,17 @@ export function ActivitiesPage() {
             if (sortConfig.key === 'tonnage') {
                 valA = a.tonnage || 0;
                 valB = b.tonnage || 0;
+            } else if (sortConfig.key === 'score') {
+                valA = calculatePerformanceScore(a, allActivities);
+                valB = calculatePerformanceScore(b, allActivities);
+            } else if (sortConfig.key === 'pace') {
+                // Pace = Duration / Distance (seconds per km)
+                valA = a.distance ? (a.durationMinutes * 60) / a.distance : 0;
+                valB = b.distance ? (b.durationMinutes * 60) / b.distance : 0;
+
+                // If sorting pace ASC, we want fastest first (lowest value)
+                // If sorting pace DESC, we want slowest first (highest value)
+                // The current comparison logic below handles this if we keep direction logic
             }
 
             if (valA === undefined) valA = 0;
@@ -591,8 +602,8 @@ export function ActivitiesPage() {
                                 )}
                                 <td className="px-6 py-4 text-right">
                                     <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-black text-[10px] border ${calculatePerformanceScore(activity) >= 80 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
-                                            calculatePerformanceScore(activity) >= 60 ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' :
-                                                'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                        calculatePerformanceScore(activity) >= 60 ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' :
+                                            'bg-slate-500/20 border-slate-500/50 text-slate-400'
                                         }`}>
                                         {calculatePerformanceScore(activity)}
                                     </div>
