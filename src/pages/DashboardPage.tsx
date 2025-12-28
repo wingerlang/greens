@@ -16,7 +16,8 @@ import {
     ChevronRight,
     X,
     AlertCircle,
-    UtensilsCrossed
+    UtensilsCrossed,
+    Zap
 } from 'lucide-react';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 
@@ -111,7 +112,7 @@ const DoubleCircularProgress = ({
                 />
             </svg>
             <div className="absolute text-center flex flex-col items-center">
-                <div className={`text-4xl font-bold leading-none ${isOver ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
+                <div className={`font-bold leading-none ${isOver ? 'text-rose-500' : 'text-slate-900 dark:text-white'} ${value > 9999 ? 'text-3xl' : 'text-4xl'}`}>
                     {Math.round(value)}
                 </div>
                 <div className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">/ {max} kcal</div>
@@ -221,17 +222,31 @@ export function DashboardPage() {
         // Show list of completed activities
         const totalDuration = completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0);
         const totalCalories = completedTraining.reduce((sum, act) => sum + act.caloriesBurned, 0);
+        const totalDistance = completedTraining.reduce((sum, act) => sum + (act.distance || 0), 0);
+        const totalTonnage = completedTraining.reduce((sum, act) => sum + (act.tonnage || 0), 0);
         const goalMet = totalDuration >= 60; // Hardcoded goal for now, could be dynamic
 
         trainingContent = (
-            <div className={`flex flex-col gap-3 w-full -m-4 p-4 rounded-3xl transition-colors ${goalMet ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}>
+            <div className={`flex flex-col gap-3 w-full p-4 rounded-3xl transition-colors ${goalMet ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}>
                 {/* Summary Header */}
-                <div className="flex justify-between items-end mb-1 px-1">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">Totalt</div>
-                    <div className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                <div className="flex flex-wrap justify-between items-center gap-2 mb-1 px-1">
+                    <div className="text-[10px] font-bold uppercase text-slate-400">Dagens Totalt</div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-600 dark:text-slate-300">
                         <span className="font-bold text-slate-900 dark:text-white">{totalDuration} min</span>
-                        <span className="mx-1 opacity-30">|</span>
+                        <span className="opacity-20">|</span>
                         <span>{totalCalories} kcal</span>
+                        {totalDistance > 0 && (
+                            <>
+                                <span className="opacity-20">|</span>
+                                <span className="text-blue-600 dark:text-blue-400 font-bold">{totalDistance.toFixed(1)} km</span>
+                            </>
+                        )}
+                        {totalTonnage > 0 && (
+                            <>
+                                <span className="opacity-20">|</span>
+                                <span className="text-purple-600 dark:text-purple-400 font-bold">{(totalTonnage / 1000).toFixed(1)} ton</span>
+                            </>
+                        )}
                     </div>
                 </div>
 
@@ -239,16 +254,27 @@ export function DashboardPage() {
                     const typeDef = EXERCISE_TYPES.find(t => t.type === act.type);
 
                     // Formatting helper for advanced metrics
-                    let details = `${act.durationMinutes} min`;
-                    if (act.type === 'running' && act.distance) {
-                        const pace = act.durationMinutes / act.distance;
-                        const paceMin = Math.floor(pace);
-                        const paceSec = Math.round((pace - paceMin) * 60);
-                        const paceStr = `${paceMin}:${paceSec.toString().padStart(2, '0')}`;
-                        details = `${act.distance} km • ${paceStr}/km`;
-                    } else if (act.type === 'strength' && act.tonnage) {
-                        details = `${act.durationMinutes} min • ${(act.tonnage / 1000).toFixed(1)} ton`;
+                    const metricParts = [];
+                    metricParts.push(`${act.durationMinutes} min`);
+
+                    if (act.distance) {
+                        if (act.type === 'running') {
+                            const pace = act.durationMinutes / act.distance;
+                            const paceMin = Math.floor(pace);
+                            const paceSec = Math.round((pace - paceMin) * 60);
+                            const paceStr = `${paceMin}:${paceSec.toString().padStart(2, '0')}`;
+                            metricParts.push(`${act.distance} km`);
+                            metricParts.push(`${paceStr}/km`);
+                        } else {
+                            metricParts.push(`${act.distance} km`);
+                        }
                     }
+
+                    if (act.tonnage) {
+                        metricParts.push(`${(act.tonnage / 1000).toFixed(1)} ton`);
+                    }
+
+                    const details = metricParts.join(' • ');
 
                     // Heart Rate if available
                     let hrString = '';
@@ -274,7 +300,7 @@ export function DashboardPage() {
                                     {typeDef?.label || act.type}
                                     {hrString && <span className="text-[9px] font-black text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded tracking-wide">{hrString}</span>}
                                 </div>
-                                <div className="text-xs text-slate-500 font-medium truncate">
+                                <div className="text-xs text-slate-500 font-medium">
                                     {details}
                                 </div>
                             </div>
@@ -435,12 +461,43 @@ export function DashboardPage() {
                         {/* Sleep */}
                         <div
                             onClick={() => handleCardClick('sleep', vitals.sleep || 0)}
-                            className="bg-white dark:bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-6 hover:scale-[1.01] transition-transform cursor-pointer group relative"
+                            className={`p-6 rounded-3xl shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-6 hover:scale-[1.01] transition-transform cursor-pointer group relative overflow-hidden ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
+                                ? 'bg-rose-50 dark:bg-rose-900/10'
+                                : (vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7
+                                    ? 'bg-amber-50 dark:bg-amber-900/10'
+                                    : (vitals.sleep || 0) >= 7 && (vitals.sleep || 0) <= 10
+                                        ? 'bg-emerald-50 dark:bg-emerald-900/20'
+                                        : 'bg-white dark:bg-slate-900'
+                                }`}
                         >
-                            <div className="w-14 h-14 bg-[#E0E7FF] dark:bg-indigo-900/30 rounded-full flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+                            {/* Background Flair Icons */}
+                            {(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5 && (
+                                <div className="absolute -right-6 -bottom-6 text-rose-500/10 pointer-events-none">
+                                    <X strokeWidth={4} size={150} />
+                                </div>
+                            )}
+                            {(vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7 && (
+                                <div className="absolute -right-6 -bottom-6 text-amber-500/10 pointer-events-none">
+                                    <Zap strokeWidth={4} size={150} />
+                                </div>
+                            )}
+                            {(vitals.sleep || 0) >= 7 && (vitals.sleep || 0) <= 10 && (
+                                <div className="absolute -right-6 -bottom-6 text-emerald-500/10 pointer-events-none">
+                                    <Check strokeWidth={4} size={150} />
+                                </div>
+                            )}
+
+                            <div className={`w-14 h-14 rounded-full flex items-center justify-center relative z-10 ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
+                                ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400'
+                                : (vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7
+                                    ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400'
+                                    : (vitals.sleep || 0) >= 7 && (vitals.sleep || 0) <= 10
+                                        ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                                }`}>
                                 <Moon className="w-7 h-7" />
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 relative z-10">
                                 <div className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-0.5">Nattens sömn</div>
                                 {editing === 'sleep' ? (
                                     <div className="flex items-baseline gap-2" onClick={e => e.stopPropagation()}>
@@ -458,9 +515,10 @@ export function DashboardPage() {
                                     </div>
                                 ) : (
                                     <div className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                                        {vitals.sleep} <span className="text-base font-medium text-slate-400">h</span>
-                                        {(vitals.sleep || 0) >= 7 && (vitals.sleep || 0) <= 10 && <Check size={18} className="text-emerald-500" />}
-                                        {(vitals.sleep || 0) > 10 && <span className="text-[10px] text-amber-500 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">Kanske för mycket?</span>}
+                                        {vitals.sleep || 0} <span className="text-base font-medium text-slate-400">h</span>
+                                        {(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5 && <span className="text-[10px] text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-2 py-0.5 rounded-full font-black uppercase tracking-tight">Lite lite?</span>}
+                                        {(vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7 && <span className="text-[10px] text-amber-500 bg-amber-50 dark:bg-amber-900/20 px-2 py-0.5 rounded-full font-black uppercase tracking-tight">Nära målet!</span>}
+                                        {(vitals.sleep || 0) > 10 && <span className="text-[10px] text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full font-black uppercase tracking-tight">Kanske för mycket?</span>}
                                     </div>
                                 )}
                             </div>
@@ -474,9 +532,9 @@ export function DashboardPage() {
                             <div className="w-14 h-14 bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors">
                                 <Dumbbell className="w-7 h-7" />
                             </div>
-                            <div className="flex-1">
-                                <div className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-0.5">Dagens träning</div>
-                                <div className="text-xl font-bold text-slate-900 dark:text-white leading-tight">{trainingContent}</div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm text-slate-500 dark:text-slate-400 font-semibold mb-1">Dagens träning</div>
+                                <div className="w-full">{trainingContent}</div>
                             </div>
                         </div>
 

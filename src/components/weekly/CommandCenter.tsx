@@ -17,7 +17,14 @@ import {
     ChevronDown,
     ArrowRight,
     CornerDownLeft,
-    Sparkles
+    Sparkles,
+    Plus,
+    X,
+    ChevronRight,
+    Footprints,
+    Repeat,
+    MapPin,
+    Heart
 } from 'lucide-react';
 import './CommandCenter.css';
 
@@ -602,15 +609,44 @@ export function CommandCenter({ autoFocus = false, onAfterAction, className = ''
                                                 ref={manualInputRef}
                                                 type="number"
                                                 value={draftDuration || ''}
-                                                onChange={(e) => { setDraftDuration(parseInt(e.target.value)); setIsManual(true); }}
-                                                className="w-full text-3xl font-black bg-transparent outline-none text-slate-900 dark:text-white"
+                                                onChange={(e) => { setDraftDuration(parseFloat(e.target.value)); setIsManual(true); }}
+                                                className="w-full text-3xl font-black bg-transparent border-b-2 border-slate-200 focus:border-indigo-500 outline-none"
                                                 placeholder="30"
                                             />
-                                            {intent.data.distance && !draftDuration && (
-                                                <div className="text-xs text-slate-500 mt-1">
-                                                    {intent.data.distance} km @ {Math.round((intent.data.duration || 30) / intent.data.distance)} min/km
-                                                </div>
-                                            )}
+
+                                            {/* Extra Details Row (Km, Ton, HR) */}
+                                            <div className="flex flex-wrap gap-3 mt-3">
+                                                {/* Distance (km) */}
+                                                {(intent.data.distance || draftType === 'running') && (
+                                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-blue-700 dark:text-blue-300">
+                                                        <MapPin size={12} />
+                                                        <span className="text-xs font-bold">{intent.data.distance ? `${intent.data.distance} km` : '- km'}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Tonnage (ton) */}
+                                                {(intent.data.tonnage || draftType === 'strength') && (
+                                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-purple-700 dark:text-purple-300">
+                                                        <Dumbbell size={12} />
+                                                        <span className="text-xs font-bold">{intent.data.tonnage ? `${intent.data.tonnage / 1000} ton` : '- ton'}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Heart Rate */}
+                                                {(intent.data.heartRateAvg) && (
+                                                    <div className="flex items-center gap-1.5 px-2 py-1 bg-rose-50 dark:bg-rose-900/20 rounded-lg text-rose-700 dark:text-rose-300">
+                                                        <Heart size={12} />
+                                                        <span className="text-xs font-bold">{intent.data.heartRateAvg} bpm</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Pace Calculation Hint */}
+                                                {intent.data.distance && !draftDuration && (
+                                                    <div className="flex items-center gap-1 px-2 py-1 text-[10px] text-slate-400">
+                                                        <span>~ {Math.round((intent.data.duration || 30) / intent.data.distance)} min/km</span>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
 
                                         <div className="flex-1 border-l border-slate-200 dark:border-slate-700 pl-6">
@@ -723,7 +759,8 @@ export function CommandCenter({ autoFocus = false, onAfterAction, className = ''
                         </div>
                     )} {/* End Content Body */}
                 </div>
-            )}
-        </div>
+            )
+            }
+        </div >
     );
 }
