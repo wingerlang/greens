@@ -69,6 +69,11 @@ export interface UserSettings {
     dailyWaterGoal?: number;
     showSleep?: boolean;
     showWater?: boolean;
+    dailyCaffeineLimit?: number;
+    dailyTrainingGoal?: number; // minutes
+    dailyAlcoholLimitWeekday?: number;
+    dailyAlcoholLimitWeekend?: number;
+    densityMode?: 'compact' | 'slim' | 'cozy';
     expandedSections?: Record<string, boolean>; // Persisted UI state
 }
 
@@ -144,8 +149,13 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     trainingGoal: 'neutral',
     dailySleepGoal: 8,
     dailyWaterGoal: 8,
+    dailyCaffeineLimit: 400,
+    dailyTrainingGoal: 60,
+    dailyAlcoholLimitWeekday: 0,
+    dailyAlcoholLimitWeekend: 2,
     showSleep: true,
     showWater: true,
+    densityMode: 'cozy',
     expandedSections: {
         'recent-workouts': true,
         'top-exercises': true
@@ -310,6 +320,7 @@ export interface DailyVitals {
     water: number;       // Glasses (approx 250ml)
     sleep: number;       // Hours
     caffeine?: number;   // Grams or counts (Coffee/Te/Nocco)
+    alcohol?: number;    // Units
     updatedAt: string;
 }
 

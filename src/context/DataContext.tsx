@@ -173,6 +173,10 @@ interface DataContextType {
     updateInjuryLog: (id: string, updates: Partial<InjuryLog>) => void;
     deleteInjuryLog: (id: string) => void;
     addRecoveryMetric: (metric: Omit<RecoveryMetric, 'id'>) => RecoveryMetric;
+    calculateStreak: () => number;
+    calculateTrainingStreak: () => number;
+    calculateWeeklyTrainingStreak: () => number;
+    calculateCalorieGoalStreak: () => number;
 
     // System
     refreshData: () => Promise<void>;
@@ -905,6 +909,8 @@ export function DataProvider({ children }: DataProviderProps) {
             const existing = prev[date] || {
                 water: 0,
                 sleep: 0,
+                caffeine: 0,
+                alcohol: 0,
                 updatedAt: new Date().toISOString()
             };
             const newData = {
@@ -915,28 +921,6 @@ export function DataProvider({ children }: DataProviderProps) {
                     updatedAt: new Date().toISOString()
                 }
             };
-
-            // Optimization: Trigger background save immediately for vitals
-            // This is "fire and forget" to avoid blocking the UI
-            try {
-                // We create a partial app data object to save
-                // This relies on storageService merging it or handling it.
-                // Since storageService.save overwrites the whole key, we must pass the FULL state.
-                // However, accessing full state here (foodItems etc) is expensive/impossible due to closure staleness.
-                //
-                // BETTER STRATEGY: Use the ref 'skipAutoSave' to ALLOW the effect to run,
-                // BUT we also want to ensure it runs even if the user closes the tab quickly.
-                //
-                // Actually, the issue might be that DailyVitals is a nested object update.
-                // React's shallow comparison in the dependency array [dailyVitals] works by reference.
-                // 'newData' IS a new reference, so the effect SHOULD fire.
-                //
-                // Let's force a sync by calling storageService specific method if we had one.
-                // For now, relies on effect but we can add logging to debug.
-            } catch (e) {
-                console.error("Vitals update error", e);
-            }
-
             return newData;
         });
     }, []);
@@ -946,9 +930,139 @@ export function DataProvider({ children }: DataProviderProps) {
             water: 0,
             sleep: 0,
             caffeine: 0,
+            alcohol: 0,
             updatedAt: new Date().toISOString()
         };
     }, [dailyVitals]);
+
+    const calculateStreak = useCallback((): number => {
+        const today = getISODate();
+        const yesterday = getISODate(new Date(Date.now() - 86400000));
+
+        const isDayActive = (date: string) => {
+            const meals = getMealEntriesForDate(date);
+            const exercises = getExercisesForDate(date);
+            const vitals = dailyVitals[date];
+
+            // Active if logged meals, exercises, or significant vitals
+            return meals.length > 0 ||
+                exercises.length > 0 ||
+                (vitals && (vitals.water > 0 || (vitals.caffeine ?? 0) > 0 || (vitals.alcohol ?? 0) > 0));
+        };
+
+        let streak = 0;
+        let checkDate = new Date();
+
+        const todayActive = isDayActive(today);
+        const yesterdayActive = isDayActive(yesterday);
+
+        if (!todayActive && !yesterdayActive) return 0;
+        if (!todayActive) checkDate = new Date(Date.now() - 86400000);
+
+        while (true) {
+            const dateStr = getISODate(checkDate);
+            if (isDayActive(dateStr)) {
+                streak++;
+                checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+                break;
+            }
+            if (streak > 3650) break;
+        }
+        return streak;
+    }, [dailyVitals, getMealEntriesForDate, getExercisesForDate]);
+
+    const calculateTrainingStreak = useCallback((): number => {
+        const today = getISODate();
+        const yesterday = getISODate(new Date(Date.now() - 86400000));
+
+        const isTrainingDay = (date: string) => getExercisesForDate(date).length > 0;
+
+        let streak = 0;
+        let checkDate = new Date();
+
+        if (!isTrainingDay(today) && !isTrainingDay(yesterday)) return 0;
+        if (!isTrainingDay(today)) checkDate = new Date(Date.now() - 86400000);
+
+        while (true) {
+            if (isTrainingDay(getISODate(checkDate))) {
+                streak++;
+                checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+                break;
+            }
+            if (streak > 1000) break;
+        }
+        return streak;
+    }, [getExercisesForDate]);
+
+    const calculateWeeklyTrainingStreak = useCallback((): number => {
+        // Count weeks where there was at least one training session
+        let streak = 0;
+        let checkDate = new Date();
+        // Move to the beginning of current week (Monday)
+        const day = checkDate.getDay();
+        const diff = checkDate.getDate() - day + (day === 0 ? -6 : 1);
+        checkDate.setDate(diff);
+
+        const hasTrainingInWeek = (startDate: Date) => {
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(startDate);
+                d.setDate(startDate.getDate() + i);
+                if (getExercisesForDate(getISODate(d)).length > 0) return true;
+                // Don't check future days if the week is current
+                if (getISODate(d) === getISODate()) break;
+            }
+            return false;
+        };
+
+        // If current week has no training yet, check last week.
+        if (!hasTrainingInWeek(new Date(checkDate))) {
+            const lastWeek = new Date(checkDate);
+            lastWeek.setDate(lastWeek.getDate() - 7);
+            if (!hasTrainingInWeek(lastWeek)) return 0;
+            checkDate = lastWeek;
+        }
+
+        while (true) {
+            if (hasTrainingInWeek(new Date(checkDate))) {
+                streak++;
+                checkDate.setDate(checkDate.getDate() - 7);
+            } else {
+                break;
+            }
+            if (streak > 520) break;
+        }
+        return streak;
+    }, [getExercisesForDate]);
+
+    const calculateCalorieGoalStreak = useCallback((): number => {
+        const today = getISODate();
+        const yesterday = getISODate(new Date(Date.now() - 86400000));
+
+        const isGoalMet = (date: string) => {
+            const data = calculateDailyNutrition(date);
+            const target = currentUser?.settings?.dailyCalorieGoal || 2500;
+            return data.calories > 0 && data.calories <= target;
+        };
+
+        let streak = 0;
+        let checkDate = new Date();
+
+        if (!isGoalMet(today) && !isGoalMet(yesterday)) return 0;
+        if (!isGoalMet(today)) checkDate = new Date(Date.now() - 86400000);
+
+        while (true) {
+            if (isGoalMet(getISODate(checkDate))) {
+                streak++;
+                checkDate.setDate(checkDate.getDate() - 1);
+            } else {
+                break;
+            }
+            if (streak > 1000) break;
+        }
+        return streak;
+    }, [calculateDailyNutrition, userSettings]);
 
     // ============================================
     // Context Value
@@ -1031,6 +1145,10 @@ export function DataProvider({ children }: DataProviderProps) {
         dailyVitals,
         updateVitals,
         getVitalsForDate,
+        calculateStreak,
+        calculateTrainingStreak,
+        calculateWeeklyTrainingStreak,
+        calculateCalorieGoalStreak,
         exerciseEntries,
         addExercise,
         deleteExercise,

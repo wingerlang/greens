@@ -47,6 +47,108 @@ export function SettingsPage() {
                     </div>
                 </section>
 
+                {/* Goals Section */}
+                <section className="bg-slate-900/50 backdrop-blur-md border border-white/5 rounded-2xl p-6">
+                    <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                        <span>🎯</span> Mål & Gränser
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-4 p-4 bg-white/5 rounded-xl">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Kost</h3>
+                            <div className="space-y-3">
+                                <label className="flex items-center justify-between">
+                                    <span className="text-slate-200 text-sm">Kalorier (kcal)</span>
+                                    <input
+                                        type="number"
+                                        className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                        value={settings.dailyCalorieGoal}
+                                        onChange={e => updateSettings({ dailyCalorieGoal: parseInt(e.target.value) })}
+                                    />
+                                </label>
+                                <label className="flex items-center justify-between">
+                                    <span className="text-slate-200 text-sm">Protein (g)</span>
+                                    <input
+                                        type="number"
+                                        className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                        value={settings.dailyProteinGoal}
+                                        onChange={e => updateSettings({ dailyProteinGoal: parseInt(e.target.value) })}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 p-4 bg-white/5 rounded-xl">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Livsstil</h3>
+                            <div className="space-y-3">
+                                <label className="flex items-center justify-between">
+                                    <span className="text-slate-200 text-sm">Vatten (glas)</span>
+                                    <input
+                                        type="number"
+                                        className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                        value={settings.dailyWaterGoal}
+                                        onChange={e => updateSettings({ dailyWaterGoal: parseInt(e.target.value) })}
+                                    />
+                                </label>
+                                <label className="flex items-center justify-between">
+                                    <span className="text-slate-200 text-sm">Koffein-limit (mg)</span>
+                                    <input
+                                        type="number"
+                                        className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                        value={settings.dailyCaffeineLimit}
+                                        onChange={e => updateSettings({ dailyCaffeineLimit: parseInt(e.target.value) })}
+                                    />
+                                </label>
+                                <label className="flex items-center justify-between">
+                                    <span className="text-slate-200 text-sm">Alkohol (varda)</span>
+                                    <input
+                                        type="number"
+                                        className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                        value={settings.dailyAlcoholLimitWeekday ?? ''}
+                                        onChange={e => updateSettings({ dailyAlcoholLimitWeekday: e.target.value === '' ? undefined : parseInt(e.target.value) })}
+                                        placeholder="Ingen"
+                                    />
+                                </label>
+                                <label className="flex items-center justify-between">
+                                    <span className="text-slate-200 text-sm">Alkohol (helg)</span>
+                                    <input
+                                        type="number"
+                                        className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                        value={settings.dailyAlcoholLimitWeekend ?? ''}
+                                        onChange={e => updateSettings({ dailyAlcoholLimitWeekend: e.target.value === '' ? undefined : parseInt(e.target.value) })}
+                                        placeholder="Ingen"
+                                    />
+                                </label>
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 p-4 bg-white/5 rounded-xl">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Träning & Sömn</h3>
+                            <div className="space-y-3">
+                                <label className="flex items-center justify-between">
+                                    <span className="text-slate-200 text-sm">Träning (min/dag)</span>
+                                    <input
+                                        type="number"
+                                        className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                        value={settings.dailyTrainingGoal}
+                                        onChange={e => updateSettings({ dailyTrainingGoal: parseInt(e.target.value) })}
+                                    />
+                                </label>
+                                <label className="flex items-center justify-between">
+                                    <span className={`text-sm ${settings.dailySleepGoal && (settings.dailySleepGoal < 6 || settings.dailySleepGoal > 9) ? 'text-rose-400 font-bold' : 'text-slate-200'}`}>
+                                        Sömn (6-9h rekommenderas)
+                                    </span>
+                                    <input
+                                        type="number"
+                                        className={`bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm ${settings.dailySleepGoal && (settings.dailySleepGoal < 6 || settings.dailySleepGoal > 9) ? 'ring-1 ring-rose-500/50' : ''}`}
+                                        value={settings.dailySleepGoal}
+                                        onChange={e => updateSettings({ dailySleepGoal: parseFloat(e.target.value) })}
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
                 {/* Data & Privacy */}
                 <section className="bg-slate-900/50 backdrop-blur-md border border-white/5 rounded-2xl p-6">
                     <h2 className="text-xl font-bold text-white mb-6 flex items-center gap-2">

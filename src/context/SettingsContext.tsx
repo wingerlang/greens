@@ -14,6 +14,7 @@ interface SettingsContextType {
     setVisibleMeals: (meals: MealType[]) => void;
     toggleMealVisibility: (meal: MealType) => void;
     updateSettings: (settings: Partial<UserSettings>) => void;
+    setDensityMode: (mode: 'compact' | 'slim' | 'cozy') => void;
 }
 
 const SettingsContext = createContext<SettingsContextType | null>(null);
@@ -101,6 +102,10 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         setSettings((prev: UserSettings) => ({ ...prev, ...updates }));
     };
 
+    const setDensityMode = (mode: 'compact' | 'slim' | 'cozy') => {
+        setSettings((prev: UserSettings) => ({ ...prev, densityMode: mode }));
+    };
+
     const value: SettingsContextType = {
         settings,
         theme: settings.theme,
@@ -109,6 +114,7 @@ export function SettingsProvider({ children }: SettingsProviderProps) {
         setVisibleMeals,
         toggleMealVisibility,
         updateSettings,
+        setDensityMode,
     };
 
     return (

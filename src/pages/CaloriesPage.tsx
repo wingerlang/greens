@@ -27,11 +27,13 @@ export function CaloriesPage() {
         updateMealEntry,
         deleteMealEntry,
         getMealEntriesForDate,
+        updateVitals,
         calculateDailyNutrition,
         getRecipeWithNutrition,
         getFoodItem,
         getPlannedMealsForDate,
         getExercisesForDate,
+        getVitalsForDate,
     } = useData();
 
     const { settings } = useSettings();
@@ -68,6 +70,29 @@ export function CaloriesPage() {
         () => getExercisesForDate(selectedDate),
         [getExercisesForDate, selectedDate]
     );
+
+    // Vitals local state
+    const currentVitals = useMemo(() => getVitalsForDate(selectedDate), [getVitalsForDate, selectedDate]);
+    const [editing, setEditing] = useState<string | null>(null);
+    const [tempValue, setTempValue] = useState<string>("");
+
+    const handleCardClick = (type: string, currentValue: number) => {
+        setEditing(type);
+        setTempValue(currentValue.toString());
+    };
+
+    const handleSave = (type: string) => {
+        const val = parseFloat(tempValue);
+        if (!isNaN(val)) {
+            updateVitals(selectedDate, { [type]: val });
+        }
+        setEditing(null);
+    };
+
+    const handleKeyDown = (e: React.KeyboardEvent, type: string) => {
+        if (e.key === 'Enter') handleSave(type);
+        if (e.key === 'Escape') setEditing(null);
+    };
 
     const dailyNutrition = useMemo(
         () => calculateDailyNutrition(selectedDate),
@@ -362,6 +387,91 @@ export function CaloriesPage() {
                             recipes={recipes}
                         />
                     )}
+
+                    {/* Vitals Summary */}
+                    {/* Vitals Summary */}
+                    <div className="mx-4 mt-6 p-4 bg-slate-900/50 border border-white/5 rounded-2xl grid grid-cols-3 gap-4">
+                        {/* Water */}
+                        <div
+                            className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                            onClick={() => handleCardClick('water', currentVitals.water || 0)}
+                        >
+                            <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Vatten</span>
+                            <div className="flex items-center gap-1.5 h-8">
+                                {editing === 'water' ? (
+                                    <input
+                                        autoFocus
+                                        type="number"
+                                        value={tempValue}
+                                        onChange={(e) => setTempValue(e.target.value)}
+                                        onBlur={() => handleSave('water')}
+                                        onKeyDown={(e) => handleKeyDown(e, 'water')}
+                                        onClick={e => e.stopPropagation()}
+                                        className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                                    />
+                                ) : (
+                                    <>
+                                        <span className="text-xl">💧</span>
+                                        <span className="text-lg font-bold text-white">{currentVitals.water || 0}</span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Caffeine */}
+                        <div
+                            className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                            onClick={() => handleCardClick('caffeine', currentVitals.caffeine || 0)}
+                        >
+                            <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Koffein</span>
+                            <div className="flex items-center gap-1.5 h-8">
+                                {editing === 'caffeine' ? (
+                                    <input
+                                        autoFocus
+                                        type="number"
+                                        value={tempValue}
+                                        onChange={(e) => setTempValue(e.target.value)}
+                                        onBlur={() => handleSave('caffeine')}
+                                        onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
+                                        onClick={e => e.stopPropagation()}
+                                        className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                                    />
+                                ) : (
+                                    <>
+                                        <span className="text-xl">☕</span>
+                                        <span className="text-lg font-bold text-white">{currentVitals.caffeine || 0}<span className="text-[10px] text-slate-500 ml-0.5">mg</span></span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Alcohol */}
+                        <div
+                            className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                            onClick={() => handleCardClick('alcohol', currentVitals.alcohol || 0)}
+                        >
+                            <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Alkohol</span>
+                            <div className="flex items-center gap-1.5 h-8">
+                                {editing === 'alcohol' ? (
+                                    <input
+                                        autoFocus
+                                        type="number"
+                                        value={tempValue}
+                                        onChange={(e) => setTempValue(e.target.value)}
+                                        onBlur={() => handleSave('alcohol')}
+                                        onKeyDown={(e) => handleKeyDown(e, 'alcohol')}
+                                        onClick={e => e.stopPropagation()}
+                                        className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                                    />
+                                ) : (
+                                    <>
+                                        <span className="text-xl">🍷</span>
+                                        <span className="text-lg font-bold text-white">{currentVitals.alcohol || 0}<span className="text-[10px] text-slate-500 ml-0.5">e</span></span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    </div>
                 </>
             )}
 
