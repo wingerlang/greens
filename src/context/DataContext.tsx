@@ -117,10 +117,12 @@ interface DataContextType {
 
     // Weight CRUD
     weightEntries: WeightEntry[];
-    addWeightEntry: (weight: number, date?: string) => WeightEntry;
-    updateWeightEntry: (id: string, weight: number, date: string) => void;
+    addWeightEntry: (weight: number, date?: string, waist?: number) => WeightEntry;
+    bulkAddWeightEntries: (entries: Partial<WeightEntry>[]) => void;
+    updateWeightEntry: (id: string, weight: number, date: string, waist?: number) => void;
     deleteWeightEntry: (id: string) => void;
     getLatestWeight: () => number;
+    getLatestWaist: () => number | undefined;
 
     // Competition CRUD
     competitions: Competition[];
@@ -275,7 +277,24 @@ export function DataProvider({ children }: DataProviderProps) {
             setExerciseEntries(data.exerciseEntries);
         }
         if (data.weightEntries) {
-            setWeightEntries(data.weightEntries || []);
+            const normalizedWeights = (data.weightEntries || []).map((w: any) => {
+                let date = w.date;
+                if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+                    if (date.includes('/') || date.includes('.')) {
+                        const sep = date.includes('/') ? '/' : '.';
+                        const parts = date.split(sep);
+                        if (parts.length === 3) {
+                            if (parts[2].length === 4) { // DD/MM/YYYY
+                                date = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+                            } else if (parts[0].length === 4) { // YYYY/MM/DD
+                                date = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+                            }
+                        }
+                    }
+                }
+                return { ...w, date };
+            });
+            setWeightEntries(normalizedWeights);
         }
         if (data.competitions) {
             setCompetitions(data.competitions || []);
@@ -629,11 +648,12 @@ export function DataProvider({ children }: DataProviderProps) {
         return exerciseEntries.filter(e => e.date === date);
     }, [exerciseEntries]);
 
-    const addWeightEntry = useCallback((weight: number, date: string = getISODate()): WeightEntry => {
+    const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number): WeightEntry => {
         const newEntry: WeightEntry = {
             id: generateId(),
             weight,
             date,
+            waist,
             createdAt: new Date().toISOString(),
         };
 
@@ -682,9 +702,27 @@ export function DataProvider({ children }: DataProviderProps) {
         return newEntry;
     }, []);
 
-    const updateWeightEntry = useCallback((id: string, weight: number, date: string) => {
+    const bulkAddWeightEntries = useCallback((entries: Partial<WeightEntry>[]) => {
+        const newEntries = entries.map(e => ({
+            id: generateId(),
+            date: e.date || getISODate(),
+            weight: e.weight || 0,
+            waist: e.waist,
+            chest: e.chest,
+            hips: e.hips,
+            thigh: e.thigh,
+            createdAt: new Date().toISOString()
+        } as WeightEntry));
+
         setWeightEntries(prev => {
-            const next = prev.map(w => w.id === id ? { ...w, weight, date } : w);
+            const next = [...prev, ...newEntries];
+            return next.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+        });
+    }, []);
+
+    const updateWeightEntry = useCallback((id: string, weight: number, date: string, waist?: number) => {
+        setWeightEntries(prev => {
+            const next = prev.map(w => w.id === id ? { ...w, weight, date, waist } : w);
             // Re-sort in case date changed
             return next.sort((a, b) => b.date.localeCompare(a.date));
         });
@@ -695,8 +733,11 @@ export function DataProvider({ children }: DataProviderProps) {
     }, []);
 
     const getLatestWeight = useCallback((): number => {
-        if (weightEntries.length === 0) return 70; // Default
-        return weightEntries[0].weight; // Already sorted
+        return weightEntries[0]?.weight || 0;
+    }, [weightEntries]);
+
+    const getLatestWaist = useCallback((): number | undefined => {
+        return weightEntries.find(w => w.waist !== undefined)?.waist;
     }, [weightEntries]);
 
     // ============================================
@@ -943,10 +984,12 @@ export function DataProvider({ children }: DataProviderProps) {
             const meals = getMealEntriesForDate(date);
             const exercises = getExercisesForDate(date);
             const vitals = dailyVitals[date];
+            const weightEntry = weightEntries.some(w => w.date === date);
 
-            // Active if logged meals, exercises, or significant vitals
+            // Active if logged meals, exercises, weights, or significant vitals
             return meals.length > 0 ||
                 exercises.length > 0 ||
+                weightEntry ||
                 (vitals && (vitals.water > 0 || (vitals.caffeine ?? 0) > 0 || (vitals.alcohol ?? 0) > 0));
         };
 
@@ -1155,9 +1198,11 @@ export function DataProvider({ children }: DataProviderProps) {
         getExercisesForDate,
         weightEntries,
         addWeightEntry,
+        bulkAddWeightEntries,
         updateWeightEntry,
         deleteWeightEntry,
         getLatestWeight,
+        getLatestWaist,
         calculateBMR,
         calculateExerciseCalories,
         competitions,

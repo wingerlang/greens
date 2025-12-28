@@ -991,11 +991,15 @@ export interface PlannedActivity {
     customScalingFactor?: number; // Scale target distances/paces (e.g. 0.85 for "piano")
 }
 
-/** Weight tracking entry */
+/** Weight and body measurements tracking entry */
 export interface WeightEntry {
     id: string;
     date: string; // ISO date string (YYYY-MM-DD)
     weight: number; // kg
+    waist?: number; // cm
+    chest?: number; // cm
+    hips?: number; // cm
+    thigh?: number; // cm
     createdAt: string;
 }
 

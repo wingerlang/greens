@@ -20,7 +20,8 @@ import {
     Zap,
     Wine,
     Calendar,
-    Target
+    Target,
+    Settings
 } from 'lucide-react';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 
@@ -162,10 +163,156 @@ const DoubleCircularProgress = ({
     );
 };
 
-// No longer using generic InfoCard, but keeping the concept in the main render if needed? 
-// Actually I replaced usages of InfoCard with inline code in the previous version (Step 1722), 
+// --- Helper Functions ---
+
+const getBMICategory = (bmi: number) => {
+    if (bmi < 18.5) return { label: 'Undervikt', color: 'text-amber-500', bg: 'bg-amber-500/10' };
+    if (bmi < 25) return { label: 'Normalvikt', color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+    if (bmi < 30) return { label: 'Övervikt', color: 'text-orange-500', bg: 'bg-orange-500/10' };
+    return { label: 'Fetma', color: 'text-rose-500', bg: 'bg-rose-500/10' };
+};
+
+const getRelativeDateLabel = (dateStr: string) => {
+    const today = new Date().toISOString().split('T')[0];
+    const d = new Date(dateStr).toISOString().split('T')[0];
+    if (d === today) return 'idag';
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    if (d === yesterday) return 'igår';
+
+    // Calculate diff in days
+    const diff = Math.floor((new Date(today).getTime() - new Date(d).getTime()) / 86400000);
+    if (diff < 7) return `${diff} dgr sen`;
+    if (diff < 30) return `${Math.floor(diff / 7)} v. sen`;
+    return dateStr;
+};
+
+const getRangeStartDate = (range: '14d' | '30d' | '3m' | '1y' | 'all') => {
+    const d = new Date();
+    if (range === '14d') d.setDate(d.getDate() - 14);
+    else if (range === '30d') d.setDate(d.getDate() - 30);
+    else if (range === '3m') d.setMonth(d.getMonth() - 3);
+    else if (range === '1y') d.setFullYear(d.getFullYear() - 1);
+    else return '0000-00-00';
+    return d.toISOString().split('T')[0];
+};
+
+const WeightSparkline = ({
+    data,
+    dates,
+    color = 'text-blue-500',
+    onPointClick
+}: {
+    data: number[],
+    dates: string[],
+    color?: string,
+    onPointClick?: (index: number) => void
+}) => {
+    const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+    if (data.length < 2) return <div className="h-[40px] w-full flex items-center justify-center text-[8px] text-slate-300 uppercase font-bold tracking-widest bg-slate-50/50 dark:bg-slate-800/20 rounded-xl">Trend saknas</div>;
+
+    // Calculate range with tighter padding for "scaled up" effect
+    const min = Math.min(...data);
+    const max = Math.max(...data);
+    const padding = (max - min) * 0.05 || 0.2;
+    const adjMin = min - padding;
+    const adjMax = max + padding;
+    const range = adjMax - adjMin || 1;
+
+    const width = 100;
+    const heightFixed = 60;
+
+    const points = data.map((v, i) => {
+        const x = (i / (data.length - 1)) * width;
+        const y = heightFixed - ((v - adjMin) / range) * heightFixed;
+        return { x, y, value: v, index: i };
+    });
+
+    const polylinePoints = points.map(p => `${p.x},${p.y}`).join(' ');
+
+    // Grid lines (3 horizontal lines)
+    const gridLines = [adjMin, adjMin + range / 2, adjMax].map(val => {
+        const y = heightFixed - ((val - adjMin) / range) * heightFixed;
+        return { y, label: val.toFixed(1) };
+    });
+
+    return (
+        <div
+            className="w-full h-[80px] px-1 group/sparkline relative"
+            onMouseMove={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+            }}
+            onMouseLeave={() => setHoveredIdx(null)}
+        >
+            <svg
+                viewBox={`0 0 ${width} ${heightFixed}`}
+                preserveAspectRatio="none"
+                className={`w-full h-full overflow-visible ${color}`}
+            >
+                {/* Horizontal Grid Lines */}
+                {gridLines.map((line, i) => (
+                    <g key={i} className="opacity-10">
+                        <line x1="0" y1={line.y} x2={width} y2={line.y} stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" />
+                        <text x="-2" y={line.y} fontSize="4" className="fill-slate-400 font-bold text-right" style={{ dominantBaseline: 'middle', textAnchor: 'end' }}>{line.label}</text>
+                    </g>
+                ))}
+
+                {/* The Path */}
+                <polyline
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    points={polylinePoints}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="drop-shadow-sm transition-all duration-500"
+                />
+
+                {/* Interactive Data Points */}
+                {points.map((p, i) => (
+                    <g
+                        key={i}
+                        className="cursor-pointer"
+                        onClick={() => onPointClick?.(i)}
+                        onMouseEnter={() => setHoveredIdx(i)}
+                    >
+                        {/* Transparent hit area */}
+                        <circle cx={p.x} cy={p.y} r="6" fill="transparent" />
+                        {/* The actual dot */}
+                        <circle
+                            cx={p.x}
+                            cy={p.y}
+                            r={hoveredIdx === i ? "2.5" : "1.5"}
+                            className={`fill-white stroke-current stroke-[2] transition-all ${hoveredIdx === i ? 'opacity-100' : 'opacity-0 group-hover/sparkline:opacity-100'}`}
+                        />
+                    </g>
+                ))}
+            </svg>
+
+            {/* Hover Tooltip/Card */}
+            {hoveredIdx !== null && (
+                <div
+                    className="absolute z-50 pointer-events-none bg-slate-900/90 dark:bg-white/90 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 dark:border-black/5 shadow-2xl flex flex-col gap-0.5 min-w-[80px]"
+                    style={{
+                        left: `${(hoveredIdx / (data.length - 1)) * 100}%`,
+                        top: '0',
+                        transform: `translate(${hoveredIdx > data.length / 2 ? '-100%' : '20%'}, -100%)`
+                    }}
+                >
+                    <div className="text-[10px] font-black text-white/50 dark:text-black/50 uppercase tracking-widest">{dates[hoveredIdx]}</div>
+                    <div className="text-sm font-black text-white dark:text-slate-900">{data[hoveredIdx].toFixed(1)} <span className="text-[10px] text-white/60 dark:text-slate-500">kg</span></div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+// No longer using generic InfoCard, but keeping the concept in the main render if needed?
+// Actually I replaced usages of InfoCard with inline code in the previous version (Step 1722),
 // but defined it anyway. I will remove it if unused, or keep it if I use it.
-// Looking at previous code, I didn't actually use InfoCard in the return statement! 
+// Looking at previous code, I didn't actually use InfoCard in the return statement!
 // I mainly used the inline divs. So I will omit InfoCard to clean up.
 
 export function DashboardPage() {
@@ -181,10 +328,13 @@ export function DashboardPage() {
         calculateWeeklyTrainingStreak,
         calculateCalorieGoalStreak,
         calculateDailyNutrition,
-        getLatestWeight,
         addWeightEntry,
+        bulkAddWeightEntries,
+        getLatestWeight,
+        getLatestWaist,
         plannedActivities,
-        exerciseEntries
+        exerciseEntries,
+        weightEntries
     } = useData();
 
     const today = getISODate();
@@ -194,7 +344,12 @@ export function DashboardPage() {
     const [vitals, setVitals] = useState<DailyVitals>({ water: 0, sleep: 0, caffeine: 0, alcohol: 0, updatedAt: '' });
     const [editing, setEditing] = useState<string | null>(null);
     const [tempValue, setTempValue] = useState<string>("");
+    const [tempWaist, setTempWaist] = useState<string>("");
     const [selectedActivity, setSelectedActivity] = useState<any>(null);
+    const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
+    const [bulkInput, setBulkInput] = useState("");
+    const [showBulkImport, setShowBulkImport] = useState(false);
+    const [weightRange, setWeightRange] = useState<'14d' | '30d' | '3m' | '1y' | 'all'>('1y');
 
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -210,6 +365,19 @@ export function DashboardPage() {
         const currentVitals = getVitalsForDate(today);
         setVitals(currentVitals);
     }, [today, getVitalsForDate]);
+
+    // Accessibility: ESC to close modals
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setIsWeightModalOpen(false);
+                setSelectedActivity(null);
+                setEditing(null);
+            }
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, []);
 
     // Handlers
     const handleCardClick = (type: string, currentValue: number) => {
@@ -268,6 +436,50 @@ export function DashboardPage() {
     const proteinCurrent = Math.round(consumed * 0.05); // Raw value
     const proteinDisplay = Math.min(proteinTarget, proteinCurrent); // Clamped for progress bar
 
+    // 3. Weight & Measurement Logic
+    const getRangeDays = (range: typeof weightRange) => {
+        switch (range) {
+            case '14d': return 14;
+            case '30d': return 30;
+            case '3m': return 90;
+            case '1y': return 365;
+            default: return 9999;
+        }
+    };
+
+    const rangeStartISO = getRangeStartDate(weightRange);
+
+    // Filter and sort for sparkline
+    const weightTrendEntries = [...weightEntries]
+        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
+        .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+    const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
+    const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
+    const weightDiffRange = latestWeightInRange - earliestWeightInRange;
+
+    // Data for sparkline (values only)
+    const weightTrend = weightTrendEntries.map(e => e.weight);
+
+    const latest3Weights = [...weightEntries]
+        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 3);
+
+    const currentUserHeight = settings.height || 0;
+    const latestWeightVal = latest3Weights[0]?.weight;
+    const bmi = (latestWeightVal && currentUserHeight)
+        ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
+        : null;
+
+    const getBMICategory = (val: number) => {
+        if (val < 18.5) return { label: 'Undervikt', color: 'text-amber-400', bg: 'bg-amber-400/10' };
+        if (val < 25) return { label: 'Normalvikt', color: 'text-emerald-400', bg: 'bg-emerald-400/10' };
+        if (val < 30) return { label: 'Övervikt', color: 'text-orange-400', bg: 'bg-orange-400/10' };
+        return { label: 'Fetma', color: 'text-rose-400', bg: 'bg-rose-400/10' };
+    };
+
     // 4. Training Analysis
     const todaysPlan = plannedActivities.find(p => p.date === today);
     const completedTraining = exerciseEntries.filter(e => e.date === today);
@@ -284,11 +496,11 @@ export function DashboardPage() {
         const goalMet = totalDuration >= (settings.dailyTrainingGoal || 60);
 
         trainingContent = (
-            <div className={`flex flex-col ${density === 'compact' ? 'gap-1 w-full p-1 rounded-xl shadow-none' : density === 'slim' ? 'gap-2 w-full p-2 rounded-2xl' : 'gap-3 w-full p-4 rounded-3xl'} transition-colors ${goalMet ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}>
+            <div className={`flex flex-col ${density === 'compact' ? 'gap-0.5 w-full p-1' : density === 'slim' ? 'gap-1.5 w-full p-2' : 'gap-2 w-full p-3'} rounded-2xl transition-colors ${goalMet ? 'bg-emerald-50/50 dark:bg-emerald-900/10' : ''}`}>
                 {/* Summary Header */}
-                <div className="flex flex-wrap justify-between items-center gap-2 mb-1 px-1">
-                    <div className="text-[10px] font-bold uppercase text-slate-400">Dagens Totalt</div>
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                <div className="flex flex-wrap justify-between items-center gap-2 mb-0.5 px-0.5">
+                    <div className="text-[9px] font-bold uppercase text-slate-400">Dagens Totalt</div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                         <span className="font-bold text-slate-900 dark:text-white">{totalDuration} min</span>
                         <span className="opacity-20">|</span>
                         <span>{totalCalories} kcal</span>
@@ -347,17 +559,17 @@ export function DashboardPage() {
                                 e.stopPropagation();
                                 setSelectedActivity(act);
                             }}
-                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-3 p-3 rounded-2xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
+                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
-                            <div className={`${density === 'compact' ? 'text-sm p-1' : 'text-xl p-2'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50`}>
+                            <div className={`${density === 'compact' ? 'text-sm p-1' : 'text-lg p-1.5'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50`}>
                                 {typeDef?.icon || '💪'}
                             </div>
                             <div className="flex-1 min-w-0">
-                                <div className="font-bold text-slate-900 dark:text-white leading-tight capitalize flex items-center gap-2 truncate">
+                                <div className="font-bold text-slate-900 dark:text-white leading-tight capitalize flex items-center gap-1.5 truncate">
                                     {typeDef?.label || act.type}
-                                    {hrString && <span className="text-[9px] font-black text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1.5 py-0.5 rounded tracking-wide">{hrString}</span>}
+                                    {hrString && <span className="text-[8px] font-black text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1 py-0.5 rounded tracking-wide">{hrString}</span>}
                                 </div>
-                                <div className="text-xs text-slate-500 font-medium">
+                                <div className="text-[11px] text-slate-500 font-medium">
                                     {details}
                                 </div>
                             </div>
@@ -462,7 +674,7 @@ export function DashboardPage() {
                     {/* 7-Day Performance Summary */}
                     <div className="md:col-span-12 mb-2">
                         <div className={`${density === 'compact' ? 'p-2' : 'p-6'} bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm`}>
-                            <div className={`flex flex-col md:flex-row md:justify-between md:items-center ${density === 'compact' ? 'mb-2 px-2' : 'mb-6 px-1'}`}>
+                            <div className={`flex flex-col md:flex-row justify-between md:items-center ${density === 'compact' ? 'mb-2 px-2' : 'mb-6 px-1'}`}>
                                 <div className="flex items-center gap-3">
                                     <h3 className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} font-black uppercase tracking-tighter text-slate-400 flex items-center gap-2`}>
                                         <div className="w-1 h-3 bg-indigo-500 rounded-full" />
@@ -622,7 +834,7 @@ export function DashboardPage() {
                     </div>
 
                     {/* KPI Card */}
-                    <div className={`md:col-span-8 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full`}>
+                    <div className={`md:col-span-6 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full`}>
                         <DoubleCircularProgress
                             value={consumed}
                             max={target}
@@ -661,7 +873,7 @@ export function DashboardPage() {
                     </div>
 
                     {/* Sleep & Alcohol Grouped Container */}
-                    <div className="md:col-span-4 flex flex-col gap-4">
+                    <div className="md:col-span-6 flex flex-col gap-4">
                         <div className={`grid ${density === 'compact' ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-4'}`}>
                             {/* Sleep Card */}
                             <div
@@ -732,7 +944,7 @@ export function DashboardPage() {
                             {(() => {
                                 const dayOfWeek = (new Date()).getDay();
                                 const isWeekendLimit = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6; // Sun, Fri or Sat
-                                const alcLimit = isWeekendLimit ? settings.dailyAlcoholLimitWeekend : settings.dailyAlcoholLimitWeekday;
+                                const alcLimit = settings.dailyAlcoholLimitWeekend !== undefined && settings.dailyAlcoholLimitWeekday !== undefined ? (isWeekendLimit ? settings.dailyAlcoholLimitWeekend : settings.dailyAlcoholLimitWeekday) : undefined;
                                 const alc = vitals.alcohol || 0;
                                 const isAlcHigh = alcLimit !== undefined && alc > alcLimit;
                                 const isAlcWarning = alcLimit !== undefined && !isAlcHigh && alc > 0 && alc === alcLimit;
@@ -940,7 +1152,7 @@ export function DashboardPage() {
 
                     <div
                         onClick={() => navigate('/training')}
-                        className={`md:col-span-8 ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-6 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full`}
+                        className={`md:col-span-6 ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full`}
                     >
                         <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors shrink-0`}>
                             <Dumbbell className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
@@ -952,31 +1164,140 @@ export function DashboardPage() {
                     </div>
 
                     {/* Health Metrics Card */}
-                    <div className={`md:col-span-4 ${density === 'compact' ? 'p-3 rounded-2xl' : 'p-6 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col justify-between h-full`}>
-                        <div className="flex justify-between items-start mb-4">
-                            <div className="flex items-center gap-2">
-                                <div className="p-1.5 bg-blue-500/10 rounded-full text-blue-500">
-                                    <Zap size={14} />
+                    <div className={`md:col-span-6 ${density === 'compact' ? 'p-2' : 'p-0'}`}>
+                        <div className="card glass p-5 md:p-5 rounded-[2rem] border border-white/5 relative overflow-hidden group bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full">
+                            <div className="relative z-10 flex flex-col h-full">
+                                {/* Header with Title and Range Selector */}
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-4">
+                                    <div className="flex items-center gap-4">
+                                        <div>
+                                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Hälsomått</h3>
+                                            <div className="flex items-baseline gap-1.5">
+                                                <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">
+                                                    {(latest3Weights[0]?.weight || 0).toFixed(1)}
+                                                </span>
+                                                <span className="text-sm font-bold text-slate-500">kg</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Trend integrated into header */}
+                                        <div className="border-l border-slate-100 dark:border-white/5 pl-4 flex flex-col justify-center">
+                                            <div className={`text-[10px] font-black uppercase ${weightDiffRange < -0.5 ? 'text-emerald-500' : weightDiffRange > 0.5 ? 'text-rose-500' : 'text-slate-500'}`}>
+                                                {weightDiffRange < -0.5 ? 'Minskande' : weightDiffRange > 0.5 ? 'Ökande' : 'Stabil'}
+                                            </div>
+                                            <div className={`text-[9px] font-bold ${weightDiffRange <= 0 ? 'text-emerald-500' : 'text-rose-500'} opacity-80`}>
+                                                {weightDiffRange > 0 ? '+' : ''}{weightDiffRange.toFixed(1)} kg
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Range Selectors */}
+                                    <div className="flex bg-slate-100 dark:bg-slate-800/50 p-0.5 rounded-lg">
+                                        {(['14d', '30d', '3m', '1y', 'all'] as const).map((r) => (
+                                            <button
+                                                key={r}
+                                                onClick={() => setWeightRange(r)}
+                                                className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase transition-all ${weightRange === r ? 'bg-white dark:bg-slate-700 text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
+                                            >
+                                                {r === 'all' ? 'All' : r}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <span className="text-[10px] font-black uppercase text-slate-400">Hälsa</span>
-                            </div>
-                            <div className="text-right">
-                                <div className="text-[9px] font-bold text-slate-400 uppercase">Aktuell vikt</div>
-                                <div className="text-lg font-black text-slate-900 dark:text-white">{getLatestWeight() || '--'} <span className="text-[9px] font-bold text-slate-400">kg</span></div>
-                            </div>
-                        </div>
-                        <div>
-                            <div className="flex items-center justify-between mb-1">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Balans</span>
-                                <span className={`text-xs font-black ${consumed - burned > 0 ? 'text-rose-500' : 'text-emerald-500'}`}>
-                                    {consumed - burned > 0 ? '+' : ''}{Math.round(consumed - burned)} kcal
-                                </span>
-                            </div>
-                            <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full rounded-full transition-all ${consumed - burned > 0 ? 'bg-rose-400' : 'bg-emerald-400'}`}
-                                    style={{ width: `${Math.min(Math.abs((consumed - burned) / 2000) * 100, 100)}%` }}
-                                />
+
+                                {/* Main Stats Grid */}
+                                <div className="grid grid-cols-3 gap-2 mb-4">
+                                    {/* Current Weight Detail */}
+                                    <div className="cursor-pointer group/stat flex flex-col justify-center" onClick={() => {
+                                        setTempValue((latest3Weights[0]?.weight || "").toString());
+                                        setTempWaist((latest3Weights[0]?.waist || "").toString());
+                                        setIsWeightModalOpen(true);
+                                    }}>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Vikt</div>
+                                        <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-blue-500">{(latest3Weights[0]?.weight || 0).toFixed(1)}<span className="text-[10px] ml-0.5 opacity-50 font-bold">kg</span></div>
+                                    </div>
+
+                                    {/* Waist Detail */}
+                                    <div className="cursor-pointer group/stat border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center" onClick={() => {
+                                        setTempValue((latest3Weights[0]?.weight || "").toString());
+                                        setTempWaist((latest3Weights[0]?.waist || "").toString());
+                                        setIsWeightModalOpen(true);
+                                    }}>
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Midja</div>
+                                        <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-emerald-500">{latest3Weights[0]?.waist || '--'}<span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span></div>
+                                    </div>
+
+                                    {/* BMI Meter */}
+                                    <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center">
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">BMI</div>
+                                        {bmi ? (
+                                            <div className="flex items-center gap-1.5">
+                                                <span className={`text-xl font-black transition-colors ${getBMICategory(bmi).color}`}>{bmi.toFixed(1)}</span>
+                                                <div className={`p-1 rounded-md ${getBMICategory(bmi).bg} ${getBMICategory(bmi).color}`}>
+                                                    <Target size={10} />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-[8px] text-slate-500 italic">--</div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Sparkline Visual */}
+                                <div className="flex-1 min-h-[120px] bg-slate-50 dark:bg-white/[0.02] rounded-3xl p-4 border border-slate-100 dark:border-white/5 relative">
+                                    <div className="absolute top-4 left-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Trendkurva</div>
+                                    <div className="h-20 mt-4">
+                                        <WeightSparkline
+                                            data={weightTrend}
+                                            dates={weightTrendEntries.map(e => e.date)}
+                                            color={weightDiffRange <= 0 ? 'text-emerald-500' : 'text-rose-500'}
+                                            onPointClick={(idx) => {
+                                                const entry = weightTrendEntries[idx];
+                                                if (entry) {
+                                                    setTempValue(entry.weight.toString());
+                                                    setTempWaist((entry.waist || "").toString());
+                                                    setIsWeightModalOpen(true);
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between items-end mt-2 px-1">
+                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{weightTrendEntries[0]?.date || ''}</span>
+                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{weightTrendEntries[weightTrendEntries.length - 1]?.date || ''}</span>
+                                    </div>
+                                </div>
+
+                                {/* Footer / Latest 3 */}
+                                <div className="mt-8 pt-6 border-t border-slate-100 dark:border-white/5">
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Senaste historik</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-1 gap-2">
+                                        {latest3Weights.length > 0 ? latest3Weights.map((w) => (
+                                            <div key={w.id} className="px-3 py-2 bg-white dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-white/5 flex items-center justify-between group/item hover:border-blue-500/30 transition-all cursor-pointer" onClick={() => {
+                                                setTempValue(w.weight.toString());
+                                                setTempWaist((w.waist || "").toString());
+                                                setIsWeightModalOpen(true);
+                                            }}>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-[10px] font-black text-slate-400 uppercase min-w-[60px]">{getRelativeDateLabel(w.date)}</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{w.weight}</span>
+                                                        <span className="text-[9px] font-bold text-slate-400">kg</span>
+                                                        {w.waist && (
+                                                            <>
+                                                                <span className="mx-1.5 opacity-20">|</span>
+                                                                <span className="text-sm font-black text-slate-900 dark:text-white">{w.waist}</span>
+                                                                <span className="text-[9px] font-bold text-slate-400">cm</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <ChevronRight size={12} className="text-slate-300 group-hover/item:text-blue-500 transition-colors" />
+                                            </div>
+                                        )) : (
+                                            <div className="col-span-3 text-center py-4 text-xs text-slate-400 italic">Ingen historik tillgänglig ännu.</div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1052,6 +1373,197 @@ export function DashboardPage() {
                     onClose={() => setSelectedActivity(null)}
                 />
             )}
+
+            {/* Weight & Measurements Modal */}
+            {isWeightModalOpen && (
+                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsWeightModalOpen(false)}>
+                    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                        <div className="p-8">
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">Vägning & mätning</h2>
+                                    <p className="text-xs font-medium text-slate-500">Logga dagens form</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={() => setShowBulkImport(!showBulkImport)}
+                                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                                        title="Bulk-import"
+                                    >
+                                        <Zap size={20} className={showBulkImport ? 'text-blue-500' : ''} />
+                                    </button>
+                                    <button
+                                        onClick={() => setIsWeightModalOpen(false)}
+                                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {!showBulkImport ? (
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Vikt (kg)</label>
+                                            <input
+                                                autoFocus
+                                                type="number"
+                                                step="0.1"
+                                                value={tempValue}
+                                                onChange={(e) => setTempValue(e.target.value)}
+                                                placeholder="0.0"
+                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 text-xl font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Midja (cm)</label>
+                                            <input
+                                                type="number"
+                                                step="0.5"
+                                                value={tempWaist}
+                                                onChange={(e) => setTempWaist(e.target.value)}
+                                                placeholder="--"
+                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 text-xl font-bold focus:ring-2 focus:ring-emerald-500 outline-none transition-all"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-3 pt-4">
+                                        <button
+                                            onClick={() => setIsWeightModalOpen(false)}
+                                            className="flex-1 px-6 py-4 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                                        >
+                                            Avbryt
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const w = parseFloat(tempValue);
+                                                const m = parseFloat(tempWaist);
+                                                if (!isNaN(w)) {
+                                                    addWeightEntry(w, today, isNaN(m) ? undefined : m);
+                                                    setIsWeightModalOpen(false);
+                                                }
+                                            }}
+                                            className="flex-1 px-6 py-4 rounded-2xl font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
+                                        >
+                                            Spara
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Pasta CSV / Tab-data</label>
+                                        <p className="text-[9px] text-slate-400 italic mb-2 ml-1">Format: Datum Vikt Midja (Tab eller Semi-kolon)</p>
+                                        <textarea
+                                            autoFocus
+                                            value={bulkInput}
+                                            onChange={(e) => setBulkInput(e.target.value)}
+                                            placeholder={"2024-01-01\t75.5\t85\n2024-01-02\t75.2\t84.5"}
+                                            className="w-full h-48 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-4 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setShowBulkImport(false)}
+                                            className="flex-1 px-6 py-4 rounded-2xl font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                                        >
+                                            Tillbaka
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const lines = bulkInput.trim().split('\n');
+                                                const entries: any[] = [];
+                                                lines.forEach(line => {
+                                                    const parts = line.split(/[\t;]/).map(p => p.trim());
+                                                    if (parts.length >= 2) {
+                                                        let date = parts[0];
+
+                                                        // Normalize Date (handles YYYY-MM-DD, DD/MM/YYYY, DD.MM.YYYY, DD-MM-YYYY)
+                                                        if (date.includes('/') || date.includes('.')) {
+                                                            const sep = date.includes('/') ? '/' : '.';
+                                                            const dParts = date.split(sep);
+                                                            if (dParts.length === 3) {
+                                                                if (dParts[0].length === 4) { // YYYY/MM/DD
+                                                                    date = `${dParts[0]}-${dParts[1].padStart(2, '0')}-${dParts[2].padStart(2, '0')}`;
+                                                                } else if (dParts[2].length === 4) { // DD/MM/YYYY
+                                                                    date = `${dParts[2]}-${dParts[1].padStart(2, '0')}-${dParts[0].padStart(2, '0')}`;
+                                                                }
+                                                            }
+                                                        }
+
+                                                        const weight = parseFloat(parts[1].replace(',', '.'));
+                                                        const waist = parts[2] ? parseFloat(parts[2].replace(',', '.')) : undefined;
+
+                                                        if (date && !isNaN(weight) && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+                                                            entries.push({ date, weight, waist });
+                                                        }
+                                                    }
+                                                });
+
+                                                if (entries.length > 0) {
+                                                    bulkAddWeightEntries(entries);
+                                                    setIsWeightModalOpen(false);
+                                                    setBulkInput("");
+                                                    setShowBulkImport(false);
+                                                }
+                                            }}
+                                            className="flex-1 px-6 py-4 rounded-2xl font-bold bg-blue-600 text-white hover:bg-blue-700 hover:scale-[1.02] active:scale-95 transition-all shadow-lg"
+                                        >
+                                            Importera {bulkInput.trim().split('\n').filter(l => l.trim()).length} rader
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            {/* History List */}
+                            <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest">Historik</h3>
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full">{weightEntries.length} loggningar</span>
+                                </div>
+                                <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                    {[...weightEntries].sort((a, b) => b.date.localeCompare(a.date)).map((entry, idx) => (
+                                        <div key={entry.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/30 rounded-2xl border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all group">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-100 dark:border-slate-800">
+                                                    {weightEntries.length - idx}
+                                                </div>
+                                                <div>
+                                                    <div className="text-xs font-black text-slate-900 dark:text-white">{entry.date}</div>
+                                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                                                        Vikt: <span className="text-slate-600 dark:text-slate-300">{entry.weight} kg</span>
+                                                        {entry.waist && <> • Midja: <span className="text-slate-600 dark:text-slate-300">{entry.waist} cm</span></>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => {
+                                                        setTempValue(entry.weight.toString());
+                                                        setTempWaist((entry.waist || "").toString());
+                                                        // Note: We might want a separate "Edit mode" for this, but for now we reuse temp
+                                                        setIsWeightModalOpen(true);
+                                                    }}
+                                                    className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg text-blue-500 transition-colors"
+                                                >
+                                                    <Settings size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+
+// Icons for the list
+const EditIcon = ({ size = 16 }: { size?: number }) => (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+);

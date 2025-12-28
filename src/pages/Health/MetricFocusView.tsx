@@ -39,11 +39,13 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
 
             return groups.map(g => {
                 const avg = g.items.reduce((sum, item) => sum + item.weight, 0) / g.items.length;
+                const avgWaist = g.items.reduce((sum, item) => sum + (item.waist || 0), 0) / g.items.filter(i => i.waist).length;
                 return {
                     date: g.date,
                     count: g.items.length,
                     average: avg,
-                    items: g.items.map(i => ({ id: i.id, date: i.date, value: i.weight, unit: 'kg' }))
+                    averageWaist: isNaN(avgWaist) ? null : avgWaist,
+                    items: g.items.map(i => ({ id: i.id, date: i.date, value: i.weight, waist: i.waist, unit: 'kg' }))
                 };
             });
         } else {
@@ -54,7 +56,8 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                     date: s.date,
                     count: 1,
                     average: s.vitals.sleep || 0,
-                    items: [{ id: s.date, date: s.date, value: s.vitals.sleep || 0, unit: 'h' }]
+                    averageWaist: null,
+                    items: [{ id: s.date, date: s.date, value: s.vitals.sleep || 0, waist: undefined, unit: 'h' }]
                 }))
                 .reverse();
         }
@@ -505,13 +508,17 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
 
             {/* History Table */}
             <div className="history-section glass p-6 rounded-2xl border border-white/5">
-                <h3 className="text-sm font-bold uppercase tracking-widest mb-4 opacity-60">Logghistorik</h3>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-sm font-bold uppercase tracking-widest opacity-60">Logghistorik</h3>
+                    <span className="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-1 rounded-full">{groupedTableData.reduce((acc, g) => acc + g.count, 0)} Punkter</span>
+                </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
                             <tr className="text-[10px] uppercase font-black text-slate-500 border-b border-white/5">
                                 <th className="py-3 px-4">Datum</th>
-                                <th className="py-3 px-4">Värde</th>
+                                <th className="py-3 px-4">Vikt</th>
+                                {isWeight && <th className="py-3 px-4">Midja</th>}
                                 <th className="py-3 px-4 text-right">Åtgärder</th>
                             </tr>
                         </thead>
@@ -562,12 +569,20 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                                                 <div className="flex items-center gap-2">
                                                     <span className="font-bold">{group.average.toFixed(1)} {group.items[0].unit}</span>
                                                     <span className="text-[10px] bg-slate-700 px-1.5 rounded text-slate-400">{group.count} st</span>
-                                                    <span className="text-[10px] text-slate-600">(Snitt)</span>
                                                 </div>
                                             ) : (
                                                 <span className="font-black">{group.items[0].value} {group.items[0].unit}</span>
                                             )}
                                         </td>
+                                        {isWeight && (
+                                            <td className="py-3 px-4">
+                                                {group.count > 1 ? (
+                                                    group.averageWaist ? <span className="text-slate-400 font-bold">{group.averageWaist.toFixed(1)} cm</span> : '--'
+                                                ) : (
+                                                    group.items[0].waist ? <span className="font-black">{group.items[0].waist} cm</span> : '--'
+                                                )}
+                                            </td>
+                                        )}
                                         <td className="py-3 px-4 text-right">
                                             {group.count === 1 && (
                                                 // Single item actions
@@ -585,11 +600,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
 
                                     {/* Expanded Group Items OR Editing State */}
                                     {(expandedGroups.has(group.date) || group.count === 1) && group.items.map(item => {
-                                        // If grouped single item, we handled display in header, but EDITING happens here?
-                                        // Actually, if count=1 and NOT editing, we showed it in header.
-                                        // If editing, we need the input.
-
-                                        if (group.count === 1 && editingId !== item.id) return null; // Already shown in header
+                                        if (group.count === 1 && editingId !== item.id) return null;
 
                                         return (
                                             <tr key={item.id} className={`${group.count > 1 ? 'bg-slate-900/50' : ''} border-b border-white/5`}>
@@ -612,6 +623,11 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                                                         <span className="font-medium text-slate-300">{item.value} {item.unit}</span>
                                                     )}
                                                 </td>
+                                                {isWeight && (
+                                                    <td className="py-2 px-4 text-xs">
+                                                        {item.waist ? `${item.waist} cm` : '--'}
+                                                    </td>
+                                                )}
                                                 <td className="py-2 px-4 text-right">
                                                     {editingId === item.id ? (
                                                         <div className="flex justify-end gap-2">
