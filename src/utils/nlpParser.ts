@@ -1,7 +1,7 @@
 import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType } from '../models/types.ts';
 
 export type OmniboxIntent =
-    | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number; distance?: number }; date?: string }
+    | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number; distance?: number; heartRateAvg?: number; heartRateMax?: number }; date?: string }
     | { type: 'food'; data: { query: string; quantity?: number; unit?: string; mealType?: MealType }; date?: string }
     | { type: 'weight'; data: { weight: number }; date?: string }
     | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy' | 'steps'; amount: number; caffeine?: number }; date?: string }
@@ -220,11 +220,27 @@ export function parseCycleString(input: string): SmartCycle | null {
 function parseVitals(input: string): OmniboxIntent | null {
     const lower = input.toLowerCase();
 
-    // Sleep: "7h sömn", "sömn 8", "8.5 timmar sömn", "sova 7h", "7h sova"
-    const sleepMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)?\s*(?:sömn|sova)/i) ||
-        lower.match(/(?:sömn|sova)\s*(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)?/i);
+    // Sleep: "7h sömn", "sömn 8", "8.5 timmar sömn", "sova 7h", "7h sova", OR JUST "7h" (fallback)
+    // We handle strict "sömn" keywords first
+    const sleepMatch = lower.match(/(?:sömn|sova|sov|natt)\s*(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)?/i) ||
+        lower.match(/(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)?\s*(?:sömn|sova|sov|natt)/i);
     if (sleepMatch) {
         return { type: 'vitals', data: { vitalType: 'sleep', amount: parseFloat(sleepMatch[1].replace(',', '.')) } };
+    }
+
+    // Aggressive "Just hours" match (e.g., "7h", "7.5h") - ONLY if it looks like a sleep log (short string, just number+h)
+    // We must be careful not to match "Run 1h" here, so we check this LAST in the main loop or rely on it being checked before others if context is clear?
+    // Actually, parseVitals is called BEFORE parseExercise in parseOmniboxInput.
+    // If user types "Run 1h", parseVitals shouldn't steal it. 
+    // BUT "7h" is ambiguous. "7h" usually means sleep in a health app context if no other keywords.
+    // Let's add strict standalone check.
+    const standaloneSleepMatch = lower.match(/^(\d+(?:[.,]\d+)?)\s*(?:h|t|timmar|tim)$/i);
+    if (standaloneSleepMatch) {
+        const val = parseFloat(standaloneSleepMatch[1].replace(',', '.'));
+        // Sanity check: sleep is usually 3-14 hours. 
+        if (val > 2 && val < 16) {
+            return { type: 'vitals', data: { vitalType: 'sleep', amount: val } };
+        }
     }
 
     // Steps: "10000 steg", "steg 8000"
@@ -280,19 +296,30 @@ function parseVitals(input: string): OmniboxIntent | null {
 function parseExercise(input: string): OmniboxIntent | null {
     // Type keywords mapping
     const typeKeywords: Record<string, ExerciseType> = {
-        'löpning': 'running', 'löpn': 'running', 'löp': 'running', 'run': 'running',
-        'cykling': 'cycling', 'cykl': 'cycling', 'cyk': 'cycling', 'bike': 'cycling',
-        'styrka': 'strength', 'styrk': 'strength', 'gym': 'strength', 'lyft': 'strength',
-        'promenad': 'walking', 'prom': 'walking', 'walk': 'walking', 'gång': 'walking',
-        'simning': 'swimming', 'simn': 'swimming', 'sim': 'swimming', 'swim': 'swimming',
-        'yoga': 'yoga'
+        'löpning': 'running', 'löpn': 'running', 'löp': 'running', 'run': 'running', 'jogging': 'running', 'jogg': 'running',
+        'cykling': 'cycling', 'cykl': 'cycling', 'cyk': 'cycling', 'bike': 'cycling', 'cykel': 'cycling',
+        'styrka': 'strength', 'styrk': 'strength', 'gym': 'strength', 'lyft': 'strength', 'strength': 'strength', 'weights': 'strength',
+        'promenad': 'walking', 'prom': 'walking', 'walk': 'walking', 'gång': 'walking', 'gå': 'walking',
+        'simning': 'swimming', 'simn': 'swimming', 'sim': 'swimming', 'swim': 'swimming', 'bad': 'swimming',
+        'yoga': 'yoga', 'pilates': 'yoga', 'stretch': 'yoga'
     };
 
     let type: ExerciseType | null = null;
     const sortedKeywords = Object.keys(typeKeywords).sort((a, b) => b.length - a.length);
 
+    // Improved regex to handle Swedish characters (åäö) as word characters
+    // Using explicit boundary checks instead of \b which fails on åäö in some engines
+    // Matches: (Start OR Non-Word)(Keyword)(WordChars containing swedish)(Non-Word OR End)
+
     for (const kw of sortedKeywords) {
-        const regex = new RegExp(`\\b${kw}\\w*\\b`, 'i');
+        // Construct regex that allows keyword followed by optional ending (like "löpning" matching "löp")
+        // but robustly handles the boundary.
+        // We use a simpler approach: check if the word exists as a distinct token.
+
+        // Strategy: Replace non-word chars with spaces, then check token list?
+        // Or just improved Regex:
+        const regex = new RegExp(`(?:^|[\\s.,!?;])(${kw}[a-zA-ZåäöÅÄÖ0-9]*)(?=$|[\\s.,!?;])`, 'i');
+
         if (regex.test(input)) {
             type = typeKeywords[kw];
             break;
@@ -355,26 +382,30 @@ function parseExercise(input: string): OmniboxIntent | null {
     // Now check for duration in the CLEANED string
     // This prevents "20 ton" from matching "20 t" (hours)
 
-    if (!type && !inputForDuration.match(/\d+\s*(min|h|t|m)/)) return null;
+    // Heart Rate Detection: "Puls 145", "HR 145", "145 bpm", "Puls 130/170"
+    let heartRateAvg: number | undefined;
+    let heartRateMax: number | undefined;
 
-    const durationMatch = inputForDuration.match(/(\d+)\s*(min|h|t|m)?/);
-    let duration = 30;
-    if (durationMatch) {
-        duration = parseInt(durationMatch[1]);
-        const unit = durationMatch[2];
-        if (unit === 'h' || unit === 't') duration *= 60;
+    // Matches: "puls 130/170", "hr 130/170"
+    const hrRangeMatch = input.match(/(?:puls|hr|bpm)\s*(\d+)\/(\d+)/i);
+    if (hrRangeMatch) {
+        heartRateAvg = parseInt(hrRangeMatch[1]);
+        heartRateMax = parseInt(hrRangeMatch[2]);
+    } else {
+        // Matches: "puls 140", "140 bpm", "hr 140"
+        const hrMatch = input.match(/(?:puls|hr|bpm)\s*(\d+)/i) || input.match(/(\d+)\s*bpm/i);
+        if (hrMatch) {
+            heartRateAvg = parseInt(hrMatch[1]);
+        }
     }
 
-    let intensity: ExerciseIntensity = 'moderate';
-    if (input.includes('lätt') || input.includes('låg') || input.includes('lugnt') || input.includes('lugn') || input.includes('slow') || input.includes('easy')) intensity = 'low';
-    else if (input.includes('hög') || input.includes('hårt') || input.includes('hard') || input.includes('tuff') || input.includes('snabb') || input.includes('snabbt') || input.includes('fast')) intensity = 'high';
-    else if (input.includes('max') || input.includes('ultra')) intensity = 'ultra';
-
-    // Distance detection (km) and smart duration estimation
+    // Distance detection (km) - moved up to clean string for duration
     let distance: number | undefined;
     const distanceMatch = input.match(/(\d+(?:[.,]\d+)?)\s*km/i);
     if (distanceMatch) {
         distance = parseFloat(distanceMatch[1].replace(',', '.'));
+        // Remove distance from inputForDuration so "10km" doesn't become "10 min"
+        inputForDuration = inputForDuration.replace(distanceMatch[0], '');
     }
 
     // Pace detection and smart duration calculation for running
@@ -394,23 +425,42 @@ function parseExercise(input: string): OmniboxIntent | null {
         }
     }
 
-    // If we have distance but no explicit duration, estimate duration
-    const hasExplicitDuration = inputForDuration.match(/\d+\s*(min|h|t|m)(?!\s*\/)/);
-    if (distance && !hasExplicitDuration) {
-        if (pace) {
-            // Use provided pace
-            duration = Math.round((distance * pace) / 60);
-        } else {
-            // Default paces by intensity
-            const defaultPace: Record<ExerciseIntensity, number> = {
-                low: 7 * 60,     // 7:00 min/km (easy jog)
-                moderate: 6 * 60, // 6:00 min/km (normal run)
-                high: 5 * 60,     // 5:00 min/km (fast run)
-                ultra: 4.5 * 60   // 4:30 min/km (race pace)
-            };
-            duration = Math.round((distance * defaultPace[intensity]) / 60);
+    // Now check for duration in the CLEANED string
+    // This prevents "20 ton" or "10 km" from matching "XX min/h" if loose regex used,
+    // or specifically prevents "10" from being picked up as duration if we used a loose fallback.
+
+    // We strictly look for units first
+    const durationMatch = inputForDuration.match(/(\d+)\s*(min|h|t|m)\b/i);
+    let duration = 30; // Default
+
+    if (durationMatch) {
+        duration = parseInt(durationMatch[1]);
+        const unit = durationMatch[2].toLowerCase();
+        if (unit.startsWith('h') || unit.startsWith('t')) duration *= 60;
+    } else {
+        // Fallback: If no units, checks for just number?
+        // NO, standard practice is to require units or rely on smart estimation from distance/pace.
+        // If we have distance but no duration (and no pace), we estimate.
+        if (distance) {
+            if (pace) {
+                duration = Math.round((distance * pace) / 60);
+            } else {
+                // Default paces by intensity
+                const defaultPace: Record<ExerciseIntensity, number> = {
+                    low: 7 * 60,     // 7:00 min/km
+                    moderate: 6 * 60, // 6:00 min/km
+                    high: 5 * 60,     // 5:00 min/km
+                    ultra: 4.5 * 60   // 4:30 min/km
+                };
+                duration = Math.round((distance * defaultPace[intensity]) / 60);
+            }
         }
     }
+
+    let intensity: ExerciseIntensity = 'moderate';
+    if (input.includes('lätt') || input.includes('låg') || input.includes('lugnt') || input.includes('lugn') || input.includes('slow') || input.includes('easy')) intensity = 'low';
+    else if (input.includes('hög') || input.includes('hårt') || input.includes('hard') || input.includes('tuff') || input.includes('snabb') || input.includes('snabbt') || input.includes('fast')) intensity = 'high';
+    else if (input.includes('max') || input.includes('ultra')) intensity = 'ultra';
 
     // Sub-types for running
     if (type === 'running') {
@@ -425,6 +475,9 @@ function parseExercise(input: string): OmniboxIntent | null {
     if (!type) {
         if (input.includes('intervall') || input.includes('långpass') || input.includes('lopp') || input.includes('tävling') || input.includes('ultra')) {
             type = 'running';
+        } else if (tonnage) {
+            // If we detected tonnage, it's definitely strength training
+            type = 'strength';
         }
     }
 
@@ -437,7 +490,9 @@ function parseExercise(input: string): OmniboxIntent | null {
             notes: input.length > 20 ? input : undefined,
             subType,
             tonnage,
-            distance
+            distance,
+            heartRateAvg,
+            heartRateMax
         }
     };
 }

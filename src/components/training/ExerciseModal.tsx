@@ -62,8 +62,6 @@ export function ExerciseModal({
 }: ExerciseModalProps) {
     const navigate = useNavigate();
 
-    if (!isOpen) return null;
-
     // Handle ESC key
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
@@ -72,6 +70,8 @@ export function ExerciseModal({
         if (isOpen) window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, onClose]);
+
+    if (!isOpen) return null;
 
     return (
         <div className="modal-overlay" onClick={onClose}>

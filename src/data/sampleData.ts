@@ -75,11 +75,14 @@ export const SAMPLE_USERS: User[] = [
     }
 ];
 
+import { GENERATED_FOOD_ITEMS } from './generatedFoodData.ts';
+
 // ============================================
 // Vegan Food Database (25+ items)
 // ============================================
 
 export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
+    ...GENERATED_FOOD_ITEMS,
     // --- LEGUMES (Baljväxter) ---
     {
         id: 'food-linser',

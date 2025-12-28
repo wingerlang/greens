@@ -92,7 +92,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         )}
 
                         {/* Veckan (Home) */}
-                        <NavLink to="/" end className={linkClasses}>
+                        <NavLink to="/veckan" className={linkClasses}>
                             <span>📅</span>
                             <span className="hidden xl:inline">Veckan</span>
                         </NavLink>

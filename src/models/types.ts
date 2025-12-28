@@ -181,13 +181,16 @@ export interface FoodItem {
     gramsPerDl?: number;        // Weight in grams for 1 dl
     yieldFactor?: number;       // Cooked weight / Raw weight (e.g. 2.5 for rice)
     linkedItemId?: string;      // ID of the corresponding raw/cooked version
-    // Micronutrients (per 100g)
+    // Micronutrients (per 100g) - Core
     iron?: number;              // mg
     calcium?: number;           // mg
     zinc?: number;              // mg
     vitaminB12?: number;        // µg
     vitaminC?: number;          // mg
     vitaminA?: number;          // µg (RAE)
+    // Extended Details (Full Macro/Micro Breakdown)
+    extendedDetails?: ExtendedFoodDetails;
+
     // Protein Quality
     isCompleteProtein?: boolean;
     missingAminoAcids?: string[]; // e.g., ['lysine', 'methionine']
@@ -196,6 +199,25 @@ export interface FoodItem {
     seasons?: Season[];                       // Best seasons for this item
     createdAt: string;
     updatedAt: string;
+}
+
+export interface ExtendedFoodDetails {
+    sugar?: number;             // g
+    addedSugar?: number;        // g
+    fiber?: number;             // g (Moved/Duplicated for completeness if needed, but FoodItem has it top-level)
+    wholeGrains?: number;       // g
+
+    // Fats Breakdown
+    saturatedFat?: number;       // g
+    monounsaturatedFat?: number; // g
+    polyunsaturatedFat?: number; // g
+    cholesterol?: number;        // mg
+    omega3?: number;             // g
+    omega6?: number;             // g
+
+    // Extra Vitamins
+    vitaminD?: number;           // µg
+    // Add others if present in DB
 }
 
 /**

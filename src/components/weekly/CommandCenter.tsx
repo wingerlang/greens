@@ -2,6 +2,23 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useData } from '../../context/DataContext.tsx';
 import { parseOmniboxInput } from '../../utils/nlpParser.ts';
 import { type ExerciseType, type ExerciseIntensity, type MealType, MEAL_TYPE_LABELS } from '../../models/types.ts';
+import {
+    Search,
+    Utensils,
+    Dumbbell,
+    Moon,
+    Droplets,
+    Coffee,
+    Zap,
+    Wine,
+    Flame,
+    Clock,
+    Calendar,
+    ChevronDown,
+    ArrowRight,
+    CornerDownLeft,
+    Sparkles
+} from 'lucide-react';
 import './CommandCenter.css';
 
 const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
@@ -21,15 +38,162 @@ const INTENSITIES: { value: ExerciseIntensity; label: string }[] = [
     { value: 'ultra', label: 'Max' },
 ];
 
-const VITAL_ICONS = {
-    sleep: '💤',
-    water: '💧',
-    coffee: '☕',
-    nocco: '⚡',
-    energy: '🥤'
+const CATEGORY_LABELS: Record<string, { label: string; icon: any; color: string; classes: { bg: string; darkBg: string; text: string; darkText: string; border: string; icon: string } }> = {
+    food: {
+        label: 'Mat',
+        icon: Utensils,
+        color: 'emerald',
+        classes: {
+            bg: 'bg-emerald-50',
+            darkBg: 'dark:bg-emerald-900/20',
+            text: 'text-emerald-600',
+            darkText: 'dark:text-emerald-400',
+            border: 'border-emerald-500',
+            icon: 'text-emerald-500'
+        }
+    },
+    exercise: {
+        label: 'Träning',
+        icon: Dumbbell,
+        color: 'orange',
+        classes: {
+            bg: 'bg-orange-50',
+            darkBg: 'dark:bg-orange-900/20',
+            text: 'text-orange-600',
+            darkText: 'dark:text-orange-400',
+            border: 'border-orange-500',
+            icon: 'text-orange-500'
+        }
+    },
+    vitals: {
+        label: 'Hälsa',
+        icon: Moon,
+        color: 'blue',
+        classes: {
+            bg: 'bg-blue-50',
+            darkBg: 'dark:bg-blue-900/20',
+            text: 'text-blue-600',
+            darkText: 'dark:text-blue-400',
+            border: 'border-blue-500',
+            icon: 'text-blue-500'
+        }
+    },
+    sleep: {
+        label: 'Sömn',
+        icon: Moon,
+        color: 'indigo',
+        classes: {
+            bg: 'bg-indigo-50',
+            darkBg: 'dark:bg-indigo-900/20',
+            text: 'text-indigo-600',
+            darkText: 'dark:text-indigo-400',
+            border: 'border-indigo-500',
+            icon: 'text-indigo-500'
+        }
+    },
+    water: {
+        label: 'Vatten',
+        icon: Droplets,
+        color: 'cyan',
+        classes: {
+            bg: 'bg-cyan-50',
+            darkBg: 'dark:bg-cyan-900/20',
+            text: 'text-cyan-600',
+            darkText: 'dark:text-cyan-400',
+            border: 'border-cyan-500',
+            icon: 'text-cyan-500'
+        }
+    },
+    coffee: {
+        label: 'Kaffe',
+        icon: Coffee,
+        color: 'amber',
+        classes: {
+            bg: 'bg-amber-50',
+            darkBg: 'dark:bg-amber-900/20',
+            text: 'text-amber-600',
+            darkText: 'dark:text-amber-400',
+            border: 'border-amber-500',
+            icon: 'text-amber-500'
+        }
+    },
+    nocco: {
+        label: 'Nocco',
+        icon: Zap,
+        color: 'yellow',
+        classes: {
+            bg: 'bg-yellow-50',
+            darkBg: 'dark:bg-yellow-900/20',
+            text: 'text-yellow-600',
+            darkText: 'dark:text-yellow-400',
+            border: 'border-yellow-500',
+            icon: 'text-yellow-500'
+        }
+    },
+    energy: {
+        label: 'Energi',
+        icon: Zap,
+        color: 'yellow',
+        classes: {
+            bg: 'bg-yellow-50',
+            darkBg: 'dark:bg-yellow-900/20',
+            text: 'text-yellow-600',
+            darkText: 'dark:text-yellow-400',
+            border: 'border-yellow-500',
+            icon: 'text-yellow-500'
+        }
+    },
+    alcohol: {
+        label: 'Alkohol',
+        icon: Wine,
+        color: 'rose',
+        classes: {
+            bg: 'bg-rose-50',
+            darkBg: 'dark:bg-rose-900/20',
+            text: 'text-rose-600',
+            darkText: 'dark:text-rose-400',
+            border: 'border-rose-500',
+            icon: 'text-rose-500'
+        }
+    },
+    weight: {
+        label: 'Vikt',
+        icon: Search,
+        color: 'slate',
+        classes: {
+            bg: 'bg-slate-50',
+            darkBg: 'dark:bg-slate-900/20',
+            text: 'text-slate-600',
+            darkText: 'dark:text-slate-400',
+            border: 'border-slate-500',
+            icon: 'text-slate-500'
+        }
+    }
 };
 
-export function CommandCenter() {
+const getNutrients = (match: { type: string, item: any }) => {
+    if (match.type === 'foodItem') {
+        return {
+            cal: match.item.calories || 0,
+            prot: match.item.protein || 0
+        };
+    } else {
+        // Recipe estimation (rough average or need helper)
+        return {
+            cal: 150,
+            prot: 8
+        };
+    }
+}
+
+interface CommandCenterProps {
+    autoFocus?: boolean;
+    onAfterAction?: () => void;
+    className?: string;
+    overlayMode?: boolean;
+}
+
+export function CommandCenter({ autoFocus = false, onAfterAction, className = '', overlayMode = false }: CommandCenterProps) {
     const {
         foodItems,
         recipes,
@@ -45,6 +209,30 @@ export function CommandCenter() {
     const [isFocused, setIsFocused] = useState(false);
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const inputRef = useRef<HTMLInputElement>(null);
+    const manualInputRef = useRef<HTMLInputElement>(null); // Ref for the first manual input field
+
+    // History State
+    const [history, setHistory] = useState<string[]>([]);
+
+    useEffect(() => {
+        const stored = localStorage.getItem('omni_history');
+        if (stored) {
+            try {
+                setHistory(JSON.parse(stored));
+            } catch (e) {
+                console.error('Failed to parse history', e);
+            }
+        }
+    }, []);
+
+    const addToHistory = (cmd: string) => {
+        if (!cmd.trim()) return;
+        setHistory(prev => {
+            const next = [cmd, ...prev.filter(c => c !== cmd)].slice(0, 10);
+            localStorage.setItem('omni_history', JSON.stringify(next));
+            return next;
+        });
+    };
 
     // Draft states...
     const [draftType, setDraftType] = useState<ExerciseType | null>(null);
@@ -53,13 +241,22 @@ export function CommandCenter() {
     const [draftQuantity, setDraftQuantity] = useState<number | null>(null);
     const [draftUnit, setDraftUnit] = useState<string | null>(null);
     const [draftMealType, setDraftMealType] = useState<MealType | null>(null);
-    const [draftVitalType, setDraftVitalType] = useState<'sleep' | 'water' | 'coffee' | 'nocco' | 'energy' | null>(null);
+    const [draftVitalType, setDraftVitalType] = useState<'sleep' | 'water' | 'coffee' | 'nocco' | 'energy' | 'steps' | null>(null);
+
+    // Explicit Manual Mode Flag
     const [isManual, setIsManual] = useState(false);
 
     const intent = useMemo(() => parseOmniboxInput(query), [query]);
 
-    // Update draft values from intent unless user is manually overriding
+    // Update draft values from intent -> BUT ONLY IF NOT ALREADY MANUALLY EDITED
     useEffect(() => {
+        // If query changes, we reset manual mode ONLY if the NEW intent type is different
+        // This is tricky. simpler: Reset manual mode only on empty query or completely different intent type logic?
+        // Actually, users want "smart defaults" which they then tweak. 
+        // So we should only update from intent if the user hasn't touched the control for THAT specific field.
+        // For simplicity in this fix: Reset manual flag only when query is cleared. 
+        // When typing, we respect intent. When clicking UI, we set isManual = true.
+
         if (!isManual) {
             if (intent.type === 'exercise') {
                 setDraftType(intent.data.exerciseType);
@@ -81,9 +278,9 @@ export function CommandCenter() {
                 setSelectedDate(intent.date);
             }
         }
-    }, [intent, isManual]);
+    }, [intent]);
 
-    // Reset manual flag when query is empty
+    // Reset everything when query is cleared
     useEffect(() => {
         if (!query) {
             setIsManual(false);
@@ -100,20 +297,53 @@ export function CommandCenter() {
     const foodMatch = useMemo(() => {
         if (intent.type !== 'food') return null;
         const q = intent.data.query.toLowerCase();
-        const recipeMatch = recipes.find(r => r.name.toLowerCase() === q || r.name.toLowerCase().includes(q));
-        if (recipeMatch) return { type: 'recipe', item: recipeMatch };
-        const foodItemMatch = foodItems.find(f => f.name.toLowerCase() === q || f.name.toLowerCase().includes(q));
-        if (foodItemMatch) return { type: 'foodItem', item: foodItemMatch };
-        return null;
+        // Exact match prioritized
+        const exactRecipe = recipes.find(r => r.name.toLowerCase() === q);
+        if (exactRecipe) return { type: 'recipe', item: exactRecipe };
+
+        const exactFood = foodItems.find(f => f.name.toLowerCase() === q);
+        if (exactFood) return { type: 'foodItem', item: exactFood };
+
+        // Starts with match
+        const prefixRecipe = recipes.find(r => r.name.toLowerCase().startsWith(q));
+        if (prefixRecipe) return { type: 'recipe', item: prefixRecipe };
+
+        const prefixFood = foodItems.find(f => f.name.toLowerCase().startsWith(q));
+        if (prefixFood) return { type: 'foodItem', item: prefixFood };
+
+        return null; // No "direct" match, fallback to search suggestions or manual entry
     }, [intent, foodItems, recipes]);
+
+    // Filter partial matches for suggestions if no exact match
+    const suggestions = useMemo(() => {
+        if (intent.type !== 'food' || foodMatch) return [];
+        const q = intent.data.query.toLowerCase();
+        if (q.length < 2) return [];
+
+        const foodSuggestions = foodItems
+            .filter(f => f.name.toLowerCase().includes(q))
+            .slice(0, 3)
+            .map(item => ({ type: 'foodItem' as const, item }));
+
+        const recipeSuggestions = recipes
+            .filter(r => r.name.toLowerCase().includes(q))
+            .slice(0, 2)
+            .map(item => ({ type: 'recipe' as const, item }));
+
+        return [...foodSuggestions, ...recipeSuggestions];
+    }, [intent, foodItems, recipes, foodMatch]);
 
     const handleAction = () => {
         const targetDate = selectedDate;
 
+        // Use DRAFT values if they exist (manual override), otherwise fall back to intent data (parsed)
+        // logic: const finalVal = draftVal !== null ? draftVal : intentVal
+
         if (intent.type === 'exercise') {
-            const type = draftType || 'other';
-            const duration = draftDuration || 30;
-            const intensity = draftIntensity || 'moderate';
+            const type = draftType || intent.data.exerciseType || 'other';
+            const duration = draftDuration || intent.data.duration || 30;
+            const intensity = draftIntensity || intent.data.intensity || 'moderate';
+
             const calories = calculateExerciseCalories(type, duration, intensity);
             addExercise({
                 date: targetDate,
@@ -123,39 +353,72 @@ export function CommandCenter() {
                 caloriesBurned: calories,
                 subType: intent.data.subType,
                 tonnage: intent.data.tonnage,
-                notes: intent.data.notes
+                notes: intent.data.notes,
+                distance: intent.data.distance,
+                heartRateAvg: intent.data.heartRateAvg,
+                heartRateMax: intent.data.heartRateMax
             });
             setQuery('');
+            if (onAfterAction) setTimeout(onAfterAction, 100);
         } else if (intent.type === 'weight') {
-            addWeightEntry(draftQuantity || 0, targetDate);
+            addWeightEntry(draftQuantity || intent.data.weight || 0, targetDate);
             setQuery('');
+            if (onAfterAction) setTimeout(onAfterAction, 100);
         } else if (intent.type === 'food' && foodMatch) {
             addMealEntry({
                 date: targetDate,
-                mealType: draftMealType || 'snack',
+                mealType: draftMealType || intent.data.mealType || 'snack',
                 items: [{
                     type: foodMatch.type as any,
                     referenceId: foodMatch.item.id,
-                    servings: draftQuantity || 1
+                    servings: draftQuantity || intent.data.quantity || 1
                 }]
             });
             setQuery('');
-        } else if (intent.type === 'vitals' && draftVitalType) {
-            const amount = draftQuantity || 0;
+            if (onAfterAction) setTimeout(onAfterAction, 100);
+        } else if (intent.type === 'vitals') {
+            const vType = draftVitalType || intent.data.vitalType;
+            if (!vType) return;
+
+            const amount = draftQuantity || intent.data.amount || 0;
             const currentVitals = getVitalsForDate(targetDate);
             const updates: any = {};
 
-            if (draftVitalType === 'sleep') {
+            if (vType === 'sleep') {
                 updates.sleep = amount;
-            } else if (draftVitalType === 'water') {
+            } else if (vType === 'water') {
                 updates.water = (currentVitals.water || 0) + amount;
-            } else { // coffee, nocco, energy
+            } else {
                 updates.caffeine = (currentVitals.caffeine || 0) + amount;
-                updates.water = (currentVitals.water || 0) + amount; // Counting as hydration too
+                if (vType !== 'nocco' && vType !== 'energy') {
+                    // Should coffee count as water? Maybe separately. Kept logic simple for now.
+                }
             }
 
             updateVitals(targetDate, updates);
             setQuery('');
+            addToHistory(query);
+            updateVitals(targetDate, updates);
+            setQuery('');
+            if (onAfterAction) setTimeout(onAfterAction, 100);
+        }
+    };
+
+    // Keyboard Navigation
+    const handleKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            handleAction();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (!query && history.length > 0) {
+                setQuery(history[0]);
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            // Move focus to manual input if it exists
+            if (manualInputRef.current) {
+                manualInputRef.current.focus();
+            }
         }
     };
 
@@ -168,309 +431,297 @@ export function CommandCenter() {
         return selectedDate;
     };
 
+    // Determine detected category for visual header
+    const detectedCategory = useMemo(() => {
+        if (intent.type === 'food') return 'food';
+        if (intent.type === 'exercise') return 'exercise';
+        if (intent.type === 'vitals') return intent.data.vitalType || 'vitals'; // Specific vital type
+        return intent.type;
+    }, [intent]);
+
+    const catInfo = CATEGORY_LABELS[detectedCategory] || {
+        label: 'Sök',
+        icon: Search,
+        color: 'slate',
+        classes: {
+            bg: 'bg-slate-50',
+            darkBg: 'dark:bg-slate-900/20',
+            text: 'text-slate-600',
+            darkText: 'dark:text-slate-400',
+            border: 'border-slate-500',
+            icon: 'text-slate-500'
+        }
+    };
+    const CategoryIcon = catInfo.icon;
+
     return (
-        <div className={`command-center ${isFocused ? 'is-active' : ''}`}>
-            <div className="omnibox-wrapper">
+        <div className={`command-center ${isFocused ? 'is-active' : ''} ${className}`}>
+            <div className="omnibox-wrapper relative z-50">
                 <button
-                    className={`date-picker-trigger ${!isToday ? 'active' : ''}`}
+                    className={`date-picker-trigger ${!isToday ? 'active' : ''} flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${isToday ? 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' : 'bg-indigo-500/10 text-indigo-500 border border-indigo-500/20'
+                        }`}
                     onClick={() => {
                         const newDate = isToday ? new Date(Date.now() - 86400000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
                         setSelectedDate(newDate);
                     }}
-                    title="Byt mellan idag/igår (eller klicka för att välja via input)"
                 >
-                    📅 {getDateLabel()}
+                    <Calendar size={12} />
+                    {getDateLabel()}
                 </button>
-                <div className="omnibox-icon">🪄</div>
+
+                <div className="omnibox-icon w-8 h-8 flex items-center justify-center text-slate-400">
+                    <Sparkles size={16} />
+                </div>
+
                 <input
                     ref={inputRef}
+                    autoFocus={autoFocus}
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onFocus={() => setIsFocused(true)}
                     onBlur={() => setTimeout(() => setIsFocused(false), 200)}
-                    placeholder="Logga träning, mat, kaffe eller sömn..."
-                    onKeyDown={(e) => e.key === 'Enter' && handleAction()}
+                    placeholder="Vad vill du logga?"
+                    className="w-full bg-transparent border-none text-base font-medium placeholder-slate-400 focus:outline-none focus:ring-0 h-12"
+                    onKeyDown={handleKeyDown}
                 />
-                <div className="omnibox-shortcut">⏎ för att spara</div>
+
+                <div className="omnibox-shortcut flex items-center gap-1 text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                    <CornerDownLeft size={10} />
+                    RETUR
+                </div>
             </div>
 
-            {query && (
-                <div className="suggestion-panel animate-in fade-in slide-in-from-top-2 duration-300">
-                    {!['vitals', 'exercise', 'weight'].includes(intent.type) && (
-                        <div className="suggestion-card search-card">
-                            <div className="card-header">
-                                <span className="card-icon">🔍</span>
-                                <div className="card-title">
-                                    <h3>Söker efter...</h3>
-                                    <p className="intent-summary text-base font-normal opacity-80">"{query}"</p>
-                                </div>
-                            </div>
-                            <div className="card-content text-right">
-                                <button className="confirm-btn bg-indigo-500 hover:bg-indigo-600 shadow-indigo-500/20" onClick={handleAction}>Sök</button>
-                            </div>
+            {(query || (isFocused && history.length > 0)) && (
+                <div className={`suggestion-panel border-slate-200 dark:border-slate-700 overflow-hidden divide-y divide-slate-100 dark:divide-slate-800 animate-in fade-in slide-in-from-top-2 duration-200 z-40 max-h-[60vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700 ${overlayMode
+                    ? 'relative border-t mt-0 bg-transparent'
+                    : 'absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border'
+                    }`}>
+
+                    {/* Explicit Category Header */}
+                    <div className={`px-4 py-2 ${catInfo.classes.bg} ${catInfo.classes.darkBg} border-l-4 ${catInfo.classes.border} flex items-center justify-between`}>
+                        <div className="flex items-center gap-2">
+                            <CategoryIcon size={16} className={`${catInfo.classes.icon}`} />
+                            <span className={`text-xs font-bold uppercase tracking-wider ${catInfo.classes.text} ${catInfo.classes.darkText}`}>
+                                {catInfo.label}
+                            </span>
+                        </div>
+                        {isManual && <span className="text-[10px] uppercase font-bold text-slate-400 bg-white/50 dark:bg-black/20 px-2 py-0.5 rounded-full">Manuellt ändrad</span>}
+                    </div>
+
+                    {/* HISTORY LIST (If query is empty) */}
+                    {!query && history.length > 0 && (
+                        <div className="p-2">
+                            <div className="text-[10px] font-bold uppercase text-slate-400 px-2 py-1">Tidigare</div>
+                            {history.map((cmd, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setQuery(cmd)}
+                                    className="w-full text-left px-3 py-2 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-lg flex items-center justify-between group"
+                                >
+                                    <span>{cmd}</span>
+                                    <CornerDownLeft size={12} className="opacity-0 group-hover:opacity-50" />
+                                </button>
+                            ))}
                         </div>
                     )}
 
-                    {intent.type === 'vitals' && (
-                        <div className="suggestion-card vitals-card reflective">
-                            <div className="card-header">
-                                <span className="card-icon">
-                                    {VITAL_ICONS[draftVitalType || 'water']}
-                                </span>
-                                <div className="card-title">
-                                    <h3>Regga {draftVitalType === 'sleep' ? 'Sömn' : 'Vätska/Energi'}</h3>
-                                    <p className="intent-summary">
-                                        {draftQuantity} {draftVitalType === 'sleep' ? 'timmar' : (draftVitalType === 'coffee' ? 'koppar' : 'st')}
-                                    </p>
-                                </div>
-                            </div>
-                            <div className="reflective-inputs">
-                                <div className="input-row flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="number"
-                                            step={draftVitalType === 'sleep' ? '0.5' : '1'}
-                                            value={draftQuantity ?? ''}
-                                            onChange={(e) => { setDraftQuantity(parseFloat(e.target.value)); setIsManual(true); }}
-                                            className="reflective-field w-20"
-                                        />
-                                        <span className="text-[10px] text-slate-500 font-bold uppercase">
-                                            {draftVitalType === 'sleep' ? 'Timmar' : 'Antal'}
-                                        </span>
-                                    </div>
-                                    <div className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest">
-                                        {getDateLabel()}
-                                    </div>
-                                </div>
-                            </div>
-                            <button className="confirm-btn" onClick={handleAction}>Spara {draftVitalType === 'sleep' ? 'Sömn' : 'Logg'}</button>
-                        </div>
-                    )}
+                    {/* Content Body */}
+                    {query && (
+                        <div className="p-4">
 
-                    {intent.type === 'exercise' && (
-                        <div className="suggestion-card exercise-card reflective">
-                            <div className="card-header">
-                                <span className="card-icon">{EXERCISE_TYPES.find(t => t.type === draftType)?.icon || '🏃'}</span>
-                                <div className="card-title">
-                                    <div className="flex justify-between items-start">
-                                        <h3>Regga träning</h3>
-                                        {draftType && draftDuration && (
-                                            <div className="text-right">
-                                                <span className="text-xs font-bold text-orange-400">
-                                                    🔥 ~{calculateExerciseCalories(draftType, draftDuration, draftIntensity || 'moderate')} kcal
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="intent-summary">{draftDuration} min {EXERCISE_TYPES.find(t => t.type === draftType)?.label}</p>
+                            {/* SEARCH / GENERIC */}
+                            {!['vitals', 'exercise', 'weight', 'food'].includes(intent.type) && (
+                                <div className="text-center py-4 text-slate-500">
+                                    <Search size={32} className="mx-auto mb-2 opacity-50" />
+                                    <p>Söker efter "{query}"...</p>
+                                    <button className="mt-4 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors" onClick={handleAction}>
+                                        Sök
+                                    </button>
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="reflective-inputs">
-                                <div className="input-row">
-                                    <div className="type-chips">
+                            {/* VITALS (Sleep, Water, etc) */}
+                            {intent.type === 'vitals' && (
+                                <div className="flex items-center gap-4">
+                                    <div className={`w-16 h-16 rounded-xl flex items-center justify-center ${catInfo.classes.bg} ${catInfo.classes.darkBg} ${catInfo.classes.text} ${catInfo.classes.darkText} text-3xl`}>
+                                        <CategoryIcon size={32} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <input
+                                                ref={manualInputRef}
+                                                type="number"
+                                                value={draftQuantity || ''}
+                                                // Removed autoFocus to prevent stealing focus. ArrowDown moves focus here.
+                                                onChange={(e) => { setDraftQuantity(parseFloat(e.target.value)); setIsManual(true); }}
+                                                className="w-24 text-3xl font-black bg-transparent border-b-2 border-slate-200 focus:border-indigo-500 outline-none text-center"
+                                                placeholder="0"
+                                            />
+                                            <span className="text-sm font-bold text-slate-400 uppercase">
+                                                {intent.data.vitalType === 'sleep' ? 'Timmar' : 'St'}
+                                            </span>
+                                        </div>
+                                        <button
+                                            className="text-white bg-slate-900 hover:bg-slate-800 px-4 py-1.5 rounded-full text-xs font-bold"
+                                            onClick={handleAction}
+                                        >
+                                            Spara
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* EXERCISE */}
+                            {intent.type === 'exercise' && (
+                                <div className="space-y-4">
+                                    <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
                                         {EXERCISE_TYPES.map(t => (
                                             <button
                                                 key={t.type}
-                                                className={`chip ${draftType === t.type ? 'active' : ''}`}
                                                 onClick={() => { setDraftType(t.type); setIsManual(true); }}
+                                                className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all min-w-[70px] ${(draftType || intent.data.exerciseType) === t.type
+                                                    ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                                                    : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                    }`}
                                             >
-                                                {t.icon}
+                                                <span className="text-2xl">{t.icon}</span>
+                                                <span className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{t.label}</span>
                                             </button>
                                         ))}
                                     </div>
-                                </div>
 
-                                {/* Running Sub-types */}
-                                {draftType === 'running' && (
-                                    <div className="input-row">
-                                        <div className="flex gap-2 overflow-x-auto pb-2">
-                                            {[
-                                                { id: 'default', label: 'Vanligt' },
-                                                { id: 'interval', label: 'Intervall' },
-                                                { id: 'long-run', label: 'Långpass' },
-                                                { id: 'ultra', label: 'Ultra' },
-                                                { id: 'competition', label: 'Tävling' }
-                                            ].map(sub => (
-                                                <button
-                                                    key={sub.id}
-                                                    className={`px-3 py-1 text-[10px] uppercase font-bold rounded-lg border transition-all ${intent.data.subType === sub.id
-                                                            ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/50'
-                                                            : 'bg-slate-800 text-slate-400 border-slate-700 hover:border-slate-600'
-                                                        }`}
-                                                    onClick={() => {
-                                                        // Note: We can't update intent directly as it's parsed from query.
-                                                        // We should append the keyword to the query string to trigger parser update?
-                                                        // OR we add local state for subType. 
-                                                        // The intent is read-only from parser.
-                                                        // If we want to change it, we should update 'query' text to include keyword.
-                                                        let newQuery = query;
-                                                        // Remove existing keywords
-                                                        newQuery = newQuery.replace(/intervall|långpass|ultra|tävling/gi, '');
-                                                        if (sub.id !== 'default') {
-                                                            newQuery += ` ${sub.label.toLowerCase()}`;
-                                                        }
-                                                        setQuery(newQuery.trim());
-                                                    }}
-                                                >
-                                                    {sub.label}
-                                                </button>
-                                            ))}
+                                    <div className="flex items-center gap-6 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                                            <Flame size={64} />
                                         </div>
-                                    </div>
-                                )}
 
-                                <div className="input-row">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="number"
-                                            value={draftDuration || ''}
-                                            onChange={(e) => { setDraftDuration(parseInt(e.target.value)); setIsManual(true); }}
-                                            className="reflective-field w-16"
-                                        />
-                                        <span className="text-[10px] text-slate-500 font-bold uppercase">Minuter</span>
-                                    </div>
-                                    <div className="intensity-selector">
-                                        {INTENSITIES.map(i => (
-                                            <button
-                                                key={i.value}
-                                                className={`intensity-btn ${draftIntensity === i.value ? 'active' : ''}`}
-                                                onClick={() => { setDraftIntensity(i.value); setIsManual(true); }}
-                                            >
-                                                {i.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Strength Tonnage Input */}
-                                {draftType === 'strength' && (
-                                    <div className="input-row flex items-center gap-3 pt-2 border-t border-white/5 mt-2">
-                                        <div className="flex items-center gap-2 flex-1">
-                                            <span className="text-lg">🏗️</span>
+                                        <div className="flex-1">
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Tid (min)</label>
                                             <input
+                                                ref={manualInputRef}
                                                 type="number"
-                                                placeholder="0" // Default
-                                                value={intent.data.tonnage ? intent.data.tonnage / 1000 : ''} // Display in tons
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    // Update query with "X ton"
-                                                    let newQuery = query.replace(/\d+\s*ton/gi, '').trim();
-                                                    if (val) {
-                                                        newQuery += ` ${val} ton`;
-                                                    }
-                                                    setQuery(newQuery.trim());
-                                                }}
-                                                className="reflective-field w-20 text-right"
+                                                value={draftDuration || ''}
+                                                onChange={(e) => { setDraftDuration(parseInt(e.target.value)); setIsManual(true); }}
+                                                className="w-full text-3xl font-black bg-transparent outline-none text-slate-900 dark:text-white"
+                                                placeholder="30"
                                             />
-                                            <span className="text-[10px] text-slate-500 font-bold uppercase">Ton (Volym)</span>
+                                            {intent.data.distance && !draftDuration && (
+                                                <div className="text-xs text-slate-500 mt-1">
+                                                    {intent.data.distance} km @ {Math.round((intent.data.duration || 30) / intent.data.distance)} min/km
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 border-l border-slate-200 dark:border-slate-700 pl-6">
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Intensitet</label>
+                                            <div className="flex flex-col gap-1">
+                                                {INTENSITIES.map(i => (
+                                                    <button
+                                                        key={i.value}
+                                                        onClick={() => { setDraftIntensity(i.value); setIsManual(true); }}
+                                                        className={`text-xs font-bold text-left px-2 py-1 rounded ${(draftIntensity || intent.data.intensity) === i.value
+                                                            ? 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400'
+                                                            : 'text-slate-400 hover:text-slate-600'
+                                                            }`}
+                                                    >
+                                                        {i.label}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                     </div>
-                                )}
-                            </div>
 
-                            <button className="confirm-btn" onClick={handleAction}>Spara Träning</button>
-                        </div>
-                    )}
+                                    <button
+                                        className="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2"
+                                        onClick={handleAction}
+                                    >
+                                        <span>Logga Träning</span>
+                                        <ArrowRight size={16} />
+                                    </button>
+                                </div>
+                            )}
 
-                    {intent.type === 'weight' && (
-                        <div className="suggestion-card weight-card reflective">
-                            <div className="card-header">
-                                <span className="card-icon">⚖️</span>
-                                <div className="card-title">
-                                    <h3>Uppdatera vikt</h3>
-                                    <p>Ny vikt: <strong>{draftQuantity} kg</strong></p>
-                                </div>
-                            </div>
-                            <div className="reflective-inputs">
-                                <div className="input-row">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        value={draftQuantity || ''}
-                                        autoFocus
-                                        onChange={(e) => { setDraftQuantity(parseFloat(e.target.value)); setIsManual(true); }}
-                                        className="reflective-field bigger text-center"
-                                    />
-                                    <span className="text-slate-400 font-bold">KG</span>
-                                </div>
-                                <div className="input-row border-t border-white/5 pt-2 mt-2">
-                                    <label className="text-[10px] text-slate-500 font-bold uppercase block mb-1">Datum</label>
-                                    <input
-                                        type="date"
-                                        value={selectedDate}
-                                        onChange={(e) => setSelectedDate(e.target.value)}
-                                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-                            <button className="confirm-btn" onClick={handleAction}>Spara Vikt</button>
-                        </div>
-                    )}
+                            {/* FOOD */}
+                            {intent.type === 'food' && (
+                                <div className="space-y-4">
+                                    {foodMatch ? (
+                                        <div className="flex gap-4">
+                                            <div className="w-20 h-20 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-4xl shadow-sm">
+                                                {foodMatch.type === 'recipe' ? '🍳' : '🥬'}
+                                            </div>
+                                            <div className="flex-1">
+                                                <h3 className="text-xl font-bold text-slate-900 dark:text-white leading-tight">
+                                                    {foodMatch.item.name}
+                                                </h3>
+                                                <div className="flex gap-2 mt-2">
+                                                    <div className="relative group">
+                                                        <input
+                                                            type="number"
+                                                            value={draftQuantity || ''}
+                                                            onChange={(e) => { setDraftQuantity(parseFloat(e.target.value)); setIsManual(true); }}
+                                                            className="w-16 bg-slate-100 dark:bg-slate-800 rounded-lg px-2 py-1 text-sm font-bold text-center focus:ring-2 focus:ring-emerald-500 outline-none"
+                                                        />
+                                                    </div>
+                                                    <select
+                                                        value={draftUnit || 'g'}
+                                                        onChange={(e) => { setDraftUnit(e.target.value); setIsManual(true); }}
+                                                        className="bg-transparent text-sm font-medium text-slate-500 focus:text-slate-800 dark:focus:text-white outline-none cursor-pointer"
+                                                    >
+                                                        <option value="g">g</option>
+                                                        <option value="st">st</option>
+                                                        <option value="ml">ml</option>
+                                                    </select>
+                                                </div>
 
-                    {intent.type === 'food' && foodMatch && (
-                        <div className="suggestion-card food-card reflective">
-                            <div className="card-header">
-                                <span className="card-icon">{foodMatch.type === 'recipe' ? '🍳' : '🥕'}</span>
-                                <div className="card-title">
-                                    <h3>Regga {MEAL_TYPE_LABELS[draftMealType || 'snack']}</h3>
-                                    <p className="intent-summary">{foodMatch.item.name}</p>
-                                </div>
-                            </div>
-
-                            <div className="reflective-inputs">
-                                <div className="input-row">
-                                    <div className="meal-type-chips">
-                                        {(Object.keys(MEAL_TYPE_LABELS) as MealType[]).map(mt => (
+                                                <div className="mt-3 flex items-center gap-4 text-xs text-slate-500 font-medium">
+                                                    <span>🔥 ~{getNutrients(foodMatch).cal * (draftQuantity || 100) / 100} kcal</span>
+                                                    <span>🥩 ~{getNutrients(foodMatch).prot * (draftQuantity || 100) / 100}g prot</span>
+                                                </div>
+                                            </div>
                                             <button
-                                                key={mt}
-                                                className={`chip ${draftMealType === mt ? 'active' : ''}`}
-                                                onClick={() => { setDraftMealType(mt); setIsManual(true); }}
+                                                onClick={handleAction}
+                                                className="h-12 w-12 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30"
                                             >
-                                                {MEAL_TYPE_LABELS[mt]}
+                                                <ArrowRight size={20} />
                                             </button>
-                                        ))}
-                                    </div>
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-2">
+                                            <p className="text-sm text-slate-500 mb-2">Ingen exakt träff. Förslag:</p>
+                                            {suggestions.length > 0 ? (
+                                                suggestions.map(s => (
+                                                    <button
+                                                        key={s.item.id}
+                                                        onClick={() => {
+                                                            const newQ = s.item.name + (draftQuantity ? ` ${draftQuantity}${draftUnit}` : '');
+                                                            setQuery(newQ);
+                                                        }}
+                                                        className="w-full p-2 flex items-center gap-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left group"
+                                                    >
+                                                        <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-lg group-hover:bg-white group-hover:shadow-sm transition-all">
+                                                            {s.type === 'recipe' ? '🍳' : '🥬'}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="text-sm font-bold text-slate-700 dark:text-slate-200">{s.item.name}</div>
+                                                            <div className="text-[10px] text-slate-400">{s.type === 'recipe' ? 'Recept' : 'Livsmedel'}</div>
+                                                        </div>
+                                                        <ArrowRight size={14} className="text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    </button>
+                                                ))
+                                            ) : (
+                                                <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl text-center text-slate-400">
+                                                    <Search size={24} className="mx-auto mb-2 opacity-30" />
+                                                    <p className="text-sm">Inga matchningar hittades i databasen.</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                <div className="input-row flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="number"
-                                            value={draftQuantity || ''}
-                                            onChange={(e) => { setDraftQuantity(parseFloat(e.target.value)); setIsManual(true); }}
-                                            className="reflective-field w-20"
-                                        />
-                                        <select
-                                            value={draftUnit || 'g'}
-                                            onChange={(e) => { setDraftUnit(e.target.value); setIsManual(true); }}
-                                            className="reflective-select"
-                                        >
-                                            <option value="g">gram</option>
-                                            <option value="st">st</option>
-                                            <option value="port">port</option>
-                                            <option value="ml">ml</option>
-                                        </select>
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 font-bold italic">
-                                        {foodMatch.type === 'recipe' ? 'Hittade recept' : 'Hittade ingrediens'}
-                                    </div>
-                                </div>
-                            </div>
+                            )}
 
-                            <button className="confirm-btn" onClick={handleAction}>Logga Mat</button>
                         </div>
-                    )}
-
-                    {intent.type === 'food' && !foodMatch && (
-                        <div className="suggestion-card search-card">
-                            <div className="card-icon">🔍</div>
-                            <div className="card-content">
-                                <h3>Databas-sök</h3>
-                                <p>Inget direkt svar för "{intent.data.query}"</p>
-                            </div>
-                        </div>
-                    )}
+                    )} {/* End Content Body */}
                 </div>
             )}
         </div>
