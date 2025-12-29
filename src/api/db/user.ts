@@ -1,38 +1,14 @@
 import { kv } from "../kv.ts";
 import { User, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY } from "../../models/types.ts";
-import { encodeBase64 } from "jsr:@std/encoding/base64";
 
 export interface DBUser extends User {
     passHash: string;
     salt: string;
 }
 
-// Crypto Helpers
-async function hashPassword(password: string, salt: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-        'raw',
-        encoder.encode(password),
-        { name: 'PBKDF2' },
-        false,
-        ['deriveBits']
-    );
+import { hashPassword } from "../utils/crypto.ts";
 
-    const bits = await crypto.subtle.deriveBits(
-        {
-            name: 'PBKDF2',
-            salt: encoder.encode(salt),
-            iterations: 100000,
-            hash: 'SHA-256'
-        },
-        key,
-        256
-    );
-
-    return encodeBase64(bits);
-}
-
-export async function createUser(username: string, password: string, email?: string): Promise<DBUser | null> {
+export async function createUser(username: string, password: string, email?: string, role: 'user' | 'admin' = 'user'): Promise<DBUser | null> {
     const existing = await kv.get(['users_by_username', username]);
     if (existing.value) return null;
 
@@ -44,7 +20,7 @@ export async function createUser(username: string, password: string, email?: str
         username,
         passHash,
         salt,
-        role: 'user',
+        role,
         plan: 'free',
         createdAt: new Date().toISOString(),
         email: email || '',
@@ -83,6 +59,13 @@ export async function getAllUsers(): Promise<DBUser[]> {
         users.push(entry.value as DBUser);
     }
     return users;
+}
+
+export async function saveUser(user: DBUser): Promise<void> {
+    await kv.set(['users', user.id], user);
+    // Maintain indexes
+    if (user.username) await kv.set(['users_by_username', user.username], user.id);
+    if (user.handle) await kv.set(['users_by_handle', user.handle.toLowerCase()], user.id);
 }
 
 import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } from "./session.ts";

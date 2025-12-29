@@ -621,6 +621,13 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString(),
         };
         setMealEntries((prev: MealEntry[]) => [...prev, newEntry]);
+
+        // Optimistic update done, now fire granular API call
+        skipAutoSave.current = true;
+        storageService.addMealEntry(newEntry).catch(e => {
+            console.error("Failed to sync meal:", e);
+        });
+
         return newEntry;
     }, []);
 

@@ -1,15 +1,7 @@
+import { hashPassword } from "../utils/crypto.ts";
 import { createUser, getUser, getUserById, sanitizeUser } from "../db/user.ts";
 import { createSession, getSession } from "../db/session.ts";
 import { logLoginAttempt, getUserLoginStats } from "../db/stats.ts";
-import { encodeBase64 } from "jsr:@std/encoding/base64";
-
-// Helper to hash password for comparison (duplicated from db/user for now, or export if needed)
-async function hashPassword(password: string, salt: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey('raw', encoder.encode(password), { name: 'PBKDF2' }, false, ['deriveBits']);
-    const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: encoder.encode(salt), iterations: 100000, hash: 'SHA-256' }, key, 256);
-    return encodeBase64(bits);
-}
 
 export async function handleAuthRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const method = req.method;

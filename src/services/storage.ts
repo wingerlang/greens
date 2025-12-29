@@ -19,6 +19,7 @@ export interface StorageService {
     saveWeeklyPlan(plan: WeeklyPlan): Promise<void>;
     deleteWeeklyPlan(id: string): Promise<void>;
     addWeightEntry(weight: number, date: string): Promise<void>;
+    addMealEntry(meal: any): Promise<void>;
 }
 
 // ============================================
@@ -204,7 +205,7 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('http://localhost:8000/api/user/weight', {
+                const res = await fetch('http://localhost:8000/api/weight', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -215,13 +216,29 @@ export class LocalStorageService implements StorageService {
 
                 if (!res.ok) throw new Error('API sync failed');
 
-                console.log('[Storage] Weight synced via Patch API');
+                console.log('[Storage] Weight synced via Granular API');
             } catch (e) {
                 console.error('[Storage] Fallback to full sync due to error:', e);
-                // Fallback to full sync happens because DataContext updates state
-                // and triggers the main save() effect. 
-                // However, we want to try to prevent that effect if we could, 
-                // but for now, this method just ensures the API gets the data directly.
+            }
+        }
+    }
+
+    async addMealEntry(meal: any): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('http://localhost:8000/api/meals', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(meal)
+                });
+                if (!res.ok) throw new Error('API sync failed');
+                console.log('[Storage] Meal synced via Granular API');
+            } catch (e) {
+                console.error('[Storage] Fallback to full sync:', e);
             }
         }
     }

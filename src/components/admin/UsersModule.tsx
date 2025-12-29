@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
-import { User } from '../../api/db.ts';
+import { User } from '../../models/types.ts';
 
 export const UsersModule: React.FC = () => {
     // const { users, currentUser, setCurrentUser } = useData(); // Legacy
@@ -46,10 +46,36 @@ export const UsersModule: React.FC = () => {
                                     <div className="text-[10px] text-gray-600 font-mono mt-1">{user.id}</div>
                                 </td>
                                 <td className="px-6 py-4">
-                                    <span className={`text-[10px] px-2 py-1 rounded-lg uppercase tracking-widest font-bold ${user.role === 'admin' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' : 'bg-slate-800 text-gray-400'
-                                        }`}>
-                                        {user.role}
-                                    </span>
+                                    <select
+                                        value={user.role}
+                                        onChange={(e) => {
+                                            const newRole = e.target.value as 'user' | 'admin';
+                                            if (!confirm(`Are you sure you want to change ${user.username}'s role to ${newRole}?`)) return;
+
+                                            // Optimistic update
+                                            setApiUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: newRole } : u));
+
+                                            fetch(`/api/admin/users/${user.id}/role`, {
+                                                method: 'PATCH',
+                                                headers: {
+                                                    'Content-Type': 'application/json',
+                                                    'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                                                },
+                                                body: JSON.stringify({ role: newRole })
+                                            }).catch(err => {
+                                                console.error(err);
+                                                // Revert on error
+                                                setApiUsers(prev => prev.map(u => u.id === user.id ? { ...u, role: user.role } : u));
+                                            });
+                                        }}
+                                        className={`text-[10px] px-2 py-1 rounded-lg uppercase tracking-widest font-bold border-none outline-none cursor-pointer ${user.role === 'admin'
+                                                ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
+                                                : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+                                            }`}
+                                    >
+                                        <option value="user">USER</option>
+                                        <option value="admin">ADMIN</option>
+                                    </select>
                                 </td>
                                 <td className="px-6 py-4">
                                     <span className="text-[10px] px-2 py-1 rounded-lg uppercase tracking-widest font-bold bg-slate-800 text-gray-400">
@@ -57,10 +83,10 @@ export const UsersModule: React.FC = () => {
                                     </span>
                                 </td>
                                 <td className="px-6 py-4">
-                                    {authUser?.id === user.id ? (
-                                        <span className="flex items-center gap-1.5 text-blue-400 text-xs font-bold">
-                                            <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
-                                            Du
+                                    {(user as any).isOnline ? (
+                                        <span className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold">
+                                            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                                            Online
                                         </span>
                                     ) : (
                                         <span className="text-gray-500 text-xs">Offline</span>

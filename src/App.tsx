@@ -50,6 +50,20 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     return children;
 }
 
+function RequireAdmin({ children }: { children: JSX.Element }) {
+    const { user, loading } = useAuth();
+
+    if (loading) {
+        return <div className="h-screen w-full flex items-center justify-center bg-slate-900 text-slate-500">Laddar...</div>;
+    }
+
+    if (user?.role !== 'admin') {
+        return <Navigate to="/" replace />;
+    }
+
+    return children;
+}
+
 export function App() {
     return (
         <AuthProvider>
@@ -88,8 +102,13 @@ export function App() {
                                                 <Route path="hälsa/:metric" element={<HealthPage />} />
                                                 <Route path="coach" element={<CoachPage />} />
                                                 <Route path="competition" element={<CompetitionPage />} />
+                                                <Route path="competition" element={<CompetitionPage />} />
                                                 <Route path="tävling" element={<CompetitionPage />} />
-                                                <Route path="admin" element={<AdminPage />} />
+                                                <Route path="admin" element={
+                                                    <RequireAdmin>
+                                                        <AdminPage />
+                                                    </RequireAdmin>
+                                                } />
                                                 <Route path="api" element={<ApiPage />} />
                                                 <Route path="docs" element={<DocumentationPage />} />
                                                 <Route path="community" element={<UsersPage />} />

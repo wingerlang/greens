@@ -27,7 +27,12 @@ export async function router(req: Request): Promise<Response> {
         // Dispatch to handlers
         if (url.pathname.startsWith("/api/auth")) return await handleAuthRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/user")) return await handleUserRoutes(req, url, headers);
+        if (url.pathname.startsWith("/api/u/")) return await handleUserRoutes(req, url, headers);
+        if (url.pathname.startsWith("/api/users")) return await handleUserRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/data")) return await handleDataRoutes(req, url, headers);
+        if (url.pathname.startsWith("/api/meals")) return await handleDataRoutes(req, url, headers);
+        if (url.pathname.startsWith("/api/weight")) return await handleDataRoutes(req, url, headers);
+        if (url.pathname.startsWith("/api/foods")) return await handleDataRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/strava")) return await handleStravaRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/social")) return await handleSocialRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/activities")) return await handleActivityRoutes(req, url, headers);

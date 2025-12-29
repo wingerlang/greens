@@ -1,5 +1,5 @@
 import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } from "../db/session.ts";
-import { getUserById, resetUserData } from "../db/user.ts"; // Note: resetUserData to be moved or imported
+import { getUserById, resetUserData, getAllUsers, saveUser, sanitizeUser } from "../db/user.ts"; // Note: resetUserData to be moved or imported
 import { kv } from "../kv.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
 
@@ -59,12 +59,64 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
         }
     }
 
+    // Public Profile by Handle
+    if (url.pathname.startsWith("/api/u/") && method === "GET") {
+        const handle = url.pathname.split("/").pop();
+        if (!handle) return new Response(JSON.stringify({ error: "Missing handle" }), { status: 400, headers });
+
+        try {
+            // 1. Lookup ID by handle
+            const idEntry = await kv.get(["users_by_handle", handle.toLowerCase()]);
+            let id = idEntry.value || (await kv.get(["users_by_username", handle])).value;
+
+            // Self-Healing Fallback: If index fails, scan users (slow path)
+            if (!id) {
+                console.log(`⚠️ Index miss for ${handle}, attempting slow scan repair...`);
+                const allUsers = await getAllUsers();
+                const match = allUsers.find(u =>
+                    (u.handle && u.handle.toLowerCase() === handle.toLowerCase()) ||
+                    u.username.toLowerCase() === handle.toLowerCase()
+                );
+
+                if (match) {
+                    console.log(`✅ Found user ${match.username} via scan. Repairing index...`);
+                    id = match.id;
+                    // Repair index on the fly
+                    await kv.set(["users_by_handle", handle.toLowerCase()], id);
+                }
+            }
+
+            if (!id) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            // 2. Fetch User
+            const user = await getUserById(id as string);
+            if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            // 3. Return Sanitized User
+            // Note: We return basic info. Privacy checks (is locked?) are handled by frontend or we can enforce here.
+            // For now, returning public info is safe.
+            return new Response(JSON.stringify({ ...sanitizeUser(user) }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
     if (url.pathname === "/api/user/profile" && method === "GET") {
         const data = await getUserData(session.userId);
+        const user = await getUserById(session.userId);
+
         return new Response(JSON.stringify({
             userId: session.userId,
+            name: user?.name,
+            handle: user?.handle,
+            bio: user?.bio,
+            avatarUrl: user?.avatarUrl,
+            email: user?.email,
+            createdAt: user?.createdAt,
+            // Settings from AppData
             settings: data?.userSettings,
-            // Add other profile fields if needed by the frontend
+            // Privacy from User or AppData? user.ts creates User with privacy.
+            privacy: user?.privacy
         }), { headers });
     }
 
@@ -121,6 +173,79 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
         try {
             const data = await getUserData(session.userId);
             return new Response(JSON.stringify({ history: data?.weightEntries || [] }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
+    // Profile Update (PATCH)
+    if (url.pathname === "/api/user/profile" && method === "PATCH") {
+        try {
+            const updates = await req.json();
+
+            // Check handle uniqueness if handle is being updated
+            if (updates.handle) {
+                const user = await getUserById(session.userId);
+                if (user && updates.handle !== user.handle) {
+                    const existingId = (await kv.get(["users_by_handle", updates.handle])).value;
+                    if (existingId && existingId !== session.userId) {
+                        return new Response(JSON.stringify({ error: "Handle already taken" }), { status: 409, headers });
+                    }
+                }
+            }
+
+            const currentData = await getUserData(session.userId);
+
+            // Handle AppData updates
+            if (currentData) {
+                const newData = {
+                    ...currentData,
+                    userSettings: { ...currentData.userSettings, ...updates },
+                };
+
+                // Handle specific top-level fields in AppData if they exist there too
+                if (updates.maxHr) newData.userSettings = { ...newData.userSettings, maxHr: updates.maxHr };
+                // ... map other specific fields if necessary or just rely on spread
+
+                await saveUserData(session.userId, newData);
+            }
+
+            // Also update the core User object if name/handle/avatar/bio are present
+            const user = await getUserById(session.userId);
+            if (user) {
+                let userChanged = false;
+                if (updates.name !== undefined) { user.name = updates.name; userChanged = true; }
+                if (updates.handle !== undefined) { user.handle = updates.handle; userChanged = true; }
+                if (updates.avatarUrl !== undefined) { user.avatarUrl = updates.avatarUrl; userChanged = true; }
+                if (updates.bio !== undefined) { user.bio = updates.bio; userChanged = true; }
+
+                if (userChanged) {
+                    await saveUser(user);
+                }
+            }
+
+            return new Response(JSON.stringify({ success: true }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
+    // Community Users List (GET)
+    if (url.pathname === "/api/users" && method === "GET") {
+        try {
+            const allUsers = await getAllUsers();
+            // Sanitize and return relevant fields for community view
+            const communityUsers = allUsers.map(u => ({
+                id: u.id,
+                username: u.username,
+                name: u.name,
+                handle: u.handle,
+                role: u.role,
+                avatarUrl: u.avatarUrl,
+                bio: u.bio,
+                createdAt: u.createdAt
+            }));
+            return new Response(JSON.stringify({ users: communityUsers }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
         }

@@ -4,6 +4,7 @@ export interface Session {
     id: string;
     userId: string;
     start: string;
+    lastSeen: string;
     expires: number;
 }
 
@@ -11,10 +12,12 @@ export async function createSession(userId: string): Promise<string> {
     const sessionId = crypto.randomUUID();
     // 30 days
     const expires = Date.now() + 1000 * 60 * 60 * 24 * 30;
+    const now = new Date().toISOString();
     const session: Session = {
         id: sessionId,
         userId,
-        start: new Date().toISOString(),
+        start: now,
+        lastSeen: now,
         expires
     };
 
@@ -28,6 +31,23 @@ export async function createSession(userId: string): Promise<string> {
 
     if (!res.ok) throw new Error("Failed to create session");
     return sessionId;
+}
+
+export async function touchSession(sessionId: string): Promise<void> {
+    const session = await getSession(sessionId);
+    if (!session) return;
+
+    // Only update if > 1 minute has passed to reduce writes
+    const lastSeenTime = new Date(session.lastSeen).getTime();
+    if (Date.now() - lastSeenTime < 60 * 1000) return;
+
+    session.lastSeen = new Date().toISOString();
+    session.expires = Date.now() + 1000 * 60 * 60 * 24 * 30; // Extend session
+
+    await kv.atomic()
+        .set(["sessions", sessionId], session)
+        .set(["user_sessions", session.userId, sessionId], session)
+        .commit();
 }
 
 export async function getSession(sessionId: string): Promise<Session | null> {
@@ -76,4 +96,14 @@ export async function revokeAllUserSessions(userId: string, keepSessionId?: stri
         }
     }
     await atomic.commit();
+}
+export async function getAllSessions(): Promise<Session[]> {
+    const iter = kv.list<Session>({ prefix: ["sessions"] });
+    const sessions: Session[] = [];
+    for await (const entry of iter) {
+        if (entry.value.expires > Date.now()) {
+            sessions.push(entry.value);
+        }
+    }
+    return sessions;
 }
