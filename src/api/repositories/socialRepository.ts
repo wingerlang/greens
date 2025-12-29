@@ -39,18 +39,18 @@ export class SocialRepository {
 
     static async followUser(followerId: string, targetId: string): Promise<void> {
         const now = new Date().toISOString();
-
         const tx = db.atomic();
 
-        // Add to "followers" list of target
+        // 1. Relationship Graph
         tx.set(['followers', targetId, followerId], now);
-
-        // Add to "following" list of follower
         tx.set(['following', followerId, targetId], now);
 
-        // Increment counts (This requires a more complex atomic op or eventual consistency counter)
-        // For simplicity, we might just count them on read or use a counter key.
-        // Let's use separate counter keys for O(1) reads.
+        // 2. Update User Counts (Read-Modify-Write for consistency)
+        // Note: For high concurrency, atomic increment on separate keys + merge on read is better.
+        // But given the simplicity requirement, we will update the User objects directly here if possible.
+        // However, we cannot easily do that inside a pure atomic without reading first inside a transaction loop.
+        // For now, let's Stick to the 'stats' keys for ATOMICITY, but UPDATE the getUserById specific logic to READ them.
+
         tx.sum(['stats', targetId, 'followersCount'], 1n);
         tx.sum(['stats', followerId, 'followingCount'], 1n);
 
@@ -63,9 +63,7 @@ export class SocialRepository {
         tx.delete(['followers', targetId, followerId]);
         tx.delete(['following', followerId, targetId]);
 
-        // Decrement (KV sum supports negative only if using Deno KV special sum logic, 
-        // typically simple kv.sum expects positive. Standard KV doesn't handle decrement easily without read-modify-write if using sum types.
-        // But for 'sum' operation with bigint, adding negative works.)
+        // Decrement using negative bigint
         tx.sum(['stats', targetId, 'followersCount'], -1n);
         tx.sum(['stats', followerId, 'followingCount'], -1n);
 

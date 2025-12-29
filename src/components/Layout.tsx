@@ -46,7 +46,7 @@ export function Layout({ children }: LayoutProps) {
                 initialInput={trainingModalDefaults.input}
             />
             <Navigation onOpenOmnibox={() => setIsOmniboxOpen(true)} />
-            <main className="flex-1 w-full max-w-[1536px] mx-auto p-4 md:p-8">
+            <main className="flex-1 w-full max-w-[1536px] mx-auto p-3 md:p-6">
                 {children}
             </main>
         </div>

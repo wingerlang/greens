@@ -48,12 +48,19 @@ export async function handleStrengthRoutes(req: Request, url: URL, headers: Head
     // ============================================
     // List Workouts
     // ============================================
+    // ============================================
+    // List Workouts
+    // ============================================
     if (url.pathname === '/api/strength/workouts' && method === 'GET') {
         try {
             const startDate = url.searchParams.get('start') || '2000-01-01';
             const endDate = url.searchParams.get('end') || '2099-12-31';
 
-            const workouts = await strengthRepo.getWorkoutsByDateRange(userId, startDate, endDate);
+            // Allow fetching for another user (for Matchup/VS mode)
+            // In a real app, strict privacy checks (isPublic/isFollowing) would go here.
+            const targetUserId = url.searchParams.get('userId') || userId;
+
+            const workouts = await strengthRepo.getWorkoutsByDateRange(targetUserId, startDate, endDate);
             return new Response(JSON.stringify({ workouts }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });

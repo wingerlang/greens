@@ -102,8 +102,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         addMealEntry,
         mealEntries,
         addExercise,
-        calculateExerciseCalories
+        calculateExerciseCalories,
+        users
     } = useData();
+
 
     const intent = parseOmniboxInput(input);
     const [showFeedback, setShowFeedback] = useState(false);
@@ -233,7 +235,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         if (isSlashMode) return [];
         if (!input.trim() || input.length < 2) return [];
         // Don't show food results for exercise/vitals/weight intents
-        if (['exercise', 'vitals', 'weight'].includes(intent.type)) return [];
+        if (['exercise', 'vitals', 'weight', 'user'].includes(intent.type)) return [];
 
         // Use parsed query from intent (cleaner) or fall back to raw input
         const searchQuery = intent.type === 'food' && intent.data.query
@@ -252,6 +254,24 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                 usageStats: foodUsageStats[item.id] || null
             }));
     }, [input, foodItems, foodUsageStats, isSlashMode, intent, lockedFood]);
+
+    // User search results
+    const userResults = useMemo(() => {
+        if (isSlashMode) return [];
+        if (!input.trim() || input.length < 2) return [];
+        // Only show if query starts with @ or if no specific intent is found
+        const isHandleQuery = input.startsWith('@');
+        const query = isHandleQuery ? input.slice(1).toLowerCase() : input.toLowerCase();
+
+        if (!isHandleQuery && ['exercise', 'vitals', 'weight', 'food'].includes(intent.type)) return [];
+
+        return users.filter(u =>
+            u.name.toLowerCase().includes(query) ||
+            (u.handle || u.username).toLowerCase().includes(query)
+        ).slice(0, 4);
+    }, [input, users, isSlashMode, intent]);
+
+
 
     // Auto-lock: When there's exactly one exact match, auto-lock it
     useEffect(() => {
@@ -285,10 +305,15 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     const selectableItems = useMemo(() => {
         if (lockedFood) return []; // No selection when locked
         if (isSlashMode) return navSuggestions.map(r => ({ itemType: 'nav' as const, ...r }));
-        if (foodResults.length > 0) return foodResults.map(f => ({ itemType: 'food' as const, ...f }));
-        if (!input && recentFoods.length > 0) return recentFoods.map(f => ({ itemType: 'recent' as const, ...f }));
-        return [];
-    }, [isSlashMode, navSuggestions, foodResults, input, recentFoods, lockedFood]);
+
+        const items: any[] = [];
+        if (userResults.length > 0) items.push(...userResults.map(u => ({ itemType: 'user' as const, ...u })));
+        if (foodResults.length > 0) items.push(...foodResults.map(f => ({ itemType: 'food' as const, ...f })));
+        if (!input && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
+
+        return items;
+    }, [isSlashMode, navSuggestions, foodResults, userResults, input, recentFoods, lockedFood]);
+
 
     // Reset selection when results change
     useEffect(() => {
@@ -442,6 +467,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             return;
         }
 
+        // Handle user selection
+        if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'user') {
+            const selectedUser = selectableItems[selectedIndex];
+            navigate(`/u/${selectedUser.handle || selectedUser.username}`);
+            onClose();
+            return;
+        }
+
         // Handle food selection - lock it instead of immediately logging
         if (selectableItems.length > 0 && (selectableItems[selectedIndex]?.itemType === 'food' || selectableItems[selectedIndex]?.itemType === 'recent')) {
             const selectedFood = selectableItems[selectedIndex] as FoodItem & { usageStats?: { avgGrams: number; count: number; lastUsed: string } };
@@ -450,6 +483,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                 return;
             }
         }
+
 
         if (!input.trim()) return;
 
@@ -822,7 +856,41 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                         </div>
                     )}
 
+                    {/* User Results */}
+                    {!isSlashMode && !lockedFood && userResults.length > 0 && (
+                        <div className="px-2 py-2">
+                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                <span>👥</span> Personer ({userResults.length})
+                            </div>
+                            {userResults.map((user, idx) => {
+                                const globalIdx = selectableItems.findIndex(i => i.itemType === 'user' && i.id === user.id);
+                                return (
+                                    <div
+                                        key={user.id}
+                                        onClick={() => { navigate(`/u/${user.handle || user.username}`); onClose(); }}
+                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                            ? 'bg-indigo-500/20 text-indigo-400'
+                                            : 'hover:bg-white/5 text-white'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-sm font-bold text-indigo-400">
+                                                {user.avatarUrl ? <img src={user.avatarUrl} className="w-full h-full object-cover rounded-lg" /> : user.name[0]}
+                                            </div>
+                                            <div>
+                                                <div className="font-medium">{user.name}</div>
+                                                <div className="text-[10px] text-slate-500">@{user.handle || user.username}</div>
+                                            </div>
+                                        </div>
+                                        <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
                     {/* Food Search Results */}
+
                     {!isSlashMode && foodResults.length > 0 && (
                         <div className="px-2 py-2">
                             {/* Parsed Intent Preview */}

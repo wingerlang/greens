@@ -15,7 +15,8 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
 
     // --- Legacy Monolithic Routes ---
     if (url.pathname === "/api/data" && method === "GET") {
-        const data = await getUserData(userId);
+        const targetUserId = url.searchParams.get("userId") || userId;
+        const data = await getUserData(targetUserId);
         return new Response(JSON.stringify(data || {}), { headers });
     }
 

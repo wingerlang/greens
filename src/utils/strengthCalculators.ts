@@ -54,12 +54,14 @@ export function calculateIPFPoints(weightKg: number, totalKg: number, gender: 'm
 }
 
 /**
- * Estimated 1RM using Brzycki formula
+ * Estimated 1RM using Epley formula (more reliable for high reps than Brzycki)
  */
 export function estimate1RM(weight: number, reps: number): number {
     if (reps === 1) return weight;
     if (reps <= 0) return 0;
-    // Brzycki formula: 1RM = weight * (36 / (37 - reps))
-    // Or simpler: weight * (1 + reps/30)
-    return weight * (36 / (37 - Math.min(reps, 30)));
+    // Epley formula: 1RM = weight * (1 + reps / 30)
+    // Capping reps at 12 to avoid unrealistic numbers from endurance sets
+    const effectiveReps = Math.min(reps, 12);
+    return weight * (1 + effectiveReps / 30);
 }
+

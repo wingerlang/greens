@@ -23,7 +23,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Initial check
     useEffect(() => {
+        let mounted = true;
         const token = localStorage.getItem('auth_token');
+
         if (token) {
             fetch('/api/auth/me', {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -32,12 +34,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (res.ok) return res.json();
                     throw new Error('Failed to fetch user');
                 })
-                .then(data => setUser(data.user))
-                .catch(() => {
-                    localStorage.removeItem('auth_token');
-                    setUser(null);
+                .then(data => {
+                    if (mounted) setUser(data.user);
                 })
-                .finally(() => setLoading(false));
+                .catch((e) => {
+                    console.error('[AuthContext] Auth check failed:', e.message);
+                    if (mounted) {
+                        localStorage.removeItem('auth_token');
+                        setUser(null);
+                    }
+                })
+                .finally(() => {
+                    if (mounted) setLoading(false);
+                });
+
+            return () => { mounted = false; };
         } else {
             setLoading(false);
         }

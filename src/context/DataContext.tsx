@@ -266,7 +266,62 @@ export function DataProvider({ children }: DataProviderProps) {
         setPantryQuantitiesState(data.pantryQuantities || {});
 
         // Handle Users
-        const loadedUsers = data.users || [];
+        let loadedUsers = data.users || [];
+
+        // If we are online, try to fetch the real user list for Community/Social features
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            // Create AbortController for this refresh cycle - allows cancellation if component re-renders
+            const abortController = new AbortController();
+            const signal = abortController.signal;
+
+            try {
+                console.log('[DataContext] Fetching /api/users...');
+                const userRes = await fetch('/api/users', {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    signal
+                });
+                if (userRes.ok) {
+                    const userPayload = await userRes.json();
+                    if (userPayload.users && Array.isArray(userPayload.users)) {
+                        console.log('[DataContext] Loaded real users list:', userPayload.users.map((u: User) => u.username));
+                        loadedUsers = userPayload.users;
+                        // Update local cache of users immediately
+                        data.users = loadedUsers;
+                    }
+                } else {
+                    console.error('[DataContext] Failed to fetch users list:', userRes.status);
+                }
+
+                // NEW: Also fetch the "me" profile to ensure currentUserId is correct
+                console.log('[DataContext] Fetching /api/auth/me...');
+                const meRes = await fetch('/api/auth/me', {
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    signal
+                });
+                if (meRes.ok) {
+                    const mePayload = await meRes.json();
+                    if (mePayload.user) {
+                        console.log('[DataContext] Resolved current user:', mePayload.user.username);
+                        data.currentUserId = mePayload.user.id;
+                        // Update the users list with this fresh profile if not already there
+                        if (!loadedUsers.find(u => u.id === mePayload.user.id)) {
+                            loadedUsers.push(mePayload.user);
+                        }
+                    }
+                }
+            } catch (e: unknown) {
+                // Ignore AbortError - this is expected when requests are cancelled during re-renders
+                if (e instanceof Error && e.name === 'AbortError') {
+                    console.log('[DataContext] Request aborted (expected during re-renders)');
+                } else {
+                    console.error('[DataContext] Exception during online sync:', e);
+                }
+            }
+        } else {
+            console.log('[DataContext] No token found, skipping online sync.');
+        }
+
         setUsers(loadedUsers);
 
         if (data.currentUserId) {
@@ -783,7 +838,8 @@ export function DataProvider({ children }: DataProviderProps) {
         const s = currentUser.settings;
         const weight = getLatestWeight();
         const height = s.height || 175;
-        const age = s.age || 30;
+        const currentYear = new Date().getFullYear();
+        const age = s.birthYear ? (currentYear - s.birthYear) : 30;
         const gender = s.gender || 'other';
 
         let bmr = (10 * weight) + (6.25 * height) - (5 * age);

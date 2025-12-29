@@ -2,6 +2,7 @@ import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } fro
 import { getUserById, resetUserData, getAllUsers, saveUser, sanitizeUser } from "../db/user.ts"; // Note: resetUserData to be moved or imported
 import { kv } from "../kv.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
+import { UniversalActivity } from "../../models/types.ts";
 
 async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weight' | 'all') {
     if (type === 'all') {
@@ -135,7 +136,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             }
             await granularReset(session.userId, body.type);
             return new Response(JSON.stringify({ success: true }), { headers });
-        } catch (e) {
+        } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message || "Failed" }), { status: 500, headers });
         }
     }
@@ -160,7 +161,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             await saveUserData(session.userId, {
                 ...currentData,
                 weightEntries: updatedEntries
-            });
+            } as any);
 
             return new Response(JSON.stringify({ success: true, entry: newEntry }), { headers });
         } catch (e) {
@@ -243,6 +244,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
                 role: u.role,
                 avatarUrl: u.avatarUrl,
                 bio: u.bio,
+                settings: u.settings,
                 createdAt: u.createdAt
             }));
             return new Response(JSON.stringify({ users: communityUsers }), { headers });
@@ -254,8 +256,9 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     // Personal Records (GET all)
     if (url.pathname === "/api/user/prs" && method === "GET") {
         try {
+            const targetUserId = url.searchParams.get("userId") || session.userId;
             const prs: any[] = [];
-            const iter = kv.list({ prefix: ['prs', session.userId] });
+            const iter = kv.list({ prefix: ['prs', targetUserId] });
             for await (const entry of iter) {
                 prs.push(entry.value);
             }
@@ -291,8 +294,68 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     // Personal Records (Detect)
     if (url.pathname === "/api/user/prs/detect" && method === "GET") {
         try {
-            // Simplified detection - return empty for now, can be expanded later
-            return new Response(JSON.stringify({ detected: [] }), { headers });
+            const targetUserId = url.searchParams.get("userId") || session.userId;
+            const detected: any[] = [];
+
+            // 1. Get all activities (simplified list for scanning)
+            const activities: UniversalActivity[] = [];
+            const iter = kv.list<UniversalActivity>({ prefix: ['activities', targetUserId] });
+            for await (const entry of iter) {
+                activities.push(entry.value);
+            }
+
+            const runs = activities.filter(a => a.performance?.activityType === 'running' && a.status === 'COMPLETED');
+
+            const STANDARD_DISTANCES = [
+                { id: '5k', km: 5 },
+                { id: '10k', km: 10 },
+                { id: 'half_marathon', km: 21.0975 },
+                { id: 'marathon', km: 42.195 }
+            ];
+
+            for (const dist of STANDARD_DISTANCES) {
+                let bestTime = Infinity;
+                let bestActivity: any = null;
+
+                for (const run of runs) {
+                    const perf = run.performance!;
+                    const runDist = perf.distanceKm || 0;
+                    const runDuration = perf.durationMinutes * 60; // seconds
+
+                    // Logic: best activity within 5% of distance or longer
+                    if (runDist >= dist.km * 0.95) {
+                        // Project pace to standard distance
+                        const pace = runDuration / runDist;
+                        const projectedTime = pace * dist.km;
+
+                        if (projectedTime < bestTime) {
+                            bestTime = projectedTime;
+                            bestActivity = run;
+                        }
+                    }
+                }
+
+                if (bestActivity) {
+                    const pr = {
+                        category: dist.id,
+                        time: Math.round(bestTime),
+                        date: bestActivity.date,
+                        activityId: bestActivity.id,
+                        isManual: false,
+                        createdAt: new Date().toISOString()
+                    };
+                    detected.push(pr);
+
+                    // Persistence: Auto-save if better than existing
+                    const existingKey = ['prs', targetUserId, dist.id];
+                    const existingRes = await kv.get<any>(existingKey);
+                    if (!existingRes.value || existingRes.value.time > pr.time) {
+                        await kv.set(existingKey, pr);
+                    }
+                }
+            }
+
+            return new Response(JSON.stringify({ detected }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
         }

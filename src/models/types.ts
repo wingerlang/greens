@@ -61,10 +61,11 @@ export interface UserSettings {
     dailyCarbsGoal: number;
     dailyFatGoal: number;
     // Physical Profile
-    age?: number;
+    birthYear?: number;
     height?: number; // cm
     gender?: 'male' | 'female' | 'other';
     trainingGoal?: 'neutral' | 'deff' | 'bulk';
+    weight?: number; // kg
     dailySleepGoal?: number;
     dailyWaterGoal?: number;
     showSleep?: boolean;
@@ -112,7 +113,7 @@ export interface UserPrivacy {
     // Visibility Toggles
     showWeight: boolean; // Hide sensitive metrics
     showHeight: boolean;
-    showAge: boolean;
+    showBirthYear: boolean;
 
     showDetailedTraining: boolean; // Show exact workouts vs just summary
     showSleep: boolean;
@@ -129,7 +130,7 @@ export const DEFAULT_PRIVACY: UserPrivacy = {
     allowFollowers: true,
     showWeight: false,
     showHeight: false,
-    showAge: false,
+    showBirthYear: false,
     showDetailedTraining: true,
     showSleep: false,
     showCalories: false,
@@ -147,6 +148,7 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     dailyCarbsGoal: 50,
     dailyFatGoal: 30,
     trainingGoal: 'neutral',
+    weight: 80,
     dailySleepGoal: 8,
     dailyWaterGoal: 8,
     dailyCaffeineLimit: 400,

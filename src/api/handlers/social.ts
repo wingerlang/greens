@@ -30,5 +30,16 @@ export async function handleSocialRoutes(req: Request, url: URL, headers: Header
         }
     }
 
+    if (url.pathname.startsWith("/api/social/is-following/") && method === "GET") {
+        try {
+            const targetId = url.pathname.split('/').pop();
+            if (!targetId) return new Response(JSON.stringify({ error: "Missing target ID" }), { status: 400, headers });
+            const isFollowing = await SocialRepository.isFollowing(session.userId, targetId);
+            return new Response(JSON.stringify({ isFollowing }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+        }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 }

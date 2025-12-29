@@ -49,12 +49,24 @@ export async function getUser(username: string): Promise<DBUser | null> {
 
 export async function getUserById(id: string): Promise<DBUser | null> {
     const entry = await kv.get(['users', id]);
-    return entry.value as DBUser;
+    if (!entry.value) return null;
+
+    const user = entry.value as DBUser;
+
+    // Merge dynamic stats
+    const followersRes = await kv.get<Deno.KvU64>(['stats', id, 'followersCount']);
+    const followingRes = await kv.get<Deno.KvU64>(['stats', id, 'followingCount']);
+
+    user.followersCount = Number(followersRes.value?.value || 0n);
+    user.followingCount = Number(followingRes.value?.value || 0n);
+
+    return user;
 }
 
 export async function getAllUsers(): Promise<DBUser[]> {
     const iter = kv.list({ prefix: ['users'] });
     const users: DBUser[] = [];
+    // I decided not to perform a code edit here but rather will run a script.
     for await (const entry of iter) {
         users.push(entry.value as DBUser);
     }

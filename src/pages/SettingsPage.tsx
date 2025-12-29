@@ -168,12 +168,31 @@ export function SettingsPage() {
                                     />
                                 </label>
                                 <label className="flex items-center justify-between">
-                                    <span className="text-slate-200 text-sm">Ålder (år)</span>
+                                    <div className="flex flex-col">
+                                        <span className="text-slate-200 text-sm">Födelseår</span>
+                                        {settings.birthYear && (
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase">
+                                                {new Date().getFullYear() - settings.birthYear} år gammal
+                                            </span>
+                                        )}
+                                    </div>
                                     <input
                                         type="number"
                                         className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
-                                        value={settings.age || ''}
-                                        onChange={e => updateSettings({ age: parseInt(e.target.value) || undefined })}
+                                        value={settings.birthYear || ''}
+                                        onChange={e => updateSettings({ birthYear: parseInt(e.target.value) || undefined })}
+                                        placeholder="YYYY"
+                                        min="1900"
+                                        max={new Date().getFullYear()}
+                                    />
+                                </label>
+                                <label className="flex items-center justify-between">
+                                    <span className="text-slate-200 text-sm">Vikt (kg)</span>
+                                    <input
+                                        type="number"
+                                        className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                        value={settings.weight || ''}
+                                        onChange={e => updateSettings({ weight: parseFloat(e.target.value) || undefined })}
                                         placeholder="--"
                                     />
                                 </label>

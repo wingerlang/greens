@@ -35,9 +35,11 @@ export function PublicProfilePage() {
             if (following) {
                 await socialService.unfollowUser(profile.id);
                 setFollowing(false);
+                setProfile(prev => prev ? ({ ...prev, followersCount: Math.max(0, (prev.followersCount || 0) - 1) }) : null);
             } else {
                 await socialService.followUser(profile.id);
                 setFollowing(true);
+                setProfile(prev => prev ? ({ ...prev, followersCount: (prev.followersCount || 0) + 1 }) : null);
             }
         } catch (e) {
             console.error("Follow action failed", e);
