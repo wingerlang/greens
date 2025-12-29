@@ -1,0 +1,3399 @@
+Name,Language,Sex,Age,Email
+Johannes Winger-Lang,en,Male,1991-09-04,wingerlang.johannes@gmail.com
+
+Workouts
+Name,Date,Body weight,Shape,Sleep,Calories,Stress
+Wednesday Morning: Squat & Push-Up,2025-12-24,79.2,-1,-1,-1,-1
+"Exercise, Squat",Set,1,reps,25,weight,30
+"Exercise, Squat",Set,2,reps,25,weight,35
+"Exercise, Squat",Set,3,reps,25,weight,40
+"Exercise, Squat",Set,4,reps,25,weight,45
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,30,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,79.2,extraWeight,0
+
+Hyrox,2025-12-22,79.2,-1,-1,-1,-1
+"Exercise, Rowing (Machine)",Set,1,time-per-500,0,distanceKm,1.1,time,00:04:44,calories,0,rpm,0
+"Exercise, Sled Push",Set,1,weight,75,distanceMeter,20
+"Exercise, Sled Push",Set,2,weight,100,distanceMeter,20
+"Exercise, Sled Push",Set,3,distanceMeter,20,weight,120
+"Exercise, Sled Push",Set,4,distanceMeter,30,weight,120
+"Exercise, Sled Push",Set,5,weight,100,distanceMeter,20
+"Exercise, Farmers Walk",Set,1,distanceMeter,100,weight,24
+"Exercise, Farmers Walk",Set,2,distanceMeter,100,weight,24
+"Exercise, Farmers Walk",Set,3,distanceMeter,100,weight,24
+"Exercise, Barbell Walking Lunges",Set,1,reps,14,weight,20
+"Exercise, Barbell Walking Lunges",Set,2,reps,14,weight,20
+"Exercise, Barbell Walking Lunges",Set,3,reps,14,weight,20
+"Exercise, Barbell Walking Lunges",Set,4,reps,14,weight,20
+"Exercise, Burpee broad jump",Set,1,distanceKm,0.04,time,00:00:00
+
+StrengthLog's Fitness Calendar 2025: Burn the Legs at Both Ends,2025-12-19,79.2,-1,-1,-1,-1
+"Exercise, Leg Extension",Set,1,reps,15,weight,68
+"Exercise, Seated Leg Curl",Set,1,reps,15,weight,46
+"Exercise, Leg Extension",Set,1,reps,15,weight,54
+"Exercise, Seated Leg Curl",Set,1,reps,15,weight,46
+"Exercise, Leg Extension",Set,1,reps,15,weight,61
+"Exercise, Seated Leg Curl",Set,1,reps,15,weight,46
+"Exercise, Squat",Set,1,reps,10,weight,20
+"Exercise, Squat",Set,2,reps,7,weight,40
+"Exercise, Squat",Set,3,reps,5,weight,50
+"Exercise, Squat",Set,4,reps,3,weight,60
+"Exercise, Squat",Set,5,reps,2,weight,70
+"Exercise, Squat",Set,6,reps,2,weight,75
+"Exercise, Squat",Set,7,reps,3,weight,80
+"Exercise, Squat",Set,8,reps,5,weight,60
+"Exercise, Barbell Shrug",Set,1,reps,20,weight,60
+"Exercise, Barbell Shrug",Set,2,reps,20,weight,80
+"Exercise, Barbell Shrug",Set,3,reps,10,weight,90
+"Exercise, Barbell Shrug",Set,4,reps,5,weight,100
+"Exercise, Leg Press",Set,1,reps,5,weight,75
+"Exercise, Leg Press",Set,2,reps,10,weight,95
+"Exercise, Leg Press",Set,3,reps,5,weight,115
+"Exercise, Leg Press",Set,4,reps,5,weight,135
+"Exercise, Leg Press",Set,5,reps,3,weight,145
+"Exercise, Leg Press",Set,6,reps,8,weight,155
+"Exercise, Leg Extension",Set,1,reps,1,weight,82
+"Exercise, Leg Extension",Set,2,reps,1,weight,89
+"Exercise, Leg Extension",Set,3,reps,1,weight,96
+"Exercise, Leg Extension",Set,4,reps,1,weight,103
+"Exercise, Leg Extension",Set,5,reps,1,weight,110
+"Exercise, Leg Extension",Set,6,reps,1,weight,117
+"Exercise, Leg Extension",Set,7,reps,2,weight,124
+
+"Friskis: Thursday Morning: Shoulders, Chest, Triceps",2025-12-18,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,5,weight,40
+"Exercise, Bench Press",Set,3,reps,5,weight,50
+"Exercise, Bench Press",Set,4,reps,3,weight,60
+"Exercise, Bench Press",Set,5,reps,2,weight,65
+"Exercise, Bench Press",Set,6,reps,5,weight,72.5
+"Exercise, Bench Press",Set,7,reps,3,weight,70
+"Exercise, Bench Press",Set,8,reps,5,weight,65
+"Exercise, Machine Shoulder Press",Set,1,reps,10,weight,25
+"Exercise, Machine Shoulder Press",Set,2,reps,10,weight,32
+"Exercise, Machine Shoulder Press",Set,3,reps,8,weight,39
+"Exercise, Machine Shoulder Press",Set,4,reps,4,weight,39
+"Exercise, Machine Shoulder Press",Set,5,reps,4,weight,39
+"Exercise, Machine Shoulder Press",Set,6,reps,8,weight,32
+"Exercise, Machine Chest Fly",Set,1,reps,12,weight,40
+"Exercise, Machine Chest Fly",Set,2,reps,5,weight,47
+"Exercise, Machine Chest Fly",Set,3,reps,5,weight,54
+"Exercise, Machine Chest Fly",Set,4,reps,5,weight,61
+"Exercise, Machine Chest Fly",Set,5,reps,7,weight,68
+"Exercise, Machine Chest Fly",Set,6,reps,5,weight,75
+"Exercise, Tricep Pushdown With Rope",Set,1,reps,10,weight,15
+"Exercise, Tricep Pushdown With Rope",Set,2,reps,10,weight,21.5
+"Exercise, Tricep Pushdown With Rope",Set,3,reps,8,weight,25
+"Exercise, Tricep Pushdown With Rope",Set,4,reps,6,weight,25
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,10,bodyweight,79.2,extraWeight,0
+
+Wednesday Evening: Deadlift & Kettlebell Swing,2025-12-17,79.2,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,5,weight,75
+"Exercise, Deadlift",Set,3,reps,5,weight,85
+"Exercise, Deadlift",Set,4,reps,5,weight,95
+"Exercise, Deadlift",Set,5,reps,12,weight,105
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,32
+"Exercise, Kettlebell Swing",Set,2,reps,15,weight,36
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,40
+
+StrengthLog's Fitness Calendar 2025: When You Wish upon a Squat,2025-12-16,79.2,-1,-1,-1,-1
+"Exercise, Squat",Set,1,reps,3,weight,0
+"Exercise, Squat",Set,2,reps,10,weight,20
+"Exercise, Squat",Set,3,reps,3,weight,0
+Instance of 'Loc'
+"Exercise, Squat",Set,4,reps,6,weight,30
+"Exercise, Squat",Set,5,reps,5,weight,40
+"Exercise, Squat",Set,6,reps,5,weight,50
+"Exercise, Squat",Set,7,reps,2,weight,55
+"Exercise, Squat",Set,8,reps,2,weight,60
+"Exercise, Squat",Set,9,reps,2,weight,65
+"Exercise, Squat",Set,10,reps,4,weight,70
+"Exercise, Squat",Set,11,reps,6,weight,60
+"Exercise, Squat",Set,12,reps,5,weight,50
+"Exercise, Cable Close Grip Seated Row",Set,1,reps,10,weight,42
+"Exercise, Cable Close Grip Seated Row",Set,2,reps,15,weight,48
+"Exercise, Cable Close Grip Seated Row",Set,3,reps,15,weight,54
+"Exercise, Cable Close Grip Seated Row",Set,4,reps,7,weight,60
+"Exercise, Cable Close Grip Seated Row",Set,5,reps,5,weight,66
+"Exercise, Cable Close Grip Seated Row",Set,6,reps,7,weight,60
+"Exercise, Cable Close Grip Seated Row",Set,7,reps,10,weight,54
+"Exercise, Barbell Shrug",Set,1,reps,15,weight,50
+"Exercise, Barbell Shrug",Set,2,reps,15,weight,70
+"Exercise, Barbell Shrug",Set,3,reps,10,weight,80
+"Exercise, Barbell Shrug",Set,4,reps,10,weight,70
+"Exercise, Barbell Shrug",Set,5,reps,15,weight,70
+"Exercise, Barbell Shrug",Set,6,reps,14,weight,70
+"Exercise, Lat Pulldown",Set,1,reps,10,weight,42
+"Exercise, Lat Pulldown",Set,2,reps,10,weight,48
+"Exercise, Lat Pulldown",Set,3,reps,4,weight,54
+"Exercise, Barbell Walking Lunges",Set,1,reps,15,weight,10
+"Exercise, Barbell Walking Lunges",Set,2,reps,13,weight,10
+
+"T - StrengthLog's Fitness Calendar 2025: Welcome to the Party, Pal!",2025-12-15,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,0,weight,0
+Instance of 'Loc'
+"Exercise, Bench Press",Set,2,reps,20,weight,20
+"Exercise, Bench Press",Set,3,reps,10,weight,40
+"Exercise, Bench Press",Set,4,reps,25,weight,45
+"Exercise, Bench Press",Set,5,reps,10,weight,50
+"Exercise, Bench Press",Set,6,reps,6,weight,55
+"Exercise, Bench Press",Set,7,reps,8,weight,50
+"Exercise, Bench Press",Set,8,reps,7,weight,50
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,12,weight,7
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,9
+"Exercise, Overhead Press",Set,1,reps,10,weight,30
+"Exercise, Overhead Press",Set,2,reps,6,weight,35
+"Exercise, Overhead Press",Set,3,reps,6,weight,37.5
+"Exercise, Overhead Press",Set,4,reps,5,weight,40
+"Exercise, Overhead Press",Set,5,reps,3,weight,42.5
+"Exercise, Overhead Press",Set,6,reps,3,weight,40
+"Exercise, Leg Extension",Set,1,reps,10,weight,24
+"Exercise, Leg Extension",Set,2,reps,10,weight,36
+"Exercise, Leg Extension",Set,3,reps,10,weight,48
+"Exercise, Leg Extension",Set,4,reps,12,weight,48
+"Exercise, Leg Extension",Set,5,reps,10,weight,54
+"Exercise, Leg Extension",Set,6,reps,7,weight,60
+"Exercise, Leg Extension",Set,7,reps,20,weight,48
+"Exercise, Push-Up",Set,1,reps,5,bodyweight,79.2,extraWeight,0
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,15,weight,6
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,10,weight,8
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,10,weight,10
+
+"Sunday Evening: Glutes, Back, Quads etc.",2025-12-14,79.2,-1,-1,-1,-1
+"Exercise, Goblet Squat",Set,1,reps,10,weight,24
+"Exercise, Squat",Set,1,reps,20,weight,30
+"Exercise, Squat",Set,2,reps,5,weight,35
+"Exercise, Squat",Set,3,reps,10,weight,40
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,5,weight,36
+"Exercise, Kettlebell Swing",Set,3,reps,40,weight,40
+
+"Saturday Evening: Glutes, Shoulders, Chest etc.",2025-12-13,79.2,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,30,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,30,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,30,bodyweight,79.2,extraWeight,0
+"Exercise, Kettlebell Swing",Set,1,reps,30,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,36
+"Exercise, Kettlebell Swing",Set,4,reps,11,weight,40
+"Exercise, Goblet Squat",Set,1,reps,10,weight,24
+
+"Friday Morning: Back, Shoulders, Biceps",2025-12-12,79.2,-1,-1,-1,-1
+"Exercise, Lat Pulldown",Set,1,reps,12,weight,17.5
+"Exercise, Lat Pulldown",Set,2,reps,10,weight,30
+"Exercise, Lat Pulldown",Set,3,reps,8,weight,35
+"Exercise, Lat Pulldown",Set,4,reps,10,weight,30
+"Exercise, Close-Grip Lat Pulldown",Set,1,reps,15,weight,30
+"Exercise, Close-Grip Lat Pulldown",Set,2,reps,8,weight,30
+"Exercise, Close-Grip Lat Pulldown",Set,3,reps,12,weight,30
+"Exercise, Cable Close Grip Seated Row",Set,1,reps,8,weight,35
+"Exercise, Cable Close Grip Seated Row",Set,2,reps,12,weight,30
+"Exercise, Cable Close Grip Seated Row",Set,3,reps,13,weight,30
+"Exercise, Barbell Row",Set,1,reps,12,weight,30
+"Exercise, Barbell Row",Set,2,reps,10,weight,30
+"Exercise, Barbell Row",Set,3,reps,12,weight,30
+"Exercise, Hammer Curl",Set,1,reps,10,weight,10
+"Exercise, Hammer Curl",Set,2,reps,10,weight,10
+"Exercise, Hammer Curl",Set,3,reps,10,weight,10
+
+"Wednesday Morning: Back, Glutes, Biceps",2025-12-10,79.2,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,3,weight,75
+"Exercise, Deadlift",Set,3,reps,6,weight,75
+"Exercise, Deadlift",Set,4,reps,5,weight,85
+"Exercise, Deadlift",Set,5,reps,7,weight,85
+"Exercise, Barbell Curl",Set,1,reps,12,weight,25
+"Exercise, Barbell Curl",Set,2,reps,8,weight,30
+"Exercise, Barbell Curl",Set,3,reps,5,weight,35
+"Exercise, Barbell Curl",Set,4,reps,4,weight,35
+"Exercise, Kettlebell Swing",Set,1,reps,25,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,32
+"Exercise, Kettlebell Swing",Set,4,reps,15,weight,32
+
+Tuesday Lunch: Squat & Barbell Shrug,2025-12-09,79.2,-1,-1,-1,-1
+"Exercise, Squat",Set,1,reps,15,weight,20
+"Exercise, Squat",Set,2,reps,10,weight,30
+"Exercise, Squat",Set,3,reps,10,weight,35
+"Exercise, Squat",Set,4,reps,10,weight,40
+"Exercise, Squat",Set,5,reps,10,weight,45
+"Exercise, Squat",Set,6,reps,10,weight,50
+"Exercise, Squat",Set,7,reps,7,weight,55
+"Exercise, Squat",Set,8,reps,10,weight,50
+"Exercise, Barbell Shrug",Set,1,reps,20,weight,60
+"Exercise, Barbell Shrug",Set,2,reps,20,weight,80
+"Exercise, Barbell Shrug",Set,3,reps,20,weight,80
+"Exercise, Barbell Walking Lunges",Set,1,reps,15,weight,10
+"Exercise, Barbell Walking Lunges",Set,2,reps,15,weight,10
+"Exercise, Barbell Walking Lunges",Set,3,reps,15,weight,10
+"Exercise, Cable Close Grip Seated Row",Set,1,reps,5,weight,24
+"Exercise, Cable Close Grip Seated Row",Set,2,reps,15,weight,36
+"Exercise, Cable Close Grip Seated Row",Set,3,reps,15,weight,48
+"Exercise, Cable Close Grip Seated Row",Set,4,reps,15,weight,48
+
+"Monday Lunch: Shoulders, Chest, Triceps",2025-12-08,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,5,weight,40
+"Exercise, Bench Press",Set,3,reps,5,weight,50
+"Exercise, Bench Press",Set,4,reps,10,weight,60
+"Exercise, Bench Press",Set,5,reps,3,weight,65
+"Exercise, Bench Press",Set,6,reps,3,weight,60
+"Exercise, Bench Press",Set,7,reps,5,weight,55
+"Exercise, Bench Press",Set,8,reps,5,weight,50
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,6
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,10,weight,8
+"Exercise, Dumbbell Lateral Raise",Set,3,reps,6,weight,8
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,30
+"Exercise, Overhead Press",Set,3,reps,8,weight,35
+"Exercise, Overhead Press",Set,4,reps,8,weight,35
+"Exercise, Overhead Press",Set,5,reps,6,weight,35
+"Exercise, Overhead Press",Set,6,reps,5,weight,32.5
+"Exercise, Overhead Press",Set,7,reps,5,weight,30
+"Exercise, Tricep Pushdown With Rope",Set,1,reps,12,weight,12
+"Exercise, Tricep Pushdown With Rope",Set,2,reps,5,weight,18
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,10,bodyweight,79.2,extraWeight,0
+
+"Thursday Evening: Shoulders, Back, Biceps",2025-12-04,79.2,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,10,weight,25
+"Exercise, Overhead Press",Set,2,reps,12,weight,30
+"Exercise, Overhead Press",Set,3,reps,8,weight,35
+"Exercise, Overhead Press",Set,4,reps,8,weight,35
+"Exercise, Barbell Curl",Set,1,reps,10,weight,25
+"Exercise, Barbell Curl",Set,2,reps,7,weight,30
+"Exercise, Barbell Curl",Set,3,reps,6,weight,35
+"Exercise, Barbell Curl",Set,4,reps,6,weight,35
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,7.5
+"Exercise, Dumbbell Front Raise",Set,2,reps,5,weight,10
+"Exercise, Barbell Shrug",Set,1,reps,15,weight,65
+"Exercise, Barbell Shrug",Set,2,reps,20,weight,67.5
+"Exercise, Barbell Shrug",Set,3,reps,10,weight,67.5
+
+"Wednesday Evening: Quads, Posterior thighs, Glutes etc.",2025-11-26,79.2,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,25,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,25,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,79.2,extraWeight,0
+"Exercise, Goblet Squat",Set,1,reps,8,weight,15
+"Exercise, Goblet Squat",Set,2,reps,15,weight,15
+"Exercise, Goblet Squat",Set,3,reps,10,weight,24
+"Exercise, Squat",Set,1,reps,20,weight,22
+
+"Tuesday Evening: Shoulders, Back, Biceps",2025-11-25,79.2,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,25
+"Exercise, Barbell Curl",Set,2,reps,8,weight,30
+"Exercise, Barbell Curl",Set,3,reps,5,weight,30
+"Exercise, Barbell Curl",Set,4,reps,6,weight,30
+"Exercise, Overhead Press",Set,1,reps,15,weight,25
+"Exercise, Overhead Press",Set,2,reps,8,weight,30
+"Exercise, Overhead Press",Set,3,reps,8,weight,30
+"Exercise, Overhead Press",Set,4,reps,6,weight,30
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,10,weight,7.5
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,24
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,32
+
+"Friday Lunch: Shoulders, Chest, Back etc.",2025-11-10,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,8,weight,40
+"Exercise, Bench Press",Set,3,reps,6,weight,55
+"Exercise, Bench Press",Set,4,reps,5,weight,67.5
+"Exercise, Bench Press",Set,5,reps,1,weight,75
+"Exercise, Bench Press",Set,6,reps,1,weight,77.5
+"Exercise, Bench Press",Set,7,reps,17,weight,55
+"Exercise, Bench Press",Set,8,reps,6,weight,55
+"Exercise, Bench Press",Set,9,reps,6,weight,55
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,9
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,12,weight,9
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,10,weight,10
+"Exercise, Push-Up",Set,1,reps,20,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,10,bodyweight,79.2,extraWeight,0
+"Exercise, Bar Hang",Set,1,bodyweight,79.2,extraWeight,0,time,00:01:00
+"Exercise, Bar Hang",Set,2,bodyweight,79.2,extraWeight,0,time,00:00:37
+"Exercise, Bar Hang",Set,3,bodyweight,79.2,extraWeight,0,time,00:00:45
+"Exercise, Dumbbell Front Raise",Set,1,reps,12,weight,6
+"Exercise, Dumbbell Front Raise",Set,2,reps,15,weight,8
+"Exercise, Dumbbell Front Raise",Set,3,reps,11,weight,10
+"Exercise, Dumbbell Front Raise",Set,4,reps,13,weight,9
+"Exercise, Barbell Shrug",Set,1,reps,25,weight,55
+"Exercise, Barbell Shrug",Set,2,reps,20,weight,70
+"Exercise, Barbell Shrug",Set,3,reps,15,weight,80
+
+"Friday Lunch: Shoulders, Chest, Back etc.",2025-11-07,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,7,weight,40
+"Exercise, Bench Press",Set,3,reps,5,weight,55
+"Exercise, Bench Press",Set,4,reps,8,weight,65
+"Exercise, Bench Press",Set,5,reps,4,weight,70
+"Exercise, Bench Press",Set,6,reps,20,weight,50
+"Exercise, Bench Press",Set,7,reps,10,weight,55
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,11,weight,8
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,12,weight,9
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,10,weight,10
+"Exercise, Push-Up",Set,1,reps,20,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,22,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Bar Hang",Set,1,bodyweight,79.2,extraWeight,0,time,00:01:07
+"Exercise, Bar Hang",Set,2,bodyweight,79.2,extraWeight,0,time,00:01:07
+"Exercise, Bar Hang",Set,3,bodyweight,79.2,extraWeight,0,time,00:00:45
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,6
+"Exercise, Dumbbell Front Raise",Set,2,reps,10,weight,7
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,8
+"Exercise, Dumbbell Front Raise",Set,4,reps,10,weight,9
+"Exercise, Dumbbell Front Raise",Set,5,reps,5,weight,10
+"Exercise, Dumbbell Front Raise",Set,6,reps,5,weight,9
+
+"Thursday Evening: Shoulders, Biceps",2025-11-06,79.2,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,5,weight,25
+"Exercise, Barbell Curl",Set,3,reps,3,weight,30
+"Exercise, Barbell Curl",Set,4,reps,4,weight,40
+"Exercise, Barbell Curl",Set,5,reps,6,weight,35
+"Exercise, Barbell Curl",Set,6,reps,5,weight,35
+"Exercise, Barbell Curl",Set,7,reps,10,weight,30
+"Exercise, Barbell Curl",Set,8,reps,5,weight,30
+"Exercise, Barbell Curl",Set,9,reps,8,weight,25
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,7,weight,25
+"Exercise, Overhead Press",Set,3,reps,3,weight,35
+"Exercise, Overhead Press",Set,4,reps,13,weight,40
+"Exercise, Overhead Press",Set,5,reps,8,weight,45
+"Exercise, Overhead Press",Set,6,reps,1,weight,47
+"Exercise, Overhead Press",Set,7,reps,10,weight,30
+"Exercise, Dumbbell Front Raise",Set,1,reps,12,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,12,weight,7.5
+"Exercise, Dumbbell Front Raise",Set,3,reps,7,weight,7.5
+
+"Friday Lunch: Shoulders, Chest, Back etc.",2025-10-27,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,6,weight,40
+"Exercise, Bench Press",Set,3,reps,4,weight,55
+"Exercise, Bench Press",Set,4,reps,10,weight,65
+"Exercise, Bench Press",Set,5,reps,3,weight,72.5
+"Exercise, Bench Press",Set,6,reps,15,weight,60
+"Exercise, Bench Press",Set,7,reps,20,weight,50
+"Exercise, Barbell Shrug",Set,1,reps,10,weight,20
+"Exercise, Barbell Shrug",Set,2,reps,15,weight,50
+"Exercise, Barbell Shrug",Set,3,reps,25,weight,70
+"Exercise, Barbell Shrug",Set,4,reps,20,weight,80
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,8
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,12,weight,9
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,8,weight,10
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,22,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Bar Hang",Set,1,bodyweight,79.2,extraWeight,0,time,00:00:45
+"Exercise, Bar Hang",Set,2,bodyweight,79.2,extraWeight,0,time,00:00:50
+"Exercise, Bar Hang",Set,3,bodyweight,79.2,extraWeight,0,time,00:00:45
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,6
+"Exercise, Dumbbell Front Raise",Set,2,reps,10,weight,7
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,8
+"Exercise, Dumbbell Front Raise",Set,4,reps,10,weight,9
+"Exercise, Dumbbell Front Raise",Set,5,reps,5,weight,10
+"Exercise, Dumbbell Front Raise",Set,6,reps,5,weight,9
+
+"Friday Lunch: Shoulders, Chest, Back etc.",2025-10-24,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,6,weight,40
+"Exercise, Bench Press",Set,3,reps,3,weight,55
+"Exercise, Bench Press",Set,4,reps,6,weight,70
+"Exercise, Bench Press",Set,5,reps,16,weight,57.5
+"Exercise, Bench Press",Set,6,reps,5,weight,60
+"Exercise, Bench Press",Set,7,reps,8,weight,50
+"Exercise, Bench Press",Set,8,reps,8,weight,50
+"Exercise, Barbell Shrug",Set,1,reps,10,weight,50
+"Exercise, Barbell Shrug",Set,2,reps,21,weight,90
+"Exercise, Barbell Shrug",Set,3,reps,10,weight,100
+"Exercise, Barbell Shrug",Set,4,reps,10,weight,100
+"Exercise, Barbell Shrug",Set,5,reps,6,weight,110
+"Exercise, Barbell Shrug",Set,6,reps,5,weight,92.5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,13,weight,7
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,12,weight,8
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,9,weight,9
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Bar Hang",Set,1,bodyweight,79.2,extraWeight,0,time,00:01:35
+
+"Thursday Morning: Back, Shoulders, Biceps",2025-10-23,79.2,-1,-1,-1,-1
+"Exercise, Machine Lat Pulldown",Set,1,reps,15,weight,40
+"Exercise, Machine Lat Pulldown",Set,2,reps,15,weight,60
+"Exercise, Machine Lat Pulldown",Set,3,reps,15,weight,70
+"Exercise, Machine Lat Pulldown",Set,4,reps,12,weight,75
+"Exercise, Assisted Pull-Up",Set,1,reps,10,bodyweight,79.2,assistingWeight,10
+"Exercise, Assisted Pull-Up",Set,2,reps,10,bodyweight,79.2,assistingWeight,15
+"Exercise, Assisted Pull-Up",Set,3,reps,7,bodyweight,79.2,assistingWeight,15
+"Exercise, Seated Machine Row",Set,1,reps,12,weight,50
+"Exercise, Seated Machine Row",Set,2,reps,10,weight,70
+"Exercise, Seated Machine Row",Set,3,reps,10,weight,65
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,18,weight,16
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,15,weight,20
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,8,weight,22
+"Exercise, Dumbbell Shoulder Press",Set,4,reps,8,weight,18
+"Exercise, Dumbbell Curl",Set,1,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,2,reps,8,weight,14
+"Exercise, Dumbbell Curl",Set,3,reps,5,weight,16
+"Exercise, Dumbbell Curl",Set,4,reps,4,weight,16
+"Exercise, Dumbbell Curl",Set,5,reps,5,weight,14
+
+"Wednesday Morning: Quads, Posterior thighs, Glutes etc.",2025-10-22,79.2,-1,-1,-1,-1
+"Exercise, Air Squat",Set,1,reps,15,bodyweight,79.2
+"Exercise, Air Squat",Set,2,reps,0,bodyweight,79.2
+"Exercise, Squat",Set,1,reps,15,weight,20
+"Exercise, Squat",Set,2,reps,10,weight,40
+"Exercise, Squat",Set,3,reps,5,weight,50
+"Exercise, Squat",Set,4,reps,5,weight,60
+"Exercise, Squat",Set,5,reps,5,weight,50
+"Exercise, Leg Press",Set,1,reps,5,weight,50
+"Exercise, Leg Press",Set,2,reps,10,weight,70
+"Exercise, Leg Press",Set,3,reps,15,weight,90
+"Exercise, Leg Press",Set,4,reps,12,weight,110
+"Exercise, Leg Extension",Set,1,reps,12,weight,35
+"Exercise, Leg Extension",Set,2,reps,5,weight,50
+"Exercise, Leg Extension",Set,3,reps,8,weight,60
+"Exercise, Leg Extension",Set,4,reps,10,weight,65
+
+"Tuesday Lunch: Shoulders, Back, Forearms etc.",2025-10-21,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,5,weight,40
+"Exercise, Bench Press",Set,3,reps,2,weight,55
+"Exercise, Bench Press",Set,4,reps,2,weight,60
+"Exercise, Bench Press",Set,5,reps,4,weight,70
+"Exercise, Bench Press",Set,6,reps,2,weight,75
+"Exercise, Bench Press",Set,7,reps,6,weight,62.5
+"Exercise, Bench Press",Set,8,reps,10,weight,55
+"Exercise, Bench Press",Set,9,reps,15,weight,50
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,4
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,12,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,15,weight,6
+"Exercise, Barbell Shrug",Set,1,reps,20,weight,60
+"Exercise, Barbell Shrug",Set,2,reps,15,weight,90
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,20,weight,10
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,30,weight,10
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,12,weight,7
+"Exercise, Bar Hang",Set,1,bodyweight,79.2,extraWeight,0,time,00:01:25
+"Exercise, Rowing (Machine)",Set,1,time-per-500,0,distanceKm,2,time,00:07:45,calories,0,rpm,0
+
+"Thursday Evening: Back, Glutes, Biceps",2025-10-16,79.2,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,4,weight,30
+"Exercise, Barbell Curl",Set,3,reps,4,weight,42
+"Exercise, Barbell Curl",Set,4,reps,2,weight,44
+"Exercise, Barbell Curl",Set,5,reps,10,weight,35
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,5,weight,75
+"Exercise, Deadlift",Set,3,reps,1,weight,105
+"Exercise, Deadlift",Set,4,reps,2,weight,125
+"Exercise, Deadlift",Set,5,reps,15,weight,95
+"Exercise, Kettlebell Swing",Set,1,reps,8,weight,32
+"Exercise, Kettlebell Swing",Set,2,reps,25,weight,40
+
+"Tuesday Morning: Shoulders, Chest, Triceps",2025-10-14,79.2,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,15,weight,20
+"Exercise, Bench Press",Set,2,reps,10,weight,40
+"Exercise, Bench Press",Set,3,reps,20,weight,50
+"Exercise, Bench Press",Set,4,reps,10,weight,60
+"Exercise, Bench Press",Set,5,reps,4,weight,67.5
+"Exercise, Machine Chest Fly",Set,1,reps,15,weight,30
+"Exercise, Machine Chest Fly",Set,2,reps,12,weight,40
+"Exercise, Machine Chest Fly",Set,3,reps,15,weight,45
+"Exercise, Machine Chest Fly",Set,4,reps,15,weight,50
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,22
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,10,weight,20
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,8,weight,18
+"Exercise, Machine Lateral Raise",Set,1,reps,14,weight,35
+"Exercise, Machine Lateral Raise",Set,2,reps,8,weight,35
+"Exercise, Machine Lateral Raise",Set,3,reps,8,weight,35
+"Exercise, Assisted Dip",Set,1,reps,12,bodyweight,79.2,assistingWeight,10
+"Exercise, Assisted Dip",Set,2,reps,10,bodyweight,79.2,assistingWeight,15
+"Exercise, Assisted Dip",Set,3,reps,12,bodyweight,79.2,assistingWeight,20
+"Exercise, Tricep Pushdown With Rope",Set,1,reps,8,weight,25
+"Exercise, Tricep Pushdown With Rope",Set,2,reps,24,weight,10
+"Exercise, Tricep Pushdown With Rope",Set,3,reps,8,weight,20
+"Exercise, Tricep Pushdown With Rope",Set,4,reps,13,weight,15
+"Exercise, Push-Up",Set,1,reps,21,bodyweight,79.2,extraWeight,0
+
+"Monday Lunch: Back, Shoulders, Forearms etc.",2025-10-13,79.2,-1,-1,-1,-1
+"Exercise, Rowing (Machine)",Set,1,time-per-500,0,distanceKm,1,calories,0,time,00:04:23,rpm,0
+"Exercise, Pull-Up",Set,1,reps,5,bodyweight,79.2,extraWeight,0
+"Exercise, Pull-Up",Set,2,reps,6,bodyweight,79.2,extraWeight,0
+"Exercise, Pull-Up",Set,3,reps,5,bodyweight,79.2,extraWeight,0
+"Exercise, Pull-Up",Set,4,reps,5,bodyweight,79.2,extraWeight,0
+"Exercise, Pull-Up",Set,5,reps,4,bodyweight,79.2,extraWeight,0
+"Exercise, Pull-Up",Set,6,reps,5,bodyweight,79.2,extraWeight,0
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,15,weight,6
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,7
+"Exercise, Dumbbell Front Raise",Set,4,reps,10,weight,8
+"Exercise, Dumbbell Front Raise",Set,5,reps,8,weight,9
+"Exercise, Dumbbell Front Raise",Set,6,reps,9,weight,9
+"Exercise, Dumbbell Front Raise",Set,7,reps,10,weight,8
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,8,weight,6
+"Exercise, Dumbbell Lateral Raise",Set,3,reps,8,weight,6
+"Exercise, Dumbbell Lateral Raise",Set,4,reps,8,weight,8
+"Exercise, Dumbbell Lateral Raise",Set,5,reps,15,weight,6
+"Exercise, Bar Hang",Set,1,bodyweight,79.2,extraWeight,0,time,00:01:07
+"Exercise, Bar Hang",Set,2,bodyweight,79.2,extraWeight,0,time,00:01:14
+"Exercise, Lat Pulldown",Set,1,reps,10,weight,36
+"Exercise, Lat Pulldown",Set,2,reps,10,weight,42
+"Exercise, Lat Pulldown",Set,3,reps,8,weight,48
+"Exercise, Lat Pulldown",Set,4,reps,8,weight,42
+"Exercise, Cable Close Grip Seated Row",Set,1,reps,15,weight,36
+"Exercise, Cable Close Grip Seated Row",Set,2,reps,12,weight,42
+"Exercise, Cable Close Grip Seated Row",Set,3,reps,10,weight,48
+"Exercise, Cable Close Grip Seated Row",Set,4,reps,9,weight,48
+"Exercise, Cable Close Grip Seated Row",Set,5,reps,9,weight,42
+"Exercise, Barbell Row",Set,1,reps,10,weight,40
+"Exercise, Barbell Row",Set,2,reps,7,weight,40
+
+"Saturday Afternoon: Shoulders, Chest, Biceps",2025-10-11,79.2,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,4,weight,30
+"Exercise, Barbell Curl",Set,4,reps,7,weight,37
+"Exercise, Barbell Curl",Set,5,reps,6,weight,35
+"Exercise, Barbell Curl",Set,6,reps,10,weight,30
+"Exercise, Barbell Curl",Set,7,reps,7,weight,30
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,35
+"Exercise, Overhead Press",Set,3,reps,6,weight,40
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,2,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,13,bodyweight,79.2,extraWeight,20
+"Exercise, Push-Up",Set,4,reps,22,bodyweight,79.2,extraWeight,20
+"Exercise, Push-Up",Set,5,reps,35,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,30,bodyweight,79.2,extraWeight,0
+
+"Thursday Lunch: Quads, Posterior thighs, Glutes etc.",2025-10-09,79.2,-1,-1,-1,-1
+"Exercise, Squat",Set,1,reps,10,weight,30
+"Exercise, Squat",Set,2,reps,25,weight,30
+"Exercise, Squat",Set,3,reps,20,weight,35
+"Exercise, Squat",Set,4,reps,20,weight,40
+"Exercise, Barbell Walking Lunges",Set,1,reps,26,weight,22
+"Exercise, Barbell Walking Lunges",Set,2,reps,30,weight,22
+"Exercise, Barbell Walking Lunges",Set,3,reps,10,weight,22
+"Exercise, Dumbbell Side Bend",Set,1,reps,25,weight,36
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,11,weight,7.5
+
+"Tuesday Morning: Back, Shoulders, Biceps etc.",2025-10-07,79.2,-1,-1,-1,-1
+"Exercise, Pull-Up",Set,1,reps,6,bodyweight,79.2,extraWeight,0
+"Exercise, Pull-Up",Set,2,reps,10,bodyweight,79.2,assistingWeight,-4
+"Exercise, Pull-Up",Set,3,reps,8,bodyweight,79.2,assistingWeight,-4
+"Exercise, Lat Pulldown",Set,1,reps,6,weight,33.5
+"Exercise, Lat Pulldown",Set,2,reps,10,weight,28.5
+"Exercise, Lat Pulldown",Set,3,reps,6,weight,28.5
+"Exercise, Straight Arm Lat Pulldown",Set,1,reps,8,weight,21
+"Exercise, Straight Arm Lat Pulldown",Set,2,reps,8,weight,24.5
+"Exercise, Straight Arm Lat Pulldown",Set,3,reps,10,weight,24.5
+"Exercise, Cable Close Grip Seated Row",Set,1,reps,12,weight,25
+"Exercise, Cable Close Grip Seated Row",Set,2,reps,10,weight,30
+"Exercise, Cable Close Grip Seated Row",Set,3,reps,6,weight,35
+"Exercise, Barbell Row",Set,1,reps,9,weight,40
+"Exercise, Barbell Row",Set,2,reps,8,weight,45
+"Exercise, Barbell Row",Set,3,reps,10,weight,40
+"Exercise, Back Extension",Set,1,reps,12,bodyweight,79.2,extraWeight,15
+"Exercise, Back Extension",Set,2,reps,12,bodyweight,79.2,extraWeight,25
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,7,weight,25
+"Exercise, Barbell Curl",Set,3,reps,6,weight,30
+"Exercise, Chin-Up",Set,1,reps,5,bodyweight,79.2,extraWeight,0
+"Exercise, Hammer Curl",Set,1,reps,7,weight,10
+"Exercise, Hammer Curl",Set,2,reps,8,weight,10
+"Exercise, Hammer Curl",Set,3,reps,6,weight,10
+
+"Monday Lunch: Back, Shoulders, Chest etc.",2025-10-06,79.2,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,7,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Push-Up",Set,8,reps,15,bodyweight,79.2,extraWeight,0
+"Exercise, Barbell Standing Triceps Extension",Set,1,reps,15,weight,5
+"Exercise, Barbell Standing Triceps Extension",Set,2,reps,10,weight,10
+"Exercise, Barbell Standing Triceps Extension",Set,3,reps,15,weight,10
+"Exercise, Barbell Standing Triceps Extension",Set,4,reps,15,weight,10
+"Exercise, Barbell Shrug",Set,1,reps,20,weight,55
+"Exercise, Barbell Shrug",Set,2,reps,20,weight,75
+"Exercise, Barbell Shrug",Set,3,reps,15,weight,85
+"Exercise, Static hold (one hand)",Set,1,weight,0,time,00:01:00
+"Exercise, Static hold (one hand)",Set,2,weight,0,time,00:01:00
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,7.5
+"Exercise, Dumbbell Front Raise",Set,2,reps,10,weight,7.5
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,7.5
+"Exercise, Dumbbell Shrug",Set,1,reps,15,weight,36
+"Exercise, Dumbbell Shrug",Set,2,reps,15,weight,40
+
+"Saturday Evening: Back, Glutes, Shoulders etc.",2025-10-04,79.2,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,30
+"Exercise, Overhead Press",Set,4,reps,6,weight,35
+"Exercise, Overhead Press",Set,5,reps,4,weight,37
+"Exercise, Overhead Press",Set,6,reps,5,weight,42
+"Exercise, Overhead Press",Set,7,reps,7,weight,50
+"Exercise, Overhead Press",Set,8,reps,5,weight,50
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,7,weight,30
+"Exercise, Barbell Curl",Set,4,reps,8,weight,35
+"Exercise, Barbell Curl",Set,5,reps,6,weight,40
+"Exercise, Deadlift",Set,1,reps,6,weight,55
+"Exercise, Deadlift",Set,2,reps,4,weight,65
+"Exercise, Deadlift",Set,3,reps,3,weight,75
+"Exercise, Deadlift",Set,4,reps,3,weight,95
+"Exercise, Deadlift",Set,5,reps,1,weight,105
+"Exercise, Deadlift",Set,6,reps,4,weight,117.5
+"Exercise, Deadlift",Set,7,reps,7,weight,95
+"Exercise, Barbell Shrug",Set,1,reps,10,weight,20
+"Exercise, Barbell Shrug",Set,2,reps,0,weight,0
+"Exercise, Barbell Shrug",Set,3,reps,0,weight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,25
+
+"Wednesday Evening: Back, Glutes, Triceps etc.",2025-10-01,79.2,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,25
+"Exercise, Barbell Curl",Set,2,reps,7,weight,30
+"Exercise, Barbell Curl",Set,3,reps,7,weight,30
+"Exercise, Barbell Curl",Set,4,reps,8,weight,35
+"Exercise, Barbell Curl",Set,5,reps,4,weight,40
+"Exercise, Barbell Curl",Set,6,reps,7,weight,35
+"Exercise, Bench Dip",Set,1,reps,25,bodyweight,79.2,extraWeight,0
+"Exercise, Deadlift",Set,1,reps,5,weight,55
+"Exercise, Deadlift",Set,2,reps,5,weight,75
+"Exercise, Deadlift",Set,3,reps,10,weight,85
+"Exercise, Deadlift",Set,4,reps,3,weight,87.5
+"Exercise, Deadlift",Set,5,reps,10,weight,105
+
+"Tuesday Lunch: Shoulders, Chest, Back",2025-09-30,80,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,15,weight,20
+"Exercise, Bench Press",Set,2,reps,10,weight,40
+"Exercise, Bench Press",Set,3,reps,5,weight,50
+"Exercise, Bench Press",Set,4,reps,5,weight,55
+"Exercise, Bench Press",Set,5,reps,3,weight,60
+"Exercise, Bench Press",Set,6,reps,7,weight,65
+"Exercise, Bench Press",Set,7,reps,7,weight,60
+"Exercise, Bench Press",Set,8,reps,5,weight,60
+"Exercise, Dumbbell Front Raise",Set,1,reps,15,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,15,weight,6
+"Exercise, Dumbbell Front Raise",Set,3,reps,15,weight,7
+"Exercise, Dumbbell Front Raise",Set,4,reps,10,weight,8
+"Exercise, Dumbbell Front Raise",Set,5,reps,12,weight,8
+"Exercise, Pull-Up",Set,1,reps,6,bodyweight,80,extraWeight,0
+"Exercise, Pull-Up",Set,2,reps,7,bodyweight,80,extraWeight,0
+"Exercise, Pull-Up",Set,3,reps,3,bodyweight,80,extraWeight,0
+"Exercise, Barbell Shrug",Set,1,reps,10,weight,60
+"Exercise, Barbell Shrug",Set,2,reps,12,weight,80
+"Exercise, Barbell Shrug",Set,3,reps,10,weight,87.5
+"Exercise, Barbell Shrug",Set,4,reps,10,weight,100
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,30
+"Exercise, Overhead Press",Set,3,reps,10,weight,35
+"Exercise, Overhead Press",Set,4,reps,5,weight,40
+"Exercise, Overhead Press",Set,5,reps,5,weight,42.5
+"Exercise, Push-Up",Set,1,reps,2,bodyweight,80,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,80,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,8,bodyweight,80,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,80,extraWeight,0
+
+"Monday Lunch: Back, Quads, Posterior thighs etc.",2025-09-29,78,-1,-1,-1,-1
+"Exercise, Lat Pulldown",Set,1,reps,12,weight,36
+"Exercise, Lat Pulldown",Set,2,reps,8,weight,42
+"Exercise, Lat Pulldown",Set,3,reps,8,weight,46
+"Exercise, Lat Pulldown",Set,4,reps,8,weight,46
+"Exercise, Lat Pulldown",Set,5,reps,12,weight,42
+"Exercise, Lat Pulldown",Set,6,reps,12,weight,42
+"Exercise, Leg Extension",Set,1,reps,10,weight,24
+"Exercise, Leg Extension",Set,2,reps,10,weight,32
+"Exercise, Leg Extension",Set,3,reps,8,weight,36
+"Exercise, Leg Extension",Set,4,reps,5,weight,42
+"Exercise, Leg Extension",Set,5,reps,3,weight,36
+"Exercise, Leg Extension",Set,6,reps,10,weight,32
+"Exercise, Dumbbell Lunge",Set,1,reps,10,weight,10
+"Exercise, Dumbbell Lunge",Set,2,reps,10,weight,10
+"Exercise, Dumbbell Lunge",Set,3,reps,10,weight,10
+"Exercise, Dumbbell Lunge",Set,4,reps,15,weight,10
+"Exercise, Pull-Up",Set,1,reps,4,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,2,reps,5,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,3,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,4,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,5,reps,5,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,6,reps,4,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,7,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Squat",Set,1,reps,10,weight,20
+"Exercise, Squat",Set,2,reps,8,weight,30
+"Exercise, Squat",Set,3,reps,8,weight,40
+"Exercise, Squat",Set,4,reps,5,weight,45
+"Exercise, Squat",Set,5,reps,5,weight,45
+"Exercise, Squat",Set,6,reps,10,weight,50
+"Exercise, Barbell Row",Set,1,reps,10,weight,20
+"Exercise, Barbell Row",Set,2,reps,10,weight,40
+"Exercise, Barbell Row",Set,3,reps,6,weight,50
+"Exercise, Barbell Row",Set,4,reps,8,weight,45
+"Exercise, Barbell Row",Set,5,reps,10,weight,45
+"Exercise, Barbell Row",Set,6,reps,8,weight,47.5
+
+"Saturday Evening: Back, Glutes, Shoulders",2025-09-27,78,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,5,weight,55
+"Exercise, Deadlift",Set,2,reps,3,weight,65
+"Exercise, Deadlift",Set,3,reps,3,weight,75
+"Exercise, Deadlift",Set,4,reps,2,weight,85
+"Exercise, Deadlift",Set,5,reps,2,weight,95
+"Exercise, Deadlift",Set,6,reps,1,weight,105
+"Exercise, Deadlift",Set,7,reps,7,weight,95
+"Exercise, Deadlift",Set,8,reps,5,weight,85
+"Exercise, Barbell Row",Set,1,reps,15,weight,40
+"Exercise, Barbell Row",Set,2,reps,10,weight,47
+"Exercise, Barbell Row",Set,3,reps,12,weight,51
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,32
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,36
+
+"Thursday Evening: Shoulders, Chest, Back etc.",2025-09-25,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,40,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,21,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,22,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,7,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Dumbbell Side Bend",Set,1,reps,15,weight,32
+"Exercise, Dumbbell Side Bend",Set,2,reps,12,weight,36
+"Exercise, Dumbbell Side Bend",Set,3,reps,12,weight,40
+"Exercise, Dumbbell Shrug",Set,1,reps,12,weight,32
+"Exercise, Dumbbell Shrug",Set,2,reps,0,weight,36
+
+"Tuesday Evening: Shoulders, Back",2025-09-23,78,-1,-1,-1,-1
+"Exercise, Barbell Row",Set,1,reps,15,weight,30
+"Exercise, Barbell Row",Set,2,reps,12,weight,35
+"Exercise, Barbell Row",Set,3,reps,10,weight,40
+"Exercise, Barbell Row",Set,4,reps,10,weight,45
+"Exercise, Barbell Row",Set,5,reps,10,weight,47
+"Exercise, Barbell Row",Set,6,reps,10,weight,50
+"Exercise, Overhead Press",Set,1,reps,10,weight,30
+"Exercise, Overhead Press",Set,2,reps,10,weight,35
+"Exercise, Overhead Press",Set,3,reps,12,weight,40
+"Exercise, Overhead Press",Set,4,reps,6,weight,45
+"Exercise, Overhead Press",Set,5,reps,5,weight,47
+"Exercise, Overhead Press",Set,6,reps,5,weight,50
+"Exercise, Barbell Shrug",Set,1,reps,10,weight,55
+"Exercise, Barbell Shrug",Set,2,reps,15,weight,75
+"Exercise, Barbell Shrug",Set,3,reps,10,weight,85
+
+"Monday Lunch: Shoulders, Back, Chest etc.",2025-09-22,78,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,5,weight,40
+"Exercise, Bench Press",Set,3,reps,5,weight,50
+"Exercise, Bench Press",Set,4,reps,12,weight,60
+"Exercise, Bench Press",Set,5,reps,4,weight,65
+"Exercise, Bench Press",Set,6,reps,4,weight,60
+"Exercise, Bench Press",Set,7,reps,11,weight,55
+"Exercise, Bench Press",Set,8,reps,5,weight,55
+"Exercise, Bench Press",Set,9,reps,10,weight,52.5
+"Exercise, Bench Press",Set,10,reps,7,weight,50
+"Exercise, EZ Curl",Set,1,reps,12,weight,18.5
+"Exercise, EZ Curl",Set,2,reps,10,weight,23.5
+"Exercise, EZ Curl",Set,3,reps,7,weight,28
+"Exercise, EZ Curl",Set,4,reps,5,weight,30
+"Exercise, EZ Curl",Set,5,reps,5,weight,32
+"Exercise, EZ Curl",Set,6,reps,4,weight,32
+"Exercise, EZ Curl",Set,7,reps,5,weight,30
+"Exercise, EZ Curl",Set,8,reps,4,weight,30
+"Exercise, Pull-Up",Set,1,reps,4,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,2,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,6
+"Exercise, Lat Pulldown",Set,1,reps,10,weight,36
+"Exercise, Lat Pulldown",Set,2,reps,10,weight,42
+"Exercise, Lat Pulldown",Set,3,reps,6,weight,48
+
+Sunday Evening: Deadlift,2025-09-21,78,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,5,weight,45
+"Exercise, Deadlift",Set,2,reps,1,weight,85
+"Exercise, Deadlift",Set,3,reps,1,weight,85
+"Exercise, Deadlift",Set,4,reps,1,weight,95
+"Exercise, Deadlift",Set,5,reps,10,weight,97.5
+"Exercise, Deadlift",Set,6,reps,1,weight,110
+"Exercise, Deadlift",Set,7,reps,3,weight,115
+"Exercise, Deadlift",Set,8,reps,20,weight,87.5
+
+"Saturday Evening: Shoulders, Chest, Back etc.",2025-09-20,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,5,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,50,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,7,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,8,reps,5,bodyweight,78,extraWeight,10
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,15,weight,32
+"Exercise, Dumbbell Shrug",Set,2,reps,15,weight,36
+"Exercise, Dumbbell Side Bend",Set,1,reps,10,weight,32
+"Exercise, Dumbbell Side Bend",Set,2,reps,10,weight,36
+"Exercise, Dumbbell Side Bend",Set,3,reps,15,weight,40
+"Exercise, Dumbbell Side Bend",Set,4,reps,10,weight,40
+
+"Tuesday Evening: Shoulders, Chest, Back etc.",2025-09-16,78,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,30
+"Exercise, Overhead Press",Set,4,reps,8,weight,30
+"Exercise, Overhead Press",Set,5,reps,5,weight,32
+"Exercise, Overhead Press",Set,6,reps,5,weight,35
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,8,weight,30
+"Exercise, Barbell Curl",Set,4,reps,8,weight,30
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,32
+"Exercise, Dumbbell Shrug",Set,3,reps,20,weight,36
+"Exercise, Dumbbell Shrug",Set,4,reps,20,weight,36
+"Exercise, Dumbbell Shrug",Set,5,reps,20,weight,40
+"Exercise, Push-Up",Set,1,reps,20,bodyweight,78,extraWeight,0
+
+"Wednesday Morning: Shoulders, Triceps",2025-09-10,78,-1,-1,-1,-1
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,10
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,10,weight,12.5
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,8,weight,15
+"Exercise, Dumbbell Shoulder Press",Set,4,reps,25,weight,17.5
+"Exercise, Dumbbell Shoulder Press",Set,5,reps,12,weight,20
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,18,weight,7
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,8,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,3,reps,10,weight,8
+"Exercise, Dumbbell Lateral Raise",Set,4,reps,10,weight,5
+"Exercise, Cable Lateral Raise",Set,1,reps,6,weight,5
+"Exercise, Cable Lateral Raise",Set,2,reps,5,weight,2.5
+"Exercise, Tricep Pushdown With Rope",Set,1,reps,12,weight,21
+"Exercise, Tricep Pushdown With Rope",Set,2,reps,15,weight,17.5
+"Exercise, Tricep Pushdown With Rope",Set,3,reps,12,weight,17.5
+
+"Tuesday Lunch: Shoulders, Back, Chest etc.",2025-09-09,78,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,10,weight,20
+"Exercise, Bench Press",Set,2,reps,10,weight,40
+"Exercise, Bench Press",Set,3,reps,5,weight,50
+"Exercise, Bench Press",Set,4,reps,10,weight,60
+"Exercise, Bench Press",Set,5,reps,12,weight,50
+"Exercise, Bench Press",Set,6,reps,10,weight,50
+"Exercise, Bench Press",Set,7,reps,8,weight,50
+"Exercise, Bench Press",Set,8,reps,8,weight,50
+"Exercise, Pull-Up",Set,1,reps,4,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,2,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,3,reps,4,bodyweight,78,extraWeight,0
+"Exercise, Leg Extension",Set,1,reps,10,weight,30
+"Exercise, Leg Extension",Set,2,reps,10,weight,30
+"Exercise, Leg Extension",Set,3,reps,15,weight,30
+"Exercise, Leg Extension",Set,4,reps,10,weight,36
+"Exercise, Leg Extension",Set,5,reps,8,weight,42
+"Exercise, Rowing (Machine)",Set,1,time-per-500,0,distanceKm,0.5,time,00:01:45,calories,0,rpm,0
+"Exercise, Rowing (Machine)",Set,2,time-per-500,0,distanceKm,0.5,calories,0,time,00:01:45,rpm,0
+"Exercise, Rowing (Machine)",Set,3,time-per-500,0,distanceKm,0.5,calories,0,time,00:01:55,rpm,0
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Lat Pulldown",Set,1,reps,10,weight,36
+"Exercise, Lat Pulldown",Set,2,reps,8,weight,42
+
+Thursday Evening: Kettlebell Swing,2025-09-04,78,-1,-1,-1,-1
+"Exercise, Kettlebell Swing",Set,1,reps,5,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,5,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,5,weight,36
+"Exercise, Kettlebell Swing",Set,4,reps,50,weight,36
+"Exercise, Kettlebell Swing",Set,5,reps,25,weight,32
+
+"Wednesday Evening: Shoulders, Back, Biceps",2025-09-03,78,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,6,weight,25
+"Exercise, Overhead Press",Set,3,reps,12,weight,30
+"Exercise, Overhead Press",Set,4,reps,10,weight,32.5
+"Exercise, Overhead Press",Set,5,reps,15,weight,30
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,6,weight,30
+"Exercise, Barbell Curl",Set,4,reps,10,weight,32.5
+"Exercise, Barbell Curl",Set,5,reps,5,weight,30
+"Exercise, Barbell Curl",Set,6,reps,5,weight,30
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,8,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,6,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+
+"Tuesday Lunch: Shoulders, Back, Chest etc.",2025-08-26,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Squat",Set,1,reps,10,weight,20
+"Exercise, Squat",Set,2,reps,10,weight,30
+"Exercise, Overhead Press",Set,1,reps,7,weight,30
+"Exercise, Overhead Press",Set,2,reps,5,weight,30
+"Exercise, Bench Press",Set,1,reps,7,weight,20
+"Exercise, Bench Press",Set,2,reps,10,weight,40
+"Exercise, Bench Press",Set,3,reps,10,weight,50
+"Exercise, Bench Press",Set,4,reps,5,weight,50
+"Exercise, Bench Press",Set,5,reps,7,weight,55
+"Exercise, Bench Press",Set,6,reps,7,weight,57.5
+"Exercise, Bench Press",Set,7,reps,5,weight,50
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,6
+"Exercise, Dumbbell Front Raise",Set,2,reps,7,weight,7
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,6
+"Exercise, Pull-Up",Set,1,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,2,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Pull-Up",Set,3,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Rowing (Machine)",Set,1,time-per-500,0,distanceKm,2,calories,0,time,00:08:40,rpm,0
+
+"Friday Lunch: Shoulders, Back, Forearms etc.",2025-08-22,78,-1,-1,-1,-1
+"Exercise, Lat Pulldown",Set,1,reps,12,weight,30
+"Exercise, Lat Pulldown",Set,2,reps,10,weight,36
+"Exercise, Lat Pulldown",Set,3,reps,10,weight,42
+"Exercise, Lat Pulldown",Set,4,reps,10,weight,42
+"Exercise, Lat Pulldown",Set,5,reps,10,weight,42
+"Exercise, Lat Pulldown",Set,6,reps,10,weight,42
+"Exercise, Lat Pulldown",Set,7,reps,7,weight,48
+"Exercise, Lat Pulldown",Set,8,reps,8,weight,48
+"Exercise, Lat Pulldown",Set,9,reps,6,weight,48
+"Exercise, Lat Pulldown",Set,10,reps,6,weight,48
+"Exercise, Barbell Shrug",Set,1,reps,15,weight,50
+"Exercise, Barbell Shrug",Set,2,reps,12,weight,70
+"Exercise, Barbell Shrug",Set,3,reps,10,weight,80
+"Exercise, Barbell Shrug",Set,4,reps,12,weight,80
+"Exercise, Barbell Shrug",Set,5,reps,10,weight,70
+"Exercise, Barbell Shrug",Set,6,reps,15,weight,60
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,8,weight,6
+"Exercise, Dumbbell Front Raise",Set,3,reps,7,weight,7
+"Exercise, Dumbbell Front Raise",Set,4,reps,8,weight,8
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,8,weight,6
+"Exercise, Dumbbell Lateral Raise",Set,3,reps,7,weight,7
+"Exercise, Rowing (Machine)",Set,1,time-per-500,116,distanceKm,1,time,00:03:54,calories,0,rpm,0
+"Exercise, Rowing (Machine)",Set,2,time-per-500,119,distanceKm,1,calories,0,time,00:03:54,rpm,0
+"Exercise, Rowing (Machine)",Set,3,time-per-500,116,distanceKm,1,time,00:03:50,calories,0,rpm,0
+
+"Tuesday Lunch: Shoulders, Chest, Back etc.",2025-08-19,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Bench Press",Set,1,reps,15,weight,20
+"Exercise, Bench Press",Set,2,reps,6,weight,40
+"Exercise, Bench Press",Set,3,reps,6,weight,50
+"Exercise, Bench Press",Set,4,reps,5,weight,50
+"Exercise, Bench Press",Set,5,reps,10,weight,55
+"Exercise, Bench Press",Set,6,reps,7,weight,50
+"Exercise, Bench Press",Set,7,reps,10,weight,45
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,10,weight,7
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,8
+"Exercise, Dumbbell Front Raise",Set,4,reps,5,weight,9
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,8,weight,8
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,7,weight,25
+"Exercise, Overhead Press",Set,3,reps,7,weight,30
+"Exercise, Overhead Press",Set,4,reps,8,weight,30
+"Exercise, Lat Pulldown",Set,1,reps,12,weight,30
+"Exercise, Lat Pulldown",Set,2,reps,8,weight,42
+"Exercise, Lat Pulldown",Set,3,reps,10,weight,42
+"Exercise, Lat Pulldown",Set,4,reps,8,weight,42
+"Exercise, Lat Pulldown",Set,5,reps,4,weight,48
+"Exercise, Rowing (Machine)",Set,1,time-per-500,127,distanceKm,2.5,calories,0,time,00:10:32,rpm,0
+
+"Monday Evening: Shoulders, Back, Biceps",2025-08-18,78,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,5,weight,30
+"Exercise, Barbell Curl",Set,4,reps,5,weight,37
+"Exercise, Barbell Curl",Set,5,reps,5,weight,35
+"Exercise, Barbell Curl",Set,6,reps,5,weight,30
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,35
+"Exercise, Overhead Press",Set,4,reps,10,weight,30
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,20
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,20
+"Exercise, Dumbbell Shrug",Set,3,reps,20,weight,24
+"Exercise, Dumbbell Shrug",Set,4,reps,20,weight,32
+
+Core,2025-08-14,78,-1,-1,-1,-1
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:00:00
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,32
+"Exercise, Lying Leg Raise",Set,1,reps,15,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,15,bodyweight,78
+"Exercise, Crunch",Set,1,reps,0,bodyweight,78,extraWeight,0
+"Exercise, Side Plank",Set,1,bodyweight,78,extraWeight,0,time,00:01:30
+"Exercise, Side Plank",Set,2,bodyweight,78,extraWeight,0,time,00:01:30
+"Exercise, Dumbbell Side Bend",Set,1,reps,15,weight,24
+"Exercise, Dumbbell Side Bend",Set,2,reps,15,weight,32
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,24
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,32
+"Exercise, Dumbbell Shrug",Set,3,reps,20,weight,32
+"Exercise, Dumbbell Shrug",Set,4,reps,20,weight,24
+
+"Wednesday Afternoon: Back, Glutes, Quads etc.",2025-08-13,78,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,5,weight,45
+"Exercise, Deadlift",Set,2,reps,7,weight,55
+"Exercise, Deadlift",Set,3,reps,5,weight,71.3
+"Exercise, Deadlift",Set,4,reps,3,weight,85
+"Exercise, Deadlift",Set,5,reps,2,weight,90
+"Exercise, Deadlift",Set,6,reps,15,weight,87.5
+"Exercise, Deadlift",Set,7,reps,6,weight,75
+"Exercise, Barbell Row",Set,1,reps,15,weight,32
+"Exercise, Barbell Row",Set,2,reps,10,weight,37
+"Exercise, Barbell Row",Set,3,reps,15,weight,42
+"Exercise, Barbell Row",Set,4,reps,15,weight,42
+"Exercise, Barbell Row",Set,5,reps,15,weight,44
+"Exercise, Squat",Set,1,reps,20,weight,0
+"Exercise, Squat",Set,2,reps,0,weight,0
+"Exercise, Kettlebell Swing",Set,1,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,25,weight,36
+"Exercise, Kettlebell Swing",Set,4,reps,20,weight,40
+"Exercise, Kettlebell Swing",Set,5,reps,10,weight,36
+"Exercise, Barbell Walking Lunges",Set,1,reps,20,weight,22
+"Exercise, Barbell Walking Lunges",Set,2,reps,15,weight,22
+"Exercise, Static hold",Set,1,weight,0,time,00:00:00
+"Exercise, Static hold",Set,2,weight,0,time,00:00:00
+"Exercise, Static hold (one hand)",Set,1,weight,36,time,00:01:00
+"Exercise, Static hold (one hand)",Set,2,weight,36,time,00:00:45
+"Exercise, Static hold (one hand)",Set,3,weight,0,time,00:00:45
+
+"Tuesday Evening: Shoulders, Abs, Back etc.",2025-08-12,78,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,30
+"Exercise, Barbell Curl",Set,3,reps,10,weight,30
+"Exercise, Barbell Curl",Set,4,reps,10,weight,30
+"Exercise, Barbell Curl",Set,5,reps,7,weight,30
+"Exercise, Barbell Curl",Set,6,reps,5,weight,32
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,30
+"Exercise, Overhead Press",Set,3,reps,18,weight,30
+"Exercise, Dumbbell Side Bend",Set,1,reps,10,weight,24
+"Exercise, Dumbbell Side Bend",Set,2,reps,20,weight,32
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,15,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,32
+"Exercise, Dumbbell Shrug",Set,3,reps,15,weight,36
+"Exercise, Dumbbell Shrug",Set,4,reps,10,weight,40
+"Exercise, Dumbbell Shrug",Set,5,reps,25,weight,32
+"Exercise, Dumbbell Shrug",Set,6,reps,25,weight,36
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:05:30
+
+"Tuesday Morning: Posterior thighs, Back, Glutes etc.",2025-08-11,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,30,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,78,extraWeight,10
+"Exercise, Push-Up",Set,6,reps,15,bodyweight,78,extraWeight,10
+"Exercise, Push-Up",Set,7,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,8,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Lying Leg Raise",Set,1,reps,20,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,20,bodyweight,78
+"Exercise, Lying Leg Raise",Set,3,reps,25,bodyweight,78
+"Exercise, Lying Leg Raise",Set,4,reps,20,bodyweight,78
+"Exercise, Dumbbell Shrug",Set,1,reps,35,weight,20
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,30,weight,24
+"Exercise, Dumbbell Shrug",Set,4,reps,30,weight,32
+"Exercise, Squat",Set,1,reps,15,weight,15
+"Exercise, Dumbbell Side Bend",Set,1,reps,15,weight,25
+"Exercise, Dumbbell Side Bend",Set,2,reps,15,weight,32
+"Exercise, Dumbbell Side Bend",Set,3,reps,15,weight,36
+"Exercise, Dumbbell Side Bend",Set,4,reps,5,weight,40
+"Exercise, Single Leg Lifts",Set,1,reps,20
+
+"Saturday Afternoon: Glutes, Abs, Forearms etc.",2025-08-02,78,-1,-1,-1,-1
+"Exercise, Sled Push",Set,1,distanceMeter,40,weight,125
+"Exercise, Sled Push",Set,2,weight,120,distanceMeter,40
+"Exercise, Sled Push",Set,3,distanceMeter,40,weight,100
+"Exercise, Farmers Walk",Set,1,weight,20,distanceMeter,200
+"Exercise, Farmers Walk",Set,2,weight,25,distanceMeter,120
+"Exercise, Farmers Walk",Set,3,weight,20,distanceMeter,120
+"Exercise, Burpee broad jump",Set,1,distanceKm,0.04
+"Exercise, Burpee broad jump",Set,2,distanceKm,0.04
+"Exercise, Burpee broad jump",Set,3,distanceKm,0.04
+"Exercise, Jump Rope",Set,1,time,00:01:33
+"Exercise, Jump Rope",Set,2,time,00:00:52
+"Exercise, Wall Ball",Set,1,reps,10,weight,15
+"Exercise, Wall Ball",Set,2,reps,10,weight,15
+"Exercise, Wall Ball",Set,3,reps,10,weight,15
+"Exercise, Wall Ball",Set,4,reps,10,weight,15
+"Exercise, Wall Ball",Set,5,reps,10,weight,15
+"Exercise, Wall Ball",Set,6,reps,4,weight,15
+"Exercise, Barbell Walking Lunges",Set,1,reps,20,weight,22
+"Exercise, Barbell Walking Lunges",Set,2,reps,40,weight,22
+"Exercise, Barbell Walking Lunges",Set,3,reps,15,weight,22
+"Exercise, Static hold",Set,1,weight,25,time,00:02:00
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:02:01
+
+Hyrox,2025-07-31,78,-1,-1,-1,-1
+"Exercise, Wall Ball",Set,1,reps,12,weight,15
+"Exercise, Wall Ball",Set,2,reps,10,weight,15
+"Exercise, Burpee",Set,1,reps,10,bodyweight,78
+"Exercise, Burpee",Set,2,reps,10,bodyweight,78
+"Exercise, Burpee",Set,3,reps,20,bodyweight,78
+"Exercise, Burpee",Set,4,reps,10,bodyweight,78
+"Exercise, Farmers Walk",Set,1,distanceMeter,200,weight,20
+"Exercise, Farmers Walk",Set,2,weight,20,distanceMeter,240
+"Exercise, Sled Push",Set,1,distanceMeter,10,weight,97
+"Exercise, Sled Push",Set,2,distanceMeter,15,weight,150
+"Exercise, Sled Push",Set,3,weight,130,distanceMeter,15
+"Exercise, Sled Push",Set,4,distanceMeter,17,weight,130
+"Exercise, Sled Push",Set,5,weight,130,distanceMeter,15
+"Exercise, Sled Push",Set,6,weight,130,distanceMeter,15
+"Exercise, Sled Push",Set,7,weight,130,distanceMeter,15
+"Exercise, Jump Rope",Set,1,time,00:01:00
+"Exercise, Jump Rope",Set,2,time,00:00:51
+"Exercise, Barbell Walking Lunges",Set,1,reps,8,weight,22
+"Exercise, Barbell Walking Lunges",Set,2,reps,15,weight,22
+
+"Wednesday Evening: Back, Glutes, Shoulders etc.",2025-07-30,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,50,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,7,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,8,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,15,bodyweight,78,extraWeight,15
+"Exercise, Bench Dip",Set,3,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Kettlebell Swing",Set,1,reps,5,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,5,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,36
+"Exercise, Kettlebell Swing",Set,4,reps,15,weight,40
+"Exercise, Dumbbell Shrug",Set,1,reps,5,weight,32
+"Exercise, Dumbbell Shrug",Set,2,reps,10,weight,36
+"Exercise, Dumbbell Shrug",Set,3,reps,10,weight,40
+"Exercise, Dumbbell Shrug",Set,4,reps,10,weight,32
+"Exercise, Wall Ball",Set,1,reps,10,weight,15
+"Exercise, Wall Ball",Set,2,reps,12,weight,15
+"Exercise, Wall Ball",Set,3,reps,15,weight,15
+
+"Tuesday Evening: Shoulders, Abs, Back etc.",2025-07-29,78,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,6,weight,30
+"Exercise, Barbell Curl",Set,4,reps,8,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,30
+"Exercise, Barbell Curl",Set,6,reps,6,weight,30
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,30
+"Exercise, Overhead Press",Set,4,reps,8,weight,30
+"Exercise, Overhead Press",Set,5,reps,8,weight,30
+"Exercise, Overhead Press",Set,6,reps,10,weight,30
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,15,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,3,reps,8,weight,5
+"Exercise, Barbell Front Raise",Set,1,reps,10,weight,15
+"Exercise, Barbell Front Raise",Set,2,reps,15,weight,15
+"Exercise, Barbell Front Raise",Set,3,reps,10,weight,15
+"Exercise, Dumbbell Shrug",Set,1,reps,40,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,35,weight,25
+"Exercise, Crunch",Set,1,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Crunch",Set,2,reps,40,bodyweight,78,extraWeight,0
+"Exercise, Crunch",Set,3,reps,25,bodyweight,78,extraWeight,10
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:03:01
+
+"Tuesday Evening: Shoulders, Abs, Back etc.",2025-07-22,78,-1,-1,-1,-1
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Overhead Press",Set,1,reps,10,weight,30
+"Exercise, Overhead Press",Set,2,reps,10,weight,35
+"Exercise, Overhead Press",Set,3,reps,7,weight,40
+"Exercise, Overhead Press",Set,4,reps,5,weight,40
+"Exercise, Overhead Press",Set,5,reps,6,weight,35
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,25,bodyweight,78,extraWeight,5
+"Exercise, Bench Dip",Set,3,reps,20,bodyweight,78,extraWeight,10
+"Exercise, Bench Dip",Set,4,reps,20,bodyweight,78,extraWeight,15
+"Exercise, Bench Dip",Set,5,reps,20,bodyweight,78,extraWeight,20
+"Exercise, Barbell Front Raise",Set,1,reps,10,weight,15
+"Exercise, Barbell Front Raise",Set,2,reps,10,weight,15
+"Exercise, Barbell Front Raise",Set,3,reps,10,weight,17
+"Exercise, Barbell Front Raise",Set,4,reps,10,weight,20
+"Exercise, Barbell Front Raise",Set,5,reps,2,weight,25
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,15,time,00:02:30
+"Exercise, Crunch",Set,1,reps,25,bodyweight,78,extraWeight,10
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,32
+"Exercise, Static hold",Set,1,weight,25,time,00:03:00
+
+"Monday Evening: Abs, Back, Glutes etc.",2025-07-21,78,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,5,weight,25
+"Exercise, Deadlift",Set,2,reps,5,weight,35
+"Exercise, Deadlift",Set,3,reps,3,weight,55
+"Exercise, Deadlift",Set,4,reps,3,weight,65
+"Exercise, Deadlift",Set,5,reps,2,weight,75
+"Exercise, Deadlift",Set,6,reps,12,weight,85
+"Exercise, Deadlift",Set,7,reps,5,weight,65
+"Exercise, Crunch",Set,1,reps,25,bodyweight,78,extraWeight,5
+"Exercise, Crunch",Set,2,reps,25,bodyweight,78,extraWeight,10
+"Exercise, Crunch",Set,3,reps,25,bodyweight,78,extraWeight,3
+"Exercise, Barbell Row",Set,1,reps,10,weight,25
+"Exercise, Barbell Row",Set,2,reps,10,weight,35
+"Exercise, Barbell Row",Set,3,reps,10,weight,40
+"Exercise, Barbell Row",Set,4,reps,10,weight,50
+"Exercise, L-sit lyft",Set,1,bodyweight,78,time,00:01:31
+"Exercise, L-sit lyft",Set,2,bodyweight,78,time,00:01:40
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,10,time,00:01:01
+
+"Sunday Evening: Shoulders, Chest, Triceps etc.",2025-07-20,78,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,12,weight,15
+"Exercise, Bench Press",Set,2,reps,5,weight,35
+"Exercise, Bench Press",Set,3,reps,5,weight,45
+"Exercise, Bench Press",Set,4,reps,4,weight,55
+"Exercise, Bench Press",Set,5,reps,1,weight,70
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,5,bodyweight,78,extraWeight,20
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,78,extraWeight,5
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,78,extraWeight,5
+"Exercise, Bench Dip",Set,1,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,30,bodyweight,78,extraWeight,0
+"Exercise, Barbell Standing Triceps Extension",Set,1,reps,10,weight,10
+"Exercise, Dumbbell Front Raise",Set,1,reps,20,weight,5
+"Exercise, Barbell Front Raise",Set,1,reps,10,weight,15
+"Exercise, Barbell Shrug",Set,1,reps,20,weight,55
+"Exercise, Barbell Shrug",Set,2,reps,20,weight,65
+"Exercise, Barbell Shrug",Set,3,reps,10,weight,70
+"Exercise, Barbell Shrug",Set,4,reps,15,weight,75
+"Exercise, Barbell Shrug",Set,5,reps,15,weight,75
+"Exercise, Barbell Shrug",Set,6,reps,10,weight,80
+
+"Friday Evening: Abs, Hip flexor, Shoulders etc.",2025-07-18,78,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,10,weight,30
+"Exercise, Barbell Curl",Set,4,reps,10,weight,25
+"Exercise, Barbell Curl",Set,5,reps,12,weight,25
+"Exercise, Barbell Curl",Set,6,reps,10,weight,25
+"Exercise, Overhead Press",Set,1,reps,10,weight,25
+"Exercise, Overhead Press",Set,2,reps,15,weight,30
+"Exercise, Overhead Press",Set,3,reps,10,weight,25
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,2,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,32
+"Exercise, Crunch",Set,1,reps,30,bodyweight,78,extraWeight,0
+"Exercise, Crunch",Set,2,reps,100,bodyweight,78,extraWeight,0
+"Exercise, Lying Leg Raise",Set,1,reps,40,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,15,bodyweight,78
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,20,time,00:02:00
+"Exercise, L-sit lyft",Set,1,bodyweight,78,time,00:01:00
+"Exercise, L-sit lyft",Set,2,bodyweight,78,time,00:01:01
+
+"Thursday Evening: Glutes, Shoulders, Back etc.",2025-07-17,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Kettlebell Swing",Set,1,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,25,weight,24
+"Exercise, Goblet Squat",Set,1,reps,15,weight,20
+"Exercise, Goblet Squat",Set,2,reps,10,weight,24
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:04:02
+"Exercise, Plank",Set,2,bodyweight,78,extraWeight,10,time,00:01:01
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,10,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,24
+"Exercise, Single Leg Lifts",Set,1,reps,15
+
+Rocky,2025-07-17,78,-1,-1,-1,-1
+"Exercise, Farmers Walk",Set,1,distanceMeter,20,weight,25
+"Exercise, Farmers Walk",Set,2,weight,25,distanceMeter,250
+"Exercise, Goblet Squat",Set,1,reps,10,weight,15
+"Exercise, Goblet Squat",Set,2,reps,25,weight,15
+"Exercise, Goblet Squat",Set,3,reps,20,weight,25
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Dumbbell Shrug",Set,1,reps,10,weight,15
+"Exercise, Dumbbell Shrug",Set,2,reps,10,weight,24
+"Exercise, Push-Up",Set,1,reps,40,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,5,bodyweight,78,extraWeight,25
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,78,extraWeight,15
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,78,extraWeight,10
+"Exercise, One-Arm Kettlebell Swing",Set,1,reps,15,weight,24
+
+"Wednesday Evening: Back, Glutes, Abs etc.",2025-07-16,78,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,5,weight,45
+"Exercise, Deadlift",Set,2,reps,3,weight,55
+"Exercise, Deadlift",Set,3,reps,2,weight,65
+"Exercise, Deadlift",Set,4,reps,1,weight,75
+"Exercise, Deadlift",Set,5,reps,10,weight,80
+"Exercise, Deadlift",Set,6,reps,15,weight,65
+"Exercise, Deadlift",Set,7,reps,5,weight,65
+"Exercise, Deadlift",Set,8,reps,5,weight,65
+"Exercise, Deadlift",Set,9,reps,5,weight,65
+"Exercise, Deadlift",Set,10,reps,5,weight,65
+"Exercise, Barbell Row",Set,1,reps,10,weight,30
+"Exercise, Barbell Row",Set,2,reps,15,weight,35
+"Exercise, Barbell Row",Set,3,reps,15,weight,40
+"Exercise, Barbell Row",Set,4,reps,10,weight,42
+"Exercise, Barbell Row",Set,5,reps,11,weight,44
+"Exercise, Single Leg Lifts",Set,1,reps,15
+"Exercise, Crunch",Set,1,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Crunch",Set,2,reps,30,bodyweight,78,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:04:30
+
+"Tuesday Lunch: Glutes, Posterior thighs, Back etc.",2025-07-15,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,5,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,5,bodyweight,78,extraWeight,5
+"Exercise, Push-Up",Set,3,reps,5,bodyweight,78,extraWeight,10
+"Exercise, Push-Up",Set,4,reps,13,bodyweight,78,extraWeight,20
+"Exercise, Push-Up",Set,5,reps,15,bodyweight,78,extraWeight,10
+"Exercise, Push-Up",Set,6,reps,32,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,7,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Barbell Standing Triceps Extension",Set,1,reps,5,weight,5
+"Exercise, Barbell Standing Triceps Extension",Set,2,reps,10,weight,10
+"Exercise, Barbell Standing Triceps Extension",Set,3,reps,10,weight,10
+"Exercise, One-Arm Kettlebell Swing",Set,1,reps,5,weight,24
+"Exercise, One-Arm Kettlebell Swing",Set,2,reps,10,weight,24
+"Exercise, Goblet Squat",Set,1,reps,10,weight,25
+"Exercise, Static hold",Set,1,weight,25,time,00:02:35
+"Exercise, Single Leg Lifts",Set,1,reps,2
+
+Biceps,2025-07-14,78,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,8,weight,20
+"Exercise, Barbell Curl",Set,2,reps,5,weight,25
+"Exercise, Barbell Curl",Set,3,reps,4,weight,30
+"Exercise, Barbell Curl",Set,4,reps,4,weight,35
+"Exercise, Barbell Curl",Set,5,reps,5,weight,30
+"Exercise, Barbell Curl",Set,6,reps,10,weight,25
+"Exercise, Overhead Press",Set,1,reps,8,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,7,weight,35
+"Exercise, Overhead Press",Set,4,reps,8,weight,35
+"Exercise, Overhead Press",Set,5,reps,12,weight,25
+"Exercise, Static hold",Set,1,weight,20,time,00:06:00
+"Exercise, Dumbbell Front Raise",Set,1,reps,20,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,0,weight,0
+
+"Sunday Evening: Glutes, Posterior thighs, Quads etc.",2025-07-13,78,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,5,weight,45
+"Exercise, Deadlift",Set,2,reps,7,weight,55
+"Exercise, Deadlift",Set,3,reps,5,weight,65
+"Exercise, Deadlift",Set,4,reps,10,weight,75
+"Exercise, Deadlift",Set,5,reps,5,weight,65
+"Exercise, Barbell Lunge",Set,1,reps,20,weight,12
+"Exercise, Goblet Squat",Set,1,reps,20,weight,20
+"Exercise, Goblet Squat",Set,2,reps,15,weight,25
+"Exercise, Goblet Squat",Set,3,reps,10,weight,20
+"Exercise, Single Leg Lifts",Set,1,reps,20
+"Exercise, Lying Leg Raise",Set,1,reps,20,bodyweight,78
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:04:15
+
+L-sit-passet,2025-07-12,78,-1,-1,-1,-1
+"Exercise, Single Leg Lifts",Set,1,reps,15
+"Exercise, Single Leg Lifts",Set,2,reps,15
+"Exercise, L-sit lyft",Set,1,bodyweight,78,time,00:01:21
+"Exercise, L-sit lyft",Set,2,bodyweight,78,time,00:01:31
+"Exercise, Static Support Hold in Dip Bar",Set,1,bodyweight,78,time,00:00:00
+"Exercise, Hollow Hold",Set,1,bodyweight,78,time,00:00:00
+"Exercise, Bench Dip",Set,1,reps,0,bodyweight,78,extraWeight,0
+"Exercise, Static Support Hold in Dip Bar",Set,1,bodyweight,78,time,00:00:00
+"Exercise, Push-Up",Set,1,reps,5,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,10,bodyweight,78,extraWeight,15
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,78,extraWeight,10
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,78,extraWeight,5
+"Exercise, Push-Up",Set,5,reps,30,bodyweight,78,extraWeight,0
+"Exercise, Lying Leg Raise",Set,1,reps,30,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,15,bodyweight,78
+"Exercise, Lying Leg Raise",Set,3,reps,32,bodyweight,78
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,40,weight,32
+
+"Fredag morgon: baksida lår, rumpa, framsida lår etc.",2025-07-11,78,-1,-1,-1,-1
+"Exercise, Machine Lat Pulldown",Set,1,reps,10,weight,18
+"Exercise, Machine Lat Pulldown",Set,2,reps,7,weight,36
+"Exercise, Machine Lat Pulldown",Set,3,reps,8,weight,42
+"Exercise, Machine Lat Pulldown",Set,4,reps,5,weight,48
+"Exercise, Machine Lat Pulldown",Set,5,reps,5,weight,48
+"Exercise, Machine Lat Pulldown",Set,6,reps,3,weight,54
+"Exercise, Machine Lat Pulldown",Set,7,reps,12,weight,45
+"Exercise, Machine Lat Pulldown",Set,8,reps,10,weight,42
+"Exercise, Squat",Set,1,reps,5,weight,20
+"Exercise, Squat",Set,2,reps,10,weight,30
+"Exercise, Squat",Set,3,reps,5,weight,40
+"Exercise, Squat",Set,4,reps,5,weight,45
+"Exercise, Squat",Set,5,reps,12,weight,40
+"Exercise, Squat",Set,6,reps,10,weight,40
+"Exercise, Squat",Set,7,reps,15,weight,40
+"Exercise, Squat",Set,8,reps,7,weight,45
+"Exercise, Bench Press",Set,1,reps,7,weight,20
+"Exercise, Bench Press",Set,2,reps,7,weight,40
+"Exercise, Bench Press",Set,3,reps,12,weight,50
+"Exercise, Bench Press",Set,4,reps,10,weight,45
+"Exercise, Bench Press",Set,5,reps,7,weight,45
+"Exercise, Bench Press",Set,6,reps,4,weight,55
+"Exercise, Bench Press",Set,7,reps,10,weight,45
+"Exercise, Hanging Leg Raise",Set,1,reps,5,bodyweight,78
+"Exercise, Hanging Leg Raise",Set,2,reps,5,bodyweight,78
+"Exercise, Single Leg Lifts",Set,1,reps,20
+"Exercise, Single Leg Lifts",Set,2,reps,30
+"Exercise, Dumbbell Walking Lunges",Set,1,reps,10,weight,10
+"Exercise, Dumbbell Walking Lunges",Set,2,reps,15,weight,10
+"Exercise, Rowing (Machine)",Set,1,time-per-500,0,distanceKm,1.25,calories,0,time,00:05:00,rpm,0
+
+"Torsdag kväll: axlar, mage, höftböjare etc.",2025-07-10,78,-1,-1,-1,-1
+"Exercise, Lying Leg Raise",Set,1,reps,15,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,16,bodyweight,78
+"Exercise, Single Leg Lifts",Set,1,reps,20
+"Exercise, Single Leg Lifts",Set,2,reps,20
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,20
+"Exercise, Barbell Curl",Set,3,reps,5,weight,30
+"Exercise, Barbell Curl",Set,4,reps,7,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,30
+"Exercise, Barbell Curl",Set,6,reps,6,weight,30
+"Exercise, Barbell Curl",Set,7,reps,7,weight,30
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,30
+"Exercise, Overhead Press",Set,3,reps,7,weight,30
+"Exercise, Overhead Press",Set,4,reps,6,weight,30
+"Exercise, Dumbbell Front Raise",Set,1,reps,7,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,7,weight,5
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,15,time,00:02:00
+"Exercise, L-sit lyft",Set,1,bodyweight,78,time,00:01:01
+"Exercise, L-sit lyft",Set,2,bodyweight,78,time,00:01:10
+
+Mark,2025-07-09,78,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,12,weight,35
+"Exercise, Deadlift",Set,2,reps,7,weight,35
+"Exercise, Deadlift",Set,3,reps,8,weight,45
+"Exercise, Deadlift",Set,4,reps,5,weight,55
+"Exercise, Deadlift",Set,5,reps,4,weight,65
+"Exercise, Deadlift",Set,6,reps,1,weight,75
+"Exercise, Deadlift",Set,7,reps,8,weight,65
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,25
+"Exercise, Single Leg Lifts",Set,1,reps,20
+"Exercise, Barbell Row",Set,1,reps,10,weight,30
+"Exercise, Barbell Row",Set,2,reps,6,weight,35
+"Exercise, Barbell Row",Set,3,reps,10,weight,35
+"Exercise, Dumbbell Row",Set,1,reps,20,weight,15
+"Exercise, Dumbbell Row",Set,2,reps,10,weight,20
+"Exercise, Dumbbell Row",Set,3,reps,5,weight,24
+"Exercise, Dumbbell Row",Set,4,reps,8,weight,25
+"Exercise, Dumbbell Row",Set,5,reps,7,weight,24
+"Exercise, Goblet Squat",Set,1,reps,10,weight,20
+"Exercise, L-sit lyft",Set,1,bodyweight,78,time,00:01:02
+"Exercise, L-sit lyft",Set,2,bodyweight,78,time,00:01:01
+"Exercise, Lying Leg Raise",Set,1,reps,30,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,20,bodyweight,78
+"Exercise, Lying Leg Raise",Set,3,reps,8,bodyweight,78
+
+"Tisdag kväll: mage, axlar, rygg etc.",2025-07-08,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,15,bodyweight,78,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,10,bodyweight,78,extraWeight,5
+"Exercise, Push-Up",Set,6,reps,10,bodyweight,78,extraWeight,0
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,8,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,5,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,3,reps,10,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,4,reps,8,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,5,reps,7,weight,5
+"Exercise, Dumbbell Front Raise",Set,1,reps,8,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,5,weight,5
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,4,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,5,reps,7,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,25
+"Exercise, Dumbbell Side Bend",Set,1,reps,10,weight,20
+"Exercise, Bench Dip",Set,1,reps,30,bodyweight,78,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,32
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:01:30
+"Exercise, L-sit lyft",Set,1,bodyweight,78,time,00:01:02
+"Exercise, L-sit lyft",Set,2,bodyweight,78,time,00:01:01
+"Exercise, Lying Leg Raise",Set,1,reps,20,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,25,bodyweight,78
+"Exercise, Lying Leg Raise",Set,3,reps,20,bodyweight,78
+"Exercise, Single Leg Lifts",Set,1,reps,15
+
+"Måndag lunch: framsida lår, baksida lår, rumpa etc.",2025-07-07,78,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,6,weight,25
+"Exercise, Barbell Curl",Set,3,reps,6,weight,30
+"Exercise, Barbell Curl",Set,4,reps,6,weight,30
+"Exercise, Barbell Curl",Set,5,reps,6,weight,30
+"Exercise, Barbell Curl",Set,6,reps,6,weight,30
+"Exercise, Barbell Curl",Set,7,reps,10,weight,25
+"Exercise, Dumbbell Lunge",Set,1,reps,6,weight,10
+"Exercise, Dumbbell Lunge",Set,2,reps,8,weight,10
+"Exercise, Chin-Up",Set,1,reps,4,bodyweight,78,extraWeight,0
+"Exercise, Chin-Up",Set,2,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Squat",Set,1,reps,15,weight,20
+"Exercise, Squat",Set,2,reps,10,weight,30
+"Exercise, Squat",Set,3,reps,10,weight,35
+"Exercise, Squat",Set,4,reps,12,weight,35
+"Exercise, Squat",Set,5,reps,15,weight,30
+"Exercise, Leg Extension",Set,1,reps,10,weight,18
+"Exercise, Leg Extension",Set,2,reps,10,weight,24
+"Exercise, Leg Extension",Set,3,reps,12,weight,24
+"Exercise, Leg Extension",Set,4,reps,10,weight,24
+"Exercise, Leg Extension",Set,5,reps,10,weight,30
+"Exercise, Single Leg Lifts",Set,1,reps,10
+"Exercise, Single Leg Lifts",Set,2,reps,10
+"Exercise, Single Leg Lifts",Set,3,reps,10
+
+"Söndag förmiddag: mage, höftböjare",2025-07-06,78,-1,-1,-1,-1
+"Exercise, Lying Leg Raise",Set,1,reps,15,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,15,bodyweight,78
+"Exercise, Lying Leg Raise",Set,3,reps,20,bodyweight,78
+"Exercise, Lying Leg Raise",Set,4,reps,25,bodyweight,78
+"Exercise, L-sit lyft",Set,1,bodyweight,78,time,00:01:02
+"Exercise, L-sit lyft",Set,2,bodyweight,78,time,00:01:00
+"Exercise, L-sit lyft",Set,3,bodyweight,78,time,00:01:01
+"Exercise, Hollow Hold",Set,1,bodyweight,78,time,00:00:44
+
+"Lördag kväll: rygg, rumpa, mage etc.",2025-07-05,78,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,10,weight,35
+"Exercise, Deadlift",Set,2,reps,10,weight,45
+"Exercise, Deadlift",Set,3,reps,5,weight,55
+"Exercise, Deadlift",Set,4,reps,5,weight,55
+"Exercise, Deadlift",Set,5,reps,7,weight,45
+"Exercise, Deadlift",Set,6,reps,10,weight,45
+"Exercise, Deadlift",Set,7,reps,15,weight,45
+"Exercise, Deadlift",Set,8,reps,10,weight,55
+"Exercise, Barbell Row",Set,1,reps,10,weight,20
+"Exercise, Barbell Row",Set,2,reps,12,weight,25
+"Exercise, Barbell Row",Set,3,reps,12,weight,30
+"Exercise, Barbell Row",Set,4,reps,12,weight,35
+"Exercise, Barbell Row",Set,5,reps,15,weight,40
+"Exercise, Barbell Row",Set,6,reps,12,weight,44
+"Exercise, Barbell Row",Set,7,reps,10,weight,45
+"Exercise, Barbell Row",Set,8,reps,10,weight,46
+"Exercise, Barbell Row",Set,9,reps,8,weight,47
+"Exercise, Barbell Row",Set,10,reps,6,weight,50
+"Exercise, Barbell Row",Set,11,reps,10,weight,42
+"Exercise, Goblet Squat",Set,1,reps,15,weight,0
+"Exercise, Goblet Squat",Set,2,reps,15,weight,10
+"Exercise, Goblet Squat",Set,3,reps,12,weight,20
+"Exercise, Goblet Squat",Set,4,reps,10,weight,20
+"Exercise, Goblet Squat",Set,5,reps,5,weight,24
+"Exercise, Goblet Squat",Set,6,reps,5,weight,24
+"Exercise, Goblet Squat",Set,7,reps,10,weight,24
+"Exercise, Goblet Squat",Set,8,reps,10,weight,24
+"Exercise, Goblet Squat",Set,9,reps,2,weight,32
+"Exercise, Goblet Squat",Set,10,reps,2,weight,25
+"Exercise, Goblet Squat",Set,11,reps,20,weight,20
+"Exercise, Goblet Squat",Set,12,reps,10,weight,20
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,10,time,00:03:01
+"Exercise, Plank",Set,2,bodyweight,78,extraWeight,5,time,00:01:30
+"Exercise, Plank",Set,3,bodyweight,78,extraWeight,0,time,00:01:31
+"Exercise, Lying Leg Raise",Set,1,reps,10,bodyweight,78
+"Exercise, Lying Leg Raise",Set,2,reps,15,bodyweight,78
+"Exercise, Lying Leg Raise",Set,3,reps,20,bodyweight,78
+
+"Fredag kväll: axlar, rygg, bröst etc.",2025-07-04,78,-1,-1,-1,-1
+"Exercise, Kettlebell Swing",Set,1,reps,25,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,4,reps,15,weight,32
+"Exercise, Kettlebell Swing",Set,5,reps,20,weight,32
+"Exercise, Kettlebell Swing",Set,6,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,7,reps,25,weight,24
+"Exercise, Kettlebell Swing",Set,8,reps,30,weight,24
+"Exercise, Dumbbell Front Raise",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,10,weight,7.5
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,7.5
+"Exercise, Dumbbell Front Raise",Set,4,reps,5,weight,7.5
+"Exercise, Dumbbell Front Raise",Set,5,reps,6,weight,7.5
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,8,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,8,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,4,reps,10,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,5,reps,10,weight,12
+"Exercise, Dumbbell Lateral Raise",Set,1,reps,12,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,2,reps,8,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,3,reps,6,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,4,reps,5,weight,5
+"Exercise, Dumbbell Lateral Raise",Set,5,reps,4,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,25
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,78,extraWeight,0
+
+"Fredag lunch: framsida lår, baksida lår, rumpa etc.",2025-07-04,78,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,78,extraWeight,0
+"Exercise, Bench Press",Set,1,reps,20,weight,20
+"Exercise, Bench Press",Set,2,reps,8,weight,30
+"Exercise, Bench Press",Set,3,reps,5,weight,40
+"Exercise, Bench Press",Set,4,reps,5,weight,50
+"Exercise, Bench Press",Set,5,reps,10,weight,40
+"Exercise, Bench Press",Set,6,reps,15,weight,40
+"Exercise, Bench Press",Set,7,reps,5,weight,40
+"Exercise, Tricep Pushdown With Rope",Set,1,reps,12,weight,12
+"Exercise, Tricep Pushdown With Rope",Set,2,reps,13,weight,8
+"Exercise, Tricep Pushdown With Rope",Set,3,reps,10,weight,8
+"Exercise, Tricep Pushdown With Rope",Set,4,reps,6,weight,12
+"Exercise, Tricep Pushdown With Rope",Set,5,reps,5,weight,12
+"Exercise, Dumbbell Lunge",Set,1,reps,4,weight,10
+"Exercise, Goblet Squat",Set,1,reps,10,weight,12
+"Exercise, Squat",Set,1,reps,10,weight,20
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,78,extraWeight,0
+"Exercise, Crunch",Set,1,reps,50,bodyweight,78,extraWeight,0
+"Exercise, Hanging Leg Raise",Set,1,reps,5,bodyweight,78
+"Exercise, Hanging Leg Raise",Set,2,reps,7,bodyweight,78
+"Exercise, Bar Hang",Set,1,bodyweight,78,extraWeight,0,time,00:00:45
+"Exercise, Bar Hang",Set,2,bodyweight,78,extraWeight,0,time,00:01:00
+"Exercise, Bar Hang",Set,3,bodyweight,78,extraWeight,0,time,00:00:45
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:01:00
+"Exercise, Plank",Set,2,bodyweight,78,extraWeight,0,time,00:01:30
+"Exercise, Rowing (Machine)",Set,1,time-per-500,0,distanceKm,0,time,00:02:00,calories,0,rpm,0
+
+"Torsdag kväll: axlar, rygg, rumpa etc.",2025-07-03,78,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,27
+"Exercise, Overhead Press",Set,4,reps,5,weight,30
+"Exercise, Overhead Press",Set,5,reps,10,weight,30
+"Exercise, Overhead Press",Set,6,reps,5,weight,30
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,8,weight,27
+"Exercise, Barbell Curl",Set,4,reps,5,weight,30
+"Exercise, Barbell Curl",Set,5,reps,5,weight,30
+"Exercise, Barbell Curl",Set,6,reps,5,weight,30
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:04:00
+"Exercise, Plank",Set,2,bodyweight,78,extraWeight,0,time,00:02:01
+"Exercise, Plank",Set,3,bodyweight,78,extraWeight,0,time,00:01:00
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,25,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,20,weight,24
+
+"Tisdag lunch: rygg, rumpa, framsida lår etc.",2025-07-01,78,-1,-1,-1,-1
+"Exercise, Machine Lat Pulldown",Set,1,reps,10,weight,18
+"Exercise, Machine Lat Pulldown",Set,2,reps,10,weight,30
+"Exercise, Machine Lat Pulldown",Set,3,reps,10,weight,36
+"Exercise, Machine Lat Pulldown",Set,4,reps,8,weight,36
+"Exercise, Machine Lat Pulldown",Set,5,reps,5,weight,42
+"Exercise, Machine Lat Pulldown",Set,6,reps,8,weight,42
+"Exercise, Machine Lat Pulldown",Set,7,reps,12,weight,36
+"Exercise, Machine Lat Pulldown",Set,8,reps,8,weight,36
+"Exercise, Machine Lat Pulldown",Set,9,reps,7,weight,36
+"Exercise, Machine Lat Pulldown",Set,10,reps,10,weight,36
+"Exercise, Pull-Up",Set,1,reps,1,bodyweight,78,extraWeight,0
+"Exercise, Barbell Row",Set,1,reps,10,weight,20
+"Exercise, Barbell Row",Set,2,reps,10,weight,30
+"Exercise, Barbell Row",Set,3,reps,10,weight,30
+"Exercise, Barbell Row",Set,4,reps,8,weight,40
+"Exercise, Barbell Row",Set,5,reps,10,weight,30
+"Exercise, Barbell Row",Set,6,reps,6,weight,30
+"Exercise, Chins (negativ)",Set,1,reps,5,bodyweight,78,extraWeight,0
+"Exercise, Chins (negativ)",Set,2,reps,3,bodyweight,78,extraWeight,0
+"Exercise, Deadlift",Set,1,reps,10,weight,30
+"Exercise, Deadlift",Set,2,reps,6,weight,40
+"Exercise, Deadlift",Set,3,reps,10,weight,40
+"Exercise, Dumbbell Walking Lunges",Set,1,reps,6,weight,10
+"Exercise, Dumbbell Walking Lunges",Set,2,reps,6,weight,10
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:03:07
+"Exercise, Rowing (Machine)",Set,1,time-per-500,120,distanceKm,1.25,calories,0,time,00:05:00,rpm,0
+"Exercise, Rowing (Machine)",Set,2,time-per-500,120,distanceKm,1.23,calories,0,time,00:05:00,rpm,0
+"Exercise, Squat",Set,1,reps,11,weight,0
+
+"Måndag kväll: framsida lår, baksida lår, rumpa etc.",2025-06-30,78,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,8,weight,25
+"Exercise, Barbell Curl",Set,4,reps,8,weight,27
+"Exercise, Barbell Curl",Set,5,reps,7,weight,27
+"Exercise, Barbell Curl",Set,6,reps,5,weight,27
+"Exercise, Barbell Curl",Set,7,reps,5,weight,25
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,25
+"Exercise, Overhead Press",Set,4,reps,8,weight,27
+"Exercise, Overhead Press",Set,5,reps,7,weight,27
+"Exercise, Overhead Press",Set,6,reps,5,weight,27
+"Exercise, Overhead Press",Set,7,reps,8,weight,27
+"Exercise, Overhead Press",Set,8,reps,5,weight,25
+"Exercise, Squat",Set,1,reps,15,weight,0
+"Exercise, Goblet Squat",Set,1,reps,15,weight,5
+"Exercise, Goblet Squat",Set,2,reps,15,weight,10
+"Exercise, Goblet Squat",Set,3,reps,10,weight,15
+"Exercise, Goblet Squat",Set,4,reps,8,weight,20
+"Exercise, Goblet Squat",Set,5,reps,10,weight,15
+"Exercise, Goblet Squat",Set,6,reps,10,weight,15
+"Exercise, Goblet Squat",Set,7,reps,7,weight,15
+
+"Söndag kväll: rygg, rumpa, mage",2025-06-29,78,-1,-1,-1,-1
+"Exercise, Plank",Set,1,bodyweight,78,extraWeight,0,time,00:01:00
+"Exercise, Plank",Set,2,bodyweight,78,extraWeight,0,time,00:01:00
+"Exercise, Plank",Set,3,bodyweight,78,extraWeight,0,time,00:01:00
+"Exercise, Plank",Set,4,bodyweight,78,extraWeight,0,time,00:01:30
+"Exercise, Deadlift",Set,1,reps,10,weight,50
+"Exercise, Deadlift",Set,2,reps,8,weight,50
+"Exercise, Deadlift",Set,3,reps,9,weight,50
+"Exercise, Deadlift",Set,4,reps,5,weight,50
+"Exercise, Deadlift",Set,5,reps,5,weight,60
+"Exercise, Crunch",Set,1,reps,50,bodyweight,78,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,78,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,50,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,25,weight,24
+
+"Tisdag förmiddag: biceps, mage, underarmar etc.",2025-06-24,74.6,-1,-1,-1,-1
+"Exercise, Rowing (Machine)",Set,1,time-per-500,200,distanceKm,1,calories,0,time,00:05:00,rpm,0
+"Exercise, Rowing (Machine)",Set,2,time-per-500,200,distanceKm,1.438,calories,90,time,00:06:06,rpm,0
+"Exercise, Dumbbell Curl",Set,1,reps,10,weight,10
+"Exercise, EZ Curl",Set,1,reps,10,weight,12
+"Exercise, EZ Curl",Set,2,reps,12,weight,17
+"Exercise, EZ Curl",Set,3,reps,12,weight,22
+"Exercise, EZ Curl",Set,4,reps,10,weight,22
+"Exercise, EZ Curl",Set,5,reps,10,weight,22
+"Exercise, EZ Curl",Set,6,reps,7,weight,22
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Tricep Pushdown With Rope",Set,1,reps,10,weight,12
+
+"Måndag kväll: axlar, rygg, rumpa etc.",2025-06-23,74.6,4,1,1,-1
+"Exercise, Push-Up",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Goblet Squat",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,1,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,50,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,4,reps,20,weight,24
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,25
+"Exercise, Bench Dip",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+
+"Måndag lunch: axlar, rygg, biceps",2025-06-09,74.6,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,12,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,27
+"Exercise, Overhead Press",Set,4,reps,8,weight,27
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,7,weight,27
+"Exercise, Barbell Curl",Set,4,reps,8,weight,27
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,20,weight,25
+
+"Torsdag förmiddag: rygg, rumpa, axlar",2025-06-05,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,10,weight,30
+"Exercise, Deadlift",Set,2,reps,5,weight,40
+"Exercise, Deadlift",Set,3,reps,5,weight,40
+"Exercise, Deadlift",Set,4,reps,5,weight,50
+"Exercise, Deadlift",Set,5,reps,10,weight,40
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,25
+"Exercise, Overhead Press",Set,4,reps,5,weight,30
+"Exercise, Overhead Press",Set,5,reps,8,weight,30
+"Exercise, Overhead Press",Set,6,reps,8,weight,30
+"Exercise, Overhead Press",Set,7,reps,5,weight,30
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Floor Back Extension",Set,1,reps,15,bodyweight,74.6
+
+"Tisdag lunch: axlar, biceps, mage etc.",2025-06-03,74.6,-1,-1,-1,-1
+"Exercise, Dumbbell Curl",Set,1,reps,9,weight,9
+"Exercise, Dumbbell Curl",Set,2,reps,10,weight,10
+"Exercise, Dumbbell Curl",Set,3,reps,9,weight,12
+"Exercise, Dumbbell Curl",Set,4,reps,9,weight,12
+"Exercise, Dumbbell Curl",Set,5,reps,8,weight,12
+"Exercise, Dumbbell Curl",Set,6,reps,7,weight,12
+"Exercise, Dumbbell Curl",Set,7,reps,7,weight,12
+"Exercise, Dumbbell Curl",Set,8,reps,10,weight,12
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,4,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,12,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Rowing (Machine)",Set,1,time-per-500,0,distanceKm,0.6,calories,0,time,00:02:30,rpm,0
+"Exercise, Rowing (Machine)",Set,2,time-per-500,0,distanceKm,0.5,time,00:02:30,calories,0,rpm,0
+
+"Söndag kväll: rygg, rumpa, axlar etc.",2025-06-01,74.6,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,25
+"Exercise, Overhead Press",Set,4,reps,8,weight,25
+"Exercise, Overhead Press",Set,5,reps,8,weight,27
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,8,weight,25
+"Exercise, Barbell Curl",Set,4,reps,8,weight,25
+"Exercise, Barbell Curl",Set,5,reps,8,weight,27
+"Exercise, Deadlift",Set,1,reps,10,weight,30
+"Exercise, Deadlift",Set,2,reps,6,weight,40
+"Exercise, Deadlift",Set,3,reps,8,weight,40
+
+"Torsdag kväll: axlar, biceps, mage",2025-05-22,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,8,weight,25
+"Exercise, Barbell Curl",Set,4,reps,8,weight,25
+"Exercise, Barbell Curl",Set,5,reps,8,weight,25
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,25
+"Exercise, Overhead Press",Set,4,reps,8,weight,25
+"Exercise, Overhead Press",Set,5,reps,8,weight,25
+"Exercise, Crunch",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,40,bodyweight,74.6,extraWeight,0
+
+"Tisdag lunch: rygg, rumpa, axlar etc.",2025-05-20,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,7,bodyweight,74.6,extraWeight,0
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,25
+"Exercise, Overhead Press",Set,3,reps,7,weight,25
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,24
+"Exercise, Deadlift",Set,1,reps,10,weight,30
+"Exercise, Deadlift",Set,2,reps,8,weight,40
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+
+"Tisdag förmiddag: rygg, axlar, rumpa etc.",2025-05-06,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Row",Set,1,reps,5,weight,24
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Deadlift",Set,1,reps,10,weight,30
+"Exercise, Deadlift",Set,2,reps,10,weight,30
+"Exercise, Deadlift",Set,3,reps,10,weight,30
+
+"Måndag förmiddag: axlar, rygg, biceps etc.",2025-05-05,74.6,-1,-1,-1,-1
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,20
+"Exercise, Overhead Press",Set,3,reps,6,weight,25
+"Exercise, Overhead Press",Set,4,reps,6,weight,25
+"Exercise, Overhead Press",Set,5,reps,8,weight,25
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,20
+"Exercise, Barbell Curl",Set,3,reps,6,weight,25
+"Exercise, Barbell Curl",Set,4,reps,6,weight,25
+"Exercise, Barbell Curl",Set,5,reps,8,weight,25
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+
+"Tisdag kväll: rygg, rumpa, framsida lår etc.",2025-03-18,74.6,-1,-1,-1,-1
+"Exercise, Air Squat",Set,1,reps,20,bodyweight,74.6
+"Exercise, Air Squat",Set,2,reps,25,bodyweight,74.6
+"Exercise, Air Squat",Set,3,reps,30,bodyweight,74.6
+"Exercise, Air Squat",Set,4,reps,20,bodyweight,74.6
+"Exercise, Deadlift",Set,1,reps,5,weight,55
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,25,weight,24
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,20,weight,25
+"Exercise, Dumbbell Shrug",Set,4,reps,20,weight,25
+
+"Måndag lunch: axlar, bröst, triceps etc.",2025-03-17,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,5,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,5,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,4,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,20,weight,25
+"Exercise, Dumbbell Shrug",Set,4,reps,15,weight,25
+"Exercise, Bench Dip",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+
+"Fredag förmiddag: axlar, rygg, biceps etc.",2025-03-14,74.6,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,7,weight,25
+"Exercise, Barbell Curl",Set,3,reps,7,weight,25
+"Exercise, Barbell Curl",Set,4,reps,7,weight,25
+"Exercise, Barbell Curl",Set,5,reps,7,weight,25
+"Exercise, Barbell Curl",Set,6,reps,10,weight,25
+"Exercise, Crunch",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,25
+"Exercise, Dumbbell Row",Set,1,reps,4,weight,24
+
+"Tisdag kväll: axlar, bröst, triceps etc.",2025-03-11,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,5,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,0
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,0
+"Exercise, Dumbbell Shrug",Set,3,reps,15,weight,0
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+
+"Torsdag kväll: axlar, rygg, biceps etc.",2025-03-06,74.6,-1,-1,-1,-1
+"Exercise, Crunch",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,25
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,20
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,20
+
+"Onsdag lunch: axlar, rygg, biceps etc.",2024-09-04,74.6,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,11,weight,25
+"Exercise, Overhead Press",Set,3,reps,11,weight,25
+"Exercise, Overhead Press",Set,4,reps,11,weight,25
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,11,weight,25
+"Exercise, Barbell Curl",Set,3,reps,11,weight,25
+"Exercise, Barbell Curl",Set,4,reps,11,weight,25
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+
+"Tisdag eftermiddag: axlar, biceps, mage",2024-08-20,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,10,weight,25
+"Exercise, Barbell Curl",Set,4,reps,10,weight,25
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,25
+"Exercise, Overhead Press",Set,4,reps,10,weight,25
+"Exercise, Overhead Press",Set,5,reps,10,weight,25
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,50,bodyweight,74.6,extraWeight,0
+
+"Fredag eftermiddag: axlar, rygg, mage etc.",2024-04-05,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,5,weight,30
+"Exercise, Barbell Curl",Set,4,reps,5,weight,30
+"Exercise, Barbell Curl",Set,5,reps,5,weight,30
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,30
+"Exercise, Overhead Press",Set,4,reps,20,weight,30
+"Exercise, Barbell Row",Set,1,reps,15,weight,20
+"Exercise, Barbell Row",Set,2,reps,15,weight,25
+"Exercise, Barbell Row",Set,3,reps,15,weight,30
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,25
+"Exercise, Sit-Up",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,60,bodyweight,74.6,extraWeight,0
+
+"Tisdag kväll: axlar, biceps, mage",2024-03-26,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,6,weight,30
+"Exercise, Barbell Curl",Set,4,reps,6,weight,30
+"Exercise, Barbell Curl",Set,5,reps,6,weight,30
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,30
+"Exercise, Crunch",Set,1,reps,60,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,50,bodyweight,74.6,extraWeight,0
+
+Söndag eftermiddag: Armhävningar,2024-03-24,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,7,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,8,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,9,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,10,reps,20,bodyweight,74.6,extraWeight,0
+
+Fredag lunch: Armhävningar,2024-03-22,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,30,bodyweight,74.6,extraWeight,0
+
+Söndag förmiddag: Armhävningar,2024-03-10,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,30,bodyweight,74.6,extraWeight,0
+
+Lördag förmiddag: Armhävningar,2024-03-09,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,30,bodyweight,74.6,extraWeight,0
+
+Fredag förmiddag: Armhävningar,2024-03-08,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,45,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,17,bodyweight,74.6,extraWeight,0
+
+Torsdag förmiddag: Armhävningar,2024-03-07,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,74.6,extraWeight,0
+
+Onsdag förmiddag: Armhävningar,2024-03-06,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,15,bodyweight,74.6,extraWeight,0
+
+Tisdag förmiddag: Armhävningar,2024-03-05,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,15,bodyweight,74.6,extraWeight,0
+
+"Torsdag eftermiddag: rygg, axlar, rumpa etc.",2024-02-29,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Barbell Row",Set,1,reps,20,weight,30
+"Exercise, Barbell Row",Set,2,reps,15,weight,35
+"Exercise, Barbell Row",Set,3,reps,20,weight,40
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,10,weight,65
+"Exercise, Deadlift",Set,3,reps,5,weight,75
+
+"Onsdag lunch: mage, axlar, rygg etc.",2024-02-28,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,6,weight,30
+"Exercise, Barbell Curl",Set,4,reps,6,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,30
+"Exercise, Barbell Curl",Set,6,reps,6,weight,30
+"Exercise, Barbell Curl",Set,7,reps,8,weight,30
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,15,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,30
+"Exercise, Overhead Press",Set,4,reps,10,weight,30
+"Exercise, Overhead Press",Set,5,reps,10,weight,30
+"Exercise, Overhead Press",Set,6,reps,10,weight,30
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Kettlebell Swing",Set,1,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,4,reps,15,weight,32
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,40,bodyweight,74.6,extraWeight,0
+
+"Tisdag kväll: mage, axlar, bröst etc.",2024-02-27,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Kettlebell Swing",Set,1,reps,35,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,20,weight,21
+"Exercise, Kettlebell Swing",Set,4,reps,20,weight,32
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+
+"Tisdag förmiddag: triceps, bröst, axlar etc.",2024-02-27,74.6,-1,-1,-1,-1
+"Exercise, Close-Grip Bench Press",Set,1,reps,20,weight,30
+"Exercise, Close-Grip Bench Press",Set,2,reps,10,weight,40
+"Exercise, Close-Grip Bench Press",Set,3,reps,3,weight,50
+"Exercise, Close-Grip Bench Press",Set,4,reps,5,weight,55
+"Exercise, Close-Grip Bench Press",Set,5,reps,5,weight,55
+"Exercise, Close-Grip Bench Press",Set,6,reps,5,weight,55
+"Exercise, Close-Grip Bench Press",Set,7,reps,6,weight,55
+"Exercise, Close-Grip Bench Press",Set,8,reps,6,weight,55
+"Exercise, Close-Grip Bench Press",Set,9,reps,7,weight,50
+"Exercise, Close-Grip Bench Press",Set,10,reps,12,weight,40
+"Exercise, Goblet Squat",Set,1,reps,10,weight,24
+"Exercise, Goblet Squat",Set,2,reps,12,weight,24
+"Exercise, Goblet Squat",Set,3,reps,15,weight,24
+"Exercise, Dumbbell Shrug",Set,1,reps,50,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,24
+"Exercise, Dumbbell Shrug",Set,3,reps,30,weight,32
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,20,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,10,weight,7.5
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,15,weight,5
+
+"Måndag förmiddag: rygg, rumpa, axlar",2024-02-26,74.6,-1,-1,-1,-1
+"Exercise, Barbell Row",Set,1,reps,20,weight,30
+"Exercise, Barbell Row",Set,2,reps,15,weight,35
+"Exercise, Barbell Row",Set,3,reps,15,weight,40
+"Exercise, Barbell Row",Set,4,reps,15,weight,44
+"Exercise, Barbell Row",Set,5,reps,15,weight,45
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,8,weight,65
+"Exercise, Deadlift",Set,3,reps,5,weight,65
+"Exercise, Deadlift",Set,4,reps,8,weight,65
+"Exercise, Deadlift",Set,5,reps,5,weight,65
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,32
+"Exercise, Kettlebell Swing",Set,4,reps,15,weight,32
+"Exercise, Kettlebell Swing",Set,5,reps,20,weight,32
+"Exercise, Dumbbell Shrug",Set,1,reps,65,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,24
+"Exercise, Dumbbell Shrug",Set,3,reps,25,weight,32
+
+"Söndag kväll: axlar, mage, bröst etc.",2024-02-25,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,30
+"Exercise, Overhead Press",Set,4,reps,15,weight,30
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,5,weight,30
+"Exercise, Barbell Curl",Set,4,reps,5,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,30
+"Exercise, Barbell Curl",Set,6,reps,5,weight,30
+"Exercise, Barbell Curl",Set,7,reps,5,weight,30
+"Exercise, Sit-Up",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+
+"Fredag förmiddag: axlar, triceps, rygg etc.",2024-02-23,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,40,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,4,reps,25,weight,24
+"Exercise, Kettlebell Swing",Set,5,reps,30,weight,24
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,15,weight,5
+"Exercise, Crunch",Set,1,reps,75,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,35,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,5
+"Exercise, Sit-Up",Set,2,reps,30,bodyweight,74.6,extraWeight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,40,weight,25
+
+"Tisdag kväll: rygg, rumpa, axlar etc.",2024-02-20,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,5,weight,30
+"Exercise, Barbell Curl",Set,4,reps,5,weight,35
+"Exercise, Barbell Curl",Set,5,reps,5,weight,35
+"Exercise, Barbell Curl",Set,6,reps,5,weight,35
+"Exercise, Barbell Curl",Set,7,reps,6,weight,30
+"Exercise, Barbell Curl",Set,8,reps,7,weight,25
+"Exercise, Barbell Curl",Set,9,reps,10,weight,20
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,5,weight,65
+"Exercise, Deadlift",Set,3,reps,5,weight,75
+"Exercise, Deadlift",Set,4,reps,3,weight,85
+"Exercise, Deadlift",Set,5,reps,3,weight,85
+"Exercise, Deadlift",Set,6,reps,3,weight,85
+"Exercise, Overhead Press",Set,1,reps,8,weight,25
+"Exercise, Overhead Press",Set,2,reps,10,weight,30
+"Exercise, Overhead Press",Set,3,reps,8,weight,35
+"Exercise, Overhead Press",Set,4,reps,8,weight,35
+"Exercise, Overhead Press",Set,5,reps,10,weight,35
+"Exercise, Overhead Press",Set,6,reps,6,weight,30
+"Exercise, Overhead Press",Set,7,reps,8,weight,25
+"Exercise, Overhead Press",Set,8,reps,10,weight,20
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,25
+
+"Måndag kväll: axlar, bröst, triceps etc.",2024-02-19,74.6,-1,-1,-1,-1
+"Exercise, Close-Grip Bench Press",Set,1,reps,20,weight,30
+"Exercise, Close-Grip Bench Press",Set,2,reps,10,weight,35
+"Exercise, Close-Grip Bench Press",Set,3,reps,5,weight,50
+"Exercise, Close-Grip Bench Press",Set,4,reps,5,weight,52
+"Exercise, Close-Grip Bench Press",Set,5,reps,5,weight,52
+"Exercise, Close-Grip Bench Press",Set,6,reps,5,weight,52
+"Exercise, Close-Grip Bench Press",Set,7,reps,5,weight,52
+"Exercise, Close-Grip Bench Press",Set,8,reps,5,weight,52
+"Exercise, Close-Grip Bench Press",Set,9,reps,5,weight,52
+"Exercise, Close-Grip Bench Press",Set,10,reps,5,weight,52
+"Exercise, Close-Grip Bench Press",Set,11,reps,5,weight,52
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,4,reps,10,weight,5
+"Exercise, Barbell Shrug",Set,1,reps,30,weight,55
+"Exercise, Barbell Shrug",Set,2,reps,25,weight,65
+"Exercise, Barbell Shrug",Set,3,reps,20,weight,65
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,10,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,1,reps,5,weight,12
+"Exercise, Dumbbell Curl",Set,2,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,3,reps,10,weight,12
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,74.6,extraWeight,0
+
+"Torsdag kväll: axlar, bröst, triceps etc.",2024-02-15,74.6,-1,-1,-1,-1
+"Exercise, Close-Grip Bench Press",Set,1,reps,15,weight,25
+"Exercise, Close-Grip Bench Press",Set,2,reps,8,weight,35
+"Exercise, Close-Grip Bench Press",Set,3,reps,3,weight,40
+"Exercise, Close-Grip Bench Press",Set,4,reps,7,weight,50
+"Exercise, Close-Grip Bench Press",Set,5,reps,7,weight,50
+"Exercise, Close-Grip Bench Press",Set,6,reps,7,weight,50
+"Exercise, Close-Grip Bench Press",Set,7,reps,7,weight,50
+"Exercise, Close-Grip Bench Press",Set,8,reps,7,weight,50
+"Exercise, Close-Grip Bench Press",Set,9,reps,7,weight,50
+"Exercise, Close-Grip Bench Press",Set,10,reps,7,weight,50
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,12,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,50,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+
+"Måndag kväll: rygg, rumpa, axlar etc.",2024-02-12,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,8,weight,30
+"Exercise, Barbell Curl",Set,4,reps,8,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,30
+"Exercise, Barbell Curl",Set,6,reps,8,weight,30
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,15,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,30
+"Exercise, Overhead Press",Set,4,reps,10,weight,30
+"Exercise, Overhead Press",Set,5,reps,10,weight,30
+"Exercise, Overhead Press",Set,6,reps,10,weight,30
+"Exercise, Overhead Press",Set,7,reps,10,weight,30
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,7,weight,65
+"Exercise, Deadlift",Set,3,reps,3,weight,75
+"Exercise, Deadlift",Set,4,reps,2,weight,85
+"Exercise, Deadlift",Set,5,reps,7,weight,95
+"Exercise, Deadlift",Set,6,reps,5,weight,85
+"Exercise, Deadlift",Set,7,reps,7,weight,75
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,25
+
+"Lördag eftermiddag: axlar, bröst, rygg etc.",2024-02-10,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Press",Set,1,reps,10,weight,30
+"Exercise, Bench Press",Set,2,reps,10,weight,35
+"Exercise, Bench Press",Set,3,reps,10,weight,40
+"Exercise, Bench Press",Set,4,reps,10,weight,40
+"Exercise, Bench Press",Set,5,reps,10,weight,40
+"Exercise, Bench Press",Set,6,reps,10,weight,40
+"Exercise, Bench Press",Set,7,reps,10,weight,40
+"Exercise, Bench Press",Set,8,reps,10,weight,40
+"Exercise, Bench Press",Set,9,reps,10,weight,40
+"Exercise, Bench Press",Set,10,reps,10,weight,40
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,4,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,5,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,4,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,5,reps,15,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,25,weight,25
+
+"Torsdag kväll: rygg, rumpa, axlar etc.",2024-02-08,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,12,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,8,weight,30
+"Exercise, Barbell Curl",Set,4,reps,8,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,30
+"Exercise, Barbell Curl",Set,6,reps,8,weight,30
+"Exercise, Barbell Curl",Set,7,reps,10,weight,30
+"Exercise, Barbell Curl",Set,8,reps,6,weight,30
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,30
+"Exercise, Overhead Press",Set,4,reps,10,weight,30
+"Exercise, Overhead Press",Set,5,reps,10,weight,30
+"Exercise, Overhead Press",Set,6,reps,15,weight,30
+"Exercise, Overhead Press",Set,7,reps,10,weight,30
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,10,weight,65
+"Exercise, Deadlift",Set,3,reps,8,weight,75
+"Exercise, Deadlift",Set,4,reps,5,weight,85
+"Exercise, Deadlift",Set,5,reps,5,weight,85
+"Exercise, Deadlift",Set,6,reps,5,weight,85
+"Exercise, Deadlift",Set,7,reps,5,weight,85
+"Exercise, Deadlift",Set,8,reps,5,weight,85
+
+"Tisdag kväll: axlar, bröst, triceps etc.",2024-02-06,74.6,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,15,weight,30
+"Exercise, Bench Press",Set,2,reps,10,weight,35
+"Exercise, Bench Press",Set,3,reps,10,weight,40
+"Exercise, Bench Press",Set,4,reps,10,weight,45
+"Exercise, Bench Press",Set,5,reps,5,weight,50
+"Exercise, Bench Press",Set,6,reps,5,weight,50
+"Exercise, Bench Press",Set,7,reps,5,weight,50
+"Exercise, Bench Press",Set,8,reps,5,weight,50
+"Exercise, Bench Press",Set,9,reps,8,weight,50
+"Exercise, Bench Press",Set,10,reps,8,weight,45
+"Exercise, Bench Press",Set,11,reps,8,weight,40
+"Exercise, Bench Press",Set,12,reps,6,weight,40
+"Exercise, Dumbbell Shrug",Set,1,reps,40,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,40,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,25,weight,25
+"Exercise, Bench Dip",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+
+"Lördag eftermiddag: mage, rygg, rumpa",2024-02-03,74.6,-1,-1,-1,-1
+"Exercise, Sit-Up",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,5,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,6,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,5,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,7,weight,65
+"Exercise, Deadlift",Set,3,reps,7,weight,75
+"Exercise, Deadlift",Set,4,reps,6,weight,85
+"Exercise, Deadlift",Set,5,reps,6,weight,85
+"Exercise, Deadlift",Set,6,reps,6,weight,85
+"Exercise, Deadlift",Set,7,reps,6,weight,85
+"Exercise, Deadlift",Set,8,reps,6,weight,85
+"Exercise, Deadlift",Set,9,reps,6,weight,85
+"Exercise, Deadlift",Set,10,reps,6,weight,85
+
+"Fredag kväll: axlar, rygg, rumpa etc.",2024-02-02,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,6,weight,30
+"Exercise, Barbell Curl",Set,4,reps,6,weight,35
+"Exercise, Barbell Curl",Set,5,reps,5,weight,35
+"Exercise, Barbell Curl",Set,6,reps,5,weight,35
+"Exercise, Barbell Curl",Set,7,reps,5,weight,30
+"Exercise, Barbell Curl",Set,8,reps,5,weight,25
+"Exercise, Barbell Curl",Set,9,reps,10,weight,20
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,6,weight,30
+"Exercise, Overhead Press",Set,4,reps,8,weight,35
+"Exercise, Overhead Press",Set,5,reps,8,weight,35
+"Exercise, Overhead Press",Set,6,reps,8,weight,35
+"Exercise, Overhead Press",Set,7,reps,6,weight,30
+"Exercise, Overhead Press",Set,8,reps,6,weight,25
+"Exercise, Overhead Press",Set,9,reps,10,weight,20
+"Exercise, Barbell Shrug",Set,1,reps,20,weight,75
+"Exercise, Kettlebell Swing",Set,1,reps,25,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,12
+
+"Torsdag kväll: rygg, axlar, triceps etc.",2024-02-01,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,20,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,20,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,4,reps,20,weight,5
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,15,weight,5
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,5,weight,55
+"Exercise, Barbell Shrug",Set,1,reps,10,weight,55
+"Exercise, Barbell Shrug",Set,2,reps,5,weight,55
+"Exercise, Barbell Shrug",Set,3,reps,20,weight,75
+
+"Onsdag eftermiddag: rygg, rumpa, axlar etc.",2024-01-31,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,10,weight,65
+"Exercise, Deadlift",Set,3,reps,7,weight,75
+"Exercise, Deadlift",Set,4,reps,5,weight,85
+"Exercise, Deadlift",Set,5,reps,5,weight,85
+"Exercise, Deadlift",Set,6,reps,5,weight,85
+"Exercise, Deadlift",Set,7,reps,5,weight,85
+"Exercise, Deadlift",Set,8,reps,10,weight,85
+"Exercise, Barbell Row",Set,1,reps,20,weight,20
+"Exercise, Barbell Row",Set,2,reps,30,weight,30
+"Exercise, Barbell Row",Set,3,reps,15,weight,30
+"Exercise, Barbell Shrug",Set,1,reps,10,weight,65
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Goblet Squat",Set,1,reps,10,weight,24
+"Exercise, Goblet Squat",Set,2,reps,20,weight,24
+"Exercise, Goblet Squat",Set,3,reps,10,weight,24
+"Exercise, Goblet Squat",Set,4,reps,10,weight,24
+"Exercise, Goblet Squat",Set,5,reps,10,weight,24
+"Exercise, Goblet Squat",Set,6,reps,10,weight,24
+"Exercise, Goblet Squat",Set,7,reps,10,weight,24
+"Exercise, Goblet Squat",Set,8,reps,10,weight,24
+"Exercise, Goblet Squat",Set,9,reps,10,weight,24
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,15,weight,20
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,20
+"Exercise, Dumbbell Shrug",Set,1,reps,40,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+
+"Måndag kväll: axlar, mage, rygg etc.",2024-01-29,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,15,weight,30
+"Exercise, Barbell Curl",Set,4,reps,12,weight,31.5
+"Exercise, Barbell Curl",Set,5,reps,8,weight,31.5
+"Exercise, Barbell Curl",Set,6,reps,10,weight,25
+"Exercise, Barbell Curl",Set,7,reps,10,weight,20
+"Exercise, Barbell Curl",Set,8,reps,10,weight,20
+"Exercise, Barbell Curl",Set,9,reps,5,weight,20
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,13,weight,30
+"Exercise, Overhead Press",Set,4,reps,12,weight,31.5
+"Exercise, Dumbbell Shrug",Set,1,reps,40,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,12
+
+"Söndag kväll: axlar, bröst, triceps",2024-01-28,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,35,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,20,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,20,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,20,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,10,weight,5
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Press",Set,1,reps,8,weight,60
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,8,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,12,weight,12
+
+"Lördag kväll: rygg, mage, rumpa etc.",2024-01-27,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,15,weight,55
+"Exercise, Deadlift",Set,2,reps,10,weight,65
+"Exercise, Deadlift",Set,3,reps,6,weight,75
+"Exercise, Deadlift",Set,4,reps,6,weight,75
+"Exercise, Deadlift",Set,5,reps,6,weight,75
+"Exercise, Deadlift",Set,6,reps,6,weight,75
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,60,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,10,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,10,weight,30
+"Exercise, Barbell Shrug",Set,1,reps,15,weight,75
+"Exercise, Barbell Shrug",Set,2,reps,6,weight,75
+"Exercise, Barbell Row",Set,1,reps,20,weight,35
+
+"Fredag förmiddag: rygg, rumpa, axlar etc.",2024-01-26,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,7,weight,25
+"Exercise, Barbell Curl",Set,3,reps,6,weight,30
+"Exercise, Barbell Curl",Set,4,reps,5,weight,35
+"Exercise, Barbell Curl",Set,5,reps,5,weight,35
+"Exercise, Barbell Curl",Set,6,reps,6,weight,35
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,7,weight,25
+"Exercise, Overhead Press",Set,3,reps,6,weight,30
+"Exercise, Overhead Press",Set,4,reps,5,weight,35
+"Exercise, Overhead Press",Set,5,reps,10,weight,35
+"Exercise, Overhead Press",Set,6,reps,7,weight,35
+"Exercise, Deadlift",Set,1,reps,10,weight,55
+"Exercise, Deadlift",Set,2,reps,7,weight,65
+"Exercise, Deadlift",Set,3,reps,5,weight,75
+"Exercise, Deadlift",Set,4,reps,5,weight,75
+"Exercise, Deadlift",Set,5,reps,5,weight,75
+"Exercise, Deadlift",Set,6,reps,5,weight,85
+
+"Torsdag kväll: axlar, triceps, rygg etc.",2024-01-25,74.6,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,20,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,30
+"Exercise, Overhead Press",Set,3,reps,10,weight,30
+"Exercise, Barbell Row",Set,1,reps,20,weight,20
+"Exercise, Barbell Row",Set,2,reps,25,weight,30
+"Exercise, Barbell Row",Set,3,reps,20,weight,35
+"Exercise, Barbell Row",Set,4,reps,20,weight,35
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,25,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,20,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,20,weight,5
+"Exercise, Crunch",Set,1,reps,60,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,40,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,25
+"Exercise, Sit-Up",Set,1,reps,50,bodyweight,74.6,extraWeight,2.5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,15,weight,5
+
+"Måndag kväll: rygg, rumpa, axlar etc.",2024-01-22,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,20,weight,55
+"Exercise, Deadlift",Set,2,reps,10,weight,65
+"Exercise, Deadlift",Set,3,reps,10,weight,75
+"Exercise, Deadlift",Set,4,reps,10,weight,75
+"Exercise, Deadlift",Set,5,reps,10,weight,75
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,15,weight,25
+"Exercise, Overhead Press",Set,3,reps,10,weight,25
+"Exercise, Overhead Press",Set,4,reps,10,weight,25
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,15,weight,25
+"Exercise, Barbell Curl",Set,3,reps,10,weight,25
+"Exercise, Barbell Curl",Set,4,reps,10,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,35
+"Exercise, Barbell Curl",Set,6,reps,8,weight,30
+"Exercise, Barbell Curl",Set,7,reps,8,weight,25
+"Exercise, Barbell Curl",Set,8,reps,8,weight,20
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+
+"Lördag eftermiddag: rygg, axlar, triceps etc.",2024-01-20,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,25,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,4,reps,15,weight,5
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,35,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,50,weight,15
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,25,weight,25
+"Exercise, Deadlift",Set,1,reps,15,weight,55
+"Exercise, Deadlift",Set,2,reps,15,weight,65
+"Exercise, Deadlift",Set,3,reps,10,weight,55
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,10,weight,5
+"Exercise, Barbell Shrug",Set,1,reps,10,weight,65
+
+"Torsdag kväll: axlar, rygg, biceps",2024-01-18,74.6,-1,-1,-1,-1
+"Exercise, Barbell Shrug",Set,1,reps,20,weight,30
+"Exercise, Barbell Shrug",Set,2,reps,15,weight,55
+"Exercise, Barbell Shrug",Set,3,reps,15,weight,75
+"Exercise, Barbell Shrug",Set,4,reps,10,weight,75
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,8,weight,30
+"Exercise, Barbell Curl",Set,4,reps,6,weight,35
+"Exercise, Barbell Curl",Set,5,reps,5,weight,35
+"Exercise, Barbell Curl",Set,6,reps,5,weight,30
+"Exercise, Barbell Curl",Set,7,reps,5,weight,25
+"Exercise, Barbell Curl",Set,8,reps,10,weight,20
+"Exercise, Overhead Press",Set,1,reps,12,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,30
+"Exercise, Overhead Press",Set,4,reps,6,weight,35
+"Exercise, Overhead Press",Set,5,reps,10,weight,20
+"Exercise, Overhead Press",Set,6,reps,10,weight,30
+"Exercise, Overhead Press",Set,7,reps,10,weight,25
+"Exercise, Overhead Press",Set,8,reps,10,weight,20
+
+"Onsdag kväll: rumpa, framsida lår, baksida lår etc.",2024-01-17,74.6,-1,-1,-1,-1
+"Exercise, Air Squat",Set,1,reps,20,bodyweight,74.6
+"Exercise, Front Squat",Set,1,reps,20,weight,20
+"Exercise, Front Squat",Set,2,reps,10,weight,30
+"Exercise, Sit-Up",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,5
+"Exercise, Sit-Up",Set,3,reps,25,bodyweight,74.6,extraWeight,5
+"Exercise, Goblet Squat",Set,1,reps,15,weight,24
+"Exercise, Goblet Squat",Set,2,reps,20,weight,24
+"Exercise, Goblet Squat",Set,3,reps,10,weight,24
+"Exercise, Goblet Squat",Set,4,reps,10,weight,24
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Lunge",Set,1,reps,5,weight,15
+"Exercise, Dumbbell Shrug",Set,1,reps,45,weight,25
+"Exercise, Kettlebell Swing",Set,1,reps,25,weight,24
+
+"Måndag kväll: rygg, rumpa, axlar",2024-01-15,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,12,weight,55
+"Exercise, Deadlift",Set,2,reps,10,weight,65
+"Exercise, Deadlift",Set,3,reps,10,weight,65
+"Exercise, Deadlift",Set,4,reps,10,weight,65
+"Exercise, Deadlift",Set,5,reps,10,weight,75
+"Exercise, Deadlift",Set,6,reps,10,weight,75
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,25
+"Exercise, Barbell Row",Set,1,reps,15,weight,30
+"Exercise, Barbell Row",Set,2,reps,15,weight,40
+"Exercise, Barbell Row",Set,3,reps,20,weight,40
+"Exercise, Barbell Row",Set,4,reps,10,weight,40
+"Exercise, Barbell Row",Set,5,reps,10,weight,40
+"Exercise, Barbell Shrug",Set,1,reps,15,weight,65
+
+"Söndag förmiddag: axlar, triceps, rygg etc.",2024-01-14,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,4,reps,35,bodyweight,74.6,extraWeight,0
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,20,weight,0
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,15,weight,0
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,15,weight,0
+"Exercise, Kettlebell Swing",Set,1,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,25
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,15,weight,5
+
+"Fredag kväll: rygg, axlar, biceps",2024-01-12,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,30
+"Exercise, Barbell Curl",Set,3,reps,8,weight,30
+"Exercise, Barbell Curl",Set,4,reps,8,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,30
+"Exercise, Barbell Shrug",Set,1,reps,35,weight,55
+"Exercise, Barbell Shrug",Set,2,reps,10,weight,75
+"Exercise, Barbell Shrug",Set,3,reps,20,weight,55
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,30
+"Exercise, Overhead Press",Set,3,reps,12,weight,30
+"Exercise, Overhead Press",Set,4,reps,10,weight,30
+"Exercise, Dumbbell Shrug",Set,1,reps,35,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,20,weight,25
+
+StrengthLog Advent Calendar 2023: Rockin’ Around the Christmas Tree,2023-12-25,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,67,bodyweight,74.6,extraWeight,0
+Instance of 'Loc'
+"Exercise, Push-Up",Set,2,reps,5,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,5,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,5,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,6,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,7,reps,8,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shrug",Set,1,reps,10,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,40,weight,25
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,24
+"Exercise, Dumbbell Curl",Set,1,reps,5,weight,12
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,20,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,20,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,15,weight,5
+"Exercise, One-Arm Kettlebell Swing",Set,1,reps,10,weight,24
+
+StrengthLog Advent Calendar 2023: Twerk the night before X-mas,2023-12-24,74.6,-1,-1,-1,-1
+"Exercise, Glute Bridge",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Glute Bridge",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Glute Bridge",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+
+StrengthLog Advent Calendar 2023: O Christmas Butt,2023-12-23,74.6,-1,-1,-1,-1
+"Exercise, Air Squat",Set,1,reps,50,bodyweight,74.6
+Instance of 'Loc'
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,8,weight,30
+"Exercise, Overhead Press",Set,3,reps,5,weight,30
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,7,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,5
+
+StrengthLog Advent Calendar 2023: Help Santa load the bag of gifts onto the sleigh,2023-12-22,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,1,weight,0
+Instance of 'Loc'
+"Exercise, Barbell Curl",Set,2,reps,15,weight,20
+"Exercise, Barbell Curl",Set,3,reps,5,weight,25
+"Exercise, Barbell Curl",Set,4,reps,3,weight,30
+"Exercise, Barbell Curl",Set,5,reps,2,weight,35
+"Exercise, Barbell Curl",Set,6,reps,2,weight,40
+"Exercise, Barbell Curl",Set,7,reps,5,weight,35
+"Exercise, Barbell Curl",Set,8,reps,8,weight,30
+"Exercise, Barbell Curl",Set,9,reps,10,weight,25
+"Exercise, Barbell Curl",Set,10,reps,10,weight,20
+"Exercise, Barbell Curl",Set,11,reps,10,weight,20
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,20,weight,12
+"Exercise, Dumbbell Front Raise",Set,1,reps,15,weight,5
+"Exercise, Dumbbell Front Raise",Set,2,reps,15,weight,5
+"Exercise, Dumbbell Front Raise",Set,3,reps,10,weight,5
+"Exercise, Dumbbell Front Raise",Set,4,reps,9,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+
+StrengthLog Advent Calendar 2023: What goes up must come down,2023-12-21,74.6,-1,-1,-1,-1
+"Exercise, Front Squat",Set,1,reps,2,weight,40
+"Exercise, Romanian Deadlift",Set,1,reps,10,weight,40
+"Exercise, Front Squat",Set,1,reps,3,weight,40
+"Exercise, Romanian Deadlift",Set,1,reps,15,weight,40
+"Exercise, Front Squat",Set,1,reps,0,weight,0
+"Exercise, Romanian Deadlift",Set,1,reps,25,weight,40
+"Exercise, Front Squat",Set,1,reps,0,weight,0
+"Exercise, Romanian Deadlift",Set,1,reps,15,weight,40
+"Exercise, Barbell Row",Set,1,reps,20,weight,40
+"Exercise, Barbell Row",Set,2,reps,25,weight,40
+"Exercise, Barbell Row",Set,3,reps,20,weight,40
+"Exercise, Dumbbell Row",Set,1,reps,15,weight,15
+
+StrengthLog Advent Calendar 2023: Push forward! It’ll all be over soon,2023-12-20,74.6,-1,-1,-1,-1
+"Exercise, Push Press",Set,1,reps,1,weight,0
+Instance of 'Loc'
+"Exercise, Push Press",Set,2,reps,10,weight,30
+Instance of 'Loc'
+"Exercise, Push Press",Set,3,reps,5,weight,35
+Instance of 'Loc'
+"Exercise, Push Press",Set,4,reps,1,weight,40
+Instance of 'Loc'
+"Exercise, Push Press",Set,5,reps,1,weight,44
+Instance of 'Loc'
+"Exercise, Push Press",Set,6,reps,5,weight,40
+Instance of 'Loc'
+"Exercise, Dumbbell Shrug",Set,1,reps,35,weight,25
+"Exercise, Dumbbell Shrug",Set,2,reps,25,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,10,weight,24
+"Exercise, Dumbbell Shrug",Set,4,reps,10,weight,32
+"Exercise, Sit-Up",Set,1,reps,40,bodyweight,74.6,extraWeight,5
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,5
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Overhead Press",Set,1,reps,10,weight,30
+"Exercise, Overhead Press",Set,2,reps,15,weight,30
+
+StrengthLog Advent Calendar 2023: StrengthLog turns five today! Say cheese!,2023-12-19,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,0,weight,0
+"Exercise, Deadlift",Set,2,reps,20,weight,30
+"Exercise, Deadlift",Set,3,reps,5,weight,55
+"Exercise, Deadlift",Set,4,reps,20,weight,75
+"Exercise, Overhead Press",Set,1,reps,10,weight,30
+"Exercise, Kettlebell Swing",Set,1,reps,12,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,75,weight,24
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,15,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,15,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,15,weight,12
+"Exercise, Dumbbell Row",Set,1,reps,15,weight,12
+"Exercise, Dumbbell Row",Set,2,reps,8,weight,24
+
+StrengthLog Advent Calendar 2023: A chest that never quits,2023-12-18,74.6,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,20,weight,25
+"Exercise, Bench Press",Set,2,reps,10,weight,30
+"Exercise, Bench Press",Set,3,reps,5,weight,35
+"Exercise, Bench Press",Set,4,reps,25,weight,42
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,20
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,30,weight,25
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,20,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,4,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,15,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,3,reps,15,weight,5
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+
+StrengthLog Advent Calendar 2023: Deck the halls with sweats of jolly + StrengthLog Advent Calendar 2023: Deck the halls with sweats of jolly,2023-12-17,74.6,-1,-1,-1,-1
+"Exercise, Burpee",Set,1,reps,6,bodyweight,74.6
+"Exercise, Sit-Up",Set,1,reps,12,bodyweight,74.6,extraWeight,0
+"Exercise, Air Squat",Set,1,reps,13,bodyweight,74.6
+"Exercise, Burpee",Set,1,reps,11,bodyweight,74.6
+"Exercise, Sit-Up",Set,1,reps,9,bodyweight,74.6,extraWeight,0
+"Exercise, Air Squat",Set,1,reps,9,bodyweight,74.6
+"Exercise, Sit-Up",Set,1,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Air Squat",Set,1,reps,3,bodyweight,74.6
+"Exercise, Push-Up",Set,1,reps,9,bodyweight,74.6,extraWeight,0
+"Exercise, Burpee",Set,1,reps,12,bodyweight,74.6
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,25
+"Exercise, Barbell Curl",Set,3,reps,5,weight,30
+"Exercise, Barbell Curl",Set,4,reps,8,weight,35
+"Exercise, Barbell Curl",Set,5,reps,5,weight,35
+"Exercise, Barbell Curl",Set,6,reps,7,weight,30
+"Exercise, Barbell Curl",Set,7,reps,10,weight,20
+"Exercise, Barbell Curl",Set,8,reps,8,weight,30
+"Exercise, Barbell Curl",Set,9,reps,8,weight,25
+"Exercise, Overhead Press",Set,1,reps,5,weight,20
+"Exercise, Overhead Press",Set,2,reps,5,weight,25
+"Exercise, Overhead Press",Set,3,reps,5,weight,30
+"Exercise, Overhead Press",Set,4,reps,7,weight,40
+"Exercise, Overhead Press",Set,5,reps,7,weight,35
+"Exercise, Overhead Press",Set,6,reps,8,weight,30
+
+StrengthLog Advent Calendar 2023: There’s still plenty of time left to sit around doing nothing,2023-12-16,74.6,-1,-1,-1,-1
+"Exercise, Wall-sit",Set,1,bodyweight,74.6,extraWeight,0,time,00:02:30
+Instance of 'Loc'
+"Exercise, Deadlift",Set,1,reps,5,weight,65
+"Exercise, Deadlift",Set,2,reps,5,weight,65
+"Exercise, Deadlift",Set,3,reps,5,weight,70
+"Exercise, Barbell Row",Set,1,reps,20,weight,30
+"Exercise, Barbell Row",Set,2,reps,25,weight,35
+"Exercise, Barbell Row",Set,3,reps,10,weight,40
+"Exercise, Barbell Row",Set,4,reps,20,weight,40
+"Exercise, Barbell Row",Set,5,reps,10,weight,40
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,60,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,5
+"Exercise, Sit-Up",Set,2,reps,10,bodyweight,74.6,extraWeight,10
+"Exercise, Overhead Press",Set,1,reps,8,weight,40
+
+StrengthLog Advent Calendar 2023: Fridays are arm days for the elves,2023-12-15,74.6,-1,-1,-1,-1
+"Exercise, Dumbbell Curl",Set,1,reps,12,weight,0
+Instance of 'Loc'
+"Exercise, Tricep Pushdown With Bar",Set,1,reps,12,weight,0
+Instance of 'Loc'
+"Exercise, Dumbbell Curl",Set,1,reps,12,weight,0
+"Exercise, Tricep Pushdown With Bar",Set,1,reps,12,weight,0
+"Exercise, Dumbbell Curl",Set,1,reps,12,weight,0
+"Exercise, Tricep Pushdown With Bar",Set,1,reps,12,weight,0
+"Exercise, Barbell Curl",Set,1,reps,20,weight,20
+"Exercise, Barbell Curl",Set,2,reps,8,weight,30
+"Exercise, Barbell Curl",Set,3,reps,8,weight,30
+"Exercise, Barbell Curl",Set,4,reps,3,weight,35
+"Exercise, Barbell Curl",Set,5,reps,5,weight,30
+"Exercise, Barbell Curl",Set,6,reps,15,weight,20
+"Exercise, Overhead Press",Set,1,reps,20,weight,20
+"Exercise, Overhead Press",Set,2,reps,15,weight,30
+"Exercise, Overhead Press",Set,3,reps,7,weight,35
+"Exercise, One-Arm Kettlebell Swing",Set,1,reps,15,weight,24
+"Exercise, One-Arm Kettlebell Swing",Set,2,reps,10,weight,24
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,20
+"Exercise, Dumbbell Shrug",Set,2,reps,15,weight,24
+"Exercise, Dumbbell Shrug",Set,3,reps,15,weight,32
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,5
+
+StrengthLog Advent Calendar 2023: Light a fire under your butt,2023-12-14,74.6,-1,-1,-1,-1
+"Exercise, Leg Extension",Set,1,reps,12,weight,0
+"Exercise, Seated Leg Curl",Set,1,reps,12,weight,0
+"Exercise, Leg Extension",Set,1,reps,12,weight,0
+"Exercise, Seated Leg Curl",Set,1,reps,12,weight,0
+"Exercise, Leg Extension",Set,1,reps,12,weight,0
+"Exercise, Seated Leg Curl",Set,1,reps,12,weight,0
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Squat",Set,1,reps,15,weight,30
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,40,weight,32
+"Exercise, Kettlebell Swing",Set,3,reps,20,weight,24
+"Exercise, Bench Dip",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,11,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,15,weight,5
+"Exercise, One-Arm Kettlebell Swing",Set,1,reps,24,weight,10
+
+StrengthLog Advent Calendar 2023: Suit up like Santa,2023-12-13,74.6,-1,-1,-1,-1
+"Exercise, Suitcase Carry",Set,1,distanceMeter,50,weight,24
+Instance of 'Loc'
+"Exercise, Goblet Squat",Set,1,reps,15,weight,24
+"Exercise, Goblet Squat",Set,2,reps,3,weight,32
+"Exercise, Goblet Squat",Set,3,reps,20,weight,24
+"Exercise, Dumbbell Lunge",Set,1,reps,10,weight,10
+"Exercise, Dumbbell Shrug",Set,1,reps,40,weight,20
+"Exercise, Barbell Row",Set,1,reps,15,weight,30
+"Exercise, Barbell Row",Set,2,reps,15,weight,35
+"Exercise, Barbell Row",Set,3,reps,15,weight,35
+"Exercise, Barbell Row",Set,4,reps,20,weight,35
+"Exercise, Dumbbell Squat",Set,1,reps,10,weight,32
+"Exercise, Dumbbell Squat",Set,2,reps,10,weight,56
+"Exercise, Dumbbell Squat",Set,3,reps,10,weight,56
+"Exercise, Crunch",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+
+StrengthLog Advent Calendar 2023: The twelve days of DOMS,2023-12-12,74.6,-1,-1,-1,-1
+"Exercise, Clean Deadlift",Set,1,reps,1,weight,15
+"Exercise, Barbell Row",Set,1,reps,1,weight,15
+"Exercise, Hang Clean",Set,1,reps,1,weight,15
+"Exercise, Thruster",Set,1,reps,1,weight,15
+"Exercise, Overhead Squat",Set,1,reps,1,weight,15
+"Exercise, Clean Deadlift",Set,1,reps,1,weight,15
+"Exercise, Barbell Row",Set,1,reps,1,weight,15
+"Exercise, Hang Clean",Set,1,reps,1,weight,15
+"Exercise, Thruster",Set,1,reps,1,weight,15
+"Exercise, Overhead Squat",Set,1,reps,1,weight,15
+"Exercise, Barbell Curl",Set,1,reps,20,weight,15
+"Exercise, Barbell Curl",Set,2,reps,15,weight,20
+"Exercise, Barbell Curl",Set,3,reps,8,weight,25
+"Exercise, Barbell Curl",Set,4,reps,10,weight,30
+"Exercise, Barbell Curl",Set,5,reps,9,weight,30
+"Exercise, Overhead Press",Set,1,reps,15,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,8,weight,30
+"Exercise, Overhead Press",Set,4,reps,8,weight,30
+"Exercise, Overhead Press",Set,5,reps,10,weight,35
+"Exercise, Deadlift",Set,1,reps,5,weight,65
+"Exercise, Deadlift",Set,2,reps,1,weight,85
+"Exercise, Deadlift",Set,3,reps,1,weight,115
+"Exercise, Deadlift",Set,4,reps,5,weight,65
+"Exercise, Deadlift",Set,5,reps,5,weight,65
+
+StrengthLog Advent Calendar 2023: Get a grip!,2023-12-11,74.6,-1,-1,-1,-1
+"Exercise, Close-Grip Bench Press",Set,1,reps,10,weight,0
+Instance of 'Loc'
+"Exercise, Close-Grip Bench Press",Set,2,reps,15,weight,20
+"Exercise, Close-Grip Bench Press",Set,3,reps,15,weight,30
+"Exercise, Close-Grip Bench Press",Set,4,reps,10,weight,40
+"Exercise, Close-Grip Bench Press",Set,5,reps,5,weight,50
+"Exercise, Close-Grip Bench Press",Set,6,reps,10,weight,40
+"Exercise, Dumbbell Shrug",Set,1,reps,35,weight,20
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,25,weight,25
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,20,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,5,weight,10
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,7.5
+
+StrengthLog Advent Calendar 2023: No walking on this plank,2023-12-10,74.6,-1,-1,-1,-1
+"Exercise, Plank",Set,1,bodyweight,74.6,extraWeight,0,time,00:02:01
+Instance of 'Loc'
+"Exercise, Side Plank",Set,1,bodyweight,74.6,extraWeight,0,time,00:01:00
+Instance of 'Loc'
+"Exercise, Side Plank",Set,2,bodyweight,74.6,extraWeight,0,time,00:01:00
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,5,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,25,weight,32
+"Exercise, Kettlebell Swing",Set,4,reps,30,weight,32
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+
+StrengthLog Advent Calendar 2023: Do you feel lucky?,2023-12-09,74.6,-1,-1,-1,-1
+"Exercise, Crunch",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Jump Lunge",Set,1,reps,10,bodyweight,74.6
+"Exercise, Jump Squat",Set,1,reps,10,bodyweight,74.6
+"Exercise, Push-Up",Set,1,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Jump Squat",Set,1,reps,10,bodyweight,74.6
+"Exercise, Jump Lunge",Set,1,reps,20,bodyweight,74.6
+"Exercise, Crunch",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Jump Squat",Set,1,reps,10,bodyweight,74.6
+"Exercise, Burpee",Set,1,reps,5,bodyweight,74.6
+"Exercise, Jump Squat",Set,1,reps,10,bodyweight,74.6
+"Exercise, Mountain Climbers",Set,1,reps,15,bodyweight,74.6
+"Exercise, Crunch",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Jump Squat",Set,1,reps,20,bodyweight,74.6
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Jump Squat",Set,1,reps,10,bodyweight,74.6
+"Exercise, Jump Squat",Set,2,reps,10,bodyweight,74.6
+
+StrengthLog Advent Calendar 2023: Drop it like it’s cold,2023-12-08,74.6,-1,-1,-1,-1
+"Exercise, Dumbbell Curl",Set,1,reps,0,weight,0
+Instance of 'Loc'
+"Exercise, Dumbbell Curl",Set,2,reps,12,weight,13
+"Exercise, Dumbbell Curl",Set,3,reps,12,weight,12
+"Exercise, Dumbbell Curl",Set,4,reps,12,weight,10
+"Exercise, Dumbbell Curl",Set,5,reps,12,weight,12
+"Exercise, Dumbbell Curl",Set,6,reps,12,weight,11
+"Exercise, Dumbbell Curl",Set,7,reps,12,weight,10
+"Exercise, Dumbbell Curl",Set,8,reps,12,weight,10
+"Exercise, Dumbbell Curl",Set,9,reps,12,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,15,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,20
+"Exercise, Dumbbell Shrug",Set,2,reps,5,weight,25
+"Exercise, Dumbbell Shrug",Set,3,reps,20,weight,25
+"Exercise, Dumbbell Shrug",Set,4,reps,15,weight,25
+
+StrengthLog Advent Calendar 2023: Jingle Back Rock,2023-12-07,74.6,-1,-1,-1,-1
+"Exercise, Barbell Row",Set,1,reps,20,weight,15
+"Exercise, Barbell Row",Set,2,reps,15,weight,35
+"Exercise, Barbell Row",Set,3,reps,15,weight,35
+"Exercise, Barbell Row",Set,4,reps,15,weight,35
+"Exercise, Barbell Row",Set,5,reps,15,weight,35
+"Exercise, Barbell Curl",Set,1,reps,10,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,11,weight,25
+"Exercise, Barbell Curl",Set,4,reps,8,weight,27
+"Exercise, Barbell Curl",Set,5,reps,7,weight,27
+"Exercise, Barbell Curl",Set,6,reps,7,weight,25
+"Exercise, Overhead Press",Set,1,reps,10,weight,20
+"Exercise, Overhead Press",Set,2,reps,10,weight,25
+"Exercise, Overhead Press",Set,3,reps,12,weight,30
+"Exercise, Overhead Press",Set,4,reps,11,weight,30
+"Exercise, Overhead Press",Set,5,reps,10,weight,25
+
+StrengthLog Advent Calendar 2023: When you met Sally,2023-12-06,74.6,-1,-1,-1,-1
+"Exercise, Pause Squat",Set,1,reps,30,weight,20
+Instance of 'Loc'
+"Exercise, Barbell Row",Set,1,reps,10,weight,20
+"Exercise, Barbell Row",Set,2,reps,15,weight,30
+"Exercise, Barbell Row",Set,3,reps,5,weight,35
+"Exercise, Barbell Row",Set,4,reps,15,weight,35
+"Exercise, Deadlift",Set,1,reps,7,weight,65
+"Exercise, Deadlift",Set,2,reps,2,weight,85
+"Exercise, Deadlift",Set,3,reps,1,weight,95
+"Exercise, Deadlift",Set,4,reps,1,weight,105
+"Exercise, Deadlift",Set,5,reps,10,weight,65
+"Exercise, Goblet Squat",Set,1,reps,15,weight,15
+"Exercise, Goblet Squat",Set,2,reps,15,weight,20
+"Exercise, Goblet Squat",Set,3,reps,5,weight,25
+"Exercise, Goblet Squat",Set,4,reps,15,weight,20
+"Exercise, Dumbbell Shrug",Set,1,reps,20,weight,25
+
+StrengthLog Advent Calendar 2023: Snatch the stolen gifts away from the Grinch,2023-12-05,74.6,-1,-1,-1,-1
+"Exercise, Snatch",Set,1,reps,1,weight,20
+Instance of 'Loc'
+"Exercise, Push-Up",Set,1,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,15,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,10,weight,5
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Dumbbell Standing Triceps Extension",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Standing Triceps Extension",Set,2,reps,10,weight,5
+"Exercise, Dumbbell Shrug",Set,1,reps,40,weight,15
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,20
+"Exercise, Barbell Row",Set,1,reps,15,weight,20
+
+StrengthLog Advent Calendar 2023: O holy press!,2023-12-04,74.6,-1,-1,-1,-1
+"Exercise, Overhead Press",Set,1,reps,0,weight,40
+Instance of 'Loc'
+"Exercise, Overhead Press",Set,2,reps,15,weight,17.5
+"Exercise, Overhead Press",Set,3,reps,10,weight,20
+"Exercise, Overhead Press",Set,4,reps,30,weight,20
+"Exercise, Overhead Press",Set,5,reps,15,weight,20
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,5
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,10,weight,10
+"Exercise, Dumbbell Shrug",Set,1,reps,25,weight,15
+"Exercise, Dumbbell Shrug",Set,2,reps,20,weight,20
+"Exercise, Dumbbell Shrug",Set,3,reps,25,weight,20
+"Exercise, Kettlebell Swing",Set,1,reps,40,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,10,weight,24
+
+StrengthLog Advent Calendar 2023: Crunch the holiday numbers,2023-12-03,74.6,-1,-1,-1,-1
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+Instance of 'Loc'
+
+StrengthLog Advent Calendar 2023: Give your name to Santa +,2023-12-03,74.6,8,-1,-1,-1
+"Exercise, Lunge (Bodyweight)",Set,1,reps,20,bodyweight,74.6
+"Exercise, Side Plank",Set,1,bodyweight,74.6,extraWeight,0,time,00:01:00
+"Exercise, Side Lunges (Bodyweight)",Set,1,reps,30,bodyweight,74.6
+"Exercise, Frog Pump",Set,1,reps,40,bodyweight,74.6
+"Exercise, Frog Pump",Set,2,reps,40,bodyweight,74.6
+"Exercise, Cobra Push-Up",Set,1,reps,15,bodyweight,74.6
+"Exercise, Side Lunges (Bodyweight)",Set,1,reps,24,bodyweight,74.6
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,5,weight,10
+"Exercise, Cobra Push-Up",Set,1,reps,15,bodyweight,74.6
+
+StrengthLog Advent Calendar 2023: I’ll be swole for X-mas,2023-12-02,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,21,weight,20
+"Exercise, Barbell Curl",Set,2,reps,21,weight,20
+"Exercise, Barbell Curl",Set,3,reps,21,weight,20
+"Exercise, Barbell Curl",Set,4,reps,14,weight,25
+"Exercise, Barbell Curl",Set,5,reps,7,weight,25
+"Exercise, Sit-Up",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,3,reps,10,bodyweight,74.6,extraWeight,10
+"Exercise, Sit-Up",Set,4,reps,25,bodyweight,74.6,extraWeight,5
+
+"Onsdag lunch: rygg, rumpa, axlar etc.",2023-11-29,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,5,weight,65
+"Exercise, Deadlift",Set,2,reps,5,weight,70
+"Exercise, Goblet Squat",Set,1,reps,15,weight,24
+"Exercise, Goblet Squat",Set,2,reps,10,weight,24
+"Exercise, Goblet Squat",Set,3,reps,15,weight,20
+"Exercise, Goblet Squat",Set,4,reps,20,weight,20
+"Exercise, Goblet Squat",Set,5,reps,10,weight,24
+"Exercise, Dumbbell Row",Set,1,reps,15,weight,12
+"Exercise, Dumbbell Row",Set,2,reps,10,weight,15
+"Exercise, Dumbbell Row",Set,3,reps,10,weight,20
+"Exercise, Dumbbell Row",Set,4,reps,15,weight,20
+"Exercise, Dumbbell Row",Set,5,reps,10,weight,24
+"Exercise, Dumbbell Shrug",Set,1,reps,30,weight,20
+"Exercise, Dumbbell Shrug",Set,2,reps,30,weight,20
+
+"Tisdag lunch: axlar, rygg, bröst etc.",2023-11-28,74.6,-1,9,-1,-1
+"Exercise, Push-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,5,bodyweight,74.6,extraWeight,0
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,4,reps,10,weight,5
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,20,weight,24
+"Exercise, Dumbbell Row",Set,1,reps,10,weight,12
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+
+Torsdag lunch: Marklyft & Hantelcurl,2023-11-23,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,20,weight,25
+"Exercise, Deadlift",Set,2,reps,15,weight,50
+"Exercise, Deadlift",Set,3,reps,10,weight,60
+"Exercise, Deadlift",Set,4,reps,10,weight,60
+"Exercise, Dumbbell Curl",Set,1,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,2,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,3,reps,10,weight,12
+
+"Torsdag kväll: mage, biceps, axlar etc.",2023-10-12,74.6,-1,-1,-1,-1
+"Exercise, Barbell Curl",Set,1,reps,15,weight,20
+"Exercise, Barbell Curl",Set,2,reps,10,weight,25
+"Exercise, Barbell Curl",Set,3,reps,5,weight,30
+"Exercise, Barbell Curl",Set,4,reps,5,weight,30
+"Exercise, Barbell Curl",Set,5,reps,8,weight,30
+"Exercise, Barbell Curl",Set,6,reps,5,weight,30
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,35,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,4,reps,15,weight,24
+"Exercise, Crunch",Set,1,reps,50,bodyweight,74.6,extraWeight,0
+"Exercise, Crunch",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,4,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,10,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,12,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,12,weight,12
+"Exercise, Dumbbell Shoulder Press",Set,4,reps,12,weight,12
+"Exercise, Dumbbell Curl",Set,1,reps,8,weight,12
+
+"Onsdag lunch: axlar, bröst, triceps etc.",2023-10-11,74.6,-1,-1,-1,-1
+"Exercise, Bench Press",Set,1,reps,5,weight,50
+"Exercise, Push-Up",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,5,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,4,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,5,reps,20,weight,24
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,3,reps,5,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,4,reps,5,weight,5
+
+"Måndag lunch: rygg, rumpa, axlar etc.",2023-10-09,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,15,weight,50
+"Exercise, Deadlift",Set,2,reps,12,weight,60
+"Exercise, Deadlift",Set,3,reps,10,weight,65
+"Exercise, Deadlift",Set,4,reps,8,weight,70
+"Exercise, Deadlift",Set,5,reps,6,weight,75
+"Exercise, Goblet Squat",Set,1,reps,15,weight,24
+"Exercise, Goblet Squat",Set,2,reps,10,weight,24
+"Exercise, Barbell Shrug",Set,1,reps,12,weight,60
+"Exercise, Kettlebell Swing",Set,1,reps,30,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Dumbbell Row",Set,1,reps,20,weight,12
+"Exercise, Dumbbell Row",Set,2,reps,25,weight,12
+
+"Fredag lunch: mage, biceps",2023-10-06,74.6,-1,-1,-1,-1
+"Exercise, Dumbbell Curl",Set,1,reps,12,weight,9.5
+"Exercise, Dumbbell Curl",Set,2,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,3,reps,15,weight,12
+"Exercise, Dumbbell Curl",Set,4,reps,12,weight,12
+"Exercise, Dumbbell Curl",Set,5,reps,12,weight,12
+"Exercise, Crunch",Set,1,reps,60,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,1,reps,5,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,3,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Plank",Set,1,bodyweight,74.6,extraWeight,0,time,00:01:00
+
+"Torsdag lunch: axlar, bröst, triceps etc.",2023-10-05,74.6,-1,-1,-1,-1
+"Exercise, Push-Up",Set,1,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,2,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,3,reps,15,bodyweight,74.6,extraWeight,0
+"Exercise, Push-Up",Set,4,reps,10,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,1,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,2,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,3,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Bench Dip",Set,4,reps,20,bodyweight,74.6,extraWeight,0
+"Exercise, Dumbbell Shoulder Press",Set,1,reps,8,weight,9.5
+"Exercise, Dumbbell Shoulder Press",Set,2,reps,10,weight,9.5
+"Exercise, Dumbbell Shoulder Press",Set,3,reps,7,weight,9.5
+"Exercise, Kettlebell Swing",Set,1,reps,25,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,24
+"Exercise, Reverse Dumbbell Flyes",Set,1,reps,10,weight,5
+"Exercise, Reverse Dumbbell Flyes",Set,2,reps,10,weight,5
+
+"Tisdag lunch: rygg, rumpa, axlar etc.",2023-10-03,74.6,-1,-1,-1,-1
+"Exercise, Deadlift",Set,1,reps,12,weight,50
+"Exercise, Deadlift",Set,2,reps,10,weight,60
+"Exercise, Deadlift",Set,3,reps,8,weight,70
+"Exercise, Deadlift",Set,4,reps,6,weight,75
+"Exercise, Deadlift",Set,5,reps,4,weight,80
+"Exercise, Deadlift",Set,6,reps,5,weight,70
+"Exercise, Barbell Shrug",Set,1,reps,15,weight,50
+"Exercise, Barbell Shrug",Set,2,reps,10,weight,60
+"Exercise, Barbell Shrug",Set,3,reps,4,weight,70
+"Exercise, Kettlebell Swing",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,10,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,10,weight,24
+"Exercise, Goblet Squat",Set,1,reps,10,weight,24
+"Exercise, Goblet Squat",Set,2,reps,10,weight,24
+"Exercise, Goblet Squat",Set,3,reps,10,weight,24
+"Exercise, Dumbbell Row",Set,1,reps,15,weight,12
+"Exercise, Dumbbell Row",Set,2,reps,8,weight,24
+"Exercise, Dumbbell Row",Set,3,reps,15,weight,12
+
+"Måndag kväll: mage, rygg, rumpa etc.",2023-10-02,74.6,-1,-1,-1,-1
+"Exercise, Dumbbell Curl",Set,1,reps,10,weight,9.5
+"Exercise, Dumbbell Curl",Set,2,reps,8,weight,9.5
+"Exercise, Dumbbell Curl",Set,3,reps,8,weight,12
+"Exercise, Dumbbell Curl",Set,4,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,5,reps,10,weight,9.5
+"Exercise, Dumbbell Curl",Set,6,reps,12,weight,12
+"Exercise, Dumbbell Curl",Set,7,reps,12,weight,9.5
+"Exercise, Dumbbell Curl",Set,8,reps,8,weight,9.5
+"Exercise, Dumbbell Curl",Set,9,reps,8,weight,12
+"Exercise, Kettlebell Swing",Set,1,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,4,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,5,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,6,reps,20,weight,24
+"Exercise, Kettlebell Swing",Set,7,reps,20,weight,24
+"Exercise, Sit-Up",Set,1,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,2,reps,25,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,3,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,4,reps,30,bodyweight,74.6,extraWeight,0
+"Exercise, Sit-Up",Set,5,reps,30,bodyweight,74.6,extraWeight,0
+
+Biceps + överkropp,2023-09-26,74.6,-1,-1,-1,-1
+"Exercise, Dumbbell Curl",Set,1,reps,10,weight,9.5
+"Exercise, Dumbbell Curl",Set,2,reps,10,weight,9.5
+"Exercise, Dumbbell Curl",Set,3,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,4,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,5,reps,10,weight,12
+"Exercise, Dumbbell Curl",Set,6,reps,8,weight,12
+"Exercise, Dumbbell Curl",Set,7,reps,6,weight,12
+"Exercise, Kettlebell Swing",Set,1,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,4,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,5,reps,15,weight,24
+"Exercise, Kettlebell Row",Set,1,reps,10,weight,24
+"Exercise, Kettlebell Row",Set,2,reps,6,weight,24
+"Exercise, Dumbbell Row",Set,1,reps,10,weight,12
+
+Måndag lunch: Marklyft,2023-09-25,75,-1,3,7,10
+"Exercise, Deadlift",Set,1,reps,10,weight,50
+"Exercise, Deadlift",Set,2,reps,10,weight,55
+"Exercise, Deadlift",Set,3,reps,8,weight,60
+"Exercise, Deadlift",Set,4,reps,8,weight,60
+"Exercise, Kettlebell Swing",Set,1,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,2,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,3,reps,15,weight,24
+"Exercise, Kettlebell Swing",Set,4,reps,20,weight,24
+"Exercise, Sit-Up",Set,1,reps,50,bodyweight,75,extraWeight,0
+"Exercise, Crunch",Set,1,reps,100,bodyweight,75,extraWeight,0
+"Exercise, Goblet Squat",Set,1,reps,10,weight,24
+"Exercise, Goblet Squat",Set,2,reps,10,weight,24
+"Exercise, Goblet Squat",Set,3,reps,10,weight,24

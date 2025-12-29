@@ -33,6 +33,7 @@ import { StrengthPage } from './pages/StrengthPage.tsx';
 import { ExercisesPage } from './pages/ExercisesPage.tsx';
 import { WorkoutBuilderPage } from './pages/WorkoutBuilderPage.tsx';
 import { WorkoutDetailPage } from './pages/WorkoutDetailPage.tsx';
+import { MatchupPage } from './pages/MatchupPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -110,6 +111,8 @@ export function App() {
                                                 <Route path="workouts/builder" element={<WorkoutBuilderPage />} />
                                                 <Route path="workouts/:id" element={<WorkoutDetailPage />} />
                                                 <Route path="/exercises" element={<ExercisesPage />} />
+                                                <Route path="matchup" element={<MatchupPage />} />
+                                                <Route path="kamrat" element={<MatchupPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>
