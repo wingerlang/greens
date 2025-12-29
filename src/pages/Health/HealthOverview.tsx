@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { useSettings } from '../../context/SettingsContext.tsx';
+import { useData } from '../../context/DataContext.tsx';
 import { DaySnapshot, HealthStats } from '../../utils/healthAggregator.ts';
-import { ExerciseEntry } from '../../models/types.ts';
+import { ExerciseEntry, WeightEntry } from '../../models/types.ts';
 
 
 interface HealthOverviewProps {
@@ -13,6 +14,7 @@ interface HealthOverviewProps {
 
 export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries }: HealthOverviewProps) {
     const { settings } = useSettings();
+    const { weightEntries } = useData();
 
     const isGoalAchieved = (type: 'sleep' | 'water' | 'calories' | 'tonnage') => {
         if (type === 'sleep') return stats.avgSleep >= (settings.dailySleepGoal || 7);
@@ -74,100 +76,144 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries }:
             <div className="flex flex-col md:flex-row gap-6">
                 {/* Left Column: Energy Balance Chart */}
                 <div className="flex-1 space-y-6">
-                    <div className="health-card massive-chart glass min-h-[300px]">
+                    <div className="health-card glass min-h-[280px] flex flex-col">
                         <div className="card-header">
-                            <h2 className="text-sm">Vikt & Energibalans</h2>
-                            <p className="text-[10px]">Energi in vs Viktkurva</p>
+                            <h2 className="text-sm">Vikt & Trend</h2>
+                            <p className="text-[10px]">Dina senaste viktmätningar</p>
                         </div>
 
-                        {(hasWeightData || hasCalorieData) ? (
-                            <div className="chart-placeholder flex flex-col p-4 md:p-6 items-center justify-center relative flex-1">
-                                {/* Chart Rendering Logic */}
-                                <div className={`w-full h-48 md:h-64 flex items-end px-2 md:px-4 z-10 relative ${snapshots.length > 60 ? 'justify-between gap-0' : 'gap-1 md:gap-2'}`}>
-                                    {snapshots.filter((_, i) => {
-                                        if (snapshots.length <= 200) return true;
-                                        const step = Math.ceil(snapshots.length / 150);
-                                        return i % step === 0;
-                                    }).map((s, i) => (
-                                        <div key={i} className={`h-full flex flex-col justify-end gap-1 group relative ${snapshots.length > 60 ? 'w-1' : 'flex-1'}`}>
-                                            {s.isUntracked && (
-                                                <div className="absolute top-0 left-0 w-full h-full flex items-center justify-center pointer-events-none opacity-20">
-                                                    <div className="w-px h-full bg-slate-500 transform rotate-45" />
-                                                </div>
-                                            )}
-                                            <div
-                                                className={`w-full rounded-t-sm transition-all ${s.isUntracked ? 'opacity-5' : 'bg-indigo-500/30 hover:bg-indigo-500/50'}`}
-                                                style={{ height: `${Math.min(100, (s.nutrition.calories / 3500) * 100)}%` }}
-                                            />
-                                            {/* Hover Tooltip */}
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block glass p-2 rounded text-[10px] whitespace-nowrap z-50 pointer-events-none">
-                                                <div className="font-bold">{s.date}</div>
-                                                <div>{Math.round(s.nutrition.calories)} kcal</div>
-                                                {s.weight && <div className="text-emerald-400">{s.weight} kg</div>}
-                                            </div>
+                        {weightEntries.length > 0 ? (() => {
+                            // Use actual weightEntries, sorted by date (oldest first for chart)
+                            const sortedEntries = [...weightEntries]
+                                .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                            // Get the latest entry (most recent date)
+                            const latestEntry = [...weightEntries]
+                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+                            const weightData = sortedEntries.map(e => ({ date: e.date, weight: e.weight }));
+
+                            if (weightData.length < 2) {
+                                return (
+                                    <div className="flex-1 flex flex-col items-center justify-center p-8 opacity-50">
+                                        <span className="text-4xl mb-4">📊</span>
+                                        <p className="text-sm text-center">Minst 2 viktmätningar behövs för trenden.</p>
+                                        <p className="text-xs text-slate-500 mt-2">Loggade: {weightData.length} mätning(ar)</p>
+                                        {latestEntry && (
+                                            <p className="text-lg font-bold text-white mt-4">{latestEntry.weight} kg</p>
+                                        )}
+                                    </div>
+                                );
+                            }
+
+                            const weights = weightData.map(d => d.weight);
+                            const minW = Math.min(...weights) - 0.5;
+                            const maxW = Math.max(...weights) + 0.5;
+                            const range = maxW - minW || 1;
+
+                            const firstWeight = weights[0];
+                            const latestWeight = latestEntry.weight; // Use actual latest, not just chart end
+                            const weightChange = latestWeight - firstWeight;
+
+                            // Create SVG path
+                            const pathPoints = weightData.map((d, i) => {
+                                const x = (i / (weightData.length - 1)) * 100;
+                                const y = 100 - ((d.weight - minW) / range) * 100;
+                                return `${x},${y}`;
+                            }).join(' L ');
+
+                            return (
+                                <div className="flex-1 p-4 flex flex-col">
+                                    {/* Weight Summary */}
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <div className="text-2xl font-black text-white">{latestWeight.toFixed(1)} <span className="text-sm text-slate-400">kg</span></div>
+                                            <div className="text-[10px] text-slate-500">Senaste mätning ({latestEntry.date})</div>
                                         </div>
-                                    ))}
+                                        <div className={`text-right px-3 py-1 rounded-lg ${weightChange > 0 ? 'bg-rose-500/20' : weightChange < 0 ? 'bg-emerald-500/20' : 'bg-slate-500/20'}`}>
+                                            <div className={`text-lg font-black ${weightChange > 0 ? 'text-rose-400' : weightChange < 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                                {weightChange > 0 ? '+' : ''}{weightChange.toFixed(1)} kg
+                                            </div>
+                                            <div className="text-[10px] text-slate-500">sedan {weightData[0].date}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Chart */}
+                                    <div className="flex-1 relative min-h-[120px]">
+                                        <svg
+                                            viewBox="0 0 100 100"
+                                            preserveAspectRatio="none"
+                                            className="w-full h-full"
+                                        >
+                                            {/* Grid lines */}
+                                            <line x1="0" y1="0" x2="100" y2="0" stroke="#334155" strokeWidth="0.5" />
+                                            <line x1="0" y1="50" x2="100" y2="50" stroke="#334155" strokeWidth="0.5" strokeDasharray="2" />
+                                            <line x1="0" y1="100" x2="100" y2="100" stroke="#334155" strokeWidth="0.5" />
+
+                                            {/* Gradient fill under line */}
+                                            <defs>
+                                                <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="0%" stopColor={weightChange <= 0 ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
+                                                    <stop offset="100%" stopColor={weightChange <= 0 ? "#10b981" : "#ef4444"} stopOpacity="0" />
+                                                </linearGradient>
+                                            </defs>
+
+                                            {/* Area fill */}
+                                            <path
+                                                d={`M 0,100 L ${pathPoints} L 100,100 Z`}
+                                                fill="url(#weightGradient)"
+                                            />
+
+                                            {/* Weight line */}
+                                            <path
+                                                d={`M ${pathPoints}`}
+                                                fill="none"
+                                                stroke={weightChange <= 0 ? "#10b981" : "#ef4444"}
+                                                strokeWidth="2"
+                                                vectorEffect="non-scaling-stroke"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            />
+
+                                            {/* Data points */}
+                                            {weightData.map((d, i) => {
+                                                const x = (i / (weightData.length - 1)) * 100;
+                                                const y = 100 - ((d.weight - minW) / range) * 100;
+                                                return (
+                                                    <circle
+                                                        key={i}
+                                                        cx={x}
+                                                        cy={y}
+                                                        r="1.5"
+                                                        fill="white"
+                                                        stroke={weightChange <= 0 ? "#10b981" : "#ef4444"}
+                                                        strokeWidth="0.5"
+                                                        vectorEffect="non-scaling-stroke"
+                                                    />
+                                                );
+                                            })}
+                                        </svg>
+
+                                        {/* Y-axis labels */}
+                                        <div className="absolute left-0 top-0 bottom-0 flex flex-col justify-between text-[9px] text-slate-500 font-mono -ml-8 pointer-events-none">
+                                            <span>{maxW.toFixed(1)}</span>
+                                            <span>{((maxW + minW) / 2).toFixed(1)}</span>
+                                            <span>{minW.toFixed(1)}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* X-axis labels */}
+                                    <div className="flex justify-between text-[9px] text-slate-500 mt-2">
+                                        <span>{weightData[0].date}</span>
+                                        <span>{weightData[weightData.length - 1].date}</span>
+                                    </div>
                                 </div>
-
-                                {/* Weight Curve SVG */}
-                                <svg className="absolute inset-0 w-full h-full pointer-events-none z-20" style={{ padding: '1.5rem 0.5rem' }} preserveAspectRatio="none">
-                                    <path
-                                        d={(() => {
-                                            const validWeights = snapshots.filter(s => s.weight);
-                                            if (validWeights.length < 2) return '';
-
-                                            const weights = validWeights.map(s => s.weight!);
-                                            const minW = Math.min(...weights) - 0.5;
-                                            const maxW = Math.max(...weights) + 0.5;
-                                            const range = maxW - minW;
-
-                                            // Need to map to the filtered visual indices if sampling is active above?
-                                            // Actually, SVG maps 0-100% of width, so mapped to time.
-                                            // Snapshot array is reverse chronologically? Or check healthAggregator.
-                                            // healthAggregator pushes unshift (newest first).
-                                            // Wait, visual order is usually left-to-right (old -> new).
-                                            // snapshots[0] is newest (today). snapshots[length-1] is oldest.
-                                            // The map above renders snapshots[0] (today) at left? No usually map renders index 0 first.
-                                            // So if snapshots is [Today, Yesterday...], index 0 is Today.
-                                            // If we want chronological Left->Right, we should reverse for display.
-                                            // Let's assume standard map order for now, but usually charts are Old->New.
-                                            // Let's reverse the data for chart logic to be Time ->
-
-                                            // FIX: Reverse data for charts
-                                            return 'M 0 0'; // Handled in reversed loop below
-                                        })() === 'M 0 0' ? (() => {
-                                            // Re-logic for chronological
-                                            // Create chronological copy
-                                            const chrono = [...snapshots].reverse();
-
-                                            const validWeights = chrono.filter(s => s.weight);
-                                            if (validWeights.length < 2) return '';
-                                            const weights = validWeights.map(s => s.weight!);
-                                            const minW = Math.min(...weights) - 0.5;
-                                            const maxW = Math.max(...weights) + 0.5;
-                                            const range = maxW - minW;
-
-                                            return 'M ' + chrono.map((s, i) => {
-                                                if (!s.weight) return null;
-                                                const x = (i / (chrono.length - 1)) * 100;
-                                                const y = 100 - ((s.weight - minW) / range) * 100;
-                                                return `${x}% ${y}% `;
-                                            }).filter(p => p !== null).join(' L ');
-                                        })() : ''}
-                                        fill="none"
-                                        stroke="#10b981"
-                                        strokeWidth="2"
-                                        vectorEffect="non-scaling-stroke"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        className="drop-shadow-lg"
-                                    />
-                                </svg>
-                            </div>
-                        ) : (
+                            );
+                        })() : (
                             <div className="flex-1 flex flex-col items-center justify-center p-8 opacity-50">
                                 <span className="text-4xl mb-4">⚖️</span>
-                                <p className="text-sm text-center">Logga vikt eller mat för att se din energibalans.</p>
+                                <p className="text-sm text-center">Logga din vikt för att se trenden.</p>
+                                <p className="text-xs text-slate-500 mt-2">Använd omniboxen: "82.5kg"</p>
                             </div>
                         )}
                     </div>

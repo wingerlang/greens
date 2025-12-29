@@ -335,6 +335,12 @@ function parseExercise(input: string): OmniboxIntent | null {
     let tonnage: number | undefined;
     let subType: ExerciseSubType = 'default';
 
+    // Intensity detection - needs to be declared early for pace calculation
+    let intensity: ExerciseIntensity = 'moderate';
+    if (input.includes('lätt') || input.includes('låg') || input.includes('lugnt') || input.includes('lugn') || input.includes('slow') || input.includes('easy')) intensity = 'low';
+    else if (input.includes('hög') || input.includes('hårt') || input.includes('hard') || input.includes('tuff') || input.includes('snabb') || input.includes('snabbt') || input.includes('fast')) intensity = 'high';
+    else if (input.includes('max') || input.includes('ultra')) intensity = 'ultra';
+
     // We create a "clean" string for duration parsing that removes tonnage
     let inputForDuration = input;
 
@@ -457,11 +463,6 @@ function parseExercise(input: string): OmniboxIntent | null {
         }
     }
 
-    let intensity: ExerciseIntensity = 'moderate';
-    if (input.includes('lätt') || input.includes('låg') || input.includes('lugnt') || input.includes('lugn') || input.includes('slow') || input.includes('easy')) intensity = 'low';
-    else if (input.includes('hög') || input.includes('hårt') || input.includes('hard') || input.includes('tuff') || input.includes('snabb') || input.includes('snabbt') || input.includes('fast')) intensity = 'high';
-    else if (input.includes('max') || input.includes('ultra')) intensity = 'ultra';
-
     // Sub-types for running
     if (type === 'running') {
         if (input.includes('intervall')) subType = 'interval';
@@ -479,6 +480,12 @@ function parseExercise(input: string): OmniboxIntent | null {
             // If we detected tonnage, it's definitely strength training
             type = 'strength';
         }
+    }
+
+    // ONLY return exercise if we have a clear indication this is an exercise
+    // Otherwise return null to allow food/search fallback
+    if (!type && !tonnage && !distance && !heartRateAvg) {
+        return null;
     }
 
     return {
@@ -501,44 +508,108 @@ function parseFood(input: string): OmniboxIntent | null {
     const mealKeywords: Record<string, MealType> = {
         'frukost': 'breakfast', 'fruk': 'breakfast',
         'lunch': 'lunch', 'lun': 'lunch',
-        'middag': 'dinner', 'midda': 'dinner', 'mid': 'dinner',
-        'mellanmål': 'snack', 'mellis': 'snack', 'mellan': 'snack',
-        'dryck': 'beverage', 'drick': 'beverage', 'dry': 'beverage'
+        'middag': 'dinner', 'midda': 'dinner', 'kvällsmat': 'dinner',
+        'mellanmål': 'snack', 'mellis': 'snack', 'mellan': 'snack', 'snack': 'snack',
+        'dryck': 'beverage', 'drick': 'beverage'
     };
 
+    let working = input.toLowerCase().trim();
+
+    // 1. Extract meal type
     let explicitMealType: MealType | undefined;
-    let queryWithoutMeal = input.toLowerCase();
     const sortedKeywords = Object.keys(mealKeywords).sort((a, b) => b.length - a.length);
 
     for (const kw of sortedKeywords) {
         const regex = new RegExp(`\\b${kw}\\w*\\b`, 'i');
-        if (regex.test(input)) {
+        if (regex.test(working)) {
             explicitMealType = mealKeywords[kw];
-            queryWithoutMeal = input.replace(regex, '').trim();
+            working = working.replace(regex, '').trim();
             break;
         }
     }
 
-    const quantityMatch = queryWithoutMeal.match(/(\d+(?:[.,]\d+)?)\s*(g|ml|st|pcs|kg|l|port)?/i);
-    let quantity: number | undefined;
-    let unit: string | undefined;
-    let query = queryWithoutMeal;
+    // 2. Extract quantity and unit - more flexible matching
+    // Matches: "123g", "123 g", "2.5 kg", "100ml", "2 st", "1 portion"
+    const quantityPatterns = [
+        /([\d.,]+)\s*(g|gram|gr)\b/i,
+        /([\d.,]+)\s*(kg|kilo)\b/i,
+        /([\d.,]+)\s*(ml|milliliter)\b/i,
+        /([\d.,]+)\s*(l|liter)\b/i,
+        /([\d.,]+)\s*(st|stycken?|pcs)\b/i,
+        /([\d.,]+)\s*(port|portion(?:er)?)\b/i,
+        /([\d.,]+)\s*(dl|deciliter)\b/i,
+        /([\d.,]+)\s*(msk|matsked(?:ar)?)\b/i,
+        /([\d.,]+)\s*(tsk|tesked(?:ar)?)\b/i,
+    ];
 
-    if (quantityMatch) {
-        quantity = parseFloat(quantityMatch[1].replace(',', '.'));
-        unit = quantityMatch[2]?.toLowerCase() || 'g';
-        query = queryWithoutMeal.replace(quantityMatch[0], '').trim();
+    let quantity: number | undefined;
+    let unit: string = 'g';
+
+    for (const pattern of quantityPatterns) {
+        const match = working.match(pattern);
+        if (match) {
+            const rawNum = parseFloat(match[1].replace(',', '.'));
+            const rawUnit = match[2].toLowerCase();
+
+            // Convert to grams for common units
+            if (rawUnit.startsWith('kg') || rawUnit.startsWith('kilo')) {
+                quantity = rawNum * 1000;
+                unit = 'g';
+            } else if (rawUnit.startsWith('l') && !rawUnit.startsWith('liter')) {
+                quantity = rawNum * 1000;
+                unit = 'ml';
+            } else if (rawUnit.startsWith('dl')) {
+                quantity = rawNum * 100;
+                unit = 'ml';
+            } else if (rawUnit.startsWith('st') || rawUnit.startsWith('pcs')) {
+                quantity = rawNum;
+                unit = 'st';
+            } else if (rawUnit.startsWith('port')) {
+                quantity = rawNum;
+                unit = 'portion';
+            } else if (rawUnit.startsWith('msk')) {
+                quantity = rawNum * 15; // 15g per msk
+                unit = 'g';
+            } else if (rawUnit.startsWith('tsk')) {
+                quantity = rawNum * 5; // 5g per tsk
+                unit = 'g';
+            } else {
+                quantity = rawNum;
+                unit = rawUnit.replace(/s$/, ''); // Remove trailing 's'
+            }
+
+            working = working.replace(match[0], '').trim();
+            break;
+        }
     }
 
-    if (!query) return null;
+    // 3. Clean up the query - remove extra spaces and common filler words
+    let query = working
+        .replace(/\s+/g, ' ')
+        .replace(/^(jag|ska|vill|logga|lägga till|äta|äter|ät|har ätit)\s+/i, '')
+        .replace(/\s+(till|som|för)\s*$/i, '')
+        .trim();
 
+    // 4. If query is empty but we have quantity, it's not a valid food intent
+    if (!query && !quantity) return null;
+
+    // 5. If we only have a number left (no food name), return null
+    if (/^\d+$/.test(query)) return null;
+
+    // 6. Determine meal type from time if not explicit
     let mealType = explicitMealType;
     if (!mealType) {
         const hour = new Date().getHours();
-        if (hour >= 6 && hour < 10) mealType = 'breakfast';
-        else if (hour >= 11 && hour < 14) mealType = 'lunch';
-        else if (hour >= 17 && hour < 20) mealType = 'dinner';
+        if (hour >= 5 && hour < 10) mealType = 'breakfast';
+        else if (hour >= 10 && hour < 14) mealType = 'lunch';
+        else if (hour >= 17 && hour < 21) mealType = 'dinner';
         else mealType = 'snack';
+    }
+
+    // 7. Default quantity to 100g if parsing food but no quantity given
+    // This can be overridden by the user's typical amount in the Omnibox
+    if (!quantity && query) {
+        quantity = 100;
     }
 
     return {

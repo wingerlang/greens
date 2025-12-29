@@ -848,21 +848,38 @@ export function DashboardPage() {
                                             <span className="text-[10px] text-slate-400 font-bold mt-1">Löpning / Gång</span>
                                         </div>
                                         <div className="flex flex-col border-l border-slate-100 dark:border-slate-800 pl-4">
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Fördelning</span>
+                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Typ</span>
                                             {(() => {
-                                                const runEx = weeklyEx.filter(e => e.type === 'running' || e.type === 'walking');
+                                                const runEx = weeklyEx.filter(e => e.type === 'running' || e.type === 'walking' || e.type === 'cycling');
                                                 const strengthEx = weeklyEx.filter(e => e.type === 'strength' || e.type === 'yoga');
                                                 const runMin = runEx.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
                                                 const strengthMin = strengthEx.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
+                                                const totalMin = runMin + strengthMin;
+                                                const cardioPercent = totalMin > 0 ? Math.round((runMin / totalMin) * 100) : 0;
+                                                const strengthPercent = totalMin > 0 ? Math.round((strengthMin / totalMin) * 100) : 0;
+
                                                 return (
-                                                    <>
-                                                        <span className="text-lg font-black text-slate-900 dark:text-white leading-none whitespace-nowrap">
-                                                            {runEx.length}<span className="text-[10px] text-slate-400 mx-1">/</span>{strengthEx.length} <span className="text-[10px] uppercase text-slate-400">pass</span>
-                                                        </span>
-                                                        <span className="text-[10px] text-slate-400 font-bold mt-1">
-                                                            {Math.round(runMin / 60)}h <span className="opacity-40">vs</span> {Math.round(strengthMin / 60)}h
-                                                        </span>
-                                                    </>
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-cyan-500"></div>
+                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                                Kondition {cardioPercent}%
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400">({runEx.length} pass)</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                                Styrka {strengthPercent}%
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-400">({strengthEx.length} pass)</span>
+                                                        </div>
+                                                        {/* Mini progress bar */}
+                                                        <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 mt-1">
+                                                            <div className="bg-cyan-500" style={{ width: `${cardioPercent}%` }}></div>
+                                                            <div className="bg-purple-500" style={{ width: `${strengthPercent}%` }}></div>
+                                                        </div>
+                                                    </div>
                                                 );
                                             })()}
                                         </div>
