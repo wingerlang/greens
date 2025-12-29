@@ -41,6 +41,12 @@ export function MatchupPage() {
 
     // 1RM vs e1RM toggle
     const [rmMode, setRmMode] = useState<'actual' | 'estimated'>('actual');
+
+    // HEAD-TO-HEAD sort and filter
+    type H2HSortMode = 'alpha' | 'diff' | 'a-wins' | 'b-wins' | 'sessions';
+    const [h2hSort, setH2HSort] = useState<H2HSortMode>('alpha');
+    const [h2hFilter, setH2HFilter] = useState<'all' | 'a-wins' | 'b-wins' | 'tie'>('all');
+
     // --- Sync default users once loaded ---
     useEffect(() => {
         if (!userAId && currentUser?.id) {
@@ -642,9 +648,12 @@ export function MatchupPage() {
                 name: exName,
                 currentA,
                 currentB,
-                // Custom period progression
-                diffA: startA > 0 ? currentA - startA : null,
-                diffB: startB > 0 ? currentB - startB : null,
+                startA,
+                startB,
+                // Show diff if there's any current value (even if starting from 0)
+                diffA: currentA > 0 ? currentA - startA : null,
+                diffB: currentB > 0 ? currentB - startB : null,
+                // Percentage only makes sense if we had a start value > 0
                 diffPctA: startA > 0 ? ((currentA - startA) / startA) * 100 : null,
                 diffPctB: startB > 0 ? ((currentB - startB) / startB) * 100 : null,
                 // PR count in period
@@ -1088,7 +1097,11 @@ export function MatchupPage() {
                                             {row.diffA !== null ? (
                                                 <span className={`font-bold ${row.diffA >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                                     {row.diffA >= 0 ? '+' : ''}{row.diffA}kg
-                                                    <span className="text-[9px] opacity-70 ml-1">({row.diffPctA && row.diffPctA >= 0 ? '+' : ''}{row.diffPctA?.toFixed(0)}%)</span>
+                                                    {row.diffPctA !== null ? (
+                                                        <span className="text-[9px] opacity-70 ml-1">({row.diffPctA >= 0 ? '+' : ''}{row.diffPctA.toFixed(0)}%)</span>
+                                                    ) : row.startA === 0 && row.currentA > 0 ? (
+                                                        <span className="text-[9px] text-purple-400 ml-1">ny!</span>
+                                                    ) : null}
                                                 </span>
                                             ) : <span className="text-slate-600">-</span>}
                                         </td>
@@ -1096,7 +1109,11 @@ export function MatchupPage() {
                                             {row.diffB !== null ? (
                                                 <span className={`font-bold ${row.diffB >= 0 ? 'text-indigo-400' : 'text-rose-400'}`}>
                                                     {row.diffB >= 0 ? '+' : ''}{row.diffB}kg
-                                                    <span className="text-[9px] opacity-70 ml-1">({row.diffPctB && row.diffPctB >= 0 ? '+' : ''}{row.diffPctB?.toFixed(0)}%)</span>
+                                                    {row.diffPctB !== null ? (
+                                                        <span className="text-[9px] opacity-70 ml-1">({row.diffPctB >= 0 ? '+' : ''}{row.diffPctB.toFixed(0)}%)</span>
+                                                    ) : row.startB === 0 && row.currentB > 0 ? (
+                                                        <span className="text-[9px] text-purple-400 ml-1">ny!</span>
+                                                    ) : null}
                                                 </span>
                                             ) : <span className="text-slate-600">-</span>}
                                         </td>
@@ -1169,41 +1186,89 @@ export function MatchupPage() {
 
                 {/* 5. HEAD-TO-HEAD (Exercises) */}
                 <section>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-                        <div>
-                            <h3 className="text-xl font-black text-white">Head-to-Head</h3>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-                                Djupdykning i specifika övningar: Maxstyrka, volym, set & reps
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            {/* 1RM Mode Toggle */}
-                            <div className="flex items-center gap-1 bg-slate-900/50 p-1 rounded-lg border border-white/5">
-                                <button
-                                    onClick={() => setRmMode('actual')}
-                                    className={`px-2.5 py-1 text-[9px] font-black uppercase rounded transition-all ${rmMode === 'actual' ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-white'}`}
-                                >
-                                    1RM
-                                </button>
-                                <button
-                                    onClick={() => setRmMode('estimated')}
-                                    className={`px-2.5 py-1 text-[9px] font-black uppercase rounded transition-all ${rmMode === 'estimated' ? 'bg-indigo-500 text-white' : 'text-slate-500 hover:text-white'}`}
-                                >
-                                    e1RM
-                                </button>
+                    <div className="flex flex-col gap-4 mb-6">
+                        {/* Top Row: Title and 1RM Toggle */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-xl font-black text-white">Head-to-Head</h3>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                                    Djupdykning i specifika övningar: Maxstyrka, volym, set & reps
+                                </p>
                             </div>
-                            <div className="relative">
+                            <div className="flex items-center gap-2">
+                                {/* 1RM Mode Toggle */}
+                                <div className="flex items-center gap-1 bg-slate-900/50 p-1 rounded-lg border border-white/5">
+                                    <button
+                                        onClick={() => setRmMode('actual')}
+                                        className={`px-2.5 py-1 text-[9px] font-black uppercase rounded transition-all ${rmMode === 'actual' ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-white'}`}
+                                    >
+                                        1RM
+                                    </button>
+                                    <button
+                                        onClick={() => setRmMode('estimated')}
+                                        className={`px-2.5 py-1 text-[9px] font-black uppercase rounded transition-all ${rmMode === 'estimated' ? 'bg-indigo-500 text-white' : 'text-slate-500 hover:text-white'}`}
+                                    >
+                                        e1RM
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Bottom Row: Search, Sort, Filter */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            {/* Search */}
+                            <div className="relative flex-1 min-w-[150px] max-w-[250px]">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
                                 <input
                                     type="text"
                                     placeholder="Sök övning..."
                                     value={searchQuery}
                                     onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="bg-white/5 border border-white/10 rounded-xl py-2 pl-9 pr-4 text-xs text-white outline-none focus:border-emerald-500/50 transition-all w-full sm:w-48"
+                                    className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-9 pr-4 text-xs text-white outline-none focus:border-emerald-500/50 transition-all"
                                 />
+                            </div>
+
+                            {/* Sort */}
+                            <div className="flex items-center gap-1 bg-slate-900/50 p-1 rounded-lg border border-white/5">
+                                <span className="text-[9px] text-slate-500 uppercase font-black px-2">Sortera:</span>
+                                {[
+                                    { key: 'alpha', label: 'A-Ö' },
+                                    { key: 'diff', label: 'Störst diff' },
+                                    { key: 'a-wins', label: `${userA?.name?.split(' ')[0] || 'A'} ⬆` },
+                                    { key: 'b-wins', label: `${userB?.name?.split(' ')[0] || 'B'} ⬆` },
+                                    { key: 'sessions', label: 'Flest pass' },
+                                ].map(opt => (
+                                    <button
+                                        key={opt.key}
+                                        onClick={() => setH2HSort(opt.key as H2HSortMode)}
+                                        className={`px-2 py-1 text-[9px] font-bold rounded transition-all ${h2hSort === opt.key ? 'bg-purple-500 text-white' : 'text-slate-500 hover:text-white'}`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Filter */}
+                            <div className="flex items-center gap-1 bg-slate-900/50 p-1 rounded-lg border border-white/5">
+                                <span className="text-[9px] text-slate-500 uppercase font-black px-2">Visa:</span>
+                                {[
+                                    { key: 'all', label: 'Alla' },
+                                    { key: 'a-wins', label: `${userA?.name?.split(' ')[0] || 'A'} vinner` },
+                                    { key: 'b-wins', label: `${userB?.name?.split(' ')[0] || 'B'} vinner` },
+                                    { key: 'tie', label: 'Lika' },
+                                ].map(opt => (
+                                    <button
+                                        key={opt.key}
+                                        onClick={() => setH2HFilter(opt.key as any)}
+                                        className={`px-2 py-1 text-[9px] font-bold rounded transition-all ${h2hFilter === opt.key ? 'bg-amber-500 text-white' : 'text-slate-500 hover:text-white'}`}
+                                    >
+                                        {opt.label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
                     </div>
+
 
 
                     {/* Dynamic Shared Exercises Grid */}
@@ -1212,17 +1277,59 @@ export function MatchupPage() {
                             <p className="text-lg font-bold mb-2">Inga gemensamma övningar</p>
                             <p className="text-xs">Ni har inte gjort samma övningar ännu.</p>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {sharedExercises
-                                .filter(exName => exName.toLowerCase().includes(searchQuery.toLowerCase()))
-                                .map((exName, i) => {
-                                    const statsA = getExactExerciseStats(sessionsA, exName);
-                                    const statsB = getExactExerciseStats(sessionsB, exName);
+                    ) : (() => {
+                        // Pre-compute stats for all exercises for sorting/filtering
+                        const exerciseData = sharedExercises
+                            .filter(exName => exName.toLowerCase().includes(searchQuery.toLowerCase()))
+                            .map(exName => {
+                                const statsA = getExactExerciseStats(sessionsA, exName);
+                                const statsB = getExactExerciseStats(sessionsB, exName);
+                                return { exName, statsA, statsB };
+                            })
+                            .filter(d => d.statsA.max1RM > 0 || d.statsB.max1RM > 0);
 
-                                    // Skip if neither has meaningful data
-                                    if (statsA.max1RM === 0 && statsB.max1RM === 0) return null;
+                        // Apply filter
+                        const filteredData = exerciseData.filter(d => {
+                            if (h2hFilter === 'all') return true;
+                            if (h2hFilter === 'a-wins') return d.statsA.max1RM > d.statsB.max1RM;
+                            if (h2hFilter === 'b-wins') return d.statsB.max1RM > d.statsA.max1RM;
+                            if (h2hFilter === 'tie') return d.statsA.max1RM === d.statsB.max1RM;
+                            return true;
+                        });
 
+                        // Apply sort
+                        const sortedData = [...filteredData].sort((a, b) => {
+                            switch (h2hSort) {
+                                case 'alpha':
+                                    return a.exName.localeCompare(b.exName, 'sv');
+                                case 'diff':
+                                    const diffA = Math.abs(a.statsA.max1RM - a.statsB.max1RM);
+                                    const diffB = Math.abs(b.statsA.max1RM - b.statsB.max1RM);
+                                    return diffB - diffA;
+                                case 'a-wins':
+                                    const marginA = a.statsA.max1RM - a.statsB.max1RM;
+                                    const marginAB = b.statsA.max1RM - b.statsB.max1RM;
+                                    return marginAB - marginA; // B wins more = lower
+                                case 'b-wins':
+                                    const marginBA = a.statsB.max1RM - a.statsA.max1RM;
+                                    const marginBB = b.statsB.max1RM - b.statsA.max1RM;
+                                    return marginBB - marginBA;
+                                case 'sessions':
+                                    const sessionsA = a.statsA.count + a.statsB.count;
+                                    const sessionsB = b.statsA.count + b.statsB.count;
+                                    return sessionsB - sessionsA;
+                                default:
+                                    return 0;
+                            }
+                        });
+
+                        return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {sortedData.length === 0 ? (
+                                    <div className="col-span-2 text-center py-8 text-slate-500">
+                                        <p className="text-sm">Inga övningar matchar filtret</p>
+                                    </div>
+                                ) : sortedData.map(({ exName, statsA, statsB }, i) => {
                                     return (
                                         <div key={i} className="glass rounded-2xl p-5 border border-white/5 hover:border-white/10 transition-all group relative overflow-hidden">
                                             <div className="flex justify-between items-center mb-4">
@@ -1293,8 +1400,9 @@ export function MatchupPage() {
                                         </div>
                                     );
                                 })}
-                        </div>
-                    )}
+                            </div>
+                        );
+                    })()}
                 </section>
 
                 {/* 6. SCOREBOARD */}
