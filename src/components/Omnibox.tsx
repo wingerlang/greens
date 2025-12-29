@@ -115,6 +115,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     const [draftVitalAmount, setDraftVitalAmount] = useState<number | null>(null);
     const [isManual, setIsManual] = useState(false);
 
+    // Locked food state - when a food is matched with high confidence
+    const [lockedFood, setLockedFood] = useState<(FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } }) | null>(null);
+    const [draftFoodQuantity, setDraftFoodQuantity] = useState<number | null>(null);
+    const [draftFoodMealType, setDraftFoodMealType] = useState<MealType | null>(null);
+    const [draftFoodDate, setDraftFoodDate] = useState<string | null>(null);
+
     // Sync draft from intent
     useEffect(() => {
         if (!isManual && intent.type === 'exercise') {
@@ -125,7 +131,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         if (!isManual && intent.type === 'vitals') {
             setDraftVitalAmount(intent.data.amount || null);
         }
-    }, [intent, isManual]);
+        // Sync food drafts from intent
+        if (intent.type === 'food' && lockedFood) {
+            if (intent.data.quantity) setDraftFoodQuantity(intent.data.quantity);
+            if (intent.data.mealType) setDraftFoodMealType(intent.data.mealType);
+            if (intent.date) setDraftFoodDate(intent.date);
+        }
+    }, [intent, isManual, lockedFood]);
 
     // Reset drafts when input clears
     useEffect(() => {
@@ -135,6 +147,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             setDraftDuration(null);
             setDraftIntensity(null);
             setDraftVitalAmount(null);
+            setLockedFood(null);
+            setDraftFoodQuantity(null);
+            setDraftFoodMealType(null);
+            setDraftFoodDate(null);
         }
     }, [input]);
 
@@ -160,7 +176,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         mealEntries.forEach(entry => {
             entry.items.forEach(item => {
                 if (item.type === 'foodItem') {
-                    const grams = (item.servings || 1) * 100;
+                    const grams = item.servings || 100; // servings is grams in this app
                     if (!stats[item.referenceId]) {
                         stats[item.referenceId] = { count: 0, lastUsed: entry.date, totalGrams: 0, avgGrams: 100 };
                     }
@@ -212,6 +228,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
     // Food search results with usage stats
     const foodResults = useMemo(() => {
+        // Don't search if we have a locked food
+        if (lockedFood) return [];
         if (isSlashMode) return [];
         if (!input.trim() || input.length < 2) return [];
         // Don't show food results for exercise/vitals/weight intents
@@ -233,15 +251,44 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                 type: 'food' as const,
                 usageStats: foodUsageStats[item.id] || null
             }));
-    }, [input, foodItems, foodUsageStats, isSlashMode, intent]);
+    }, [input, foodItems, foodUsageStats, isSlashMode, intent, lockedFood]);
+
+    // Auto-lock: When there's exactly one exact match, auto-lock it
+    useEffect(() => {
+        if (lockedFood) return; // Already locked
+        if (foodResults.length === 0) return;
+
+        // Check for exact name match
+        const searchQuery = intent.type === 'food' && intent.data.query
+            ? intent.data.query.toLowerCase().trim()
+            : input.toLowerCase().trim();
+
+        const exactMatch = foodResults.find(
+            item => item.name.toLowerCase() === searchQuery
+        );
+
+        if (exactMatch) {
+            setLockedFood({
+                ...exactMatch,
+                usageStats: foodUsageStats[exactMatch.id] || undefined
+            });
+            // Set initial drafts
+            const stats = foodUsageStats[exactMatch.id];
+            const foodData = intent.type === 'food' ? intent.data : null;
+            setDraftFoodQuantity(foodData?.quantity || stats?.avgGrams || 100);
+            setDraftFoodMealType(foodData?.mealType || null);
+            setDraftFoodDate(intent.date || null);
+        }
+    }, [foodResults, lockedFood, intent, input, foodUsageStats]);
 
     // Combined selectable items for keyboard nav
     const selectableItems = useMemo(() => {
+        if (lockedFood) return []; // No selection when locked
         if (isSlashMode) return navSuggestions.map(r => ({ itemType: 'nav' as const, ...r }));
         if (foodResults.length > 0) return foodResults.map(f => ({ itemType: 'food' as const, ...f }));
         if (!input && recentFoods.length > 0) return recentFoods.map(f => ({ itemType: 'recent' as const, ...f }));
         return [];
-    }, [isSlashMode, navSuggestions, foodResults, input, recentFoods]);
+    }, [isSlashMode, navSuggestions, foodResults, input, recentFoods, lockedFood]);
 
     // Reset selection when results change
     useEffect(() => {
@@ -280,12 +327,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     }, [onClose, selectableItems.length]);
 
     const logFoodItem = (item: FoodItem, quantity: number = 100) => {
-        // Use parsed date from intent, or today
-        const logDate = intent.date || new Date().toISOString().split('T')[0];
+        // Use draft values (from locked food mode), or parsed intent, or defaults
+        const logDate = draftFoodDate || intent.date || new Date().toISOString().split('T')[0];
 
-        // Use parsed mealType from intent, or calculate from time
+        // Use draft mealType, or parsed mealType from intent, or calculate from time
         let mealType: MealType = 'snack';
-        if (intent.type === 'food' && intent.data.mealType) {
+        if (draftFoodMealType) {
+            mealType = draftFoodMealType;
+        } else if (intent.type === 'food' && intent.data.mealType) {
             mealType = intent.data.mealType;
         } else {
             const hour = new Date().getHours();
@@ -300,13 +349,33 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             items: [{
                 type: 'foodItem',
                 referenceId: item.id,
-                servings: quantity / 100
+                servings: quantity // servings is grams
             }]
         });
 
         setShowFeedback(true);
         setInput('');
+        setLockedFood(null);
         setTimeout(() => onClose(), 800);
+    };
+
+    // Lock a food item for detailed editing
+    const lockFood = (item: FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } | null }) => {
+        setLockedFood({
+            ...item,
+            usageStats: item.usageStats || undefined
+        });
+        const stats = foodUsageStats[item.id];
+        setDraftFoodQuantity(intent.type === 'food' && intent.data.quantity ? intent.data.quantity : (stats?.avgGrams || 100));
+        setDraftFoodMealType(intent.type === 'food' && intent.data.mealType ? intent.data.mealType : null);
+        setDraftFoodDate(intent.date || null);
+    };
+
+    // Handle logging the locked food
+    const handleLockedFoodAction = () => {
+        if (!lockedFood) return;
+        const quantity = draftFoodQuantity || lockedFood.usageStats?.avgGrams || 100;
+        logFoodItem(lockedFood, quantity);
     };
 
     const handleExerciseAction = () => {
@@ -359,6 +428,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     };
 
     const handleExecute = () => {
+        // Handle locked food first
+        if (lockedFood) {
+            handleLockedFoodAction();
+            return;
+        }
+
         // Handle slash navigation
         if (isSlashMode && selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'nav') {
             const navItem = selectableItems[selectedIndex] as { itemType: 'nav'; path: string };
@@ -367,13 +442,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             return;
         }
 
-        // Handle food selection
+        // Handle food selection - lock it instead of immediately logging
         if (selectableItems.length > 0 && (selectableItems[selectedIndex]?.itemType === 'food' || selectableItems[selectedIndex]?.itemType === 'recent')) {
-            const selectedFood = selectableItems[selectedIndex] as FoodItem & { usageStats?: { avgGrams: number } };
+            const selectedFood = selectableItems[selectedIndex] as FoodItem & { usageStats?: { avgGrams: number; count: number; lastUsed: string } };
             if (selectedFood) {
-                const defaultQuantity = selectedFood.usageStats?.avgGrams || 100;
-                const quantity = intent.type === 'food' ? intent.data.quantity || defaultQuantity : defaultQuantity;
-                logFoodItem(selectedFood, quantity);
+                lockFood(selectedFood);
                 return;
             }
         }
@@ -475,8 +548,137 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                         </div>
                     )}
 
+                    {/* LOCKED FOOD MODULE - Shows when a food is matched/locked */}
+                    {!isSlashMode && lockedFood && (
+                        <div className="p-4 space-y-4">
+                            <div className="px-3 py-2 bg-emerald-500/10 border-l-4 border-emerald-500 rounded-r-lg flex items-center gap-2">
+                                <span className="text-lg">{getCategoryEmoji(lockedFood.category)}</span>
+                                <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Logga Mat</span>
+                                <button
+                                    onClick={() => { setLockedFood(null); setDraftFoodQuantity(null); setDraftFoodMealType(null); setDraftFoodDate(null); }}
+                                    className="ml-auto text-[10px] uppercase font-bold text-slate-400 hover:text-white bg-white/10 px-2 py-0.5 rounded-full"
+                                >
+                                    ✕ Ångra
+                                </button>
+                            </div>
+
+                            {/* Food Item Display */}
+                            <div className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-xl">
+                                <div className="w-16 h-16 rounded-xl bg-emerald-500/20 flex items-center justify-center text-3xl">
+                                    {getCategoryEmoji(lockedFood.category)}
+                                </div>
+                                <div className="flex-1">
+                                    <h3 className="text-xl font-bold text-white">{lockedFood.name}</h3>
+                                    <div className="text-xs text-slate-400 flex items-center gap-2 mt-1">
+                                        <span className="uppercase">{lockedFood.category || 'Livsmedel'}</span>
+                                        {lockedFood.usageStats && (
+                                            <>
+                                                <span className="text-slate-600">•</span>
+                                                <span className="text-emerald-500/70">{lockedFood.usageStats.count}x loggad</span>
+                                                <span className="text-slate-600">•</span>
+                                                <span>snitt {Math.round(lockedFood.usageStats.avgGrams)}g</span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Editable Fields Row */}
+                            <div className="grid grid-cols-3 gap-3">
+                                {/* Quantity */}
+                                <div className="bg-slate-800/50 rounded-xl p-3">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Mängd</label>
+                                    <div className="flex items-baseline gap-1">
+                                        <input
+                                            type="number"
+                                            value={draftFoodQuantity || ''}
+                                            onChange={(e) => setDraftFoodQuantity(parseFloat(e.target.value) || 0)}
+                                            className="w-full text-2xl font-black bg-transparent border-b-2 border-slate-600 focus:border-emerald-500 outline-none text-white"
+                                            placeholder={String(lockedFood.usageStats?.avgGrams || 100)}
+                                        />
+                                        <span className="text-sm font-bold text-slate-400">g</span>
+                                    </div>
+                                </div>
+
+                                {/* Meal Type */}
+                                <div className="bg-slate-800/50 rounded-xl p-3">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Måltid</label>
+                                    <select
+                                        value={draftFoodMealType || ''}
+                                        onChange={(e) => setDraftFoodMealType(e.target.value as MealType)}
+                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
+                                    >
+                                        <option value="">Auto</option>
+                                        <option value="breakfast">🌅 Frukost</option>
+                                        <option value="lunch">☀️ Lunch</option>
+                                        <option value="dinner">🌙 Middag</option>
+                                        <option value="snack">🍎 Mellanmål</option>
+                                        <option value="beverage">🥤 Dryck</option>
+                                    </select>
+                                </div>
+
+                                {/* Date */}
+                                <div className="bg-slate-800/50 rounded-xl p-3">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Datum</label>
+                                    <select
+                                        value={draftFoodDate || ''}
+                                        onChange={(e) => setDraftFoodDate(e.target.value || null)}
+                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
+                                    >
+                                        <option value="">📅 Idag</option>
+                                        <option value={new Date(Date.now() - 86400000).toISOString().split('T')[0]}>⏪ Igår</option>
+                                        <option value={new Date(Date.now() + 86400000).toISOString().split('T')[0]}>⏩ Imorgon</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Calculated Nutrients Preview */}
+                            <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
+                                <div className="flex items-center gap-4 text-sm">
+                                    <span className="text-slate-400">
+                                        🔥 <span className="font-bold text-white">{Math.round(lockedFood.calories * (draftFoodQuantity || 100) / 100)}</span> kcal
+                                    </span>
+                                    <span className="text-slate-400">
+                                        🥩 <span className="font-bold text-white">{Math.round(lockedFood.protein * (draftFoodQuantity || 100) / 100)}</span>g prot
+                                    </span>
+                                    <span className="text-slate-400">
+                                        🍞 <span className="font-bold text-white">{Math.round((lockedFood.carbs || 0) * (draftFoodQuantity || 100) / 100)}</span>g kolh
+                                    </span>
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                    för {draftFoodQuantity || 100}g
+                                </div>
+                            </div>
+
+                            {/* Action Button */}
+                            <button
+                                className="w-full py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2"
+                                onClick={handleLockedFoodAction}
+                            >
+                                <span>Logga {lockedFood.name}</span>
+                                <ArrowRight size={16} />
+                            </button>
+
+                            {/* View Details & History Link */}
+                            <button
+                                onClick={() => {
+                                    navigate(`/database?id=${lockedFood.id}`);
+                                    onClose();
+                                }}
+                                className="w-full py-2 text-center text-slate-400 hover:text-white text-xs underline underline-offset-4"
+                            >
+                                📋 Visa alla detaljer & logghistorik →
+                            </button>
+
+                            {/* Hint for continuing to type */}
+                            <div className="text-center text-[10px] text-slate-500">
+                                💡 Fortsätt skriva för att ändra mängd, måltid eller datum (t.ex. "120g mellanmål igår")
+                            </div>
+                        </div>
+                    )}
+
                     {/* EXERCISE MODULE */}
-                    {!isSlashMode && intent.type === 'exercise' && (
+                    {!isSlashMode && !lockedFood && intent.type === 'exercise' && (
                         <div className="p-4 space-y-4">
                             <div className="px-3 py-2 bg-orange-500/10 border-l-4 border-orange-500 rounded-r-lg flex items-center gap-2">
                                 <Dumbbell size={16} className="text-orange-500" />
@@ -570,7 +772,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                     )}
 
                     {/* VITALS MODULE */}
-                    {!isSlashMode && intent.type === 'vitals' && vitalInfo && (
+                    {!isSlashMode && !lockedFood && intent.type === 'vitals' && vitalInfo && (
                         <div className="p-4 space-y-4">
                             <div className={`px-3 py-2 ${vitalInfo.bg} border-l-4 ${vitalInfo.text.replace('text-', 'border-')} rounded-r-lg flex items-center gap-2`}>
                                 <VitalIcon size={16} className={vitalInfo.text} />
@@ -606,7 +808,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                     )}
 
                     {/* WEIGHT MODULE */}
-                    {!isSlashMode && intent.type === 'weight' && (
+                    {!isSlashMode && !lockedFood && intent.type === 'weight' && (
                         <div className="flex items-center gap-3 text-emerald-400 px-4 py-4">
                             <span className="text-2xl">⚖️</span>
                             <span className="text-lg">Logga vikt: <span className="font-bold">{intent.data.weight} kg</span></span>

@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext.tsx';
+import { useSearchParams } from 'react-router-dom';
 import {
     type FoodItem,
     type FoodItemFormData,
@@ -45,19 +46,71 @@ const EMPTY_FORM: FoodItemFormData = {
 type ViewMode = 'grid' | 'list';
 
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
-    const { foodItems, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
+    const { foodItems, mealEntries, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [isFormOpen, setIsFormOpen] = useState(false);
+    const [detailItem, setDetailItem] = useState<FoodItem | null>(null);
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
     const [formData, setFormData] = useState<FoodItemFormData>(EMPTY_FORM);
-    const [searchQuery, setSearchQuery] = useState('');
+    const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
     const [selectedCategory, setSelectedCategory] = useState<FoodCategory | 'all'>('all');
     const [viewMode, setViewMode] = useState<ViewMode>('list');
+
+    // Update URL param when detailItem changes
+    useEffect(() => {
+        if (detailItem) {
+            const newParams = new URLSearchParams(searchParams);
+            newParams.set('id', detailItem.id);
+            setSearchParams(newParams, { replace: true });
+        } else {
+            const idParam = searchParams.get('id');
+            if (idParam) {
+                const newParams = new URLSearchParams(searchParams);
+                newParams.delete('id');
+                setSearchParams(newParams, { replace: true });
+            }
+        }
+    }, [detailItem, setSearchParams, searchParams]);
+
+    // Sync searchQuery with URL search param
+    useEffect(() => {
+        const urlSearch = searchParams.get('search');
+        if (urlSearch) {
+            setSearchQuery(urlSearch);
+        }
+    }, [searchParams]);
 
     const filteredItems = foodItems.filter(item => {
         const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
         return matchesSearch && matchesCategory;
     });
+
+    // Auto-open detail if EXACT search match OR ID match from URL
+    useEffect(() => {
+        const urlId = searchParams.get('id');
+        if (urlId) {
+            const item = foodItems.find(it => it.id === urlId);
+            if (item) {
+                setDetailItem(item);
+                return;
+            }
+        }
+
+        const urlSearch = searchParams.get('search');
+        if (urlSearch && filteredItems.length === 1 && filteredItems[0].name.toLowerCase() === urlSearch.toLowerCase()) {
+            setDetailItem(filteredItems[0]);
+        }
+    }, [searchParams, filteredItems.length, foodItems]);
+
+    // Handle ESC key to close modal
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setDetailItem(null);
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     const handleOpenForm = (item?: FoodItem) => {
         if (item) {
@@ -268,13 +321,22 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                     <td className="td-actions">
                                         <button
                                             className="btn btn-ghost btn-sm"
+                                            onClick={() => setDetailItem(item)}
+                                            title="Detaljer & historik"
+                                        >
+                                            📋
+                                        </button>
+                                        <button
+                                            className="btn btn-ghost btn-sm"
                                             onClick={() => handleOpenForm(item)}
+                                            title="Redigera"
                                         >
                                             ✏️
                                         </button>
                                         <button
                                             className="btn btn-ghost btn-sm btn-danger"
                                             onClick={() => handleDelete(item.id)}
+                                            title="Ta bort"
                                         >
                                             🗑️
                                         </button>
@@ -322,8 +384,9 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             <div className="food-card-footer">
                                 <span className="unit-label">per 100{item.unit === 'pcs' ? ' st' : item.unit}</span>
                                 <div className="card-actions">
-                                    <button className="btn btn-ghost" onClick={() => handleOpenForm(item)}>Redigera</button>
-                                    <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(item.id)}>Ta bort</button>
+                                    <button className="btn btn-ghost" onClick={() => setDetailItem(item)} title="Detaljer & historik">📋</button>
+                                    <button className="btn btn-ghost" onClick={() => handleOpenForm(item)}>✏️</button>
+                                    <button className="btn btn-ghost btn-danger" onClick={() => handleDelete(item.id)}>🗑️</button>
                                 </div>
                             </div>
                         </div>
@@ -634,6 +697,93 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {detailItem && (
+                <div className="modal-overlay" onClick={() => setDetailItem(null)}>
+                    <div className="modal-content detail-modal" onClick={e => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h2>{detailItem.name}</h2>
+                            <button className="btn-close" onClick={() => setDetailItem(null)}>×</button>
+                        </div>
+                        <div className="detail-grid">
+                            <div className="detail-section">
+                                <h3 className="detail-title text-emerald-400">📊 Näringsvärde (100g)</h3>
+                                <div className="food-stats-row">
+                                    <div className="food-stat-card">
+                                        <span className="food-stat-label">Protein</span>
+                                        <span className="food-stat-value">{detailItem.protein}g</span>
+                                    </div>
+                                    <div className="food-stat-card">
+                                        <span className="food-stat-label">Kolh.</span>
+                                        <span className="food-stat-value">{detailItem.carbs}g</span>
+                                    </div>
+                                    <div className="food-stat-card">
+                                        <span className="food-stat-label">Fett</span>
+                                        <span className="food-stat-value">{detailItem.fat}g</span>
+                                    </div>
+                                    <div className="food-stat-card">
+                                        <span className="food-stat-label">Kalorier</span>
+                                        <span className="food-stat-value text-emerald-400">{detailItem.calories}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="detail-section">
+                                <h3 className="detail-title text-indigo-400">🧬 Mikronäringsämnen</h3>
+                                <div className="micro-grid">
+                                    <div className="micro-item">
+                                        <span>Järn:</span>
+                                        <strong>{detailItem.iron || 0} mg</strong>
+                                    </div>
+                                    <div className="micro-item">
+                                        <span>Kalcium:</span>
+                                        <strong>{detailItem.calcium || 0} mg</strong>
+                                    </div>
+                                    <div className="micro-item">
+                                        <span>Zink:</span>
+                                        <strong>{detailItem.zinc || 0} mg</strong>
+                                    </div>
+                                    <div className="micro-item">
+                                        <span>B12:</span>
+                                        <strong>{detailItem.vitaminB12 || 0} µg</strong>
+                                    </div>
+                                    <div className="micro-item">
+                                        <span>Vitamin C:</span>
+                                        <strong>{detailItem.vitaminC || 0} mg</strong>
+                                    </div>
+                                    <div className="micro-item">
+                                        <span>Fiber:</span>
+                                        <strong>{detailItem.fiber || 0} g</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="detail-section full-width">
+                                <h3 className="detail-title text-amber-400">📜 Logghistorik</h3>
+                                <div className="history-list">
+                                    {mealEntries
+                                        .filter(e => e.items.some(it => it.referenceId === detailItem.id))
+                                        .sort((a, b) => b.date.localeCompare(a.date))
+                                        .map(entry => {
+                                            const item = entry.items.find(it => it.referenceId === detailItem.id);
+                                            return (
+                                                <div key={entry.id} className="history-item">
+                                                    <span className="history-date">{entry.date}</span>
+                                                    <span className="history-type uppercase tracking-widest">{entry.mealType}</span>
+                                                    <span className="history-amount">{Math.round(item?.servings || 0)}g</span>
+                                                </div>
+                                            );
+                                        })
+                                    }
+                                    {mealEntries.filter(e => e.items.some(it => it.referenceId === detailItem.id)).length === 0 && (
+                                        <p className="no-history text-slate-500 italic text-sm">Ingen logghistorik hittades för denna råvara.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}

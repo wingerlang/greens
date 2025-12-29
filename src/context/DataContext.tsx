@@ -248,8 +248,18 @@ export function DataProvider({ children }: DataProviderProps) {
             return;
         }
 
-        setFoodItems(data.foodItems || []);
-        setRecipes(data.recipes || []);
+        // De-duplicate items to prevent React key warnings and glitches
+        const deDuplicate = <T extends { id: string }>(items: T[]): T[] => {
+            const seen = new Set();
+            return items.filter(item => {
+                if (seen.has(item.id)) return false;
+                seen.add(item.id);
+                return true;
+            });
+        };
+
+        setFoodItems(deDuplicate(data.foodItems || []));
+        setRecipes(deDuplicate(data.recipes || []));
         setMealEntries(data.mealEntries || []);
         setWeeklyPlans(data.weeklyPlans || []);
         setPantryItems(data.pantryItems || []);

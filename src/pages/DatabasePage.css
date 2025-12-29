@@ -595,3 +595,224 @@
         font-size: 0.85rem;
     }
 }
+
+/* ============================================
+   FOOD DETAIL MODAL
+   ============================================ */
+
+.modal-content.detail-modal {
+    background: #0f172a;
+    /* Slate 900 */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px;
+    width: 95%;
+    max-width: 700px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    padding: 0;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: 900;
+    color: white;
+    letter-spacing: -0.5px;
+}
+
+.btn-close {
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    color: #94a3b8;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-close:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    transform: rotate(90deg);
+}
+
+.detail-grid {
+    padding: 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+}
+
+.detail-section.full-width {
+    grid-column: span 2;
+}
+
+.detail-title {
+    font-size: 0.75rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 1.5rem;
+    opacity: 0.8;
+}
+
+.food-stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.food-stat-card {
+    background: rgba(30, 41, 59, 0.5);
+    /* Slate 800 */
+    padding: 1.25rem;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: transform 0.2s ease;
+}
+
+.food-stat-card:hover {
+    transform: translateY(-2px);
+    background: rgba(30, 41, 59, 0.8);
+}
+
+.food-stat-label {
+    font-size: 0.7rem;
+    color: #64748b;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0.5rem;
+}
+
+.food-stat-value {
+    font-size: 2rem;
+    font-weight: 900;
+    color: white;
+    line-height: 1.1;
+}
+
+.micro-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+}
+
+.micro-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.95rem;
+    padding: 0.75rem 1rem;
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.micro-item span {
+    color: #94a3b8;
+}
+
+.micro-item strong {
+    color: white;
+    font-weight: 700;
+}
+
+.history-list {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 20px;
+    padding: 0.5rem;
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    transition: background 0.2s ease;
+}
+
+.history-item:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.history-item:last-child {
+    border-bottom: none;
+}
+
+.history-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.history-type {
+    font-size: 0.65rem;
+    font-weight: 900;
+    padding: 0.3rem 0.6rem;
+    background: rgba(56, 189, 248, 0.1);
+    border-radius: 6px;
+    color: #38bdf8;
+    text-transform: uppercase;
+}
+
+.history-amount {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--accent-primary);
+}
+
+.no-history {
+    padding: 2rem;
+    text-align: center;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 650px) {
+    .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 2rem;
+    }
+
+    .detail-section.full-width {
+        grid-column: span 1;
+    }
+
+    .modal-header h2 {
+        font-size: 1.5rem;
+    }
+}

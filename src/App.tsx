@@ -74,6 +74,8 @@ export function App() {
                                                 <Route path="planera" element={<PlanningPage />} />
                                                 <Route path="pantry" element={<PantryPage />} />
                                                 <Route path="recipes" element={<RecipesPage />} />
+                                                <Route path="database" element={<DatabasePage />} />
+                                                <Route path="databas" element={<DatabasePage />} />
                                                 <Route path="calories" element={<CaloriesPage />} />
                                                 <Route path="training" element={<TrainingPage />} />
                                                 <Route path="profile" element={<ProfilePage />} />
