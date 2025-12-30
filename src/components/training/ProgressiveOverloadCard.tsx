@@ -59,8 +59,8 @@ export function ProgressiveOverloadCard({ suggestion, compact = false, onSelectW
     if (compact) {
         return (
             <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${isPlateaued
-                    ? 'bg-amber-500/10 border border-amber-500/20'
-                    : 'bg-emerald-500/10 border border-emerald-500/20'
+                ? 'bg-amber-500/10 border border-amber-500/20'
+                : 'bg-emerald-500/10 border border-emerald-500/20'
                 }`}>
                 <span className="text-lg">{isPlateaued ? '⚠️' : getTrendIcon()}</span>
                 <div className="flex-1">
@@ -78,8 +78,8 @@ export function ProgressiveOverloadCard({ suggestion, compact = false, onSelectW
 
     return (
         <div className={`rounded-xl p-4 ${isPlateaued
-                ? 'bg-amber-500/10 border border-amber-500/20'
-                : 'bg-gradient-to-r from-emerald-500/10 to-sky-500/10 border border-emerald-500/20'
+            ? 'bg-amber-500/10 border border-amber-500/20'
+            : 'bg-gradient-to-r from-emerald-500/10 to-sky-500/10 border border-emerald-500/20'
             }`}>
             <div className="flex items-start gap-3">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${isPlateaued ? 'bg-amber-500/20' : 'bg-emerald-500/20'
@@ -128,8 +128,8 @@ export function ProgressiveOverloadCard({ suggestion, compact = false, onSelectW
                         <button
                             onClick={() => onSelectWeight?.(suggestedWeight, lastReps)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 ${isPlateaued
-                                    ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
-                                    : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
+                                ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                                : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
                                 }`}
                         >
                             💪 {suggestedWeight}kg × {lastReps}
@@ -138,8 +138,8 @@ export function ProgressiveOverloadCard({ suggestion, compact = false, onSelectW
                         <button
                             onClick={() => onSelectWeight?.(lastWeight, suggestedReps)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 ${isPlateaued
-                                    ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
-                                    : 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30'
+                                ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                                : 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30'
                                 }`}
                         >
                             🔄 {lastWeight}kg × {suggestedReps}
@@ -291,7 +291,7 @@ export function VolumeRecommendationCard({ recommendation }: VolumeRecommendatio
                         {currentWeeklyVolume.toLocaleString()}kg
                     </div>
                     <div className={`text-[9px] ${change >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {change >= 0 ? '+' : ''}{Math.round(change)}% vs förra veckan
+                        {change >= 0 ? '+' : ''}{Math.round(change)}% vs snitt (6v)
                     </div>
                 </div>
             </div>

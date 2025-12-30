@@ -11,7 +11,7 @@
  */
 
 import type { StrengthWorkout, StrengthWorkoutExercise, StrengthSet } from '../models/strengthTypes.ts';
-import { calculate1RM } from '../models/strengthTypes.ts';
+import { calculate1RM, normalizeExerciseName, isBodyweightExercise, isTimeBasedExercise, isWeightedDistanceExercise, isHyroxExercise } from '../models/strengthTypes.ts';
 
 // ============================================
 // Configuration
@@ -616,3 +616,206 @@ function formatRelativeDate(dateStr: string): string {
     if (diffDays < 14) return 'Förra veckan';
     return `${Math.floor(diffDays / 7)} veckor sedan`;
 }
+
+// ============================================
+// Underperformers Analysis
+// ============================================
+
+export interface Underperformer {
+    exerciseName: string;
+    totalSets: number;
+    totalVolume: number;
+    daysSinceLastPB: number | null;
+    lastPBDate: string | null;
+    lastPBWorkoutId: string | null;
+    e1RM: number | null;
+    setsSinceLastPB: number;
+    stagnationScore: number;
+    message: string;
+    isBodyweight: boolean;
+    isTimeBased: boolean;
+    maxTimeFormatted: string | null;
+    isWeightedDistance: boolean;
+    maxDistance: number | null;
+    maxDistanceUnit: string | null;
+    isHyrox: boolean;
+}
+
+/**
+ * Find exercises that are trained frequently but have stagnant progress.
+ * "Underperformers" = high volume but flat line on development (many sets without PB)
+ */
+export function getUnderperformers(
+    workouts: StrengthWorkout[],
+    personalBests: { exerciseName: string; date: string; value: number; workoutId?: string; type?: string }[],
+    minSets: number = 20
+): Underperformer[] {
+    const exerciseStats = new Map<string, {
+        totalSets: number;
+        totalVolume: number;
+        lastWorkoutDate: string;
+        firstWorkoutDate: string;
+    }>();
+
+    // Collect all exercise data
+    for (const workout of workouts) {
+        for (const exercise of workout.exercises) {
+            const name = normalizeExerciseName(exercise.exerciseName);
+            const existing = exerciseStats.get(name) || {
+                totalSets: 0,
+                totalVolume: 0,
+                lastWorkoutDate: workout.date,
+                firstWorkoutDate: workout.date
+            };
+
+            existing.totalSets += exercise.sets.length;
+            existing.totalVolume += exercise.sets.reduce((sum, s) => sum + (s.weight * s.reps), 0);
+
+            if (workout.date > existing.lastWorkoutDate) {
+                existing.lastWorkoutDate = workout.date;
+            }
+            if (workout.date < existing.firstWorkoutDate) {
+                existing.firstWorkoutDate = workout.date;
+            }
+
+            exerciseStats.set(name, existing);
+        }
+    }
+
+    const underperformers: Underperformer[] = [];
+    const now = new Date();
+
+    for (const [name, stats] of exerciseStats) {
+        // Skip exercises with too few sets (not trained enough to matter)
+        if (stats.totalSets < minSets) continue;
+
+        // Find the most recent PB for this exercise
+        // For time-based exercises, look for 'time' type PBs
+        // For weight-based exercises, look for '1rm' type PBs
+        const isTime = isTimeBasedExercise(name);
+        const isBW = isBodyweightExercise(name);
+        const exercisePBs = personalBests
+            .filter(pb => {
+                const pbName = normalizeExerciseName(pb.exerciseName);
+                if (pbName !== name) return false;
+                // Filter by type if available
+                if (isTime) return !pb.type || pb.type === 'time';
+                return !pb.type || pb.type === '1rm';
+            })
+            .sort((a, b) => b.date.localeCompare(a.date));
+
+        const lastPB = exercisePBs[0];
+        let lastPBDate = lastPB?.date || null;
+        let lastPBWorkoutId = lastPB?.workoutId || null;
+
+        // For bodyweight exercises, the 1RM should be based on extraWeight only
+        // Find the PB with the highest extraWeight (best weighted performance)
+        let e1RMValue: number | null = null;
+        const isWeightedDistance = isWeightedDistanceExercise(name);
+        const isHyrox = isHyroxExercise(name);
+        let maxDistance: number | null = null;
+        let maxDistanceUnit: string | null = null;
+
+        if (isWeightedDistance) {
+            // Find the PB with the highest weight (already sorted by value/weight)
+            // But we also want the distance from key context
+            // Sort by value (weight) descending
+            const bestPB = exercisePBs
+                .filter(pb => !pb.type || pb.type === '1rm')
+                .sort((a, b) => b.value - a.value)[0];
+
+            if (bestPB) {
+                e1RMValue = bestPB.value;
+                maxDistance = (bestPB as any).distance || null;
+                maxDistanceUnit = (bestPB as any).distanceUnit || null;
+                lastPBDate = bestPB.date;
+                lastPBWorkoutId = bestPB.workoutId;
+            }
+        } else if (isBW && exercisePBs.length > 0) {
+            // Find the PB with highest extraWeight
+            let maxExtraWeight = 0;
+            for (const pb of exercisePBs) {
+                const extra = (pb as any).extraWeight || 0;
+                if (extra > maxExtraWeight) {
+                    maxExtraWeight = extra;
+                    lastPBWorkoutId = pb.workoutId || null;
+                    lastPBDate = pb.date;
+                }
+            }
+            e1RMValue = maxExtraWeight > 0 ? maxExtraWeight : null;
+        } else if (!isTime && lastPB) {
+            e1RMValue = lastPB.value || null;
+        }
+
+        // Format time if it's a time-based exercise
+        let maxTimeFormatted: string | null = null;
+        if (isTime && lastPB?.value) {
+            const secs = lastPB.value;
+            const mins = Math.floor(secs / 60);
+            const remainingSecs = secs % 60;
+            maxTimeFormatted = `${mins}:${remainingSecs.toString().padStart(2, '0')}`;
+        }
+
+        let daysSinceLastPB: number | null = null;
+        let setsSinceLastPB = 0;
+
+        if (lastPBDate) {
+            daysSinceLastPB = Math.floor((now.getTime() - new Date(lastPBDate).getTime()) / (1000 * 60 * 60 * 24));
+
+            // Count sets performed AFTER the last PB
+            for (const workout of workouts) {
+                if (workout.date <= lastPBDate) continue;
+                for (const exercise of workout.exercises) {
+                    if (normalizeExerciseName(exercise.exerciseName) === name) {
+                        setsSinceLastPB += exercise.sets.length;
+                    }
+                }
+            }
+        } else {
+            // No PB at all - all sets are "since last PB"
+            setsSinceLastPB = stats.totalSets;
+            const firstDate = new Date(stats.firstWorkoutDate);
+            daysSinceLastPB = Math.floor((now.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+        }
+
+        // Stagnation score: sets since PB weighted by time
+        // Higher = trained more without progressing
+        const stagnationScore = setsSinceLastPB * Math.sqrt(daysSinceLastPB || 1);
+
+        // Only include if there's meaningful stagnation (at least 15 sets without PB)
+        if (setsSinceLastPB < 15) continue;
+
+        let message = '';
+        if (setsSinceLastPB >= 50) {
+            message = `${setsSinceLastPB} set sedan senaste rekord – överväg ny teknik eller variation`;
+        } else if (daysSinceLastPB && daysSinceLastPB >= 180) {
+            message = `6+ månader sedan senaste rekord trots ${setsSinceLastPB} set`;
+        } else {
+            message = `${setsSinceLastPB} set utan nytt rekord (${Math.round(daysSinceLastPB || 0)} dagar)`;
+        }
+
+        underperformers.push({
+            exerciseName: name.charAt(0).toUpperCase() + name.slice(1),
+            totalSets: stats.totalSets,
+            totalVolume: Math.round(stats.totalVolume),
+            daysSinceLastPB,
+            lastPBDate,
+            lastPBWorkoutId,
+            e1RM: e1RMValue,
+            setsSinceLastPB,
+            stagnationScore,
+            message,
+            isBodyweight: isBodyweightExercise(name),
+            isTimeBased: isTime,
+            maxTimeFormatted,
+            isWeightedDistance,
+            maxDistance,
+            maxDistanceUnit,
+            isHyrox
+        });
+    }
+
+    // Sort by days since last PB (longest stagnation first)
+    return underperformers.sort((a, b) => (b.daysSinceLastPB || 0) - (a.daysSinceLastPB || 0));
+}
+

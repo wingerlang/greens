@@ -10,6 +10,8 @@ import {
     StrengthExercise,
     ExerciseCategory,
     generateStrengthId,
+    isWeightedDistanceExercise,
+    isDistanceBasedExercise,
     normalizeExerciseName,
     parseTimeToSeconds,
     calculate1RM,
@@ -253,7 +255,7 @@ function parseSetData(values: string[], bodyWeight?: number): StrengthSet {
                 set.rpe = parseFloat(value) || undefined;
                 break;
             case 'time-per-500':
-                // Rowing pace, skip for now
+                set.tempo = value;
                 break;
         }
     }
@@ -304,6 +306,109 @@ function finalizeWorkout(ctx: ParserContext) {
 }
 
 function trackPersonalBest(ctx: ParserContext, exercise: StrengthExercise, set: StrengthSet) {
+
+    // 0. Handle Weighted Distance PBs (Sled Push, Farmers Walk, etc.)
+    if (isWeightedDistanceExercise(exercise.name)) {
+        const pbKey = `${exercise.id}-1rm`; // Still use 1rm key for consistency
+        const existing = ctx.personalBests.get(pbKey);
+
+        // Logic: 
+        // 1. Higher weight wins
+        // 2. If same weight, longer distance wins
+
+        let isNewPB = false;
+
+        if (!existing) {
+            isNewPB = true;
+        } else if (set.weight > existing.value) {
+            isNewPB = true;
+        } else if (set.weight === existing.value && (set.distance || 0) > (existing.distance || 0)) {
+            isNewPB = true;
+        }
+
+        if (isNewPB) {
+            ctx.personalBests.set(pbKey, {
+                id: generateStrengthId(),
+                exerciseId: exercise.id,
+                exerciseName: exercise.name,
+                userId: ctx.userId,
+                type: '1rm',
+                value: set.weight, // Value is the weight
+                weight: set.weight,
+                distance: set.distance, // Store distance context
+                distanceUnit: set.distanceUnit,
+                reps: set.reps,
+                isBodyweight: false,
+                extraWeight: 0,
+                date: ctx.currentWorkout!.date,
+                workoutId: ctx.currentWorkout!.id,
+                workoutName: ctx.currentWorkout!.name,
+                estimated1RM: set.weight,
+                createdAt: new Date().toISOString(),
+                previousBest: existing?.value
+            });
+        }
+        return;
+    }
+
+    // 0.5. Track Distance-based PBs (Running, Rowing, Ski Erg)
+    // Note: Weighted Distance is handled above. This is for pure cardio/distance.
+    if (isDistanceBasedExercise(exercise.name) && set.distance && set.distance > 0) {
+        const pbKey = `${exercise.id}-distance`;
+        const existing = ctx.personalBests.get(pbKey);
+
+        if (!existing || set.distance > existing.value) {
+            ctx.personalBests.set(pbKey, {
+                id: generateStrengthId(),
+                exerciseId: exercise.id,
+                exerciseName: exercise.name,
+                userId: ctx.userId,
+                type: 'distance',
+                value: set.distance,
+                weight: 0,
+                reps: 0,
+                distance: set.distance,
+                distanceUnit: set.distanceUnit,
+                time: set.timeSeconds,
+                tempo: set.tempo,
+                date: ctx.currentWorkout!.date,
+                workoutId: ctx.currentWorkout!.id,
+                workoutName: ctx.currentWorkout!.name,
+                estimated1RM: 0,
+                createdAt: new Date().toISOString(),
+                previousBest: existing?.value
+            });
+        }
+    }
+
+    // 1. Track time-based PBs (for plank, dead hang, etc.)
+    if (set.timeSeconds && set.timeSeconds > 0) {
+        const timePbKey = `${exercise.id}-time`;
+        const existingTimePB = ctx.personalBests.get(timePbKey);
+
+        if (!existingTimePB || set.timeSeconds > existingTimePB.value) {
+            ctx.personalBests.set(timePbKey, {
+                id: generateStrengthId(),
+                exerciseId: exercise.id,
+                exerciseName: exercise.name,
+                userId: ctx.userId,
+                type: 'time',
+                value: set.timeSeconds,
+                weight: set.weight,
+                reps: set.reps,
+                isBodyweight: !!set.isBodyweight,
+                extraWeight: set.extraWeight,
+                date: ctx.currentWorkout!.date,
+                workoutId: ctx.currentWorkout!.id,
+                workoutName: ctx.currentWorkout!.name,
+                estimated1RM: 0, // Not applicable for time-based
+                createdAt: new Date().toISOString(),
+                previousBest: existingTimePB?.value
+            });
+        }
+    }
+
+    // 2. Track weight-based 1RM PBs
     if (set.reps <= 0) return;
 
     const isBW = !!set.isBodyweight;
@@ -315,6 +420,8 @@ function trackPersonalBest(ctx: ParserContext, exercise: StrengthExercise, set: 
     const pbKey = `${exercise.id}-1rm`;
 
     const existing = ctx.personalBests.get(pbKey);
+    // Added fix: For bodyweight, we check extraWeight specifically if values are close, but e1RM should cover it
+    // Updated Logic: Always overwrite if greater.
     if (!existing || estimated1RM > existing.value) {
         ctx.personalBests.set(pbKey, {
             id: generateStrengthId(),

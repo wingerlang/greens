@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { StrengthWorkout, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
 
 interface ExerciseDetailModalProps {
     exerciseName: string;
@@ -29,7 +29,20 @@ export function ExerciseDetailModal({
 
     // Get all instances of this exercise across workouts
     const exerciseHistory = useMemo(() => {
-        const history: { date: string; sets: number; reps: number; maxWeight: number; volume: number; est1RM: number; workout: StrengthWorkout }[] = [];
+        const history: {
+            date: string;
+            sets: number;
+            reps: number;
+            maxWeight: number;
+            volume: number;
+            est1RM: number;
+            workout: StrengthWorkout;
+            maxDistance?: number;
+            totalDistance?: number;
+            maxTime?: number;
+            maxTimeFormatted?: string;
+            bestTempo?: string;
+        }[] = [];
 
         workouts.forEach(w => {
             // Robust matching: Check both exact and normalized
@@ -52,6 +65,19 @@ export function ExerciseDetailModal({
                 });
                 const best1RMValue = Math.max(...est1RMs);
 
+                // Cardio/Distance metrics
+                const distances = allSets.map(s => s.distance || 0);
+                const maxDistance = Math.max(...distances);
+                const totalDistance = distances.reduce((sum, d) => sum + d, 0);
+
+                const times = allSets.map(s => s.timeSeconds || 0);
+                const maxTime = Math.max(...times);
+                // Prefer formatted time from the longest duration set
+                const maxTimeFormatted = allSets.find(s => s.timeSeconds === maxTime)?.time || '';
+
+                // Tempo from best set (longest distance or time)
+                const bestTempo = allSets.find(s => (s.distance === maxDistance && maxDistance > 0) || (s.timeSeconds === maxTime && maxTime > 0))?.tempo;
+
                 history.push({
                     date: w.date,
                     sets: allSets.length,
@@ -59,7 +85,12 @@ export function ExerciseDetailModal({
                     maxWeight,
                     volume,
                     est1RM: Math.round(best1RMValue),
-                    workout: w
+                    workout: w,
+                    maxDistance,
+                    totalDistance,
+                    maxTime,
+                    maxTimeFormatted,
+                    bestTempo
                 });
             }
         });
@@ -296,9 +327,19 @@ export function ExerciseDetailModal({
                                             <tr>
                                                 <th className="px-4 py-3 text-left font-bold">Datum</th>
                                                 <th className="px-4 py-3 text-right font-bold">Set</th>
-                                                <th className="px-4 py-3 text-right font-bold">Reps</th>
-                                                <th className="px-4 py-3 text-right font-bold">Max</th>
-                                                <th className="px-4 py-3 text-right font-bold">Volym</th>
+                                                {isDistanceBasedExercise(exerciseName) ? (
+                                                    <>
+                                                        <th className="px-4 py-3 text-right font-bold">Tempo</th>
+                                                        <th className="px-4 py-3 text-right font-bold">Distans</th>
+                                                        <th className="px-4 py-3 text-right font-bold">Tid</th>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <th className="px-4 py-3 text-right font-bold">Reps</th>
+                                                        <th className="px-4 py-3 text-right font-bold">Max</th>
+                                                        <th className="px-4 py-3 text-right font-bold">Volym</th>
+                                                    </>
+                                                )}
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-white/5">
@@ -313,9 +354,33 @@ export function ExerciseDetailModal({
                                                         </button>
                                                     </td>
                                                     <td className="px-4 py-3 text-right text-slate-400 group-hover:text-white transition-colors">{h.sets}</td>
-                                                    <td className="px-4 py-3 text-right text-blue-400 group-hover:text-blue-300 transition-colors">{h.reps}</td>
-                                                    <td className="px-4 py-3 text-right text-white font-bold">{h.maxWeight} kg</td>
-                                                    <td className="px-4 py-3 text-right text-emerald-400 group-hover:text-emerald-300 transition-colors">{Math.round(h.volume).toLocaleString()} kg</td>
+
+                                                    {isDistanceBasedExercise(exerciseName) ? (
+                                                        <>
+                                                            <td className="px-4 py-3 text-right text-blue-400 group-hover:text-blue-300 transition-colors font-mono">
+                                                                {h.bestTempo || '-'}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-white font-bold">
+                                                                {h.totalDistance ? Math.round(h.totalDistance) + 'm' : '-'}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-emerald-400 group-hover:text-emerald-300 transition-colors">
+                                                                {h.maxTimeFormatted || '-'}
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <td className="px-4 py-3 text-right text-blue-400 group-hover:text-blue-300 transition-colors">{h.reps}</td>
+                                                            <td className="px-4 py-3 text-right text-white font-bold">
+                                                                {isWeightedDistanceExercise(exerciseName)
+                                                                    ? <span>{h.maxWeight} kg <span className="text-slate-500 text-xs font-normal">({h.maxDistance}m)</span></span>
+                                                                    : `${h.maxWeight} kg`
+                                                                }
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-emerald-400 group-hover:text-emerald-300 transition-colors">
+                                                                {Math.round(h.volume).toLocaleString()} {isWeightedDistanceExercise(exerciseName) ? 'kg' : 'kg'}
+                                                            </td>
+                                                        </>
+                                                    )}
                                                 </tr>
                                             ))}
                                         </tbody>

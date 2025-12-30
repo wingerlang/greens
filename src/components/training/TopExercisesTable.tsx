@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StrengthWorkout, PersonalBest, calculate1RM } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, PersonalBest, calculate1RM, isBodyweightExercise, isTimeBasedExercise, getTimePBValue, isHyroxExercise, isWeightedDistanceExercise } from '../../models/strengthTypes.ts';
 
 interface TopExercisesTableProps {
     workouts: StrengthWorkout[];
@@ -48,10 +48,17 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
             volume: number;
             count: number;
             isBW: boolean;
+            isTimeBased: boolean;
             pb?: PersonalBest;
-            estimated1RM: number;  // Estimated 1RM (calculated)
-            maxWeight: number;     // Actual heaviest weight lifted
+            estimated1RM: number;
+            maxWeight: number;
             maxWeightDate?: string;
+            maxTimeSeconds: number;
+            maxTimeFormatted: string;
+            isHyrox: boolean;
+            isWeightedDistance: boolean;
+            maxDistance: number;
+            maxDistanceUnit: string;
         }> = {};
 
         workouts.forEach(w => {
@@ -59,7 +66,8 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                 const key = ex.exerciseName.toLowerCase().trim();
 
                 if (!stats[key]) {
-                    const isBW = ex.sets.every(s => s.isBodyweight || s.weight === 0);
+                    const isBW = isBodyweightExercise(ex.exerciseName) || ex.sets.every(s => s.isBodyweight || s.weight === 0);
+                    const isTime = isTimeBasedExercise(ex.exerciseName);
                     const pb = pbMap.get(key);
 
                     stats[key] = {
@@ -69,24 +77,53 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         volume: 0,
                         count: 0,
                         isBW,
+                        isTimeBased: isTime,
                         pb,
                         estimated1RM: pb?.estimated1RM || 0,
                         maxWeight: pb?.weight || 0,
-                        maxWeightDate: pb?.date
+                        maxWeightDate: pb?.date,
+                        maxTimeSeconds: 0,
+                        maxTimeFormatted: '',
+                        isHyrox: isHyroxExercise(ex.exerciseName),
+                        isWeightedDistance: isWeightedDistanceExercise(ex.exerciseName),
+                        maxDistance: pb?.distance || 0,
+                        maxDistanceUnit: pb?.distanceUnit || 'm'
                     };
                 }
 
                 // Track best e1RM and max weight from this exercise's sets
                 ex.sets.forEach(set => {
-                    if (set.weight > 0 && set.reps > 0) {
-                        const est1RM = calculate1RM(set.weight, set.reps);
+                    // Track time for time-based exercises
+                    if (stats[key].isTimeBased) {
+                        const timeResult = getTimePBValue([set]);
+                        if (timeResult && timeResult.seconds > stats[key].maxTimeSeconds) {
+                            stats[key].maxTimeSeconds = timeResult.seconds;
+                            stats[key].maxTimeFormatted = timeResult.formatted;
+                            stats[key].maxWeightDate = w.date;
+                        }
+                    }
+
+                    // Track weight for weighted exercises
+                    // For bodyweight exercises, use only extraWeight for 1RM calculation
+                    const calcWeight = stats[key].isBW
+                        ? (set.extraWeight || 0)
+                        : set.weight;
+                    const displayWeight = stats[key].isBW
+                        ? (set.extraWeight || 0)
+                        : set.weight;
+
+                    if (calcWeight > 0 && set.reps > 0) {
+                        const est1RM = calculate1RM(calcWeight, set.reps);
                         if (est1RM > stats[key].estimated1RM) {
                             stats[key].estimated1RM = est1RM;
                         }
-                        if (set.weight > stats[key].maxWeight) {
-                            stats[key].maxWeight = set.weight;
+                        if (displayWeight > stats[key].maxWeight) {
+                            stats[key].maxWeight = displayWeight;
                             stats[key].maxWeightDate = w.date;
                         }
+                    } else if (stats[key].isBW && set.reps > 0 && (!set.extraWeight || set.extraWeight === 0)) {
+                        // Pure bodyweight (no extra weight) - track max reps instead
+                        // Don't update maxWeight/estimated1RM since there's no added weight
                     }
                 });
 
@@ -187,19 +224,51 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                                 <td className="px-4 py-4 text-white font-black group">
                                     <span className="group-hover:text-blue-400 group-hover:underline transition-colors">{ex.name}</span>
                                     {ex.isBW && <span className="ml-2 text-[9px] text-slate-500 border border-white/10 px-1.5 py-0.5 rounded bg-slate-800">KV</span>}
+                                    {ex.isTimeBased && <span className="ml-2 text-[9px] text-cyan-500 border border-cyan-500/20 px-1.5 py-0.5 rounded bg-cyan-500/10">TID</span>}
+                                    {ex.isHyrox && <span className="ml-2 text-[9px] text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded bg-amber-500/10 tracking-wider">HYROX</span>}
                                 </td>
                                 <td className="px-4 py-4 text-right">
-                                    {ex.estimated1RM > 0 || ex.maxWeight > 0 ? (
+                                    {/* Time-based exercises - show duration */}
+                                    {ex.isTimeBased && ex.maxTimeSeconds > 0 ? (
                                         <div className="flex flex-col items-end gap-0.5">
-                                            {/* Estimated 1RM */}
-                                            {ex.estimated1RM > 0 && (
-                                                <span className="text-amber-400 font-bold">{ex.estimated1RM}kg <span className="text-[9px] text-slate-500">e1RM</span></span>
+                                            <span className="text-cyan-400 font-bold">{ex.maxTimeFormatted} <span className="text-[9px] text-slate-500">rekord</span></span>
+                                            {ex.maxWeightDate && (
+                                                <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
                                             )}
-                                            {/* Actual max weight */}
-                                            {ex.maxWeight > 0 && ex.maxWeight !== ex.estimated1RM && (
-                                                <span className="text-sky-400 font-bold text-xs">{ex.maxWeight}kg <span className="text-[9px] text-slate-500">max</span></span>
+                                        </div>
+                                    ) : ex.isWeightedDistance && (ex.maxWeight > 0 || ex.maxDistance > 0) ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <span className="text-emerald-400 font-bold">
+                                                {ex.maxWeight}kg <span className="text-slate-400 text-[10px] font-normal">({ex.maxDistance}{ex.maxDistanceUnit})</span>
+                                                <span className="text-[9px] text-slate-500 ml-1">PB</span>
+                                            </span>
+                                            {ex.maxWeightDate && (
+                                                <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
                                             )}
-                                            {/* Date */}
+                                        </div>
+                                    ) : ex.estimated1RM > 0 || ex.maxWeight > 0 ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            {/* For bodyweight exercises, show actual 1RM (max reps) as primary */}
+                                            {ex.isBW ? (
+                                                <>
+                                                    {ex.maxWeight > 0 && (
+                                                        <span className="text-sky-400 font-bold">{ex.maxWeight}kg <span className="text-[9px] text-slate-500">1RM</span></span>
+                                                    )}
+                                                    {ex.estimated1RM > 0 && ex.estimated1RM !== ex.maxWeight && (
+                                                        <span className="text-amber-400/60 font-bold text-xs">{ex.estimated1RM}kg <span className="text-[9px] text-slate-500">e1RM</span></span>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    {/* Weighted exercises - show e1RM as primary */}
+                                                    {ex.estimated1RM > 0 && (
+                                                        <span className="text-amber-400 font-bold">{ex.estimated1RM}kg <span className="text-[9px] text-slate-500">e1RM</span></span>
+                                                    )}
+                                                    {ex.maxWeight > 0 && ex.maxWeight !== ex.estimated1RM && (
+                                                        <span className="text-sky-400 font-bold text-xs">{ex.maxWeight}kg <span className="text-[9px] text-slate-500">max</span></span>
+                                                    )}
+                                                </>
+                                            )}
                                             {ex.maxWeightDate && (
                                                 <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
                                             )}

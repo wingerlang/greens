@@ -13,7 +13,7 @@ import { Tabs } from '../components/common/Tabs.tsx';
 import { CollapsibleSection } from '../components/common/CollapsibleSection.tsx';
 import { TrainingTimeStats } from '../components/training/TrainingTimeStats.tsx';
 import { PlateauWarningCard, VolumeRecommendationCard } from '../components/training/ProgressiveOverloadCard.tsx';
-import { getPlateauWarnings, getWeeklyVolumeRecommendations, type PlateauWarning } from '../utils/progressiveOverload.ts';
+import { getPlateauWarnings, getWeeklyVolumeRecommendations, getUnderperformers, type PlateauWarning, type Underperformer } from '../utils/progressiveOverload.ts';
 
 // ============================================
 // Strength Page - Main Component
@@ -583,9 +583,9 @@ export function StrengthPage() {
             <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <TrainingTimeStats
                     workouts={filteredWorkouts}
-                    days={hasDateFilter ? 365 : 30}
+                    days={hasDateFilter ? 365 : 9999}
                     personalBests={personalBests}
-                    dateRangeLabel={hasDateFilter && startDate && endDate ? `${new Date(startDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(endDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Senaste 30 dagarna'}
+                    dateRangeLabel={hasDateFilter && startDate && endDate ? `${new Date(startDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(endDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Alla tider'}
                 />
                 {/* Placeholder for another module */}
                 <div className="hidden md:block" />
@@ -685,6 +685,89 @@ export function StrengthPage() {
                                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                                     <h2 className="text-xl font-bold text-white mb-4">📈 Volym per vecka</h2>
                                     <WeeklyVolumeChart workouts={workouts} setStartDate={setStartDate} setEndDate={setEndDate} />
+                                </div>
+                            )
+                        },
+                        {
+                            id: 'underperformers',
+                            label: 'Underpresterare',
+                            icon: '📉',
+                            content: (
+                                <div className="space-y-4">
+                                    <div className="bg-slate-900/30 border border-white/5 rounded-xl p-4">
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold">
+                                            Övningar du tränar ofta men har flat utveckling — många set utan nya rekord
+                                        </p>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                        {getUnderperformers(workouts, personalBests, 15).slice(0, 9).map(u => (
+                                            <div
+                                                key={u.exerciseName}
+                                                className="bg-slate-900/40 border border-white/5 rounded-xl p-4 hover:border-amber-500/30 transition-all group"
+                                            >
+                                                <div
+                                                    className="cursor-pointer"
+                                                    onClick={() => navigate(`/styrka/${slugify(u.exerciseName)}`)}
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h3 className="text-sm font-black text-white uppercase truncate pr-2 group-hover:text-amber-400 transition-colors">
+                                                            {u.exerciseName}
+                                                            {u.isBodyweight && <span className="ml-1 text-[8px] text-slate-500 border border-white/10 px-1 py-0.5 rounded bg-slate-800">KV</span>}
+                                                            {u.isTimeBased && <span className="ml-1 text-[8px] text-cyan-500 border border-cyan-500/20 px-1 py-0.5 rounded bg-cyan-500/10">TID</span>}
+                                                            {u.isHyrox && <span className="ml-1 text-[8px] text-amber-500 border border-amber-500/20 px-1 py-0.5 rounded bg-amber-500/10 tracking-wider">HYROX</span>}
+                                                        </h3>
+                                                        <span className="text-[8px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded font-black uppercase shrink-0">
+                                                            {u.setsSinceLastPB} set
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 mb-2">
+                                                        <div>
+                                                            <p className="text-xl font-black text-amber-400">{u.daysSinceLastPB || '—'}d</p>
+                                                            <p className="text-[8px] text-slate-600 uppercase">sedan rekord</p>
+                                                        </div>
+                                                        {u.isTimeBased && u.maxTimeFormatted ? (
+                                                            <div className="border-l border-white/5 pl-3">
+                                                                <p className="text-lg font-black text-cyan-400">{u.maxTimeFormatted}</p>
+                                                                <p className="text-[8px] text-slate-600 uppercase">rekord</p>
+                                                            </div>
+                                                        ) : u.isWeightedDistance && (u.e1RM || u.maxDistance) ? (
+                                                            <div className="border-l border-white/5 pl-3">
+                                                                <p className="text-lg font-black text-emerald-400">
+                                                                    {u.e1RM}kg <span className="text-slate-500 text-xs font-normal">({u.maxDistance}{u.maxDistanceUnit})</span>
+                                                                </p>
+                                                                <p className="text-[8px] text-slate-600 uppercase">PB</p>
+                                                            </div>
+                                                        ) : u.e1RM && (
+                                                            <div className="border-l border-white/5 pl-3">
+                                                                <p className="text-lg font-black text-slate-400">{u.e1RM}kg</p>
+                                                                <p className="text-[8px] text-slate-600 uppercase">{u.isBodyweight ? '1RM' : 'e1RM'}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-[9px] text-slate-500 italic mb-2">{u.message}</p>
+                                                </div>
+                                                {u.lastPBWorkoutId && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const workout = workouts.find(w => w.id === u.lastPBWorkoutId);
+                                                            if (workout) setSelectedWorkout(workout);
+                                                        }}
+                                                        className="w-full mt-2 text-[9px] bg-slate-800/50 hover:bg-blue-600/20 text-slate-500 hover:text-blue-400 py-1.5 rounded-lg transition-all border border-white/5 font-bold uppercase"
+                                                    >
+                                                        📋 Visa senaste rekord-passet
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {getUnderperformers(workouts, personalBests, 15).length === 0 && (
+                                        <div className="text-center text-slate-500 py-8">
+                                            <p className="text-2xl mb-2">🎉</p>
+                                            <p className="text-sm">Inga underpresterande övningar!</p>
+                                            <p className="text-[10px] text-slate-600">Du gör framsteg i alla övningar du tränar regelbundet.</p>
+                                        </div>
+                                    )}
                                 </div>
                             )
                         }

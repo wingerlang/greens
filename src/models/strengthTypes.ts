@@ -74,6 +74,7 @@ export interface StrengthSet {
     isWarmup?: boolean;
     isDropset?: boolean;
     isFailed?: boolean;              // Didn't complete target reps
+    tempo?: string;                  // e.g. "2:05/500m"
 }
 
 // ============================================
@@ -140,6 +141,10 @@ export interface PersonalBest {
     // Context
     weight?: number;                 // Weight used
     reps?: number;                   // Reps achieved
+    distance?: number;               // Distance covered (meters)
+    distanceUnit?: 'm' | 'km';
+    time?: number;
+    tempo?: string;
     date: string;
     workoutId: string;
     workoutName?: string;
@@ -243,3 +248,150 @@ export function parseTimeToSeconds(time: string): number {
 export function generateStrengthId(): string {
     return `str-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 }
+
+// ============================================
+// Exercise Type Detection
+// ============================================
+
+/** Bodyweight exercises - should use actual 1RM (max reps × extra weight) not estimated */
+export const BODYWEIGHT_EXERCISES = [
+    'pull up', 'pullup', 'pull-up', 'chin up', 'chinup', 'chin-up', 'chins',
+    'push up', 'pushup', 'push-up', 'push ups', 'armhävningar', 'armhävning',
+    'dip', 'dips', 'dippar',
+    'muscle up', 'muscle-up', 'muscleup',
+    'pistol squat', 'pistol', 'pistols',
+    'lunge', 'lunges', 'utfall',
+    'burpee', 'burpees',
+    'squat jump', 'jump squat', 'box jump',
+    'inverted row', 'body row', 'australian pull up',
+    'leg raise', 'hanging leg raise', 'toes to bar',
+    'l-sit', 'l sit',
+    'handstand', 'handstand push up', 'hspu',
+    'nordic curl', 'nordic hamstring curl',
+    'back extension', 'reverse hyper'
+];
+
+/** Time-based exercises - track duration instead of reps */
+export const TIME_BASED_EXERCISES = [
+    'plank', 'plankan', 'planking', 'side plank',
+    'dead hang', 'hang', 'hängning',
+    'wall sit', 'wall squat',
+    'hollow hold', 'hollow body hold',
+    'superman hold', 'superman',
+    'bridge hold', 'glute bridge hold',
+    'farmer walk', 'farmers walk', 'farmer carry',
+    'l-sit', 'l sit',
+    'handstand hold', 'handstand',
+    'flexed arm hang'
+];
+
+/** Distance/cardio exercises - track distance + time */
+export const DISTANCE_BASED_EXERCISES = [
+    'rowing', 'rowing machine', 'rower', 'rodd',
+    'ski erg', 'skierg', 'skiing',
+    'assault bike', 'echo bike', 'air bike',
+    'treadmill', 'löpband',
+    'stationary bike', 'cycle', 'cykel',
+    'running', 'löpning'
+];
+
+/** Weighted Distance exercises - track Weight (primary) + Distance (secondary) */
+export const WEIGHTED_DISTANCE_EXERCISES = [
+    'sled push', 'sled', 'sledge push', 'prowler',
+    'sled pull', 'sled rope pull',
+    'farmers walk', 'farmers carry', 'farmer walk', 'farmer carry',
+    'yoke', 'yoke walk', 'yoke carry',
+    'sandbag lunge', 'sandbag lunges', 'walking lunge', 'walking lunges', 'utfallsgång'
+];
+
+/** Hyrox specific exercises - for labeling */
+export const HYROX_EXERCISES = [
+    'ski erg', 'skierg',
+    'sled push', 'sled', 'prowler',
+    'sled pull', 'sled rope pull',
+    'burpee broad jump', 'burpee broad jumps',
+    'rowing', 'rowing machine', 'rodd',
+    'farmers walk', 'farmers carry', 'farmer walk',
+    'sandbag lunge', 'sandbag lunges', 'walking lunge', 'walking lunges', 'utfallsgång',
+    'wall ball', 'wall balls', 'wallball', 'wallballs'
+];
+
+/** Check if exercise is bodyweight-based */
+export function isBodyweightExercise(name: string): boolean {
+    const normalized = normalizeExerciseName(name);
+    return BODYWEIGHT_EXERCISES.some(bw => normalized.includes(bw));
+}
+
+/** Check if exercise is time-based (duration instead of reps) */
+export function isTimeBasedExercise(name: string): boolean {
+    const normalized = normalizeExerciseName(name);
+    return TIME_BASED_EXERCISES.some(tb => normalized.includes(tb));
+}
+
+/** Check if exercise is distance-based (rowing, skiing, etc.) */
+export function isDistanceBasedExercise(name: string): boolean {
+    const normalized = normalizeExerciseName(name);
+    return DISTANCE_BASED_EXERCISES.some(db => normalized.includes(db));
+}
+
+/** Check if exercise is weighted distance (heavy carry/push) */
+export function isWeightedDistanceExercise(name: string): boolean {
+    const normalized = normalizeExerciseName(name);
+    return WEIGHTED_DISTANCE_EXERCISES.some(wd => normalized.includes(wd));
+}
+
+/** Check if exercise is a Hyrox event */
+export function isHyroxExercise(name: string): boolean {
+    const normalized = normalizeExerciseName(name);
+    return HYROX_EXERCISES.some(h => normalized.includes(h));
+}
+
+/**
+ * Calculate 1RM for bodyweight exercises.
+ * For bodyweight exercises, the "1RM" is bodyweight + extra weight.
+ * Returns: { used1RM: actual max weight used, estimated1RM: Epley estimate }
+ */
+export function calculate1RMForBodyweight(
+    bodyweight: number,
+    extraWeight: number,
+    reps: number
+): { actual1RM: number; estimated1RM: number } {
+    const totalWeight = bodyweight + extraWeight;
+    const estimated1RM = calculate1RM(totalWeight, reps);
+
+    // For bodyweight, actual 1RM is just the max weight achieved (BW + extra)
+    // We don't estimate because bodyweight exercises have different mechanics
+    return {
+        actual1RM: totalWeight,
+        estimated1RM
+    };
+}
+
+/**
+ * Get the best set value for a time-based exercise.
+ * Returns duration in seconds (longer is better).
+ */
+export function getTimePBValue(sets: StrengthSet[]): { seconds: number; formatted: string } | null {
+    let maxSeconds = 0;
+
+    for (const set of sets) {
+        const seconds = set.timeSeconds ?? (set.time ? parseTimeToSeconds(set.time) : 0);
+        if (seconds > maxSeconds) {
+            maxSeconds = seconds;
+        }
+    }
+
+    if (maxSeconds === 0) return null;
+
+    // Format as mm:ss or hh:mm:ss
+    const hours = Math.floor(maxSeconds / 3600);
+    const mins = Math.floor((maxSeconds % 3600) / 60);
+    const secs = maxSeconds % 60;
+
+    const formatted = hours > 0
+        ? `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+        : `${mins}:${secs.toString().padStart(2, '0')}`;
+
+    return { seconds: maxSeconds, formatted };
+}
+

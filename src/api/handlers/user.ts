@@ -1,5 +1,6 @@
 import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } from "../db/session.ts";
 import { getUserById, resetUserData, getAllUsers, saveUser, sanitizeUser } from "../db/user.ts"; // Note: resetUserData to be moved or imported
+import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { kv } from "../kv.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
 import { UniversalActivity } from "../../models/types.ts";
@@ -27,6 +28,7 @@ async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weig
         data.exerciseEntries = [];
         data.trainingCycles = [];
         data.plannedActivities = [];
+        await strengthRepo.clearUserStrengthData(userId);
     }
     else if (type === 'weight') data.weightEntries = [];
 

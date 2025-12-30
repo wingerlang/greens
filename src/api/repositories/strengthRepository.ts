@@ -252,6 +252,24 @@ export async function getStrengthStats(userId: string): Promise<StrengthStats> {
     };
 }
 
+// ============================================
+// Data Management
+// ============================================
+
+export async function clearUserStrengthData(userId: string): Promise<void> {
+    // 1. Delete all workouts
+    const workoutIter = kv.list({ prefix: ['strength_workouts', userId] });
+    for await (const entry of workoutIter) {
+        await kv.delete(entry.key);
+    }
+
+    // 2. Delete all Personal Bests
+    const pbIter = kv.list({ prefix: ['strength_pbs', userId] });
+    for await (const entry of pbIter) {
+        await kv.delete(entry.key);
+    }
+}
+
 // Export singleton-style
 export const strengthRepo = {
     saveWorkout,
@@ -269,5 +287,6 @@ export const strengthRepo = {
     getAllPersonalBests,
     savePersonalBests,
     importWorkouts,
-    getStrengthStats
+    getStrengthStats,
+    clearUserStrengthData
 };
