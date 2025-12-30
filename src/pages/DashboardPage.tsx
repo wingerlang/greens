@@ -334,7 +334,7 @@ export function DashboardPage() {
         getLatestWeight,
         getLatestWaist,
         plannedActivities,
-        exerciseEntries,
+        unifiedActivities,
         weightEntries
     } = useData();
 
@@ -490,7 +490,7 @@ export function DashboardPage() {
 
     // 4. Training Analysis
     const todaysPlan = plannedActivities.find(p => p.date === selectedDate);
-    const completedTraining = exerciseEntries.filter(e => e.date === selectedDate);
+    const completedTraining = unifiedActivities.filter(e => e.date === selectedDate);
 
     // Determine Training Card Content
     let trainingContent;
@@ -719,7 +719,7 @@ export function DashboardPage() {
                                             d.setDate(d.getDate() - i);
                                             return d.toISOString().split('T')[0];
                                         });
-                                        const weeklyEx = exerciseEntries.filter(e => last7.includes(e.date));
+                                        const weeklyEx = unifiedActivities.filter(e => last7.includes(e.date));
 
                                         // Manual calorie sum to avoid hook violation
                                         let totalCals = 0;
@@ -760,7 +760,7 @@ export function DashboardPage() {
                                     const isDayToday = iso === today;
 
                                     // Data aggregation for day i
-                                    const dayExercises = exerciseEntries.filter(e => e.date === iso);
+                                    const dayExercises = unifiedActivities.filter(e => e.date === iso);
                                     const dayNutrition = calculateDailyNutrition(iso);
 
                                     const dist = dayExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
@@ -824,7 +824,7 @@ export function DashboardPage() {
                                 });
                                 // Correcting index to find if selectedDate is in the last 7 days
                                 const isSelectedInVisibleRange = last7.includes(selectedDate);
-                                const weeklyEx = exerciseEntries.filter(e => last7.includes(e.date));
+                                const weeklyEx = unifiedActivities.filter(e => last7.includes(e.date));
                                 const totalDist = weeklyEx.reduce((sum, e) => sum + (e.distance || 0), 0);
                                 const totalTon = weeklyEx.reduce((sum, e) => sum + (e.tonnage || 0), 0);
                                 const totalDur = weeklyEx.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);

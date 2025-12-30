@@ -144,6 +144,22 @@ export async function savePersonalBests(pbs: PersonalBest[]): Promise<number> {
     return count;
 }
 
+/**
+ * Reset an exercise - delete all personal bests for a specific exercise.
+ * Workout data is preserved, PBs will be recalculated on next import.
+ */
+export async function resetExercise(userId: string, exerciseId: string): Promise<number> {
+    const iter = kv.list<PersonalBest>({ prefix: ['strength_pbs', userId, exerciseId] });
+    let deletedCount = 0;
+
+    for await (const entry of iter) {
+        await kv.delete(entry.key);
+        deletedCount++;
+    }
+
+    return deletedCount;
+}
+
 // ============================================
 // Import Logic
 // ============================================
@@ -286,6 +302,7 @@ export const strengthRepo = {
     getPersonalBest,
     getAllPersonalBests,
     savePersonalBests,
+    resetExercise,
     importWorkouts,
     getStrengthStats,
     clearUserStrengthData

@@ -1,6 +1,7 @@
-// ============================================
 // Shared Types - Reusable across all modules
 // ============================================
+
+import { type StrengthWorkout } from './strengthTypes.ts';
 
 /** Unit of measurement for food items and recipe ingredients */
 export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l';
@@ -1139,7 +1140,7 @@ export interface AppData {
     injuryLogs?: InjuryLog[];
     recoveryMetrics?: RecoveryMetric[];
     // Phase 12: Strength Sessions
-    strengthSessions?: StrengthSession[];
+    strengthSessions?: StrengthWorkout[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */

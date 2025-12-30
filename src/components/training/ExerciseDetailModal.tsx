@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { StrengthWorkout, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 interface ExerciseDetailModalProps {
     exerciseName: string;
@@ -7,6 +8,7 @@ interface ExerciseDetailModalProps {
     onClose: () => void;
     onSelectWorkout?: (workout: StrengthWorkout) => void;
     isWorkoutModalOpen?: boolean;
+    onReset?: () => void;  // Callback after exercise reset
 }
 
 export function ExerciseDetailModal({
@@ -14,8 +16,10 @@ export function ExerciseDetailModal({
     workouts,
     onClose,
     onSelectWorkout,
-    isWorkoutModalOpen
+    isWorkoutModalOpen,
+    onReset
 }: ExerciseDetailModalProps) {
+    const { token } = useAuth();
     // ESC key to close - only if workout modal is NOT open
     useEffect(() => {
         const handleEsc = (e: KeyboardEvent) => {
@@ -27,6 +31,34 @@ export function ExerciseDetailModal({
 
     const [viewMode, setViewMode] = useState<'history' | 'prs' | 'annual'>('history');
     const [metricMode, setMetricMode] = useState<'absolute' | 'relative'>('absolute');
+    const [showResetConfirm, setShowResetConfirm] = useState(false);
+    const [isResetting, setIsResetting] = useState(false);
+
+    // Generate exercise ID from name
+    const exerciseId = `ex-${normalizeExerciseName(exerciseName).replace(/\s/g, '-')}`;
+
+    // Reset exercise handler
+    const handleReset = async () => {
+        if (!token) return;
+        setIsResetting(true);
+        try {
+            const res = await fetch(`/api/strength/exercise/${encodeURIComponent(exerciseId)}/reset`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                setShowResetConfirm(false);
+                onClose();
+                onReset?.();
+            } else {
+                console.error('Failed to reset exercise');
+            }
+        } catch (e) {
+            console.error('Reset error:', e);
+        } finally {
+            setIsResetting(false);
+        }
+    };
 
     // Get all instances of this exercise across workouts
     const exerciseHistory = useMemo(() => {
@@ -346,17 +378,59 @@ export function ExerciseDetailModal({
                         <h2 className="text-2xl font-black text-white">{exerciseName}</h2>
                         <p className="text-slate-400 text-sm">{exerciseHistory.length} pass med denna övning</p>
                     </div>
-                    <button
-                        onClick={(e) => {
-                            e.preventDefault();
-                            onClose();
-                        }}
-                        className="text-slate-500 hover:text-white text-3xl p-1 -mt-2 transition-colors"
-                        type="button"
-                    >
-                        ×
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setShowResetConfirm(true)}
+                            className="text-rose-500/60 hover:text-rose-400 text-sm px-2 py-1 rounded-lg hover:bg-rose-500/10 transition-all"
+                            title="Återställ övning"
+                        >
+                            🗑️
+                        </button>
+                        <button
+                            onClick={(e) => {
+                                e.preventDefault();
+                                onClose();
+                            }}
+                            className="text-slate-500 hover:text-white text-3xl p-1 -mt-2 transition-colors"
+                            type="button"
+                        >
+                            ×
+                        </button>
+                    </div>
                 </div>
+
+                {/* Reset Confirmation Dialog */}
+                {showResetConfirm && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-60" onClick={() => setShowResetConfirm(false)}>
+                        <div className="bg-slate-800 border border-rose-500/30 rounded-2xl p-6 max-w-sm mx-4 space-y-4" onClick={e => e.stopPropagation()}>
+                            <div className="text-center">
+                                <div className="text-4xl mb-2">⚠️</div>
+                                <h3 className="text-lg font-bold text-white">Återställ "{exerciseName}"?</h3>
+                                <p className="text-sm text-slate-400 mt-2">
+                                    Detta raderar alla personliga rekord för denna övning. Träningshistoriken behålls.
+                                </p>
+                                <p className="text-xs text-slate-500 mt-2">
+                                    PBs kommer att räknas om vid nästa import.
+                                </p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowResetConfirm(false)}
+                                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-xl transition-colors"
+                                >
+                                    Avbryt
+                                </button>
+                                <button
+                                    onClick={handleReset}
+                                    disabled={isResetting}
+                                    className="flex-1 bg-rose-500 hover:bg-rose-400 text-white font-bold py-2.5 rounded-xl transition-colors disabled:opacity-50"
+                                >
+                                    {isResetting ? '⏳ Raderar...' : '🗑️ Återställ'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Contextual Hero Section (Motivation Mode) */}
                 {!isDistanceBasedExercise(exerciseName) && contextStats && (

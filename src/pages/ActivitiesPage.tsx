@@ -12,13 +12,12 @@ import { formatDuration } from '../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP } from '../utils/performanceEngine.ts';
 
 export function ActivitiesPage() {
-    const { universalActivities, exerciseEntries: localEntries } = useData();
+    const { unifiedActivities: allActivities, universalActivities } = useData();
     const { token } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
 
     // Core State
     const [selectedActivity, setSelectedActivity] = useState<(ExerciseEntry & { source: string }) | null>(null);
-    const [strengthWorkouts, setStrengthWorkouts] = useState<StrengthWorkout[]>([]);
     const [showFilters, setShowFilters] = useState(false);
 
     // Filter State
@@ -38,104 +37,7 @@ export function ActivitiesPage() {
     // Sort State
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
-    // 1. Fetch strength data
-    const fetchStrength = useCallback(async () => {
-        if (!token) return;
-        try {
-            const res = await fetch('http://localhost:8000/api/strength/workouts', { headers: { Authorization: `Bearer ${token}` } });
-            if (res.ok) {
-                const data = await res.json();
-                setStrengthWorkouts(data.workouts || []);
-            }
-        } catch (e) {
-            console.error('Failed to fetch strength workouts:', e);
-        }
-    }, [token]);
-
-    useEffect(() => {
-        fetchStrength();
-    }, [fetchStrength]);
-
-    // 2. Prepare Unified List
-    const allActivities = useMemo(() => {
-        const serverEntries = universalActivities
-            .map(mapUniversalToLegacyEntry)
-            .filter((e): e is ExerciseEntry => e !== null);
-
-        const normalizedServer = serverEntries.map(e => ({ ...e, source: 'strava' }));
-        const normalizedLocal = localEntries.map(e => ({ ...e, source: 'manual' }));
-
-        // Convert strength workouts to ExerciseEntry format
-        const strengthEntries = strengthWorkouts.map(w => ({
-            id: w.id,
-            date: w.date,
-            type: 'strength' as const,
-            durationMinutes: w.duration || 60,
-            intensity: 'moderate' as const,
-            caloriesBurned: 0,
-            distance: undefined,
-            tonnage: w.totalVolume,
-            notes: w.name,
-            source: 'strength',
-            createdAt: w.createdAt,
-            subType: undefined,
-            externalId: undefined
-        }));
-
-        // Smart Merge: Combine StrengthLog with Strava data
-        const stravaWeightByDate = new Map<string, typeof normalizedServer[0]>();
-        normalizedServer.forEach(e => {
-            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
-                e.type?.toLowerCase().includes('styrka') ||
-                e.type?.toLowerCase().includes('strength');
-            if (isWeightTraining) {
-                stravaWeightByDate.set(e.date.split('T')[0], e);
-            }
-        });
-
-        const mergedStrengthEntries = strengthEntries.map(se => {
-            const dateKey = se.date.split('T')[0];
-            const stravaMatch = stravaWeightByDate.get(dateKey);
-
-            if (stravaMatch) {
-                const universalMatch = universalActivities.find(u => u.id === stravaMatch.id);
-                const perf = universalMatch?.performance;
-                const strengthWorkout = strengthWorkouts.find(sw => sw.id === se.id);
-
-                return {
-                    ...se,
-                    source: 'merged' as const,
-                    caloriesBurned: stravaMatch.caloriesBurned || se.caloriesBurned,
-                    durationMinutes: stravaMatch.durationMinutes || se.durationMinutes,
-                    avgHeartRate: perf?.avgHeartRate,
-                    maxHeartRate: perf?.maxHeartRate,
-                    subType: stravaMatch.subType, // Propagate subtype from Strava
-                    _mergeData: {
-                        strava: stravaMatch,
-                        strength: se,
-                        strengthWorkout: strengthWorkout,
-                        universalActivity: universalMatch,
-                    }
-                };
-            }
-            return se;
-        });
-
-        const deduplicatedServer = normalizedServer.filter(e => {
-            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
-                e.type?.toLowerCase().includes('styrka') ||
-                e.type?.toLowerCase().includes('strength');
-            if (isWeightTraining) {
-                const dateKey = e.date.split('T')[0];
-                if (strengthEntries.some(se => se.date.split('T')[0] === dateKey)) {
-                    return false;
-                }
-            }
-            return true;
-        });
-
-        return [...deduplicatedServer, ...normalizedLocal, ...mergedStrengthEntries];
-    }, [universalActivities, localEntries, strengthWorkouts]);
+    // URL sync and other logic remains...
 
     // 3. Deep Linking Logic
     useEffect(() => {

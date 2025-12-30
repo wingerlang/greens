@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, type ReactNode } from 'react';
 import {
     type FoodItem,
     type Recipe,
@@ -44,10 +44,14 @@ import {
     type StrengthExercise,
     type UserPrivacy
 } from '../models/types.ts';
+import { type StrengthWorkout } from '../models/strengthTypes.ts';
 import { storageService } from '../services/storage.ts';
 import type { FeedEventType } from '../models/feedTypes.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { generateTrainingPlan } from '../services/coach/planGenerator.ts';
+import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
+import { slugify } from '../utils/formatters.ts';
+import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
 
 // ============================================
 // Context Types
@@ -140,9 +144,9 @@ interface DataContextType {
     deleteTrainingCycle: (id: string) => void;
 
     // Strength Sessions CRUD
-    strengthSessions: StrengthSession[];
-    addStrengthSession: (session: Omit<StrengthSession, 'id'>) => StrengthSession;
-    updateStrengthSession: (id: string, updates: Partial<StrengthSession>) => void;
+    strengthSessions: StrengthWorkout[];
+    addStrengthSession: (session: Omit<StrengthWorkout, 'id'>) => StrengthWorkout;
+    updateStrengthSession: (id: string, updates: Partial<StrengthWorkout>) => void;
     deleteStrengthSession: (id: string) => void;
 
     // Performance Goals CRUD
@@ -177,6 +181,7 @@ interface DataContextType {
     updateInjuryLog: (id: string, updates: Partial<InjuryLog>) => void;
     deleteInjuryLog: (id: string) => void;
     addRecoveryMetric: (metric: Omit<RecoveryMetric, 'id'>) => RecoveryMetric;
+    unifiedActivities: (ExerciseEntry & { source: string })[];
     calculateStreak: () => number;
     calculateTrainingStreak: () => number;
     calculateWeeklyTrainingStreak: () => number;
@@ -214,7 +219,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
     const [competitions, setCompetitions] = useState<Competition[]>([]);
     const [trainingCycles, setTrainingCycles] = useState<TrainingCycle[]>([]);
-    const [strengthSessions, setStrengthSessions] = useState<StrengthSession[]>([]);
+    const [strengthSessions, setStrengthSessions] = useState<StrengthWorkout[]>([]);
     const [performanceGoals, setPerformanceGoals] = useState<PerformanceGoal[]>([]);
     const [coachConfig, setCoachConfig] = useState<CoachConfig | undefined>(undefined);
     const [plannedActivities, setPlannedActivities] = useState<PlannedActivity[]>([]);
@@ -964,25 +969,26 @@ export function DataProvider({ children }: DataProviderProps) {
     // Strength Session CRUD (Phase 12)
     // ============================================
 
-    const addStrengthSession = useCallback((session: Omit<StrengthSession, 'id'>): StrengthSession => {
-        const newSession: StrengthSession = {
-            ...session,
+    const addStrengthSession = useCallback((session: Omit<StrengthWorkout, 'id'>): StrengthWorkout => {
+        const newSession: StrengthWorkout = {
+            ...session as any, // Cast for simplicity during migration
             id: generateId(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
         };
         setStrengthSessions(prev => [...prev, newSession]);
 
         // Life Stream: Add event
-        const totalVol = (newSession.exercises || []).reduce((sum: number, ex: any) =>
-            sum + (ex.sets || []).reduce((ss: number, s: any) => ss + ((s.weight || 0) * (s.reps || 0)), 0), 0);
+        const totalVol = newSession.totalVolume || 0;
 
         emitFeedEvent(
             'WORKOUT_STRENGTH',
-            newSession.title || 'Styrkepass slutfört',
+            newSession.name || 'Styrkepass slutfört',
             {
                 type: 'WORKOUT_STRENGTH',
                 sessionId: newSession.id,
                 exerciseCount: (newSession.exercises || []).length,
-                setCount: (newSession.exercises || []).reduce((sum: number, ex: any) => sum + (ex.sets || []).length, 0),
+                setCount: (newSession.exercises || []).reduce((sum, ex) => sum + (ex.sets || []).length, 0),
                 totalVolume: totalVol,
             },
             [
@@ -995,8 +1001,8 @@ export function DataProvider({ children }: DataProviderProps) {
         return newSession;
     }, [emitFeedEvent]);
 
-    const updateStrengthSession = useCallback((id: string, updates: Partial<StrengthSession>): void => {
-        setStrengthSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+    const updateStrengthSession = useCallback((id: string, updates: Partial<StrengthWorkout>): void => {
+        setStrengthSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s));
     }, []);
 
     const deleteStrengthSession = useCallback((id: string): void => {
@@ -1404,6 +1410,90 @@ export function DataProvider({ children }: DataProviderProps) {
         return newMetric;
     }, []);
 
+    // ============================================
+    // Derived: Unified Activities (Manual + Strava + Strength)
+    // ============================================
+
+    const unifiedActivities = useMemo(() => {
+        const serverEntries = universalActivities
+            .map(mapUniversalToLegacyEntry)
+            .filter((e): e is ExerciseEntry => e !== null);
+
+        const normalizedServer = serverEntries.map(e => ({ ...e, source: 'strava' }));
+        const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' }));
+
+        // Convert strength workouts to ExerciseEntry format
+        const strengthEntries = (strengthSessions as any[]).map(w => ({
+            id: w.id,
+            date: w.date,
+            type: 'strength' as const,
+            durationMinutes: w.duration || w.durationMinutes || 60,
+            intensity: 'moderate' as const,
+            caloriesBurned: 0,
+            distance: undefined,
+            tonnage: w.totalVolume || 0,
+            notes: w.name || w.title,
+            source: 'strength',
+            createdAt: w.createdAt || new Date().toISOString(),
+            subType: undefined,
+            externalId: undefined
+        }));
+
+        // Smart Merge: Combine StrengthLog with Strava data
+        const stravaWeightByDate = new Map<string, typeof normalizedServer[0]>();
+        normalizedServer.forEach(e => {
+            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
+                e.type?.toLowerCase().includes('styrka') ||
+                e.type?.toLowerCase().includes('strength');
+            if (isWeightTraining) {
+                stravaWeightByDate.set(e.date.split('T')[0], e);
+            }
+        });
+
+        const mergedStrengthEntries = strengthEntries.map(se => {
+            const dateKey = se.date.split('T')[0];
+            const stravaMatch = stravaWeightByDate.get(dateKey);
+
+            if (stravaMatch) {
+                const universalMatch = universalActivities.find(u => u.id === stravaMatch.id);
+                const perf = universalMatch?.performance;
+                const sw = (strengthSessions as any[]).find(s => s.id === se.id);
+                return {
+                    ...se,
+                    source: 'merged' as const,
+                    caloriesBurned: stravaMatch.caloriesBurned || se.caloriesBurned,
+                    durationMinutes: stravaMatch.durationMinutes || se.durationMinutes,
+                    avgHeartRate: perf?.avgHeartRate,
+                    maxHeartRate: perf?.maxHeartRate,
+                    subType: stravaMatch.subType,
+                    _mergeData: {
+                        strava: stravaMatch,
+                        strength: se,
+                        strengthWorkout: sw,
+                        universalActivity: universalMatch,
+                    }
+                };
+            }
+            return se;
+        });
+
+        const deduplicatedServer = normalizedServer.filter(e => {
+            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
+                e.type?.toLowerCase().includes('styrka') ||
+                e.type?.toLowerCase().includes('strength');
+            if (isWeightTraining) {
+                const dateKey = e.date.split('T')[0];
+                if (strengthEntries.some(se => se.date.split('T')[0] === dateKey)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        const result = [...deduplicatedServer, ...normalizedLocal, ...mergedStrengthEntries];
+        return result.sort((a, b) => b.date.localeCompare(a.date));
+    }, [universalActivities, exerciseEntries, strengthSessions]);
+
     const value: DataContextType = {
         foodItems,
         recipes,
@@ -1639,7 +1729,7 @@ export function DataProvider({ children }: DataProviderProps) {
         updateInjuryLog,
         deleteInjuryLog,
         addRecoveryMetric,
-
+        unifiedActivities,
         refreshData
     };
 

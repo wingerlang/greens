@@ -143,5 +143,30 @@ export async function handleStrengthRoutes(req: Request, url: URL, headers: Head
         }
     }
 
+    // ============================================
+    // Reset Exercise (Delete PBs for specific exercise)
+    // ============================================
+    if (url.pathname.match(/^\/api\/strength\/exercise\/[^/]+\/reset$/) && method === 'DELETE') {
+        try {
+            const pathParts = url.pathname.split('/');
+            const exerciseId = decodeURIComponent(pathParts[4]); // /api/strength/exercise/:id/reset
+
+            if (!exerciseId) {
+                return new Response(JSON.stringify({ error: 'Missing exercise ID' }), { status: 400, headers });
+            }
+
+            const deletedCount = await strengthRepo.resetExercise(userId, exerciseId);
+            return new Response(JSON.stringify({
+                success: true,
+                message: `Reset exercise: ${deletedCount} PBs deleted`,
+                exerciseId,
+                deletedCount
+            }), { headers });
+        } catch (e) {
+            console.error('[DELETE /api/strength/exercise/:id/reset] Error:', e);
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+        }
+    }
+
     return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers });
 }

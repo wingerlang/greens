@@ -5,6 +5,7 @@ import { useData } from '../../context/DataContext.tsx';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { formatDuration, formatPace, getRelativeTime, formatSwedishDate } from '../../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown } from '../../utils/performanceEngine.ts';
+import { HeartRateZones } from '../training/HeartRateZones.tsx';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 // Expandable Exercise Component - click to show sets
@@ -384,8 +385,17 @@ export function ActivityDetailModal({
                             </div>
                         )}
 
-                        {/* Heart Rate (if available) */}
-                        {(perf?.avgHeartRate || perf?.maxHeartRate) && (
+                        {/* Heart Rate Zone Visualization (for cardio with HR data) */}
+                        {perf?.avgHeartRate && activity.type?.toLowerCase() !== 'strength' && (
+                            <HeartRateZones
+                                avgHeartRate={Math.round(perf.avgHeartRate)}
+                                maxHeartRate={perf.maxHeartRate ? Math.round(perf.maxHeartRate) : undefined}
+                                duration={activity.durationMinutes ? activity.durationMinutes * 60 : undefined}
+                            />
+                        )}
+
+                        {/* Simple HR display fallback (for strength or merged) */}
+                        {(perf?.avgHeartRate || perf?.maxHeartRate) && activity.type?.toLowerCase() === 'strength' && (
                             <div className="bg-red-950/30 border border-red-500/20 rounded-xl p-4 w-fit">
                                 <h3 className="text-xs font-bold text-red-400 uppercase mb-2">❤️ Puls {isMerged && <span className="text-slate-500">(från Strava)</span>}</h3>
                                 <div className="flex gap-6">
