@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ProgressionSuggestion, PlateauWarning, WeeklyVolumeRecommendation } from '../../utils/progressiveOverload.ts';
+import { formatDateShort } from '../../utils/formatters.ts';
 
 interface ProgressiveOverloadCardProps {
     suggestion: ProgressionSuggestion;
@@ -32,16 +33,8 @@ export function ProgressiveOverloadCard({ suggestion, compact = false, onSelectW
         tips
     } = suggestion;
 
-    const formatDate = (dateStr: string) => {
-        const date = new Date(dateStr);
-        const now = new Date();
-        const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-
-        if (diffDays === 0) return 'Idag';
-        if (diffDays === 1) return 'Igår';
-        if (diffDays < 7) return `${diffDays}d sedan`;
-        return `${Math.floor(diffDays / 7)}v sedan`;
-    };
+    // Use shared formatDate from utils/formatters.ts
+    const formatDate = formatDateShort;
 
     const getTrendIcon = () => {
         switch (progressTrend) {

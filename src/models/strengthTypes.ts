@@ -282,7 +282,8 @@ export const TIME_BASED_EXERCISES = [
     'farmer walk', 'farmers walk', 'farmer carry',
     'l-sit', 'l sit',
     'handstand hold', 'handstand',
-    'flexed arm hang'
+    'flexed arm hang',
+    'static hold', 'statiskt håll'
 ];
 
 /** Distance/cardio exercises - track distance + time */
@@ -292,7 +293,8 @@ export const DISTANCE_BASED_EXERCISES = [
     'assault bike', 'echo bike', 'air bike',
     'treadmill', 'löpband',
     'stationary bike', 'cycle', 'cykel',
-    'running', 'löpning'
+    'running', 'löpning',
+    'burpee broad jump', 'burpee broad jumps'
 ];
 
 /** Weighted Distance exercises - track Weight (primary) + Distance (secondary) */

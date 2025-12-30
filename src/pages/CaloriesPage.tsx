@@ -16,6 +16,7 @@ import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
 import { NutritionInsights } from '../components/calories/NutritionInsights.tsx';
 import { MacroDistribution } from '../components/calories/MacroDistribution.tsx';
+import { normalizeText } from '../utils/formatters.ts';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
@@ -114,16 +115,17 @@ export function CaloriesPage() {
     }, [dailyEntries]);
 
     const searchResults = useMemo(() => {
-        if (!searchQuery.trim()) return [];
-        const query = searchQuery.toLowerCase();
+        // normalizeText imported from utils/formatters.ts
+        const query = normalizeText(searchQuery);
+        if (!query) return [];
 
         const recipeResults = recipes
-            .filter(r => r.name.toLowerCase().includes(query))
+            .filter(r => normalizeText(r.name).includes(query))
             .slice(0, 5)
             .map(r => ({ type: 'recipe' as const, id: r.id, name: r.name, subtitle: `${r.servings} portioner` }));
 
         const foodResults = foodItems
-            .filter(f => f.name.toLowerCase().includes(query))
+            .filter(f => normalizeText(f.name).includes(query))
             .slice(0, 5)
             .map(f => ({
                 type: 'foodItem' as const,

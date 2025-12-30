@@ -7,6 +7,8 @@ import { WorkoutAnalyzer } from '../components/workouts/WorkoutAnalyzer.tsx';
 import { WorkoutComparisonView } from '../components/workouts/WorkoutComparisonView.tsx';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { MUSCLE_MAP, BODY_PARTS } from '../data/muscleMap.ts';
+import { calculate1RM } from '../models/strengthTypes.ts';
+import { StrengthSet } from '../models/strengthTypes.ts';
 
 const SUBCATEGORIES: Record<string, string[]> = {
     'STRENGTH': ['Push', 'Pull', 'Ben', 'Överkropp', 'Underkropp', 'Hela Kroppen'],
@@ -206,6 +208,105 @@ export function WorkoutBuilderPage() {
         deriveMuscles(next);
     }
 
+    // Overload Engine: Find the ideal progression target from history
+    const getProgressionTarget = (exerciseName: string) => {
+        if (!strengthSessions || strengthSessions.length === 0) return null;
+
+        // Find the LATEST session containing this exercise
+        const sortedSessions = [...strengthSessions].sort((a: any, b: any) => b.date.localeCompare(a.date));
+        const relevantSessions = sortedSessions.filter((s: any) =>
+            s.exercises.some((e: any) => (e.exerciseName || e.name).toLowerCase() === exerciseName.toLowerCase())
+        );
+
+        if (relevantSessions.length === 0) return null;
+
+        const lastSession = relevantSessions[0];
+        const lastEx = (lastSession.exercises as any[]).find(e => (e.exerciseName || e.name).toLowerCase() === exerciseName.toLowerCase());
+        if (!lastEx || (!lastEx.sets && (lastEx as any).weight === undefined)) return null;
+
+        // Calculate Plateau (Sessions since last PR)
+        let sessionsSincePR = 0;
+        let highestRMFound = 0;
+
+        for (const session of relevantSessions) {
+            const ex = (session.exercises as any[]).find(e => (e.exerciseName || e.name).toLowerCase() === exerciseName.toLowerCase());
+            if (!ex) continue;
+
+            let sessionMax = 0;
+            if (Array.isArray(ex.sets)) {
+                sessionMax = ex.sets.reduce((max: number, s: any) => Math.max(max, calculate1RM(s.weight, s.reps)), 0);
+            } else {
+                sessionMax = calculate1RM((ex as any).weight || 0, (ex as any).reps || 0);
+            }
+
+            if (sessionMax > highestRMFound * 1.01) { // 1% buffer
+                if (highestRMFound > 0) break; // We found the PR that ended the previous plateau
+                highestRMFound = sessionMax;
+            } else {
+                sessionsSincePR++;
+            }
+        }
+
+        // If it's the summarized model (StrengthSession), it only has one set/rep/weight
+        if (!Array.isArray(lastEx.sets)) {
+            const weight = (lastEx as any).weight || 0;
+            const reps = (lastEx as any).reps || 0;
+            if (weight <= 0 && reps <= 0) return null;
+
+            const powerWeight = Math.ceil((weight * 1.025) / 2.5) * 2.5;
+            const volumeReps = reps + 1;
+
+            return {
+                lastWeight: weight,
+                lastReps: reps,
+                powerTarget: { weight: powerWeight, reps: reps },
+                volumeTarget: { weight: weight, reps: volumeReps },
+                date: lastSession.date,
+                sessionsSincePR
+            };
+        }
+
+        if (lastEx.sets.length === 0) return null;
+
+        // Detailed model (StrengthWorkout)
+        const bestSet = lastEx.sets.reduce((best: StrengthSet, current: StrengthSet) => {
+            const current1RM = calculate1RM(current.weight, current.reps);
+            const best1RM = calculate1RM(best.weight, best.reps);
+            return current1RM > best1RM ? current : best;
+        }, lastEx.sets[0]);
+
+        if (bestSet.weight <= 0 && bestSet.reps <= 0) return null;
+
+        // Calculate targets
+        // 1. Power Target: Same reps, +2.5% weight (rounded to nearest 2.5kg)
+        const powerWeight = Math.ceil((bestSet.weight * 1.025) / 2.5) * 2.5;
+
+        // 2. Volume Target: Same weight, +1-2 reps
+        const volumeReps = bestSet.reps + 1;
+
+        return {
+            lastWeight: bestSet.weight,
+            lastReps: bestSet.reps,
+            powerTarget: { weight: powerWeight, reps: bestSet.reps },
+            volumeTarget: { weight: bestSet.weight, reps: volumeReps },
+            date: lastSession.date,
+            sessionsSincePR
+        };
+    };
+
+    const applyTarget = (sectionId: string, exerciseId: string, weight: number | string, reps: number | string) => {
+        const sIdx = workout.exercises!.findIndex(s => s.id === sectionId);
+        if (sIdx === -1) return;
+
+        const newW = JSON.parse(JSON.stringify(workout));
+        const eIdx = newW.exercises[sIdx].exercises.findIndex((x: any) => x.id === exerciseId);
+        if (eIdx === -1) return;
+
+        newW.exercises[sIdx].exercises[eIdx].weight = typeof weight === 'number' ? `${weight}kg` : weight;
+        newW.exercises[sIdx].exercises[eIdx].reps = reps.toString();
+        setWorkout(newW);
+    };
+
     return (
         <div className="h-full flex flex-col bg-[#050510] text-white overflow-hidden font-sans">
             {/* HEADER TOOLBAR */}
@@ -361,6 +462,42 @@ export function WorkoutBuilderPage() {
                                                             <input className="bg-transparent font-mono text-indigo-400 font-bold outline-none" defaultValue={ex.weight} onBlur={(e) => { const sIdx = workout.exercises!.findIndex(s => s.id === section.id); const eIdx = section.exercises.findIndex(x => x.id === ex.id); const newW = JSON.parse(JSON.stringify(workout)); newW.exercises[sIdx].exercises[eIdx].weight = e.target.value; setWorkout(newW); }} />
                                                         </div>
                                                     </div>
+
+                                                    {/* Overload Engine Nudge */}
+                                                    {(() => {
+                                                        const target = getProgressionTarget(ex.name);
+                                                        if (!target) return null;
+                                                        return (
+                                                            <div className="mt-3 space-y-3">
+                                                                {target.sessionsSincePR >= 3 && (
+                                                                    <div className="flex items-center gap-3 px-4 py-2 bg-rose-500/10 border border-rose-500/20 rounded-2xl">
+                                                                        <span className="text-lg">⚠️</span>
+                                                                        <div className="flex flex-col">
+                                                                            <span className="text-[10px] font-black text-rose-400 uppercase tracking-wider">Platå-varning ({target.sessionsSincePR} pass utan PR!)</span>
+                                                                            <span className="text-[9px] text-rose-500/70 font-bold uppercase tracking-widest">Rekommendation: Deload eller Byt Variant</span>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">🎯 Mål (vs {target.date}):</span>
+                                                                    <button
+                                                                        onClick={() => applyTarget(section.id, ex.id, target.powerTarget.weight, target.powerTarget.reps)}
+                                                                        className="px-2 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 rounded text-[10px] font-bold text-indigo-400 transition-all flex items-center gap-1"
+                                                                        title="Öka vikt (+2.5%)"
+                                                                    >
+                                                                        ⚡ Power: {target.powerTarget.weight}kg x {target.powerTarget.reps}
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => applyTarget(section.id, ex.id, target.volumeTarget.weight, target.volumeTarget.reps)}
+                                                                        className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded text-[10px] font-bold text-emerald-400 transition-all flex items-center gap-1"
+                                                                        title="Öka repetitioner (+1)"
+                                                                    >
+                                                                        📈 Volym: {target.volumeTarget.weight}kg x {target.volumeTarget.reps}
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <button onClick={() => removeExercise(section.id, ex.id)} className="opacity-0 group-hover/ex:opacity-100 p-2 text-slate-600 hover:text-rose-500 transition-all">✕</button>
                                             </div>

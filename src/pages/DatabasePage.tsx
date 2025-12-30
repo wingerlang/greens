@@ -10,6 +10,7 @@ import {
     CATEGORY_LABELS,
     UNIT_LABELS,
 } from '../models/types.ts';
+import { normalizeText } from '../utils/formatters.ts';
 import './DatabasePage.css';
 
 const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
@@ -80,12 +81,8 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         }
     }, [searchParams]);
 
-    // Smart search with relevance ranking and robust Swedish character handling
     const filteredItems = React.useMemo(() => {
-        // Normalize text: NFC normalize, lowercase, trim, and strip any zero-width chars
-        const normalizeText = (text: string) =>
-            text.normalize('NFC').toLowerCase().trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
-
+        // normalizeText imported from utils/formatters.ts
         const query = normalizeText(searchQuery);
         const matchesCategory = (item: FoodItem) => selectedCategory === 'all' || item.category === selectedCategory;
 
