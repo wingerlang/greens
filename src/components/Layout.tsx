@@ -2,6 +2,7 @@ import React, { type ReactNode, useState, useEffect } from 'react';
 import { Navigation } from './Navigation.tsx';
 import { Omnibox } from './Omnibox.tsx';
 import { GlobalExerciseModal } from './training/GlobalExerciseModal.tsx';
+import { NoccoOClock } from './NoccoOClock.tsx';
 import { ExerciseType } from '../models/types.ts';
 
 interface LayoutProps {
@@ -32,6 +33,7 @@ export function Layout({ children }: LayoutProps) {
 
     return (
         <div className="min-h-screen flex flex-col relative">
+            <NoccoOClock />
             {/* New Omnibox Component - handles its own overlay */}
             <Omnibox
                 isOpen={isOmniboxOpen}

@@ -260,6 +260,12 @@ function parseSetData(values: string[], bodyWeight?: number): StrengthSet {
         }
     }
 
+    // Fix edge cases:
+    // 1. Distance-based sets with 0 reps should be 1 rep (e.g. Sled Push)
+    if (set.reps === 0 && (set.distance || 0) > 0) {
+        set.reps = 1;
+    }
+
     return set;
 }
 

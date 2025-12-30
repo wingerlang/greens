@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, calculate1RM } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, calculate1RM, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
 import { UniversalActivity } from '../../models/types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 
@@ -195,91 +195,143 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
 
                 {/* Exercises List */}
                 <div className="space-y-6">
-                    {uniqueExercises.map((exercise, idx) => (
-                        <div key={idx} className="bg-slate-800/30 rounded-2xl overflow-hidden border border-white/5">
-                            <div className="p-4 bg-slate-900/30 border-b border-white/5 flex justify-between items-start">
-                                <div>
-                                    <h3
-                                        className={`font-bold text-lg text-white ${onSelectExercise ? 'hover:text-blue-400 cursor-pointer transition-colors' : ''}`}
-                                        onClick={() => onSelectExercise?.(exercise.exerciseName)}
-                                    >
-                                        {exercise.exerciseName}
-                                        {onSelectExercise && <span className="opacity-0 group-hover:opacity-100 text-slate-500 ml-2 text-sm">→</span>}
-                                    </h3>
-                                    <p className="text-xs text-slate-500">{exercise.sets.length} set • {Math.round(exercise.totalVolume || 0)} kg volym</p>
+                    {uniqueExercises.map((exercise, idx) => {
+                        const isWeightedDist = isWeightedDistanceExercise(exercise.exerciseName);
+                        // Cast to boolean to ensure type safety
+                        const isDist = !!isDistanceBasedExercise(exercise.exerciseName);
+
+                        return (
+                            <div key={idx} className="bg-slate-800/30 rounded-2xl overflow-hidden border border-white/5">
+                                <div className="p-4 bg-slate-900/30 border-b border-white/5 flex justify-between items-start">
+                                    <div>
+                                        <h3
+                                            className={`font-bold text-lg text-white ${onSelectExercise ? 'hover:text-blue-400 cursor-pointer transition-colors' : ''}`}
+                                            onClick={() => onSelectExercise?.(exercise.exerciseName)}
+                                        >
+                                            {exercise.exerciseName}
+                                            {onSelectExercise && <span className="opacity-0 group-hover:opacity-100 text-slate-500 ml-2 text-sm">→</span>}
+                                        </h3>
+                                        <p className="text-xs text-slate-500">{exercise.sets.length} set • {Math.round(exercise.totalVolume || 0)} kg volym</p>
+                                    </div>
+                                    {exercise.isPB && (
+                                        <span className="bg-amber-500/10 text-amber-500 text-[10px] font-black px-2 py-1 rounded-full uppercase border border-amber-500/20 flex items-center gap-1">
+                                            ⭐ PB
+                                        </span>
+                                    )}
                                 </div>
-                                {exercise.isPB && (
-                                    <span className="bg-amber-500/10 text-amber-500 text-[10px] font-black px-2 py-1 rounded-full uppercase border border-amber-500/20 flex items-center gap-1">
-                                        ⭐ PB
-                                    </span>
-                                )}
-                            </div>
 
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="bg-white/5 text-[10px] text-slate-400 uppercase font-black">
-                                        <tr>
-                                            <th className="px-4 py-2 text-left w-16">Set</th>
-                                            <th className="px-4 py-2 text-right">Vikt</th>
-                                            <th className="px-4 py-2 text-right">Reps</th>
-                                            <th className="px-4 py-2 text-right text-slate-500">1RM (Est)</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-white/5">
-                                        {(() => {
-                                            // Pre-calculate 1RMs to find max
-                                            const setStats = exercise.sets.map(set => {
-                                                const isBW = set.isBodyweight || set.weight === 0;
-                                                const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
-                                                const est1RM = calculate1RM(calcWeight, set.reps);
-                                                return { ...set, est1RM, isBW, calcWeight };
-                                            });
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="bg-white/5 text-[10px] text-slate-400 uppercase font-black">
+                                            <tr>
+                                                <th className="px-4 py-2 text-left w-16">Set</th>
+                                                {isWeightedDist ? (
+                                                    <>
+                                                        <th className="px-4 py-2 text-right">Vikt</th>
+                                                        <th className="px-4 py-2 text-right">Distans</th>
+                                                        {/* Empty col for alignment or maybe remove */}
+                                                        <th className="px-4 py-2 text-right text-slate-500">Not</th>
+                                                    </>
+                                                ) : isDist ? (
+                                                    <>
+                                                        <th className="px-4 py-2 text-right">Tempo</th>
+                                                        <th className="px-4 py-2 text-right">Distans</th>
+                                                        <th className="px-4 py-2 text-right">Tid</th>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <th className="px-4 py-2 text-right">Vikt</th>
+                                                        <th className="px-4 py-2 text-right">Reps</th>
+                                                        <th className="px-4 py-2 text-right text-slate-500">1RM (Est)</th>
+                                                    </>
+                                                )}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {(() => {
+                                                // Pre-calculate 1RMs to find max
+                                                const setStats = exercise.sets.map(set => {
+                                                    const isBW = set.isBodyweight || set.weight === 0;
+                                                    const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
+                                                    const est1RM = calculate1RM(calcWeight, set.reps);
+                                                    return { ...set, est1RM, isBW, calcWeight };
+                                                });
 
-                                            const maxEst1RM = Math.max(...setStats.map(s => s.est1RM));
+                                                const maxEst1RM = Math.max(...setStats.map(s => s.est1RM));
 
-                                            return setStats.map((set, sIdx) => {
-                                                const weightDisplay = set.isBW ? (set.extraWeight ? `+${set.extraWeight}kg` : 'KV') : `${set.weight}kg`;
-                                                const isBest1RM = set.est1RM === maxEst1RM && maxEst1RM > 0;
-                                                const isPB = exercise.isPB && set.weight === exercise.topSet?.weight;
+                                                return setStats.map((set, sIdx) => {
+                                                    const weightDisplay = set.isBW ? (set.extraWeight ? `+${set.extraWeight}kg` : 'KV') : `${set.weight}kg`;
+                                                    const isBest1RM = set.est1RM === maxEst1RM && maxEst1RM > 0 && !isDist && !isWeightedDist;
+                                                    const isPB = exercise.isPB && set.weight === exercise.topSet?.weight;
 
-                                                return (
-                                                    <tr
-                                                        key={sIdx}
-                                                        className={`transition-colors border-l-2 ${isBest1RM ? 'bg-emerald-500/10 border-emerald-500' : 'border-transparent hover:bg-white/5'}`}
-                                                    >
-                                                        <td className={`px-4 py-2 font-mono ${isBest1RM ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
-                                                            #{set.setNumber || sIdx + 1}
-                                                        </td>
-                                                        <td className="px-4 py-2 text-right">
-                                                            <span className={`font-bold ${isBest1RM ? 'text-white' : 'text-slate-200'}`}>
-                                                                {weightDisplay}
-                                                            </span>
-                                                            {isPB && (
-                                                                <span className="ml-2 text-xs" title="Nytt PB!">⭐</span>
+                                                    return (
+                                                        <tr
+                                                            key={sIdx}
+                                                            className={`transition-colors border-l-2 ${isBest1RM ? 'bg-emerald-500/10 border-emerald-500' : 'border-transparent hover:bg-white/5'}`}
+                                                        >
+                                                            <td className={`px-4 py-2 font-mono ${isBest1RM ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                                                                #{set.setNumber || sIdx + 1}
+                                                            </td>
+
+                                                            {isWeightedDist ? (
+                                                                <>
+                                                                    <td className="px-4 py-2 text-right font-bold text-white">
+                                                                        {weightDisplay}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 text-right text-blue-400 font-mono">
+                                                                        {set.distance || 0} m
+                                                                    </td>
+                                                                    <td className="px-4 py-2 text-right text-slate-600 italic">
+                                                                        -
+                                                                    </td>
+                                                                </>
+                                                            ) : isDist ? (
+                                                                <>
+                                                                    <td className="px-4 py-2 text-right font-mono text-blue-300">
+                                                                        {set.tempo || '-'}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 text-right font-bold text-white">
+                                                                        {set.distance || 0} m
+                                                                    </td>
+                                                                    <td className="px-4 py-2 text-right text-emerald-400 font-mono">
+                                                                        {set.time || '-'}
+                                                                    </td>
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <td className="px-4 py-2 text-right">
+                                                                        <span className={`font-bold ${isBest1RM ? 'text-white' : 'text-slate-200'}`}>
+                                                                            {weightDisplay}
+                                                                        </span>
+                                                                        {isPB && (
+                                                                            <span className="ml-2 text-xs" title="Nytt PB!">⭐</span>
+                                                                        )}
+                                                                    </td>
+                                                                    <td className={`px-4 py-2 text-right font-bold ${isBest1RM ? 'text-emerald-400' : 'text-blue-400'}`}>
+                                                                        {set.reps}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 text-right">
+                                                                        <div className="flex items-center justify-end gap-1">
+                                                                            <span className={`font-mono text-xs ${isBest1RM ? 'text-emerald-300 font-bold' : 'text-slate-500'}`}>
+                                                                                {Math.round(set.est1RM)} kg
+                                                                            </span>
+                                                                            {isBest1RM && (
+                                                                                <span className="text-emerald-500 text-[10px]" title="Bästa 1eRM i passet">⚡</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                </>
                                                             )}
-                                                        </td>
-                                                        <td className={`px-4 py-2 text-right font-bold ${isBest1RM ? 'text-emerald-400' : 'text-blue-400'}`}>
-                                                            {set.reps}
-                                                        </td>
-                                                        <td className="px-4 py-2 text-right">
-                                                            <div className="flex items-center justify-end gap-1">
-                                                                <span className={`font-mono text-xs ${isBest1RM ? 'text-emerald-300 font-bold' : 'text-slate-500'}`}>
-                                                                    {Math.round(set.est1RM)} kg
-                                                                </span>
-                                                                {isBest1RM && (
-                                                                    <span className="text-emerald-500 text-[10px]" title="Bästa 1eRM i passet">⚡</span>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            });
-                                        })()}
-                                    </tbody>
-                                </table>
+                                                        </tr>
+                                                    );
+                                                });
+                                            })()}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 <div className="pt-4 border-t border-white/10 flex gap-3">

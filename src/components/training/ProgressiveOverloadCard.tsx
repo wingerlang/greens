@@ -23,6 +23,9 @@ export function ProgressiveOverloadCard({ suggestion, compact = false, onSelectW
         progressRate,
         isPlateaued,
         isCompound,
+        isDistanceBased,
+        lastDistance,
+        suggestedDistance,
         progressTrend,
         primaryMessage,
         plateauMessage,
@@ -65,13 +68,19 @@ export function ProgressiveOverloadCard({ suggestion, compact = false, onSelectW
                 <span className="text-lg">{isPlateaued ? '⚠️' : getTrendIcon()}</span>
                 <div className="flex-1">
                     <span className="text-slate-400">{formatDate(lastDate)}:</span>
-                    <span className="font-bold text-white ml-1">{lastWeight}kg × {lastReps}</span>
+                    <span className="font-bold text-white ml-1">
+                        {isDistanceBased
+                            ? `${lastDistance}m`
+                            : `${lastWeight}kg × ${lastReps}`}
+                    </span>
                     <span className="text-slate-500 mx-1">→</span>
                     <span className={`font-bold ${isPlateaued ? 'text-amber-400' : 'text-emerald-400'}`}>
-                        {suggestedWeight}kg × {lastReps}
+                        {isDistanceBased
+                            ? `${suggestedDistance}m`
+                            : `${suggestedWeight}kg × ${lastReps}`}
                     </span>
                 </div>
-                <span className="text-[9px] text-slate-500 font-mono">{current1RM}kg 1RM</span>
+                {!isDistanceBased && <span className="text-[9px] text-slate-500 font-mono">{current1RM}kg 1RM</span>}
             </div>
         );
     }
@@ -108,42 +117,59 @@ export function ProgressiveOverloadCard({ suggestion, compact = false, onSelectW
                         <div className="flex items-center gap-2">
                             <span className="text-xs text-slate-400">{formatDate(lastDate)}:</span>
                             <span className="px-2 py-1 bg-slate-800 rounded-lg text-sm font-bold text-white">
-                                {lastWeight}kg × {lastReps}
+                                {isDistanceBased
+                                    ? `${lastDistance}m`
+                                    : `${lastWeight}kg × ${lastReps}`}
                             </span>
                         </div>
-                        <div className="flex items-center gap-1 text-[10px]">
-                            <span className="text-slate-500">1RM:</span>
-                            <span className="font-mono font-bold text-sky-400">{current1RM}kg</span>
-                            <span className={getTrendColor()}>{getTrendIcon()}</span>
-                            {progressRate !== 0 && (
-                                <span className={`${progressRate > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                    {progressRate > 0 ? '+' : ''}{progressRate}%/pass
-                                </span>
-                            )}
-                        </div>
+                        {!isDistanceBased && (
+                            <div className="flex items-center gap-1 text-[10px]">
+                                <span className="text-slate-500">1RM:</span>
+                                <span className="font-mono font-bold text-sky-400">{current1RM}kg</span>
+                                <span className={getTrendColor()}>{getTrendIcon()}</span>
+                                {progressRate !== 0 && (
+                                    <span className={`${progressRate > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {progressRate > 0 ? '+' : ''}{progressRate}%/pass
+                                    </span>
+                                )}
+                            </div>
+                        )}
+                        {isDistanceBased && (
+                            <div className="flex items-center gap-1 text-[10px]">
+                                <span className={getTrendColor()}>{getTrendIcon()}</span>
+                            </div>
+                        )}
                     </div>
 
                     {/* Suggestions */}
                     <div className="flex flex-wrap gap-2 mb-3">
                         <button
-                            onClick={() => onSelectWeight?.(suggestedWeight, lastReps)}
+                            onClick={() => isDistanceBased
+                                ? onSelectWeight?.(0, 0) // Cannot set weight/reps for distance easily via this callback yet
+                                : onSelectWeight?.(suggestedWeight, lastReps)
+                            }
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 ${isPlateaued
                                 ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
                                 : 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30'
                                 }`}
                         >
-                            💪 {suggestedWeight}kg × {lastReps}
-                            <span className="ml-1 text-[9px] opacity-60">({projected1RM}kg 1RM)</span>
+                            {isDistanceBased ? (
+                                <>🏃 {suggestedDistance}m (+2.5%)</>
+                            ) : (
+                                <>💪 {suggestedWeight}kg × {lastReps} <span className="ml-1 text-[9px] opacity-60">({projected1RM}kg 1RM)</span></>
+                            )}
                         </button>
-                        <button
-                            onClick={() => onSelectWeight?.(lastWeight, suggestedReps)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 ${isPlateaued
-                                ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
-                                : 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30'
-                                }`}
-                        >
-                            🔄 {lastWeight}kg × {suggestedReps}
-                        </button>
+                        {!isDistanceBased && (
+                            <button
+                                onClick={() => onSelectWeight?.(lastWeight, suggestedReps)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all hover:scale-105 ${isPlateaued
+                                    ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30'
+                                    : 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30'
+                                    }`}
+                            >
+                                🔄 {lastWeight}kg × {suggestedReps}
+                            </button>
+                        )}
                     </div>
 
                     {/* Tips */}

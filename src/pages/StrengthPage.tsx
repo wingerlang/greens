@@ -339,6 +339,26 @@ export function StrengthPage() {
         setEndDate(null);
     };
 
+    // Workout Search & Pagination
+    const [workoutSearchTerm, setWorkoutSearchTerm] = useState('');
+    const [workoutDisplayCount, setWorkoutDisplayCount] = useState(20);
+
+    const searchedWorkouts = useMemo(() => {
+        if (!workoutSearchTerm) return filteredWorkouts;
+        const lower = workoutSearchTerm.toLowerCase();
+        return filteredWorkouts.filter(w =>
+            w.name.toLowerCase().includes(lower) ||
+            w.exercises.some(e => e.exerciseName.toLowerCase().includes(lower))
+        );
+    }, [filteredWorkouts, workoutSearchTerm]);
+
+    // Reset pagination when filter changes
+    useEffect(() => {
+        setWorkoutDisplayCount(20);
+    }, [workoutSearchTerm, startDate, endDate]);
+
+    const visibleWorkouts = searchedWorkouts.slice(0, workoutDisplayCount);
+
     const hasDateFilter = startDate !== null || endDate !== null;
 
     return (
@@ -867,14 +887,48 @@ export function StrengthPage() {
                         <p>{hasDateFilter ? 'Inga pass i valt datumintervall' : 'Inga pass ännu. Importera din StrengthLog CSV!'}</p>
                     </div>
                 ) : (
-                    <div className="space-y-3">
-                        {filteredWorkouts.map(workout => (
-                            <WorkoutCard
-                                key={workout.id}
-                                workout={workout}
-                                onClick={() => setSelectedWorkout(workout)}
+                    <div className="space-y-4">
+                        {/* Search Bar */}
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
+                            <input
+                                type="text"
+                                placeholder="Sök pass, övningar..."
+                                value={workoutSearchTerm}
+                                onChange={(e) => setWorkoutSearchTerm(e.target.value)}
+                                className="w-full bg-slate-900 border border-white/5 text-white pl-10 pr-4 py-3 rounded-xl focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
                             />
-                        ))}
+                            {workoutSearchTerm && (
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono">
+                                    {searchedWorkouts.length} träffar
+                                </div>
+                            )}
+                        </div>
+
+                        {visibleWorkouts.length === 0 ? (
+                            <div className="text-center text-slate-500 py-12">
+                                <p>Inga pass matchar din sökning.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {visibleWorkouts.map(workout => (
+                                    <WorkoutCard
+                                        key={workout.id}
+                                        workout={workout}
+                                        onClick={() => setSelectedWorkout(workout)}
+                                    />
+                                ))}
+                            </div>
+                        )}
+
+                        {visibleWorkouts.length < searchedWorkouts.length && (
+                            <button
+                                onClick={() => setWorkoutDisplayCount(prev => prev + 20)}
+                                className="w-full py-3 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl border border-white/5 transition-all font-bold uppercase text-xs tracking-wider"
+                            >
+                                Visa fler pass ({searchedWorkouts.length - visibleWorkouts.length} kvar)
+                            </button>
+                        )}
                     </div>
                 )}
             </CollapsibleSection>

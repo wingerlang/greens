@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { StrengthWorkout, PersonalBest, calculate1RM, isBodyweightExercise, isTimeBasedExercise, getTimePBValue, isHyroxExercise, isWeightedDistanceExercise } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, PersonalBest, calculate1RM, isBodyweightExercise, isTimeBasedExercise, getTimePBValue, isHyroxExercise, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
 
 interface TopExercisesTableProps {
     workouts: StrengthWorkout[];
@@ -10,7 +10,10 @@ interface TopExercisesTableProps {
 export function TopExercisesTable({ workouts, personalBests = [], onSelectExercise }: TopExercisesTableProps) {
     const [sortBy, setSortBy] = useState<'name' | 'count' | 'sets' | 'reps' | 'volume' | 'pb'>('volume');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-    const [filter, setFilter] = useState<'all' | 'bw' | 'weighted'>('all');
+    const [filter, setFilter] = useState<'all' | 'bw' | 'weighted' | 'cardio' | 'hyrox'>('all');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [page, setPage] = useState(1);
+    const pageSize = 100;
 
     const handleSort = (field: typeof sortBy) => {
         if (sortBy === field) {
@@ -57,6 +60,7 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
             maxTimeFormatted: string;
             isHyrox: boolean;
             isWeightedDistance: boolean;
+            isDistanceBased: boolean;
             maxDistance: number;
             maxDistanceUnit: string;
         }> = {};
@@ -86,6 +90,7 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         maxTimeFormatted: '',
                         isHyrox: isHyroxExercise(ex.exerciseName),
                         isWeightedDistance: isWeightedDistanceExercise(ex.exerciseName),
+                        isDistanceBased: isDistanceBasedExercise(ex.exerciseName),
                         maxDistance: pb?.distance || 0,
                         maxDistanceUnit: pb?.distanceUnit || 'm'
                     };
@@ -129,7 +134,17 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
 
                 stats[key].sets += ex.sets.length;
                 stats[key].reps += ex.sets.reduce((sum, s) => sum + s.reps, 0);
-                stats[key].volume += ex.totalVolume || 0;
+
+                // Smart Volume Calculation
+                let volume = 0;
+                if (stats[key].isWeightedDistance) {
+                    volume = ex.sets.reduce((sum, s) => sum + (s.weight * (s.distance || 0)), 0);
+                } else if (stats[key].isDistanceBased) {
+                    volume = ex.sets.reduce((sum, s) => sum + (s.distance || 0), 0);
+                } else {
+                    volume = ex.totalVolume || 0;
+                }
+                stats[key].volume += volume;
                 stats[key].count += 1;
             });
         });
@@ -140,17 +155,39 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
         if (filter === 'bw') {
             result = result.filter(ex => ex.isBW);
         } else if (filter === 'weighted') {
-            result = result.filter(ex => !ex.isBW);
+            result = result.filter(ex => !ex.isBW && !ex.isTimeBased && !ex.isDistanceBased && !ex.isWeightedDistance && !ex.isHyrox);
+        } else if (filter === 'cardio') {
+            result = result.filter(ex => ex.isTimeBased || ex.isDistanceBased || ex.isWeightedDistance || ex.isHyrox);
+        } else if (filter === 'hyrox') {
+            result = result.filter(ex => ex.isHyrox);
+        }
+
+        // Apply search
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            result = result.filter(ex => ex.name.toLowerCase().includes(term));
         }
 
         // Apply sorting
         return result.sort((a, b) => {
             let mult = sortOrder === 'asc' ? 1 : -1;
             if (sortBy === 'name') return mult * a.name.localeCompare(b.name);
-            if (sortBy === 'pb') return mult * (a.estimated1RM - b.estimated1RM);
+            if (sortBy === 'pb') {
+                // Sort by max metric depending on type? mostly e1rm or maxWeight 
+                return mult * (a.estimated1RM - b.estimated1RM);
+            }
+            // For other numeric fields
+            // @ts-ignore - dynamic access to properties we know exist
             return mult * (a[sortBy] - b[sortBy]);
         });
-    }, [workouts, sortBy, sortOrder, filter, pbMap]);
+    }, [workouts, sortBy, sortOrder, filter, searchTerm, pbMap]);
+
+    const paginatedStats = useMemo(() => {
+        const start = (page - 1) * pageSize;
+        return exerciseStats.slice(start, start + pageSize);
+    }, [exerciseStats, page]);
+
+    const totalPages = Math.ceil(exerciseStats.length / pageSize);
 
     // Helper to format days ago as "2y4m sedan"
     const formatDaysAgoCompact = (dateStr: string) => {
@@ -169,30 +206,53 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
         return months > 0 ? `${years}y${months}m sedan` : `${years}y sedan`;
     };
 
-    if (exerciseStats.length === 0) return null;
+    if (exerciseStats.length === 0 && !searchTerm) return null;
 
     return (
         <div className="space-y-4">
-            {/* Filters */}
-            <div className="flex gap-2">
-                {[
-                    { id: 'all', label: 'Alla övningar' },
-                    { id: 'bw', label: 'Bara kroppsvikt' },
-                    { id: 'weighted', label: 'Fria vikter / Maskin' }
-                ].map(f => (
-                    <button
-                        key={f.id}
-                        onClick={() => setFilter(f.id as any)}
-                        className={`text-[10px] font-black uppercase px-4 py-2 rounded-full border transition-all ${filter === f.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-white/5 text-slate-500 hover:border-white/10'}`}
-                    >
-                        {f.label}
-                    </button>
-                ))}
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center mb-4">
+                <div className="flex gap-2 flex-wrap">
+                    {[
+                        { id: 'all', label: 'Alla' },
+                        { id: 'bw', label: 'Kroppsvikt' },
+                        { id: 'weighted', label: 'Fria vikter' },
+                        { id: 'cardio', label: 'Cardio' },
+                        { id: 'hyrox', label: 'Hyrox' }
+                    ].map(f => (
+                        <button
+                            key={f.id}
+                            onClick={() => {
+                                setFilter(f.id as any);
+                                setPage(1); // Reset page on filter change
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === f.id
+                                ? 'bg-white text-slate-900'
+                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+
+                <div className="relative w-full md:w-64">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">🔍</span>
+                    <input
+                        type="text"
+                        placeholder="Sök övning..."
+                        value={searchTerm}
+                        onChange={(e) => {
+                            setSearchTerm(e.target.value);
+                            setPage(1);
+                        }}
+                        className="w-full bg-slate-900 border border-white/10 rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+                    />
+                </div>
             </div>
 
-            <div className="bg-slate-900/50 border border-white/5 rounded-2xl overflow-hidden shadow-2xl">
-                <table className="w-full text-sm">
-                    <thead className="bg-slate-950 text-[10px] text-slate-500 uppercase font-black">
+            <div className="max-h-[600px] overflow-y-auto custom-scrollbar border border-white/5 rounded-xl bg-slate-950/50">
+                <table className="w-full text-xs">
+                    <thead className="text-slate-500 font-bold bg-slate-900/90 sticky top-0 z-10 backdrop-blur-sm">
                         <tr>
                             <th className="px-4 py-4 text-left cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
                                 Övning {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -215,7 +275,7 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {exerciseStats.map((ex, i) => (
+                        {paginatedStats.map((ex, i) => (
                             <tr
                                 key={ex.name}
                                 className={`hover:bg-slate-800/30 ${onSelectExercise ? 'cursor-pointer' : ''}`}
@@ -224,14 +284,22 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                                 <td className="px-4 py-4 text-white font-black group">
                                     <span className="group-hover:text-blue-400 group-hover:underline transition-colors">{ex.name}</span>
                                     {ex.isBW && <span className="ml-2 text-[9px] text-slate-500 border border-white/10 px-1.5 py-0.5 rounded bg-slate-800">KV</span>}
-                                    {ex.isTimeBased && <span className="ml-2 text-[9px] text-cyan-500 border border-cyan-500/20 px-1.5 py-0.5 rounded bg-cyan-500/10">TID</span>}
+                                    {(ex.isTimeBased || ex.isDistanceBased) && <span className="ml-2 text-[9px] text-cyan-500 border border-cyan-500/20 px-1.5 py-0.5 rounded bg-cyan-500/10">CARDIO</span>}
                                     {ex.isHyrox && <span className="ml-2 text-[9px] text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded bg-amber-500/10 tracking-wider">HYROX</span>}
+                                    {ex.isWeightedDistance && <span className="ml-2 text-[9px] text-emerald-500 border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/10">DIST</span>}
                                 </td>
                                 <td className="px-4 py-4 text-right">
                                     {/* Time-based exercises - show duration */}
                                     {ex.isTimeBased && ex.maxTimeSeconds > 0 ? (
                                         <div className="flex flex-col items-end gap-0.5">
                                             <span className="text-cyan-400 font-bold">{ex.maxTimeFormatted} <span className="text-[9px] text-slate-500">rekord</span></span>
+                                            {ex.maxWeightDate && (
+                                                <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
+                                            )}
+                                        </div>
+                                    ) : ex.isDistanceBased ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <span className="text-cyan-400 font-bold">{ex.maxDistance > 0 ? ex.maxDistance + 'm' : '-'}</span>
                                             {ex.maxWeightDate && (
                                                 <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
                                             )}
@@ -278,14 +346,45 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                                     )}
                                 </td>
                                 <td className="px-4 py-4 text-right text-slate-400">{ex.count}</td>
-                                <td className="px-4 py-4 text-right text-slate-500 hidden md:table-cell">{ex.sets}</td>
-                                <td className="px-4 py-4 text-right text-slate-500 hidden md:table-cell">{ex.reps}</td>
-                                <td className="px-4 py-4 text-right text-emerald-400 font-bold">{(ex.volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 })}t</td>
+                                <td className="px-4 py-4 text-right text-slate-500 hidden md:table-cell">{ex.sets > 0 ? ex.sets : '-'}</td>
+                                <td className="px-4 py-4 text-right text-slate-500 hidden md:table-cell">{ex.reps > 0 ? ex.reps : '-'}</td>
+                                <td className="px-4 py-4 text-right text-emerald-400 font-bold whitespace-nowrap">
+                                    {(ex.isDistanceBased ? (ex.volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 }) + 'km' :
+                                        (ex.volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 }) + 't')}
+                                </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
-        </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4">
+                    <p className="text-[10px] text-slate-500">
+                        Visar {Math.min((page - 1) * pageSize + 1, exerciseStats.length)}-{Math.min(page * pageSize, exerciseStats.length)} av {exerciseStats.length} övningar
+                    </p>
+                    <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
+                        <button
+                            onClick={() => setPage(Math.max(1, page - 1))}
+                            disabled={page === 1}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-colors ${page === 1 ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:bg-white/5'}`}
+                        >
+                            ←
+                        </button>
+                        <span className="px-3 py-1 text-xs font-bold text-slate-400 border-x border-white/5">
+                            {page} / {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setPage(Math.min(totalPages, page + 1))}
+                            disabled={page === totalPages}
+                            className={`px-3 py-1 rounded text-xs font-bold transition-colors ${page === totalPages ? 'text-slate-600 cursor-not-allowed' : 'text-slate-300 hover:bg-white/5'}`}
+                        >
+                            →
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div >
     );
 }

@@ -25,7 +25,7 @@ export function ExerciseDetailModal({
         return () => window.removeEventListener('keydown', handleEsc, true);
     }, [onClose, isWorkoutModalOpen]);
 
-    const [viewMode, setViewMode] = useState<'history' | 'prs'>('history');
+    const [viewMode, setViewMode] = useState<'history' | 'prs' | 'annual'>('history');
 
     // Get all instances of this exercise across workouts
     const exerciseHistory = useMemo(() => {
@@ -55,10 +55,21 @@ export function ExerciseDetailModal({
                 const allSets = exerciseEntries.flatMap(e => e.sets);
                 const maxWeight = Math.max(...allSets.map(s => s.weight));
                 const totalReps = allSets.reduce((sum, s) => sum + s.reps, 0);
-                const volume = exerciseEntries.reduce((sum, e) => sum + (e.totalVolume || 0), 0);
+                // Calculate Volume & Max Weight
+                let volume = 0;
 
-                // Find best set for 1RM estimate (bodyweight aware)
+                if (isWeightedDistanceExercise(exerciseName)) {
+                    volume = allSets.reduce((sum, s) => sum + (s.weight * (s.distance || 0)), 0);
+                } else if (isDistanceBasedExercise(exerciseName)) {
+                    volume = allSets.reduce((sum, s) => sum + (s.distance || 0), 0);
+                } else {
+                    volume = allSets.reduce((sum, s) => sum + (s.weight * s.reps), 0);
+                }
+
                 const est1RMs = allSets.map(s => {
+                    // For weighted distance, est1RM is just the weight (since reps are 0)
+                    if (isWeightedDistanceExercise(exerciseName)) return s.weight;
+                    if (isDistanceBasedExercise(exerciseName)) return 0;
                     const isBW = s.isBodyweight || s.weight === 0;
                     const calcWeight = isBW ? (s.extraWeight || 0) : s.weight;
                     return calculate1RM(calcWeight, s.reps);
@@ -150,6 +161,59 @@ export function ExerciseDetailModal({
         return prs;
     }, [exerciseHistory, exerciseName]);
 
+    // Calculate Annual Bests
+    const annualBestData = useMemo(() => {
+        const byYear: Record<string, {
+            year: string;
+            maxEst1RM: number;
+            maxWeight: number;
+            maxDistance: number;
+            maxEst1RMWorkout?: StrengthWorkout;
+            maxWeightWorkout?: StrengthWorkout;
+            monthlyMaxes: { value: number; date: string; workout: StrengthWorkout }[];
+        }> = {};
+
+        exerciseHistory.forEach(h => {
+            const year = h.date.substring(0, 4);
+            if (!byYear[year]) {
+                byYear[year] = { year, maxEst1RM: 0, maxWeight: 0, maxDistance: 0, monthlyMaxes: [] };
+            }
+
+            // Update Annual Maxes
+            if (h.est1RM > byYear[year].maxEst1RM) {
+                byYear[year].maxEst1RM = h.est1RM;
+                byYear[year].maxEst1RMWorkout = h.workout;
+            }
+            if (h.maxWeight > byYear[year].maxWeight) {
+                byYear[year].maxWeight = h.maxWeight;
+                byYear[year].maxWeightWorkout = h.workout;
+            }
+            if ((h.maxDistance || 0) > byYear[year].maxDistance) byYear[year].maxDistance = h.maxDistance || 0;
+
+            // Track Monthly Maxes (for "swarm" visualization)
+            // For now, simpler: just push every single session's "best" value to monthlyMaxes
+            // We can filter for unique months or just keep all sessions to show density
+            // User asked for "månadsbästa" specifically, so let's try to keep 1 per month per year?
+            // Actually, showing density of ALL sessions as faint dots is cool too.
+            // But let's stick to "Monthly Best" to keep it cleaner.
+
+            const monthKey = h.date.substring(0, 7); // YYYY-MM
+            const val = isWeightedDistanceExercise(exerciseName) ? h.maxWeight :
+                isDistanceBasedExercise(exerciseName) ? (h.maxDistance || 0) : h.maxWeight;
+
+            const existingMonth = byYear[year].monthlyMaxes.find(m => m.date.startsWith(monthKey));
+            if (!existingMonth) {
+                byYear[year].monthlyMaxes.push({ value: val, date: h.date, workout: h.workout });
+            } else if (val > existingMonth.value) {
+                existingMonth.value = val;
+                existingMonth.date = h.date;
+                existingMonth.workout = h.workout;
+            }
+        });
+
+        return Object.values(byYear).sort((a, b) => a.year.localeCompare(b.year));
+    }, [exerciseHistory]);
+
     const totalSets = useMemo(() => exerciseHistory.reduce((sum, h) => sum + h.sets, 0), [exerciseHistory]);
     const totalVolume = exerciseHistory.reduce((sum: number, h) => sum + h.volume, 0);
 
@@ -162,9 +226,30 @@ export function ExerciseDetailModal({
 
     const bestRecord = useMemo(() => {
         if (exerciseHistory.length === 0) return null;
+        if (isDistanceBasedExercise(exerciseName)) {
+            return exerciseHistory.reduce((prev, curr) => ((curr.maxDistance || 0) > (prev.maxDistance || 0) ? curr : prev), exerciseHistory[0]);
+        }
         return exerciseHistory.reduce((prev, curr) => (curr.est1RM > prev.est1RM ? curr : prev), exerciseHistory[0]);
-    }, [exerciseHistory]);
-    const best1RM = bestRecord?.est1RM || 0;
+    }, [exerciseHistory, exerciseName]);
+
+    // Best value for the summary card (1RM, Distance, or Weight+Dist)
+    const bestValueDisplay = useMemo(() => {
+        if (!maxRecord && !bestRecord) return '0';
+
+        if (isWeightedDistanceExercise(exerciseName)) {
+            // Show Max Weight (and distance)
+            const rec = maxRecord || bestRecord;
+            return `${rec?.maxWeight}kg (${rec?.maxDistance}m)`;
+        }
+
+        if (isDistanceBasedExercise(exerciseName)) {
+            // Show Max Distance
+            return `${Math.round(bestRecord?.maxDistance || 0)}m`;
+        }
+
+        // Default Strength
+        return `${bestRecord?.est1RM || 0} kg`;
+    }, [maxRecord, bestRecord, exerciseName]);
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -201,16 +286,24 @@ export function ExerciseDetailModal({
                         <p className="text-[9px] text-slate-500 uppercase font-bold">Set</p>
                     </div>
                     <div className="bg-slate-800/50 rounded-xl p-2.5 text-center">
-                        <p className="text-lg font-black text-white text-blue-400">{totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 't' : totalVolume + 'kg'}</p>
+                        {/* Intelligent Volume Display */}
+                        <p className="text-lg font-black text-white text-blue-400">
+                            {isDistanceBasedExercise(exerciseName)
+                                ? (totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 'km' : Math.round(totalVolume) + 'm')
+                                : (totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 't' : Math.round(totalVolume) + 'kg')
+                            }
+                        </p>
                         <p className="text-[9px] text-slate-500 uppercase font-bold">Total Volym</p>
                     </div>
                     <button
                         onClick={() => maxRecord && onSelectWorkout?.(maxRecord.workout)}
                         className="bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/60 rounded-xl p-2.5 text-center group/pb transition-all active:scale-[0.98]"
                     >
-                        <p className="text-lg font-black text-emerald-400 group-hover/pb:text-emerald-300 transition-colors">{maxEver} kg</p>
+                        <p className="text-lg font-black text-emerald-400 group-hover/pb:text-emerald-300 transition-colors text-nowrap truncate px-1">
+                            {bestValueDisplay}
+                        </p>
                         <p className="text-[9px] text-emerald-500 uppercase font-bold flex items-center justify-center gap-1">
-                            Max (1RM)
+                            {isDistanceBasedExercise(exerciseName) ? 'Längsta Distans' : 'Max (PB)'}
                             <span className="opacity-0 group-hover/pb:opacity-100 transition-opacity">→</span>
                         </p>
                     </button>
@@ -222,13 +315,24 @@ export function ExerciseDetailModal({
                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-tight flex items-center gap-2">
                             {viewMode === 'history' ? (
                                 <>
-                                    <span>📈 Progression (1eRM)</span>
-                                    <span className="text-[10px] text-slate-500 font-normal normal-case italic">(estimerat 1RM)</span>
+                                    <span>
+                                        {isDistanceBasedExercise(exerciseName) ? '📈 Progression (Distans)' :
+                                            isWeightedDistanceExercise(exerciseName) ? '📈 Progression (Vikt)' : '📈 Progression (1eRM)'}
+                                    </span>
+                                    <span className="text-[10px] text-slate-500 font-normal normal-case italic">
+                                        {isDistanceBasedExercise(exerciseName) ? '(meter per pass)' :
+                                            isWeightedDistanceExercise(exerciseName) ? '(tyngsta vikt)' : '(estimerat 1RM)'}
+                                    </span>
+                                </>
+                            ) : viewMode === 'prs' ? (
+                                <>
+                                    <span className="text-amber-500">🏆 Progression (PB)</span>
+                                    <span className="text-[10px] text-slate-500 font-normal normal-case italic">(faktiska rekord)</span>
                                 </>
                             ) : (
                                 <>
-                                    <span className="text-amber-500">🏆 Progression (1RM)</span>
-                                    <span className="text-[10px] text-slate-500 font-normal normal-case italic">(faktiska rekordvikter)</span>
+                                    <span className="text-purple-500">🏆 Årsbästa</span>
+                                    <span className="text-[10px] text-slate-500 font-normal normal-case italic">(EST 1RM vs Faktiskt)</span>
                                 </>
                             )}
                         </h3>
@@ -245,11 +349,190 @@ export function ExerciseDetailModal({
                             >
                                 Tyngsta lyft
                             </button>
+                            <button
+                                onClick={() => setViewMode('annual')}
+                                className={`px-3 py-1 text-xs font-bold rounded-md transition-colors ${viewMode === 'annual' ? 'bg-purple-500 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                            >
+                                Årsbästa
+                            </button>
                         </div>
                     </div>
 
                     <div className="bg-slate-800/30 rounded-2xl p-6 border border-white/5">
                         {(() => {
+                            if (viewMode === 'annual') {
+                                if (annualBestData.length < 2) {
+                                    return <p className="text-center text-slate-500 py-8">Inte nog med data för att visa årsbästa.</p>;
+                                }
+
+                                const isDist = isDistanceBasedExercise(exerciseName);
+                                const maxVal = Math.max(...annualBestData.map(d => isDist ? d.maxDistance : d.maxEst1RM));
+                                const height = 200;
+                                const width = 500;
+
+                                const getX = (i: number) => (i / (annualBestData.length - 1)) * width;
+                                const getY = (val: number) => height - (val / (maxVal * 1.1)) * height;
+
+                                const lineEst = annualBestData.map((d, i) => `${getX(i)},${getY(isDist ? d.maxDistance : d.maxEst1RM)}`).join(' ');
+                                const lineAct = annualBestData.map((d, i) => `${getX(i)},${getY(d.maxWeight)}`).join(' ');
+
+                                return (
+                                    <div className="w-full h-[250px] relative">
+                                        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+                                            {/* Grid Lines & Y-Labels */}
+                                            {[0, 0.25, 0.5, 0.75, 1].map(p => (
+                                                <g key={p}>
+                                                    <line
+                                                        x1="0"
+                                                        y1={height * p}
+                                                        x2={width}
+                                                        y2={height * p}
+                                                        stroke="rgba(255,255,255,0.05)"
+                                                        strokeWidth="1"
+                                                    />
+                                                    <text
+                                                        x="-10"
+                                                        y={height * p + 3}
+                                                        fill="#64748b" // slate-500
+                                                        fontSize="9"
+                                                        textAnchor="end"
+                                                        className="font-mono"
+                                                    >
+                                                        {Math.round(maxVal * (1 - p))}{isDist ? 'm' : 'kg'}
+                                                    </text>
+                                                </g>
+                                            ))}
+
+                                            {/* "Subtle Monthly Bests" (Background Dots) */}
+                                            {annualBestData.map((d, i) => (
+                                                <g key={`monthlies-${i}`}>
+                                                    {d.monthlyMaxes.map((m, mIdx) => (
+                                                        <circle
+                                                            key={mIdx}
+                                                            cx={getX(i)}
+                                                            cy={getY(m.value)}
+                                                            r="2"
+                                                            fill={isDist ? "#3b82f6" : "#10b981"}
+                                                            fillOpacity="0.2"
+                                                            className="hover:fill-opacity-80 transition-all cursor-pointer"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onSelectWorkout?.(m.workout);
+                                                            }}
+                                                        >
+                                                            <title>{m.date}: {m.value}{isDist ? 'm' : 'kg'}</title>
+                                                        </circle>
+                                                    ))}
+                                                </g>
+                                            ))}
+
+                                            {/* Actual 1RM Line (Secondary) - Only if not distance based */}
+                                            {!isDist && (
+                                                <>
+                                                    <polyline
+                                                        points={lineAct}
+                                                        fill="none"
+                                                        stroke="#10b981" // emerald-500
+                                                        strokeWidth="2"
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                    // Solid line for Actual (Real)
+                                                    />
+                                                    {annualBestData.map((d, i) => (
+                                                        <circle
+                                                            onClick={() => d.maxWeightWorkout && onSelectWorkout?.(d.maxWeightWorkout)}
+                                                            key={`act-${i}`}
+                                                            cx={getX(i)}
+                                                            cy={getY(d.maxWeight)}
+                                                            r="3"
+                                                            fill="#10b981"
+                                                            className="group hover:r-5 transition-all cursor-pointer stroke-slate-900 stroke-1"
+                                                        />
+                                                    ))}
+                                                </>
+                                            )}
+
+                                            {/* Est 1RM / Max Dist Line (Primary) */}
+                                            <polyline
+                                                points={lineEst}
+                                                fill="none"
+                                                stroke={isDist ? "#3b82f6" : "#f59e0b"} // blue-500 or amber-500
+                                                strokeWidth="3"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                // Dashed line for Estimated (Theoretical)
+                                                strokeDasharray={!isDist ? "6 4" : ""}
+                                            />
+
+                                            {/* Data Points & Tooltips */}
+                                            {annualBestData.map((d, i) => (
+                                                <g
+                                                    key={i}
+                                                    className="group"
+                                                    onClick={() => d.maxEst1RMWorkout && onSelectWorkout?.(d.maxEst1RMWorkout)}
+                                                >
+                                                    <circle
+                                                        cx={getX(i)}
+                                                        cy={getY(isDist ? d.maxDistance : d.maxEst1RM)}
+                                                        r="4"
+                                                        fill={isDist ? "#3b82f6" : "#f59e0b"} // blue or amber
+                                                        className="stroke-slate-900 stroke-2 cursor-pointer transition-all hover:r-5"
+                                                    />
+                                                    {/* Tooltip */}
+                                                    <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                        <rect
+                                                            x={getX(i) - 30}
+                                                            y={getY(isDist ? d.maxDistance : d.maxEst1RM) - 40}
+                                                            width="60"
+                                                            height="30"
+                                                            rx="4"
+                                                            fill="#0f172a"
+                                                            stroke="rgba(255,255,255,0.1)"
+                                                        />
+                                                        <text
+                                                            x={getX(i)}
+                                                            y={getY(isDist ? d.maxDistance : d.maxEst1RM) - 22}
+                                                            textAnchor="middle"
+                                                            fill="white"
+                                                            fontSize="10"
+                                                            fontWeight="bold"
+                                                        >
+                                                            {isDist ? Math.round(d.maxDistance) : Math.round(d.maxEst1RM)} {isDist ? 'm' : 'kg'}
+                                                        </text>
+                                                    </g>
+                                                </g>
+                                            ))}
+                                        </svg>
+
+                                        {/* X-Axis Labels */}
+                                        <div className="flex justify-between mt-2 px-2">
+                                            {annualBestData.map(d => (
+                                                <div key={d.year} className="text-center">
+                                                    <p className="text-xs text-slate-400 font-bold">{d.year}</p>
+                                                    {!isDist && (
+                                                        <p className="text-[9px] text-emerald-500/80">{d.maxWeight}kg (Act)</p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Legend */}
+                                        <div className="absolute top-0 right-0 flex gap-4 text-[10px]">
+                                            <div className="flex items-center gap-1">
+                                                <span className={`w-3 h-1 rounded-full ${isDist ? 'bg-blue-500' : 'bg-amber-500'}`}></span>
+                                                <span className="text-slate-400">{isDist ? 'Max Distans' : 'Estimerat 1RM'}</span>
+                                            </div>
+                                            {!isDist && (
+                                                <div className="flex items-center gap-1">
+                                                    <span className="w-3 h-1 rounded-full bg-emerald-500/50 border-b border-emerald-500 border-dashed"></span>
+                                                    <span className="text-slate-400">Faktiskt 1RM</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            }
+
                             const isHistory = viewMode === 'history';
                             const activeData = isHistory
                                 ? exerciseHistory.slice(-25)
@@ -259,8 +542,20 @@ export function ExerciseDetailModal({
                                 return <p className="text-center text-slate-500 py-8">Inte nog med data för att visa progression.</p>;
                             }
 
+                            // Determine Metric
+                            const getMetric = (h: any) => {
+                                if (isDistanceBasedExercise(exerciseName)) return h.maxDistance || 0;
+                                if (isWeightedDistanceExercise(exerciseName)) return h.maxWeight || 0; // Use maxWeight for sled push
+                                return isHistory ? h.est1RM : h.weight;
+                            };
+
+                            const getUnit = () => {
+                                if (isDistanceBasedExercise(exerciseName)) return 'm';
+                                return 'kg';
+                            };
+
                             // Calculate specific bounds for this view
-                            const values = activeData.map((h: any) => isHistory ? h.est1RM : h.weight);
+                            const values = activeData.map((h: any) => getMetric(h));
                             const minVal = Math.min(...values);
                             const maxVal = Math.max(...values);
 
@@ -272,19 +567,19 @@ export function ExerciseDetailModal({
                                 <>
                                     <div className="flex items-end gap-1.5 h-40 mb-6">
                                         {activeData.map((h, i) => {
-                                            const val = isHistory ? (h as any).est1RM : (h as any).weight;
+                                            const val = getMetric(h);
 
                                             let heightPercent = ((val - cMin) / range) * 100;
                                             if (isNaN(heightPercent) || heightPercent < 15) heightPercent = 15;
 
-                                            const isBest = isHistory
-                                                ? (h as any).est1RM === best1RM
-                                                : (h as any).weight === maxEver;
+                                            // Is this the "best" bar?
+                                            // Note: using simple comparison logic
+                                            const isBest = val === maxVal;
 
                                             return (
                                                 <div key={i} className="flex-1 flex flex-col justify-end items-center gap-2 group relative h-full">
                                                     <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] py-1 px-2 rounded-md z-20 pointer-events-none border border-white/10 shadow-xl whitespace-nowrap">
-                                                        <p className="font-bold">{val} kg {isHistory ? '(1eRM)' : '(Vikt)'}</p>
+                                                        <p className="font-bold">{val} {getUnit()}</p>
                                                         <p className="text-[9px] text-slate-400">{h.date}</p>
                                                     </div>
                                                     <div
@@ -304,7 +599,7 @@ export function ExerciseDetailModal({
                                         <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isHistory ? 'bg-amber-500/10 border-amber-500/10 text-amber-400' : 'bg-emerald-500/10 border-emerald-500/10 text-emerald-400'}`}>
                                             <span className={`w-2 h-2 rounded-full animate-pulse ${isHistory ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
                                             <span className="font-bold uppercase tracking-wider">
-                                                {isHistory ? `Bästa 1eRM: ${best1RM} kg` : `Max-lyft: ${maxEver} kg`}
+                                                {maxVal} {getUnit()} (Max)
                                             </span>
                                         </div>
                                         <span>{activeData[activeData.length - 1]?.date}</span>
@@ -317,7 +612,13 @@ export function ExerciseDetailModal({
 
                 {/* Content Area */}
                 <div className="space-y-4">
-                    {viewMode === 'history' ? (
+                    {viewMode === 'annual' ? (
+                        <div className="text-center p-4 bg-slate-800/30 rounded-xl border border-white/5">
+                            <p className="text-xs text-slate-400">
+                                Grafern visar ditt starkaste estimerade 1RM (orange) och ditt tyngsta faktiska lyft (grön) för respektive år.
+                            </p>
+                        </div>
+                    ) : viewMode === 'history' ? (
                         <div>
                             <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">📋 All Historik</h3>
                             <div className="bg-slate-800/30 rounded-2xl border border-white/5 overflow-hidden">
@@ -557,7 +858,7 @@ export function ExerciseDetailModal({
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

@@ -11,7 +11,7 @@
  */
 
 import type { StrengthWorkout, StrengthWorkoutExercise, StrengthSet } from '../models/strengthTypes.ts';
-import { calculate1RM, normalizeExerciseName, isBodyweightExercise, isTimeBasedExercise, isWeightedDistanceExercise, isHyroxExercise } from '../models/strengthTypes.ts';
+import { calculate1RM, normalizeExerciseName, isBodyweightExercise, isTimeBasedExercise, isWeightedDistanceExercise, isHyroxExercise, isDistanceBasedExercise } from '../models/strengthTypes.ts';
 
 // ============================================
 // Configuration
@@ -78,6 +78,9 @@ export interface ProgressionSuggestion {
     sessionsSinceProgress: number;
     isPlateaued: boolean;
     isCompound: boolean;
+    isDistanceBased?: boolean;
+    lastDistance?: number;
+    suggestedDistance?: number;
     progressTrend: 'improving' | 'stable' | 'declining';
 
     // Messages
@@ -99,6 +102,11 @@ export interface PlateauWarning {
     averageWeight: number;
     peakWeight: number;
     estimated1RM: number;
+
+    // Distance metrics
+    isDistanceBased?: boolean;
+    averageDistance?: number;
+    peakDistance?: number;
 }
 
 export interface WeeklyVolumeRecommendation {
@@ -161,9 +169,13 @@ export function getTopSet(exercise: StrengthWorkoutExercise): StrengthSet | null
     if (!exercise.sets || exercise.sets.length === 0) return null;
 
     const workingSets = exercise.sets.filter(s => !s.isWarmup);
-    if (workingSets.length === 0) return exercise.sets[0];
+    const setsToUse = workingSets.length > 0 ? workingSets : exercise.sets;
+    const isDistance = isDistanceBasedExercise(exercise.exerciseName);
 
-    return workingSets.reduce((top, set) => {
+    return setsToUse.reduce((top, set) => {
+        if (isDistance) {
+            return (set.distance || 0) > (top.distance || 0) ? set : top;
+        }
         if (set.weight > top.weight) return set;
         if (set.weight === top.weight && set.reps > top.reps) return set;
         return top;
@@ -217,9 +229,10 @@ export function getProgressionSuggestion(
     const weight = topSet.weight;
     const reps = topSet.reps;
     const isCompound = isCompoundExercise(exerciseName);
+    const isDistance = isDistanceBasedExercise(exerciseName);
 
     // Calculate current 1RM
-    const current1RM = calculate1RM(weight, reps);
+    const current1RM = isDistance ? 0 : calculate1RM(weight, reps);
 
     // Adjust increment based on exercise type
     const baseIncrement = Math.max(
@@ -234,7 +247,12 @@ export function getProgressionSuggestion(
     let suggestedWeight = weight;
     let suggestedReps = reps;
 
-    if (reps >= config.targetRepRange.max) {
+    if (isDistance) {
+        // Distance progression logic
+        // Simple 2.5% increase in distance
+        suggestedWeight = 0;
+        suggestedReps = 0; // Not used for distance
+    } else if (reps >= config.targetRepRange.max) {
         // At top of rep range → increase weight, reset reps
         suggestedWeight = weight + increment;
         suggestedReps = config.targetRepRange.min;
@@ -243,6 +261,21 @@ export function getProgressionSuggestion(
         // Option 2: same weight +reps
         suggestedWeight = weight + increment;
         suggestedReps = reps + 1;
+    }
+
+    // Distance suggestion specifics
+    let lastDistance = 0;
+    let suggestedDistance = 0;
+
+    if (isDistance) {
+        lastDistance = topSet.distance || 0;
+        // Suggest 2.5% increase, rounded to nearest 100m if large, or 10m if small
+        const rawDist = lastDistance * 1.025;
+        if (rawDist > 1000) {
+            suggestedDistance = Math.round(rawDist / 50) * 50;
+        } else {
+            suggestedDistance = Math.round(rawDist / 10) * 10;
+        }
     }
 
     // Get history with 1RM
@@ -270,11 +303,18 @@ export function getProgressionSuggestion(
     if (trend === 'declining') {
         tips.push('📉 Trenden sjunker - överväg extra vila eller deload');
     }
-    if (!isCompound) {
+    if (!isCompound && !isDistance) {
         tips.push('🎯 Isolationsövning - fokusera på kontroll, inte maxvikt');
+    }
+    if (isDistance) {
+        tips.push('🏃 Cardio - fokusera på att öka distansen eller tempot');
     }
 
     const projected1RM = calculate1RM(suggestedWeight, suggestedReps);
+
+    const primaryMessage = isDistance
+        ? `${formatRelativeDate(lastSession.workout.date)}: ${lastDistance}m. Sikte på ${suggestedDistance}m (+2.5%)`
+        : `${formatRelativeDate(lastSession.workout.date)}: ${weight}kg × ${reps}. Prova ${suggestedWeight}kg × ${suggestedReps} idag!`;
 
     return {
         exerciseName,
@@ -291,8 +331,11 @@ export function getProgressionSuggestion(
         sessionsSinceProgress,
         isPlateaued: sessionsSinceProgress >= config.plateauSessionThreshold,
         isCompound,
+        isDistanceBased: isDistance,
+        lastDistance,
+        suggestedDistance,
         progressTrend: trend,
-        primaryMessage: `${formatRelativeDate(lastSession.workout.date)}: ${weight}kg × ${reps}. Prova ${suggestedWeight}kg × ${suggestedReps} idag!`,
+        primaryMessage,
         plateauMessage: sessionsSinceProgress >= config.plateauSessionThreshold
             ? `Ingen ökning på ${sessionsSinceProgress} pass. ${sessionsSinceProgress >= config.deloadThreshold ? 'Dags för deload!' : 'Prova att ändra något.'}`
             : undefined,
@@ -307,9 +350,9 @@ export function getExerciseHistoryWithRM(
     exerciseName: string,
     workouts: StrengthWorkout[],
     limit: number = 10
-): { date: string; weight: number; reps: number; estimated1RM: number; volume: number }[] {
+): { date: string; weight: number; reps: number; estimated1RM: number; volume: number; distance: number }[] {
     const normalizedName = exerciseName.toLowerCase().trim();
-    const history: { date: string; weight: number; reps: number; estimated1RM: number; volume: number }[] = [];
+    const history: { date: string; weight: number; reps: number; estimated1RM: number; volume: number; distance: number }[] = [];
 
     const sorted = [...workouts].sort((a, b) =>
         new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -330,7 +373,8 @@ export function getExerciseHistoryWithRM(
                     weight: topSet.weight,
                     reps: topSet.reps,
                     estimated1RM: calculate1RM(topSet.weight, topSet.reps),
-                    volume: calculateVolume(exercise)
+                    volume: calculateVolume(exercise),
+                    distance: topSet.distance || 0
                 });
             }
         }
@@ -358,7 +402,7 @@ export function getExerciseHistory(
  * Count sessions since last progress
  */
 function countSessionsSinceProgress(
-    history: { date: string; weight: number; reps: number; estimated1RM: number }[]
+    history: { date: string; weight: number; reps: number; estimated1RM: number; distance?: number }[]
 ): number {
     if (history.length < 2) return 0;
 
@@ -371,7 +415,8 @@ function countSessionsSinceProgress(
         const hasProgress =
             current.weight > previous.weight ||
             (current.weight === previous.weight && current.reps > previous.reps) ||
-            current.estimated1RM > previous.estimated1RM * 1.01; // 1% 1RM improvement counts
+            current.estimated1RM > previous.estimated1RM * 1.01 || // 1% 1RM improvement counts
+            ((current.distance || 0) > 0 && (current.distance || 0) > (previous.distance || 0)); // Distance improvement
 
         if (hasProgress) break;
         count++;
@@ -453,6 +498,10 @@ export function getPlateauWarnings(
                 change_exercise: `Överväg att byta ${displayName} till en variant`
             };
 
+            const isDistance = isDistanceBasedExercise(name);
+            const averageDistance = isDistance ? history.reduce((sum, h) => sum + h.distance, 0) / history.length : 0;
+            const peakDistance = isDistance ? Math.max(...history.map(h => h.distance)) : 0;
+
             warnings.push({
                 exerciseName: displayName,
                 weeksSinceProgress: sessionsSince,
@@ -463,7 +512,10 @@ export function getPlateauWarnings(
                 actionItems,
                 averageWeight: Math.round(averageWeight * 10) / 10,
                 peakWeight,
-                estimated1RM: Math.round(latest1RM)
+                estimated1RM: Math.round(latest1RM),
+                isDistanceBased: isDistance,
+                averageDistance: Math.round(averageDistance),
+                peakDistance: Math.round(peakDistance)
             });
         }
     }
@@ -729,7 +781,7 @@ export function getUnderperformers(
                 maxDistance = (bestPB as any).distance || null;
                 maxDistanceUnit = (bestPB as any).distanceUnit || null;
                 lastPBDate = bestPB.date;
-                lastPBWorkoutId = bestPB.workoutId;
+                lastPBWorkoutId = bestPB.workoutId || null;
             }
         } else if (isBW && exercisePBs.length > 0) {
             // Find the PB with highest extraWeight

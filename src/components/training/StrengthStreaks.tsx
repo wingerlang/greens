@@ -78,10 +78,10 @@ export function StrengthStreaks({ workouts }: StrengthStreaksProps) {
                             <p className="text-xl font-black text-white group-hover:text-emerald-400 transition-colors">
                                 {s.count} veckor
                             </p>
-                            <p className="text-[9px] text-slate-500 truncate">
+                            <p className="text-xs text-slate-400 truncate">
                                 {new Date(s.start).toLocaleDateString('sv-SE', { month: 'short', year: '2-digit' })} - {new Date(s.end).toLocaleDateString('sv-SE', { month: 'short', year: '2-digit' })}
                             </p>
-                            <p className="text-[8px] text-emerald-500/60">
+                            <p className="text-[10px] text-emerald-500/80">
                                 ({formatTimeSince(s.end)})
                             </p>
                         </div>
