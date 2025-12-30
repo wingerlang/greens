@@ -326,6 +326,63 @@ export function StrengthPage() {
         };
     }, [filteredWorkouts]);
 
+    // Identify workouts that contain an Annual Best (for that year)
+    const annualBestWorkoutIds = useMemo(() => {
+        const ids = new Set<string>();
+        const bestsByYear: Record<string, Record<string, number>> = {};
+
+        // 1. Find Max Values per Year per Exercise
+        workouts.forEach(w => {
+            const year = w.date.substring(0, 4);
+            if (!bestsByYear[year]) bestsByYear[year] = {};
+
+            w.exercises.forEach(e => {
+                const exName = normalizeExerciseName(e.exerciseName);
+
+                // Calculate session max (Standard 1RM based)
+                const sessionMax = e.sets.reduce((max, s) => {
+                    const isBW = s.isBodyweight || s.weight === 0;
+                    const weight = isBW ? (s.extraWeight || 0) : s.weight;
+                    if (weight <= 0 && !isBW) return max;
+                    return Math.max(max, calculate1RM(weight, s.reps));
+                }, 0);
+
+                if (sessionMax > (bestsByYear[year][exName] || 0)) {
+                    bestsByYear[year][exName] = sessionMax;
+                }
+            });
+        });
+
+        // 2. Mark workouts that achieved the max
+        workouts.forEach(w => {
+            const year = w.date.substring(0, 4);
+            const hasBest = w.exercises.some(e => {
+                const exName = normalizeExerciseName(e.exerciseName);
+                const sessionMax = e.sets.reduce((max, s) => {
+                    const isBW = s.isBodyweight || s.weight === 0;
+                    const weight = isBW ? (s.extraWeight || 0) : s.weight;
+                    if (weight <= 0 && !isBW) return max;
+                    return Math.max(max, calculate1RM(weight, s.reps));
+                }, 0);
+
+                return sessionMax > 0 && sessionMax >= (bestsByYear[year][exName] || 0);
+            });
+
+            if (hasBest) ids.add(w.id);
+        });
+
+        return ids;
+    }, [workouts]);
+
+    // Identify workouts that contain an All-Time PR
+    const allTimePBWorkoutIds = useMemo(() => {
+        const ids = new Set<string>();
+        derivedPersonalBests.forEach(pb => {
+            if (pb.workoutId) ids.add(pb.workoutId);
+        });
+        return ids;
+    }, [derivedPersonalBests]);
+
     // Period-based stats
     const periodStats = React.useMemo(() => {
         const count = filteredWorkouts.length;
@@ -915,6 +972,8 @@ export function StrengthPage() {
                                     <WorkoutCard
                                         key={workout.id}
                                         workout={workout}
+                                        isAnnualBest={annualBestWorkoutIds.has(workout.id)}
+                                        isPR={allTimePBWorkoutIds.has(workout.id)}
                                         onClick={() => setSelectedWorkout(workout)}
                                     />
                                 ))}
@@ -984,19 +1043,37 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
     );
 }
 
-function WorkoutCard({ workout, onClick }: { workout: StrengthWorkout; onClick: () => void }) {
+function WorkoutCard({ workout, isAnnualBest, isPR, onClick }: { workout: StrengthWorkout; isAnnualBest?: boolean; isPR?: boolean; onClick: () => void }) {
     const topExercises = workout.exercises.slice(0, 3).map(e => e.exerciseName).join(', ');
 
     return (
         <div
-            className="bg-slate-900/50 border border-white/5 rounded-xl p-4 hover:bg-slate-800/50 transition-colors cursor-pointer"
+            className={`bg-slate-900/50 border transition-all cursor-pointer relative overflow-hidden rounded-xl p-4 ${isPR
+                ? 'border-amber-500/40 bg-amber-500/10 shadow-[0_0_15px_rgba(245,158,11,0.05)]'
+                : isAnnualBest
+                    ? 'border-yellow-500/20 bg-yellow-500/5'
+                    : 'border-white/5 hover:bg-slate-800/50'
+                }`}
             onClick={onClick}
         >
-            <div className="flex items-center justify-between">
+            {isPR && (
+                <div className="absolute -right-6 -top-6 w-16 h-16 bg-amber-500/20 blur-2xl rounded-full pointer-events-none"></div>
+            )}
+            <div className="flex items-center justify-between relative z-10">
                 <div className="flex items-center gap-3">
                     <span className="inline-flex items-center gap-1 text-purple-400 font-bold text-[10px] uppercase tracking-wider bg-purple-500/10 px-2 py-1 rounded">
                         💪 StrengthLog
                     </span>
+                    {isPR && (
+                        <span className="inline-flex items-center gap-1 text-amber-400 font-bold text-[10px] uppercase tracking-wider bg-amber-500/20 px-2 py-1 rounded border border-amber-500/30">
+                            ⭐ All-Time PR
+                        </span>
+                    )}
+                    {isAnnualBest && (
+                        <span className="inline-flex items-center gap-1 text-yellow-400 font-bold text-[10px] uppercase tracking-wider bg-yellow-500/10 px-2 py-1 rounded border border-yellow-500/20">
+                            🏆 Årsbästa
+                        </span>
+                    )}
                     <div>
                         <p className="text-white font-bold">{workout.name}</p>
                         <p className="text-xs text-slate-500">{workout.date} • {workout.uniqueExercises} övningar • {workout.totalSets} set</p>
