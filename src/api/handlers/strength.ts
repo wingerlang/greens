@@ -68,23 +68,42 @@ export async function handleStrengthRoutes(req: Request, url: URL, headers: Head
     }
 
     // ============================================
-    // Single Workout Detail
+    // Single Workout Detail (GET / DELETE)
     // ============================================
-    if (url.pathname.startsWith('/api/strength/workout/') && method === 'GET') {
-        try {
-            const workoutId = url.pathname.split('/').pop();
-            if (!workoutId) {
-                return new Response(JSON.stringify({ error: 'Missing workout ID' }), { status: 400, headers });
-            }
+    if (url.pathname.startsWith('/api/strength/workout/')) {
+        const workoutId = url.pathname.split('/').pop();
+        if (!workoutId) {
+            return new Response(JSON.stringify({ error: 'Missing workout ID' }), { status: 400, headers });
+        }
 
-            const workout = await strengthRepo.getWorkout(userId, workoutId);
-            if (!workout) {
-                return new Response(JSON.stringify({ error: 'Workout not found' }), { status: 404, headers });
+        // GET - Fetch workout
+        if (method === 'GET') {
+            try {
+                const workout = await strengthRepo.getWorkout(userId, workoutId);
+                if (!workout) {
+                    return new Response(JSON.stringify({ error: 'Workout not found' }), { status: 404, headers });
+                }
+                return new Response(JSON.stringify({ workout }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
             }
+        }
 
-            return new Response(JSON.stringify({ workout }), { headers });
-        } catch (e) {
-            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+        // DELETE - Remove workout
+        if (method === 'DELETE') {
+            try {
+                // First find the workout to get its date
+                const workout = await strengthRepo.getWorkout(userId, workoutId);
+                if (!workout) {
+                    return new Response(JSON.stringify({ error: 'Workout not found' }), { status: 404, headers });
+                }
+
+                await strengthRepo.deleteWorkout(userId, workout.date, workoutId);
+                return new Response(JSON.stringify({ success: true, message: 'Workout deleted' }), { headers });
+            } catch (e) {
+                console.error('[DELETE /api/strength/workout/:id] Error:', e);
+                return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+            }
         }
     }
 

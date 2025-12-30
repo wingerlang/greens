@@ -17,6 +17,7 @@ import { getPlateauWarnings, getWeeklyVolumeRecommendations, getUnderperformers,
 import { MuscleVolumeChart } from '../components/training/MuscleVolumeChart.tsx';
 import { ACWRGauge } from '../components/training/ACWRGauge.tsx';
 import { StatCard, WorkoutCard, RecordTrendLine } from '../components/training/StrengthCards.tsx';
+import { StrengthPageSkeleton } from '../components/training/StrengthSkeletons.tsx';
 import { formatDateFull, slugify } from '../utils/formatters.ts';
 
 // ============================================
@@ -362,6 +363,19 @@ export function StrengthPage() {
     const visibleWorkouts = searchedWorkouts.slice(0, workoutDisplayCount);
 
     const hasDateFilter = startDate !== null || endDate !== null;
+
+    // Show skeleton during initial load
+    if (loading && workouts.length === 0) {
+        return (
+            <div className="pt-2 md:pt-4 p-4 md:p-8 max-w-7xl mx-auto">
+                <header className="mb-8">
+                    <h1 className="text-3xl font-black text-white mb-2">💪 Styrketräning</h1>
+                    <p className="text-slate-400">Dina pass, övningar och personliga rekord.</p>
+                </header>
+                <StrengthPageSkeleton />
+            </div>
+        );
+    }
 
     return (
         <div className="pt-2 md:pt-4 p-4 md:p-8 max-w-7xl mx-auto space-y-8">
@@ -989,6 +1003,11 @@ export function StrengthPage() {
                             navigate(`/styrka/${slugify(name)}`);
                         }}
                         pbs={filteredPBs}
+                        allWorkouts={workouts}
+                        onDeleted={() => {
+                            setSelectedWorkout(null);
+                            fetchData();  // Refresh the list
+                        }}
                     />
                 )
             }

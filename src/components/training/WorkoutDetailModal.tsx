@@ -3,19 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, calculate1RM, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
 import { UniversalActivity } from '../../models/types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { SimilarWorkouts } from './SimilarWorkouts.tsx';
 
 interface WorkoutDetailModalProps {
     workout: StrengthWorkout;
     onClose: () => void;
     onSelectExercise?: (name: string) => void;
     pbs?: PersonalBest[];
+    onDeleted?: () => void;  // Callback after workout is deleted
+    allWorkouts?: StrengthWorkout[];  // For Similar Workouts feature
 }
 
-export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [] }: WorkoutDetailModalProps) {
+export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [], onDeleted, allWorkouts = [] }: WorkoutDetailModalProps) {
     const { token } = useAuth();
     const navigate = useNavigate();
     const [dailyActivities, setDailyActivities] = useState<UniversalActivity[]>([]);
     const [loadingActivities, setLoadingActivities] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // ESC key to close
     useEffect(() => {
@@ -130,6 +135,29 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
     });
 
     const categories = Array.from(new Set(workout.exercises.map(e => e.exerciseName))).slice(0, 3).join(', ');
+
+    // Delete workout handler
+    const handleDelete = async () => {
+        if (!token || !workout.id) return;
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`/api/strength/workout/${workout.id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                onClose();
+                onDeleted?.();
+            } else {
+                console.error('Failed to delete workout');
+            }
+        } catch (e) {
+            console.error('Delete error:', e);
+        } finally {
+            setIsDeleting(false);
+            setShowDeleteConfirm(false);
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
@@ -334,6 +362,49 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                     })}
                 </div>
 
+                {/* Similar Workouts Section */}
+                {allWorkouts.length > 0 && (
+                    <SimilarWorkouts
+                        currentWorkout={workout}
+                        allWorkouts={allWorkouts}
+                        onSelectWorkout={(w) => {
+                            onClose();
+                            // Navigate to workout detail - uses workout ID
+                            // Parent should handle re-opening modal with selected workout
+                        }}
+                    />
+                )}
+
+                {/* Delete Confirmation Dialog */}
+                {showDeleteConfirm && (
+                    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-60" onClick={() => setShowDeleteConfirm(false)}>
+                        <div className="bg-slate-800 border border-rose-500/30 rounded-2xl p-6 max-w-sm mx-4 space-y-4" onClick={e => e.stopPropagation()}>
+                            <div className="text-center">
+                                <div className="text-4xl mb-2">⚠️</div>
+                                <h3 className="text-lg font-bold text-white">Radera träningspass?</h3>
+                                <p className="text-sm text-slate-400 mt-2">
+                                    Detta tar bort passet permanent. Personliga rekord påverkas inte.
+                                </p>
+                            </div>
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setShowDeleteConfirm(false)}
+                                    className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2.5 rounded-xl transition-colors"
+                                >
+                                    Avbryt
+                                </button>
+                                <button
+                                    onClick={handleDelete}
+                                    disabled={isDeleting}
+                                    className="flex-1 bg-rose-500 hover:bg-rose-400 text-white font-bold py-2.5 rounded-xl transition-colors disabled:opacity-50"
+                                >
+                                    {isDeleting ? '⏳ Raderar...' : '🗑️ Radera'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="pt-4 border-t border-white/10 flex gap-3">
                     <button
                         onClick={() => {
@@ -343,6 +414,13 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                         className="flex-1 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white border border-indigo-500/20 font-bold py-3 rounded-xl transition-all"
                     >
                         📝 Använd som mall
+                    </button>
+                    <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-bold py-3 px-4 rounded-xl transition-all"
+                        title="Radera pass"
+                    >
+                        🗑️
                     </button>
                     <button
                         onClick={onClose}
