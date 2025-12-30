@@ -56,20 +56,34 @@ export function StrengthStreaks({ workouts }: StrengthStreaksProps) {
 
     if (streaks.length === 0) return null;
 
+    // Helper to format "X år sedan" or "X mån sedan"
+    const formatTimeSince = (dateStr: string) => {
+        const d = new Date(dateStr);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 30) return `${diffDays}d sedan`;
+        if (diffDays < 365) return `${Math.floor(diffDays / 30)} mån sedan`;
+        const years = Math.floor(diffDays / 365);
+        const months = Math.floor((diffDays % 365) / 30);
+        return months > 0 ? `${years} år ${months} mån sedan` : `${years} år sedan`;
+    };
+
     return (
         <section>
-            <h2 className="text-xl font-bold text-white mb-4">🔥 Längsta sviter</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {streaks.slice(0, 3).map((s, i) => (
-                    <div key={i} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 flex items-center justify-between group hover:border-emerald-500/20 transition-all">
-                        <div>
-                            <p className="text-[10px] text-slate-500 font-black uppercase mb-1">Veckosvit</p>
-                            <p className="text-xl font-black text-white group-hover:text-emerald-400 transition-colors">{s.count} veckor i rad</p>
-                            <p className="text-[11px] text-emerald-500/60 mt-1 font-black uppercase tracking-wider">
-                                {new Date(s.start).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })} — {new Date(s.end).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', year: 'numeric' })}
-                            </p>
-                        </div>
-                        <div className="text-2xl opacity-20 group-hover:opacity-100 transition-opacity">⚡</div>
+            <h2 className="text-lg font-bold text-white mb-3">🔥 Längsta sviter</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {streaks.slice(0, 4).map((s, i) => (
+                    <div key={i} className="bg-slate-900/50 border border-white/5 rounded-xl p-3 group hover:border-emerald-500/20 transition-all">
+                        <p className="text-lg font-black text-white group-hover:text-emerald-400 transition-colors">
+                            {s.count} veckor
+                        </p>
+                        <p className="text-[9px] text-slate-500 mt-0.5">
+                            {new Date(s.start).toLocaleDateString('sv-SE', { month: 'short', year: '2-digit' })} - {new Date(s.end).toLocaleDateString('sv-SE', { month: 'short', year: '2-digit' })}
+                        </p>
+                        <p className="text-[8px] text-emerald-500/60 mt-0.5">
+                            ({formatTimeSince(s.end)})
+                        </p>
                     </div>
                 ))}
             </div>

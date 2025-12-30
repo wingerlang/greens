@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { StrengthWorkout, PersonalBest, calculate1RM, normalizeExerciseName } from '../../models/strengthTypes.ts';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
@@ -15,6 +15,15 @@ interface PRResearchCenterProps {
 export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWorkout }: PRResearchCenterProps) {
     const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
     const [isWeightPRMode, setIsWeightPRMode] = useState(false);
+
+    // ESC to close
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
     const allExerciseNames = useMemo(() => {
         const names = Array.from(new Set(personalBests.map(pb => pb.exerciseName)));
@@ -266,12 +275,15 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
 
     return (
         <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col md:flex-row h-screen overflow-hidden text-slate-200">
-            {/* Sidebar - Compact */}
-            <div className="w-full md:w-64 bg-slate-900 border-r border-white/5 flex flex-col h-full shrink-0">
-                <div className="p-4 border-b border-white/5 bg-slate-900">
-                    <div className="flex items-center gap-2 mb-4">
-                        <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black shadow-lg">⚛️</div>
-                        <h1 className="text-sm font-black text-white tracking-widest uppercase italic">PR-Laboratoriet</h1>
+            {/* Sidebar - Wider for text */}
+            <div className="w-full md:w-72 bg-slate-900 border-r border-white/5 flex flex-col h-full shrink-0">
+                <div className="p-3 border-b border-white/5 bg-slate-900">
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black shadow-lg text-sm">⚛️</div>
+                            <h1 className="text-[10px] font-black text-white tracking-wider uppercase">PR-Lab</h1>
+                        </div>
+                        <button onClick={onClose} className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-red-600 flex items-center justify-center text-slate-500 hover:text-white transition-all text-xs" title="Stäng (ESC)">✕</button>
                     </div>
                     <button
                         onClick={() => setSelectedExercise(null)}
@@ -294,8 +306,8 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
                     ))}
                 </div>
 
-                <div className="p-4 border-t border-white/5 bg-slate-900">
-                    <button onClick={onClose} className="w-full bg-slate-800 hover:bg-red-900/40 text-[9px] font-black py-3 rounded-xl transition-all uppercase tracking-widest border border-white/5">Stäng Lab</button>
+                <div className="p-3 border-t border-white/5 bg-slate-900">
+                    <p className="text-[8px] text-slate-600 text-center">Tryck ESC för att stänga</p>
                 </div>
             </div>
 

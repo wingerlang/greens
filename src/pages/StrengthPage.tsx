@@ -32,6 +32,51 @@ export function StrengthPage() {
     const [isResearchCenterOpen, setIsResearchCenterOpen] = useState(false);
 
     // Helpers
+    // Format as "16 juli 2025 (3 dagar sedan)"
+    const formatDateFull = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffTime = now.getTime() - date.getTime();
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        const datePart = date.toLocaleDateString('sv-SE', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric'
+        });
+
+        let agoPart = '';
+        if (diffDays === 0) agoPart = 'idag';
+        else if (diffDays === 1) agoPart = 'igår';
+        else if (diffDays < 7) agoPart = `${diffDays} dagar sedan`;
+        else if (diffDays < 30) agoPart = `${Math.floor(diffDays / 7)} veckor sedan`;
+        else if (diffDays < 365) agoPart = `${Math.floor(diffDays / 30)} mån sedan`;
+        else {
+            const years = Math.floor(diffDays / 365);
+            const months = Math.floor((diffDays % 365) / 30);
+            agoPart = months > 0 ? `${years} år ${months} mån sedan` : `${years} år sedan`;
+        }
+
+        return `${datePart} (${agoPart})`;
+    };
+
+    // Format as compact "3d", "2v", "2 år 4 mån"
+    const formatDaysAgoCompact = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays === 0) return 'idag';
+        if (diffDays === 1) return 'igår';
+        if (diffDays < 7) return `${diffDays}d sedan`;
+        if (diffDays < 30) return `${Math.floor(diffDays / 7)}v sedan`;
+        if (diffDays < 365) return `${Math.floor(diffDays / 30)} mån sedan`;
+
+        const years = Math.floor(diffDays / 365);
+        const months = Math.floor((diffDays % 365) / 30);
+        return months > 0 ? `${years} år ${months} mån sedan` : `${years} år sedan`;
+    };
+
     const formatDateRelative = (dateStr: string) => {
         const date = new Date(dateStr);
         const now = new Date();
@@ -534,9 +579,16 @@ export function StrengthPage() {
                 );
             })()}
 
-            {/* Training Time Analytics */}
-            <section className="mt-8">
-                <TrainingTimeStats workouts={filteredWorkouts} days={hasDateFilter ? 365 : 30} />
+            {/* Training Time Analytics - 50% width */}
+            <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <TrainingTimeStats
+                    workouts={filteredWorkouts}
+                    days={hasDateFilter ? 365 : 30}
+                    personalBests={personalBests}
+                    dateRangeLabel={hasDateFilter && startDate && endDate ? `${new Date(startDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(endDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Senaste 30 dagarna'}
+                />
+                {/* Placeholder for another module */}
+                <div className="hidden md:block" />
             </section>
 
             {/* Personal Bests */}
@@ -649,64 +701,54 @@ export function StrengthPage() {
             {/* Best Workouts / Records Section */}
             {bestWorkouts && (
                 <section>
-                    <h2 className="text-xl font-bold text-white mb-4">🏅 Rekordpass {hasDateFilter ? '(Perioden)' : '(Alla tider)'}</h2>
-                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                    <h2 className="text-lg font-bold text-white mb-3">🏅 Rekordpass {hasDateFilter ? '(Perioden)' : '(Alla tider)'}</h2>
+                    <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
                         <button
                             onClick={() => setSelectedWorkout(bestWorkouts.volume)}
-                            className="bg-emerald-500/10 border border-emerald-500/20 rounded-2xl p-4 text-center hover:bg-emerald-500/20 transition-all group active:scale-95"
+                            className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 text-center hover:bg-emerald-500/20 transition-all group active:scale-95"
                         >
-                            <p className="text-[10px] text-emerald-500 font-black uppercase mb-1">Mest volym</p>
-                            <p className="text-2xl font-black text-white">{Math.round(bestWorkouts.volume.totalVolume / 1000)}t</p>
-                            <div className="mt-1">
-                                <p className="text-[10px] text-slate-500 leading-none">{bestWorkouts.volume.date}</p>
-                                <p className="text-[9px] text-emerald-500 opacity-60 font-bold mt-1">{formatDateRelative(bestWorkouts.volume.date)}</p>
-                            </div>
+                            <p className="text-[9px] text-emerald-500 font-black uppercase">Mest volym</p>
+                            <p className="text-xl font-black text-white my-1">{Math.round(bestWorkouts.volume.totalVolume / 1000)}t</p>
+                            <p className="text-[9px] text-slate-500">{bestWorkouts.volume.totalSets} set | {bestWorkouts.volume.uniqueExercises} övn</p>
+                            <p className="text-[8px] text-emerald-500/60 mt-1">{formatDateFull(bestWorkouts.volume.date)}</p>
                         </button>
                         {bestWorkouts.duration?.duration && bestWorkouts.duration.duration > 0 && (
                             <button
                                 onClick={() => setSelectedWorkout(bestWorkouts.duration)}
-                                className="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4 text-center hover:bg-blue-500/20 transition-all group active:scale-95"
+                                className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 text-center hover:bg-blue-500/20 transition-all group active:scale-95"
                             >
-                                <p className="text-[10px] text-blue-500 font-black uppercase mb-1">Längst pass</p>
-                                <p className="text-2xl font-black text-white">{bestWorkouts.duration.duration}m</p>
-                                <div className="mt-1">
-                                    <p className="text-[10px] text-slate-500 leading-none">{bestWorkouts.duration.date}</p>
-                                    <p className="text-[9px] text-blue-500 opacity-60 font-bold mt-1">{formatDateRelative(bestWorkouts.duration.date)}</p>
-                                </div>
+                                <p className="text-[9px] text-blue-500 font-black uppercase">Längst pass</p>
+                                <p className="text-xl font-black text-white my-1">{bestWorkouts.duration.duration}m</p>
+                                <p className="text-[9px] text-slate-500">{bestWorkouts.duration.totalSets} set | {bestWorkouts.duration.uniqueExercises} övn</p>
+                                <p className="text-[8px] text-blue-500/60 mt-1">{formatDateFull(bestWorkouts.duration.date)}</p>
                             </button>
                         )}
                         <button
                             onClick={() => setSelectedWorkout(bestWorkouts.sets)}
-                            className="bg-purple-500/10 border border-purple-500/20 rounded-2xl p-4 text-center hover:bg-purple-500/20 transition-all group active:scale-95"
+                            className="bg-purple-500/10 border border-purple-500/20 rounded-xl p-3 text-center hover:bg-purple-500/20 transition-all group active:scale-95"
                         >
-                            <p className="text-[10px] text-purple-500 font-black uppercase mb-1">Flest set</p>
-                            <p className="text-2xl font-black text-white">{bestWorkouts.sets.totalSets} st</p>
-                            <div className="mt-1">
-                                <p className="text-[10px] text-slate-500 leading-none">{bestWorkouts.sets.date}</p>
-                                <p className="text-[9px] text-purple-500 opacity-60 font-bold mt-1">{formatDateRelative(bestWorkouts.sets.date)}</p>
-                            </div>
+                            <p className="text-[9px] text-purple-500 font-black uppercase">Flest set</p>
+                            <p className="text-xl font-black text-white my-1">{bestWorkouts.sets.totalSets} st</p>
+                            <p className="text-[9px] text-slate-500">{bestWorkouts.sets.uniqueExercises} övningar</p>
+                            <p className="text-[8px] text-purple-500/60 mt-1">{formatDateFull(bestWorkouts.sets.date)}</p>
                         </button>
                         <button
                             onClick={() => setSelectedWorkout(bestWorkouts.reps)}
-                            className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 text-center hover:bg-amber-500/20 transition-all group active:scale-95"
+                            className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-center hover:bg-amber-500/20 transition-all group active:scale-95"
                         >
-                            <p className="text-[10px] text-amber-500 font-black uppercase mb-1">Flest reps</p>
-                            <p className="text-2xl font-black text-white">{bestWorkouts.reps.totalReps}</p>
-                            <div className="mt-1">
-                                <p className="text-[10px] text-slate-500 leading-none">{bestWorkouts.reps.date}</p>
-                                <p className="text-[9px] text-amber-500 opacity-60 font-bold mt-1">{formatDateRelative(bestWorkouts.reps.date)}</p>
-                            </div>
+                            <p className="text-[9px] text-amber-500 font-black uppercase">Flest reps</p>
+                            <p className="text-xl font-black text-white my-1">{bestWorkouts.reps.totalReps}</p>
+                            <p className="text-[9px] text-slate-500">{bestWorkouts.reps.totalSets} set | {bestWorkouts.reps.uniqueExercises} övn</p>
+                            <p className="text-[8px] text-amber-500/60 mt-1">{formatDateFull(bestWorkouts.reps.date)}</p>
                         </button>
                         <button
                             onClick={() => setSelectedWorkout(bestWorkouts.exercises)}
-                            className="bg-pink-500/10 border border-pink-500/20 rounded-2xl p-4 text-center hover:bg-pink-500/20 transition-all group active:scale-95"
+                            className="bg-pink-500/10 border border-pink-500/20 rounded-xl p-3 text-center hover:bg-pink-500/20 transition-all group active:scale-95"
                         >
-                            <p className="text-[10px] text-pink-500 font-black uppercase mb-1">Variation</p>
-                            <p className="text-2xl font-black text-white">{bestWorkouts.exercises.uniqueExercises} övn</p>
-                            <div className="mt-1">
-                                <p className="text-[10px] text-slate-500 leading-none">{bestWorkouts.exercises.date}</p>
-                                <p className="text-[9px] text-pink-500 opacity-60 font-bold mt-1">{formatDateRelative(bestWorkouts.exercises.date)}</p>
-                            </div>
+                            <p className="text-[9px] text-pink-500 font-black uppercase">Variation</p>
+                            <p className="text-xl font-black text-white my-1">{bestWorkouts.exercises.uniqueExercises} övn</p>
+                            <p className="text-[9px] text-slate-500">{bestWorkouts.exercises.totalSets} set totalt</p>
+                            <p className="text-[8px] text-pink-500/60 mt-1">{formatDateFull(bestWorkouts.exercises.date)}</p>
                         </button>
                     </div>
                 </section>
@@ -721,7 +763,7 @@ export function StrengthPage() {
                         icon="🔥"
                         className="mb-8"
                     >
-                        <TopExercisesTable workouts={filteredWorkouts} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} />
+                        <TopExercisesTable workouts={filteredWorkouts} personalBests={personalBests} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} />
                     </CollapsibleSection>
                 )
             }

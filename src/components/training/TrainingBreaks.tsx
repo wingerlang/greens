@@ -18,7 +18,6 @@ export function TrainingBreaks({ workouts, filterRange }: TrainingBreaksProps) {
             const diffDays = Math.floor((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
 
             if (diffDays >= 28) { // Gap of 4+ weeks
-                // Check if break overlaps with current filter
                 const s = filterRange?.start;
                 const e = filterRange?.end;
                 const bStart = sorted[i].date;
@@ -37,34 +36,46 @@ export function TrainingBreaks({ workouts, filterRange }: TrainingBreaksProps) {
                 }
             }
         }
-        return res.sort((a, b) => b.days - a.days); // Longest breaks first
+        return res.sort((a, b) => b.days - a.days);
     }, [workouts, filterRange]);
 
     if (breaks.length === 0) return null;
 
+    // Helper to format "X år sedan" or "X mån sedan"
+    const formatTimeSince = (dateStr: string) => {
+        const d = new Date(dateStr);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 30) return `${diffDays}d sedan`;
+        if (diffDays < 365) return `${Math.floor(diffDays / 30)} mån sedan`;
+        const years = Math.floor(diffDays / 365);
+        const months = Math.floor((diffDays % 365) / 30);
+        return months > 0 ? `${years} år ${months} mån sedan` : `${years} år sedan`;
+    };
+
+    const formatWeeks = (days: number) => {
+        const weeks = Math.floor(days / 7);
+        return weeks >= 4 ? `${Math.floor(weeks / 4)} mån` : `${weeks}v`;
+    };
+
     return (
         <section>
-            <h2 className="text-xl font-bold text-white mb-4">⏸️ Träningsuppehåll</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {breaks.slice(0, 6).map((b, i) => {
-                    const formatDateStr = (dStr: string) => {
-                        const d = new Date(dStr);
-                        const year = d.getFullYear();
-                        return `${d.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })} ${year}`;
-                    };
-                    return (
-                        <div key={i} className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 flex items-center justify-between group hover:border-amber-500/20 transition-all">
-                            <div>
-                                <p className="text-[10px] text-slate-500 font-black uppercase mb-1">Uppehåll</p>
-                                <p className="text-xl font-black text-white group-hover:text-amber-400 transition-colors">{b.days} dagar</p>
-                                <p className="text-[11px] text-blue-400 mt-1 font-black uppercase tracking-wider">
-                                    {formatDateStr(b.start)} — {formatDateStr(b.end)}
-                                </p>
-                            </div>
-                            <div className="text-2xl opacity-20 group-hover:opacity-100 transition-opacity">💤</div>
-                        </div>
-                    );
-                })}
+            <h2 className="text-lg font-bold text-white mb-3">⏸️ Träningsuppehåll</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {breaks.slice(0, 4).map((b, i) => (
+                    <div key={i} className="bg-slate-900/50 border border-white/5 rounded-xl p-3 group hover:border-amber-500/20 transition-all">
+                        <p className="text-lg font-black text-white group-hover:text-amber-400 transition-colors">
+                            {formatWeeks(b.days)}
+                        </p>
+                        <p className="text-[9px] text-slate-500 mt-0.5">
+                            {new Date(b.start).toLocaleDateString('sv-SE', { month: 'short', year: '2-digit' })} - {new Date(b.end).toLocaleDateString('sv-SE', { month: 'short', year: '2-digit' })}
+                        </p>
+                        <p className="text-[8px] text-amber-500/60 mt-0.5">
+                            ({formatTimeSince(b.end)})
+                        </p>
+                    </div>
+                ))}
             </div>
         </section>
     );

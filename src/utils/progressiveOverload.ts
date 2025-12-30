@@ -480,68 +480,119 @@ export function getPlateauWarnings(
  */
 export function getWeeklyVolumeRecommendations(
     workouts: StrengthWorkout[],
-    weeksToAnalyze: number = 4
+    weeksToAnalyze: number = 8
 ): WeeklyVolumeRecommendation[] {
     const recommendations: WeeklyVolumeRecommendation[] = [];
-    const exerciseVolumes = new Map<string, { thisWeek: number; lastWeek: number }>();
 
     const now = new Date();
-    const thisWeekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-    const lastWeekStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    const recentPeriodStart = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000); // Last 2 weeks
+    const baselinePeriodStart = new Date(now.getTime() - weeksToAnalyze * 7 * 24 * 60 * 60 * 1000);
+
+    // Track exercise data over time
+    const exerciseData = new Map<string, {
+        recentVolume: number;
+        recentSessions: number;
+        baselineVolume: number;
+        baselineSessions: number;
+        totalOccurrences: number;
+        lastDate: string;
+    }>();
 
     for (const workout of workouts) {
         const workoutDate = new Date(workout.date);
-        const isThisWeek = workoutDate >= thisWeekStart;
-        const isLastWeek = workoutDate >= lastWeekStart && workoutDate < thisWeekStart;
 
-        if (!isThisWeek && !isLastWeek) continue;
+        // Only count workouts in the analysis window
+        if (workoutDate < baselinePeriodStart) continue;
+
+        const isRecent = workoutDate >= recentPeriodStart;
 
         for (const exercise of workout.exercises) {
             const name = exercise.exerciseName.toLowerCase().trim();
             const volume = calculateVolume(exercise);
 
-            const existing = exerciseVolumes.get(name) || { thisWeek: 0, lastWeek: 0 };
-            if (isThisWeek) {
-                existing.thisWeek += volume;
-            } else {
-                existing.lastWeek += volume;
+            const existing = exerciseData.get(name) || {
+                recentVolume: 0,
+                recentSessions: 0,
+                baselineVolume: 0,
+                baselineSessions: 0,
+                totalOccurrences: 0,
+                lastDate: workout.date
+            };
+
+            existing.totalOccurrences++;
+            if (workoutDate > new Date(existing.lastDate)) {
+                existing.lastDate = workout.date;
             }
-            exerciseVolumes.set(name, existing);
+
+            if (isRecent) {
+                existing.recentVolume += volume;
+                existing.recentSessions++;
+            } else {
+                existing.baselineVolume += volume;
+                existing.baselineSessions++;
+            }
+
+            exerciseData.set(name, existing);
         }
     }
 
-    for (const [name, volumes] of exerciseVolumes) {
-        if (volumes.lastWeek === 0) continue; // Skip if no data from last week
+    // Only process exercises that are done regularly (at least 3 times in analysis period)
+    for (const [name, data] of exerciseData) {
+        // Skip exercises done fewer than 3 times - they're not regular
+        if (data.totalOccurrences < 3) continue;
 
-        const change = ((volumes.thisWeek - volumes.lastWeek) / volumes.lastWeek) * 100;
+        // Skip if no recent data at all (haven't done this in 2 weeks)
+        if (data.recentSessions === 0) continue;
+
+        // Skip if no baseline data (new exercise)
+        if (data.baselineSessions === 0) continue;
+
+        // Calculate weekly averages
+        const recentWeeklyAvg = data.recentVolume / 2; // 2 weeks
+        const baselineWeeklyAvg = data.baselineVolume / (weeksToAnalyze - 2); // baseline period
+
+        // Skip if baseline is too low to be meaningful
+        if (baselineWeeklyAvg < 100) continue;
+
+        const change = ((recentWeeklyAvg - baselineWeeklyAvg) / baselineWeeklyAvg) * 100;
 
         let recommendation: WeeklyVolumeRecommendation['recommendation'] = 'maintain';
         let message = '';
-        let targetVolume = volumes.thisWeek;
+        let targetVolume = Math.round(recentWeeklyAvg);
 
-        if (change < -20) {
+        if (change < -30) {
             recommendation = 'increase';
-            targetVolume = Math.round(volumes.lastWeek);
-            message = `Volymen har sjunkit ${Math.abs(Math.round(change))}% - sikta på minst ${targetVolume}kg total`;
-        } else if (change > 30) {
+            targetVolume = Math.round(baselineWeeklyAvg);
+            message = `Volymen har sjunkit ${Math.abs(Math.round(change))}% senaste 2v - sikta på ~${targetVolume}kg/vecka`;
+        } else if (change > 40) {
             recommendation = 'decrease';
-            targetVolume = Math.round(volumes.lastWeek * 1.1);
-            message = `Volymen har ökat ${Math.round(change)}% - risk för överträning, håll ${targetVolume}kg`;
+            targetVolume = Math.round(baselineWeeklyAvg * 1.15);
+            message = `Volymen har ökat ${Math.round(change)}% - ev. risk för överträning`;
         } else {
-            message = `Bra volym! ${Math.round(change)}% förändring är hållbart`;
+            message = `Stabil volym (${change > 0 ? '+' : ''}${Math.round(change)}% från snittet)`;
         }
 
         recommendations.push({
             exerciseName: name.charAt(0).toUpperCase() + name.slice(1),
-            currentWeeklyVolume: Math.round(volumes.thisWeek),
-            previousWeeklyVolume: Math.round(volumes.lastWeek),
+            currentWeeklyVolume: Math.round(recentWeeklyAvg),
+            previousWeeklyVolume: Math.round(baselineWeeklyAvg),
             recommendation,
             targetVolume,
             message
         });
     }
 
-    return recommendations;
+    // Sort by most significant changes first (biggest deviations)
+    return recommendations.sort((a, b) => {
+        if (a.recommendation !== b.recommendation) {
+            if (a.recommendation === 'increase') return -1;
+            if (b.recommendation === 'increase') return 1;
+            if (a.recommendation === 'decrease') return -1;
+            return 1;
+        }
+        return Math.abs(b.currentWeeklyVolume - b.previousWeeklyVolume) -
+            Math.abs(a.currentWeeklyVolume - a.previousWeeklyVolume);
+    });
 }
 
 /**
