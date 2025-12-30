@@ -1,16 +1,41 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { Settings, Search, RefreshCw } from 'lucide-react';
 import { User, UserPrivacy } from '../models/types.ts';
 import { socialService } from '../services/socialService.ts';
 import { useAuth } from '../context/AuthContext.tsx';
+import { FollowMatrixModal } from '../components/feed/FollowMatrixModal.tsx';
+import FeedEventCard from '../components/feed/FeedEventCard.tsx';
+import type { FeedEvent } from '../models/feedTypes.ts';
 
 export function PublicProfilePage() {
     const { handle } = useParams<{ handle: string }>();
     const { user: currentUser } = useAuth(); // We need to know who is viewing
     const [profile, setProfile] = useState<User | null>(null);
+    const [events, setEvents] = useState<FeedEvent[]>([]);
     const [loading, setLoading] = useState(true);
+    const [feedLoading, setFeedLoading] = useState(false);
     const [following, setFollowing] = useState(false);
+    const [showMatrix, setShowMatrix] = useState(false);
     const [error, setError] = useState('');
+
+    const fetchFeed = async (userId: string) => {
+        setFeedLoading(true);
+        try {
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(`http://localhost:8000/api/feed/user/${userId}?limit=10`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setEvents(data.events || []);
+            }
+        } catch (e) {
+            console.error("Failed to fetch feed:", e);
+        } finally {
+            setFeedLoading(false);
+        }
+    };
 
     useEffect(() => {
         if (!handle) return;
@@ -18,10 +43,13 @@ export function PublicProfilePage() {
         socialService.getProfileByHandle(handle)
             .then(async (user) => {
                 setProfile(user);
-                if (user && currentUser) {
-                    // Check if I follow them
-                    const isFollowing = await socialService.checkIsFollowing(currentUser.id, user.id);
-                    setFollowing(isFollowing);
+                if (user) {
+                    fetchFeed(user.id);
+                    if (currentUser) {
+                        // Check if I follow them
+                        const isFollowing = await socialService.checkIsFollowing(currentUser.id, user.id);
+                        setFollowing(isFollowing);
+                    }
                 }
             })
             .catch(() => setError('Kunde inte hämta profil'))
@@ -102,14 +130,24 @@ export function PublicProfilePage() {
                         </div>
 
                         {!isMe && (
-                            <button
-                                onClick={handleFollowToggle}
-                                className={`px-6 py-2 rounded-full font-bold transition-all ${following
-                                    ? 'bg-slate-800 text-slate-300 border border-white/10'
-                                    : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20'}`}
-                            >
-                                {following ? 'Följer' : 'Följ'}
-                            </button>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleFollowToggle}
+                                    className={`px-6 py-2 rounded-full font-bold transition-all ${following
+                                        ? 'bg-slate-800 text-slate-300 border border-white/10'
+                                        : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20'}`}
+                                >
+                                    {following ? 'Följer' : 'Följ'}
+                                </button>
+                                {following && (
+                                    <button
+                                        onClick={() => setShowMatrix(true)}
+                                        className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white border border-white/5 transition-all"
+                                    >
+                                        <Settings size={18} />
+                                    </button>
+                                )}
+                            </div>
                         )}
                         {isMe && (
                             <div className="bg-emerald-500/10 text-emerald-400 text-xs px-3 py-1 rounded-full border border-emerald-500/20">
@@ -160,27 +198,33 @@ export function PublicProfilePage() {
                         <h3 className="font-bold text-slate-400 uppercase tracking-widest text-xs">Aktivitetslogg</h3>
                     </div>
 
-                    {/* Mock Activity List */}
-                    {[1, 2, 3].map(i => (
-                        <div key={i} className="content-card hover:bg-slate-900/80 transition-all cursor-pointer group">
-                            <div className="flex justify-between items-start">
-                                <div className="flex gap-4">
-                                    <div className="text-3xl bg-slate-800 w-12 h-12 flex items-center justify-center rounded-xl">🏃</div>
-                                    <div>
-                                        <div className="text-xs text-emerald-400 font-bold mb-0.5">Idag, 07:00</div>
-                                        <h4 className="text-white font-bold">Morgonjogg i skogen 🌲</h4>
-                                        <div className="text-xs text-slate-400 mt-1">Lätt distanspass med bra känsla.</div>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-white font-black">8.5 km</div>
-                                    <div className="text-xs text-slate-500">5:12 /km</div>
-                                </div>
-                            </div>
+                    {/* Real Activity List */}
+                    {feedLoading ? (
+                        <div className="flex justify-center py-10 opacity-50">
+                            <RefreshCw className="animate-spin text-emerald-500" size={24} />
                         </div>
-                    ))}
+                    ) : events.length > 0 ? (
+                        events.map(event => (
+                            <FeedEventCard
+                                key={event.id}
+                                event={event}
+                                showUser={false}
+                            />
+                        ))
+                    ) : (
+                        <div className="text-center py-12 bg-slate-900/40 rounded-3xl border border-dashed border-white/10">
+                            <p className="text-sm text-slate-500">Inga offentliga aktiviteter ännu.</p>
+                        </div>
+                    )}
                 </div>
             </div>
+
+            <FollowMatrixModal
+                isOpen={showMatrix}
+                onClose={() => setShowMatrix(false)}
+                targetUserId={profile.id}
+                targetUserName={profile.handle || profile.name}
+            />
         </div>
     );
 }

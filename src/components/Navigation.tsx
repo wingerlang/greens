@@ -178,6 +178,12 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             <span className="hidden xl:inline">Community</span>
                         </NavLink>
 
+                        {/* Life Stream */}
+                        <NavLink to="/feed" className={linkClasses}>
+                            <span>⛲</span>
+                            <span className="hidden xl:inline">The Stream</span>
+                        </NavLink>
+
                         {/* Tävling */}
                         <NavLink to="/tävling" className={linkClasses}>
                             <span>🏆</span>
@@ -382,6 +388,13 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                 <div className="flex flex-col">
                                     <span className="font-bold text-slate-100">Community</span>
                                     <span className="text-[10px] text-slate-500 font-medium">Hitta vänner</span>
+                                </div>
+                            </NavLink>
+                            <NavLink to="/feed" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">⛲</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">The Stream</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Life Stream Feed</span>
                                 </div>
                             </NavLink>
                         </div>

@@ -12,6 +12,8 @@ import { WorkoutDetailModal } from '../components/training/WorkoutDetailModal.ts
 import { Tabs } from '../components/common/Tabs.tsx';
 import { CollapsibleSection } from '../components/common/CollapsibleSection.tsx';
 import { TrainingTimeStats } from '../components/training/TrainingTimeStats.tsx';
+import { PlateauWarningCard, VolumeRecommendationCard } from '../components/training/ProgressiveOverloadCard.tsx';
+import { getPlateauWarnings, getWeeklyVolumeRecommendations, type PlateauWarning } from '../utils/progressiveOverload.ts';
 
 // ============================================
 // Strength Page - Main Component
@@ -485,6 +487,52 @@ export function StrengthPage() {
                     <StatCard label="Volym denna månad" value={`${Math.round(stats.volumeThisMonth / 1000)}t`} />
                 </div>
             )}
+
+            {/* Progressive Overload - Plateau Warnings & Volume */}
+            {workouts.length > 0 && (() => {
+                const plateauWarnings = getPlateauWarnings(workouts, 3);
+                const volumeRecs = getWeeklyVolumeRecommendations(workouts).filter(r => r.recommendation !== 'maintain');
+
+                if (plateauWarnings.length === 0 && volumeRecs.length === 0) return null;
+
+                return (
+                    <section className="mt-8">
+                        <div className="flex items-center gap-3 mb-4">
+                            <span className="text-xl">📈</span>
+                            <div>
+                                <h2 className="text-xs font-black text-slate-500 uppercase tracking-widest">Progressive Overload Assistant</h2>
+                                <p className="text-[10px] text-slate-600 font-bold">Platåer, volym och rekommendationer</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Plateau Warnings */}
+                            {plateauWarnings.length > 0 && (
+                                <div className="space-y-3">
+                                    <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                        <span>⚠️</span> Övningar som stagnerat
+                                    </h3>
+                                    {plateauWarnings.slice(0, 4).map((warning, idx) => (
+                                        <PlateauWarningCard key={idx} warning={warning} />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Volume Recommendations */}
+                            {volumeRecs.length > 0 && (
+                                <div className="space-y-3">
+                                    <h3 className="text-[10px] font-black text-sky-400 uppercase tracking-widest flex items-center gap-2">
+                                        <span>📊</span> Volymanalys
+                                    </h3>
+                                    {volumeRecs.slice(0, 4).map((rec, idx) => (
+                                        <VolumeRecommendationCard key={idx} recommendation={rec} />
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </section>
+                );
+            })()}
 
             {/* Training Time Analytics */}
             <section className="mt-8">

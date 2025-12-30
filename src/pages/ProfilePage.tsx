@@ -1,22 +1,23 @@
 // ProfilePage - Main orchestrator component
 // All logic has been extracted into reusable hooks and components
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { type MealType, MEAL_TYPE_LABELS } from '../models/types.ts';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
-import { profileService, ProfileData } from '../services/profileService.ts';
+import { profileService, type ProfileData } from '../services/profileService.ts';
 
 // Import profile components
 import {
-    CollapsibleSection,
-    DataField,
     InlineEdit,
     InlineTextArea,
-    InfoBadge,
     StatBadge,
+    CollapsibleSection,
+    InfoBadge,
     QuickAction,
+    DataField
 } from '../components/profile/atoms/index.ts';
 
 import {
@@ -24,12 +25,14 @@ import {
     PRManagerSection,
     HRZonesSection,
     ActivityStatsSection,
-    NotificationSettingsSection,
+    PrivacySettingsSection,
     SessionsSection,
     WeightHistorySection,
-    PrivacySettingsSection,
-    DangerZoneSection
+    DangerZoneSection,
+    NotificationSettingsSection
 } from '../components/profile/sections/index.ts';
+import { FeedEventCard } from '../components/feed/FeedEventCard.tsx';
+import { FeedEvent } from '../models/feedTypes.ts';
 
 import './ProfilePage.css';
 
@@ -39,20 +42,26 @@ export function ProfilePage() {
     const { settings, updateSettings, toggleMealVisibility, theme, toggleTheme } = useSettings();
     const { user: authUser } = useAuth();
     const { users } = useData();
+    const navigate = useNavigate();
 
     // Profile state
-    const [profile, setProfile] = useState({
+    const DEFAULT_PROFILE: ProfileData = {
         name: '', handle: '', bio: '', location: '', birthdate: '', email: '', phone: '', website: '',
-        avatarUrl: '', streak: 0, weight: 0, targetWeight: 0, bodyFat: 0, maxHr: 0, restingHr: 0, lthr: 0,
-        vdot: 0, ftp: 0, weeklyDistanceGoal: 0, weeklyCalorieGoal: 0, sleepGoal: 8, waterGoal: 8,
-        preferredUnits: 'metric', weekStartsOn: 1,
+        avatarUrl: '', streak: 0, weight: 0, targetWeight: 0, maxHr: 0, restingHr: 0, lthr: 0,
+        vdot: 0, ftp: 0, weekStartsOn: 1, preferredUnits: 'metric',
         privacy: {
-            isPublic: true, allowFollowers: true, showWeight: false, showAge: true,
-            showCalories: true, showDetailedTraining: true, showSleep: false
+            isPublic: true, allowFollowers: true, sharing: {
+                training: 'FRIENDS', nutrition: 'FRIENDS', health: 'PRIVATE', social: 'FRIENDS', body: 'PRIVATE'
+            },
+            whitelistedUsers: [], showWeight: false, showHeight: false, showBirthYear: false, showDetailedTraining: true
         }
-    });
-    const [editingField, setEditingField] = useState<string | null>(null);
+    };
+    const [profile, setProfile] = useState<ProfileData>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
+    const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([]);
+    const [feedLoading, setFeedLoading] = useState(true);
+    const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview');
+    const [editingField, setEditingField] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Load profile on mount
@@ -88,19 +97,61 @@ export function ProfilePage() {
         await profileService.updateProfile({ [field]: value });
     };
 
-    const updateProfile = (field: string, value: any) => {
+    const updateProfile = <K extends keyof ProfileData>(field: K, value: ProfileData[K]) => {
         setProfile(prev => ({ ...prev, [field]: value }));
-        saveField(field, value);
+        saveField(field as string, value);
     };
 
-    const commitField = (field: string) => {
+    const commitField = <K extends keyof ProfileData>(field: K) => {
         setEditingField(null);
-        saveField(field, (profile as any)[field]);
+        saveField(field as string, profile[field]);
     };
 
-    const updatePrivacy = async (key: string, value: boolean) => {
-        setProfile(prev => ({ ...prev, privacy: { ...prev.privacy, [key]: value } }));
+    const fetchFeed = async () => {
+        setFeedLoading(true);
+        try {
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(`http://localhost:8000/api/feed/me?limit=10`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setFeedEvents(data.events || []);
+            }
+        } catch (e) {
+            console.error("Failed to fetch personal feed:", e);
+        } finally {
+            setFeedLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (!isLoading) {
+            fetchFeed();
+        }
+    }, [isLoading]);
+
+    const updatePrivacy = async (key: string, value: any) => {
+        setProfile(prev => {
+            if (!prev.privacy) return prev;
+            return {
+                ...prev,
+                privacy: { ...prev.privacy, [key]: value }
+            };
+        });
         await profileService.updatePrivacy({ [key]: value });
+    };
+
+    const updateSharing = async (category: string, level: string) => {
+        setProfile(prev => {
+            if (!prev.privacy) return prev;
+            const newSharing = { ...(prev.privacy.sharing || {}), [category]: level };
+            return {
+                ...prev,
+                privacy: { ...prev.privacy, sharing: newSharing }
+            } as ProfileData;
+        });
+        await profileService.updatePrivacy({ sharing: { [category]: level } as any });
     };
 
     // Avatar handling
@@ -155,7 +206,7 @@ export function ProfilePage() {
                         {/* Name & Handle */}
                         <div className="flex-1 pt-2">
                             <InlineEdit
-                                value={profile.name}
+                                value={profile.name || ''}
                                 isEditing={editingField === 'name'}
                                 onEdit={() => setEditingField('name')}
                                 onBlur={() => commitField('name')}
@@ -166,7 +217,7 @@ export function ProfilePage() {
                             <div className="flex items-center gap-1 text-slate-400">
                                 <span>@</span>
                                 <InlineEdit
-                                    value={profile.handle}
+                                    value={profile.handle || ''}
                                     isEditing={editingField === 'handle'}
                                     onEdit={() => setEditingField('handle')}
                                     onBlur={() => commitField('handle')}
@@ -179,7 +230,7 @@ export function ProfilePage() {
 
                         {/* Stats */}
                         <div className="flex gap-4 bg-slate-900/50 rounded-xl px-4 py-2">
-                            <StatBadge value={profile.streak} label="🔥 Streak" />
+                            <StatBadge value={profile.streak || 0} label="🔥 Streak" />
                             <StatBadge value={0} label="Följare" />
                             <StatBadge value={0} label="Följer" />
                         </div>
@@ -188,7 +239,7 @@ export function ProfilePage() {
                     {/* Bio */}
                     <div className="mt-4">
                         <InlineTextArea
-                            value={profile.bio}
+                            value={profile.bio || ''}
                             isEditing={editingField === 'bio'}
                             onEdit={() => setEditingField('bio')}
                             onBlur={() => commitField('bio')}
@@ -199,9 +250,9 @@ export function ProfilePage() {
 
                     {/* Info Badges */}
                     <div className="flex flex-wrap gap-2 mt-4">
-                        <InfoBadge icon="📍" value={profile.location} placeholder="Plats" field="location" editingField={editingField} onEdit={setEditingField} onChange={(f, v) => setProfile(p => ({ ...p, [f]: v }))} onBlur={() => commitField('location')} />
-                        <InfoBadge icon="🌐" value={profile.website} placeholder="Webbsida" field="website" editingField={editingField} onEdit={setEditingField} onChange={(f, v) => setProfile(p => ({ ...p, [f]: v }))} onBlur={() => commitField('website')} />
-                        <InfoBadge icon="🎂" value={profile.birthdate ? `${calculateAge(profile.birthdate)} år` : ''} placeholder="Ålder" field="birthdate" editingField={editingField} onEdit={setEditingField} onChange={(f, v) => setProfile(p => ({ ...p, [f]: v }))} />
+                        <InfoBadge icon="📍" value={profile.location || ''} placeholder="Plats" field="location" editingField={editingField} onEdit={setEditingField} onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))} onBlur={() => commitField('location')} />
+                        <InfoBadge icon="🌐" value={profile.website || ''} placeholder="Webbsida" field="website" editingField={editingField} onEdit={setEditingField} onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))} onBlur={() => commitField('website')} />
+                        <InfoBadge icon="🎂" value={profile.birthdate ? `${calculateAge(profile.birthdate)} år` : ''} placeholder="Ålder" field="birthdate" editingField={editingField} onEdit={setEditingField} onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))} />
                     </div>
                 </div>
             </div>
@@ -219,29 +270,29 @@ export function ProfilePage() {
             {/* Sections */}
             <div className="px-6 space-y-4">
                 <CollapsibleSection id="body" title="Kropp & Mått" icon="📏">
-                    <BodyMeasurementsSection targetWeight={profile.targetWeight} height={settings.height} />
+                    <BodyMeasurementsSection targetWeight={profile.targetWeight || 0} height={settings.height} />
                 </CollapsibleSection>
 
                 <CollapsibleSection id="goals" title="Dagliga Mål" icon="🎯">
                     <div className="grid md:grid-cols-4 gap-3">
-                        <DataField label="Kalorier" value={settings.dailyCalorieGoal?.toString() || ''} type="number" suffix="kcal" onChange={(v) => updateSettings({ dailyCalorieGoal: Number(v) })} />
-                        <DataField label="Protein" value={settings.dailyProteinGoal?.toString() || ''} type="number" suffix="g" onChange={(v) => updateSettings({ dailyProteinGoal: Number(v) })} />
-                        <DataField label="Kolhydrater" value={settings.dailyCarbsGoal?.toString() || ''} type="number" suffix="g" onChange={(v) => updateSettings({ dailyCarbsGoal: Number(v) })} />
-                        <DataField label="Fett" value={settings.dailyFatGoal?.toString() || ''} type="number" suffix="g" onChange={(v) => updateSettings({ dailyFatGoal: Number(v) })} />
-                        <DataField label="Sömn" value={settings.dailySleepGoal?.toString() || ''} type="number" suffix="h" onChange={(v) => updateSettings({ dailySleepGoal: Number(v) })} />
-                        <DataField label="Vatten" value={(settings as any).dailyWaterGoal?.toString() || '8'} type="number" suffix="glas" onChange={(v) => updateSettings({ dailyWaterGoal: Number(v) } as any)} />
-                        <DataField label="Steg" value={(settings as any).dailyStepGoal?.toString() || '10000'} type="number" suffix="" onChange={(v) => updateSettings({ dailyStepGoal: Number(v) } as any)} />
-                        <DataField label="Koffein Max" value={(settings as any).dailyCaffeineMax?.toString() || '400'} type="number" suffix="mg" onChange={(v) => updateSettings({ dailyCaffeineMax: Number(v) } as any)} />
+                        <DataField label="Kalorier" value={settings.dailyCalorieGoal?.toString() || ''} type="number" suffix="kcal" onChange={(v: string) => updateSettings({ dailyCalorieGoal: Number(v) })} />
+                        <DataField label="Protein" value={settings.dailyProteinGoal?.toString() || ''} type="number" suffix="g" onChange={(v: string) => updateSettings({ dailyProteinGoal: Number(v) })} />
+                        <DataField label="Kolhydrater" value={settings.dailyCarbsGoal?.toString() || ''} type="number" suffix="g" onChange={(v: string) => updateSettings({ dailyCarbsGoal: Number(v) })} />
+                        <DataField label="Fett" value={settings.dailyFatGoal?.toString() || ''} type="number" suffix="g" onChange={(v: string) => updateSettings({ dailyFatGoal: Number(v) })} />
+                        <DataField label="Sömn" value={settings.dailySleepGoal?.toString() || ''} type="number" suffix="h" onChange={(v: string) => updateSettings({ dailySleepGoal: Number(v) })} />
+                        <DataField label="Vatten" value={(settings as any).dailyWaterGoal?.toString() || '8'} type="number" suffix="glas" onChange={(v: string) => updateSettings({ dailyWaterGoal: Number(v) } as any)} />
+                        <DataField label="Steg" value={(settings as any).dailyStepGoal?.toString() || '10000'} type="number" suffix="" onChange={(v: string) => updateSettings({ dailyStepGoal: Number(v) } as any)} />
+                        <DataField label="Koffein Max" value={(settings as any).dailyCaffeineMax?.toString() || '400'} type="number" suffix="mg" onChange={(v: string) => updateSettings({ dailyCaffeineMax: Number(v) } as any)} />
                     </div>
                 </CollapsibleSection>
 
                 <CollapsibleSection id="running" title="Löpning & Cykel" icon="🏃">
                     <div className="grid md:grid-cols-4 gap-3">
-                        <DataField label="Max Puls" value={profile.maxHr.toString()} type="number" suffix="bpm" onChange={(v) => updateProfile('maxHr', Number(v))} />
-                        <DataField label="Vila Puls" value={profile.restingHr.toString()} type="number" suffix="bpm" onChange={(v) => updateProfile('restingHr', Number(v))} />
-                        <DataField label="Laktattröskel" value={profile.lthr.toString()} type="number" suffix="bpm" onChange={(v) => updateProfile('lthr', Number(v))} />
-                        <DataField label="VDOT" value={profile.vdot.toString()} type="number" onChange={(v) => updateProfile('vdot', Number(v))} />
-                        <DataField label="FTP (Cykel)" value={profile.ftp.toString()} type="number" suffix="W" onChange={(v) => updateProfile('ftp', Number(v))} />
+                        <DataField label="Max Puls" value={profile.maxHr?.toString() || '0'} type="number" suffix="bpm" onChange={(v: string) => updateProfile('maxHr', Number(v))} />
+                        <DataField label="Vila Puls" value={profile.restingHr?.toString() || '0'} type="number" suffix="bpm" onChange={(v: string) => updateProfile('restingHr', Number(v))} />
+                        <DataField label="Laktattröskel" value={profile.lthr?.toString() || '0'} type="number" suffix="bpm" onChange={(v: string) => updateProfile('lthr', Number(v))} />
+                        <DataField label="VDOT" value={profile.vdot?.toString() || '0'} type="number" onChange={(v: string) => updateProfile('vdot', Number(v))} />
+                        <DataField label="FTP (Cykel)" value={profile.ftp?.toString() || '0'} type="number" suffix="W" onChange={(v: string) => updateProfile('ftp', Number(v))} />
                     </div>
                 </CollapsibleSection>
 
@@ -250,7 +301,7 @@ export function ProfilePage() {
                 </CollapsibleSection>
 
                 <CollapsibleSection id="weight-history" title="Vikthistorik" icon="⚖️" defaultOpen={false}>
-                    <WeightHistorySection currentWeight={profile.weight} targetWeight={profile.targetWeight} />
+                    <WeightHistorySection currentWeight={profile.weight || 0} targetWeight={profile.targetWeight || 0} />
                 </CollapsibleSection>
 
                 <CollapsibleSection id="hr-zones" title="Pulszoner" icon="💓" defaultOpen={false}>
@@ -261,8 +312,37 @@ export function ProfilePage() {
                     <ActivityStatsSection />
                 </CollapsibleSection>
 
-                <CollapsibleSection id="privacy" title="Integritet" icon="🔒">
-                    <PrivacySettingsSection privacy={profile.privacy} onToggle={updatePrivacy} />
+                <CollapsibleSection id="privacy" title="Integritet & Delning" icon="🔒">
+                    <PrivacySettingsSection
+                        privacy={profile.privacy as any}
+                        onToggle={updatePrivacy}
+                        onUpdateSharing={updateSharing}
+                    />
+                </CollapsibleSection>
+
+                <CollapsibleSection id="activity-stream" title="Mitt Flöde (Senaste)" icon="⛲">
+                    <div className="space-y-4">
+                        {feedLoading ? (
+                            <div className="py-8 text-center text-slate-500">Laddar händelser...</div>
+                        ) : feedEvents.length > 0 ? (
+                            <div className="grid gap-4">
+                                {feedEvents.map(event => (
+                                    <FeedEventCard key={event.id} event={event} />
+                                ))}
+                                <button
+                                    onClick={() => navigate('/feed')}
+                                    className="w-full py-3 rounded-xl bg-slate-800/50 text-slate-400 text-sm font-bold hover:bg-slate-800"
+                                >
+                                    Visa allt i The Stream
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="py-12 text-center bg-slate-800/30 rounded-2xl border border-dashed border-slate-700">
+                                <p className="text-slate-500 text-sm">Inga händelser ännu.</p>
+                                <p className="text-slate-600 text-[10px] mt-1 italic">Logga träning eller mat för att se dem här.</p>
+                            </div>
+                        )}
+                    </div>
                 </CollapsibleSection>
 
                 <CollapsibleSection id="notifications" title="Notifikationer" icon="🔔" defaultOpen={false}>
@@ -302,11 +382,11 @@ export function ProfilePage() {
                         <DataField label="Första dag i veckan" value={profile.weekStartsOn === 0 ? 'sunday' : 'monday'} type="select" options={[
                             { value: 'monday', label: 'Måndag' },
                             { value: 'sunday', label: 'Söndag' },
-                        ]} onChange={(v) => updateProfile('weekStartsOn', v === 'sunday' ? 0 : 1)} />
-                        <DataField label="Enheter" value={profile.preferredUnits} type="select" options={[
+                        ]} onChange={(v: any) => updateProfile('weekStartsOn', v === 'sunday' ? 0 : 1)} />
+                        <DataField label="Enheter" value={profile.preferredUnits || 'metric'} type="select" options={[
                             { value: 'metric', label: '📐 Metriskt (kg, km)' },
                             { value: 'imperial', label: '📐 Imperial (lbs, mi)' },
-                        ]} onChange={(v) => updateProfile('preferredUnits', v)} />
+                        ]} onChange={(v: any) => updateProfile('preferredUnits', v)} />
                     </div>
                 </CollapsibleSection>
 

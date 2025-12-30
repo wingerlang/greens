@@ -20,6 +20,7 @@ export interface StorageService {
     deleteWeeklyPlan(id: string): Promise<void>;
     addWeightEntry(weight: number, date: string): Promise<void>;
     addMealEntry(meal: any): Promise<void>;
+    createFeedEvent(event: any): Promise<any>;
 }
 
 // ============================================
@@ -241,6 +242,28 @@ export class LocalStorageService implements StorageService {
                 console.error('[Storage] Fallback to full sync:', e);
             }
         }
+    }
+    async createFeedEvent(event: any): Promise<any> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('http://localhost:8000/api/feed/events', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(event)
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.event;
+                }
+            } catch (e) {
+                console.error('[Storage] Failed to create feed event:', e);
+            }
+        }
+        return null;
     }
 }
 

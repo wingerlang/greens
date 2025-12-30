@@ -10,6 +10,8 @@ function getHeaders() {
     };
 }
 
+export type VisibilityLevel = 'PUBLIC' | 'FRIENDS' | 'PRIVATE' | 'INDIVIDUAL';
+
 export interface ProfileData {
     name?: string;
     bio?: string;
@@ -20,14 +22,31 @@ export interface ProfileData {
     website?: string;
     phone?: string;
     streak?: number;
+    email?: string;
+    maxHr?: number;
+    restingHr?: number;
+    lthr?: number;
+    vdot?: number;
+    ftp?: number;
+    weight?: number;
+    targetWeight?: number;
+    weekStartsOn?: number;
+    preferredUnits?: string;
     privacy?: {
         isPublic?: boolean;
         allowFollowers?: boolean;
+        sharing?: {
+            training?: VisibilityLevel;
+            nutrition?: VisibilityLevel;
+            health?: VisibilityLevel;
+            social?: VisibilityLevel;
+            body?: VisibilityLevel;
+        };
+        whitelistedUsers?: string[];
         showWeight?: boolean;
-        showAge?: boolean;
-        showCalories?: boolean;
+        showHeight?: boolean;
+        showBirthYear?: boolean;
         showDetailedTraining?: boolean;
-        showSleep?: boolean;
     };
 }
 

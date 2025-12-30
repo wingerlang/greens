@@ -106,37 +106,58 @@ export interface User {
     privacy?: UserPrivacy;
 }
 
-export interface UserPrivacy {
-    isPublic: boolean; // If false, only followers can see
-    allowFollowers: boolean; // If false, no one can follow
+export type VisibilityLevel = 'PUBLIC' | 'FRIENDS' | 'PRIVATE' | 'INDIVIDUAL';
 
-    // Visibility Toggles
-    showWeight: boolean; // Hide sensitive metrics
+export interface UserPrivacy {
+    isPublic: boolean; // Base profile visibility
+    allowFollowers: boolean;
+
+    // Granular Category Sharing
+    sharing: {
+        training: VisibilityLevel;
+        nutrition: VisibilityLevel;
+        health: VisibilityLevel;
+        social: VisibilityLevel;
+        body: VisibilityLevel;
+    };
+
+    // Whitelisted user IDs for individual or exclusive sharing
+    whitelistedUsers: string[];
+
+    // NEW: Per-person overrides for specific categories
+    // Key = userId, Value = which categories they have access to (true = allow, false = deny)
+    categoryOverrides?: {
+        [userId: string]: {
+            training?: boolean;
+            nutrition?: boolean;
+            health?: boolean;
+            social?: boolean;
+            body?: boolean;
+        };
+    };
+
+    // Specific Detail Toggles
+    showWeight: boolean;
     showHeight: boolean;
     showBirthYear: boolean;
-
-    showDetailedTraining: boolean; // Show exact workouts vs just summary
-    showSleep: boolean;
-    showCalories: boolean;
-    showNutrition: boolean; // Show macro breakdown
-
-    // Activity Types
-    showRunning: boolean;
-    showLifting: boolean;
+    showDetailedTraining: boolean; // Full workout vs summary
 }
 
 export const DEFAULT_PRIVACY: UserPrivacy = {
     isPublic: true,
     allowFollowers: true,
+    sharing: {
+        training: 'FRIENDS',
+        nutrition: 'FRIENDS',
+        health: 'PRIVATE',
+        social: 'FRIENDS',
+        body: 'PRIVATE'
+    },
+    whitelistedUsers: [],
     showWeight: false,
     showHeight: false,
     showBirthYear: false,
-    showDetailedTraining: true,
-    showSleep: false,
-    showCalories: false,
-    showNutrition: false,
-    showRunning: true,
-    showLifting: true
+    showDetailedTraining: true
 };
 
 

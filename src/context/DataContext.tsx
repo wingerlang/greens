@@ -41,9 +41,11 @@ import {
     type RecoveryMetric, // Phase 7
     type StrengthSession, // Phase 12
     type StrengthMuscleGroup,
-    type StrengthExercise
+    type StrengthExercise,
+    type UserPrivacy
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
+import type { FeedEventType } from '../models/feedTypes.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { generateTrainingPlan } from '../services/coach/planGenerator.ts';
 
@@ -195,6 +197,7 @@ interface DataProviderProps {
 }
 
 export function DataProvider({ children }: DataProviderProps) {
+
     const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
     const [recipes, setRecipes] = useState<Recipe[]>([]);
     const [mealEntries, setMealEntries] = useState<MealEntry[]>([]);
@@ -227,6 +230,30 @@ export function DataProvider({ children }: DataProviderProps) {
 
     const [isLoaded, setIsLoaded] = useState(false);
 
+    // Helper for Feed events
+    const emitFeedEvent = useCallback((type: FeedEventType, title: string, payload: any, metrics?: any[], summary?: string) => {
+        if (!currentUser) return;
+
+        // Map FeedEventType to Privacy Category
+        let category: keyof UserPrivacy['sharing'] = 'social';
+        if (type.startsWith('WORKOUT')) category = 'training';
+        if (type.startsWith('NUTRITION') || type === 'HYDRATION') category = 'nutrition';
+        if (type.startsWith('HEALTH')) category = 'health';
+        if (type === 'BODY_METRIC') category = 'body';
+
+        const visibility = (currentUser.privacy?.sharing as any)?.[category] || 'FRIENDS';
+
+        storageService.createFeedEvent({
+            type,
+            title,
+            payload,
+            metrics,
+            summary,
+            timestamp: new Date().toISOString(),
+            visibility
+        }).catch(err => console.error("Feed event failed:", err));
+    }, [currentUser]);
+
     // Optimization: Skip auto-save for atomic updates that are handled by dedicated API calls
     const skipAutoSave = useRef(false);
 
@@ -247,6 +274,7 @@ export function DataProvider({ children }: DataProviderProps) {
             console.log('[DataContext] Discarding stale load results');
             return;
         }
+
 
         // De-duplicate items to prevent React key warnings and glitches
         const deDuplicate = <T extends { id: string }>(items: T[]): T[] => {
@@ -683,8 +711,95 @@ export function DataProvider({ children }: DataProviderProps) {
             console.error("Failed to sync meal:", e);
         });
 
+        // Life Stream: Add event
+        // Calculate nutrition summary for the feed event
+        let totalCals = 0;
+        let totalProtein = 0;
+        let totalCarbs = 0;
+        let totalFat = 0;
+        let totalAlcoholUnits = 0; // Track alcohol units
+
+        // Helper to extract alcohol percentage from food name (e.g., "vol. % 5,4" or "vol. % 14")
+        const extractAlcoholPercent = (name: string): number | null => {
+            const match = name.match(/vol\.?\s*%\s*(\d+(?:[,.]?\d*)?)/i);
+            if (match) {
+                return parseFloat(match[1].replace(',', '.'));
+            }
+            return null;
+        };
+
+        // Calculate alcohol units: (volume in ml × ABV%) / 1000
+        // Standard unit = 10ml pure alcohol = ~0.79g
+        const calculateAlcoholUnits = (grams: number, alcoholPercent: number): number => {
+            // Assume beverages: grams ≈ ml (density ~1)
+            // Units = (ml × ABV%) / 1000
+            return (grams * alcoholPercent) / 1000;
+        };
+
+        newEntry.items.forEach(item => {
+            if (item.type === 'foodItem') {
+                const food = foodItems.find(f => f.id === item.referenceId);
+                if (food) {
+                    const mult = item.servings / 100;
+                    totalCals += food.calories * mult;
+                    totalProtein += food.protein * mult;
+                    totalCarbs += food.carbs * mult;
+                    totalFat += food.fat * mult;
+
+                    // Check for alcohol content
+                    const alcoholPercent = extractAlcoholPercent(food.name);
+                    if (alcoholPercent && alcoholPercent > 0) {
+                        const units = calculateAlcoholUnits(item.servings, alcoholPercent);
+                        totalAlcoholUnits += units;
+                    }
+                }
+            } else if (item.type === 'recipe') {
+                const recipe = recipes.find(r => r.id === item.referenceId);
+                if (recipe) {
+                    const nutrition = calculateRecipeNutrition(recipe);
+                    const perServing = recipe.servings || 1;
+                    const mult = item.servings / perServing;
+                    totalCals += nutrition.calories * mult;
+                    totalProtein += nutrition.protein * mult;
+                    totalCarbs += nutrition.carbs * mult;
+                    totalFat += nutrition.fat * mult;
+                }
+            }
+        });
+
+        // Update daily vitals with alcohol units if any were consumed
+        if (totalAlcoholUnits > 0) {
+            const date = newEntry.date;
+            setDailyVitals(prev => {
+                const existing = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
+                return {
+                    ...prev,
+                    [date]: {
+                        ...existing,
+                        alcohol: (existing.alcohol || 0) + Math.round(totalAlcoholUnits * 10) / 10,
+                        updatedAt: new Date().toISOString()
+                    }
+                };
+            });
+            console.log(`[Alcohol] Added ${totalAlcoholUnits.toFixed(1)} units for ${date}`);
+        }
+
+        emitFeedEvent(
+            'NUTRITION_MEAL',
+            `Loggade ${newEntry.mealType.charAt(0).toUpperCase() + newEntry.mealType.slice(1)}`,
+            {
+                type: 'NUTRITION_MEAL',
+                mealType: newEntry.mealType,
+                calories: Math.round(totalCals),
+                protein: Math.round(totalProtein),
+                carbs: Math.round(totalCarbs),
+                fat: Math.round(totalFat),
+            },
+            [{ label: 'Energi', value: Math.round(totalCals), unit: 'kcal', icon: '🔥' }]
+        );
+
         return newEntry;
-    }, []);
+    }, [foodItems, recipes, calculateRecipeNutrition, emitFeedEvent]);
 
     const updateMealEntry = useCallback((id: string, data: Partial<MealEntryFormData>): void => {
         setMealEntries((prev: MealEntry[]) =>
@@ -709,8 +824,33 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString(),
         };
         setExerciseEntries(prev => [...prev, newEntry]);
+
+        // Life Stream: Add event (Simplified: all activities trigger a feed event)
+        const typeLabel = (data.type.charAt(0).toUpperCase() + data.type.slice(1)).replace('Strength', 'Styrka').replace('Walking', 'Promenad').replace('Running', 'Löpning').replace('Cycling', 'Cykling');
+
+        const isStrength = data.type === 'strength';
+
+        emitFeedEvent(
+            isStrength ? 'WORKOUT_STRENGTH' : 'WORKOUT_CARDIO',
+            data.notes || typeLabel,
+            {
+                type: isStrength ? 'WORKOUT_STRENGTH' : 'WORKOUT_CARDIO',
+                exerciseType: data.type,
+                duration: data.durationMinutes,
+                distance: data.distance,
+                calories: data.caloriesBurned,
+                intensity: data.intensity
+            },
+            [
+                { label: 'Tid', value: data.durationMinutes, unit: 'min', icon: '⏱️' },
+                ...(data.distance ? [{ label: 'Distans', value: data.distance.toFixed(1), unit: 'km', icon: '📍' }] : []),
+                { label: 'Energi', value: Math.round(data.caloriesBurned), unit: 'kcal', icon: '🔥' }
+            ],
+            `${data.distance ? `${data.distance.toFixed(1)} km • ` : ''}${data.durationMinutes} min`
+        );
+
         return newEntry;
-    }, []);
+    }, [emitFeedEvent]);
 
     const deleteExercise = useCallback((id: string) => {
         setExerciseEntries(prev => prev.filter(e => e.id !== id));
@@ -771,8 +911,16 @@ export function DataProvider({ children }: DataProviderProps) {
             console.error("Failed to sync weight:", err);
         });
 
+        // Life Stream: Add event
+        emitFeedEvent(
+            'BODY_METRIC',
+            'Ny invägning',
+            { type: 'BODY_METRIC', metricType: 'weight', value: weight, unit: 'kg' },
+            [{ label: 'Vikt', value: weight, unit: 'kg', icon: '⚖️' }]
+        );
+
         return newEntry;
-    }, []);
+    }, [emitFeedEvent]);
 
     const bulkAddWeightEntries = useCallback((entries: Partial<WeightEntry>[]) => {
         const newEntries = entries.map(e => ({
@@ -822,8 +970,30 @@ export function DataProvider({ children }: DataProviderProps) {
             id: generateId(),
         };
         setStrengthSessions(prev => [...prev, newSession]);
+
+        // Life Stream: Add event
+        const totalVol = (newSession.exercises || []).reduce((sum: number, ex: any) =>
+            sum + (ex.sets || []).reduce((ss: number, s: any) => ss + ((s.weight || 0) * (s.reps || 0)), 0), 0);
+
+        emitFeedEvent(
+            'WORKOUT_STRENGTH',
+            newSession.title || 'Styrkepass slutfört',
+            {
+                type: 'WORKOUT_STRENGTH',
+                sessionId: newSession.id,
+                exerciseCount: (newSession.exercises || []).length,
+                setCount: (newSession.exercises || []).reduce((sum: number, ex: any) => sum + (ex.sets || []).length, 0),
+                totalVolume: totalVol,
+            },
+            [
+                { label: 'Volym', value: Math.round(totalVol / 1000), unit: 't', icon: '🏋️' },
+                { label: 'Övningar', value: (newSession.exercises || []).length, icon: '📋' }
+            ],
+            `${(newSession.exercises || []).length} övningar • ${Math.round(totalVol / 1000)}t total volym`
+        );
+
         return newSession;
-    }, []);
+    }, [emitFeedEvent]);
 
     const updateStrengthSession = useCallback((id: string, updates: Partial<StrengthSession>): void => {
         setStrengthSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
@@ -1035,9 +1205,20 @@ export function DataProvider({ children }: DataProviderProps) {
                     updatedAt: new Date().toISOString()
                 }
             };
+
+            // Life Stream: Add event for water if increased
+            if (updates.water && updates.water > (existing.water || 0)) {
+                emitFeedEvent(
+                    'HYDRATION',
+                    'Drack vatten',
+                    { type: 'HYDRATION', amountMl: (updates.water - (existing.water || 0)) * 1000 },
+                    [{ label: 'Mängd', value: (updates.water - (existing.water || 0)).toFixed(1), unit: 'L', icon: '💧' }]
+                );
+            }
+
             return newData;
         });
-    }, []);
+    }, [emitFeedEvent]);
 
     const getVitalsForDate = useCallback((date: string): DailyVitals => {
         return dailyVitals[date] || {
@@ -1440,7 +1621,16 @@ export function DataProvider({ children }: DataProviderProps) {
                     sleep: parseFloat((session.durationSeconds / 3600).toFixed(1))
                 });
             }
-        }, [updateVitals]),
+
+            // Life Stream: Add event
+            const hours = session.durationSeconds ? session.durationSeconds / 3600 : 0;
+            emitFeedEvent(
+                'HEALTH_SLEEP',
+                'Sömn loggad',
+                { type: 'HEALTH_SLEEP', hours, score: session.score },
+                [{ label: 'Tid', value: hours.toFixed(1), unit: 'h', icon: '😴' }]
+            );
+        }, [updateVitals, emitFeedEvent]),
 
         // Phase 7: Physio-AI
         injuryLogs,

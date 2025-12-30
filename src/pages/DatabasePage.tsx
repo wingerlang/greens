@@ -80,11 +80,43 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         }
     }, [searchParams]);
 
-    const filteredItems = foodItems.filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-        const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-        return matchesSearch && matchesCategory;
-    });
+    // Smart search with relevance ranking and robust Swedish character handling
+    const filteredItems = React.useMemo(() => {
+        // Normalize text: NFC normalize, lowercase, trim, and strip any zero-width chars
+        const normalizeText = (text: string) =>
+            text.normalize('NFC').toLowerCase().trim().replace(/[\u200B-\u200D\uFEFF]/g, '');
+
+        const query = normalizeText(searchQuery);
+        const matchesCategory = (item: FoodItem) => selectedCategory === 'all' || item.category === selectedCategory;
+
+        if (!query) {
+            // No search query - just filter by category and limit
+            return foodItems.filter(matchesCategory).slice(0, 100);
+        }
+
+        // Categorize matches by relevance
+        const exactMatches: FoodItem[] = [];
+        const startsWithMatches: FoodItem[] = [];
+        const containsMatches: FoodItem[] = [];
+
+        for (const item of foodItems) {
+            if (!matchesCategory(item)) continue;
+
+            const nameLower = normalizeText(item.name);
+            const descLower = item.description ? normalizeText(item.description) : '';
+
+            if (nameLower === query) {
+                exactMatches.push(item);
+            } else if (nameLower.startsWith(query)) {
+                startsWithMatches.push(item);
+            } else if (nameLower.includes(query) || descLower.includes(query)) {
+                containsMatches.push(item);
+            }
+        }
+
+        // Combine in priority order, limit total results for performance
+        return [...exactMatches, ...startsWithMatches, ...containsMatches].slice(0, 100);
+    }, [foodItems, searchQuery, selectedCategory]);
 
     // Auto-open detail if EXACT search match OR ID match from URL
     useEffect(() => {
@@ -229,6 +261,30 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                     </button>
                 )}
             </div>
+
+            {searchQuery && (
+                <div className="search-results-hint" style={{
+                    padding: '0.5rem 1rem',
+                    fontSize: '0.8rem',
+                    color: 'var(--text-secondary)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.5rem'
+                }}>
+                    <span>🔍</span>
+                    <span>
+                        {filteredItems.length === 0
+                            ? 'Inga träffar'
+                            : filteredItems.length === 100
+                                ? '100+ träffar (visar topp 100)'
+                                : `${filteredItems.length} träffar`
+                        }
+                        {' för "'}
+                        <strong>{searchQuery}</strong>
+                        {'"'}
+                    </span>
+                </div>
+            )}
 
             {filteredItems.length === 0 ? (
                 <div className="empty-state">

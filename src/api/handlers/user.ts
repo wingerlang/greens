@@ -361,6 +361,40 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
         }
     }
 
+    // Privacy Update (PATCH)
+    if (url.pathname === "/api/user/privacy" && method === "PATCH") {
+        try {
+            const updates = await req.json();
+            const user = await getUserById(session.userId);
+            if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            // Merge privacy settings
+            const currentPrivacy = user.privacy || {
+                isPublic: true,
+                allowFollowers: true,
+                sharing: { training: 'FRIENDS', nutrition: 'FRIENDS', health: 'PRIVATE', social: 'FRIENDS', body: 'PRIVATE' },
+                whitelistedUsers: [],
+                showWeight: false,
+                showHeight: false,
+                showBirthYear: false,
+                showDetailedTraining: true
+            };
+
+            // Deep merge for 'sharing' if present
+            const newPrivacy = { ...currentPrivacy, ...updates };
+            if (updates.sharing) {
+                newPrivacy.sharing = { ...currentPrivacy.sharing, ...updates.sharing };
+            }
+
+            user.privacy = newPrivacy;
+            await saveUser(user);
+
+            return new Response(JSON.stringify({ success: true, privacy: user.privacy }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
     // Personal Records (DELETE)
     if (url.pathname.startsWith("/api/user/prs/") && method === "DELETE") {
         try {
