@@ -766,7 +766,9 @@ export function DashboardPage() {
                                     const dist = dayExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
                                     const ton = dayExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
                                     const duration = dayExercises.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
-                                    const speed = duration > 0 ? (dist / (duration / 60)) : 0;
+                                    const runExercises = dayExercises.filter(e => e.type === 'running' || e.type === 'walking' || e.type === 'cycling' || (e.distance || 0) > 0);
+                                    const runDuration = runExercises.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
+                                    const speed = runDuration > 0 ? (dist / (runDuration / 60)) : 0;
                                     const calPercentage = Math.min((dayNutrition.calories || 0) / (settings.dailyCalorieGoal || 2000), 1.2);
 
                                     return (
@@ -796,12 +798,29 @@ export function DashboardPage() {
                                                 </div>
 
                                                 {/* Detailed Hover Info */}
-                                                <div className="hidden group-hover/day:flex flex-col items-center leading-tight absolute -bottom-14 bg-slate-800 text-white p-2 rounded-lg text-[8px] z-50 shadow-2xl whitespace-nowrap border border-white/10">
-                                                    {dayExercises.length > 0 && <div className="font-bold">{dayExercises.length} pass</div>}
-                                                    {dist > 0 && <div className="text-cyan-400">{dist.toFixed(1)} km @ {speed.toFixed(1)} km/h</div>}
-                                                    {duration > 0 && <div className="text-slate-300">{duration} min</div>}
-                                                    {ton > 0 && <div className="text-purple-400">{(ton / 1000).toFixed(1)} ton</div>}
-                                                </div>
+                                                {dayExercises.length > 0 && (
+                                                    <div className="hidden group-hover/day:flex flex-col gap-1 items-start absolute -bottom-2 translate-y-full bg-slate-800 text-white p-2 rounded-lg text-[10px] z-50 shadow-xl whitespace-nowrap border border-white/10 min-w-[100px]">
+                                                        {dayExercises.map((e, idx) => (
+                                                            <div key={idx} className="flex items-center gap-2 w-full">
+                                                                <span className="text-slate-400 w-4">{e.type === 'strength' ? '🏋️' : e.type === 'running' ? '🏃' : '⚡'}</span>
+                                                                <div className="flex flex-col leading-none">
+                                                                    <span className="font-bold capitalize">{e.type === 'strength' ? (e.notes || 'Styrka') : e.type}</span>
+                                                                    <span className="text-[9px] text-slate-400">
+                                                                        {e.distance ? `${e.distance}km` : ''}
+                                                                        {e.distance && e.durationMinutes ? ' • ' : ''}
+                                                                        {e.durationMinutes ? `${e.durationMinutes}m` : ''}
+                                                                        {e.tonnage ? ` • ${(e.tonnage / 1000).toFixed(1)}t` : ''}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        {speed > 0 && (
+                                                            <div className="pt-1 mt-1 border-t border-white/10 w-full text-center text-[9px] text-cyan-400 font-mono">
+                                                                Snitt: {speed.toFixed(1)} km/h
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
 
                                                 {(density === 'cozy' || (density === 'slim' && (dist > 0 || ton > 0))) && (
                                                     <div className="flex flex-col items-center leading-none">

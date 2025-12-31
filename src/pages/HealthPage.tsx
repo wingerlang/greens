@@ -16,7 +16,7 @@ import { RecoveryPage } from './Health/RecoveryPage.tsx';
 import { BodyView } from './Health/BodyView.tsx';
 import './HealthPage.css';
 
-type TimeFrame = '7d' | '30d' | '3m' | '6m' | '9m' | 'year' | 'all';
+type TimeFrame = '7d' | '30d' | '3m' | '6m' | '9m' | 'year' | 'all' | '2024' | '2025';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -76,8 +76,6 @@ export function HealthPage() {
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null)
             .filter(e => {
-                // Remove Strava strength activities if we already have a dedicated strength workout on that day
-                // Cast to string to handle raw Strava types like 'WeightTraining' that might not be in our strict type definition yet
                 const t = e.type as string;
                 if (t === 'strength' || t === 'WeightTraining') {
                     const hasDedicatedWorkout = strength.some(s => s.date.split('T')[0] === e.date.split('T')[0]);
@@ -98,15 +96,9 @@ export function HealthPage() {
         const m = metric?.toLowerCase();
         if (!m || m === 'overview' || m === 'översikt') return 'overview';
         if (m === 'food' || m === 'mat') return 'food';
-
-        // Training Hub
         if (['training', 'träning', 'strength', 'styrka', 'cardio', 'kondition', 'hyrox'].includes(m)) return 'training';
-
-        // Body Hub
         if (['weight', 'vikt', 'sleep', 'sömn'].includes(m)) return 'body';
-
         if (m === 'recovery' || m === 'rehab') return 'recovery';
-
         return 'overview';
     }, [metric]);
 
@@ -118,34 +110,73 @@ export function HealthPage() {
         if (m === 'weight' || m === 'vikt') return 'weight';
         if (m === 'sleep' || m === 'sömn') return 'sleep';
         if (m === 'hyrox') return 'hyrox';
-        return undefined; // Default
+        return undefined;
     }, [metric]);
 
     const [timeframe, setTimeframe] = useState<TimeFrame>('year');
 
     const days = useMemo(() => {
+        const now = new Date();
+        const startOf2025 = new Date('2025-01-01');
+        const startOf2024 = new Date('2024-01-01');
+
         switch (timeframe) {
             case '7d': return 7;
             case '30d': return 30;
             case '3m': return 90;
             case '6m': return 180;
             case '9m': return 270;
-            case 'year': {
-                const now = new Date();
-                const startOfYear = new Date(now.getFullYear(), 0, 1);
-                const diff = now.getTime() - startOfYear.getTime();
-                return Math.ceil(diff / (1000 * 60 * 60 * 24));
+            case 'year': return 365;
+            case '2025': {
+                const diff = now.getTime() - startOf2025.getTime();
+                return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+            }
+            case '2024': {
+                const diff = now.getTime() - startOf2024.getTime();
+                return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
             }
             case 'all': return 3650;
             default: return 30;
         }
     }, [timeframe]);
 
+    // FILTERED ENTRIES
+    const filteredExerciseEntries = useMemo(() => {
+        if (timeframe === '2024') return unifiedExerciseEntries.filter(e => e.date.startsWith('2024'));
+        if (timeframe === '2025') return unifiedExerciseEntries.filter(e => e.date.startsWith('2025'));
+
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        const cutoffStr = cutoff.toISOString().split('T')[0];
+        return unifiedExerciseEntries.filter(e => e.date >= cutoffStr);
+    }, [unifiedExerciseEntries, days, timeframe]);
+
+    const filteredWeightEntries = useMemo(() => {
+        if (timeframe === '2024') return weightEntries.filter(e => e.date.startsWith('2024'));
+        if (timeframe === '2025') return weightEntries.filter(e => e.date.startsWith('2025'));
+
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        const cutoffStr = cutoff.toISOString().split('T')[0];
+        return weightEntries.filter(e => e.date >= cutoffStr);
+    }, [weightEntries, days, timeframe]);
+
     const snapshots = useMemo(() => {
         return aggregateHealthData(days, dailyVitals, weightEntries, mealEntries, unifiedExerciseEntries, calculateDailyNutrition);
     }, [days, dailyVitals, weightEntries, mealEntries, unifiedExerciseEntries, calculateDailyNutrition]);
 
-    const stats = useMemo(() => calculateHealthStats(snapshots), [snapshots]);
+    // STRICT YEAR FILTERING FOR SNAPSHOTS
+    const finalSnapshots = useMemo(() => {
+        if (timeframe === '2024') {
+            return snapshots.filter(s => s.date.startsWith('2024'));
+        }
+        if (timeframe === '2025') {
+            return snapshots.filter(s => s.date.startsWith('2025'));
+        }
+        return snapshots;
+    }, [snapshots, timeframe]);
+
+    const stats = useMemo(() => calculateHealthStats(finalSnapshots), [finalSnapshots]);
 
     const goalTheme = useMemo(() => {
         if (settings.trainingGoal === 'bulk') return { primary: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', text: 'text-amber-400', label: 'Bulk-fokus' };
@@ -163,10 +194,9 @@ export function HealthPage() {
         const isSwedishPath = window.location.pathname.includes('/hälsa') || window.location.pathname.includes('/halsa');
         const basePath = isSwedishPath ? '/hälsa' : '/health';
 
-        // Map abstract tabs to URLs
         let path = tab;
         if (isSwedishPath) {
-            if (tab === 'body') path = 'vikt'; // Default to weight for Body tab
+            if (tab === 'body') path = 'vikt';
             if (tab === 'food') path = 'mat';
             if (tab === 'training') path = 'träning';
             if (tab === 'recovery') path = 'rehab';
@@ -181,32 +211,54 @@ export function HealthPage() {
         <div className="health-page animate-in fade-in duration-500">
             <header className="health-header">
                 <div className="header-content">
-                    <span className={`header-badge ${goalTheme.text}`} style={{ backgroundColor: goalTheme.bg }}>{goalTheme.label}</span>
-                    <h1>Din Hälsa</h1>
+                    <div>
+                        <span className={`header-badge ${goalTheme.text}`} style={{ backgroundColor: goalTheme.bg }}>{goalTheme.label}</span>
+                        <h1 className="mt-2">Din Hälsa</h1>
+                    </div>
 
-                    {/* SIMPLIFIED NAVIGATION */}
-                    <div className="tab-nav">
-                        <button className={`tab-link ${activeView === 'overview' ? 'active' : ''}`} onClick={() => handleTabChange('overview')}>Översikt</button>
-                        <button className={`tab-link ${activeView === 'food' ? 'active' : ''}`} onClick={() => handleTabChange('food')}>🥗 Mat</button>
-                        <button className={`tab-link ${activeView === 'training' ? 'active' : ''}`} onClick={() => handleTabChange('training')}>⚡ Träning</button>
-                        <button className={`tab-link ${activeView === 'recovery' ? 'active' : ''}`} onClick={() => handleTabChange('recovery')}>🩹 Recovery</button>
-                        <button className={`tab-link ${activeView === 'body' ? 'active' : ''}`} onClick={() => handleTabChange('body')}>🧬 Kropp</button>
+                    {/* Global Time Filter */}
+                    <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 backdrop-blur-sm overflow-x-auto">
+                        {(['7d', '30d', '3m', '6m', '2025', '2024', 'all'] as TimeFrame[]).map((tf) => (
+                            <button
+                                key={tf}
+                                onClick={() => setTimeframe(tf)}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${timeframe === tf
+                                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                    }`}
+                            >
+                                {tf === '7d' ? '7D' : tf === '30d' ? '30D' : tf === 'year' ? '1ÅR' : tf.toUpperCase()}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
-                {/* Score & Time Selector */}
+                {/* SIMPLIFIED NAVIGATION */}
+                <div className="tab-nav mt-6">
+                    <button className={`tab-link ${activeView === 'overview' ? 'active' : ''}`} onClick={() => handleTabChange('overview')}>Översikt</button>
+                    <button className={`tab-link ${activeView === 'food' ? 'active' : ''}`} onClick={() => handleTabChange('food')}>🥗 Mat</button>
+                    <button className={`tab-link ${activeView === 'training' ? 'active' : ''}`} onClick={() => handleTabChange('training')}>⚡ Träning</button>
+                    <button className={`tab-link ${activeView === 'recovery' ? 'active' : ''}`} onClick={() => handleTabChange('recovery')}>🩹 Recovery</button>
+                    <button className={`tab-link ${activeView === 'body' ? 'active' : ''}`} onClick={() => handleTabChange('body')}>🧬 Kropp</button>
+                </div>
             </header>
 
             <main className="health-grid">
                 {activeView === 'overview' && (
-                    <HealthOverview snapshots={snapshots} stats={stats} timeframe={days} exerciseEntries={unifiedExerciseEntries} />
+                    <HealthOverview
+                        snapshots={finalSnapshots}
+                        stats={stats}
+                        timeframe={days}
+                        exerciseEntries={filteredExerciseEntries}
+                        weightEntries={filteredWeightEntries}
+                    />
                 )}
                 {activeView === 'food' && (
-                    <MatView stats={stats} snapshots={snapshots} />
+                    <MatView stats={stats} snapshots={finalSnapshots} />
                 )}
                 {activeView === 'training' && (
                     <TrainingView
-                        exerciseEntries={unifiedExerciseEntries}
+                        exerciseEntries={filteredExerciseEntries}
                         days={days}
                         universalActivities={fetchedUniversalActivities}
                         initialTab={subTab as any}
@@ -214,7 +266,7 @@ export function HealthPage() {
                 )}
                 {activeView === 'body' && (
                     <BodyView
-                        snapshots={snapshots}
+                        snapshots={finalSnapshots}
                         stats={stats}
                         days={days}
                         initialTab={subTab as any}

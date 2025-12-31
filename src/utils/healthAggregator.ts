@@ -10,6 +10,8 @@ export interface HealthStats {
     proteinQualityScore: number; // 0-100
     vitaminCoverage: Record<string, number>; // nutrient -> % of RDA
     loggingConsistency: number; // 0-100 % of days with at least one log
+    sleepConsistency: number;
+    waterConsistency: number;
     activeDays: number;
     untrackedDays: number;
     exerciseBreakdown: {
@@ -147,6 +149,17 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
     const untrackedDays = snapshots.filter(s => s.isUntracked).length;
     const loggingConsistency = Math.round((activeDays / count) * 100);
 
+    // Sleep & Water Consistency (Non-zero days)
+    const sleepDays = snapshots.filter(s => s.vitals.sleep > 0).length || 1;
+    const waterDays = snapshots.filter(s => s.vitals.water > 0).length || 1;
+
+    const avgSleep = totals.sleep / sleepDays;
+    const avgWater = totals.water / waterDays;
+
+    // Consistency percentages for UI
+    const sleepConsistency = Math.round((snapshots.filter(s => s.vitals.sleep > 0).length / count) * 100);
+    const waterConsistency = Math.round((snapshots.filter(s => s.vitals.water > 0).length / count) * 100);
+
     // Exercise Breakdown
     const exerciseBreakdown = snapshots.reduce((acc, s) => {
         acc.intervals += s.exerciseDeatils.intervals;
@@ -160,8 +173,8 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
     }, { intervals: 0, longRuns: 0, races: 0, totalTonnage: 0, strengthSessions: 0, totalDistance: 0, totalCardioDuration: 0 });
 
     return {
-        avgSleep: totals.sleep / count,
-        avgWater: totals.water / count,
+        avgSleep,
+        avgWater,
         avgCaffeine: totals.caffeine / count,
         weightTrend,
         totalCalories: totals.calories,
@@ -169,6 +182,8 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
         proteinQualityScore,
         vitaminCoverage,
         loggingConsistency,
+        sleepConsistency,
+        waterConsistency,
         activeDays,
         untrackedDays,
         exerciseBreakdown
