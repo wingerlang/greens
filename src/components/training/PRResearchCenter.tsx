@@ -10,20 +10,22 @@ interface PRResearchCenterProps {
     personalBests: PersonalBest[];
     onClose: () => void;
     onSelectWorkout?: (workout: StrengthWorkout) => void;
+    inline?: boolean;
 }
 
-export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWorkout }: PRResearchCenterProps) {
+export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWorkout, inline }: PRResearchCenterProps) {
     const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
     const [isWeightPRMode, setIsWeightPRMode] = useState(false);
 
-    // ESC to close
+    // ESC to close - only if not inline
     useEffect(() => {
+        if (inline) return;
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
+    }, [onClose, inline]);
 
     const allExerciseNames = useMemo(() => {
         const names = Array.from(new Set(personalBests.map(pb => pb.exerciseName)));
@@ -274,16 +276,22 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
     }, [selectedExercise, isWeightPRMode, workouts, personalBests]);
 
     return (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col md:flex-row h-screen overflow-hidden text-slate-200">
+        <div className={`flex flex-col md:flex-row overflow-hidden text-slate-200 ${inline
+            ? 'h-[800px] bg-slate-900 border border-white/5 rounded-2xl shadow-2xl'
+            : 'fixed inset-0 z-50 bg-slate-950 h-screen'
+            }`}>
             {/* Sidebar - Wider for text */}
-            <div className="w-full md:w-72 bg-slate-900 border-r border-white/5 flex flex-col h-full shrink-0">
-                <div className="p-3 border-b border-white/5 bg-slate-900">
+            <div className={`w-full md:w-72 border-r border-white/5 flex flex-col h-full shrink-0 ${inline ? 'bg-slate-900/50' : 'bg-slate-900'
+                }`}>
+                <div className={`p-3 border-b border-white/5 ${inline ? 'bg-slate-900/30' : 'bg-slate-900'}`}>
                     <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center text-white font-black shadow-lg text-sm">⚛️</div>
                             <h1 className="text-[10px] font-black text-white tracking-wider uppercase">PR-Lab</h1>
                         </div>
-                        <button onClick={onClose} className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-red-600 flex items-center justify-center text-slate-500 hover:text-white transition-all text-xs" title="Stäng (ESC)">✕</button>
+                        {!inline && (
+                            <button onClick={onClose} className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-red-600 flex items-center justify-center text-slate-500 hover:text-white transition-all text-xs" title="Stäng (ESC)">✕</button>
+                        )}
                     </div>
                     <button
                         onClick={() => setSelectedExercise(null)}
@@ -306,9 +314,11 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
                     ))}
                 </div>
 
-                <div className="p-3 border-t border-white/5 bg-slate-900">
-                    <p className="text-[8px] text-slate-600 text-center">Tryck ESC för att stänga</p>
-                </div>
+                {!inline && (
+                    <div className="p-3 border-t border-white/5 bg-slate-900">
+                        <p className="text-[8px] text-slate-600 text-center">Tryck ESC för att stänga</p>
+                    </div>
+                )}
             </div>
 
             {/* Main Content - Data Dense */}

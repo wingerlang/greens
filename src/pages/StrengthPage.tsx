@@ -36,6 +36,9 @@ export function StrengthPage() {
     const [personalBests, setPersonalBests] = useState<PersonalBest[]>([]);
     const [isResearchCenterOpen, setIsResearchCenterOpen] = useState(false);
 
+    // Main tab navigation
+    const [mainTab, setMainTab] = useState<'overview' | 'analysis' | 'research'>('overview');
+
     // Check for exercise in URL
     const exerciseNameMatch = window.location.pathname.match(/\/styrka\/(.+)/);
     const exerciseSlug = exerciseNameMatch ? exerciseNameMatch[1] : null;
@@ -380,40 +383,67 @@ export function StrengthPage() {
     return (
         <div className="pt-2 md:pt-4 p-4 md:p-8 max-w-7xl mx-auto space-y-8">
             {/* Header */}
-            <header className="flex items-center justify-between flex-wrap gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-white mb-2">💪 Styrketräning</h1>
-                    <p className="text-slate-400">Dina pass, övningar och personliga rekord.</p>
+            <header className="flex flex-col gap-6">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                    <div>
+                        <h1 className="text-3xl font-black text-white mb-2">💪 Styrketräning</h1>
+                        <p className="text-slate-400">Dina pass, övningar och personliga rekord.</p>
+                    </div>
+                    <div className="flex gap-3 items-center">
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".csv"
+                            onChange={handleImport}
+                            className="hidden"
+                            id="csv-import"
+                        />
+                        <label
+                            htmlFor="csv-import"
+                            className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-all ${importing
+                                ? 'bg-slate-700 text-slate-400'
+                                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
+                                }`}
+                        >
+                            {importing ? '⏳ Importerar...' : '📥 Importera CSV'}
+                        </label>
+                    </div>
                 </div>
-                <div className="flex gap-3 items-center">
+
+                {/* Main Tab Navigation */}
+                <div className="flex gap-2 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5 w-fit">
                     <button
-                        onClick={() => setIsResearchCenterOpen(true)}
-                        className="bg-amber-500/10 border border-amber-500/20 text-amber-500 hover:bg-amber-500/20 px-5 py-2.5 rounded-xl font-bold transition-all flex items-center gap-2 active:scale-95"
+                        onClick={() => setMainTab('overview')}
+                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mainTab === 'overview'
+                            ? 'bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                            }`}
+                    >
+                        <span>📊</span> Översikt
+                    </button>
+                    <button
+                        onClick={() => setMainTab('analysis')}
+                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mainTab === 'analysis'
+                            ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                            }`}
+                    >
+                        <span>🔬</span> Analys
+                    </button>
+                    <button
+                        onClick={() => setMainTab('research')}
+                        className={`px-6 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${mainTab === 'research'
+                            ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20'
+                            : 'text-slate-400 hover:text-white hover:bg-white/5'
+                            }`}
                     >
                         <span>⚛️</span> Research Center
                     </button>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".csv"
-                        onChange={handleImport}
-                        className="hidden"
-                        id="csv-import"
-                    />
-                    <label
-                        htmlFor="csv-import"
-                        className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-all ${importing
-                            ? 'bg-slate-700 text-slate-400'
-                            : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
-                            }`}
-                    >
-                        {importing ? '⏳ Importerar...' : '📥 Importera CSV'}
-                    </label>
                 </div>
             </header>
 
-            {/* Advanced Temporal Controls */}
-            {workouts.length > 0 && (
+            {/* Date Filter - Only show on Overview and Analysis tabs */}
+            {mainTab !== 'research' && workouts.length > 0 && (
                 <div className="bg-slate-900/50 border border-white/5 rounded-3xl p-6 shadow-xl space-y-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
@@ -560,7 +590,7 @@ export function StrengthPage() {
             )}
 
             {/* Stats Cards */}
-            {stats && (
+            {mainTab === 'overview' && stats && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <StatCard label="Totalt pass" value={hasDateFilter ? periodStats.count : stats.totalWorkouts} />
                     <StatCard label="Pass denna vecka" value={stats.workoutsThisWeek} />
@@ -569,15 +599,13 @@ export function StrengthPage() {
                 </div>
             )}
 
-            {/* Progressive Overload - Plateau Warnings & Volume */}
-            {workouts.length > 0 && (() => {
+            {/* Progressive Overload - Plateau Warnings & Volume - ANALYSIS TAB */}
+            {mainTab === 'analysis' && workouts.length > 0 && (() => {
                 const plateauWarnings = getPlateauWarnings(workouts, 3);
                 const volumeRecs = getWeeklyVolumeRecommendations(workouts).filter(r => r.recommendation !== 'maintain');
 
-                if (plateauWarnings.length === 0 && volumeRecs.length === 0) return null;
-
                 return (
-                    <section className="mt-8">
+                    <section className="space-y-8">
                         <div className="flex items-center gap-3 mb-4">
                             <span className="text-xl">📈</span>
                             <div>
@@ -586,49 +614,53 @@ export function StrengthPage() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                            {/* Plateau Warnings */}
-                            {plateauWarnings.length > 0 && (
-                                <div className="space-y-3">
-                                    <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
-                                        <span>⚠️</span> Övningar som stagnerat
-                                    </h3>
-                                    {plateauWarnings.slice(0, 4).map((warning, idx) => (
-                                        <PlateauWarningCard key={idx} warning={warning} />
-                                    ))}
-                                </div>
-                            )}
+                        {(plateauWarnings.length > 0 || volumeRecs.length > 0) && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                {/* Plateau Warnings */}
+                                {plateauWarnings.length > 0 && (
+                                    <div className="space-y-3">
+                                        <h3 className="text-[10px] font-black text-amber-400 uppercase tracking-widest flex items-center gap-2">
+                                            <span>⚠️</span> Övningar som stagnerat
+                                        </h3>
+                                        {plateauWarnings.slice(0, 4).map((warning, idx) => (
+                                            <PlateauWarningCard key={idx} warning={warning} />
+                                        ))}
+                                    </div>
+                                )}
 
-                            {/* Volume Recommendations */}
-                            {volumeRecs.length > 0 && (
-                                <div className="space-y-3">
-                                    <h3 className="text-[10px] font-black text-sky-400 uppercase tracking-widest flex items-center gap-2">
-                                        <span>📊</span> Volymanalys
-                                    </h3>
-                                    {volumeRecs.slice(0, 4).map((rec, idx) => (
-                                        <VolumeRecommendationCard key={idx} recommendation={rec} />
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                                {/* Volume Recommendations */}
+                                {volumeRecs.length > 0 && (
+                                    <div className="space-y-3">
+                                        <h3 className="text-[10px] font-black text-sky-400 uppercase tracking-widest flex items-center gap-2">
+                                            <span>📊</span> Volymanalys
+                                        </h3>
+                                        {volumeRecs.slice(0, 4).map((rec, idx) => (
+                                            <VolumeRecommendationCard key={idx} recommendation={rec} />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </section>
                 );
             })()}
 
-            {/* Training Time Analytics - 50% width */}
-            <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <TrainingTimeStats
-                    workouts={filteredWorkouts}
-                    days={hasDateFilter ? 365 : 9999}
-                    personalBests={personalBests}
-                    dateRangeLabel={hasDateFilter && startDate && endDate ? `${new Date(startDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(endDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Alla tider'}
-                />
-                {/* Placeholder for another module */}
-                <div className="hidden md:block" />
-            </section>
+            {/* Training Time Analytics - ANALYSIS TAB */}
+            {mainTab === 'analysis' && (
+                <section className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <TrainingTimeStats
+                        workouts={filteredWorkouts}
+                        days={hasDateFilter ? 365 : 9999}
+                        personalBests={personalBests}
+                        dateRangeLabel={hasDateFilter && startDate && endDate ? `${new Date(startDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(endDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' })}` : 'Alla tider'}
+                    />
+                    {/* Placeholder for another module */}
+                    <div className="hidden md:block" />
+                </section>
+            )}
 
-            {/* Physiological Analytics - Analys XL */}
-            {workouts.length > 0 && (
+            {/* Physiological Analytics - ANALYSIS TAB */}
+            {mainTab === 'analysis' && workouts.length > 0 && (
                 <section className="mt-8">
                     <div className="flex items-center gap-3 mb-6">
                         <span className="text-xl">🔬</span>
@@ -657,198 +689,201 @@ export function StrengthPage() {
                 </section>
             )}
 
-            {/* Personal Bests */}
-            {/* Tabs for PBs and Trends */}
-            <section className="mt-8">
-                <Tabs
-                    items={[
-                        {
-                            id: 'latest-records',
-                            label: 'Senaste Rekord',
-                            icon: '🏆',
-                            content: (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    {(() => {
-                                        // Group PBs by exerciseName
-                                        const grouped = filteredPBs.reduce((acc, pb) => {
-                                            const key = pb.exerciseName;
-                                            if (!acc[key]) acc[key] = [];
-                                            acc[key].push(pb);
-                                            return acc;
-                                        }, {} as Record<string, PersonalBest[]>);
+            {/* Personal Bests - OVERVIEW TAB */}
+            {mainTab === 'overview' && (
+                <section className="mt-8">
+                    <Tabs
+                        items={[
+                            {
+                                id: 'latest-records',
+                                label: 'Senaste Rekord',
+                                icon: '🏆',
+                                content: (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                        {(() => {
+                                            // Group PBs by exerciseName
+                                            const grouped = filteredPBs.reduce((acc, pb) => {
+                                                const key = pb.exerciseName;
+                                                if (!acc[key]) acc[key] = [];
+                                                acc[key].push(pb);
+                                                return acc;
+                                            }, {} as Record<string, PersonalBest[]>);
 
-                                        // Sort groups by the date of their most recent PR
-                                        return Object.values(grouped)
-                                            .sort((a, b) => b[0].date.localeCompare(a[0].date))
-                                            .slice(0, 12)
-                                            .map(pbs => {
-                                                const latestPb = pbs[0];
-                                                const exName = latestPb.exerciseName;
+                                            // Sort groups by the date of their most recent PR
+                                            return Object.values(grouped)
+                                                .sort((a, b) => b[0].date.localeCompare(a[0].date))
+                                                .slice(0, 12)
+                                                .map(pbs => {
+                                                    const latestPb = pbs[0];
+                                                    const exName = latestPb.exerciseName;
 
-                                                return (
-                                                    <div
-                                                        key={exName}
-                                                        className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 transition-all hover:border-blue-500/30 hover:bg-slate-900/60 group relative overflow-hidden cursor-pointer"
-                                                        onClick={() => navigate(`/styrka/${slugify(exName)}`)}
-                                                    >
-                                                        <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-500/5 blur-2xl group-hover:bg-blue-500/10 transition-all rounded-full" />
-                                                        <div className="flex justify-between items-start mb-3 relative">
-                                                            <div className="flex-1 min-w-0">
-                                                                <h3 className="text-sm font-black text-blue-400 uppercase truncate pr-4" title={exName}>
-                                                                    {exName}
-                                                                </h3>
-                                                                <p className="text-[10px] text-slate-500 font-mono mt-0.5">
-                                                                    Senaste: {latestPb.date}
-                                                                </p>
+                                                    return (
+                                                        <div
+                                                            key={exName}
+                                                            className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 transition-all hover:border-blue-500/30 hover:bg-slate-900/60 group relative overflow-hidden cursor-pointer"
+                                                            onClick={() => navigate(`/styrka/${slugify(exName)}`)}
+                                                        >
+                                                            <div className="absolute -right-4 -top-4 w-16 h-16 bg-blue-500/5 blur-2xl group-hover:bg-blue-500/10 transition-all rounded-full" />
+                                                            <div className="flex justify-between items-start mb-3 relative">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <h3 className="text-sm font-black text-blue-400 uppercase truncate pr-4" title={exName}>
+                                                                        {exName}
+                                                                    </h3>
+                                                                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                                                        Senaste: {latestPb.date}
+                                                                    </p>
+                                                                </div>
+                                                                <span className="bg-slate-800 text-slate-500 text-[9px] font-black px-2 py-1 rounded-full border border-white/5">
+                                                                    {pbs.length} REKORD
+                                                                </span>
                                                             </div>
-                                                            <span className="bg-slate-800 text-slate-500 text-[9px] font-black px-2 py-1 rounded-full border border-white/5">
-                                                                {pbs.length} REKORD
+                                                            <div className="space-y-2 relative">
+                                                                {pbs.slice(0, 3).map((singlePb, idx) => (
+                                                                    <div key={singlePb.id} className="flex justify-between items-center text-xs">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <span className={`font-black ${idx === 0 ? 'text-white text-lg' : 'text-slate-400'}`}>{singlePb.weight} kg</span>
+                                                                            {singlePb.isHighestWeight && <span className="text-[8px] bg-emerald-500/10 text-emerald-500 px-1 rounded font-bold uppercase">TOPP</span>}
+                                                                        </div>
+                                                                        <div className="text-right">
+                                                                            <span className="text-slate-500">{singlePb.reps} reps</span>
+                                                                        </div>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                });
+                                        })()}
+                                    </div>
+                                )
+                            },
+                            {
+                                id: 'trend-line',
+                                label: 'Trend',
+                                icon: '📈',
+                                content: (
+                                    <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 overflow-hidden">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div>
+                                                <h3 className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Övergripande rekord-trend</h3>
+                                                <p className="text-[9px] text-slate-600 mt-1 uppercase font-bold italic">Din totala styrka (Summan av alla personbästa 1eRM)</p>
+                                            </div>
+                                        </div>
+                                        <div className="h-48 w-full relative">
+                                            <RecordTrendLine pbs={filteredPBs} />
+                                        </div>
+                                    </div>
+                                )
+                            },
+                            {
+                                id: 'volume-overview',
+                                label: 'Volym-Översikt',
+                                icon: '📊',
+                                content: (
+                                    <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                                        <h2 className="text-xl font-bold text-white mb-4">📈 Volym per vecka</h2>
+                                        <WeeklyVolumeChart workouts={workouts} setStartDate={setStartDate} setEndDate={setEndDate} />
+                                    </div>
+                                )
+                            },
+                            {
+                                id: 'underperformers',
+                                label: 'Underpresterare',
+                                icon: '📉',
+                                content: (
+                                    <div className="space-y-4">
+                                        <div className="bg-slate-900/30 border border-white/5 rounded-xl p-4">
+                                            <p className="text-[10px] text-slate-500 uppercase font-bold">
+                                                Övningar du tränar ofta men har flat utveckling — många set utan nya rekord
+                                            </p>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                            {getUnderperformers(workouts, personalBests, 15).slice(0, 9).map(u => (
+                                                <div
+                                                    key={u.exerciseName}
+                                                    className="bg-slate-900/40 border border-white/5 rounded-xl p-4 hover:border-amber-500/30 transition-all group"
+                                                >
+                                                    <div
+                                                        className="cursor-pointer"
+                                                        onClick={() => navigate(`/styrka/${slugify(u.exerciseName)}`)}
+                                                    >
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <h3 className="text-sm font-black text-white uppercase truncate pr-2 group-hover:text-amber-400 transition-colors">
+                                                                {u.exerciseName}
+                                                                {u.isBodyweight && <span className="ml-1 text-[8px] text-slate-500 border border-white/10 px-1 py-0.5 rounded bg-slate-800">KV</span>}
+                                                                {u.isTimeBased && <span className="ml-1 text-[8px] text-cyan-500 border border-cyan-500/20 px-1 py-0.5 rounded bg-cyan-500/10">TID</span>}
+                                                                {u.isHyrox && <span className="ml-1 text-[8px] text-amber-500 border border-amber-500/20 px-1 py-0.5 rounded bg-amber-500/10 tracking-wider">HYROX</span>}
+                                                            </h3>
+                                                            <span className="text-[8px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded font-black uppercase shrink-0">
+                                                                {u.setsSinceLastPB} set
                                                             </span>
                                                         </div>
-                                                        <div className="space-y-2 relative">
-                                                            {pbs.slice(0, 3).map((singlePb, idx) => (
-                                                                <div key={singlePb.id} className="flex justify-between items-center text-xs">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className={`font-black ${idx === 0 ? 'text-white text-lg' : 'text-slate-400'}`}>{singlePb.weight} kg</span>
-                                                                        {singlePb.isHighestWeight && <span className="text-[8px] bg-emerald-500/10 text-emerald-500 px-1 rounded font-bold uppercase">TOPP</span>}
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        <span className="text-slate-500">{singlePb.reps} reps</span>
-                                                                    </div>
+                                                        <div className="flex items-center gap-3 mb-2">
+                                                            <div>
+                                                                <p className="text-xl font-black text-amber-400">{u.daysSinceLastPB || '—'}d</p>
+                                                                <p className="text-[8px] text-slate-600 uppercase">sedan rekord</p>
+                                                            </div>
+                                                            {u.isTimeBased && u.maxTimeFormatted ? (
+                                                                <div className="border-l border-white/5 pl-3">
+                                                                    <p className="text-lg font-black text-cyan-400">{u.maxTimeFormatted}</p>
+                                                                    <p className="text-[8px] text-slate-600 uppercase">rekord</p>
                                                                 </div>
-                                                            ))}
+                                                            ) : u.isWeightedDistance && (u.e1RM || u.maxDistance) ? (
+                                                                <div className="border-l border-white/5 pl-3">
+                                                                    <p className="text-lg font-black text-emerald-400">
+                                                                        {u.e1RM}kg <span className="text-slate-500 text-xs font-normal">({u.maxDistance}{u.maxDistanceUnit})</span>
+                                                                    </p>
+                                                                    <p className="text-[8px] text-slate-600 uppercase">PB</p>
+                                                                </div>
+                                                            ) : u.e1RM && (
+                                                                <div className="border-l border-white/5 pl-3">
+                                                                    <p className="text-lg font-black text-slate-400">{u.e1RM}kg</p>
+                                                                    <p className="text-[8px] text-slate-600 uppercase">{u.isBodyweight ? '1RM' : 'e1RM'}</p>
+                                                                </div>
+                                                            )}
                                                         </div>
+                                                        <p className="text-[9px] text-slate-500 italic mb-2">{u.message}</p>
                                                     </div>
-                                                );
-                                            });
-                                    })()}
-                                </div>
-                            )
-                        },
-                        {
-                            id: 'trend-line',
-                            label: 'Trend',
-                            icon: '📈',
-                            content: (
-                                <div className="bg-slate-900/40 border border-white/5 rounded-2xl p-5 overflow-hidden">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div>
-                                            <h3 className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Övergripande rekord-trend</h3>
-                                            <p className="text-[9px] text-slate-600 mt-1 uppercase font-bold italic">Din totala styrka (Summan av alla personbästa 1eRM)</p>
-                                        </div>
-                                    </div>
-                                    <div className="h-48 w-full relative">
-                                        <RecordTrendLine pbs={filteredPBs} />
-                                    </div>
-                                </div>
-                            )
-                        },
-                        {
-                            id: 'volume-overview',
-                            label: 'Volym-Översikt',
-                            icon: '📊',
-                            content: (
-                                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
-                                    <h2 className="text-xl font-bold text-white mb-4">📈 Volym per vecka</h2>
-                                    <WeeklyVolumeChart workouts={workouts} setStartDate={setStartDate} setEndDate={setEndDate} />
-                                </div>
-                            )
-                        },
-                        {
-                            id: 'underperformers',
-                            label: 'Underpresterare',
-                            icon: '📉',
-                            content: (
-                                <div className="space-y-4">
-                                    <div className="bg-slate-900/30 border border-white/5 rounded-xl p-4">
-                                        <p className="text-[10px] text-slate-500 uppercase font-bold">
-                                            Övningar du tränar ofta men har flat utveckling — många set utan nya rekord
-                                        </p>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                        {getUnderperformers(workouts, personalBests, 15).slice(0, 9).map(u => (
-                                            <div
-                                                key={u.exerciseName}
-                                                className="bg-slate-900/40 border border-white/5 rounded-xl p-4 hover:border-amber-500/30 transition-all group"
-                                            >
-                                                <div
-                                                    className="cursor-pointer"
-                                                    onClick={() => navigate(`/styrka/${slugify(u.exerciseName)}`)}
-                                                >
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <h3 className="text-sm font-black text-white uppercase truncate pr-2 group-hover:text-amber-400 transition-colors">
-                                                            {u.exerciseName}
-                                                            {u.isBodyweight && <span className="ml-1 text-[8px] text-slate-500 border border-white/10 px-1 py-0.5 rounded bg-slate-800">KV</span>}
-                                                            {u.isTimeBased && <span className="ml-1 text-[8px] text-cyan-500 border border-cyan-500/20 px-1 py-0.5 rounded bg-cyan-500/10">TID</span>}
-                                                            {u.isHyrox && <span className="ml-1 text-[8px] text-amber-500 border border-amber-500/20 px-1 py-0.5 rounded bg-amber-500/10 tracking-wider">HYROX</span>}
-                                                        </h3>
-                                                        <span className="text-[8px] bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded font-black uppercase shrink-0">
-                                                            {u.setsSinceLastPB} set
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center gap-3 mb-2">
-                                                        <div>
-                                                            <p className="text-xl font-black text-amber-400">{u.daysSinceLastPB || '—'}d</p>
-                                                            <p className="text-[8px] text-slate-600 uppercase">sedan rekord</p>
-                                                        </div>
-                                                        {u.isTimeBased && u.maxTimeFormatted ? (
-                                                            <div className="border-l border-white/5 pl-3">
-                                                                <p className="text-lg font-black text-cyan-400">{u.maxTimeFormatted}</p>
-                                                                <p className="text-[8px] text-slate-600 uppercase">rekord</p>
-                                                            </div>
-                                                        ) : u.isWeightedDistance && (u.e1RM || u.maxDistance) ? (
-                                                            <div className="border-l border-white/5 pl-3">
-                                                                <p className="text-lg font-black text-emerald-400">
-                                                                    {u.e1RM}kg <span className="text-slate-500 text-xs font-normal">({u.maxDistance}{u.maxDistanceUnit})</span>
-                                                                </p>
-                                                                <p className="text-[8px] text-slate-600 uppercase">PB</p>
-                                                            </div>
-                                                        ) : u.e1RM && (
-                                                            <div className="border-l border-white/5 pl-3">
-                                                                <p className="text-lg font-black text-slate-400">{u.e1RM}kg</p>
-                                                                <p className="text-[8px] text-slate-600 uppercase">{u.isBodyweight ? '1RM' : 'e1RM'}</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                    <p className="text-[9px] text-slate-500 italic mb-2">{u.message}</p>
+                                                    {u.lastPBWorkoutId && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const workout = workouts.find(w => w.id === u.lastPBWorkoutId);
+                                                                if (workout) setSelectedWorkout(workout);
+                                                            }}
+                                                            className="w-full mt-2 text-[9px] bg-slate-800/50 hover:bg-blue-600/20 text-slate-500 hover:text-blue-400 py-1.5 rounded-lg transition-all border border-white/5 font-bold uppercase"
+                                                        >
+                                                            📋 Visa senaste rekord-passet
+                                                        </button>
+                                                    )}
                                                 </div>
-                                                {u.lastPBWorkoutId && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            const workout = workouts.find(w => w.id === u.lastPBWorkoutId);
-                                                            if (workout) setSelectedWorkout(workout);
-                                                        }}
-                                                        className="w-full mt-2 text-[9px] bg-slate-800/50 hover:bg-blue-600/20 text-slate-500 hover:text-blue-400 py-1.5 rounded-lg transition-all border border-white/5 font-bold uppercase"
-                                                    >
-                                                        📋 Visa senaste rekord-passet
-                                                    </button>
-                                                )}
-                                            </div>
-                                        ))}
-                                    </div>
-                                    {getUnderperformers(workouts, personalBests, 15).length === 0 && (
-                                        <div className="text-center text-slate-500 py-8">
-                                            <p className="text-2xl mb-2">🎉</p>
-                                            <p className="text-sm">Inga underpresterande övningar!</p>
-                                            <p className="text-[10px] text-slate-600">Du gör framsteg i alla övningar du tränar regelbundet.</p>
+                                            ))}
                                         </div>
-                                    )}
-                                </div>
-                            )
-                        }
-                    ]}
-                />
-            </section>
+                                        {getUnderperformers(workouts, personalBests, 15).length === 0 && (
+                                            <div className="text-center text-slate-500 py-8">
+                                                <p className="text-2xl mb-2">🎉</p>
+                                                <p className="text-sm">Inga underpresterande övningar!</p>
+                                                <p className="text-[10px] text-slate-600">Du gör framsteg i alla övningar du tränar regelbundet.</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            }
+                        ]}
+                    />
+                </section>
+            )}
 
-            {/* Training Quality & Continuity */}
-            <div className="space-y-12">
-                <TrainingBreaks workouts={workouts} filterRange={{ start: startDate, end: endDate }} />
-                <StrengthStreaks workouts={filteredWorkouts} />
-            </div>
+            {/* Training Quality & Continuity - OVERVIEW TAB */}
+            {mainTab === 'overview' && (
+                <div className="space-y-12">
+                    <TrainingBreaks workouts={workouts} filterRange={{ start: startDate, end: endDate }} />
+                    <StrengthStreaks workouts={filteredWorkouts} />
+                </div>
+            )}
 
-            {/* Best Workouts / Records Section */}
-            {bestWorkouts && (
+            {/* Best Workouts / Records Section - OVERVIEW TAB */}
+            {mainTab === 'overview' && bestWorkouts && (
                 <section>
                     <h2 className="text-lg font-bold text-white mb-3">🏅 Rekordpass {hasDateFilter ? '(Perioden)' : '(Alla tider)'}</h2>
                     <div className="grid grid-cols-2 lg:grid-cols-5 gap-2">
@@ -903,83 +938,106 @@ export function StrengthPage() {
                 </section>
             )}
 
-            {/* Top Exercises by Volume */}
-            {
-                filteredWorkouts.length > 0 && (
-                    <CollapsibleSection
-                        id="top-exercises"
-                        title="Mest tränade övningar"
-                        icon="🔥"
-                        className="mb-8"
-                    >
-                        <TopExercisesTable workouts={filteredWorkouts} personalBests={personalBests} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} />
-                    </CollapsibleSection>
-                )
-            }
+            {/* Top Exercises by Volume - OVERVIEW TAB */}
+            {mainTab === 'overview' && filteredWorkouts.length > 0 && (
+                <CollapsibleSection
+                    id="top-exercises"
+                    title="Mest tränade övningar"
+                    icon="🔥"
+                    className="mb-8"
+                >
+                    <TopExercisesTable workouts={filteredWorkouts} personalBests={personalBests} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} />
+                </CollapsibleSection>
+            )}
 
-            {/* Workouts List */}
-            <CollapsibleSection
-                id="recent-workouts"
-                title="Träningspass"
-                icon="📋"
-                defaultOpen={true}
-                className="mb-8"
-            >
-                {loading ? (
-                    <div className="text-center text-slate-500 py-12">Laddar...</div>
-                ) : filteredWorkouts.length === 0 ? (
-                    <div className="text-center text-slate-500 py-12 bg-slate-900/50 rounded-2xl border border-white/5">
-                        <p className="text-4xl mb-4">🏋️</p>
-                        <p>{hasDateFilter ? 'Inga pass i valt datumintervall' : 'Inga pass ännu. Importera din StrengthLog CSV!'}</p>
-                    </div>
-                ) : (
-                    <div className="space-y-4">
-                        {/* Search Bar */}
-                        <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
-                            <input
-                                type="text"
-                                placeholder="Sök pass, övningar..."
-                                value={workoutSearchTerm}
-                                onChange={(e) => setWorkoutSearchTerm(e.target.value)}
-                                className="w-full bg-slate-900 border border-white/5 text-white pl-10 pr-4 py-3 rounded-xl focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
-                            />
-                            {workoutSearchTerm && (
-                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono">
-                                    {searchedWorkouts.length} träffar
+            {/* Workouts List - OVERVIEW TAB */}
+            {mainTab === 'overview' && (
+                <CollapsibleSection
+                    id="recent-workouts"
+                    title="Träningspass"
+                    icon="📋"
+                    defaultOpen={true}
+                    className="mb-8"
+                >
+                    {loading ? (
+                        <div className="text-center text-slate-500 py-12">Laddar...</div>
+                    ) : filteredWorkouts.length === 0 ? (
+                        <div className="text-center text-slate-500 py-12 bg-slate-900/50 rounded-2xl border border-white/5">
+                            <p className="text-4xl mb-4">🏋️</p>
+                            <p>{hasDateFilter ? 'Inga pass i valt datumintervall' : 'Inga pass ännu. Importera din StrengthLog CSV!'}</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {/* Search Bar */}
+                            <div className="relative">
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
+                                <input
+                                    type="text"
+                                    placeholder="Sök pass, övningar..."
+                                    value={workoutSearchTerm}
+                                    onChange={(e) => setWorkoutSearchTerm(e.target.value)}
+                                    className="w-full bg-slate-900 border border-white/5 text-white pl-10 pr-4 py-3 rounded-xl focus:border-blue-500/50 outline-none transition-all placeholder:text-slate-600"
+                                />
+                                {workoutSearchTerm && (
+                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-mono">
+                                        {searchedWorkouts.length} träffar
+                                    </div>
+                                )}
+                            </div>
+
+                            {visibleWorkouts.length === 0 ? (
+                                <div className="text-center text-slate-500 py-12">
+                                    <p>Inga pass matchar din sökning.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3">
+                                    {visibleWorkouts.map(workout => (
+                                        <WorkoutCard
+                                            key={workout.id}
+                                            workout={workout}
+                                            isAnnualBest={annualBestWorkoutIds.has(workout.id)}
+                                            isPR={allTimePBWorkoutIds.has(workout.id)}
+                                            onClick={() => setSelectedWorkout(workout)}
+                                        />
+                                    ))}
                                 </div>
                             )}
+
+                            {visibleWorkouts.length < searchedWorkouts.length && (
+                                <button
+                                    onClick={() => setWorkoutDisplayCount(prev => prev + 20)}
+                                    className="w-full py-3 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl border border-white/5 transition-all font-bold uppercase text-xs tracking-wider"
+                                >
+                                    Visa fler pass ({searchedWorkouts.length - visibleWorkouts.length} kvar)
+                                </button>
+                            )}
                         </div>
+                    )}
+                </CollapsibleSection>
+            )}
 
-                        {visibleWorkouts.length === 0 ? (
-                            <div className="text-center text-slate-500 py-12">
-                                <p>Inga pass matchar din sökning.</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3">
-                                {visibleWorkouts.map(workout => (
-                                    <WorkoutCard
-                                        key={workout.id}
-                                        workout={workout}
-                                        isAnnualBest={annualBestWorkoutIds.has(workout.id)}
-                                        isPR={allTimePBWorkoutIds.has(workout.id)}
-                                        onClick={() => setSelectedWorkout(workout)}
-                                    />
-                                ))}
-                            </div>
-                        )}
-
-                        {visibleWorkouts.length < searchedWorkouts.length && (
-                            <button
-                                onClick={() => setWorkoutDisplayCount(prev => prev + 20)}
-                                className="w-full py-3 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl border border-white/5 transition-all font-bold uppercase text-xs tracking-wider"
-                            >
-                                Visa fler pass ({searchedWorkouts.length - visibleWorkouts.length} kvar)
-                            </button>
-                        )}
+            {/* Research Center - RESEARCH TAB */}
+            {mainTab === 'research' && (
+                <div className="bg-slate-900/50 border border-white/5 rounded-3xl p-8 shadow-xl">
+                    <div className="flex items-center gap-4 mb-8">
+                        <div className="bg-amber-500/20 w-12 h-12 rounded-2xl flex items-center justify-center text-2xl border border-amber-500/30 shadow-lg shadow-amber-500/10">
+                            ⚛️
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-black text-white">Research Center</h2>
+                            <p className="text-slate-400 text-sm italic">"The path to strength is paved with data."</p>
+                        </div>
                     </div>
-                )}
-            </CollapsibleSection>
+
+                    <PRResearchCenter
+                        workouts={workouts}
+                        personalBests={derivedPersonalBests}
+                        onClose={() => { }} // No closing when inline
+                        onSelectWorkout={(w) => setSelectedWorkout(w)}
+                        inline={true} // Special flag for inline rendering if supported
+                    />
+                </div>
+            )}
 
             {/* Exercise Detail Modal */}
             {selectedExercise && (
