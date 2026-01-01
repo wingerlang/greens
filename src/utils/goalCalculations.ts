@@ -1,0 +1,511 @@
+/**
+ * Goal Calculations Utility
+ * Core logic for calculating goal progress, streaks, and projections.
+ */
+
+import type {
+    PerformanceGoal,
+    ExerciseEntry,
+    MealEntry,
+    FoodItem,
+    Recipe,
+    GoalTarget
+} from '../models/types';
+
+// ============================================
+// Types
+// ============================================
+
+export interface GoalProgress {
+    current: number;
+    target: number;
+    percentage: number;
+    trend: 'up' | 'down' | 'stable';
+    isComplete: boolean;
+    isOnTrack: boolean;
+    daysRemaining?: number;
+    estimatedCompletionDate?: string;
+    periodStart: string;
+    periodEnd: string;
+}
+
+export interface StreakInfo {
+    current: number;
+    best: number;
+    lastActiveDate: string | null;
+    isActive: boolean;
+}
+
+// ============================================
+// Period Helpers
+// ============================================
+
+/**
+ * Get the start and end dates for a goal's current period.
+ */
+export function getGoalPeriodDates(goal: PerformanceGoal, referenceDate: Date = new Date()): { start: string; end: string } {
+    const today = referenceDate;
+
+    switch (goal.period) {
+        case 'daily': {
+            const dateStr = today.toISOString().split('T')[0];
+            return { start: dateStr, end: dateStr };
+        }
+        case 'weekly': {
+            // Start of week (Monday)
+            const weekStart = new Date(today);
+            const day = weekStart.getDay();
+            const diff = day === 0 ? -6 : 1 - day; // Adjust for Monday start
+            weekStart.setDate(weekStart.getDate() + diff);
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekEnd.getDate() + 6);
+            return {
+                start: weekStart.toISOString().split('T')[0],
+                end: weekEnd.toISOString().split('T')[0]
+            };
+        }
+        case 'monthly': {
+            const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+            const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            return {
+                start: monthStart.toISOString().split('T')[0],
+                end: monthEnd.toISOString().split('T')[0]
+            };
+        }
+        case 'once': {
+            // For "once" goals, period is from goal start to now (or end date)
+            return {
+                start: goal.startDate,
+                end: goal.endDate || today.toISOString().split('T')[0]
+            };
+        }
+        default:
+            return {
+                start: today.toISOString().split('T')[0],
+                end: today.toISOString().split('T')[0]
+            };
+    }
+}
+
+/**
+ * Get days remaining in the current period.
+ */
+export function getDaysRemaining(goal: PerformanceGoal): number | undefined {
+    if (goal.period === 'once') {
+        if (!goal.endDate) return undefined;
+        const end = new Date(goal.endDate);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        return Math.max(0, Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
+    }
+
+    const { end } = getGoalPeriodDates(goal);
+    const endDate = new Date(end);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.max(0, Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+// ============================================
+// Progress Calculations
+// ============================================
+
+/**
+ * Calculate progress for a frequency goal.
+ */
+export function calculateFrequencyProgress(
+    goal: PerformanceGoal,
+    exerciseEntries: ExerciseEntry[]
+): number {
+    const { start, end } = getGoalPeriodDates(goal);
+    const target = goal.targets[0];
+
+    const matchingEntries = exerciseEntries.filter(e => {
+        if (e.date < start || e.date > end) return false;
+        if (target?.exerciseType && e.type !== target.exerciseType) return false;
+        return true;
+    });
+
+    return matchingEntries.length;
+}
+
+/**
+ * Calculate progress for a distance goal.
+ */
+export function calculateDistanceProgress(
+    goal: PerformanceGoal,
+    exerciseEntries: ExerciseEntry[]
+): number {
+    const { start, end } = getGoalPeriodDates(goal);
+    const target = goal.targets[0];
+
+    return exerciseEntries
+        .filter(e => {
+            if (e.date < start || e.date > end) return false;
+            if (target?.exerciseType && e.type !== target.exerciseType) return false;
+            return true;
+        })
+        .reduce((sum, e) => sum + (e.distance || 0), 0);
+}
+
+/**
+ * Calculate progress for a tonnage goal.
+ */
+export function calculateTonnageProgress(
+    goal: PerformanceGoal,
+    exerciseEntries: ExerciseEntry[]
+): number {
+    const { start, end } = getGoalPeriodDates(goal);
+
+    const totalKg = exerciseEntries
+        .filter(e => e.date >= start && e.date <= end)
+        .reduce((sum, e) => sum + (e.tonnage || 0), 0);
+
+    return totalKg / 1000; // Convert to tons
+}
+
+/**
+ * Calculate progress for a calories goal.
+ */
+export function calculateCaloriesProgress(
+    goal: PerformanceGoal,
+    exerciseEntries: ExerciseEntry[]
+): number {
+    const { start, end } = getGoalPeriodDates(goal);
+
+    return exerciseEntries
+        .filter(e => e.date >= start && e.date <= end)
+        .reduce((sum, e) => sum + (e.caloriesBurned || 0), 0);
+}
+
+/**
+ * Calculate streak for a goal.
+ */
+export function calculateStreak(
+    exerciseEntries: ExerciseEntry[],
+    period: 'daily' | 'weekly',
+    exerciseType?: string
+): StreakInfo {
+    if (exerciseEntries.length === 0) {
+        return { current: 0, best: 0, lastActiveDate: null, isActive: false };
+    }
+
+    // Get unique dates with activity
+    const activeDates = [...new Set(
+        exerciseEntries
+            .filter(e => !exerciseType || e.type === exerciseType)
+            .map(e => e.date)
+    )].sort().reverse();
+
+    if (activeDates.length === 0) {
+        return { current: 0, best: 0, lastActiveDate: null, isActive: false };
+    }
+
+    const lastActiveDate = activeDates[0];
+    const today = new Date().toISOString().split('T')[0];
+
+    if (period === 'daily') {
+        // Check if streak is still active (today or yesterday)
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const isActive = lastActiveDate === today || lastActiveDate === yesterdayStr;
+
+        let currentStreak = 0;
+        let bestStreak = 0;
+        let tempStreak = 1;
+
+        for (let i = 0; i < activeDates.length - 1; i++) {
+            const curr = new Date(activeDates[i]);
+            const next = new Date(activeDates[i + 1]);
+            const diffDays = (curr.getTime() - next.getTime()) / (1000 * 60 * 60 * 24);
+
+            if (diffDays === 1) {
+                tempStreak++;
+            } else {
+                if (i === 0 || currentStreak === 0) {
+                    currentStreak = tempStreak;
+                }
+                bestStreak = Math.max(bestStreak, tempStreak);
+                tempStreak = 1;
+            }
+        }
+
+        // Handle final streak
+        if (activeDates.length > 0 && (activeDates[0] === today || activeDates[0] === yesterdayStr)) {
+            currentStreak = tempStreak;
+        }
+        bestStreak = Math.max(bestStreak, tempStreak);
+
+        return { current: currentStreak, best: bestStreak, lastActiveDate, isActive };
+    } else {
+        // Weekly streak - check ISO week numbers
+        const getWeekNumber = (d: Date) => {
+            const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            const dayNum = date.getUTCDay() || 7;
+            date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+            return Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+        };
+
+        const activeWeeks = [...new Set(activeDates.map(d => {
+            const date = new Date(d);
+            return `${date.getFullYear()}-W${getWeekNumber(date)}`;
+        }))].sort().reverse();
+
+        // Simple weekly streak count
+        let currentStreak = 1;
+        let bestStreak = 1;
+
+        // Check if current week is active
+        const thisWeek = `${new Date().getFullYear()}-W${getWeekNumber(new Date())}`;
+        const lastWeek = new Date();
+        lastWeek.setDate(lastWeek.getDate() - 7);
+        const lastWeekStr = `${lastWeek.getFullYear()}-W${getWeekNumber(lastWeek)}`;
+
+        const isActive = activeWeeks[0] === thisWeek || activeWeeks[0] === lastWeekStr;
+
+        for (let i = 0; i < activeWeeks.length - 1; i++) {
+            // Simplified: just count consecutive weeks
+            const [y1, w1] = activeWeeks[i].split('-W').map(Number);
+            const [y2, w2] = activeWeeks[i + 1].split('-W').map(Number);
+
+            if (y1 === y2 && w1 - w2 === 1) {
+                currentStreak++;
+            } else if (y1 === y2 + 1 && w1 === 1 && w2 >= 51) {
+                currentStreak++; // Handle year boundary
+            } else {
+                bestStreak = Math.max(bestStreak, currentStreak);
+                currentStreak = 1;
+            }
+        }
+        bestStreak = Math.max(bestStreak, currentStreak);
+
+        return { current: isActive ? currentStreak : 0, best: bestStreak, lastActiveDate, isActive };
+    }
+}
+
+/**
+ * Calculate nutrition progress for a goal.
+ */
+export function calculateNutritionProgress(
+    goal: PerformanceGoal,
+    mealEntries: MealEntry[],
+    foodItems: FoodItem[],
+    recipes: Recipe[]
+): number {
+    const { start, end } = getGoalPeriodDates(goal);
+    const target = goal.targets[0];
+    const nutritionType = target?.nutritionType || 'calories';
+
+    let total = 0;
+
+    mealEntries
+        .filter(e => e.date >= start && e.date <= end)
+        .forEach(entry => {
+            entry.items.forEach(item => {
+                if (item.type === 'foodItem') {
+                    const food = foodItems.find(f => f.id === item.referenceId);
+                    if (food) {
+                        const multiplier = item.servings / 100;
+                        switch (nutritionType) {
+                            case 'calories': total += food.calories * multiplier; break;
+                            case 'protein': total += food.protein * multiplier; break;
+                            case 'carbs': total += food.carbs * multiplier; break;
+                            case 'fat': total += food.fat * multiplier; break;
+                        }
+                    }
+                } else if (item.type === 'recipe') {
+                    const recipe = recipes.find(r => r.id === item.referenceId);
+                    if (recipe) {
+                        // Calculate recipe totals
+                        let recipeTotal = 0;
+                        recipe.ingredients.forEach(ing => {
+                            const f = foodItems.find(fi => fi.id === ing.foodItemId);
+                            if (f) {
+                                const mult = ing.quantity / 100;
+                                switch (nutritionType) {
+                                    case 'calories': recipeTotal += f.calories * mult; break;
+                                    case 'protein': recipeTotal += f.protein * mult; break;
+                                    case 'carbs': recipeTotal += f.carbs * mult; break;
+                                    case 'fat': recipeTotal += f.fat * mult; break;
+                                }
+                            }
+                        });
+                        const perServing = recipe.servings > 0 ? recipeTotal / recipe.servings : recipeTotal;
+                        total += perServing * item.servings;
+                    }
+                }
+            });
+        });
+
+    return total;
+}
+
+/**
+ * Estimate completion date based on current progress rate.
+ */
+export function estimateCompletionDate(
+    goal: PerformanceGoal,
+    current: number,
+    target: number
+): string | undefined {
+    if (current >= target) return new Date().toISOString().split('T')[0];
+    if (current === 0) return undefined;
+
+    const { start } = getGoalPeriodDates(goal);
+    const startDate = new Date(start);
+    const today = new Date();
+    const daysPassed = Math.max(1, (today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    const rate = current / daysPassed;
+    if (rate <= 0) return undefined;
+
+    const remaining = target - current;
+    const daysNeeded = remaining / rate;
+
+    const estimatedDate = new Date();
+    estimatedDate.setDate(estimatedDate.getDate() + Math.ceil(daysNeeded));
+
+    return estimatedDate.toISOString().split('T')[0];
+}
+
+/**
+ * Check if goal is on track to be completed by end of period.
+ */
+export function isGoalOnTrack(
+    goal: PerformanceGoal,
+    current: number,
+    target: number
+): boolean {
+    if (current >= target) return true;
+    if (goal.period === 'once' && !goal.endDate) return true; // No deadline
+
+    const { start, end } = getGoalPeriodDates(goal);
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const today = new Date();
+
+    const totalDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+    const daysPassed = (today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+
+    if (totalDays <= 0) return current >= target;
+
+    const expectedProgress = (daysPassed / totalDays) * target;
+    return current >= expectedProgress * 0.9; // 90% of expected is "on track"
+}
+
+/**
+ * Main function to calculate full goal progress.
+ */
+export function calculateGoalProgress(
+    goal: PerformanceGoal,
+    exerciseEntries: ExerciseEntry[],
+    mealEntries: MealEntry[] = [],
+    foodItems: FoodItem[] = [],
+    recipes: Recipe[] = [],
+    weightEntries: { date: string; weight: number }[] = []
+): GoalProgress {
+    const { start, end } = getGoalPeriodDates(goal);
+    const target = goal.targets[0];
+
+    let current = 0;
+    let targetValue = target?.count || target?.value ||
+        goal.milestoneValue ||
+        goal.nutritionMacros?.calories ||
+        1;
+
+    switch (goal.type) {
+        case 'frequency':
+            current = calculateFrequencyProgress(goal, exerciseEntries);
+            targetValue = target?.count || 1;
+            break;
+        case 'distance':
+            current = calculateDistanceProgress(goal, exerciseEntries);
+            targetValue = target?.value || 1;
+            break;
+        case 'tonnage':
+            current = calculateTonnageProgress(goal, exerciseEntries);
+            targetValue = target?.value || 1;
+            break;
+        case 'calories':
+            current = calculateCaloriesProgress(goal, exerciseEntries);
+            targetValue = target?.value || 1;
+            break;
+        case 'streak':
+            const streakInfo = calculateStreak(
+                exerciseEntries,
+                goal.period === 'daily' ? 'daily' : 'weekly',
+                target?.exerciseType
+            );
+            current = streakInfo.current;
+            targetValue = goal.milestoneValue || 7;
+            break;
+        case 'nutrition':
+            current = calculateNutritionProgress(goal, mealEntries, foodItems, recipes);
+            targetValue = goal.nutritionMacros?.[target?.nutritionType || 'calories'] ||
+                target?.value || 1;
+            break;
+        case 'weight':
+            const latestWeight = weightEntries.length > 0
+                ? weightEntries.sort((a, b) => b.date.localeCompare(a.date))[0].weight
+                : 0;
+            const startWeight = goal.milestoneProgress || latestWeight;
+            const targetWeight = goal.targetWeight || 0;
+            // Progress is how close we are to target
+            if (targetWeight < startWeight) {
+                // Weight loss goal
+                current = startWeight - latestWeight;
+                targetValue = startWeight - targetWeight;
+            } else {
+                // Weight gain goal
+                current = latestWeight - startWeight;
+                targetValue = targetWeight - startWeight;
+            }
+            break;
+        case 'milestone':
+        case 'pb':
+            // For milestones, accumulate all-time progress
+            if (goal.type === 'milestone' && target?.exerciseType === 'running') {
+                current = exerciseEntries
+                    .filter(e => e.type === 'running')
+                    .reduce((sum, e) => sum + (e.distance || 0), 0);
+            } else if (goal.type === 'pb' && target?.exerciseName) {
+                // PB tracking would need strength session data
+                current = goal.milestoneProgress || 0;
+            } else {
+                current = goal.milestoneProgress || 0;
+            }
+            targetValue = goal.milestoneValue || 1;
+            break;
+        default:
+            current = 0;
+    }
+
+    const percentage = targetValue > 0 ? Math.min(100, (current / targetValue) * 100) : 0;
+    const isComplete = percentage >= 100;
+    const daysRemaining = getDaysRemaining(goal);
+
+    // Calculate trend from progress history
+    let trend: 'up' | 'down' | 'stable' = 'stable';
+    if (goal.progressHistory && goal.progressHistory.length >= 2) {
+        const recent = goal.progressHistory.slice(-3);
+        const first = recent[0].value;
+        const last = recent[recent.length - 1].value;
+        if (last > first * 1.05) trend = 'up';
+        else if (last < first * 0.95) trend = 'down';
+    }
+
+    return {
+        current,
+        target: targetValue,
+        percentage,
+        trend,
+        isComplete,
+        isOnTrack: isGoalOnTrack(goal, current, targetValue),
+        daysRemaining,
+        estimatedCompletionDate: !isComplete ? estimateCompletionDate(goal, current, targetValue) : undefined,
+        periodStart: start,
+        periodEnd: end
+    };
+}

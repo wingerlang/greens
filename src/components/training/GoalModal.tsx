@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PerformanceGoal, PerformanceGoalType, GoalPeriod, GoalTarget, ExerciseType, TrainingCycle } from '../../models/types.ts';
+import { PerformanceGoal, PerformanceGoalType, GoalPeriod, GoalTarget, ExerciseType, TrainingCycle, GoalCategory, GoalStatus } from '../../models/types.ts';
 
 const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
     { type: 'running', icon: '🏃', label: 'Löpning' },
@@ -130,14 +130,22 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             unit: type !== 'frequency' ? targetUnit : 'sessions'
         }];
 
+        // Determine category based on goal type
+        let category: GoalCategory = 'training';
+        if (type === 'nutrition') category = 'nutrition';
+        else if (type === 'weight') category = 'body';
+        else if (type === 'streak' && targetExerciseType === 'yoga') category = 'lifestyle';
+
         onSave({
             name: name || `${targetCount}x ${targetExerciseType}`,
             type,
             period,
             targets,
             cycleId,
-            startDate: new Date().toISOString().split('T')[0],
-            endDate: hasEndDate && endDate ? endDate : undefined
+            startDate: editingGoal?.startDate || new Date().toISOString().split('T')[0],
+            endDate: hasEndDate && endDate ? endDate : undefined,
+            category,
+            status: editingGoal?.status || 'active'
         });
 
         onClose();

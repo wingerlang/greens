@@ -191,6 +191,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                         <span className="w-5 text-center">📅</span>
                                         <span>Årsöversikt</span>
                                     </NavLink>
+                                    <NavLink to="/goals" className={linkClasses}>
+                                        <span className="w-5 text-center">🎯</span>
+                                        <span>Mål</span>
+                                    </NavLink>
                                 </div>
                             </div>
                         </div>
@@ -406,6 +410,13 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                 <div className="flex flex-col">
                                     <span className="font-bold text-slate-100">Kalorier</span>
                                     <span className="text-[10px] text-slate-500 font-medium">Logga mat</span>
+                                </div>
+                            </NavLink>
+                            <NavLink to="/goals" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">🎯</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Mål</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Spåra framsteg</span>
                                 </div>
                             </NavLink>
                         </div>

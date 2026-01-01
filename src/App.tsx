@@ -36,6 +36,7 @@ import { WorkoutDetailPage } from './pages/WorkoutDetailPage.tsx';
 import { MatchupPage } from './pages/MatchupPage.tsx';
 import { LifeStreamPage } from './pages/LifeStreamPage.tsx';
 import { YearInReviewPage } from './pages/YearInReviewPage.tsx';
+import { GoalsPage } from './pages/GoalsPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -138,6 +139,8 @@ export function App() {
                                                 <Route path="lifestream" element={<LifeStreamPage />} />
                                                 <Route path="year-in-review" element={<YearInReviewPage />} />
                                                 <Route path="ars-sammanfattning" element={<YearInReviewPage />} />
+                                                <Route path="goals" element={<GoalsPage />} />
+                                                <Route path="mal" element={<GoalsPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>
