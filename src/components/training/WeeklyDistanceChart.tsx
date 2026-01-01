@@ -4,10 +4,11 @@ import { UniversalActivity } from '../../models/types.ts';
 interface WeeklyDistanceChartProps {
     activities: UniversalActivity[];
     fixedYear?: number;
+    fixedDateRange?: { start: Date, end: Date };
 }
 
-export function WeeklyDistanceChart({ activities, fixedYear }: WeeklyDistanceChartProps) {
-    const [range, setRange] = useState<'3m' | '6m' | '12m' | 'year' | 'all'>(fixedYear ? 'year' : '12m');
+export function WeeklyDistanceChart({ activities, fixedYear, fixedDateRange }: WeeklyDistanceChartProps) {
+    const [range, setRange] = useState<'3m' | '6m' | '12m' | 'year' | 'all'>(fixedYear || fixedDateRange ? 'year' : '12m');
     const containerRef = useRef<HTMLDivElement>(null);
     const [pathData, setPathData] = useState<string>('');
     const dotRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -47,7 +48,10 @@ export function WeeklyDistanceChart({ activities, fixedYear }: WeeklyDistanceCha
         let minDate: Date;
         let maxDate = getLocalMidnight(sortedActivities[sortedActivities.length - 1].date);
 
-        if (fixedYear) {
+        if (fixedDateRange) {
+            minDate = getLocalMidnight(fixedDateRange.start);
+            maxDate = getLocalMidnight(fixedDateRange.end);
+        } else if (fixedYear) {
             minDate = new Date(fixedYear, 0, 1);
             const eoy = new Date(fixedYear, 11, 31);
             maxDate = eoy; // Always show full year if fixed
@@ -197,37 +201,71 @@ export function WeeklyDistanceChart({ activities, fixedYear }: WeeklyDistanceCha
                         const isLeadingGap = !hasBarsBefore;
                         const shouldSuppress = isLeadingGap && (range === 'all' || range === '12m' || range === '3m' || range === '6m');
 
-                        // For fixed year, we don't suppress leading gaps as we want to show the whole year grid? 
-                        // Actually yes, showing gaps is good for context.
                         if (shouldSuppress && !fixedYear) return;
 
-                        indices.forEach((idx, iInGap) => {
-                            const marker = yearMarkers.find(ym => ym.index === idx);
-                            if (marker) {
-                                items.push(
-                                    <div key={`year-${marker.year}`} className="flex-shrink-0 w-[1px] h-full bg-emerald-500/20 relative mx-0.5">
-                                        <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-black text-emerald-500/50 px-1 bg-emerald-500/10 rounded">{marker.year}</span>
-                                    </div>
-                                );
-                            }
-
-                            const d = weeklyData[idx];
-                            const avgHeight = (d.rollingAvg / maxVolume) * 100;
-
+                        if (indices.length >= 4) {
                             items.push(
-                                <div key={`cross-${idx}`} className="flex-1 min-w-[2px] max-w-[40px] flex flex-col items-center h-full justify-end group/cross relative">
-                                    <div
-                                        ref={el => { if (el) dotRefs.current.set(idx, el); }}
-                                        className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend hover:bg-emerald-400/5 transition-colors"
-                                        style={{ bottom: `${avgHeight}%`, marginBottom: '16px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
-                                    >
+                                <div key={`break-${indices[0]}`} className="flex-shrink-0 flex flex-col items-center justify-center min-w-[32px] md:min-w-[40px] h-full border-x border-white/5 bg-slate-800/10 rounded-sm relative group/break">
+                                    {yearMarkers.map(ym => {
+                                        const relIndex = ym.index - indices[0];
+                                        const leftPos = (relIndex / indices.length) * 100;
+                                        return (
+                                            <div key={`year-inner-${ym.year}`} className="absolute top-0 bottom-0 w-[1px] bg-emerald-500/20 z-0" style={{ left: `${leftPos}%` }}>
+                                                <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-black text-emerald-500/30 px-1 bg-emerald-500/5 rounded">{ym.year}</span>
+                                            </div>
+                                        );
+                                    })}
+                                    <div className="text-[8px] text-amber-500/60 font-black uppercase tracking-widest whitespace-nowrap z-10">
+                                        ← {indices.length} v →
                                     </div>
-                                    <div className="h-4 flex items-center justify-center">
-                                        <span className="text-[10px] text-slate-800 font-bold group-hover/cross:text-slate-700 transition-colors">·</span>
-                                    </div>
+                                    {indices.map((idx, step) => {
+                                        const d = weeklyData[idx];
+                                        const avgHeight = (d.rollingAvg / maxVolume) * 100;
+                                        return (
+                                            <div
+                                                key={`break-dot-${idx}`}
+                                                ref={el => { if (el) dotRefs.current.set(idx, el); }}
+                                                className="absolute w-1 h-1 pointer-events-none opacity-0"
+                                                style={{
+                                                    bottom: `${avgHeight}%`,
+                                                    marginBottom: '16px',
+                                                    left: `${(step / (indices.length - 1 || 1)) * 100}%`
+                                                }}
+                                            />
+                                        );
+                                    })}
+                                    <div className="h-4" />
                                 </div>
                             );
-                        });
+                        } else {
+                            indices.forEach((idx, iInGap) => {
+                                const marker = yearMarkers.find(ym => ym.index === idx);
+                                if (marker) {
+                                    items.push(
+                                        <div key={`year-${marker.year}`} className="flex-shrink-0 w-[1px] h-full bg-emerald-500/20 relative mx-0.5">
+                                            <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-[8px] font-black text-emerald-500/50 px-1 bg-emerald-500/10 rounded">{marker.year}</span>
+                                        </div>
+                                    );
+                                }
+
+                                const d = weeklyData[idx];
+                                const avgHeight = (d.rollingAvg / maxVolume) * 100;
+
+                                items.push(
+                                    <div key={`cross-${idx}`} className="flex-1 min-w-[2px] max-w-[40px] flex flex-col items-center h-full justify-end group/cross relative">
+                                        <div
+                                            ref={el => { if (el) dotRefs.current.set(idx, el); }}
+                                            className="absolute w-6 h-6 rounded-full bg-transparent z-30 cursor-pointer pointer-events-auto flex items-center justify-center group/trend hover:bg-emerald-400/5 transition-colors"
+                                            style={{ bottom: `${avgHeight}%`, marginBottom: '16px', transform: 'translateY(50%) translateX(-50%)', left: '50%' }}
+                                        >
+                                        </div>
+                                        <div className="h-4 flex items-center justify-center">
+                                            <span className="text-[10px] text-slate-800 font-bold group-hover/cross:text-slate-700 transition-colors">·</span>
+                                        </div>
+                                    </div>
+                                );
+                            });
+                        }
                     };
 
                     weeklyData.forEach(({ week, volume, rollingAvg }, i) => {
@@ -241,7 +279,7 @@ export function WeeklyDistanceChart({ activities, fixedYear }: WeeklyDistanceCha
                             pendingYearMarkers.push({ index: i, year: currYear });
                         }
 
-                        if (volume === 0) {
+                        if (volume === 0 && !isCurrentWeek) {
                             gapBuffer.push(i);
                         } else {
                             renderGap(gapBuffer, pendingYearMarkers);

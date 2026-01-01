@@ -38,8 +38,8 @@ import { HyroxDashboard } from '../components/hyrox/HyroxDashboard.tsx';
 
 export function TrainingPage() {
     const {
-        exerciseEntries: legacyExerciseEntries,
-        weightEntries,
+        exerciseEntries: legacyExerciseEntries = [],
+        weightEntries = [],
         addExercise,
         deleteExercise,
         addWeightEntry,
@@ -48,16 +48,16 @@ export function TrainingPage() {
         calculateBMR,
         addTrainingCycle,
         deleteTrainingCycle,
-        trainingCycles,
-        mealEntries,
-        foodItems,
-        recipes,
-        updateTrainingCycle, // Add this if available
-        performanceGoals,
+        trainingCycles = [],
+        mealEntries = [],
+        foodItems = [],
+        recipes = [],
+        updateTrainingCycle,
+        performanceGoals = [],
         addGoal,
         updateGoal,
         deleteGoal,
-        universalActivities // Get from Context (Phase 9/11)
+        universalActivities = []
     } = useData();
 
     const navigate = useNavigate();
@@ -67,7 +67,7 @@ export function TrainingPage() {
 
     // Merge Data
     const exerciseEntries = useMemo(() => {
-        const serverEntries = universalActivities
+        const serverEntries = (universalActivities || [])
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null);
 
@@ -77,7 +77,7 @@ export function TrainingPage() {
         // But for visual continuity, let's show all.
         // Identify duplicates by ID?
         const serverIds = new Set(serverEntries.map(e => e.id));
-        const uniqueLegacy = legacyExerciseEntries.filter(e => !serverIds.has(e.id));
+        const uniqueLegacy = (legacyExerciseEntries || []).filter(e => !serverIds.has(e.id));
 
         return [...serverEntries, ...uniqueLegacy];
     }, [universalActivities, legacyExerciseEntries]);
@@ -113,7 +113,7 @@ export function TrainingPage() {
         const entriesByDate: Record<string, typeof mealEntries> = {};
 
         // Group entries by date
-        mealEntries.forEach(entry => {
+        (mealEntries || []).forEach(entry => {
             if (!entriesByDate[entry.date]) entriesByDate[entry.date] = [];
             entriesByDate[entry.date].push(entry);
         });
@@ -221,7 +221,7 @@ export function TrainingPage() {
     }, [exerciseEntries, filterStartDate, filterEndDate]);
 
     const filteredWeightEntries = useMemo(() => {
-        return weightEntries.filter(e => {
+        return (weightEntries || []).filter(e => {
             if (filterStartDate && e.date < filterStartDate) return false;
             if (filterEndDate && e.date > filterEndDate) return false;
             return true;
@@ -251,7 +251,7 @@ export function TrainingPage() {
     });
 
     const [smartInput, setSmartInput] = useState('');
-    const [weightInput, setWeightInput] = useState(getLatestWeight().toString());
+    const [weightInput, setWeightInput] = useState(getLatestWeight?.()?.toString() || '');
     const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
 
     const [exerciseForm, setExerciseForm] = useState<{
@@ -951,7 +951,7 @@ export function TrainingPage() {
                                                 <span className="text-4xl">🏆</span>
                                                 <h5 className="text-sm font-bold text-emerald-400 mt-2">Nytt Volymrekord!</h5>
                                                 <p className="text-[10px] text-slate-400 mt-1">
-                                                    Du lyfte {Math.round(Math.max(...exerciseEntries.filter(e => e.tonnage).map(e => e.tonnage || 0)))} kg som mest i ett pass.
+                                                    Du lyfte {Math.round(Math.max(0, ...exerciseEntries.filter(e => e.tonnage).map(e => e.tonnage || 0)))} kg som mest i ett pass.
                                                 </p>
                                             </div>
                                         )}
@@ -960,7 +960,7 @@ export function TrainingPage() {
                                                 <span className="text-4xl">👟</span>
                                                 <h5 className="text-sm font-bold text-sky-400 mt-2">Distanstopp</h5>
                                                 <p className="text-[10px] text-slate-400 mt-1">
-                                                    Längsta passet var {Math.max(...exerciseEntries.filter(e => e.distance).map(e => e.distance || 0))} km.
+                                                    Längsta passet var {Math.max(0, ...exerciseEntries.filter(e => e.distance).map(e => e.distance || 0))} km.
                                                 </p>
                                             </div>
                                         )}

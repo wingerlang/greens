@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
 import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
 import { formatDuration, formatSwedishDate, formatPace } from '../utils/dateUtils.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
@@ -7,28 +9,111 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, 
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { WeeklyVolumeChart } from '../components/training/WeeklyVolumeChart.tsx';
 import { WeeklyDistanceChart } from '../components/training/WeeklyDistanceChart.tsx';
-import { UniversalActivity } from '../models/types.ts';
+import { PersonalBest } from '../models/strengthTypes.ts';
+import type { UniversalActivity } from '../models/types.ts';
+
+function formatYearRange(years: number[]) {
+    if (years.length === 0) return '';
+    if (years.length === 1) return years[0].toString();
+
+    const sorted = [...years].sort((a, b) => a - b);
+    const result: string[] = [];
+    let start = sorted[0];
+    let end = sorted[0];
+
+    for (let i = 1; i <= sorted.length; i++) {
+        if (i < sorted.length && sorted[i] === end + 1) {
+            end = sorted[i];
+        } else {
+            if (start === end) {
+                result.push(start.toString());
+            } else {
+                result.push(`${start}–${end}`);
+            }
+            if (i < sorted.length) {
+                start = sorted[i];
+                end = sorted[i];
+            }
+        }
+    }
+
+    return result.join(', ');
+}
 
 export function YearInReviewPage() {
-    const { universalActivities, strengthSessions } = useData();
+    const { universalActivities = [], strengthSessions = [] } = useData();
+    const { token } = useAuth();
     const [selectedActivity, setSelectedActivity] = useState<UniversalActivity | null>(null);
-    const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+    const [strengthPBs, setStrengthPBs] = useState<PersonalBest[]>([]);
+    const [paceInterval, setPaceInterval] = useState<'1d' | '1w' | '2w' | '1m' | '3m'>('2w');
+    const [durationInterval, setDurationInterval] = useState<'1d' | '1w' | '2w' | '1m' | '3m'>('2w');
 
-    // 1. Filter Data for the selected year
+    const durationLabel = (minutes: number) => {
+        const h = Math.floor(minutes / 60);
+        const m = Math.round(minutes % 60);
+        if (h > 0) return `${h}h ${m}min`;
+        return `${m}min`;
+    };
+
+    const [searchParams, setSearchParams] = useSearchParams();
+    const [selectedYears, setSelectedYears] = useState<number[]>(() => {
+        const yearsParam = searchParams.get('years');
+        if (yearsParam) {
+            return yearsParam.split(',').map(Number).filter(n => !isNaN(n));
+        }
+        return [new Date().getFullYear()];
+    });
+
+    // Sync to URL
+    useEffect(() => {
+        if (selectedYears.length > 0) {
+            setSearchParams({ years: selectedYears.join(',') }, { replace: true });
+        }
+    }, [selectedYears, setSearchParams]);
+
+    const toggleYear = (year: number) => {
+        setSelectedYears(prev => {
+            let next;
+            if (prev.includes(year)) {
+                if (prev.length === 1) return prev; // Prevent empty
+                next = prev.filter(y => y !== year);
+            } else {
+                next = [...prev, year];
+            }
+            return next.sort();
+        });
+    };
+
+    // Load Strength PBs
+    useEffect(() => {
+        if (!token) return;
+        fetch('/api/strength/pbs', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.pbs && Array.isArray(data.pbs)) {
+                    setStrengthPBs(data.pbs);
+                }
+            })
+            .catch(err => console.error('Failed to load strength PBs', err));
+    }, [token]);
+
+    // 1. Filter Data for the selected years
     const yearlyActivities = useMemo(() => {
         return universalActivities.filter(a => {
             const d = new Date(a.date);
-            return d.getFullYear() === selectedYear;
+            return selectedYears.includes(d.getFullYear());
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [universalActivities, selectedYear]);
+    }, [universalActivities, selectedYears]);
 
-    // 1.1 Filter Strength Sessions for the selected year (Source of Truth for Strength)
+    // 1.1 Filter Strength Sessions for the selected years (Source of Truth for Strength)
     const yearlyStrengthSessions = useMemo(() => {
         return strengthSessions.filter(s => {
             const d = new Date(s.date);
-            return d.getFullYear() === selectedYear;
+            return selectedYears.includes(d.getFullYear());
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [strengthSessions, selectedYear]);
+    }, [strengthSessions, selectedYears]);
 
     // 2. Aggregate Stats
     const stats = useMemo(() => {
@@ -41,6 +126,7 @@ export function YearInReviewPage() {
         let totalPRs = 0;
         let runningPRs = 0;
         let strengthPRs = 0;
+        let totalTonnage = 0;
         let activeDays = new Set<string>();
 
         // Type Breakdown
@@ -49,6 +135,13 @@ export function YearInReviewPage() {
         // Consistency
         let longestGap = 0;
         let lastDate: Date | null = null;
+
+        // Count Strength PBs from fetched data
+        const yearlyStrengthPBs = strengthPBs.filter(pb => {
+            const d = new Date(pb.date);
+            return selectedYears.includes(d.getFullYear());
+        });
+        strengthPRs = yearlyStrengthPBs.length;
 
         yearlyActivities.forEach(a => {
             const dist = a.performance?.distanceKm || 0;
@@ -60,15 +153,16 @@ export function YearInReviewPage() {
             totalDist += dist;
             totalTime += time;
             totalCals += cals;
-            totalPRs += prs;
+            // Only add running PRs from activities here, as we count Strength PBs separately
+            if (a.performance?.activityType === 'running') {
+                runningPRs += prs;
+            } else if (a.performance?.activityType === 'strength') {
+                // Ignore prCount here as we use strengthPBs list
+            }
+
             activeDays.add(a.date.split('T')[0]);
 
             const type = a.performance?.activityType || 'other';
-
-            if (prs > 0) {
-                if (type === 'running') runningPRs += prs;
-                else if (type === 'strength') strengthPRs += prs;
-            }
 
             if (score > 0) {
                 totalScore += score;
@@ -99,6 +193,7 @@ export function YearInReviewPage() {
         let maxVolumeSession: any = null; // Use StrengthWorkout type effectively
 
         yearlyStrengthSessions.forEach(s => {
+            totalTonnage += (s.totalVolume || 0);
             // Find Best Lift
             s.exercises.forEach(e => {
                 e.sets.forEach(set => {
@@ -124,26 +219,45 @@ export function YearInReviewPage() {
             }
         });
 
-        // Highlights
-        const longestRun = yearlyActivities
-            .filter(a => a.performance?.activityType === 'running')
-            .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0))[0];
+        totalPRs = runningPRs + strengthPRs;
 
-        const fastestRun = yearlyActivities
-            .filter(a => a.performance?.activityType === 'running' && (a.performance?.distanceKm || 0) > 5) // Min 5km for pace record
+        // Highlights - Top 3
+        const longestRuns = [...yearlyActivities]
+            .filter(a => a.performance?.activityType === 'running')
+            .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0))
+            .slice(0, 3);
+
+        const fastestRuns = [...yearlyActivities]
+            .filter(a => a.performance?.activityType === 'running' && (a.performance?.distanceKm || 0) > 5)
             .sort((a, b) => {
                 const paceA = (a.performance?.durationMinutes || 0) / (a.performance?.distanceKm || 1);
                 const paceB = (b.performance?.durationMinutes || 0) / (b.performance?.distanceKm || 1);
                 return paceA - paceB;
-            })[0];
+            })
+            .slice(0, 3);
 
-        const maxScore = yearlyActivities.reduce((max, a) => {
-            const s = calculatePerformanceScore({ ...a, durationMinutes: a.performance?.durationMinutes || 0, distance: a.performance?.distanceKm } as any);
-            return s > max.score ? { activity: a, score: s } : max;
-        }, { activity: null as UniversalActivity | null, score: 0 });
+        const maxScores = [...yearlyActivities]
+            .map(a => ({ activity: a, score: calculatePerformanceScore({ ...a, durationMinutes: a.performance?.durationMinutes || 0, distance: a.performance?.distanceKm } as any) }))
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 3);
 
-        // Calculate Total Tonnage
-        const totalTonnage = yearlyStrengthSessions.reduce((sum, s) => sum + (s.totalVolume || 0), 0);
+        const topVolumeSessions = [...yearlyStrengthSessions]
+            .sort((a, b) => (b.totalVolume || 0) - (a.totalVolume || 0))
+            .slice(0, 3);
+
+        // Best Lifts (Top 3)
+        const allLifts: { weight: number, exercise: string, date: string, id: string }[] = [];
+        yearlyStrengthSessions.forEach(s => {
+            s.exercises.forEach(e => {
+                e.sets.forEach(set => {
+                    const weight = set.weight || 0;
+                    if (weight > 0) {
+                        allLifts.push({ weight, exercise: e.exerciseName, date: s.date, id: s.id });
+                    }
+                });
+            });
+        });
+        const topLifts = allLifts.sort((a, b) => b.weight - a.weight).slice(0, 3);
 
         return {
             totalDist,
@@ -156,21 +270,20 @@ export function YearInReviewPage() {
             avgScore: scoreCount > 0 ? Math.round(totalScore / scoreCount) : 0,
             activeDays: activeDays.size,
             types: Array.from(typeMap.entries()).map(([k, v]) => ({ name: k, ...v })),
-            longestRun,
-            fastestRun,
-            maxScore,
-            maxVolume: maxVolumeSession,
-            bestLift,
+            longestRuns,
+            fastestRuns,
+            maxScores,
+            topVolumeSessions,
+            topLifts,
             longestGap,
             totalTonnage
         };
-    }, [yearlyActivities, yearlyStrengthSessions]);
+    }, [yearlyActivities, yearlyStrengthSessions, strengthPBs]);
 
     // 3. Monthly Breakdown Data
     const monthlyData = useMemo(() => {
         const months = Array(12).fill(0).map((_, i) => ({
-            name: new Date(selectedYear, i, 1).toLocaleString('sv-SE', { month: 'short' }).replace('.', ''),
-            fullDate: new Date(selectedYear, i, 1),
+            name: new Date(2024, i, 1).toLocaleString('sv-SE', { month: 'short' }).replace('.', ''), // Generic year
             dist: 0,
             time: 0,
             cals: 0,
@@ -187,88 +300,129 @@ export function YearInReviewPage() {
             }
         });
         return months;
-    }, [yearlyActivities, selectedYear]);
+    }, [yearlyActivities]);
 
-    // 4. Weekly Running Pace Data
-    const weeklyPaceData = useMemo(() => {
-        const weeks = new Map<number, { totalTime: number, totalDist: number }>();
+    // 4. Smoothed Chart Data (Pace & Duration)
+    const smoothedPaceData = useMemo(() => {
+        if (selectedYears.length === 0) return [];
+        const minYear = Math.min(...selectedYears);
+        const startDate = new Date(minYear, 0, 1);
+        const intervalDays = paceInterval === '1d' ? 1 : paceInterval === '1w' ? 7 : paceInterval === '2w' ? 14 : paceInterval === '1m' ? 30 : 90;
+        const buckets = new Map<number, { totalTime: number, totalDist: number, firstDate: Date }>();
 
         yearlyActivities.forEach(a => {
             if (a.performance?.activityType === 'running' && (a.performance.distanceKm || 0) > 0) {
                 const d = new Date(a.date);
-                // Simple week number calc
-                const onejan = new Date(d.getFullYear(), 0, 1);
-                const week = Math.ceil((((d.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7);
+                const daysSinceStart = Math.floor((d.getTime() - startDate.getTime()) / 86400000);
+                const bucketIndex = Math.floor(daysSinceStart / intervalDays);
 
-                const curr = weeks.get(week) || { totalTime: 0, totalDist: 0 };
-                weeks.set(week, {
+                const curr = buckets.get(bucketIndex) || { totalTime: 0, totalDist: 0, firstDate: d };
+                buckets.set(bucketIndex, {
                     totalTime: curr.totalTime + (a.performance.durationMinutes || 0),
-                    totalDist: curr.totalDist + (a.performance.distanceKm || 0)
+                    totalDist: curr.totalDist + (a.performance.distanceKm || 0),
+                    firstDate: curr.firstDate < d ? curr.firstDate : d
                 });
             }
         });
 
-        // Fill gaps 1-52
-        return Array.from({ length: 52 }, (_, i) => {
-            const week = i + 1;
-            const data = weeks.get(week);
-            if (!data || data.totalDist === 0) return { week, pace: null }; // Null for gaps
-            return { week, pace: data.totalTime / data.totalDist }; // min/km
+        const totalDays = selectedYears.length * 366;
+        const maxBuckets = Math.ceil(totalDays / intervalDays);
+        return Array.from({ length: maxBuckets }, (_, i) => {
+            const data = buckets.get(i);
+            if (!data || data.totalDist === 0) return { bucket: i, pace: null, date: null };
+            return {
+                bucket: i,
+                pace: data.totalTime / data.totalDist,
+                date: data.firstDate
+            };
         });
-    }, [yearlyActivities]);
+    }, [yearlyActivities, paceInterval, selectedYears]);
 
-    // 5. Avg Session Length per Week
-    const avgSessionLengthData = useMemo(() => {
-        const weeks = new Map<number, { totalTime: number, count: number }>();
+    const smoothedDurationData = useMemo(() => {
+        if (selectedYears.length === 0) return [];
+        const minYear = Math.min(...selectedYears);
+        const startDate = new Date(minYear, 0, 1);
+        const intervalDays = durationInterval === '1d' ? 1 : durationInterval === '1w' ? 7 : durationInterval === '2w' ? 14 : durationInterval === '1m' ? 30 : 90;
+        const buckets = new Map<number, { totalTime: number, count: number, firstDate: Date }>();
 
         yearlyActivities.forEach(a => {
             const d = new Date(a.date);
-            const onejan = new Date(d.getFullYear(), 0, 1);
-            const week = Math.ceil((((d.getTime() - onejan.getTime()) / 86400000) + onejan.getDay() + 1) / 7);
+            const daysSinceStart = Math.floor((d.getTime() - startDate.getTime()) / 86400000);
+            const bucketIndex = Math.floor(daysSinceStart / intervalDays);
 
-            const curr = weeks.get(week) || { totalTime: 0, count: 0 };
-            weeks.set(week, {
+            const curr = buckets.get(bucketIndex) || { totalTime: 0, count: 0, firstDate: d };
+            buckets.set(bucketIndex, {
                 totalTime: curr.totalTime + (a.performance?.durationMinutes || 0),
-                count: curr.count + 1
+                count: curr.count + 1,
+                firstDate: curr.firstDate < d ? curr.firstDate : d
             });
         });
 
-        return Array.from({ length: 52 }, (_, i) => {
-            const week = i + 1;
-            const data = weeks.get(week);
-            if (!data || data.count === 0) return { week, avgDuration: 0 };
-            return { week, avgDuration: Math.round(data.totalTime / data.count) };
+        const totalDays = selectedYears.length * 366;
+        const maxBuckets = Math.ceil(totalDays / intervalDays);
+        return Array.from({ length: maxBuckets }, (_, i) => {
+            const data = buckets.get(i);
+            if (!data || data.count === 0) return { bucket: i, avgDuration: 0, date: null };
+            return {
+                bucket: i,
+                avgDuration: Math.round(data.totalTime / data.count),
+                date: data.firstDate
+            };
         });
-    }, [yearlyActivities]);
+    }, [yearlyActivities, durationInterval, selectedYears]);
 
     // Strength Workouts for Volume Chart - Use direct source
     const strengthWorkoutsForChart = yearlyStrengthSessions;
 
-    // 6. Heatmap Data (Calendar Grid)
-    const calendarGrid = useMemo(() => {
-        const start = new Date(selectedYear, 0, 1);
-        const end = new Date(selectedYear, 11, 31);
-        const days = [];
-        let current = new Date(start);
+    // 6. Heatmap Data (Calendar Grid) - Calculate for all selected years
+    const yearlyGrids = useMemo(() => {
+        const grids: Record<number, any[]> = {};
 
-        const activityMap = new Map();
-        yearlyActivities.forEach(a => {
-            const date = a.date.split('T')[0];
-            const existing = activityMap.get(date) || 0;
-            activityMap.set(date, existing + (a.performance?.durationMinutes || 0));
-        });
+        selectedYears.forEach(year => {
+            const start = new Date(year, 0, 1);
+            const end = new Date(year, 11, 31);
+            const days = [];
+            let current = new Date(start);
 
-        while (current <= end) {
-            const iso = current.toISOString().split('T')[0];
-            days.push({
-                date: iso,
-                minutes: activityMap.get(iso) || 0,
-                dayOfWeek: current.getDay()
+            const activityMap = new Map();
+            yearlyActivities.forEach(a => {
+                const d = new Date(a.date);
+                if (d.getFullYear() !== year) return;
+                const date = a.date.split('T')[0];
+                const existing = activityMap.get(date) || 0;
+                activityMap.set(date, existing + (a.performance?.durationMinutes || 0));
             });
-            current.setDate(current.getDate() + 1);
-        }
-        return days;
-    }, [yearlyActivities, selectedYear]);
+
+            while (current <= end) {
+                const iso = current.toISOString().split('T')[0];
+                days.push({
+                    date: iso,
+                    minutes: activityMap.get(iso) || 0,
+                    dayOfWeek: current.getDay()
+                });
+                current.setDate(current.getDate() + 1);
+            }
+            grids[year] = days;
+        });
+        return grids;
+    }, [yearlyActivities, selectedYears]);
+
+    // Computed Range for Charts
+    const dateRange = useMemo(() => {
+        if (selectedYears.length === 0) return undefined;
+        const minYear = Math.min(...selectedYears);
+        const maxYear = Math.max(...selectedYears);
+        const now = new Date();
+        const endYearDate = new Date(maxYear, 11, 31);
+
+        // Cap at today if latest selected year is current year
+        const end = (maxYear === now.getFullYear()) ? now : endYearDate;
+
+        return {
+            start: new Date(minYear, 0, 1),
+            end
+        };
+    }, [selectedYears]);
 
     // Type Colors
     const COLORS = {
@@ -285,19 +439,25 @@ export function YearInReviewPage() {
             <header className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-white/5 pb-6">
                 <div>
                     <h1 className="text-4xl md:text-6xl font-black bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
-                        {selectedYear}
+                        {formatYearRange(selectedYears)}
                     </h1>
                     <p className="text-slate-400 uppercase tracking-widest font-bold mt-2">Annual Performance Review</p>
                 </div>
 
-                <div className="flex gap-2">
-                    <select
-                        value={selectedYear}
-                        onChange={e => setSelectedYear(parseInt(e.target.value))}
-                        className="bg-slate-900 border border-white/10 text-white font-bold rounded-lg px-4 py-2 focus:outline-none focus:border-emerald-500"
-                    >
-                        {[2023, 2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
+                <div className="flex gap-2 bg-slate-900 border border-white/10 rounded-lg p-1">
+                    {[2023, 2024, 2025, 2026].map(y => (
+                        <button
+                            key={y}
+                            onClick={() => toggleYear(y)}
+                            className={`px-4 py-2 rounded-md font-bold text-sm transition-all ${selectedYears.includes(y)
+                                ? 'bg-emerald-500 text-white shadow-lg'
+                                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                                }`}
+                        >
+                            {selectedYears.includes(y) && <span className="mr-1">✓</span>}
+                            {y}
+                        </button>
+                    ))}
                 </div>
             </header>
 
@@ -437,7 +597,7 @@ export function YearInReviewPage() {
                         <span>💪</span> Volym per vecka (Styrka)
                     </h3>
                     <div className="w-full">
-                        <WeeklyVolumeChart workouts={strengthWorkoutsForChart} fixedYear={selectedYear} />
+                        <WeeklyVolumeChart workouts={strengthWorkoutsForChart} fixedDateRange={dateRange} />
                     </div>
                 </div>
 
@@ -447,7 +607,7 @@ export function YearInReviewPage() {
                         <span>🏃</span> Distans per vecka (Löpning)
                     </h3>
                     <div className="w-full">
-                        <WeeklyDistanceChart activities={yearlyActivities} fixedYear={selectedYear} />
+                        <WeeklyDistanceChart activities={yearlyActivities} fixedDateRange={dateRange} />
                     </div>
                 </div>
             </div>
@@ -455,27 +615,54 @@ export function YearInReviewPage() {
             {/* Running Deep Dive: Weekly Pace & Session Length */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <div className="bg-slate-900/30 border border-white/5 p-6 rounded-3xl">
-                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                        <span>⚡</span> Snitthastighet per vecka (Löpning)
-                    </h3>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <h3 className="text-xl font-bold flex items-center gap-2">
+                            <span>⚡</span> Snitthastighet (Löpning)
+                        </h3>
+                        <div className="flex gap-1 bg-slate-950 p-1 rounded-lg border border-white/5">
+                            {(['1d', '1w', '2w', '1m', '3m'] as const).map(i => (
+                                <button
+                                    key={i}
+                                    onClick={() => setPaceInterval(i)}
+                                    className={`text-[9px] font-black uppercase px-2 py-1 rounded transition-all ${paceInterval === i ? 'bg-emerald-500 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    {i}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={weeklyPaceData}>
+                            <LineChart data={smoothedPaceData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" />
-                                <XAxis dataKey="week" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
+                                <XAxis
+                                    dataKey="bucket"
+                                    stroke="#64748b"
+                                    fontSize={10}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickFormatter={(v, i) => {
+                                        const d = smoothedPaceData[i]?.date;
+                                        if (!d) return '';
+                                        return d.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
+                                    }}
+                                />
                                 <YAxis
                                     stroke="#10b981"
                                     fontSize={12}
                                     tickLine={false}
                                     axisLine={false}
-                                    domain={['dataMin - 0.5', 'dataMax + 0.5']}
+                                    domain={['dataMin - 0.2', 'dataMax + 0.2']}
                                     reversed={true}
                                     tickFormatter={(val) => `${Math.floor(val)}:${Math.round((val % 1) * 60).toString().padStart(2, '0')}`}
                                 />
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                                    formatter={(val: number) => [formatPace(val), 'Snittempo']}
-                                    labelFormatter={(label) => `Vecka ${label}`}
+                                    formatter={(val: number) => [formatPace(val * 60), 'Snittempo']}
+                                    labelFormatter={(label, payload) => {
+                                        const d = payload[0]?.payload?.date;
+                                        return d ? d.toLocaleDateString('sv-SE', { year: 'numeric', month: 'long', day: 'numeric' }) : `Period ${Number(label) + 1}`;
+                                    }}
                                 />
                                 <Line type="monotone" dataKey="pace" stroke="#10b981" strokeWidth={3} dot={false} activeDot={{ r: 6 }} connectNulls />
                             </LineChart>
@@ -484,12 +671,25 @@ export function YearInReviewPage() {
                 </div>
 
                 <div className="bg-slate-900/30 border border-white/5 p-6 rounded-3xl">
-                    <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                        <span>⏳</span> Genomsnittlig passlängd per vecka
-                    </h3>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <h3 className="text-xl font-bold flex items-center gap-2">
+                            <span>⏳</span> Genomsnittlig passlängd
+                        </h3>
+                        <div className="flex gap-1 bg-slate-950 p-1 rounded-lg border border-white/5">
+                            {(['1d', '1w', '2w', '1m', '3m'] as const).map(i => (
+                                <button
+                                    key={i}
+                                    onClick={() => setDurationInterval(i)}
+                                    className={`text-[9px] font-black uppercase px-2 py-1 rounded transition-all ${durationInterval === i ? 'bg-indigo-500 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+                                >
+                                    {i}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
                     <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={avgSessionLengthData}>
+                            <AreaChart data={smoothedDurationData}>
                                 <defs>
                                     <linearGradient id="colorDuration" x1="0" y1="0" x2="0" y2="1">
                                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
@@ -497,12 +697,26 @@ export function YearInReviewPage() {
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" />
-                                <XAxis dataKey="week" stroke="#64748b" fontSize={12} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#6366f1" fontSize={12} tickLine={false} axisLine={false} />
+                                <XAxis
+                                    dataKey="bucket"
+                                    stroke="#64748b"
+                                    fontSize={10}
+                                    tickLine={false}
+                                    axisLine={false}
+                                    tickFormatter={(v, i) => {
+                                        const d = smoothedDurationData[i]?.date;
+                                        if (!d) return '';
+                                        return d.toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' });
+                                    }}
+                                />
+                                <YAxis stroke="#6366f1" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}m`} />
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                                    formatter={(val: number) => [`${val} min`, 'Snittlängd']}
-                                    labelFormatter={(label) => `Vecka ${label}`}
+                                    formatter={(val: number) => [durationLabel(val), 'Snittlängd']}
+                                    labelFormatter={(label, payload) => {
+                                        const d = payload[0]?.payload?.date;
+                                        return d ? d.toLocaleDateString('sv-SE', { year: 'numeric', month: 'long', day: 'numeric' }) : `Period ${Number(label) + 1}`;
+                                    }}
                                 />
                                 <Area type="monotone" dataKey="avgDuration" stroke="#6366f1" fillOpacity={1} fill="url(#colorDuration)" />
                             </AreaChart>
@@ -516,83 +730,130 @@ export function YearInReviewPage() {
                 <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
                     <span>🏆</span> Årets Höjdpunkter
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* Longest Run */}
-                    {stats.longestRun && (
-                        <div
-                            className="bg-gradient-to-br from-emerald-900/20 to-slate-900 border border-emerald-500/20 p-6 rounded-3xl cursor-pointer hover:border-emerald-500/50 transition-all group"
-                            onClick={() => setSelectedActivity(stats.longestRun)}
-                        >
-                            <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">Längsta Löpning</p>
-                            <p className="text-4xl font-black text-white mb-1 group-hover:scale-105 transition-transform origin-left">
-                                {stats.longestRun.performance?.distanceKm?.toFixed(1)} km
-                            </p>
-                            <p className="text-slate-500 text-sm">{formatSwedishDate(stats.longestRun.date)}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                    {/* Longest Runs Top 3 */}
+                    <div className="bg-slate-900/50 border border-emerald-500/10 rounded-3xl p-6 flex flex-col space-y-4">
+                        <p className="text-emerald-400 text-xs font-bold uppercase tracking-wider">Längsta Löpningar</p>
+                        <div className="space-y-4">
+                            {stats.longestRuns.map((a, i) => (
+                                <div
+                                    key={i}
+                                    className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20 shadow-lg shadow-emerald-500/5' : ''
+                                        }`}
+                                    onClick={() => setSelectedActivity(a)}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-300'}`}>
+                                            {a.performance?.distanceKm?.toFixed(1)} <span className="text-xs text-slate-500">km</span>
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase">{formatSwedishDate(a.date)}</span>
+                                    </div>
+                                    <span className={`text-xs font-black p-2 rounded-full ${i === 0 ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-600'}`}>#{i + 1}</span>
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
 
-                    {/* Fastest Run */}
-                    {stats.fastestRun && (
-                        <div
-                            className="bg-gradient-to-br from-cyan-900/20 to-slate-900 border border-cyan-500/20 p-6 rounded-3xl cursor-pointer hover:border-cyan-500/50 transition-all group"
-                            onClick={() => setSelectedActivity(stats.fastestRun)}
-                        >
-                            <p className="text-cyan-400 text-xs font-bold uppercase tracking-wider mb-2">Snabbaste Tempot ({'>'}5km)</p>
-                            <p className="text-4xl font-black text-white mb-1 group-hover:scale-105 transition-transform origin-left">
-                                {formatPace((stats.fastestRun.performance?.durationMinutes! * 60) / stats.fastestRun.performance?.distanceKm!)} <span className="text-lg text-slate-500">min/km</span>
-                            </p>
-                            <p className="text-slate-500 text-sm">{formatSwedishDate(stats.fastestRun.date)} • {stats.fastestRun.performance?.distanceKm?.toFixed(1)} km</p>
+                    {/* Fastest Runs Top 3 */}
+                    <div className="bg-slate-900/50 border border-cyan-500/10 rounded-3xl p-6 flex flex-col space-y-4">
+                        <p className="text-cyan-400 text-xs font-bold uppercase tracking-wider">Snabbaste Tempo</p>
+                        <div className="space-y-4">
+                            {stats.fastestRuns.map((a, i) => (
+                                <div
+                                    key={i}
+                                    className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-cyan-500/10 p-4 rounded-2xl border border-cyan-500/20 shadow-lg shadow-cyan-500/5' : ''
+                                        }`}
+                                    onClick={() => setSelectedActivity(a)}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-300'}`}>
+                                            {formatPace((a.performance?.durationMinutes! * 60) / a.performance?.distanceKm!)} <span className="text-xs text-slate-500">min/km</span>
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase truncate max-w-[120px]">
+                                            {a.performance?.distanceKm?.toFixed(1)} km • {formatSwedishDate(a.date)}
+                                        </span>
+                                    </div>
+                                    <span className={`text-xs font-black p-2 rounded-full ${i === 0 ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-600'}`}>#{i + 1}</span>
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
 
-                    {/* Best Lift - NEW */}
-                    {stats.bestLift.weight > 0 && (
-                        <div
-                            className="bg-gradient-to-br from-purple-900/20 to-slate-900 border border-purple-500/20 p-6 rounded-3xl cursor-pointer hover:border-purple-500/50 transition-all group"
-                        >
-                            <p className="text-purple-400 text-xs font-bold uppercase tracking-wider mb-2">Tyngsta Lyftet</p>
-                            <p className="text-3xl font-black text-white mb-1 group-hover:scale-105 transition-transform origin-left truncate" title={stats.bestLift.exercise}>
-                                {stats.bestLift.exercise}
-                            </p>
-                            <p className="text-4xl font-black text-white">
-                                {stats.bestLift.weight} <span className="text-lg text-slate-500">kg</span>
-                            </p>
+                    {/* Best Lifts Top 3 */}
+                    <div className="bg-slate-900/50 border border-purple-500/10 rounded-3xl p-6 flex flex-col space-y-4">
+                        <p className="text-purple-400 text-xs font-bold uppercase tracking-wider">Tyngsta Lyft</p>
+                        <div className="space-y-4">
+                            {stats.topLifts.map((l, i) => (
+                                <div
+                                    key={i}
+                                    className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-purple-500/10 p-4 rounded-2xl border border-purple-500/20 shadow-lg shadow-purple-500/5' : ''
+                                        }`}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className={`font-black truncate ${i === 0 ? 'text-xl text-white' : 'text-base text-slate-300'} max-w-[140px]`} title={l.exercise}>{l.exercise}</span>
+                                        <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-400'}`}>
+                                            {l.weight} <span className="text-xs text-slate-500">kg</span>
+                                        </span>
+                                        <span className="text-[10px] text-slate-600 font-bold uppercase">{formatSwedishDate(l.date)}</span>
+                                    </div>
+                                    <span className={`text-xs font-black p-2 rounded-full ${i === 0 ? 'bg-purple-500/20 text-purple-400' : 'text-slate-600'}`}>#{i + 1}</span>
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
 
-                    {/* Heaviest Session - Using maxVolume from strengthSessions */}
-                    {stats.maxVolume && (
-                        <div
-                            className="bg-gradient-to-br from-fuchsia-900/20 to-slate-900 border border-fuchsia-500/20 p-6 rounded-3xl cursor-pointer hover:border-fuchsia-500/50 transition-all group"
-                            onClick={() => setSelectedActivity(null /* TODO: Open strength workout specific modal or detailed view? */)}
-                        >
-                            <p className="text-fuchsia-400 text-xs font-bold uppercase tracking-wider mb-2">Största Volympasset</p>
-                            <p className="text-4xl font-black text-white mb-1 group-hover:scale-105 transition-transform origin-left">
-                                {(stats.maxVolume.totalVolume / 1000).toFixed(1)} <span className="text-lg text-slate-500">ton</span>
-                            </p>
-                            <p className="text-slate-500 text-sm">Styrketräning • {formatSwedishDate(stats.maxVolume.date)}</p>
+                    {/* Heaviest Sessions Top 3 */}
+                    <div className="bg-slate-900/50 border border-fuchsia-500/10 rounded-3xl p-6 flex flex-col space-y-4">
+                        <p className="text-fuchsia-400 text-xs font-bold uppercase tracking-wider">Största Volympass</p>
+                        <div className="space-y-4">
+                            {stats.topVolumeSessions.map((s, i) => (
+                                <div
+                                    key={i}
+                                    className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-fuchsia-500/10 p-4 rounded-2xl border border-fuchsia-500/20 shadow-lg shadow-fuchsia-500/5' : ''
+                                        }`}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-300'}`}>
+                                            {(s.totalVolume! / 1000).toFixed(1)} <span className="text-xs text-slate-500">ton</span>
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase">{formatSwedishDate(s.date)}</span>
+                                    </div>
+                                    <span className={`text-xs font-black p-2 rounded-full ${i === 0 ? 'bg-fuchsia-500/20 text-fuchsia-400' : 'text-slate-600'}`}>#{i + 1}</span>
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
 
-                    {/* Top Score */}
-                    {stats.maxScore.activity && (
-                        <div
-                            className="bg-gradient-to-br from-indigo-900/20 to-slate-900 border border-indigo-500/20 p-6 rounded-3xl cursor-pointer hover:border-indigo-500/50 transition-all group"
-                            onClick={() => setSelectedActivity(stats.maxScore.activity)}
-                        >
-                            <p className="text-indigo-400 text-xs font-bold uppercase tracking-wider mb-2">Bästa Prestation</p>
-                            <p className="text-4xl font-black text-white mb-1 group-hover:scale-105 transition-transform origin-left">
-                                {Math.round(stats.maxScore.score)} <span className="text-lg text-slate-500">poäng</span>
-                            </p>
-                            <p className="text-slate-500 text-sm capitalize">{stats.maxScore.activity.performance?.activityType} • {formatSwedishDate(stats.maxScore.activity.date)}</p>
+                    {/* Top Performance Scores Top 3 */}
+                    <div className="bg-slate-900/50 border border-indigo-500/10 rounded-3xl p-6 flex flex-col space-y-4">
+                        <p className="text-indigo-400 text-xs font-bold uppercase tracking-wider">Bästa Prestationer</p>
+                        <div className="space-y-4">
+                            {stats.maxScores.map((ms, i) => (
+                                <div
+                                    key={i}
+                                    className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-indigo-500/10 p-4 rounded-2xl border border-indigo-500/20 shadow-lg shadow-indigo-500/5' : ''
+                                        }`}
+                                    onClick={() => setSelectedActivity(ms.activity)}
+                                >
+                                    <div className="flex flex-col">
+                                        <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-300'}`}>
+                                            {Math.round(ms.score)} <span className="text-xs text-slate-500">p</span>
+                                        </span>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px]">
+                                            {ms.activity.performance?.activityType} • {formatSwedishDate(ms.activity.date)}
+                                        </span>
+                                    </div>
+                                    <span className={`text-xs font-black p-2 rounded-full ${i === 0 ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-600'}`}>#{i + 1}</span>
+                                </div>
+                            ))}
                         </div>
-                    )}
+                    </div>
                 </div>
             </div>
 
             {/* HEATMAP / CONTRIBUTION GRID */}
-            <div>
-                <div className="flex flex-col md:flex-row justify-between items-end mb-6 gap-4">
+            <div className="space-y-8">
+                <div className="flex flex-col md:flex-row justify-between items-end mb-2 gap-4">
                     <h3 className="text-xl font-bold flex items-center gap-2">
                         <span>🗓️</span> Aktivitetshistorik
                     </h3>
@@ -606,34 +867,39 @@ export function YearInReviewPage() {
                     </div>
                 </div>
 
-                <div className="bg-slate-900/30 border border-white/5 p-6 rounded-3xl overflow-hidden">
-                    <div className="flex gap-[3px] overflow-x-auto pb-2">
-                        {/* We group by weeks for columns */}
-                        {Array.from({ length: 53 }).map((_, weekIndex) => (
-                            <div key={weekIndex} className="flex flex-col gap-[3px]">
-                                {Array.from({ length: 7 }).map((_, dayIndex) => {
-                                    const dayData = calendarGrid[weekIndex * 7 + dayIndex];
-                                    if (!dayData) return <div key={dayIndex} className="w-3 h-3 rounded-sm bg-transparent" />;
+                {[...selectedYears].sort((a, b) => b - a).map(year => (
+                    <div key={year} className="bg-slate-900/30 border border-white/5 p-6 rounded-3xl overflow-hidden">
+                        <div className="flex justify-between items-center mb-4">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{year} Activity Map</span>
+                            <span className="text-[10px] text-slate-600 font-bold uppercase">{yearlyGrids[year]?.filter((d: any) => d.minutes > 0)?.length || 0} aktiva dagar</span>
+                        </div>
+                        <div className="flex gap-[3px] overflow-x-auto pb-2">
+                            {Array.from({ length: 53 }).map((_, weekIndex) => (
+                                <div key={weekIndex} className="flex flex-col gap-[3px]">
+                                    {Array.from({ length: 7 }).map((_, dayIndex) => {
+                                        const dayData = yearlyGrids[year]?.[weekIndex * 7 + dayIndex];
+                                        if (!dayData) return <div key={dayIndex} className="w-3 h-3 rounded-sm bg-transparent" />;
 
-                                    const intensityClass =
-                                        dayData.minutes === 0 ? 'bg-slate-800/50' :
-                                            dayData.minutes < 30 ? 'bg-emerald-900' :
-                                                dayData.minutes < 60 ? 'bg-emerald-700' :
-                                                    dayData.minutes < 90 ? 'bg-emerald-500' :
-                                                        'bg-emerald-300'; // Hot
+                                        const intensityClass =
+                                            dayData.minutes === 0 ? 'bg-slate-800/50' :
+                                                dayData.minutes < 30 ? 'bg-emerald-900' :
+                                                    dayData.minutes < 60 ? 'bg-emerald-700' :
+                                                        dayData.minutes < 90 ? 'bg-emerald-500' :
+                                                            'bg-emerald-300';
 
-                                    return (
-                                        <div
-                                            key={dayIndex}
-                                            className={`w-3 h-3 rounded-sm ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all`}
-                                            title={`${dayData.date}: ${dayData.minutes} min`}
-                                        />
-                                    );
-                                })}
-                            </div>
-                        ))}
+                                        return (
+                                            <div
+                                                key={dayIndex}
+                                                className={`w-3 h-3 rounded-sm ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all cursor-pointer`}
+                                                title={`${dayData.date}: ${dayData.minutes} min`}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </div>
+                ))}
             </div>
 
             {/* Modal for viewing highlights */}

@@ -1,7 +1,7 @@
 import { UniversalActivity, ExerciseEntry, PlannedActivity } from '../models/types.ts';
 
 export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry | null {
-    if (!a.performance) return null;
+    if (!a || !a.performance) return null;
     return {
         id: a.id,
         date: a.date,
@@ -12,6 +12,7 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         distance: a.performance.distanceKm,
         createdAt: a.createdAt,
         externalId: a.performance.source?.externalId,
+        prCount: a.performance.prCount || 0,
         platform: a.performance.source?.source === 'strava' ? 'strava' : undefined,
         heartRateAvg: a.performance.avgHeartRate,
         heartRateMax: a.performance.maxHeartRate,

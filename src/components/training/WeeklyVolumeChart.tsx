@@ -6,10 +6,11 @@ interface WeeklyVolumeChartProps {
     setStartDate?: (d: string | null) => void;
     setEndDate?: (d: string | null) => void;
     fixedYear?: number;
+    fixedDateRange?: { start: Date, end: Date };
 }
 
-export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate, fixedYear }: WeeklyVolumeChartProps) {
-    const [range, setRange] = useState<'3m' | '6m' | '12m' | '2025' | 'all'>(fixedYear ? 'all' : '12m'); // 'all' is placeholder if fixedYear is set
+export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate, fixedYear, fixedDateRange }: WeeklyVolumeChartProps) {
+    const [range, setRange] = useState<'3m' | '6m' | '12m' | '2025' | 'all'>(fixedYear || fixedDateRange ? 'all' : '12m'); // 'all' is placeholder if fixed is set
     const containerRef = useRef<HTMLDivElement>(null);
     const [pathData, setPathData] = useState<string>('');
     const dotRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -49,7 +50,10 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate, fixedYea
         let minDate: Date;
         let maxDate = getLocalMidnight(sortedWorkouts[sortedWorkouts.length - 1].date);
 
-        if (fixedYear) {
+        if (fixedDateRange) {
+            minDate = getLocalMidnight(fixedDateRange.start);
+            maxDate = getLocalMidnight(fixedDateRange.end);
+        } else if (fixedYear) {
             minDate = new Date(fixedYear, 0, 1);
             const eoy = new Date(fixedYear, 11, 31);
             maxDate = eoy;

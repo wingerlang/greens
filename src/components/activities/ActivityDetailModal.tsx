@@ -411,11 +411,29 @@ export function ActivityDetailModal({
 
                         {/* Source Badge + View Toggle for Merged */}
                         <div className="flex items-center justify-between gap-3 flex-wrap">
-                            {activity.source === 'strava' && (
+                            {activity.source === 'strava' && activity.externalId ? (
+                                <a
+                                    href={`https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 bg-[#FC4C02]/20 text-[#FC4C02] px-3 py-1.5 rounded-lg text-xs font-bold uppercase hover:bg-[#FC4C02]/30 transition-colors"
+                                    title="Öppna i Strava"
+                                >
+                                    <span>🔥</span> Synkad från Strava ↗
+                                </a>
+                            ) : activity.source === 'strava' && (
                                 <div className="inline-flex items-center gap-2 bg-[#FC4C02]/20 text-[#FC4C02] px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
                                     <span>🔥</span> Synkad från Strava
                                 </div>
                             )}
+
+                            {/* Ultra Label */}
+                            {activity.type === 'running' && activity.distance && activity.distance >= 42.2 && (
+                                <div className="inline-flex items-center gap-2 bg-pink-500/20 text-pink-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase animate-pulse">
+                                    <span>🦅</span> Ultra
+                                </div>
+                            )}
+
                             {activity.source === 'strength' && (
                                 <div className="inline-flex items-center gap-2 bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
                                     <span>💪</span> StrengthLog
