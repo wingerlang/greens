@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
+import { ExerciseEntry } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -10,7 +11,7 @@ import {
     WEEKDAY_LABELS
 } from '../models/types.ts';
 import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
-import { UniversalActivity, ExerciseEntry } from '../models/types.ts';
+import { UniversalActivity } from '../models/types.ts';
 import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate } from '../models/types.ts';
 // import { useUniversalActivities } from '../hooks/useUniversalActivities.ts';
@@ -156,6 +157,85 @@ export function TrainingPage() {
         return result;
     }, [mealEntries, foodItems, recipes]);
 
+    // Period Filter State
+    const [activePreset, setActivePreset] = useState<'all' | 'ytd' | 'prev' | '3m' | '6m' | '9m' | 'ttm'>('all');
+    const [filterStartDate, setFilterStartDate] = useState<string | null>(null);
+    const [filterEndDate, setFilterEndDate] = useState<string | null>(null);
+
+    const applyPeriodPreset = (preset: typeof activePreset) => {
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        setActivePreset(preset);
+
+        switch (preset) {
+            case 'all':
+                setFilterStartDate(null);
+                setFilterEndDate(null);
+                break;
+            case 'ytd':
+                setFilterStartDate(`${now.getFullYear()}-01-01`);
+                setFilterEndDate(today);
+                break;
+            case 'prev':
+                setFilterStartDate(`${now.getFullYear() - 1}-01-01`);
+                setFilterEndDate(`${now.getFullYear() - 1}-12-31`);
+                break;
+            case '3m': {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 3);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case '6m': {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 6);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case '9m': {
+                const d = new Date();
+                d.setMonth(d.getMonth() - 9);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+            case 'ttm': {
+                const d = new Date();
+                d.setFullYear(d.getFullYear() - 1);
+                setFilterStartDate(d.toISOString().split('T')[0]);
+                setFilterEndDate(today);
+                break;
+            }
+        }
+    };
+
+    // Apply Period Filter to data
+    const filteredExerciseEntries = useMemo(() => {
+        return exerciseEntries.filter(e => {
+            if (filterStartDate && e.date < filterStartDate) return false;
+            if (filterEndDate && e.date > filterEndDate) return false;
+            return true;
+        });
+    }, [exerciseEntries, filterStartDate, filterEndDate]);
+
+    const filteredWeightEntries = useMemo(() => {
+        return weightEntries.filter(e => {
+            if (filterStartDate && e.date < filterStartDate) return false;
+            if (filterEndDate && e.date > filterEndDate) return false;
+            return true;
+        });
+    }, [weightEntries, filterStartDate, filterEndDate]);
+
+    const filteredDailyNutrition = useMemo(() => {
+        return dailyNutrition.filter(e => {
+            if (filterStartDate && e.date < filterStartDate) return false;
+            if (filterEndDate && e.date > filterEndDate) return false;
+            return true;
+        });
+    }, [dailyNutrition, filterStartDate, filterEndDate]);
+
     const { settings, updateSettings } = useSettings();
 
     const [selectedDate, setSelectedDate] = useState(getISODate());
@@ -239,18 +319,13 @@ export function TrainingPage() {
     // Let's match variable text:
     const tdee = dailyTdee + goalAdjustment;
 
+    const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
+
     const handleEditExercise = (ex: any) => {
-        setExerciseForm({
-            type: ex.type,
-            duration: ex.durationMinutes.toString(),
-            intensity: ex.intensity,
-            notes: ex.notes || '',
-            subType: ex.subType || 'default',
-            tonnage: ex.tonnage ? ex.tonnage.toString() : '',
-            distance: ex.distance ? ex.distance.toString() : ''
-        });
-        setEditingExerciseId(ex.id);
-        setIsExerciseModalOpen(true);
+        // Transform to full object if needed, or just pass 'ex' if it matches ExerciseEntry
+        // ensuring we have the source if missing
+        const fullActivity = { ...ex, source: ex.source || 'manual' };
+        setSelectedActivity(fullActivity);
     };
 
     const handleSmartAction = (e: React.FormEvent) => {
@@ -420,94 +495,230 @@ export function TrainingPage() {
                 </button>
             </div>
 
+            {/* Period Selector - Sticky Header */}
+            <div className="sticky top-[64px] z-40 -mx-4 px-4 py-4 mb-8 bg-slate-950/80 backdrop-blur-xl border-b border-white/5 shadow-2xl">
+                <div className="flex flex-nowrap items-center gap-2 max-w-7xl mx-auto overflow-x-auto no-scrollbar">
+                    <div className="flex items-center gap-2 px-3 border-r border-white/5 mr-1">
+                        <span className="text-xl">📅</span>
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest hidden sm:block">Visa Period</span>
+                    </div>
+                    {[
+                        { id: 'all', label: 'ALLT' },
+                        { id: 'ytd', label: 'I ÅR' },
+                        { id: 'prev', label: 'FÖREG. ÅR' },
+                        { id: '3m', label: '3 MÅN' },
+                        { id: '6m', label: '6 MÅN' },
+                        { id: '9m', label: '9 MÅN' },
+                        { id: 'ttm', label: 'TTM (12M)' }
+                    ].map(p => (
+                        <button
+                            key={p.id}
+                            onClick={() => applyPeriodPreset(p.id as any)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${activePreset === p.id
+                                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25'
+                                : 'text-slate-500 hover:text-white hover:bg-white/5 border border-transparent'
+                                }`}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             {/* Conditionally render based on tab */}
-            {currentTab === 'overview' && (
-                <>
+            {
+                currentTab === 'overview' && (
+                    <>
 
-                    {/* Dashboard Overview */}
-                    <TrainingOverview exercises={exerciseEntries} />
+                        {/* Dashboard Overview */}
+                        <TrainingOverview
+                            exercises={filteredExerciseEntries}
+                            year={filterStartDate ? new Date(filterStartDate).getFullYear() : new Date().getFullYear()}
+                            isFiltered={true}
+                            onExerciseClick={handleEditExercise}
+                            periodLabel={
+                                activePreset === 'all' ? 'Total Volym' :
+                                    activePreset === 'ytd' ? `Årsvolym ${new Date().getFullYear()}` :
+                                        activePreset === 'prev' ? `Årsvolym ${new Date().getFullYear() - 1}` :
+                                            activePreset === 'ttm' ? 'Trailing 12 Months' :
+                                                `Periodens Volym (${activePreset.toUpperCase()})`
+                            }
+                        />
 
-                    {/* Cycle Manager (Replaces Goal Selector) */}
-                    <section className="mb-8">
-                        {activeCycle && !isCycleCreatorOpen ? (
-                            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 border border-white/10 p-6 shadow-2xl group">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 text-[100px] leading-none select-none grayscale group-hover:grayscale-0 transition-all duration-500">
-                                    {activeCycle.goal === 'deff' ? '🔥' : activeCycle.goal === 'bulk' ? '💪' : '⚖️'}
-                                </div>
-
-                                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                                    <div>
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
-                                                Active Cycle
-                                            </span>
-                                            <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">
-                                                {activeCycle.startDate} — {activeCycle.endDate}
-                                            </span>
-                                        </div>
-                                        <h2 className="text-3xl font-black text-white italic tracking-tighter mb-1">{activeCycle.name}</h2>
-                                        <p className="text-sm text-slate-400 font-medium">
-                                            Mål: <span className="text-white">{activeCycle.goal === 'deff' ? 'Deff (-500 kcal)' : activeCycle.goal === 'bulk' ? 'Bulk (+500 kcal)' : 'Balans (0 kcal)'}</span>
-                                        </p>
+                        {/* Cycle Manager (Replaces Goal Selector) */}
+                        <section className="mb-8">
+                            {activeCycle && !isCycleCreatorOpen ? (
+                                <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 to-slate-950 border border-white/10 p-6 shadow-2xl group">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10 text-[100px] leading-none select-none grayscale group-hover:grayscale-0 transition-all duration-500">
+                                        {activeCycle.goal === 'deff' ? '🔥' : activeCycle.goal === 'bulk' ? '💪' : '⚖️'}
                                     </div>
 
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={() => {
-                                                if (confirm('Är du säker på att du vill avsluta denna period?')) {
-                                                    deleteTrainingCycle(activeCycle.id);
-                                                }
-                                            }}
-                                            className="px-6 py-3 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/5 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 font-bold text-xs uppercase tracking-wider transition-all"
-                                        >
-                                            Avsluta
-                                        </button>
-                                        <button
-                                            onClick={() => handleEditCycle(activeCycle)}
-                                            className="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 hover:text-slate-950 transition-all border border-white/5 hover:border-emerald-500"
-                                        >
-                                            Redigera
-                                        </button>
-                                        <button
-                                            onClick={() => setIsCycleCreatorOpen(true)}
-                                            className="px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 hover:text-slate-950 transition-all border border-emerald-500/20 hover:border-emerald-500 text-center"
-                                        >
-                                            + Ny Period
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="bg-slate-900/50 border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center text-center gap-4 hover:bg-slate-900/80 transition-all custom-dashed-border">
-                                {!isCycleCreatorOpen ? (
-                                    <>
-                                        <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-2xl text-emerald-500 mb-2">
-                                            📅
-                                        </div>
+                                    <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                                         <div>
-                                            <h3 className="text-xl font-bold text-white mb-1">Starta ny Träningsperiod</h3>
-                                            <p className="text-sm text-slate-400">Definiera ditt mål och följ din utveckling över tid.</p>
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest border border-emerald-500/20">
+                                                    Active Cycle
+                                                </span>
+                                                <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                                    {activeCycle.startDate} — {activeCycle.endDate}
+                                                </span>
+                                            </div>
+                                            <h2 className="text-3xl font-black text-white italic tracking-tighter mb-1">{activeCycle.name}</h2>
+                                            <p className="text-sm text-slate-400 font-medium">
+                                                Mål: <span className="text-white">{activeCycle.goal === 'deff' ? 'Deff (-500 kcal)' : activeCycle.goal === 'bulk' ? 'Bulk (+500 kcal)' : 'Balans (0 kcal)'}</span>
+                                            </p>
                                         </div>
-                                        <button
-                                            onClick={() => setIsCycleCreatorOpen(true)}
-                                            className="mt-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/20"
-                                        >
-                                            Skapa Period
-                                        </button>
-                                    </>
-                                ) : (
-                                    <div className="w-full max-w-2xl text-left bg-slate-950 p-6 rounded-2xl border border-white/10 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
-                                        <h3 className="text-lg font-bold text-white mb-6">Ny Period</h3>
 
-                                        {/* Smart Input for Cycle */}
-                                        <div className="mb-6 p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
-                                            <label className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider mb-2 block">✨ AI Snabb-skapare</label>
-                                            <input
-                                                type="text"
-                                                placeholder="t.ex. 'Sommardeff 2024-03-01 - 2024-06-01'"
-                                                className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl p-3 text-white text-sm focus:border-emerald-500 transition-all outline-none"
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter' && cycleForm.name && cycleForm.endDate) {
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => {
+                                                    if (confirm('Är du säker på att du vill avsluta denna period?')) {
+                                                        deleteTrainingCycle(activeCycle!.id);
+                                                    }
+                                                }}
+                                                className="px-6 py-3 rounded-xl bg-white/5 hover:bg-rose-500/20 border border-white/5 hover:border-rose-500/50 text-slate-400 hover:text-rose-400 font-bold text-xs uppercase tracking-wider transition-all"
+                                            >
+                                                Avsluta
+                                            </button>
+                                            <button
+                                                onClick={() => handleEditCycle(activeCycle)}
+                                                className="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 hover:text-slate-950 transition-all border border-white/5 hover:border-emerald-500"
+                                            >
+                                                Redigera
+                                            </button>
+                                            <button
+                                                onClick={() => setIsCycleCreatorOpen(true)}
+                                                className="px-4 py-3 rounded-xl bg-emerald-500/10 text-emerald-400 font-bold text-xs uppercase tracking-wider hover:bg-emerald-500 hover:text-slate-950 transition-all border border-emerald-500/20 hover:border-emerald-500 text-center"
+                                            >
+                                                + Ny Period
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="bg-slate-900/50 border border-white/5 rounded-3xl p-6 flex flex-col items-center justify-center text-center gap-4 hover:bg-slate-900/80 transition-all custom-dashed-border">
+                                    {!isCycleCreatorOpen ? (
+                                        <>
+                                            <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center text-2xl text-emerald-500 mb-2">
+                                                📅
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xl font-bold text-white mb-1">Starta ny Träningsperiod</h3>
+                                                <p className="text-sm text-slate-400">Definiera ditt mål och följ din utveckling över tid.</p>
+                                            </div>
+                                            <button
+                                                onClick={() => setIsCycleCreatorOpen(true)}
+                                                className="mt-2 px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/20"
+                                            >
+                                                Skapa Period
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <div className="w-full max-w-2xl text-left bg-slate-950 p-6 rounded-2xl border border-white/10 shadow-2xl animate-in fade-in slide-in-from-bottom-4">
+                                            <h3 className="text-lg font-bold text-white mb-6">Ny Period</h3>
+
+                                            {/* Smart Input for Cycle */}
+                                            <div className="mb-6 p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
+                                                <label className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider mb-2 block">✨ AI Snabb-skapare</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="t.ex. 'Sommardeff 2024-03-01 - 2024-06-01'"
+                                                    className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl p-3 text-white text-sm focus:border-emerald-500 transition-all outline-none"
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' && cycleForm.name && cycleForm.endDate) {
+                                                            addTrainingCycle({
+                                                                name: cycleForm.name,
+                                                                goal: cycleForm.goal,
+                                                                startDate: cycleForm.startDate,
+                                                                endDate: cycleForm.endDate
+                                                            });
+                                                            setIsCycleCreatorOpen(false);
+                                                        }
+                                                    }}
+                                                    onChange={(e) => {
+                                                        if (!isCycleCreatorOpen) setIsCycleCreatorOpen(true);
+                                                        const val = e.target.value;
+
+                                                        // Always update name field as user types
+                                                        setCycleForm(prev => ({ ...prev, name: val }));
+
+                                                        // Smart Parse
+                                                        const smart = parseCycleString(val);
+                                                        if (smart) {
+                                                            setCycleForm(prev => ({
+                                                                ...prev,
+                                                                name: smart.name,
+                                                                startDate: smart.startDate,
+                                                                endDate: smart.endDate,
+                                                                goal: smart.goal
+                                                            }));
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Namn</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="t.ex. Vinterbulk 2024"
+                                                        value={cycleForm.name}
+                                                        onChange={e => setCycleForm({ ...cycleForm, name: e.target.value })}
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 transition-all outline-none"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mål</label>
+                                                    <div className="grid grid-cols-3 gap-2">
+                                                        {[
+                                                            { id: 'deff', label: 'Deff', icon: '🔥' },
+                                                            { id: 'neutral', label: 'Normal', icon: '⚖️' },
+                                                            { id: 'bulk', label: 'Bulk', icon: '💪' }
+                                                        ].map(opt => (
+                                                            <button
+                                                                key={opt.id}
+                                                                onClick={() => setCycleForm({ ...cycleForm, goal: opt.id as any })}
+                                                                className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${cycleForm.goal === opt.id
+                                                                    ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                                    : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                                    }`}
+                                                            >
+                                                                <span className="text-lg">{opt.icon}</span>
+                                                                <span className="text-[10px] font-black uppercase">{opt.label}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Start</label>
+                                                    <input
+                                                        type="date"
+                                                        value={cycleForm.startDate}
+                                                        onChange={e => setCycleForm({ ...cycleForm, startDate: e.target.value })}
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 transition-all outline-none"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Slut (Preliminärt)</label>
+                                                    <input
+                                                        type="date"
+                                                        value={cycleForm.endDate}
+                                                        onChange={e => setCycleForm({ ...cycleForm, endDate: e.target.value })}
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 transition-all outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-3 justify-end">
+                                                <button
+                                                    onClick={() => setIsCycleCreatorOpen(false)}
+                                                    className="px-6 py-3 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-bold text-xs uppercase transition-all"
+                                                >
+                                                    Avbryt
+                                                </button>
+                                                <button
+                                                    disabled={!cycleForm.name || !cycleForm.endDate}
+                                                    onClick={() => {
                                                         addTrainingCycle({
                                                             name: cycleForm.name,
                                                             goal: cycleForm.goal,
@@ -515,164 +726,80 @@ export function TrainingPage() {
                                                             endDate: cycleForm.endDate
                                                         });
                                                         setIsCycleCreatorOpen(false);
-                                                    }
-                                                }}
-                                                onChange={(e) => {
-                                                    if (!isCycleCreatorOpen) setIsCycleCreatorOpen(true);
-                                                    const val = e.target.value;
-
-                                                    // Always update name field as user types
-                                                    setCycleForm(prev => ({ ...prev, name: val }));
-
-                                                    // Smart Parse
-                                                    const smart = parseCycleString(val);
-                                                    if (smart) {
-                                                        setCycleForm(prev => ({
-                                                            ...prev,
-                                                            name: smart.name,
-                                                            startDate: smart.startDate,
-                                                            endDate: smart.endDate,
-                                                            goal: smart.goal
-                                                        }));
-                                                    }
-                                                }}
-                                            />
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Namn</label>
-                                                <input
-                                                    type="text"
-                                                    placeholder="t.ex. Vinterbulk 2024"
-                                                    value={cycleForm.name}
-                                                    onChange={e => setCycleForm({ ...cycleForm, name: e.target.value })}
-                                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 transition-all outline-none"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Mål</label>
-                                                <div className="grid grid-cols-3 gap-2">
-                                                    {[
-                                                        { id: 'deff', label: 'Deff', icon: '🔥' },
-                                                        { id: 'neutral', label: 'Normal', icon: '⚖️' },
-                                                        { id: 'bulk', label: 'Bulk', icon: '💪' }
-                                                    ].map(opt => (
-                                                        <button
-                                                            key={opt.id}
-                                                            onClick={() => setCycleForm({ ...cycleForm, goal: opt.id as any })}
-                                                            className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${cycleForm.goal === opt.id
-                                                                ? 'bg-emerald-500 text-slate-950 border-emerald-500'
-                                                                : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
-                                                                }`}
-                                                        >
-                                                            <span className="text-lg">{opt.icon}</span>
-                                                            <span className="text-[10px] font-black uppercase">{opt.label}</span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Start</label>
-                                                <input
-                                                    type="date"
-                                                    value={cycleForm.startDate}
-                                                    onChange={e => setCycleForm({ ...cycleForm, startDate: e.target.value })}
-                                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 transition-all outline-none"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Slut (Preliminärt)</label>
-                                                <input
-                                                    type="date"
-                                                    value={cycleForm.endDate}
-                                                    onChange={e => setCycleForm({ ...cycleForm, endDate: e.target.value })}
-                                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 transition-all outline-none"
-                                                />
+                                                    }}
+                                                    className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/20 uppercase text-xs tracking-wider"
+                                                >
+                                                    Skapa Period
+                                                </button>
                                             </div>
                                         </div>
-                                        <div className="flex gap-3 justify-end">
-                                            <button
-                                                onClick={() => setIsCycleCreatorOpen(false)}
-                                                className="px-6 py-3 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-bold text-xs uppercase transition-all"
-                                            >
-                                                Avbryt
-                                            </button>
-                                            <button
-                                                disabled={!cycleForm.name || !cycleForm.endDate}
-                                                onClick={() => {
-                                                    addTrainingCycle({
-                                                        name: cycleForm.name,
-                                                        goal: cycleForm.goal,
-                                                        startDate: cycleForm.startDate,
-                                                        endDate: cycleForm.endDate
-                                                    });
-                                                    setIsCycleCreatorOpen(false);
-                                                }}
-                                                className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/20 uppercase text-xs tracking-wider"
-                                            >
-                                                Skapa Period
-                                            </button>
-                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </section>
+
+                        {/* Full Width Layout for Charts */}
+                        {/* Analysis Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            {/* Left: Cycle & Progress Chart */}
+                            <div className="content-card overflow-hidden">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                            📊 Årsöversikt & Utveckling
+                                            {activePreset !== 'all' && <span className="text-[10px] bg-blue-500/10 text-blue-400 px-2 py-0.5 rounded border border-blue-500/20">PERIODISERA</span>}
+                                        </h3>
+                                        <p className="text-slate-400 text-xs mt-1">Vikt, kalorier och träningsbelastning</p>
                                     </div>
-                                )}
-                            </div>
-                        )}
-                    </section>
-
-                    {/* Full Width Layout for Charts */}
-                    {/* Full Width Layout for Charts */}
-                    <div className="space-y-6">
-
-                        <HealthScoreCard
-                            exercises={legacyExerciseEntries}
-                            meals={mealEntries}
-                            userSettings={{ bmr: calculateBMR() }}
-                        />
-
-                        {/* Year Visualization */}
-                        <div className="content-card">
-                            <div className="flex justify-between items-center mb-4">
-                                <h3 className="section-title">Årsöversikt & Utveckling</h3>
-                                <div className="flex gap-2">
-                                    <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
-                                        {[
-                                            { id: 'calories', label: 'Kcal', icon: '🔥' },
-                                            { id: 'volume', label: 'Volym', icon: '⚖️' },
-                                            { id: 'workouts', label: 'Pass', icon: '💪' }
-                                        ].map(m => (
-                                            <button
-                                                key={m.id}
-                                                onClick={() => setVisibleMetrics(prev => ({ ...prev, [m.id]: !prev[m.id as keyof typeof prev] }))}
-                                                className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${visibleMetrics[m.id as keyof typeof visibleMetrics]
-                                                    ? 'bg-emerald-500 text-slate-950'
-                                                    : 'text-slate-400 hover:text-white'
-                                                    }`}
-                                            >
-                                                <span>{m.icon}</span>
-                                                <span className="hidden sm:inline">{m.label}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                    <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
-                                        <button onClick={() => setZoomLevel(z => Math.min(12, z + 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">-</button>
-                                        <span className="px-2 flex items-center text-[10px] font-mono text-slate-500">{zoomLevel}m</span>
-                                        <button onClick={() => setZoomLevel(z => Math.max(2, z - 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">+</button>
+                                    <div className="flex gap-2">
+                                        <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
+                                            {[
+                                                { id: 'calories', label: 'Kcal', icon: '🔥' },
+                                                { id: 'volume', label: 'Volym', icon: '⚖️' },
+                                                { id: 'workouts', label: 'Pass', icon: '💪' }
+                                            ].map(m => (
+                                                <button
+                                                    key={m.id}
+                                                    onClick={() => setVisibleMetrics(prev => ({ ...prev, [m.id]: !prev[m.id as keyof typeof prev] }))}
+                                                    className={`px-3 py-1 rounded text-[10px] font-bold uppercase transition-all flex items-center gap-1 ${visibleMetrics[m.id as keyof typeof visibleMetrics]
+                                                        ? 'bg-emerald-500 text-slate-950'
+                                                        : 'text-slate-400 hover:text-white'
+                                                        }`}
+                                                >
+                                                    <span>{m.icon}</span>
+                                                    <span className="hidden sm:inline">{m.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <div className="flex bg-slate-900 rounded-lg p-1 border border-white/5">
+                                            <button onClick={() => setZoomLevel(z => Math.min(12, z + 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">-</button>
+                                            <span className="px-2 flex items-center text-[10px] font-mono text-slate-500">{zoomLevel}m</span>
+                                            <button onClick={() => setZoomLevel(z => Math.max(2, z - 2))} className="px-3 hover:bg-white/10 rounded text-slate-400 font-bold">+</button>
+                                        </div>
                                     </div>
                                 </div>
+
+                                <div className="h-[350px]">
+                                    <CycleYearChart
+                                        cycles={trainingCycles}
+                                        weightEntries={filteredWeightEntries}
+                                        nutrition={filteredDailyNutrition}
+                                        exercises={filteredExerciseEntries}
+                                        zoomMonths={zoomLevel}
+                                        visibleMetrics={visibleMetrics}
+                                        filterStartDate={filterStartDate}
+                                        filterEndDate={filterEndDate}
+                                        onEditCycle={handleEditCycle}
+                                        onCreateCycleAfter={handleCreateCycleAfter}
+                                    />
+                                </div>
                             </div>
-                            <div className="h-64 bg-slate-900/30 rounded-xl border border-white/5 relative overflow-hidden mt-4">
-                                <CycleYearChart
-                                    cycles={trainingCycles}
-                                    weightEntries={weightEntries}
-                                    nutrition={dailyNutrition}
-                                    exercises={exerciseEntries}
-                                    zoomMonths={zoomLevel}
-                                    visibleMetrics={visibleMetrics}
-                                    onEditCycle={handleEditCycle}
-                                    onCreateCycleAfter={handleCreateCycleAfter}
-                                />
-                            </div>
+
+                            <HealthScoreCard
+                                exercises={filteredExerciseEntries}
+                                meals={mealEntries}
+                                userSettings={{ bmr: calculateBMR() }}
+                            />
                         </div>
 
                         <CycleDetailModal
@@ -688,20 +815,27 @@ export function TrainingPage() {
 
                         {/* Training Load & Weight Correlation Dashboard */}
                         <TrainingLoadCorrelation
-                            exercises={exerciseEntries}
-                            weightEntries={weightEntries}
+                            exercises={filteredExerciseEntries}
+                            weightEntries={filteredWeightEntries}
                         />
 
                         {/* Exercise Log */}
                         <div className="content-card">
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="section-title">Träningsdagbok</h3>
-                                <input
-                                    type="date"
-                                    value={selectedDate}
-                                    onChange={(e) => setSelectedDate(e.target.value)}
-                                    className="bg-slate-800 border-none rounded-lg text-xs p-2 text-white"
-                                />
+                                <div className="flex items-center gap-4">
+                                    {activePreset !== 'all' && (
+                                        <div className="text-[10px] font-black text-blue-400 bg-blue-400/10 px-3 py-1 rounded-full border border-blue-400/20">
+                                            FILTER AKTIVT
+                                        </div>
+                                    )}
+                                    <input
+                                        type="date"
+                                        value={selectedDate}
+                                        onChange={(e) => setSelectedDate(e.target.value)}
+                                        className="bg-slate-800 border-none rounded-lg text-xs p-2 text-white"
+                                    />
+                                </div>
                             </div>
 
                             <div className="exercise-list space-y-2">
@@ -740,184 +874,196 @@ export function TrainingPage() {
                                 )}
                             </div>
                         </div>
-                    </div>
 
 
-                    {/* Data Analysis Section - Full Width */}
-                    <div className="content-card mt-6">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="section-title">Djupanalys & Statistik</h3>
-                            <a
-                                href="#mina-mal"
-                                className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold rounded-lg text-xs uppercase transition-all flex items-center gap-2"
-                            >
-                                🎯 Mina Mål
-                            </a>
-                        </div>
+                        {/* Data Analysis Section - Full Width */}
+                        <div className="content-card mt-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="section-title">Djupanalys & Statistik</h3>
+                                <a
+                                    href="#mina-mal"
+                                    className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-bold rounded-lg text-xs uppercase transition-all flex items-center gap-2"
+                                >
+                                    🎯 Mina Mål
+                                </a>
+                            </div>
 
-                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                            {/* Stat 1: Total Tonnage */}
-                            <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
-                                <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Totalt Tonnage</div>
-                                <div className="text-2xl font-black text-rose-400">
-                                    {Math.round(exerciseEntries.reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000)} <span className="text-sm text-slate-500 font-bold">ton</span>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                                {/* Stat 1: Total Tonnage */}
+                                <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Totalt Tonnage</div>
+                                    <div className="text-2xl font-black text-rose-400">
+                                        {Math.round(filteredExerciseEntries.reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000)} <span className="text-sm text-slate-500 font-bold">ton</span>
+                                    </div>
+                                </div>
+
+                                {/* Stat 2: Total Distance */}
+                                <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Distans</div>
+                                    <div className="text-2xl font-black text-sky-400">
+                                        {Math.round(filteredExerciseEntries.reduce((sum, e) => sum + (e.distance || 0), 0))} <span className="text-sm text-slate-500 font-bold">km</span>
+                                    </div>
+                                </div>
+
+                                {/* Stat 3: Avg Intensity (Proxy) */}
+                                <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Snittduration</div>
+                                    <div className="text-2xl font-black text-emerald-400">
+                                        {Math.round(filteredExerciseEntries.length > 0 ? filteredExerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / filteredExerciseEntries.length : 0)} <span className="text-sm text-slate-500 font-bold">min</span>
+                                    </div>
+                                </div>
+
+                                {/* Stat 4: Total Time */}
+                                <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
+                                    <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Träningstid</div>
+                                    <div className="text-2xl font-black text-indigo-400">
+                                        {Math.round(filteredExerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / 60)} <span className="text-sm text-slate-500 font-bold">h</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Stat 2: Total Distance */}
-                            <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
-                                <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Distans</div>
-                                <div className="text-2xl font-black text-sky-400">
-                                    {Math.round(exerciseEntries.reduce((sum, e) => sum + (e.distance || 0), 0))} <span className="text-sm text-slate-500 font-bold">km</span>
-                                </div>
-                            </div>
-
-                            {/* Stat 3: Avg Intensity (Proxy) */}
-                            <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
-                                <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Snittduration</div>
-                                <div className="text-2xl font-black text-emerald-400">
-                                    {Math.round(exerciseEntries.length > 0 ? exerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / exerciseEntries.length : 0)} <span className="text-sm text-slate-500 font-bold">min</span>
-                                </div>
-                            </div>
-
-                            {/* Stat 4: Total Time */}
-                            <div className="p-4 rounded-2xl bg-slate-900/50 border border-white/5">
-                                <div className="text-[10px] uppercase font-bold text-slate-500 mb-1">Total Träningstid</div>
-                                <div className="text-2xl font-black text-indigo-400">
-                                    {Math.round(exerciseEntries.reduce((sum, e) => sum + e.durationMinutes, 0) / 60)} <span className="text-sm text-slate-500 font-bold">h</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                            {/* Top Activities Table */}
-                            <div>
-                                <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Topplista Aktiviteter</h4>
-                                <div className="space-y-2">
-                                    {Object.entries(exerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
-                                        .sort((a, b) => b[1] - a[1])
-                                        .slice(0, 5)
-                                        .map(([type, count]) => (
-                                            <div key={type} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-xl">{EXERCISE_TYPES.find(t => t.type === type)?.icon}</span>
-                                                    <span className="text-xs font-bold capitalize text-slate-300">{EXERCISE_TYPES.find(t => t.type === type)?.label}</span>
-                                                </div>
-                                                <div className="text-sm font-black text-white">{count} <span className="text-[10px] text-slate-500 font-normal">pass</span></div>
-                                            </div>
-                                        ))}
-                                </div>
-                            </div>
-
-                            {/* Recent Records - Only show if there's data */}
-                            {(exerciseEntries.some(e => e.tonnage) || exerciseEntries.some(e => e.distance)) && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Top Activities Table */}
                                 <div>
-                                    <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Senaste PB & Milstolpar</h4>
-                                    {exerciseEntries.some(e => e.tonnage) && (
-                                        <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 text-center mb-4">
-                                            <span className="text-4xl">🏆</span>
-                                            <h5 className="text-sm font-bold text-emerald-400 mt-2">Nytt Volymrekord!</h5>
-                                            <p className="text-[10px] text-slate-400 mt-1">
-                                                Du lyfte {Math.round(Math.max(...exerciseEntries.filter(e => e.tonnage).map(e => e.tonnage || 0)))} kg som mest i ett pass.
-                                            </p>
-                                        </div>
-                                    )}
-                                    {exerciseEntries.some(e => e.distance) && (
-                                        <div className="p-6 rounded-2xl bg-gradient-to-br from-sky-500/10 to-transparent border border-sky-500/20 text-center">
-                                            <span className="text-4xl">👟</span>
-                                            <h5 className="text-sm font-bold text-sky-400 mt-2">Distanstopp</h5>
-                                            <p className="text-[10px] text-slate-400 mt-1">
-                                                Längsta passet var {Math.max(...exerciseEntries.filter(e => e.distance).map(e => e.distance || 0))} km.
-                                            </p>
-                                        </div>
-                                    )}
+                                    <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Topplista Aktiviteter</h4>
+                                    <div className="space-y-2">
+                                        {Object.entries(filteredExerciseEntries.reduce((acc, e) => ({ ...acc, [e.type]: (acc[e.type] || 0) + 1 }), {} as Record<string, number>))
+                                            .sort((a, b) => b[1] - a[1])
+                                            .slice(0, 5)
+                                            .map(([type, count]) => (
+                                                <div key={type} className="flex justify-between items-center p-3 rounded-xl bg-white/5 border border-white/5">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-xl">{EXERCISE_TYPES.find(t => t.type === type)?.icon}</span>
+                                                        <span className="text-xs font-bold capitalize text-slate-300">{EXERCISE_TYPES.find(t => t.type === type)?.label}</span>
+                                                    </div>
+                                                    <div className="text-sm font-black text-white">{count} <span className="text-[10px] text-slate-500 font-normal">pass</span></div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+
+                                {/* Recent Records - Only show if there's data */}
+                                {(exerciseEntries.some(e => e.tonnage) || exerciseEntries.some(e => e.distance)) && (
+                                    <div>
+                                        <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-3">Senaste PB & Milstolpar</h4>
+                                        {exerciseEntries.some(e => e.tonnage) && (
+                                            <div className="p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-transparent border border-emerald-500/20 text-center mb-4">
+                                                <span className="text-4xl">🏆</span>
+                                                <h5 className="text-sm font-bold text-emerald-400 mt-2">Nytt Volymrekord!</h5>
+                                                <p className="text-[10px] text-slate-400 mt-1">
+                                                    Du lyfte {Math.round(Math.max(...exerciseEntries.filter(e => e.tonnage).map(e => e.tonnage || 0)))} kg som mest i ett pass.
+                                                </p>
+                                            </div>
+                                        )}
+                                        {exerciseEntries.some(e => e.distance) && (
+                                            <div className="p-6 rounded-2xl bg-gradient-to-br from-sky-500/10 to-transparent border border-sky-500/20 text-center">
+                                                <span className="text-4xl">👟</span>
+                                                <h5 className="text-sm font-bold text-sky-400 mt-2">Distanstopp</h5>
+                                                <p className="text-[10px] text-slate-400 mt-1">
+                                                    Längsta passet var {Math.max(...exerciseEntries.filter(e => e.distance).map(e => e.distance || 0))} km.
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Goals Section */}
+                        <div id="mina-mal" className="content-card mt-6 scroll-mt-24">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="section-title">🎯 Mina Mål</h3>
+                                <button
+                                    onClick={() => { setEditingGoal(null); setIsGoalModalOpen(true); }}
+                                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs uppercase transition-all"
+                                >
+                                    + Nytt Mål
+                                </button>
+                            </div>
+
+                            {performanceGoals.length > 0 ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {performanceGoals.map(goal => {
+                                        // Calculate progress
+                                        const now = new Date();
+                                        const weekStart = new Date(now);
+                                        weekStart.setDate(now.getDate() - now.getDay() + 1);
+                                        const weekStartStr = weekStart.toISOString().split('T')[0];
+
+                                        let current = 0;
+                                        if (goal.type === 'frequency' && goal.targets[0]?.exerciseType) {
+                                            current = exerciseEntries.filter(e =>
+                                                e.type === goal.targets[0].exerciseType &&
+                                                e.date >= weekStartStr
+                                            ).length;
+                                        } else if (goal.type === 'distance') {
+                                            current = exerciseEntries
+                                                .filter(e => e.date >= weekStartStr)
+                                                .reduce((sum, e) => sum + (e.distance || 0), 0);
+                                        } else if (goal.type === 'tonnage') {
+                                            current = exerciseEntries
+                                                .filter(e => e.date >= weekStartStr)
+                                                .reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000;
+                                        }
+
+                                        const target = goal.targets[0]?.count || goal.targets[0]?.value || 1;
+                                        const percentage = (current / target) * 100;
+
+                                        return (
+                                            <GoalCard
+                                                key={goal.id}
+                                                goal={goal}
+                                                progress={{ current, target, percentage }}
+                                                onEdit={() => { setEditingGoal(goal); setIsGoalModalOpen(true); }}
+                                                onDelete={() => deleteGoal(goal.id)}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 text-slate-600">
+                                    <span className="text-4xl block mb-3">🎯</span>
+                                    <p className="text-sm">Inga mål ännu. Skapa ett för att börja spåra din framgång!</p>
                                 </div>
                             )}
                         </div>
+                    </>
+                )
+            }
+
+            {
+                currentTab === 'kondition' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <KonditionView
+                            filterStartDate={filterStartDate}
+                            filterEndDate={filterEndDate}
+                            exerciseEntries={exerciseEntries}
+                            universalActivities={universalActivities}
+                        />
                     </div>
+                )
+            }
 
-                    {/* Goals Section */}
-                    <div id="mina-mal" className="content-card mt-6 scroll-mt-24">
-                        <div className="flex justify-between items-center mb-4">
-                            <h3 className="section-title">🎯 Mina Mål</h3>
-                            <button
-                                onClick={() => { setEditingGoal(null); setIsGoalModalOpen(true); }}
-                                className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold rounded-xl text-xs uppercase transition-all"
-                            >
-                                + Nytt Mål
-                            </button>
-                        </div>
-
-                        {performanceGoals.length > 0 ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {performanceGoals.map(goal => {
-                                    // Calculate progress
-                                    const now = new Date();
-                                    const weekStart = new Date(now);
-                                    weekStart.setDate(now.getDate() - now.getDay() + 1);
-                                    const weekStartStr = weekStart.toISOString().split('T')[0];
-
-                                    let current = 0;
-                                    if (goal.type === 'frequency' && goal.targets[0]?.exerciseType) {
-                                        current = exerciseEntries.filter(e =>
-                                            e.type === goal.targets[0].exerciseType &&
-                                            e.date >= weekStartStr
-                                        ).length;
-                                    } else if (goal.type === 'distance') {
-                                        current = exerciseEntries
-                                            .filter(e => e.date >= weekStartStr)
-                                            .reduce((sum, e) => sum + (e.distance || 0), 0);
-                                    } else if (goal.type === 'tonnage') {
-                                        current = exerciseEntries
-                                            .filter(e => e.date >= weekStartStr)
-                                            .reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000;
-                                    }
-
-                                    const target = goal.targets[0]?.count || goal.targets[0]?.value || 1;
-                                    const percentage = (current / target) * 100;
-
-                                    return (
-                                        <GoalCard
-                                            key={goal.id}
-                                            goal={goal}
-                                            progress={{ current, target, percentage }}
-                                            onEdit={() => { setEditingGoal(goal); setIsGoalModalOpen(true); }}
-                                            onDelete={() => deleteGoal(goal.id)}
-                                        />
-                                    );
-                                })}
-                            </div>
-                        ) : (
-                            <div className="text-center py-12 text-slate-600">
-                                <span className="text-4xl block mb-3">🎯</span>
-                                <p className="text-sm">Inga mål ännu. Skapa ett för att börja spåra din framgång!</p>
-                            </div>
-                        )}
+            {
+                currentTab === 'races' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <RaceList
+                            exerciseEntries={exerciseEntries}
+                            universalActivities={universalActivities}
+                            filterStartDate={filterStartDate}
+                            filterEndDate={filterEndDate}
+                        />
                     </div>
-                </>
-            )}
+                )
+            }
 
-            {currentTab === 'kondition' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <KonditionView
-                        days={365}
-                        exerciseEntries={exerciseEntries}
-                        universalActivities={universalActivities}
-                    />
-                </div>
-            )}
-
-            {currentTab === 'races' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <RaceList exerciseEntries={exerciseEntries} universalActivities={universalActivities} />
-                </div>
-            )}
-
-            {currentTab === 'hyrox' && (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <HyroxDashboard />
-                </div>
-            )}
+            {
+                currentTab === 'hyrox' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <HyroxDashboard />
+                    </div>
+                )
+            }
 
             {/* Goal Modal */}
             <GoalModal
@@ -970,6 +1116,14 @@ export function TrainingPage() {
                 setSelectedDate={setSelectedDate}
                 onSave={handleAddWeight}
             />
-        </div >
+            {/* Activity Detail / Edit Modal */}
+            {selectedActivity && (
+                <ActivityDetailModal
+                    activity={selectedActivity}
+                    onClose={() => setSelectedActivity(null)}
+                    initiallyEditing={true}
+                />
+            )}
+        </div>
     );
 }

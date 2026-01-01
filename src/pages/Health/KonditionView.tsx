@@ -6,12 +6,13 @@ import { ActivityBreakdown } from '../../components/cardio/ActivityBreakdown.tsx
 import { ConditioningStreaks } from '../../components/cardio/ConditioningStreaks.tsx';
 
 interface KonditionViewProps {
-    days: number;
+    filterStartDate?: string | null;
+    filterEndDate?: string | null;
     exerciseEntries: ExerciseEntry[];
     universalActivities: UniversalActivity[];
 }
 
-export function KonditionView({ days, exerciseEntries, universalActivities }: KonditionViewProps) {
+export function KonditionView({ filterStartDate, filterEndDate, exerciseEntries, universalActivities }: KonditionViewProps) {
     // Filter cardio-related exercises
     const cardioTypes = ['running', 'cycling', 'swimming', 'walking', 'hiking', 'cardio', 'löpning', 'cykling', 'simning', 'promenad', 'run', 'ride', 'swim', 'walk', 'hike'];
 
@@ -34,16 +35,18 @@ export function KonditionView({ days, exerciseEntries, universalActivities }: Ko
     }, [exerciseEntries, universalActivities]);
 
     const filteredEntries = useMemo(() => {
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - days);
         return allEntries
             .filter(e => {
                 const isCardio = cardioTypes.some(t => e.type.toLowerCase().includes(t));
-                const inRange = new Date(e.date) >= cutoff;
-                return isCardio && inRange;
+                if (!isCardio) return false;
+
+                if (filterStartDate && e.date < filterStartDate) return false;
+                if (filterEndDate && e.date > filterEndDate) return false;
+
+                return true;
             })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [allEntries, days]);
+    }, [allEntries, filterStartDate, filterEndDate, cardioTypes]);
 
     // Format data for WeeklyDistanceChart
     const weeklyData = useMemo(() => {

@@ -118,6 +118,7 @@ interface DataContextType {
     // Exercise CRUD
     exerciseEntries: ExerciseEntry[];
     addExercise: (data: Omit<ExerciseEntry, 'id' | 'createdAt'>) => ExerciseEntry;
+    updateExercise: (id: string, updates: Partial<ExerciseEntry>) => void;
     deleteExercise: (id: string) => void;
     getExercisesForDate: (date: string) => ExerciseEntry[];
 
@@ -353,6 +354,33 @@ export function DataProvider({ children }: DataProviderProps) {
             }
         } else {
             console.log('[DataContext] No token found, skipping online sync.');
+        }
+
+        // EXTRA SYNC: Strength Workouts
+        if (token) {
+            try {
+                // Fetch full strength history to ensure YearInReview has data
+                const strengthRes = await fetch('/api/strength/workouts', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (strengthRes.ok) {
+                    const strengthData = await strengthRes.json();
+                    if (strengthData.workouts && Array.isArray(strengthData.workouts)) {
+                        console.log('[DataContext] Loaded strength workouts globally:', strengthData.workouts.length);
+                        data.strengthSessions = strengthData.workouts;
+
+                        // Update local mirror so next load has it
+                        const stored = localStorage.getItem('greens-app-data');
+                        if (stored) {
+                            const parsed = JSON.parse(stored);
+                            parsed.strengthSessions = strengthData.workouts;
+                            localStorage.setItem('greens-app-data', JSON.stringify(parsed));
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('[DataContext] Failed to fetch strength workouts:', e);
+            }
         }
 
         setUsers(loadedUsers);
@@ -856,6 +884,20 @@ export function DataProvider({ children }: DataProviderProps) {
 
         return newEntry;
     }, [emitFeedEvent]);
+
+    const updateExercise = useCallback((id: string, updates: Partial<ExerciseEntry>) => {
+        setExerciseEntries(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+
+        // Optimistic update done, syncing...
+        // Note: storageService needs to support updateExercise or similar if we want persistence
+        // For now, mirroring how other updates work or minimal implementation
+        // storageService.updateExercise(id, updates); // If exists
+
+        // Since we don't have a direct atomic update in storage service for exercises yet shown, 
+        // we might rely on the auto-save effect for now, but skipping auto-save for atomic updates 
+        // is usually preferred. Let's rely on auto-save for this iteration as adding a full 
+        // service method is out of scope for just UI unifying, but we should mark it.
+    }, []);
 
     const deleteExercise = useCallback((id: string) => {
         setExerciseEntries(prev => prev.filter(e => e.id !== id));
@@ -1538,6 +1580,7 @@ export function DataProvider({ children }: DataProviderProps) {
         calculateCalorieGoalStreak,
         exerciseEntries,
         addExercise,
+        updateExercise,
         deleteExercise,
         getExercisesForDate,
         weightEntries,

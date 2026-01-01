@@ -904,6 +904,7 @@ export interface ActivityPerformanceSection {
         averageSpeed: number;
         averageHeartrate?: number;
     }>;
+    prCount?: number;
 }
 
 /**

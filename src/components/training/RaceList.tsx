@@ -1,20 +1,40 @@
 import React, { useState, useMemo } from 'react';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
+import {
+    BarChart,
+    Bar,
+    XAxis,
+    YAxis,
+    Tooltip,
+    ResponsiveContainer,
+    CartesianGrid
+} from 'recharts';
 
 interface RaceListProps {
     exerciseEntries: ExerciseEntry[];
     universalActivities: UniversalActivity[];
+    filterStartDate?: string | null;
+    filterEndDate?: string | null;
 }
 
-export function RaceList({ exerciseEntries = [], universalActivities = [] }: RaceListProps) {
+export function RaceList({
+    exerciseEntries = [],
+    universalActivities = [],
+    filterStartDate,
+    filterEndDate
+}: RaceListProps) {
     const [searchQuery, setSearchQuery] = useState('');
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
     const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
 
-    // 1. Filter races & Search
+    // 1. Filter races & Search & Period
     const races = useMemo(() => {
         let items = exerciseEntries.filter(e => e.subType === 'race');
+
+        // Apply Global Filter
+        if (filterStartDate) items = items.filter(r => r.date >= filterStartDate);
+        if (filterEndDate) items = items.filter(r => r.date <= filterEndDate);
 
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
@@ -35,7 +55,32 @@ export function RaceList({ exerciseEntries = [], universalActivities = [] }: Rac
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [exerciseEntries, searchQuery, sortConfig]);
+    }, [exerciseEntries, searchQuery, sortConfig, filterStartDate, filterEndDate]);
+
+    // Statistics Calculation
+    const stats = useMemo(() => {
+        const totalDistance = races.reduce((sum, r) => sum + (r.distance || 0), 0);
+        const totalMinutes = races.reduce((sum, r) => sum + r.durationMinutes, 0);
+
+        // Group by month/year for chart
+        const grouped: Record<string, number> = {};
+        races.forEach(r => {
+            const d = new Date(r.date);
+            const key = `${d.getFullYear()}-${(d.getMonth() + 1).toString().padStart(2, '0')}`;
+            grouped[key] = (grouped[key] || 0) + 1;
+        });
+
+        const chartData = Object.entries(grouped)
+            .map(([date, count]) => ({ date, count }))
+            .sort((a, b) => a.date.localeCompare(b.date));
+
+        return {
+            totalDistance,
+            totalMinutes,
+            count: races.length,
+            chartData
+        };
+    }, [races]);
 
     const handleSort = (key: string) => {
         setSortConfig(prev => ({
@@ -92,9 +137,43 @@ export function RaceList({ exerciseEntries = [], universalActivities = [] }: Rac
                 </div>
             </div>
 
+            {/* Statistics Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div className="grid grid-cols-3 gap-4">
+                    <div className="bg-slate-900/80 border border-white/5 p-4 rounded-2xl text-center">
+                        <div className="text-2xl font-black text-amber-400">{stats.count}</div>
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Tävlingar</div>
+                    </div>
+                    <div className="bg-slate-900/80 border border-white/5 p-4 rounded-2xl text-center">
+                        <div className="text-2xl font-black text-white">{stats.totalDistance.toFixed(1)}</div>
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Km totalt</div>
+                    </div>
+                    <div className="bg-slate-900/80 border border-white/5 p-4 rounded-2xl text-center">
+                        <div className="text-2xl font-black text-sky-400">{Math.round(stats.totalMinutes / 60)}h</div>
+                        <div className="text-[10px] uppercase font-bold text-slate-500">Tid totalt</div>
+                    </div>
+                </div>
+
+                <div className="h-24 bg-slate-900/40 rounded-2xl border border-white/5 p-4 relative overflow-hidden">
+                    <div className="absolute top-2 left-4 text-[9px] font-black text-slate-600 uppercase tracking-widest z-10">Tävlingar per månad</div>
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={stats.chartData} margin={{ top: 10, right: 0, left: -20, bottom: -10 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                            <XAxis dataKey="date" hide />
+                            <YAxis hide />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', fontSize: '10px' }}
+                                itemStyle={{ color: '#fbbf24' }}
+                            />
+                            <Bar dataKey="count" fill="#fbbf24" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+
             {races.length === 0 ? (
                 <div className="text-center py-12 text-slate-500 italic bg-amber-500/5 rounded-xl border border-amber-500/10">
-                    <p>Inga tävlingar hittades.</p>
+                    <p>Inga tävlingar hittades för vald period.</p>
                 </div>
             ) : (
                 <div className="overflow-hidden rounded-xl border border-white/5">

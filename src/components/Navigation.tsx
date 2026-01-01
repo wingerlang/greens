@@ -186,6 +186,11 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                         <span className="w-5 text-center">🧠</span>
                                         <span>Smart Coach</span>
                                     </NavLink>
+                                    <div className="border-t border-white/5 my-1" />
+                                    <NavLink to="/year-in-review" className={linkClasses}>
+                                        <span className="w-5 text-center">📅</span>
+                                        <span>Årsöversikt</span>
+                                    </NavLink>
                                 </div>
                             </div>
                         </div>

@@ -19,6 +19,8 @@ interface CycleYearChartProps {
     exercises: any[];
     zoomMonths: number;
     visibleMetrics: { calories: boolean; volume: boolean; workouts: boolean };
+    filterStartDate?: string | null;
+    filterEndDate?: string | null;
     onEditCycle?: (cycle: any) => void;
     onCreateCycleAfter?: (cycle: any) => void;
 }
@@ -43,6 +45,8 @@ export function CycleYearChart({
     exercises,
     zoomMonths,
     visibleMetrics,
+    filterStartDate,
+    filterEndDate,
     onEditCycle,
     onCreateCycleAfter
 }: CycleYearChartProps) {
@@ -51,16 +55,22 @@ export function CycleYearChart({
     // Calculate date range
     const today = new Date();
     const startDate = useMemo(() => {
+        if (filterStartDate) return new Date(filterStartDate);
+
+        // If no filter, fall back to zoom window
         const d = new Date(today);
         d.setMonth(today.getMonth() - zoomMonths);
         return d;
-    }, [zoomMonths]);
+    }, [zoomMonths, filterStartDate, today]);
 
     const endDate = useMemo(() => {
+        if (filterEndDate) return new Date(filterEndDate);
+
+        // If no filter, fall back to zoom window
         const d = new Date(today);
         d.setMonth(today.getMonth() + zoomMonths);
         return d;
-    }, [zoomMonths]);
+    }, [zoomMonths, filterEndDate, today]);
 
     // Transform data to weekly aggregates
     const chartData = useMemo(() => {

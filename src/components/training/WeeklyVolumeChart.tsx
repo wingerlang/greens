@@ -5,10 +5,11 @@ interface WeeklyVolumeChartProps {
     workouts: StrengthWorkout[];
     setStartDate?: (d: string | null) => void;
     setEndDate?: (d: string | null) => void;
+    fixedYear?: number;
 }
 
-export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: WeeklyVolumeChartProps) {
-    const [range, setRange] = useState<'3m' | '6m' | '12m' | '2025' | 'all'>('12m');
+export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate, fixedYear }: WeeklyVolumeChartProps) {
+    const [range, setRange] = useState<'3m' | '6m' | '12m' | '2025' | 'all'>(fixedYear ? 'all' : '12m'); // 'all' is placeholder if fixedYear is set
     const containerRef = useRef<HTMLDivElement>(null);
     const [pathData, setPathData] = useState<string>('');
     const dotRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -48,7 +49,11 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
         let minDate: Date;
         let maxDate = getLocalMidnight(sortedWorkouts[sortedWorkouts.length - 1].date);
 
-        if (range === '3m') {
+        if (fixedYear) {
+            minDate = new Date(fixedYear, 0, 1);
+            const eoy = new Date(fixedYear, 11, 31);
+            maxDate = eoy;
+        } else if (range === '3m') {
             minDate = new Date(now);
             minDate.setMonth(now.getMonth() - 3);
         } else if (range === '6m') {
@@ -74,6 +79,8 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
 
         workouts.forEach(w => {
             const date = getLocalMidnight(w.date);
+            if (date < minDate || date > maxDate) return;
+
             const weekStart = getSundayMidnight(date);
             const weekKey = getDateKey(weekStart);
             if (weeks[weekKey] !== undefined) {
@@ -90,7 +97,7 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
             const avg = prev4.reduce((sum, item) => sum + item.volume, 0) / prev4.length;
             return { ...d, rollingAvg: avg };
         });
-    }, [workouts, range]);
+    }, [workouts, range, fixedYear]);
 
     // Calculate Trend Line Path
     useLayoutEffect(() => {
@@ -131,27 +138,29 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
 
     return (
         <div className="space-y-6">
-            <div className="flex gap-2 mb-2">
-                {[
-                    { id: '3m', label: '3 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().split('T')[0]; } },
-                    { id: '6m', label: '6 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 6); return d.toISOString().split('T')[0]; } },
-                    { id: '12m', label: '12 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 12); return d.toISOString().split('T')[0]; } },
-                    { id: '2025', label: '2025', start: () => '2025-01-01', end: () => '2025-12-31' },
-                    { id: 'all', label: 'Alla', start: () => null, end: () => null }
-                ].map(p => (
-                    <button
-                        key={p.id}
-                        onClick={() => {
-                            setRange(p.id as any);
-                            setStartDate?.(p.start());
-                            setEndDate?.(p.end?.() || null);
-                        }}
-                        className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg border transition-all ${range === p.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-white/5 text-slate-500 hover:border-white/10'}`}
-                    >
-                        {p.label}
-                    </button>
-                ))}
-            </div>
+            {!fixedYear && (
+                <div className="flex gap-2 mb-2">
+                    {[
+                        { id: '3m', label: '3 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 3); return d.toISOString().split('T')[0]; } },
+                        { id: '6m', label: '6 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 6); return d.toISOString().split('T')[0]; } },
+                        { id: '12m', label: '12 mån', start: () => { const d = new Date(); d.setMonth(d.getMonth() - 12); return d.toISOString().split('T')[0]; } },
+                        { id: '2025', label: '2025', start: () => '2025-01-01', end: () => '2025-12-31' },
+                        { id: 'all', label: 'Alla', start: () => null, end: () => null }
+                    ].map(p => (
+                        <button
+                            key={p.id}
+                            onClick={() => {
+                                setRange(p.id as any);
+                                setStartDate?.(p.start());
+                                setEndDate?.(p.end?.() || null);
+                            }}
+                            className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-lg border transition-all ${range === p.id ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-950 border-white/5 text-slate-500 hover:border-white/10'}`}
+                        >
+                            {p.label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             <div className={`w-full h-40 flex items-end relative ${barGapClass} overflow-visible`} ref={containerRef}>
                 {/* Rolling Average Continuous Dashed Line */}
@@ -335,8 +344,8 @@ export function WeeklyVolumeChart({ workouts, setStartDate, setEndDate }: Weekly
                                         <div className="flex justify-between items-center mb-1 gap-4">
                                             <span className="text-[10px] text-slate-400 font-bold uppercase">{fullLabel}</span>
                                             {rank && <span className={`text-[10px] font-black uppercase px-1.5 rounded ${isGold ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                                                    isSilver ? 'bg-slate-500/20 text-slate-300 border border-slate-500/30' :
-                                                        'bg-orange-500/20 text-orange-300 border border-orange-500/30'
+                                                isSilver ? 'bg-slate-500/20 text-slate-300 border border-slate-500/30' :
+                                                    'bg-orange-500/20 text-orange-300 border border-orange-500/30'
                                                 }`}>
                                                 #{rank}
                                             </span>}
