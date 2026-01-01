@@ -1,13 +1,16 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { WeightEntry } from '../../models/types.ts';
 
 interface WeightTrendChartProps {
     entries: WeightEntry[];
     currentWeight: number;
+    onEntryClick?: (entry: WeightEntry) => void;
 }
 
-export function WeightTrendChart({ entries, currentWeight }: WeightTrendChartProps) {
-    // No internal filtering - use parent-provided entries directly
+export function WeightTrendChart({ entries, currentWeight, onEntryClick }: WeightTrendChartProps) {
+    const [hoveredEntry, setHoveredEntry] = useState<WeightEntry | null>(null);
+    const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
+
     const sortedEntries = useMemo(() => {
         return [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [entries]);
@@ -37,9 +40,50 @@ export function WeightTrendChart({ entries, currentWeight }: WeightTrendChartPro
         return `${x},${y}`;
     }).join(' L ');
 
+    // Generate X-axis labels (more labels for better readability)
+    const xLabels = useMemo(() => {
+        if (sortedEntries.length <= 5) {
+            return sortedEntries.map((e, i) => ({
+                label: e.date.slice(5), // MM-DD
+                pos: (i / (sortedEntries.length - 1)) * 100
+            }));
+        }
+        // Show ~5 evenly spaced labels
+        const step = Math.ceil(sortedEntries.length / 5);
+        const labels: { label: string; pos: number }[] = [];
+        for (let i = 0; i < sortedEntries.length; i += step) {
+            labels.push({
+                label: sortedEntries[i].date.slice(5), // MM-DD
+                pos: (i / (sortedEntries.length - 1)) * 100
+            });
+        }
+        // Always add last
+        const lastIdx = sortedEntries.length - 1;
+        if (!labels.find(l => l.pos === 100)) {
+            labels.push({
+                label: sortedEntries[lastIdx].date.slice(5),
+                pos: 100
+            });
+        }
+        return labels;
+    }, [sortedEntries]);
+
+    const handleMouseEnter = (entry: WeightEntry, event: React.MouseEvent) => {
+        setHoveredEntry(entry);
+        const rect = (event.target as SVGElement).closest('svg')?.getBoundingClientRect();
+        if (rect) {
+            setHoverPos({ x: event.clientX - rect.left, y: event.clientY - rect.top - 30 });
+        }
+    };
+
+    const handleMouseLeave = () => {
+        setHoveredEntry(null);
+        setHoverPos(null);
+    };
+
     return (
         <div className="flex-1 p-4 flex flex-col h-full">
-            {/* Header - NO range selector anymore */}
+            {/* Header */}
             <div className="flex justify-between items-start mb-6">
                 <div>
                     <div className="text-2xl font-black text-white">
@@ -95,26 +139,43 @@ export function WeightTrendChart({ entries, currentWeight }: WeightTrendChartPro
                         strokeLinejoin="round"
                     />
 
-                    {/* Data Points (Smaller dots) */}
+                    {/* Data Points with hover/click */}
                     {sortedEntries.map((d, i) => {
                         const x = (i / (sortedEntries.length - 1)) * 100;
                         const y = 100 - ((d.weight - minW) / chartRange) * 100;
-                        if (sortedEntries.length > 60) return null;
+                        const isHovered = hoveredEntry?.date === d.date;
 
                         return (
                             <circle
-                                key={i}
+                                key={d.date}
                                 cx={x}
                                 cy={y}
-                                r="1"
-                                fill="white"
+                                r={isHovered ? "2" : "1"}
+                                fill={isHovered ? (weightChange <= 0 ? "#10b981" : "#ef4444") : "white"}
                                 stroke={weightChange <= 0 ? "#10b981" : "#ef4444"}
-                                strokeWidth="0.5"
+                                strokeWidth={isHovered ? "1" : "0.5"}
                                 vectorEffect="non-scaling-stroke"
+                                className="cursor-pointer transition-all"
+                                onMouseEnter={(e) => handleMouseEnter(d, e)}
+                                onMouseLeave={handleMouseLeave}
+                                onClick={() => onEntryClick?.(d)}
+                                style={{ pointerEvents: 'all' }}
                             />
                         );
                     })}
                 </svg>
+
+                {/* Tooltip on Hover */}
+                {hoveredEntry && hoverPos && (
+                    <div
+                        className="absolute bg-slate-800 border border-white/10 rounded-lg px-3 py-2 shadow-xl z-50 pointer-events-none"
+                        style={{ left: hoverPos.x, top: hoverPos.y, transform: 'translateX(-50%)' }}
+                    >
+                        <div className="text-xs font-bold text-white">{hoveredEntry.weight.toFixed(1)} kg</div>
+                        <div className="text-[10px] text-slate-400">{hoveredEntry.date}</div>
+                        {onEntryClick && <div className="text-[9px] text-emerald-400 mt-1">Klicka för detaljer</div>}
+                    </div>
+                )}
 
                 {/* Y-axis labels */}
                 <div className="absolute left-0 top-0 bottom-0 -ml-6 flex flex-col justify-between text-[9px] text-slate-500 font-mono py-1 h-full pointer-events-none">
@@ -123,10 +184,13 @@ export function WeightTrendChart({ entries, currentWeight }: WeightTrendChartPro
                     <span>{minW.toFixed(0)}</span>
                 </div>
 
-                {/* X-axis labels */}
-                <div className="absolute -bottom-5 left-0 right-0 flex justify-between text-[9px] text-slate-500 font-medium">
-                    <span>{sortedEntries[0].date}</span>
-                    <span>{sortedEntries[sortedEntries.length - 1].date}</span>
+                {/* X-axis labels (multiple) */}
+                <div className="absolute -bottom-5 left-0 right-0 flex justify-between text-[9px] text-slate-500 font-medium pointer-events-none">
+                    {xLabels.map((l, i) => (
+                        <span key={i} style={{ position: 'absolute', left: `${l.pos}%`, transform: 'translateX(-50%)' }}>
+                            {l.label}
+                        </span>
+                    ))}
                 </div>
             </div>
         </div>

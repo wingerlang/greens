@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { StrengthWorkout } from '../../models/strengthTypes.ts';
 import { useData } from '../../context/DataContext.tsx';
+import { useAuth } from '../../context/AuthContext.tsx';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
 import { formatDuration, formatPace, getRelativeTime, formatSwedishDate } from '../../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown } from '../../utils/performanceEngine.ts';
@@ -74,9 +75,21 @@ export function ActivityDetailModal({
     onSeparate
 }: ActivityDetailModalProps) {
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
-    const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits'>('stats');
+    const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits' | 'merge'>('stats');
     const [showScoreInfo, setShowScoreInfo] = useState(false);
+    const [isUnmerging, setIsUnmerging] = useState(false);
     const { exerciseEntries, universalActivities } = useData();
+    const { token } = useAuth();
+
+    // Check if this is a manually merged activity (using our new merge system)
+    const isMergedActivity = universalActivity?.mergeInfo?.isMerged === true;
+    const mergeInfo = universalActivity?.mergeInfo;
+
+    // Get original activities for merged view
+    const originalActivities = React.useMemo(() => {
+        if (!isMergedActivity || !mergeInfo?.originalActivityIds) return [];
+        return universalActivities.filter(u => mergeInfo.originalActivityIds.includes(u.id));
+    }, [isMergedActivity, mergeInfo, universalActivities]);
 
     // Combine manual entries with mapped universal activities
     const allActivities = React.useMemo(() => {
@@ -95,6 +108,32 @@ export function ActivityDetailModal({
     // Derived splits helper
     const splits = perf?.splits || [];
     const hasSplits = splits.length > 0;
+
+    // Unmerge handler
+    const handleUnmerge = async () => {
+        if (!universalActivity?.id || !token) return;
+        setIsUnmerging(true);
+        try {
+            const response = await fetch(`/api/activities/${universalActivity.id}/separate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            const result = await response.json();
+            if (result.success) {
+                onClose();
+                window.location.reload();
+            } else {
+                alert(`Separering misslyckades: ${result.error}`);
+            }
+        } catch (e) {
+            alert('Separering misslyckades: Nätverksfel');
+        } finally {
+            setIsUnmerging(false);
+        }
+    };
 
     // Find similar activities for comparison
     const similarActivities = React.useMemo(() => {
@@ -157,6 +196,14 @@ export function ActivityDetailModal({
                             className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 ${activeTab === 'splits' ? 'text-indigo-400 border-indigo-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
                         >
                             Splits
+                        </button>
+                    )}
+                    {isMergedActivity && (
+                        <button
+                            onClick={() => setActiveTab('merge')}
+                            className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'merge' ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                        >
+                            <span>⚡</span> Sammanslagen ({originalActivities.length})
                         </button>
                     )}
                 </div>
@@ -622,9 +669,95 @@ export function ActivityDetailModal({
                     </div>
                 )}
 
+                {/* MERGE TAB - Shows original activities for manually merged activities */}
+                {activeTab === 'merge' && isMergedActivity && (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">⚡ Sammanslagen aktivitet</h3>
+                            <span className="text-[10px] text-slate-500 uppercase font-mono">
+                                Skapad {mergeInfo?.mergedAt ? formatSwedishDate(mergeInfo.mergedAt.split('T')[0]) : '-'}
+                            </span>
+                        </div>
+
+                        <div className="bg-amber-950/20 border border-amber-500/20 rounded-xl p-4">
+                            <p className="text-sm text-slate-300 mb-4">
+                                Denna aktivitet är en sammanslagning av <strong className="text-amber-400">{originalActivities.length}</strong> separata aktiviteter.
+                                De kombinerade värdena (distans, tid, kalorier osv.) har räknats ut automatiskt.
+                            </p>
+
+                            {/* Original Activities List */}
+                            <div className="space-y-3">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase">Ingående aktiviteter:</h4>
+                                {originalActivities.length > 0 ? (
+                                    originalActivities.map((orig, idx) => (
+                                        <div key={orig.id} className="bg-slate-800/50 border border-white/5 rounded-lg p-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-400">
+                                                        {idx + 1}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-white font-bold capitalize">{orig.performance?.activityType || 'Aktivitet'}</p>
+                                                        <p className="text-xs text-slate-500">{formatSwedishDate(orig.date)}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex gap-4 text-sm">
+                                                    {orig.performance?.distanceKm && (
+                                                        <div className="text-right">
+                                                            <p className="text-emerald-400 font-mono font-bold">{orig.performance.distanceKm.toFixed(1)} km</p>
+                                                        </div>
+                                                    )}
+                                                    {orig.performance?.durationMinutes && (
+                                                        <div className="text-right">
+                                                            <p className="text-slate-300 font-mono">{formatDuration(orig.performance.durationMinutes * 60)}</p>
+                                                        </div>
+                                                    )}
+                                                    {orig.performance?.distanceKm && orig.performance?.durationMinutes && (
+                                                        <div className="text-right">
+                                                            <p className="text-indigo-400 font-mono">{formatPace((orig.performance.durationMinutes * 60) / orig.performance.distanceKm)}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-slate-500 italic text-sm">
+                                        Originalaktiviteterna kunde inte hittas. De kan ha tagits bort.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Unmerge Option */}
+                        <div className="bg-slate-800/30 border border-white/5 rounded-xl p-4">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">🔀 Ta isär aktiviteter</h4>
+                            <p className="text-sm text-slate-400 mb-4">
+                                Om sammanslagningen blev fel kan du separera dem igen. Den sammanslagna aktiviteten försvinner och de ursprungliga aktiviteterna visas på nytt.
+                            </p>
+                            <button
+                                onClick={handleUnmerge}
+                                disabled={isUnmerging}
+                                className="w-full bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
+                            >
+                                {isUnmerging ? '⏳ Separerar...' : '🔀 Separera aktiviteter'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Action Buttons */}
                 <div className="flex gap-3">
-                    {isMerged && onSeparate && (
+                    {isMergedActivity && (
+                        <button
+                            onClick={handleUnmerge}
+                            disabled={isUnmerging}
+                            className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white font-bold py-3 rounded-xl transition-colors"
+                        >
+                            {isUnmerging ? '⏳...' : '🔀 Separera'}
+                        </button>
+                    )}
+                    {isMerged && onSeparate && !isMergedActivity && (
                         <button
                             onClick={onSeparate}
                             className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-bold py-3 rounded-xl transition-colors"
@@ -642,7 +775,7 @@ export function ActivityDetailModal({
                     </button>
                     <button
                         onClick={onClose}
-                        className={`${isMerged && onSeparate ? 'flex-1' : 'flex-1'} bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors`}
+                        className={`flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors`}
                     >
                         Stäng
                     </button>

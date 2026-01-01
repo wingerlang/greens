@@ -938,6 +938,17 @@ export interface UniversalActivity {
     performance?: ActivityPerformanceSection;
     analysis?: ActivityAnalysisSection;
 
+    // Merge tracking (for combined activities)
+    mergeInfo?: {
+        isMerged: boolean;
+        originalActivityIds: string[];  // IDs of activities that were merged
+        mergedAt: string;               // ISO timestamp when merge occurred
+    };
+
+    // If this activity was merged INTO another, hide it from views
+    // This ID points to the merged activity that replaced this one
+    mergedIntoId?: string;
+
     createdAt: string;
     updatedAt: string;
 }

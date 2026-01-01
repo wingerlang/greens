@@ -10,15 +10,21 @@ import { ActivityDetailModal } from '../components/activities/ActivityDetailModa
 import { SmartFilter, parseSmartQuery, applySmartFilters } from '../utils/activityFilters.ts';
 import { formatDuration } from '../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP } from '../utils/performanceEngine.ts';
+import { mergeStrengthWorkouts } from '../api/services/activityMergeService.ts';
 
 export function ActivitiesPage() {
-    const { unifiedActivities: allActivities, universalActivities } = useData();
+    const { unifiedActivities: allActivities, universalActivities, strengthSessions, addStrengthSession, deleteStrengthSession } = useData();
     const { token } = useAuth();
     const [searchParams, setSearchParams] = useSearchParams();
 
     // Core State
     const [selectedActivity, setSelectedActivity] = useState<(ExerciseEntry & { source: string }) | null>(null);
     const [showFilters, setShowFilters] = useState(false);
+
+    // Merge Selection State
+    const [selectedForMerge, setSelectedForMerge] = useState<Set<string>>(new Set());
+    const [lastClickedIndex, setLastClickedIndex] = useState<number | null>(null);
+    const [isMerging, setIsMerging] = useState(false);
 
     // Filter State
     const [searchQuery, setSearchQuery] = useState('');
@@ -72,6 +78,11 @@ export function ActivitiesPage() {
         let result = applySmartFilters(allActivities, activeSmartFilters);
 
         result = result.filter(a => {
+            // Hide activities that have been merged into another activity
+            // Check if there's a corresponding universalActivity with mergedIntoId
+            const universalMatch = universalActivities.find(u => u.id === a.id);
+            if (universalMatch?.mergedIntoId) return false;
+
             // Source Filter
             if (sourceFilter !== 'all' && a.source !== sourceFilter) return false;
 
@@ -169,6 +180,116 @@ export function ActivitiesPage() {
     const selectedUniversal = selectedActivity
         ? universalActivities.find(u => u.id === selectedActivity.id)
         : undefined;
+
+    // Merge selection handlers
+    const toggleMergeSelection = (activityId: string, index: number, event: React.MouseEvent) => {
+        event.stopPropagation();
+
+        setSelectedForMerge(prev => {
+            const newSet = new Set(prev);
+
+            // Shift-click: select range
+            if (event.shiftKey && lastClickedIndex !== null) {
+                const start = Math.min(lastClickedIndex, index);
+                const end = Math.max(lastClickedIndex, index);
+                for (let i = start; i <= end; i++) {
+                    const activity = processedActivities[i];
+                    if (activity?.id) newSet.add(activity.id);
+                }
+            } else {
+                // Regular click: toggle single
+                if (newSet.has(activityId)) {
+                    newSet.delete(activityId);
+                } else {
+                    newSet.add(activityId);
+                }
+            }
+
+            return newSet;
+        });
+
+        setLastClickedIndex(index);
+    };
+
+    const clearMergeSelection = () => {
+        setSelectedForMerge(new Set());
+        setLastClickedIndex(null);
+    };
+
+    const handleMergeActivities = async () => {
+        if (selectedForMerge.size < 2 || !token) return;
+
+        setIsMerging(true);
+        try {
+            // Check if these are strength activities (from strengthSessions)
+            const selectedIds = Array.from(selectedForMerge);
+            const selectedStrengthWorkouts = (strengthSessions as StrengthWorkout[]).filter(w => selectedForMerge.has(w.id));
+
+            // If all selected are strength workouts, merge them client-side
+            if (selectedStrengthWorkouts.length >= 2 && selectedStrengthWorkouts.length === selectedIds.length) {
+                // This is a strength-only merge - handle client-side
+                const tempUserId = 'local-user'; // Client-side merge doesn't need real userId
+                const mergedWorkout = mergeStrengthWorkouts(selectedStrengthWorkouts, tempUserId);
+
+                // Add the merged workout
+                addStrengthSession(mergedWorkout);
+
+                // Delete the original workouts
+                for (const workout of selectedStrengthWorkouts) {
+                    deleteStrengthSession(workout.id);
+                }
+
+                clearMergeSelection();
+                // No need to reload - state will update automatically
+                alert(`Sammanslog ${selectedStrengthWorkouts.length} styrkepass!\n\n` +
+                    `Övningar: ${mergedWorkout.uniqueExercises}\n` +
+                    `Set: ${mergedWorkout.totalSets}\n` +
+                    `Volym: ${(mergedWorkout.totalVolume / 1000).toFixed(1)} ton`);
+                return;
+            }
+
+            // Get the full universal activities for the selected IDs (non-strength)
+            const activitiesToMerge = universalActivities.filter(u => selectedForMerge.has(u.id));
+
+            if (activitiesToMerge.length < 2) {
+                // Maybe mixed selection - try strength as fallback
+                if (selectedStrengthWorkouts.length > 0) {
+                    alert('Blandade aktivitetstyper kan inte slås ihop. Välj bara styrkepass eller bara andra aktiviteter.');
+                    setIsMerging(false);
+                    return;
+                }
+                alert('Kunde inte hitta aktiviteterna. Försök igen.');
+                setIsMerging(false);
+                return;
+            }
+
+            const response = await fetch('/api/activities/merge', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ activities: activitiesToMerge })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                clearMergeSelection();
+                // Refresh data (ideally via context)
+                window.location.reload();
+            } else {
+                alert(`Merge failed: ${result.error}`);
+            }
+        } catch (e) {
+            console.error('Merge error:', e);
+            alert('Merge failed: Network error');
+        } finally {
+            setIsMerging(false);
+        }
+    };
+
+    // Get selected activities for preview
+    const selectedActivitiesForMerge = processedActivities.filter(a => selectedForMerge.has(a.id));
 
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
@@ -399,6 +520,7 @@ export function ActivitiesPage() {
                 <table className="w-full text-left text-sm text-slate-400">
                     <thead className="bg-slate-950/80 text-xs uppercase font-bold text-slate-500 border-b border-white/5 sticky top-0 z-10 backdrop-blur-md">
                         <tr>
+                            <th className="w-10"></th> {/* Merge selection column */}
                             <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('date')}>
                                 Datum <SortIcon colKey="date" />
                             </th>
@@ -433,88 +555,131 @@ export function ActivitiesPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {processedActivities.map((activity, i) => (
-                            <tr
-                                key={activity.id || i}
-                                className="hover:bg-white/5 transition-colors cursor-pointer group"
-                                onClick={() => handleSetSelectedActivity(activity)}
-                            >
-                                <td className="px-6 py-4 font-mono text-white whitespace-nowrap">
-                                    {activity.date.split('T')[0]}
-                                </td>
-                                <td className="px-6 py-4">
-                                    <div className="flex flex-col items-start gap-1">
-                                        <span className="capitalize text-white font-bold group-hover:text-emerald-400 transition-colors">{activity.type}</span>
-                                        {activity.subType === 'race' && (
-                                            <span className="text-[10px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">🏆 Tävling</span>
-                                        )}
-                                        {activity.subType === 'interval' && (
-                                            <span className="text-[10px] uppercase font-bold bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20">⚡ Intervaller</span>
-                                        )}
-                                        {activity.subType === 'long-run' && (
-                                            <span className="text-[10px] uppercase font-bold bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏃 Långpass</span>
-                                        )}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4">
-                                    {activity.source === 'strava' ? (
-                                        <span className="inline-flex items-center gap-1 text-[#FC4C02] font-bold text-[10px] uppercase tracking-wider bg-[#FC4C02]/10 px-2 py-1 rounded">
-                                            🔥 Strava
-                                        </span>
-                                    ) : activity.source === 'merged' ? (
-                                        <span className="inline-flex items-center gap-1 text-emerald-400 font-bold text-[10px] uppercase tracking-wider bg-emerald-500/10 px-2 py-1 rounded">
-                                            ⚡ Merged
-                                        </span>
-                                    ) : activity.source === 'strength' ? (
-                                        <span className="inline-flex items-center gap-1 text-purple-400 font-bold text-[10px] uppercase tracking-wider bg-purple-500/10 px-2 py-1 rounded">
-                                            💪 Strength
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex items-center gap-1 text-blue-400 font-bold text-[10px] uppercase tracking-wider bg-blue-500/10 px-2 py-1 rounded">
-                                            ✏️ Manuell
-                                        </span>
-                                    )}
-                                </td>
-                                <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                    {activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}
-                                </td>
-                                {processedActivities.some(a => a.distance) && (
-                                    <>
-                                        <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                            {activity.distance ? `${activity.distance.toFixed(1)}` : '-'}
-                                        </td>
-                                        <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                            {activity.distance ? (
-                                                <div className="flex flex-col items-end">
-                                                    <span className="text-[10px] opacity-70">{(activity.durationMinutes / activity.distance).toFixed(2).replace('.', ':')} /km</span>
-                                                    {activity.elevationGain && activity.elevationGain > 0 && (
-                                                        <span className="text-[10px] text-indigo-400 font-bold" title="Grade Adjusted Pace (Lutningsjusterat tempo)">
-                                                            GAP: {(calculateGAP((activity.durationMinutes * 60) / activity.distance, activity.elevationGain, activity.distance) / 60).toFixed(2).replace('.', ':')}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            ) : '-'}
-                                        </td>
-                                    </>
-                                )}
-                                {processedActivities.some(a => a.tonnage) && (
-                                    <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                        {activity.tonnage ? `${(activity.tonnage / 1000).toFixed(1)} t` : '-'}
+                        {processedActivities.map((activity, i) => {
+                            const isSelectedForMerge = selectedForMerge.has(activity.id);
+                            return (
+                                <tr
+                                    key={activity.id || i}
+                                    className={`transition-colors cursor-pointer group ${isSelectedForMerge
+                                        ? 'bg-indigo-500/20 hover:bg-indigo-500/30 ring-1 ring-indigo-500/50'
+                                        : 'hover:bg-white/5'
+                                        }`}
+                                    onClick={() => handleSetSelectedActivity(activity)}
+                                >
+                                    {/* Mark for merge button */}
+                                    <td className="w-10 px-2">
+                                        <button
+                                            onClick={(e) => toggleMergeSelection(activity.id, i, e)}
+                                            className={`opacity-0 group-hover:opacity-100 transition-all w-6 h-6 rounded-md flex items-center justify-center ${isSelectedForMerge
+                                                ? 'opacity-100 bg-indigo-500 text-white'
+                                                : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                                                }`}
+                                            title={isSelectedForMerge ? 'Ta bort från merge' : 'Markera för merge (Shift+klick för flera)'}
+                                        >
+                                            {isSelectedForMerge ? '✓' : '+'}
+                                        </button>
                                     </td>
-                                )}
-                                <td className="px-6 py-4 text-right">
-                                    <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-black text-[10px] border ${calculatePerformanceScore(activity) >= 80 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
-                                        calculatePerformanceScore(activity) >= 60 ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' :
-                                            'bg-slate-500/20 border-slate-500/50 text-slate-400'
-                                        }`}>
-                                        {calculatePerformanceScore(activity)}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-4 text-xs italic opacity-50 truncate max-w-[150px]">
-                                    {activity.notes}
-                                </td>
-                            </tr>
-                        ))}
+                                    <td className="px-6 py-4 font-mono text-white whitespace-nowrap">
+                                        {activity.date.split('T')[0]}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col items-start gap-1">
+                                            <span className="capitalize text-white font-bold group-hover:text-emerald-400 transition-colors">{activity.type}</span>
+                                            {activity.subType === 'race' && (
+                                                <span className="text-[10px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">🏆 Tävling</span>
+                                            )}
+                                            {activity.subType === 'interval' && (
+                                                <span className="text-[10px] uppercase font-bold bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20">⚡ Intervaller</span>
+                                            )}
+                                            {activity.subType === 'long-run' && (
+                                                <span className="text-[10px] uppercase font-bold bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏃 Långpass</span>
+                                            )}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {(() => {
+                                            // Check if this is a manually merged activity
+                                            const universalMatch = universalActivities.find(u => u.id === activity.id);
+                                            const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true;
+
+                                            if (isMergedActivity) {
+                                                return (
+                                                    <span className="inline-flex items-center gap-1 text-amber-400 font-bold text-[10px] uppercase tracking-wider bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
+                                                        ⚡ Sammanslagen ({universalMatch?.mergeInfo?.originalActivityIds?.length || 0})
+                                                    </span>
+                                                );
+                                            } else if (activity.source === 'strava') {
+                                                return (
+                                                    <span className="inline-flex items-center gap-1 text-[#FC4C02] font-bold text-[10px] uppercase tracking-wider bg-[#FC4C02]/10 px-2 py-1 rounded">
+                                                        🔥 Strava
+                                                    </span>
+                                                );
+                                            } else if (activity.source === 'merged') {
+                                                return (
+                                                    <span className="inline-flex items-center gap-1 text-emerald-400 font-bold text-[10px] uppercase tracking-wider bg-emerald-500/10 px-2 py-1 rounded">
+                                                        ⚡ Merged
+                                                    </span>
+                                                );
+                                            } else if (activity.source === 'strength') {
+                                                return (
+                                                    <span className="inline-flex items-center gap-1 text-purple-400 font-bold text-[10px] uppercase tracking-wider bg-purple-500/10 px-2 py-1 rounded">
+                                                        💪 Strength
+                                                    </span>
+                                                );
+                                            } else {
+                                                return (
+                                                    <span className="inline-flex items-center gap-1 text-blue-400 font-bold text-[10px] uppercase tracking-wider bg-blue-500/10 px-2 py-1 rounded">
+                                                        ✏️ Manuell
+                                                    </span>
+                                                );
+                                            }
+                                        })()}
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                        {activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}
+                                    </td>
+                                    {
+                                        processedActivities.some(a => a.distance) && (
+                                            <>
+                                                <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                                    {activity.distance ? `${activity.distance.toFixed(1)}` : '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                                    {activity.distance ? (
+                                                        <div className="flex flex-col items-end">
+                                                            <span className="text-[10px] opacity-70">{(activity.durationMinutes / activity.distance).toFixed(2).replace('.', ':')} /km</span>
+                                                            {activity.elevationGain && activity.elevationGain > 0 && (
+                                                                <span className="text-[10px] text-indigo-400 font-bold" title="Grade Adjusted Pace (Lutningsjusterat tempo)">
+                                                                    GAP: {(calculateGAP((activity.durationMinutes * 60) / activity.distance, activity.elevationGain, activity.distance) / 60).toFixed(2).replace('.', ':')}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    ) : '-'}
+                                                </td>
+                                            </>
+                                        )
+                                    }
+                                    {
+                                        processedActivities.some(a => a.tonnage) && (
+                                            <td className="px-6 py-4 text-right font-mono text-slate-300">
+                                                {activity.tonnage ? `${(activity.tonnage / 1000).toFixed(1)} t` : '-'}
+                                            </td>
+                                        )
+                                    }
+                                    <td className="px-6 py-4 text-right">
+                                        <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-black text-[10px] border ${calculatePerformanceScore(activity) >= 80 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
+                                            calculatePerformanceScore(activity) >= 60 ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' :
+                                                'bg-slate-500/20 border-slate-500/50 text-slate-400'
+                                            }`}>
+                                            {calculatePerformanceScore(activity)}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-xs italic opacity-50 truncate max-w-[150px]">
+                                        {activity.notes}
+                                    </td>
+                                </tr>
+                            );
+                        })}
                     </tbody>
                 </table>
 
@@ -540,13 +705,50 @@ export function ActivitiesPage() {
             </div>
 
             {/* Detail Modal */}
-            {selectedActivity && (
-                <ActivityDetailModal
-                    activity={selectedActivity}
-                    universalActivity={selectedUniversal}
-                    onClose={() => handleSetSelectedActivity(null)}
-                />
+            {
+                selectedActivity && (
+                    <ActivityDetailModal
+                        activity={selectedActivity}
+                        universalActivity={selectedUniversal}
+                        onClose={() => handleSetSelectedActivity(null)}
+                    />
+                )
+            }
+
+            {/* Floating Merge Action Bar */}
+            {selectedForMerge.size >= 2 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-slate-900 border border-indigo-500/50 rounded-2xl shadow-2xl shadow-indigo-500/20 px-6 py-4 flex items-center gap-6">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-indigo-500/20 border border-indigo-500/50 flex items-center justify-center">
+                                <span className="text-indigo-400 font-black">{selectedForMerge.size}</span>
+                            </div>
+                            <div>
+                                <p className="text-white font-bold">Aktiviteter markerade</p>
+                                <p className="text-xs text-slate-400">
+                                    Total: {selectedActivitiesForMerge.reduce((s, a) => s + (a.distance || 0), 0).toFixed(1)} km,
+                                    {formatDuration(selectedActivitiesForMerge.reduce((s, a) => s + (a.durationMinutes * 60 || 0), 0))}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={clearMergeSelection}
+                                className="px-4 py-2 rounded-xl text-sm font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                onClick={handleMergeActivities}
+                                disabled={isMerging}
+                                className="px-6 py-2 rounded-xl text-sm font-bold bg-indigo-500 hover:bg-indigo-400 text-white shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {isMerging ? '⏳ Slår ihop...' : '⚡ Slå ihop aktiviteter'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
-        </div>
+        </div >
     );
 }
