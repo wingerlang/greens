@@ -84,6 +84,26 @@ export class LocalStorageService implements StorageService {
                                 cloudData.recipes = localData.recipes;
                                 if (!cloudData.foodItems || cloudData.foodItems.length < 5) cloudData.foodItems = localData.foodItems;
                             }
+                            // Safety: Merge performance goals intelligently
+                            // Combine local and cloud goals by ID, preferring cloud versions if they exist (unless local is newer - but we don't track localUpdatedAt robustly yet)
+                            // Ideally we would check timestamps, but for now: union of IDs is safer than overwrite.
+                            const cloudGoals = cloudData.performanceGoals || [];
+                            const localGoals = localData.performanceGoals || [];
+
+                            if (localGoals.length > 0) {
+                                console.log('[Storage] Merging local goals with cloud goals');
+                                const mergedGoals = [...cloudGoals];
+                                const cloudIds = new Set(cloudGoals.map(g => g.id));
+
+                                localGoals.forEach(localG => {
+                                    if (!cloudIds.has(localG.id)) {
+                                        // Goal exists locally but not in cloud -> Preserve it (it's likely new)
+                                        console.log(`[Storage] Preserving local-only goal: ${localG.name} (${localG.id})`);
+                                        mergedGoals.push(localG);
+                                    }
+                                });
+                                cloudData.performanceGoals = mergedGoals;
+                            }
                         }
 
                         data = cloudData;

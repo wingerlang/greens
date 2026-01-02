@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { GoalsOverviewWidget } from '../components/goals/GoalsOverviewWidget.tsx';
+import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
+import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -58,24 +60,24 @@ const DoubleCircularProgress = ({
             stroke: 6,
             innerRadius: 36,
             innerStroke: 4,
-            text: 'text-2xl',
-            icon: 16
+            text: 'text-xl',
+            icon: 14
         },
         slim: {
             radius: 85,
             stroke: 9,
             innerRadius: 65,
             innerStroke: 6,
-            text: 'text-4xl',
-            icon: 24
+            text: 'text-3xl',
+            icon: 20
         },
         cozy: {
             radius: 110,
             stroke: 12,
             innerRadius: 85,
             innerStroke: 10,
-            text: 'text-5xl',
-            icon: 28
+            text: 'text-4xl',
+            icon: 24
         }
     }[density];
 
@@ -147,18 +149,16 @@ const DoubleCircularProgress = ({
                     {Math.round(value)}
                 </div>
                 <div className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">{label}</div>
-                <div className="mt-2 flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
-                    <div className={`w-2 h-2 rounded-full ${isProteinMet ? 'bg-emerald-500' : 'bg-orange-400'}`} />
-                    <span className="text-slate-700 dark:text-slate-300">
-                        {Math.round(innerValue)}/{innerMax}g
+                <div className="mt-2 flex flex-col items-center gap-0.5">
+                    <div className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
+                        <div className={`w-2 h-2 rounded-full ${isProteinMet ? 'bg-emerald-500' : 'bg-orange-400'}`} />
+                        <span className="text-slate-700 dark:text-slate-300">
+                            {Math.round(innerValue)}/{innerMax}g
+                        </span>
+                    </div>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                        Protein
                     </span>
-                </div>
-
-                {/* Micro-nutrient indicator (mock) */}
-                <div className="mt-1 flex gap-0.5">
-                    {[1, 2, 3].map(i => (
-                        <div key={i} className="w-1 h-1 rounded-full bg-emerald-500/50" />
-                    ))}
                 </div>
             </div>
         </div>
@@ -435,15 +435,21 @@ export function DashboardPage() {
 
     // --- Derived Data ---
 
-    // 1. Calories
-    const consumed = health.dailyCaloriesConsumed || 0;
+    // 1. Calories & Nutrition
+    const dailyNutrition = calculateDailyNutrition(selectedDate);
+    const consumed = dailyNutrition.calories;
     const burned = health.dailyCaloriesBurned || 0;
-    const target = health.targetCalories || 2500;
+    const target = settings.dailyCalorieGoal || 2500;
 
-    // 2. Protein Calculation
+    // 2. Macros
     const proteinTarget = settings.dailyProteinGoal || 160;
-    const proteinCurrent = Math.round(consumed * 0.05); // Raw value
-    const proteinDisplay = Math.min(proteinTarget, proteinCurrent); // Clamped for progress bar
+    const proteinCurrent = dailyNutrition.protein;
+
+    const carbsTarget = settings.dailyCarbsGoal || 250; // Default estimate
+    const carbsCurrent = dailyNutrition.carbs;
+
+    const fatTarget = settings.dailyFatGoal || 80; // Default estimate
+    const fatCurrent = dailyNutrition.fat;
 
     // 3. Weight & Measurement Logic
     const getRangeDays = (range: typeof weightRange) => {
@@ -652,6 +658,39 @@ export function DashboardPage() {
     const sleepClasses = vitals.sleep > 0 ? (sleepColorMap[sleepInfo.color] || sleepColorMap.slate) : sleepColorMap.slate;
     const sleepColorClass = sleepClasses.text;
 
+    // --- Card Completion Logic for Sorting ---
+    // --- Card Completion Logic for Sorting ---
+    const [completedCards, setCompletedCards] = useState<string[]>([]);
+
+    const toggleCardCompletion = (id: string, e: React.MouseEvent) => {
+        e.stopPropagation();
+        setCompletedCards(prev =>
+            prev.includes(id)
+                ? prev.filter(c => c !== id)
+                : [...prev, id]
+        );
+    };
+
+    const isIntakeDone = completedCards.includes('intake');
+    const isTrainingDone = completedCards.includes('training');
+    const isSleepDone = completedCards.includes('sleep');
+    const isWaterDone = completedCards.includes('water');
+    const isCaffeineDone = completedCards.includes('caffeine');
+    const isAlcoholDone = completedCards.includes('alcohol');
+
+    // Card Definition
+    const cardOrder = [
+        { id: 'intake', isDone: isIntakeDone, component: null }, // Handled specially
+        { id: 'training', isDone: isTrainingDone, component: null },
+        { id: 'sleep', isDone: isSleepDone, component: null },
+        { id: 'water', isDone: isWaterDone, component: null },
+        { id: 'alcohol', isDone: isAlcoholDone, component: null },
+        { id: 'caffeine', isDone: isCaffeineDone, component: null },
+    ].sort((a, b) => {
+        if (a.isDone === b.isDone) return 0;
+        return a.isDone ? 1 : -1; // Done Items at Bottom
+    });
+
     return (
         <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-12 font-sans text-slate-900 dark:text-white animate-in fade-in duration-500 transition-colors">
             <div className="max-w-5xl mx-auto">
@@ -704,353 +743,256 @@ export function DashboardPage() {
                     </div>
                 </header>
 
-                <div className={`grid grid-cols-1 md:grid-cols-12 ${density === 'compact' ? 'gap-3' : density === 'slim' ? 'gap-4' : 'gap-6'} items-start`}>
+                <div className={`grid grid-cols-1 md:grid-cols-12 ${density === 'compact' ? 'gap-3' : density === 'slim' ? 'gap-4' : 'gap-6'} items-stretch`}>
+                    {/* Top Section: Daily Summary & Active Goals */}
+                    <div className="md:col-span-12 flex flex-col gap-4 mb-4">
+                        <DailySummaryCard
+                            calories={{ current: consumed, target: target }}
+                            protein={{ current: proteinCurrent, target: proteinTarget }}
+                            trainingMinutes={completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0)}
+                            measurementsCount={0}
+                            weighInDone={latest3Weights.some(w => w.date === today)}
+                            sleepHours={vitals.sleep || 0}
+                            alcoholUnits={vitals.alcohol || 0}
+                            density={density === 'compact' ? 'compact' : 'normal'}
+                        />
+                        <ActiveGoalsCard />
+                    </div>
+
                     {/* 7-Day Performance Summary */}
-                    <div className="md:col-span-12 mb-2">
-                        <div className={`${density === 'compact' ? 'p-2' : 'p-6'} bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm`}>
-                            <div className={`flex flex-col md:flex-row justify-between md:items-center ${density === 'compact' ? 'mb-2 px-2' : 'mb-6 px-1'}`}>
-                                <div className="flex items-center gap-3">
-                                    <h3 className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} font-black uppercase tracking-tighter text-slate-400 flex items-center gap-2`}>
-                                        <div className="w-1 h-3 bg-indigo-500 rounded-full" />
-                                        Senaste 7 Dagarna
-                                    </h3>
-                                    {density === 'compact' && (() => {
-                                        const last7 = Array.from({ length: 7 }).map((_, i) => {
-                                            const d = new Date();
-                                            d.setDate(d.getDate() - i);
-                                            return d.toISOString().split('T')[0];
-                                        });
-                                        const weeklyEx = unifiedActivities.filter(e => last7.includes(e.date));
+                    {/* Render Sorted Cards */}
+                    {cardOrder.map((card) => {
+                        const isDone = card.isDone;
+                        // Visual state: "Done" = slightly transparent, checkmark badge, grayscale
+                        const opacityClass = isDone
+                            ? 'opacity-60 grayscale-[0.8] hover:opacity-100 hover:grayscale-0 transition-all duration-500'
+                            : '';
 
-                                        // Manual calorie sum to avoid hook violation
-                                        let totalCals = 0;
-                                        last7.forEach(iso => {
-                                            const nutrition = calculateDailyNutrition(iso);
-                                            totalCals += nutrition.calories;
-                                        });
+                        const Wrapper = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
+                            <div className={`${className} ${opacityClass} relative group/card`}>
+                                {/* Manual Completion Toggle */}
+                                <button
+                                    onClick={(e) => toggleCardCompletion(card.id, e)}
+                                    className={`absolute -top-3 -right-3 z-30 p-2 rounded-full shadow-lg transition-all transform hover:scale-110 ${isDone ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 opacity-0 group-hover/card:opacity-100'}`}
+                                    title={isDone ? "Markera som ej klar" : "Markera som klar"}
+                                >
+                                    <Check size={14} strokeWidth={3} />
+                                </button>
 
-                                        const totalDur = weeklyEx.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
-                                        const totalDist = weeklyEx.reduce((sum, e) => sum + (e.distance || 0), 0);
-                                        const totalTon = weeklyEx.reduce((sum, e) => sum + (e.tonnage || 0), 0);
-                                        return (
-                                            <span className="text-[10px] font-bold text-slate-500 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full overflow-hidden whitespace-nowrap opacity-60">
-                                                {Math.floor(totalDur / 60)}h {totalDur % 60}m | {Math.round(totalCals)} kcal | {totalDist.toFixed(1)} km | {(totalTon / 1000).toFixed(1)} t
-                                            </span>
-                                        );
-                                    })()}
-                                </div>
-                                <div className="flex gap-4 items-center">
-                                    <div className="flex items-center gap-1.5">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase">Träning</span>
-                                    </div>
-                                    {density !== 'compact' && (
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/30"></div>
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase">Idag</span>
-                                        </div>
-                                    )}
-                                </div>
+                                {children}
                             </div>
+                        );
 
-                            <div className={`grid grid-cols-7 ${density === 'compact' ? 'gap-1' : 'gap-3'}`}>
-                                {Array.from({ length: 7 }).map((_, i) => {
-                                    const date = new Date();
-                                    date.setDate(date.getDate() - (6 - i));
-                                    const iso = date.toISOString().split('T')[0];
-                                    const isDayToday = iso === today;
-
-                                    // Data aggregation for day i
-                                    const dayExercises = unifiedActivities.filter(e => e.date === iso);
-                                    const dayNutrition = calculateDailyNutrition(iso);
-
-                                    const dist = dayExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
-                                    const ton = dayExercises.reduce((sum, e) => sum + (e.tonnage || 0), 0);
-                                    const duration = dayExercises.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
-                                    const runExercises = dayExercises.filter(e => e.type === 'running' || e.type === 'walking' || e.type === 'cycling' || (e.distance || 0) > 0);
-                                    const runDuration = runExercises.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
-                                    const speed = runDuration > 0 ? (dist / (runDuration / 60)) : 0;
-                                    const calPercentage = Math.min((dayNutrition.calories || 0) / (settings.dailyCalorieGoal || 2000), 1.2);
-
-                                    return (
-                                        <div
-                                            key={iso}
-                                            onClick={() => setSelectedDate(iso)}
-                                            className={`flex flex-col items-center cursor-pointer transition-all ${iso === selectedDate ? 'bg-indigo-100/50 dark:bg-indigo-900/30 ring-2 ring-indigo-500/50' : isDayToday ? 'bg-indigo-50/20 dark:bg-indigo-900/10 opacity-70' : 'hover:bg-slate-50 dark:hover:bg-slate-800/20'} rounded-xl ${density === 'compact' ? 'p-1' : 'p-2'} border border-transparent group/day relative`}
-                                        >
-                                            <span className={`${density === 'compact' ? 'text-[8px]' : 'text-[10px]'} font-bold text-slate-400 uppercase mb-1`}>
-                                                {date.toLocaleDateString('sv-SE', { weekday: 'short' }).replace('.', '')}
-                                            </span>
-
-                                            <div className="flex flex-col items-center gap-1.5 w-full">
-                                                {/* Calorie Performance Bar */}
-                                                <div className={`w-full ${density === 'compact' ? 'h-1' : 'h-1.5'} bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden`}>
-                                                    <div
-                                                        className={`h-full rounded-full transition-all ${calPercentage > 1.05 ? 'bg-rose-400' : 'bg-emerald-400'}`}
-                                                        style={{ width: `${Math.max(calPercentage * 100, 5)}%` }}
-                                                    />
+                        if (card.id === 'intake') {
+                            return (
+                                <Wrapper key="intake" className="md:col-span-12 lg:col-span-6 h-full flex">
+                                    <div className={`flex-1 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full`}>
+                                        <DoubleCircularProgress
+                                            value={consumed}
+                                            max={target}
+                                            innerValue={proteinCurrent}
+                                            innerMax={proteinTarget}
+                                            label="Kcal"
+                                            subLabel={<span>{Math.round(consumed - target)} kcal</span>}
+                                        />
+                                        <div className="flex-1 ml-4 overflow-hidden">
+                                            <div className={`font-black text-slate-900 dark:text-white uppercase tracking-tighter ${density === 'compact' ? 'text-[10px] mb-2' : 'text-sm mb-4'}`}>Dagens Intag</div>
+                                            <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                                                {/* Protein */}
+                                                <div>
+                                                    <div className={`flex justify-between items-baseline mb-1`}>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Protein</span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-slate-900 dark:text-white`}>
+                                                            {Math.round(proteinCurrent)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">/ {proteinTarget}g</span>
+                                                    </div>
+                                                    <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                                                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min((proteinCurrent / proteinTarget) * 100, 100)}%` }}></div>
+                                                    </div>
                                                 </div>
 
-                                                {/* Activity Indicators */}
-                                                <div className="flex gap-0.5 mt-0.5">
-                                                    {dayExercises.length > 0 && <div className={`${density === 'compact' ? 'w-1 h-1' : 'w-1.5 h-1.5'} rounded-full bg-blue-500`}></div>}
-                                                    {dist > 0 && <div className={`${density === 'compact' ? 'w-1 h-1' : 'w-1.5 h-1.5'} rounded-full bg-cyan-400`}></div>}
-                                                    {ton > 0 && <div className={`${density === 'compact' ? 'w-1 h-1' : 'w-1.5 h-1.5'} rounded-full bg-purple-500`}></div>}
+                                                {/* Carbs */}
+                                                <div>
+                                                    <div className={`flex justify-between items-baseline mb-1`}>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kolh.</span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-slate-900 dark:text-white`}>
+                                                            {Math.round(carbsCurrent)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">/ {carbsTarget}g</span>
+                                                    </div>
+                                                    <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                                                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min((carbsCurrent / carbsTarget) * 100, 100)}%` }}></div>
+                                                    </div>
                                                 </div>
 
-                                                {/* Detailed Hover Info */}
-                                                {dayExercises.length > 0 && (
-                                                    <div className="hidden group-hover/day:flex flex-col gap-1 items-start absolute -bottom-2 translate-y-full bg-slate-800 text-white p-2 rounded-lg text-[10px] z-50 shadow-xl whitespace-nowrap border border-white/10 min-w-[100px]">
-                                                        {dayExercises.map((e, idx) => (
-                                                            <div key={idx} className="flex items-center gap-2 w-full">
-                                                                <span className="text-slate-400 w-4">{e.type === 'strength' ? '🏋️' : e.type === 'running' ? '🏃' : '⚡'}</span>
-                                                                <div className="flex flex-col leading-none">
-                                                                    <span className="font-bold capitalize">{e.type === 'strength' ? (e.notes || 'Styrka') : e.type}</span>
-                                                                    <span className="text-[9px] text-slate-400">
-                                                                        {e.distance ? `${e.distance}km` : ''}
-                                                                        {e.distance && e.durationMinutes ? ' • ' : ''}
-                                                                        {e.durationMinutes ? `${e.durationMinutes}m` : ''}
-                                                                        {e.tonnage ? ` • ${(e.tonnage / 1000).toFixed(1)}t` : ''}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                        {speed > 0 && (
-                                                            <div className="pt-1 mt-1 border-t border-white/10 w-full text-center text-[9px] text-cyan-400 font-mono">
-                                                                Snitt: {speed.toFixed(1)} km/h
-                                                            </div>
+                                                {/* Fat */}
+                                                <div>
+                                                    <div className={`flex justify-between items-baseline mb-1`}>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fett</span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-slate-900 dark:text-white`}>
+                                                            {Math.round(fatCurrent)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">/ {fatTarget}g</span>
+                                                    </div>
+                                                    <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                                                        <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.min((fatCurrent / fatTarget) * 100, 100)}%` }}></div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Calories */}
+                                                <div>
+                                                    <div className={`flex justify-between items-baseline mb-1`}>
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kcal</span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${consumed > target ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
+                                                            {Math.round(consumed)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">/ {target}</span>
+                                                    </div>
+                                                    <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                                                        <div className={`h-full rounded-full ${consumed > target ? 'bg-rose-500' : 'bg-slate-900 dark:bg-white'}`} style={{ width: `${Math.min((consumed / target) * 100, 100)}%` }}></div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Wrapper>
+                            );
+                        }
+
+                        if (card.id === 'training') {
+                            return (
+                                <Wrapper key="training" className="md:col-span-12 lg:col-span-6 h-full">
+                                    <div
+                                        onClick={() => navigate('/training')}
+                                        className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full`}
+                                    >
+                                        <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors shrink-0`}>
+                                            <Dumbbell className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
+                                        </div>
+                                        <div className="flex-1 min-w-0 text-left">
+                                            <div className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} text-slate-500 dark:text-slate-400 font-semibold mb-1`}>Dagens träning</div>
+                                            <div className="w-full">{trainingContent}</div>
+                                        </div>
+                                    </div>
+                                </Wrapper>
+                            );
+                        }
+
+                        if (card.id === 'sleep') {
+                            return (
+                                <Wrapper key="sleep" className="md:col-span-6 lg:col-span-3">
+                                    <div
+                                        onClick={() => handleCardClick('sleep', vitals.sleep || 0)}
+                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-between hover:scale-[1.01] transition-transform cursor-pointer group relative overflow-hidden h-full ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
+                                            ? 'bg-rose-50 dark:bg-rose-900/10'
+                                            : (vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7
+                                                ? 'bg-amber-50 dark:bg-amber-900/10'
+                                                : (vitals.sleep || 0) >= 7 && (vitals.sleep || 0) <= 10
+                                                    ? 'bg-emerald-50 dark:bg-emerald-900/20'
+                                                    : 'bg-white dark:bg-slate-900'
+                                            }`}
+                                    >
+                                        <Moon className="absolute -bottom-4 -right-4 w-24 h-24 text-indigo-500/5 dark:text-indigo-400/10 pointer-events-none transform -rotate-12 transition-all group-hover:scale-110" />
+                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'} relative z-10`}>
+                                            <div className={`p-1.5 rounded-full ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
+                                                ? 'bg-rose-100 text-rose-600'
+                                                : (vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7
+                                                    ? 'bg-amber-100 text-amber-600'
+                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                                                }`}>
+                                                <Moon className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
+                                            </div>
+                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Sömn</span>
+                                        </div>
+                                        <div className="flex-1">
+                                            {editing === 'sleep' ? (
+                                                <div className="flex flex-col gap-2 pt-1" onClick={e => e.stopPropagation()}>
+                                                    <div className="flex justify-between items-center bg-slate-100/50 dark:bg-slate-800/50 px-2 py-1 rounded-lg">
+                                                        <span className={`text-xs font-black ${sleepColorClass}`}>{parseFloat(tempValue).toFixed(1)}h</span>
+                                                        {parseFloat(tempValue) > 0 && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setTempValue('0');
+                                                                    setVitals(prev => ({ ...prev, sleep: 0 }));
+                                                                    updateVitals(selectedDate, { sleep: 0 });
+                                                                }}
+                                                                className="w-5 h-5 flex items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-500 hover:bg-rose-200 dark:hover:bg-rose-800/50 text-xs font-bold transition-colors"
+                                                                title="Rensa sömnvärde"
+                                                            >
+                                                                ×
+                                                            </button>
                                                         )}
                                                     </div>
-                                                )}
-
-                                                {(density === 'cozy' || (density === 'slim' && (dist > 0 || ton > 0))) && (
-                                                    <div className="flex flex-col items-center leading-none">
-                                                        {dist > 0 && <span className="text-[8px] font-black text-blue-600 dark:text-blue-400">{dist.toFixed(0)}k</span>}
-                                                        {ton > 0 && <span className="text-[8px] font-black text-purple-600 dark:text-purple-400">{(ton / 1000).toFixed(0)}t</span>}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-
-                            {/* Written Weekly Summary */}
-                            {(() => {
-                                const last7 = Array.from({ length: 7 }).map((_, i) => {
-                                    const d = new Date();
-                                    d.setDate(d.getDate() - i);
-                                    return d.toISOString().split('T')[0];
-                                });
-                                // Correcting index to find if selectedDate is in the last 7 days
-                                const isSelectedInVisibleRange = last7.includes(selectedDate);
-                                const weeklyEx = unifiedActivities.filter(e => last7.includes(e.date));
-                                const totalDist = weeklyEx.reduce((sum, e) => sum + (e.distance || 0), 0);
-                                const totalTon = weeklyEx.reduce((sum, e) => sum + (e.tonnage || 0), 0);
-                                const totalDur = weeklyEx.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
-                                const totalPass = weeklyEx.length;
-
-                                return (
-                                    <div className={`mt-6 pt-4 border-t border-slate-50 dark:border-slate-800/50 grid grid-cols-2 md:grid-cols-4 gap-4 ${density === 'compact' ? 'hidden' : ''}`}>
-                                        <div className="flex flex-col">
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Total Tid</span>
-                                            <span className="text-lg font-black text-slate-900 dark:text-white leading-none whitespace-nowrap">{Math.floor(totalDur / 60)}h {totalDur % 60}m</span>
-                                            <span className="text-[10px] text-slate-400 font-bold mt-1">{totalPass} Slutförda pass</span>
-                                        </div>
-                                        <div className="flex flex-col border-l border-slate-100 dark:border-slate-800 pl-4">
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Volym</span>
-                                            <span className="text-lg font-black text-purple-600 dark:text-purple-400 leading-none whitespace-nowrap">{(totalTon / 1000).toFixed(1)} Ton</span>
-                                            <span className="text-[10px] text-slate-400 font-bold mt-1">Styrketräning</span>
-                                        </div>
-                                        <div className="flex flex-col border-l border-slate-100 dark:border-slate-800 pl-4">
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Distans</span>
-                                            <span className="text-lg font-black text-blue-600 dark:text-blue-400 leading-none whitespace-nowrap">{totalDist.toFixed(1)} Km</span>
-                                            <span className="text-[10px] text-slate-400 font-bold mt-1">Löpning / Gång</span>
-                                        </div>
-                                        <div className="flex flex-col border-l border-slate-100 dark:border-slate-800 pl-4">
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Typ</span>
-                                            {(() => {
-                                                const runEx = weeklyEx.filter(e => e.type === 'running' || e.type === 'walking' || e.type === 'cycling');
-                                                const strengthEx = weeklyEx.filter(e => e.type === 'strength' || e.type === 'yoga');
-                                                const runMin = runEx.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
-                                                const strengthMin = strengthEx.reduce((sum, e) => sum + (e.durationMinutes || 0), 0);
-                                                const totalMin = runMin + strengthMin;
-                                                const cardioPercent = totalMin > 0 ? Math.round((runMin / totalMin) * 100) : 0;
-                                                const strengthPercent = totalMin > 0 ? Math.round((strengthMin / totalMin) * 100) : 0;
-
-                                                return (
-                                                    <div className="flex flex-col gap-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-cyan-500"></div>
-                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                                                Kondition {cardioPercent}%
-                                                            </span>
-                                                            <span className="text-[10px] text-slate-400">({runEx.length} pass)</span>
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                                                                Styrka {strengthPercent}%
-                                                            </span>
-                                                            <span className="text-[10px] text-slate-400">({strengthEx.length} pass)</span>
-                                                        </div>
-                                                        {/* Mini progress bar */}
-                                                        <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100 dark:bg-slate-800 mt-1">
-                                                            <div className="bg-cyan-500" style={{ width: `${cardioPercent}%` }}></div>
-                                                            <div className="bg-purple-500" style={{ width: `${strengthPercent}%` }}></div>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
-
-                    {/* KPI Card */}
-                    <div className={`md:col-span-6 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full`}>
-                        <DoubleCircularProgress
-                            value={consumed}
-                            max={target}
-                            innerValue={proteinCurrent}
-                            innerMax={proteinTarget}
-                            label="Protein"
-                            subLabel={<span>{Math.round(consumed - target)} kcal</span>}
-                        />
-                        <div className="flex-1 py-0.5 ml-4 max-w-[180px]">
-                            <div className={`font-black text-slate-900 dark:text-white uppercase tracking-tighter ${density === 'compact' ? 'text-[10px] mb-2' : 'text-sm mb-4'}`}>Dagens Intag</div>
-                            <div className={`${density === 'compact' ? 'space-y-4' : 'space-y-6'}`}>
-                                <div>
-                                    <div className={`flex justify-between items-baseline mb-1`}>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Protein</span>
-                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-xl'} text-slate-900 dark:text-white`}>
-                                            {Math.round(proteinCurrent)}<span className="text-[10px] text-slate-400 ml-0.5">/ {proteinTarget}g</span>
-                                        </span>
-                                    </div>
-                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                        <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${Math.min((proteinCurrent / proteinTarget) * 100, 100)}%` }}></div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className={`flex justify-between items-baseline mb-1`}>
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kalorier</span>
-                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-xl'} ${consumed > target ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
-                                            {Math.round(consumed)}<span className="text-[10px] text-slate-400 ml-0.5">/ {target}</span>
-                                        </span>
-                                    </div>
-                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                        <div className={`h-full rounded-full transition-all duration-700 ${consumed > target ? 'bg-rose-500' : 'bg-slate-900 dark:bg-white'}`} style={{ width: `${Math.min((consumed / target) * 100, 100)}%` }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Sleep & Alcohol Grouped Container */}
-                    <div className="md:col-span-6 flex flex-col gap-4">
-                        <div className={`grid ${density === 'compact' ? 'grid-cols-2 gap-2' : 'grid-cols-2 gap-4'}`}>
-                            {/* Sleep Card */}
-                            <div
-                                onClick={() => handleCardClick('sleep', vitals.sleep || 0)}
-                                className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col hover:scale-[1.01] transition-transform cursor-pointer group relative overflow-hidden h-full ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
-                                    ? 'bg-rose-50 dark:bg-rose-900/10'
-                                    : (vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7
-                                        ? 'bg-amber-50 dark:bg-amber-900/10'
-                                        : (vitals.sleep || 0) >= 7 && (vitals.sleep || 0) <= 10
-                                            ? 'bg-emerald-50 dark:bg-emerald-900/20'
-                                            : 'bg-white dark:bg-slate-900'
-                                    }`}
-                            >
-                                <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'}`}>
-                                    <div className={`p-1.5 rounded-full ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
-                                        ? 'bg-rose-100 text-rose-600'
-                                        : (vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7
-                                            ? 'bg-amber-100 text-amber-600'
-                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                                        }`}>
-                                        <Moon className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
-                                    </div>
-                                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Sömn</span>
-                                </div>
-                                <div className="flex-1">
-                                    {editing === 'sleep' ? (
-                                        <div className="flex flex-col gap-2 pt-1" onClick={e => e.stopPropagation()}>
-                                            <div className="flex justify-between items-center bg-slate-100/50 dark:bg-slate-800/50 px-2 py-1 rounded-lg">
-                                                <span className={`text-xs font-black ${sleepColorClass}`}>{parseFloat(tempValue).toFixed(1)}h</span>
-                                                {parseFloat(tempValue) > 0 && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setTempValue('0');
-                                                            setVitals(prev => ({ ...prev, sleep: 0 }));
-                                                            updateVitals(selectedDate, { sleep: 0 });
-                                                            setEditing(null);
+                                                    <input
+                                                        autoFocus
+                                                        type="range"
+                                                        min="0"
+                                                        max="12"
+                                                        step="0.5"
+                                                        value={tempValue}
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            setTempValue(val);
+                                                            const num = parseFloat(val);
+                                                            if (!isNaN(num)) {
+                                                                setVitals(prev => ({ ...prev, sleep: num }));
+                                                                debouncedSave('sleep', num);
+                                                            }
                                                         }}
-                                                        className="w-5 h-5 flex items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-500 hover:bg-rose-200 dark:hover:bg-rose-800/50 text-xs font-bold transition-colors"
-                                                        title="Rensa sömnvärde"
-                                                    >
-                                                        ×
-                                                    </button>
-                                                )}
-                                            </div>
-                                            <input
-                                                autoFocus
-                                                type="range"
-                                                min="0"
-                                                max="12"
-                                                step="0.5"
-                                                value={tempValue}
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    setTempValue(val);
-                                                    const num = parseFloat(val);
-                                                    if (!isNaN(num)) {
-                                                        setVitals(prev => ({ ...prev, sleep: num }));
-                                                        debouncedSave('sleep', num);
-                                                    }
-                                                }}
-                                                onBlur={() => setEditing(null)}
-                                                className={`w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer ${sleepClasses.accent} transition-all`}
-                                            />
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <div className="flex items-baseline gap-1">
-                                                <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${sleepColorClass}`}>{vitals.sleep || 0}</span>
-                                                <span className="text-[9px] font-bold text-slate-400 uppercase">H</span>
-                                            </div>
-                                            {density !== 'compact' && (vitals.sleep || 0) > 0 && (
-                                                <div className="mt-1 text-[8px] font-black uppercase tracking-tight opacity-60">
-                                                    {sleepInfo.status}
+                                                        onBlur={() => setEditing(null)}
+                                                        className={`w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer ${sleepClasses.accent} transition-all`}
+                                                    />
                                                 </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${sleepColorClass}`}>{vitals.sleep || 0}</span>
+                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">H</span>
+                                                    </div>
+                                                    {density !== 'compact' && (vitals.sleep || 0) > 0 && (
+                                                        <div className="mt-1 text-[8px] font-black uppercase tracking-tight opacity-60">
+                                                            {sleepInfo.status}
+                                                        </div>
+                                                    )}
+                                                </>
                                             )}
-                                        </>
-                                    )}
-                                </div>
-                            </div>
+                                        </div>
+                                    </div>
+                                </Wrapper>
+                            );
+                        }
 
-                            {/* Alcohol Card (Inline in the 4-col group) */}
-                            {(() => {
-                                const dayOfWeek = (new Date()).getDay();
-                                const isWeekendLimit = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6; // Sun, Fri or Sat
-                                const alcLimit = settings.dailyAlcoholLimitWeekend !== undefined && settings.dailyAlcoholLimitWeekday !== undefined ? (isWeekendLimit ? settings.dailyAlcoholLimitWeekend : settings.dailyAlcoholLimitWeekday) : undefined;
-                                const alc = vitals.alcohol || 0;
-                                const isAlcHigh = alcLimit !== undefined && alc > alcLimit;
-                                const isAlcWarning = alcLimit !== undefined && !isAlcHigh && alc > 0 && alc === alcLimit;
+                        if (card.id === 'alcohol') {
+                            const dayOfWeek = (new Date()).getDay();
+                            const isWeekendLimit = dayOfWeek === 0 || dayOfWeek === 5 || dayOfWeek === 6;
+                            const alcLimit = settings.dailyAlcoholLimitWeekend !== undefined && settings.dailyAlcoholLimitWeekday !== undefined ? (isWeekendLimit ? settings.dailyAlcoholLimitWeekend : settings.dailyAlcoholLimitWeekday) : undefined;
+                            const alc = vitals.alcohol || 0;
+                            const isAlcHigh = alcLimit !== undefined && alc > alcLimit;
+                            const isAlcWarning = alcLimit !== undefined && !isAlcHigh && alc > 0 && alc === alcLimit;
 
-                                return (
+                            return (
+                                <Wrapper key="alcohol" className="md:col-span-6 lg:col-span-3">
                                     <div
                                         onClick={() => handleCardClick('alcohol', alc)}
-                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm hover:scale-[1.01] transition-all cursor-pointer relative overflow-hidden ${isAlcHigh
+                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm flex flex-col justify-between hover:scale-[1.01] transition-all cursor-pointer relative overflow-hidden h-full ${isAlcHigh
                                             ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30'
                                             : isAlcWarning
                                                 ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30'
                                                 : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
                                             }`}
                                     >
-                                        <div className={`flex items-center justify-between ${density === 'compact' ? 'mb-1' : 'mb-2'}`}>
+                                        <Wine className="absolute -bottom-4 -right-4 w-24 h-24 text-rose-500/5 dark:text-rose-400/10 pointer-events-none transform rotate-12 transition-all group-hover:scale-110" />
+                                        <div className={`flex items-center justify-between ${density === 'compact' ? 'mb-1' : 'mb-2'} relative z-10`}>
                                             <div className="flex items-center gap-1.5">
                                                 <div className={`p-1.5 rounded-full ${isAlcHigh ? 'bg-rose-100 text-rose-600' : isAlcWarning ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
                                                     <Wine className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
@@ -1099,19 +1041,21 @@ export function DashboardPage() {
                                             )}
                                         </div>
                                     </div>
-                                );
-                            })()}
+                                </Wrapper>
+                            );
+                        }
 
-                            {/* Water Card */}
-                            {(() => {
-                                const waterGoal = settings.dailyWaterGoal || 8;
-                                const isWaterMet = (vitals.water || 0) >= waterGoal;
-                                return (
+                        if (card.id === 'water') {
+                            const waterGoal = settings.dailyWaterGoal || 8;
+                            const isWaterMet = (vitals.water || 0) >= waterGoal;
+                            return (
+                                <Wrapper key="water" className="md:col-span-6 lg:col-span-3">
                                     <div
                                         onClick={() => handleCardClick('water', vitals.water || 0)}
-                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden ${isWaterMet ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/50' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}
+                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm flex flex-col justify-between hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden h-full ${isWaterMet ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/50' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}
                                     >
-                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'}`}>
+                                        <Droplets className="absolute -bottom-4 -right-4 w-24 h-24 text-blue-500/5 dark:text-blue-400/10 pointer-events-none transform -rotate-6 transition-all group-hover:scale-110" />
+                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'} relative z-10`}>
                                             <div className={`p-1.5 rounded-full ${isWaterMet ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-500'}`}>
                                                 {isWaterMet ? <Check className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} /> : <Droplets className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />}
                                             </div>
@@ -1137,7 +1081,7 @@ export function DashboardPage() {
                                                         <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${isWaterMet ? 'text-emerald-600' : 'text-slate-900 dark:text-white'}`}>{vitals.water || 0}</span>
                                                         <span className="text-[9px] font-bold text-slate-400 uppercase">Glas</span>
                                                     </div>
-                                                    <div className={`flex gap-0.5 mt-2 ${density === 'compact' ? 'h-4' : 'h-8'}`}>
+                                                    <div className={`flex gap-0.5 mt-2 ${density === 'compact' ? 'h-4' : 'h-6'}`}>
                                                         {Array.from({ length: 8 }).map((_, i) => (
                                                             <div key={i} onClick={(e) => { e.stopPropagation(); handleWaterClick(i + 1); }} className={`flex-1 rounded-sm cursor-pointer transition-all border border-transparent ${i < (vitals.water || 0) ? (isWaterMet ? 'bg-emerald-500' : 'bg-blue-400 shadow-sm') : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'}`} />
                                                         ))}
@@ -1146,21 +1090,24 @@ export function DashboardPage() {
                                             )}
                                         </div>
                                     </div>
-                                );
-                            })()}
+                                </Wrapper>
+                            );
+                        }
 
-                            {/* Caffeine Card */}
-                            {(() => {
-                                const caffeineLimit = settings.dailyCaffeineLimit || 400;
-                                const caff = vitals.caffeine || 0;
-                                const isCaffHigh = caff >= caffeineLimit;
-                                const isCaffWarning = !isCaffHigh && caff >= caffeineLimit * 0.7;
-                                return (
+                        if (card.id === 'caffeine') {
+                            const caffeineLimit = settings.dailyCaffeineLimit || 400;
+                            const caff = vitals.caffeine || 0;
+                            const isCaffHigh = caff >= caffeineLimit;
+                            const isCaffWarning = !isCaffHigh && caff >= caffeineLimit * 0.7;
+
+                            return (
+                                <Wrapper key="caffeine" className="md:col-span-6 lg:col-span-3">
                                     <div
                                         onClick={() => handleCardClick('caffeine', vitals.caffeine || 0)}
-                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm hover:scale-[1.02] transition-all cursor-pointer overflow-hidden relative ${isCaffHigh ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30' : isCaffWarning ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}
+                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm flex flex-col justify-between hover:scale-[1.02] transition-all cursor-pointer overflow-hidden relative h-full ${isCaffHigh ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30' : isCaffWarning ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}
                                     >
-                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'}`}>
+                                        <Coffee className="absolute -bottom-4 -right-4 w-24 h-24 text-amber-500/5 dark:text-amber-400/10 pointer-events-none transform rotate-6 transition-all group-hover:scale-110" />
+                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'} relative z-10`}>
                                             <div className={`p-1.5 rounded-full ${isCaffHigh ? 'bg-rose-100 text-rose-600' : isCaffWarning ? 'bg-amber-100 text-amber-600' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600'}`}>
                                                 <Coffee className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
                                             </div>
@@ -1236,29 +1183,18 @@ export function DashboardPage() {
                                             )}
                                         </div>
                                     </div>
-                                );
-                            })()}
-                        </div>
-                    </div>
+                                </Wrapper>
+                            );
+                        }
+                    })}
 
-                    <div
-                        onClick={() => navigate('/training')}
-                        className={`md:col-span-6 ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full`}
-                    >
-                        <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors shrink-0`}>
-                            <Dumbbell className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
-                        </div>
-                        <div className="flex-1 min-w-0 text-left">
-                            <div className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} text-slate-500 dark:text-slate-400 font-semibold mb-1`}>Dagens träning</div>
-                            <div className="w-full">{trainingContent}</div>
-                        </div>
-                    </div>
+                    {/* duplicate KPI removed */}<div className="hidden"></div>
 
-                    {/* Goals Widget - New */}
-                    <GoalsOverviewWidget />
+                    {/* Old Cards Removed (Sleep/Alc/Water/Caff/Training/Goals) */}<div className="hidden"></div>
 
-                    {/* Health Metrics Card */}
-                    <div className={`col-span-12 md:col-span-6 lg:col-span-4 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
+                    {/* Health Metrics Card - Expanded */}
+
+                    <div className={`col-span-12 md:col-span-8 lg:col-span-6 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
                         <div className={`h-full ${density === 'compact' ? 'p-2' : 'p-6'} bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col`}>
                             <div className="relative z-10 flex flex-col h-full">
                                 {/* Header with Title and Range Selector */}
@@ -1318,7 +1254,19 @@ export function DashboardPage() {
                                         setIsWeightModalOpen(true);
                                     }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Midja</div>
-                                        <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-emerald-500">{latest3Weights[0]?.waist || '--'}<span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span></div>
+                                        <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-emerald-500">
+                                            {useData().bodyMeasurements?.filter(m => m.type === 'waist').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.value || latest3Weights[0]?.waist || '--'}
+                                            <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Chest (Bröst) */}
+                                    <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center hidden md:flex">
+                                        <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Bröst</div>
+                                        <div className="text-xl font-black text-slate-900 dark:text-white">
+                                            {useData().bodyMeasurements.filter(m => m.type === 'chest').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.value || '--'}
+                                            <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
+                                        </div>
                                     </div>
 
                                     {/* BMI Meter */}
@@ -1392,6 +1340,92 @@ export function DashboardPage() {
                                         )}
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 7-Day Performance Summary */}
+                    <div className="col-span-12 md:col-span-12">
+                        <div className={`w-full ${density === 'compact' ? 'p-3' : 'p-6'} bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm`}>
+                            <div className="flex items-center justify-between mb-4 px-2">
+                                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Senaste 7 Dagarna</h3>
+                                <div className="flex gap-2">
+                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-white"></div><span className="text-[9px] text-slate-400">Kcal</span></div>
+                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div><span className="text-[9px] text-slate-400">Träning</span></div>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-col gap-3">
+                                {Array.from({ length: 7 }, (_, i) => {
+                                    const d = new Date();
+                                    d.setDate(d.getDate() - (6 - i));
+                                    return d.toISOString().split('T')[0];
+                                }).reverse().map((date) => {
+                                    const nutrition = calculateDailyNutrition(date);
+                                    const cal = nutrition.calories || 0;
+                                    const targetCal = settings.dailyCalorieGoal || 2500;
+                                    const training = unifiedActivities.filter(a => a.date === date);
+                                    const dayVitals = getVitalsForDate(date);
+
+                                    const dayLabel = new Date(date).toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'short' });
+                                    const isToday = date === new Date().toISOString().split('T')[0];
+
+                                    // Status Logic
+                                    const isCalGood = cal > 0 && Math.abs(cal - targetCal) < 300;
+                                    const isTrained = training.length > 0;
+                                    const isSleepGood = (dayVitals.sleep || 0) >= 7;
+
+                                    return (
+                                        <div key={date} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${isToday ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+
+                                            {/* Date Section */}
+                                            <div className="w-32 flex flex-col justify-center">
+                                                <div className={`text-xs font-bold capitalize ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}>
+                                                    {dayLabel}
+                                                </div>
+                                                {isToday && <div className="text-[9px] font-black uppercase text-slate-300 tracking-wider">Idag</div>}
+                                            </div>
+
+                                            {/* Training Summary or Resting State */}
+                                            <div className="flex-1 flex flex-wrap gap-2 justify-start px-4">
+                                                {isTrained ? (
+                                                    training.map((t, idx) => (
+                                                        <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 text-emerald-600 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+                                                            <Dumbbell size={10} weight="fill" />
+                                                            <span>{t.title || (t.type === 'strength' ? 'Styrka' : 'Pass')}</span>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-[10px] font-medium text-slate-300 dark:text-slate-700 italic">Vilodag</span>
+                                                )}
+                                            </div>
+
+                                            {/* Stats (Cal/Sleep) */}
+                                            <div className="flex items-center gap-4">
+                                                {/* Sleep */}
+                                                <div className="flex items-center gap-1.5" title={`${dayVitals.sleep || 0} timmar sömn`}>
+                                                    <Moon size={12} weight={isSleepGood ? "fill" : "regular"} className={isSleepGood ? "text-indigo-400" : "text-slate-300 dark:text-slate-700"} />
+                                                    <span className={`text-[10px] font-bold ${isSleepGood ? 'text-slate-700 dark:text-slate-300' : 'text-slate-300 dark:text-slate-600'}`}>{dayVitals.sleep || '-'}h</span>
+                                                </div>
+
+                                                {/* Calories */}
+                                                <div className="flex flex-col items-end w-20">
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-xs font-black text-slate-900 dark:text-white">{cal}</span>
+                                                        <span className="text-[8px] font-bold text-slate-400">kcal</span>
+                                                    </div>
+                                                    {/* Mini Progress Bar */}
+                                                    <div className="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full mt-0.5 overflow-hidden">
+                                                        <div
+                                                            className={`h-full rounded-full ${cal > targetCal + 300 ? 'bg-rose-400' : isCalGood ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                                            style={{ width: `${Math.min((cal / targetCal) * 100, 100)}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>

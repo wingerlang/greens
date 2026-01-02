@@ -134,6 +134,16 @@ export function YearInReviewPage() {
         });
     }, [performanceGoals, selectedYears]);
 
+    // Compute activities in legacy format for goal calculations
+    const legacyActivities = useMemo(() => {
+        return unifiedActivities
+            .map(mapUniversalToLegacyEntry)
+            .filter((a): a is import('../models/types').ExerciseEntry => a !== null);
+    }, [unifiedActivities]);
+
+    // Data for goal calculations
+    const { weightEntries = [], mealEntries = [], foodItems = [], recipes = [] } = useData();
+
     // 2. Aggregate Stats
     const stats = useMemo(() => {
         let totalDist = 0;
@@ -556,7 +566,14 @@ export function YearInReviewPage() {
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {yearlyGoals.map(goal => {
-                            const progress = calculateGoalProgress(goal, unifiedActivities);
+                            const progress = calculateGoalProgress(
+                                goal,
+                                legacyActivities,
+                                mealEntries,
+                                foodItems,
+                                recipes,
+                                weightEntries
+                            );
                             const percent = Math.min(100, Math.round(progress.percentage));
                             const isCompleted = progress.isComplete;
                             const isFailed = !isCompleted && new Date(goal.endDate || '') < new Date() && goal.period !== 'daily' && goal.period !== 'weekly'; // Simple fail check

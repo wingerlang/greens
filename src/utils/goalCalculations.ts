@@ -53,6 +53,15 @@ export function getGoalPeriodDates(goal: PerformanceGoal, referenceDate: Date = 
             return { start: dateStr, end: dateStr };
         }
         case 'weekly': {
+            // Weight goals should always be treated as long-term (once) even if set to weekly, 
+            // as you don't "reset" weight loss every week.
+            if (goal.type === 'weight') {
+                return {
+                    start: goal.startDate,
+                    end: goal.endDate || today.toISOString().split('T')[0]
+                };
+            }
+
             // Start of week (Monday)
             const weekStart = new Date(today);
             const day = weekStart.getDay();
@@ -92,7 +101,7 @@ export function getGoalPeriodDates(goal: PerformanceGoal, referenceDate: Date = 
  * Get days remaining in the current period.
  */
 export function getDaysRemaining(goal: PerformanceGoal): number | undefined {
-    if (goal.period === 'once') {
+    if (goal.period === 'once' || goal.type === 'weight') {
         if (!goal.endDate) return undefined;
         const end = new Date(goal.endDate);
         const today = new Date();
@@ -545,7 +554,7 @@ export function isGoalOnTrack(
     target: number
 ): boolean {
     if (current >= target) return true;
-    if (goal.period === 'once' && !goal.endDate) return true; // No deadline
+    if ((goal.period === 'once' || goal.type === 'weight') && !goal.endDate) return true; // No deadline
 
     const { start, end } = getGoalPeriodDates(goal);
     const startDate = new Date(start);

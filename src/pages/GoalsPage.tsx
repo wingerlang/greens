@@ -155,28 +155,14 @@ export function GoalsPage() {
     const [showTemplates, setShowTemplates] = useState(false);
     const [sortBy, setSortBy] = useState<SortOption>('progress');
     const [sortAsc, setSortAsc] = useState(false);
-    const [viewingGoal, setViewingGoal] = useState<PerformanceGoal | null>(null);
     const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
     const [searchParams, setSearchParams] = useSearchParams();
 
-    // URL Sync for viewing goal
-    useEffect(() => {
-        const goalId = searchParams.get('goal');
-        if (goalId && !viewingGoal) {
-            const goal = performanceGoals.find(g => g.id === goalId);
-            if (goal) setViewingGoal(goal);
-        }
-    }, [searchParams, performanceGoals, viewingGoal]);
-
-    useEffect(() => {
-        if (viewingGoal) {
-            setSearchParams({ goal: viewingGoal.id }, { replace: true });
-        } else {
-            const newParams = new URLSearchParams(searchParams);
-            newParams.delete('goal');
-            setSearchParams(newParams, { replace: true });
-        }
-    }, [viewingGoal, setSearchParams]);
+    // Derived state from URL - Source of Truth
+    const viewingGoalId = searchParams.get('goal');
+    const viewingGoal = useMemo(() =>
+        viewingGoalId ? performanceGoals.find(g => g.id === viewingGoalId) || null : null,
+        [viewingGoalId, performanceGoals]);
 
     // Hooks
     const activeGoals = useActiveGoals();
@@ -295,9 +281,10 @@ export function GoalsPage() {
     const formatProgress = (current: number, target: number, unit?: string) => {
         const formatNum = (n: number) => {
             if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-            if (n >= 100) return Math.round(n).toString();
-            if (n >= 10) return n.toFixed(1);
-            return n.toFixed(2);
+            // If it's effectively an integer, show as integer
+            if (Math.abs(n % 1) < 0.01) return Math.round(n).toString();
+            if (n >= 10) return parseFloat(n.toFixed(1)).toString();
+            return parseFloat(n.toFixed(2)).toString();
         };
 
         return `${formatNum(current)} / ${formatNum(target)}${unit ? ` ${unit}` : ''}`;
@@ -469,7 +456,7 @@ export function GoalsPage() {
                                 key={goal.id}
                                 className={`goal-card ${progress.isComplete ? 'complete' : ''} ${!progress.isOnTrack && !progress.isComplete ? 'off-track' : ''}`}
                                 style={{ '--accent': CATEGORY_CONFIG[goal.category || 'training'].color } as React.CSSProperties}
-                                onClick={() => setViewingGoal(goal)}
+                                onClick={() => setSearchParams({ goal: goal.id })}
                             >
                                 {/* Category badge */}
                                 <div className="goal-category-badge">
@@ -505,6 +492,9 @@ export function GoalsPage() {
                                                     goal.period === 'monthly' ? '/månad' : 'totalt'}
                                         </span>
                                     </div>
+                                    <div className="text-[10px] text-slate-500 font-mono mt-1">
+                                        {goal.startDate} {goal.endDate ? ` - ${goal.endDate}` : ' -> Tills vidare'}
+                                    </div>
 
                                     {/* Progress bar with percentage */}
                                     <div className="goal-progress-container">
@@ -526,7 +516,10 @@ export function GoalsPage() {
                                             <span className="badge badge-warning">⚠️ Halkar efter</span>
                                         )}
                                         {progress.daysRemaining !== undefined && progress.daysRemaining <= 3 && !progress.isComplete && (
-                                            <span className="badge badge-urgent">⏰ {progress.daysRemaining}d kvar</span>
+                                            <span className="badge badge-urgent">
+                                                ⏰ {progress.daysRemaining}d kvar
+                                                {goal.period === 'weekly' ? ' av v.' : ''}
+                                            </span>
                                         )}
                                         {progress.trend === 'up' && !progress.isComplete && (
                                             <span className="badge badge-trending">📈 Trending</span>
@@ -647,10 +640,18 @@ export function GoalsPage() {
             {viewingGoal && (
                 <GoalDetailModal
                     goal={viewingGoal}
-                    onClose={() => setViewingGoal(null)}
+                    onClose={() => {
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.delete('goal');
+                        setSearchParams(newParams);
+                    }}
                     onEdit={() => {
+                        // Keep the URL param or remove it? Usually keep context or close detail to open edit.
+                        // Let's close detail and open edit modal.
                         setEditingGoal(viewingGoal);
-                        setViewingGoal(null);
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.delete('goal');
+                        setSearchParams(newParams);
                         setIsModalOpen(true);
                     }}
                 />

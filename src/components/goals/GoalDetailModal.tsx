@@ -532,7 +532,10 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                             </div>
                         </div>
                         <button
-                            onClick={onClose}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onClose();
+                            }}
                             className="p-2 hover:bg-white/5 rounded-xl transition-colors text-slate-400 hover:text-white"
                         >
                             ✕
