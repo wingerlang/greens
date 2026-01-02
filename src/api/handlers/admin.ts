@@ -56,6 +56,62 @@ export async function handleAdminRoutes(req: Request, url: URL, headers: Headers
         }
     }
 
+    // Delete User (Admin only)
+    if (url.pathname.startsWith("/api/admin/users/") && !url.pathname.endsWith("/role") && req.method === "DELETE") {
+        try {
+            const userId = url.pathname.split("/")[4]; // /api/admin/users/:id
+
+            // Prevent self-deletion
+            if (userId === ctx.user.id) {
+                return new Response(JSON.stringify({ error: "Cannot delete yourself" }), { status: 400, headers });
+            }
+
+            const user = await getUserById(userId);
+            if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            // Import the KV and data functions
+            const { kv } = await import("../kv.ts");
+            const { revokeAllUserSessions } = await import("../db/session.ts");
+
+            // Delete all user data
+            await kv.atomic()
+                .delete(["users", userId])
+                .delete(["user_data", userId])
+                .delete(["user_profiles", userId])
+                .delete(["users_by_username", user.username])
+                .delete(["users_by_handle", user.handle || ""])
+                .commit();
+
+            // Also revoke all sessions
+            await revokeAllUserSessions(userId);
+
+            // Delete strength data
+            const strengthIter = kv.list({ prefix: ["strength_sessions", userId] });
+            for await (const entry of strengthIter) {
+                await kv.delete(entry.key);
+            }
+
+            // Delete activities
+            const activityIter = kv.list({ prefix: ["activities", userId] });
+            for await (const entry of activityIter) {
+                await kv.delete(entry.key);
+            }
+
+            // Delete PRs
+            const prIter = kv.list({ prefix: ["prs", userId] });
+            for await (const entry of prIter) {
+                await kv.delete(entry.key);
+            }
+
+            console.log(`[Admin] Deleted user ${user.username} (${userId}) and all their data`);
+
+            return new Response(JSON.stringify({ success: true, deleted: user.username }), { headers });
+        } catch (e) {
+            console.error("[Admin] Delete user error:", e);
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 }
 

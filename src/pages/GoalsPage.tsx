@@ -3,7 +3,8 @@
  * Route: /goals
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import {
     useActiveGoals,
@@ -155,6 +156,27 @@ export function GoalsPage() {
     const [sortBy, setSortBy] = useState<SortOption>('progress');
     const [sortAsc, setSortAsc] = useState(false);
     const [viewingGoal, setViewingGoal] = useState<PerformanceGoal | null>(null);
+    const [deletingGoalId, setDeletingGoalId] = useState<string | null>(null);
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    // URL Sync for viewing goal
+    useEffect(() => {
+        const goalId = searchParams.get('goal');
+        if (goalId && !viewingGoal) {
+            const goal = performanceGoals.find(g => g.id === goalId);
+            if (goal) setViewingGoal(goal);
+        }
+    }, [searchParams, performanceGoals, viewingGoal]);
+
+    useEffect(() => {
+        if (viewingGoal) {
+            setSearchParams({ goal: viewingGoal.id }, { replace: true });
+        } else {
+            const newParams = new URLSearchParams(searchParams);
+            newParams.delete('goal');
+            setSearchParams(newParams, { replace: true });
+        }
+    }, [viewingGoal, setSearchParams]);
 
     // Hooks
     const activeGoals = useActiveGoals();
@@ -226,8 +248,13 @@ export function GoalsPage() {
     };
 
     const handleDeleteGoal = (goalId: string) => {
-        if (confirm('Är du säker på att du vill ta bort detta mål?')) {
-            deleteGoal(goalId);
+        setDeletingGoalId(goalId);
+    };
+
+    const confirmDeleteGoal = () => {
+        if (deletingGoalId) {
+            deleteGoal(deletingGoalId);
+            setDeletingGoalId(null);
         }
     };
 
@@ -512,21 +539,21 @@ export function GoalsPage() {
                                     {progress.isComplete && (
                                         <button
                                             className="action-btn celebrate"
-                                            onClick={() => handleCompleteGoal(goal)}
+                                            onClick={(e) => { e.stopPropagation(); handleCompleteGoal(goal); }}
                                         >
                                             🎉 Fira
                                         </button>
                                     )}
                                     <button
                                         className="action-btn edit"
-                                        onClick={() => handleEditGoal(goal)}
+                                        onClick={(e) => { e.stopPropagation(); handleEditGoal(goal); }}
                                         title="Redigera"
                                     >
                                         ✏️
                                     </button>
                                     <button
                                         className="action-btn delete"
-                                        onClick={() => handleDeleteGoal(goal.id)}
+                                        onClick={(e) => { e.stopPropagation(); handleDeleteGoal(goal.id); }}
                                         title="Ta bort"
                                     >
                                         🗑️
@@ -627,6 +654,41 @@ export function GoalsPage() {
                         setIsModalOpen(true);
                     }}
                 />
+            )}
+
+            {/* Delete Confirmation Modal */}
+            {deletingGoalId && (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => setDeletingGoalId(null)}>
+                    <div
+                        className="bg-slate-900 border border-red-500/30 rounded-2xl p-6 max-w-md w-full space-y-4 animate-in zoom-in-95"
+                        onClick={e => e.stopPropagation()}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center text-2xl">🗑️</div>
+                            <div>
+                                <h3 className="text-xl font-bold text-white">Ta bort mål?</h3>
+                                <p className="text-sm text-slate-400">Detta kan inte ångras.</p>
+                            </div>
+                        </div>
+                        <p className="text-slate-300">
+                            Är du säker på att du vill ta bort detta mål? All progress och historik försvinner.
+                        </p>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => setDeletingGoalId(null)}
+                                className="flex-1 px-4 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition-colors"
+                            >
+                                Avbryt
+                            </button>
+                            <button
+                                onClick={confirmDeleteGoal}
+                                className="flex-1 px-4 py-3 rounded-xl bg-red-600 text-white font-bold hover:bg-red-500 transition-colors"
+                            >
+                                Ja, ta bort
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

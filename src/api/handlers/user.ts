@@ -5,7 +5,7 @@ import { kv } from "../kv.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
 import { UniversalActivity } from "../../models/types.ts";
 
-async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weight' | 'all') {
+async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all') {
     if (type === 'all') {
         const user = await getUserById(userId);
         if (user) {
@@ -20,17 +20,38 @@ async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weig
         return;
     }
 
-    const data = await getUserData(userId);
+    const data = await getUserData(userId) as any;
     if (!data) return;
 
-    if (type === 'meals') data.mealEntries = [];
-    else if (type === 'exercises') {
+    if (type === 'meals') {
+        data.mealEntries = [];
+    } else if (type === 'exercises') {
         data.exerciseEntries = [];
         data.trainingCycles = [];
         data.plannedActivities = [];
         await strengthRepo.clearUserStrengthData(userId);
+    } else if (type === 'weight') {
+        data.weightEntries = [];
+    } else if (type === 'sleep') {
+        // Clear sleep entries from vitals
+        if (data.vitals) {
+            data.vitals = data.vitals.map((v: any) => ({ ...v, sleepHours: undefined, sleepQuality: undefined }));
+        }
+        if (data.sleepLogs) data.sleepLogs = [];
+    } else if (type === 'water') {
+        // Clear water entries from vitals
+        if (data.vitals) {
+            data.vitals = data.vitals.map((v: any) => ({ ...v, water: undefined }));
+        }
+    } else if (type === 'caffeine') {
+        // Clear caffeine entries from vitals
+        if (data.vitals) {
+            data.vitals = data.vitals.map((v: any) => ({ ...v, caffeine: undefined }));
+        }
+    } else if (type === 'food') {
+        // 'food' is essentially same as 'meals' - the actual food log entries
+        data.mealEntries = [];
     }
-    else if (type === 'weight') data.weightEntries = [];
 
     await saveUserData(userId, data);
 }
@@ -133,7 +154,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     if (url.pathname === "/api/user/reset" && method === "POST") {
         try {
             const body = await req.json();
-            if (!['meals', 'exercises', 'weight', 'all'].includes(body.type)) {
+            if (!['meals', 'exercises', 'weight', 'sleep', 'water', 'caffeine', 'food', 'all'].includes(body.type)) {
                 return new Response(JSON.stringify({ error: "Invalid type" }), { status: 400, headers });
             }
             await granularReset(session.userId, body.type);

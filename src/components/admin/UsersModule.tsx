@@ -69,8 +69,8 @@ export const UsersModule: React.FC = () => {
                                             });
                                         }}
                                         className={`text-[10px] px-2 py-1 rounded-lg uppercase tracking-widest font-bold border-none outline-none cursor-pointer ${user.role === 'admin'
-                                                ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
-                                                : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+                                            ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
+                                            : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
                                             }`}
                                     >
                                         <option value="user">USER</option>
@@ -93,7 +93,35 @@ export const UsersModule: React.FC = () => {
                                     )}
                                 </td>
                                 <td className="px-6 py-4 text-right">
-                                    {/* Action buttons if needed */}
+                                    {authUser?.id !== user.id && (
+                                        <button
+                                            onClick={async () => {
+                                                if (!confirm(`Är du HELT SÄKER på att du vill ta bort användaren "${user.username}" och ALL deras data? Detta kan INTE ångras!`)) return;
+
+                                                try {
+                                                    const res = await fetch(`/api/admin/users/${user.id}`, {
+                                                        method: 'DELETE',
+                                                        headers: {
+                                                            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                                                        }
+                                                    });
+                                                    if (res.ok) {
+                                                        setApiUsers(prev => prev.filter(u => u.id !== user.id));
+                                                        alert(`✅ Användaren ${user.username} har tagits bort.`);
+                                                    } else {
+                                                        const err = await res.json();
+                                                        alert(`❌ Fel: ${err.error}`);
+                                                    }
+                                                } catch (e) {
+                                                    console.error(e);
+                                                    alert('❌ Kunde inte ta bort användaren.');
+                                                }
+                                            }}
+                                            className="text-[10px] px-3 py-1.5 rounded-lg uppercase tracking-widest font-bold bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                                        >
+                                            🗑️ Ta bort
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         ))}

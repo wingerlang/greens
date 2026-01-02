@@ -964,38 +964,72 @@ export function ActivityDetailModal({
                                     <div className="space-y-3">
                                         <h4 className="text-xs font-bold text-slate-400 uppercase">Ingående aktiviteter:</h4>
                                         {originalActivities.length > 0 ? (
-                                            originalActivities.map((orig, idx) => (
-                                                <div key={orig.id} className="bg-slate-800/50 border border-white/5 rounded-lg p-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-400">
-                                                                {idx + 1}
+                                            originalActivities.map((orig, idx) => {
+                                                const title = orig.plan?.title || orig.performance?.notes || null;
+                                                const avgHr = orig.performance?.avgHeartRate;
+
+                                                return (
+                                                    <button
+                                                        key={orig.id}
+                                                        className="w-full bg-slate-800/50 border border-white/5 rounded-lg p-3 hover:bg-slate-700/50 hover:border-amber-500/30 transition-all text-left group"
+                                                        onClick={() => {
+                                                            // Open this component activity in a new modal
+                                                            // For now, we'll use a simple approach - set it as selected
+                                                            // This requires passing a callback or using context
+                                                            // For simplicity, open in new tab via URL if possible
+                                                            const extId = orig.performance?.source?.externalId;
+                                                            if (extId) {
+                                                                window.open(`https://www.strava.com/activities/${extId.replace('strava_', '')}`, '_blank');
+                                                            }
+                                                        }}
+                                                        title={title || 'Visa aktivitet'}
+                                                    >
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-400 group-hover:bg-amber-500/20 group-hover:text-amber-400 transition-colors">
+                                                                    {idx + 1}
+                                                                </div>
+                                                                <div>
+                                                                    {title ? (
+                                                                        <>
+                                                                            <p className="text-white font-bold group-hover:text-amber-400 transition-colors truncate max-w-[200px]">{title}</p>
+                                                                            <p className="text-xs text-slate-500 capitalize">{orig.performance?.activityType || 'Aktivitet'} • {formatSwedishDate(orig.date)}</p>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <p className="text-white font-bold capitalize group-hover:text-amber-400 transition-colors">{orig.performance?.activityType || 'Aktivitet'}</p>
+                                                                            <p className="text-xs text-slate-500">{formatSwedishDate(orig.date)}</p>
+                                                                        </>
+                                                                    )}
+                                                                </div>
                                                             </div>
-                                                            <div>
-                                                                <p className="text-white font-bold capitalize">{orig.performance?.activityType || 'Aktivitet'}</p>
-                                                                <p className="text-xs text-slate-500">{formatSwedishDate(orig.date)}</p>
+                                                            <div className="flex gap-4 text-sm items-center">
+                                                                {orig.performance?.distanceKm && (
+                                                                    <div className="text-right">
+                                                                        <p className="text-emerald-400 font-mono font-bold">{orig.performance.distanceKm.toFixed(1)} km</p>
+                                                                    </div>
+                                                                )}
+                                                                {orig.performance?.durationMinutes && (
+                                                                    <div className="text-right">
+                                                                        <p className="text-slate-300 font-mono">{formatDuration(orig.performance.durationMinutes * 60)}</p>
+                                                                    </div>
+                                                                )}
+                                                                {avgHr && avgHr > 0 && (
+                                                                    <div className="text-right">
+                                                                        <p className="text-rose-400 font-mono text-xs">❤️ {avgHr}</p>
+                                                                    </div>
+                                                                )}
+                                                                {orig.performance?.distanceKm && orig.performance?.durationMinutes && (
+                                                                    <div className="text-right">
+                                                                        <p className="text-indigo-400 font-mono">{formatPace((orig.performance.durationMinutes * 60) / orig.performance.distanceKm)}</p>
+                                                                    </div>
+                                                                )}
+                                                                <span className="text-slate-500 group-hover:text-amber-400 transition-colors">↗</span>
                                                             </div>
                                                         </div>
-                                                        <div className="flex gap-4 text-sm">
-                                                            {orig.performance?.distanceKm && (
-                                                                <div className="text-right">
-                                                                    <p className="text-emerald-400 font-mono font-bold">{orig.performance.distanceKm.toFixed(1)} km</p>
-                                                                </div>
-                                                            )}
-                                                            {orig.performance?.durationMinutes && (
-                                                                <div className="text-right">
-                                                                    <p className="text-slate-300 font-mono">{formatDuration(orig.performance.durationMinutes * 60)}</p>
-                                                                </div>
-                                                            )}
-                                                            {orig.performance?.distanceKm && orig.performance?.durationMinutes && (
-                                                                <div className="text-right">
-                                                                    <p className="text-indigo-400 font-mono">{formatPace((orig.performance.durationMinutes * 60) / orig.performance.distanceKm)}</p>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))
+                                                    </button>
+                                                );
+                                            })
                                         ) : (
                                             <p className="text-slate-500 italic text-sm">
                                                 Originalaktiviteterna kunde inte hittas. De kan ha tagits bort.

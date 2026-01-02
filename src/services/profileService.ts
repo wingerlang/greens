@@ -323,7 +323,7 @@ export const profileService = {
     // Danger Zone
     // ==========================================
 
-    async resetData(type: 'meals' | 'exercises' | 'weight' | 'all'): Promise<boolean> {
+    async resetData(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): Promise<boolean> {
         const res = await fetch(`${API_BASE}/user/reset`, {
             method: 'POST',
             headers: getHeaders(),

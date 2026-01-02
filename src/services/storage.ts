@@ -21,6 +21,8 @@ export interface StorageService {
     addWeightEntry(weight: number, date: string): Promise<void>;
     addMealEntry(meal: any): Promise<void>;
     createFeedEvent(event: any): Promise<any>;
+    // Clear specific data from local cache
+    clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
 }
 
 // ============================================
@@ -264,6 +266,69 @@ export class LocalStorageService implements StorageService {
             }
         }
         return null;
+    }
+
+    /**
+     * Clear specific data from localStorage cache
+     * This MUST be called after server reset to prevent data resurrection
+     */
+    clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void {
+        try {
+            const stored = localStorage.getItem(STORAGE_KEY);
+            if (!stored) return;
+
+            if (type === 'all') {
+                // Clear everything
+                localStorage.removeItem(STORAGE_KEY);
+                console.log('[Storage] Cleared all local cache');
+                return;
+            }
+
+            const data = JSON.parse(stored) as AppData;
+
+            if (type === 'meals' || type === 'food') {
+                data.mealEntries = [];
+                console.log('[Storage] Cleared mealEntries from local cache');
+            } else if (type === 'exercises') {
+                data.exerciseEntries = [];
+                (data as any).trainingCycles = [];
+                (data as any).plannedActivities = [];
+                (data as any).strengthSessions = [];
+                console.log('[Storage] Cleared exercise data from local cache');
+            } else if (type === 'weight') {
+                data.weightEntries = [];
+                console.log('[Storage] Cleared weightEntries from local cache');
+            } else if (type === 'sleep') {
+                if ((data as any).sleepSessions) (data as any).sleepSessions = [];
+                if ((data as any).dailyVitals) {
+                    Object.keys((data as any).dailyVitals).forEach(date => {
+                        const v = (data as any).dailyVitals[date];
+                        if (v) { v.sleepHours = undefined; v.sleepQuality = undefined; }
+                    });
+                }
+                console.log('[Storage] Cleared sleep data from local cache');
+            } else if (type === 'water') {
+                if ((data as any).dailyVitals) {
+                    Object.keys((data as any).dailyVitals).forEach(date => {
+                        const v = (data as any).dailyVitals[date];
+                        if (v) v.water = undefined;
+                    });
+                }
+                console.log('[Storage] Cleared water data from local cache');
+            } else if (type === 'caffeine') {
+                if ((data as any).dailyVitals) {
+                    Object.keys((data as any).dailyVitals).forEach(date => {
+                        const v = (data as any).dailyVitals[date];
+                        if (v) v.caffeine = undefined;
+                    });
+                }
+                console.log('[Storage] Cleared caffeine data from local cache');
+            }
+
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } catch (e) {
+            console.error('[Storage] Failed to clear local cache:', e);
+        }
     }
 }
 

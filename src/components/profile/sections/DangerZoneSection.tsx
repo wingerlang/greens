@@ -12,13 +12,27 @@ export function DangerZoneSection() {
     const [isResetting, setIsResetting] = useState(false);
 
     // Track which granular reset is being confirmed
-    const [pendingReset, setPendingReset] = useState<'meals' | 'exercises' | 'weight' | null>(null);
+    const [pendingReset, setPendingReset] = useState<'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | null>(null);
     const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
 
-    const labels = {
+    const labels: Record<string, string> = {
         meals: 'måltidshistorik',
         exercises: 'träningspass',
-        weight: 'vikthistorik'
+        weight: 'vikthistorik',
+        sleep: 'sömnloggar',
+        water: 'vattenloggar',
+        caffeine: 'koffeinloggar',
+        food: 'matloggar'
+    };
+
+    const icons: Record<string, string> = {
+        meals: '🍽️',
+        exercises: '🏋️',
+        weight: '⚖️',
+        sleep: '😴',
+        water: '💧',
+        caffeine: '☕',
+        food: '🥗'
     };
 
     const handleReset = async () => {
@@ -28,6 +42,11 @@ export function DangerZoneSection() {
         try {
             const success = await profileService.resetData(pendingReset);
             if (success) {
+                // CRITICAL: Clear localStorage cache FIRST to prevent data resurrection
+                const { storageService } = await import('../../../services/storage.ts');
+                storageService.clearLocalCache(pendingReset);
+
+                // Then refresh from server (which now has empty data)
                 await refreshData();
                 setFeedbackMessage(`✅ ${labels[pendingReset]} har rensats.`);
                 setPendingReset(null);
@@ -74,8 +93,8 @@ export function DangerZoneSection() {
                 </div>
             )}
 
-            <div className="grid md:grid-cols-2 gap-4 mb-8">
-                {(['meals', 'exercises', 'weight'] as const).map(type => (
+            <div className="grid md:grid-cols-3 gap-4 mb-8">
+                {(['meals', 'exercises', 'weight', 'sleep', 'water', 'caffeine', 'food'] as const).map(type => (
                     <div key={type} className="relative">
                         {pendingReset === type ? (
                             <div className="w-full h-full bg-red-950 border border-red-500 rounded-xl p-4 flex flex-col justify-center items-center gap-3 z-10 animate-in zoom-in-95">
@@ -103,8 +122,8 @@ export function DangerZoneSection() {
                                 onClick={() => setPendingReset(type)}
                                 className="w-full h-full p-4 bg-red-950/30 border border-red-900/30 rounded-xl text-red-400 hover:bg-red-900/20 text-left transition-all disabled:opacity-50"
                             >
-                                <div className="font-bold mb-1 capital">
-                                    🧹 Rensa {type === 'meals' ? 'Måltider' : type === 'exercises' ? 'Träningspass' : 'Vikt'}
+                                <div className="font-bold mb-1 flex items-center gap-2">
+                                    <span>{icons[type]}</span> Rensa {labels[type]}
                                 </div>
                                 <div className="text-xs opacity-70">
                                     Tar bort all {labels[type]}

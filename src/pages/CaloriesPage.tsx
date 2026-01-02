@@ -62,6 +62,9 @@ export function CaloriesPage() {
     // Nutrition breakdown modal state
     const [breakdownItem, setBreakdownItem] = useState<MealItem | null>(null);
 
+    // Bulk selection state
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
     const dailyEntries = useMemo(
         () => getMealEntriesForDate(selectedDate),
         [getMealEntriesForDate, selectedDate]
@@ -207,7 +210,40 @@ export function CaloriesPage() {
     const handleDeleteEntry = (id: string) => {
         if (confirm('Ta bort denna måltid?')) {
             deleteMealEntry(id);
+            setSelectedIds(prev => {
+                const next = new Set(prev);
+                next.delete(id);
+                return next;
+            });
         }
+    };
+
+    const handleToggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+            }
+            return next;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (selectedIds.size === dailyEntries.length) {
+            setSelectedIds(new Set());
+        } else {
+            setSelectedIds(new Set(dailyEntries.map(e => e.id)));
+        }
+    };
+
+    const handleDeleteSelected = () => {
+        if (selectedIds.size === 0) return;
+        if (!confirm(`Ta bort ${selectedIds.size} markerade måltider?`)) return;
+
+        selectedIds.forEach(id => deleteMealEntry(id));
+        setSelectedIds(new Set());
     };
 
     const getItemName = (item: MealItem): string => {
@@ -488,6 +524,10 @@ export function CaloriesPage() {
                 setIsFormOpen={setIsFormOpen}
                 setMealType={setMealType}
                 setBreakdownItem={setBreakdownItem}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
+                onSelectAll={handleSelectAll}
+                onDeleteSelected={handleDeleteSelected}
             />
 
             {dailyExercises.length > 0 && (

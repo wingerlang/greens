@@ -292,6 +292,10 @@ export function DataProvider({ children }: DataProviderProps) {
             });
         };
 
+        // CRITICAL: Skip auto-save for this batch of state updates
+        // This prevents race condition where refreshData() re-posts old local data
+        skipAutoSave.current = true;
+
         setFoodItems(deDuplicate(data.foodItems || []));
         setRecipes(deDuplicate(data.recipes || []));
         setMealEntries(data.mealEntries || []);

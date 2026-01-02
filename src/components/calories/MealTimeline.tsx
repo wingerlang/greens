@@ -17,6 +17,11 @@ interface MealTimelineProps {
     setIsFormOpen: (open: boolean) => void;
     setMealType: (type: MealType) => void;
     setBreakdownItem: (item: MealItem | null) => void;
+    // Bulk selection
+    selectedIds: Set<string>;
+    onToggleSelect: (id: string) => void;
+    onSelectAll: () => void;
+    onDeleteSelected: () => void;
 }
 
 export function MealTimeline({
@@ -30,6 +35,10 @@ export function MealTimeline({
     setIsFormOpen,
     setMealType,
     setBreakdownItem,
+    selectedIds,
+    onToggleSelect,
+    onSelectAll,
+    onDeleteSelected,
 }: MealTimelineProps) {
     if (viewMode === 'compact') {
         return (
@@ -46,12 +55,44 @@ export function MealTimeline({
                     </div>
                 ) : (
                     <>
+                        {/* Bulk actions bar */}
+                        <div className="flex items-center justify-between px-2 py-1.5 mb-1 border-b border-slate-700/50">
+                            <label className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedIds.size === dailyEntries.length && dailyEntries.length > 0}
+                                    onChange={onSelectAll}
+                                    className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50"
+                                />
+                                <span className="text-xs text-slate-400">
+                                    {selectedIds.size > 0 ? `${selectedIds.size} markerade` : 'Markera alla'}
+                                </span>
+                            </label>
+                            {selectedIds.size > 0 && (
+                                <button
+                                    onClick={onDeleteSelected}
+                                    className="text-xs px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors font-bold"
+                                >
+                                    🗑️ Ta bort ({selectedIds.size})
+                                </button>
+                            )}
+                        </div>
+
                         {dailyEntries.map((entry: MealEntry) => (
                             <div
                                 key={entry.id}
-                                className="group flex items-center justify-between py-2 px-3 bg-slate-800/50 hover:bg-slate-800 rounded-lg transition-all"
+                                className={`group flex items-center justify-between py-2 px-3 rounded-lg transition-all ${selectedIds.has(entry.id)
+                                        ? 'bg-emerald-500/10 border border-emerald-500/30'
+                                        : 'bg-slate-800/50 hover:bg-slate-800'
+                                    }`}
                             >
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.has(entry.id)}
+                                        onChange={() => onToggleSelect(entry.id)}
+                                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50 shrink-0"
+                                    />
                                     <span className="text-[10px] uppercase text-slate-500 w-16 shrink-0">
                                         {MEAL_TYPE_LABELS[entry.mealType]}
                                     </span>
