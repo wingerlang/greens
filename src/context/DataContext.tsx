@@ -42,7 +42,8 @@ import {
     type StrengthSession, // Phase 12
     type StrengthMuscleGroup,
     type StrengthExercise,
-    type UserPrivacy
+    type UserPrivacy,
+    type BodyMeasurementEntry // Phase Legacy+
 } from '../models/types.ts';
 import { type StrengthWorkout } from '../models/strengthTypes.ts';
 import { storageService } from '../services/storage.ts';
@@ -175,13 +176,20 @@ interface DataContextType {
     universalActivities: UniversalActivity[];
     addSleepSession: (session: SleepSession) => void;
 
-    // Phase 7: Physio-AI
     injuryLogs: InjuryLog[];
     recoveryMetrics: RecoveryMetric[];
     addInjuryLog: (log: Omit<InjuryLog, 'id' | 'createdAt' | 'updatedAt'>) => InjuryLog;
     updateInjuryLog: (id: string, updates: Partial<InjuryLog>) => void;
     deleteInjuryLog: (id: string) => void;
     addRecoveryMetric: (metric: Omit<RecoveryMetric, 'id'>) => RecoveryMetric;
+
+
+    // Body Measurements
+    bodyMeasurements: BodyMeasurementEntry[];
+    addBodyMeasurement: (entry: Omit<BodyMeasurementEntry, 'id' | 'createdAt'>) => void;
+    updateBodyMeasurement: (id: string, updates: Partial<BodyMeasurementEntry>) => void;
+    deleteBodyMeasurement: (id: string) => void;
+
     unifiedActivities: (ExerciseEntry & { source: string })[];
     calculateStreak: () => number;
     calculateTrainingStreak: () => number;
@@ -233,6 +241,7 @@ export function DataProvider({ children }: DataProviderProps) {
     // Phase 7: Physio-AI State
     const [injuryLogs, setInjuryLogs] = useState<InjuryLog[]>([]);
     const [recoveryMetrics, setRecoveryMetrics] = useState<RecoveryMetric[]>([]);
+    const [bodyMeasurements, setBodyMeasurements] = useState<BodyMeasurementEntry[]>([]);
 
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -441,14 +450,14 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.coachConfig) {
             setCoachConfig(data.coachConfig);
         }
-        if (data.plannedActivities) {
-            setPlannedActivities(data.plannedActivities || []);
-        }
+        if (data.plannedActivities) setPlannedActivities(data.plannedActivities || []);
         if (data.sleepSessions) setSleepSessions(data.sleepSessions);
         if (data.intakeLogs) setIntakeLogs(data.intakeLogs);
         if (data.universalActivities) setUniversalActivities(data.universalActivities);
         if (data.injuryLogs) setInjuryLogs(data.injuryLogs);
         if (data.recoveryMetrics) setRecoveryMetrics(data.recoveryMetrics);
+        if (data.bodyMeasurements) setBodyMeasurements(data.bodyMeasurements || []);
+
         setIsLoaded(true);
     }, []);
 
@@ -489,7 +498,8 @@ export function DataProvider({ children }: DataProviderProps) {
                 intakeLogs,
                 universalActivities,
                 injuryLogs,
-                recoveryMetrics
+                recoveryMetrics,
+                bodyMeasurements
             }, { skipApi: shouldSkipApi });
         }
     }, [
@@ -500,7 +510,9 @@ export function DataProvider({ children }: DataProviderProps) {
         // Phase 8
         sleepSessions, intakeLogs, universalActivities,
         // Phase 7
-        injuryLogs, recoveryMetrics
+        injuryLogs, recoveryMetrics,
+        // Phase 13
+        bodyMeasurements
     ]);
 
     // ============================================
@@ -1262,9 +1274,9 @@ export function DataProvider({ children }: DataProviderProps) {
             if (updates.water && updates.water > (existing.water || 0)) {
                 emitFeedEvent(
                     'HYDRATION',
-                    'Drack vatten',
+                    'Drank water',
                     { type: 'HYDRATION', amountMl: (updates.water - (existing.water || 0)) * 1000 },
-                    [{ label: 'Mängd', value: (updates.water - (existing.water || 0)).toFixed(1), unit: 'L', icon: '💧' }]
+                    [{ label: 'Amount', value: (updates.water - (existing.water || 0)).toFixed(1), unit: 'L', icon: '💧' }]
                 );
             }
 
@@ -1454,6 +1466,23 @@ export function DataProvider({ children }: DataProviderProps) {
             return [...filtered, newMetric];
         });
         return newMetric;
+    }, []);
+
+    const addBodyMeasurement = useCallback((entry: Omit<BodyMeasurementEntry, 'id' | 'createdAt'>) => {
+        const newEntry: BodyMeasurementEntry = {
+            ...entry,
+            id: generateId(),
+            createdAt: new Date().toISOString()
+        };
+        setBodyMeasurements(prev => [...prev, newEntry]);
+    }, []);
+
+    const updateBodyMeasurement = useCallback((id: string, updates: Partial<BodyMeasurementEntry>) => {
+        setBodyMeasurements(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+    }, []);
+
+    const deleteBodyMeasurement = useCallback((id: string) => {
+        setBodyMeasurements(prev => prev.filter(e => e.id !== id));
     }, []);
 
     // ============================================
@@ -1777,6 +1806,13 @@ export function DataProvider({ children }: DataProviderProps) {
         updateInjuryLog,
         deleteInjuryLog,
         addRecoveryMetric,
+
+        // Body Measurements
+        bodyMeasurements,
+        addBodyMeasurement,
+        updateBodyMeasurement,
+        deleteBodyMeasurement,
+
         unifiedActivities,
         refreshData
     };

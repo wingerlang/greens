@@ -97,7 +97,7 @@ export function HealthPage() {
         if (!m || m === 'overview' || m === 'översikt') return 'overview';
         if (m === 'food' || m === 'mat') return 'food';
         if (['training', 'träning', 'strength', 'styrka', 'cardio', 'kondition', 'hyrox'].includes(m)) return 'training';
-        if (['weight', 'vikt', 'sleep', 'sömn'].includes(m)) return 'body';
+        if (['weight', 'vikt', 'sleep', 'sömn', 'measurements', 'matt', 'mått'].includes(m)) return 'body';
         if (m === 'recovery' || m === 'rehab') return 'recovery';
         return 'overview';
     }, [metric]);
@@ -105,10 +105,12 @@ export function HealthPage() {
     // DERIVE SUB-TAB for complex views
     const subTab = useMemo(() => {
         const m = metric?.toLowerCase();
+        if (!m) return undefined;
         if (m === 'strength' || m === 'styrka') return 'strength';
         if (m === 'cardio' || m === 'kondition') return 'cardio';
         if (m === 'weight' || m === 'vikt') return 'weight';
         if (m === 'sleep' || m === 'sömn') return 'sleep';
+        if (['measurements', 'matt', 'mått'].includes(m)) return 'measurements';
         if (m === 'hyrox') return 'hyrox';
         return undefined;
     }, [metric]);
@@ -201,7 +203,7 @@ export function HealthPage() {
             if (tab === 'training') path = 'träning';
             if (tab === 'recovery') path = 'rehab';
         } else {
-            if (tab === 'body') path = 'weight';
+            if (tab === 'body') path = 'measurements';
         }
 
         navigate(`${basePath}/${path}`);

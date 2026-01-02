@@ -6,6 +6,7 @@ export interface HealthStats {
     avgCaffeine: number;
     weightTrend: number; // kg change over period
     totalCalories: number;
+    avgCalories: number;
     avgProtein: number;
     proteinQualityScore: number; // 0-100
     vitaminCoverage: Record<string, number>; // nutrient -> % of RDA
@@ -178,6 +179,7 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
         avgCaffeine: totals.caffeine / count,
         weightTrend,
         totalCalories: totals.calories,
+        avgCalories: totals.calories / count,
         avgProtein: totals.protein / count,
         proteinQualityScore,
         vitaminCoverage,

@@ -33,40 +33,58 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
     const firstWeight = weights[0];
     const weightChange = currentWeight - firstWeight;
 
-    // Create SVG path
-    const pathPoints = sortedEntries.map((d, i) => {
-        const x = (i / (sortedEntries.length - 1)) * 100;
+    // Calculate date range for proper X positioning
+    const dateRange = useMemo(() => {
+        if (sortedEntries.length === 0) return { min: 0, max: 1 };
+        const timestamps = sortedEntries.map(e => new Date(e.date).getTime());
+        const min = Math.min(...timestamps);
+        const max = Math.max(...timestamps);
+        return { min, max: max === min ? min + 1 : max }; // Avoid div by zero
+    }, [sortedEntries]);
+
+    // Get X position based on date (0-100)
+    const getXPosition = (date: string): number => {
+        const timestamp = new Date(date).getTime();
+        return ((timestamp - dateRange.min) / (dateRange.max - dateRange.min)) * 100;
+    };
+
+    // Create SVG path using date-based X positioning
+    const pathPoints = sortedEntries.map((d) => {
+        const x = getXPosition(d.date);
         const y = 100 - ((d.weight - minW) / chartRange) * 100;
         return `${x},${y}`;
     }).join(' L ');
 
     // Generate X-axis labels (more labels for better readability)
     const xLabels = useMemo(() => {
-        if (sortedEntries.length <= 5) {
-            return sortedEntries.map((e, i) => ({
-                label: e.date.slice(5), // MM-DD
-                pos: (i / (sortedEntries.length - 1)) * 100
+        // Get unique dates
+        const uniqueDates = [...new Set(sortedEntries.map(e => e.date))];
+
+        if (uniqueDates.length <= 5) {
+            return uniqueDates.map((date) => ({
+                label: date.slice(5), // MM-DD
+                pos: getXPosition(date)
             }));
         }
         // Show ~5 evenly spaced labels
-        const step = Math.ceil(sortedEntries.length / 5);
+        const step = Math.ceil(uniqueDates.length / 5);
         const labels: { label: string; pos: number }[] = [];
-        for (let i = 0; i < sortedEntries.length; i += step) {
+        for (let i = 0; i < uniqueDates.length; i += step) {
             labels.push({
-                label: sortedEntries[i].date.slice(5), // MM-DD
-                pos: (i / (sortedEntries.length - 1)) * 100
+                label: uniqueDates[i].slice(5), // MM-DD
+                pos: getXPosition(uniqueDates[i])
             });
         }
         // Always add last
-        const lastIdx = sortedEntries.length - 1;
+        const lastDate = uniqueDates[uniqueDates.length - 1];
         if (!labels.find(l => l.pos === 100)) {
             labels.push({
-                label: sortedEntries[lastIdx].date.slice(5),
-                pos: 100
+                label: lastDate.slice(5),
+                pos: getXPosition(lastDate)
             });
         }
         return labels;
-    }, [sortedEntries]);
+    }, [sortedEntries, dateRange]);
 
     const handleMouseEnter = (entry: WeightEntry, event: React.MouseEvent) => {
         setHoveredEntry(entry);
@@ -141,13 +159,13 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
 
                     {/* Data Points with hover/click */}
                     {sortedEntries.map((d, i) => {
-                        const x = (i / (sortedEntries.length - 1)) * 100;
+                        const x = getXPosition(d.date);
                         const y = 100 - ((d.weight - minW) / chartRange) * 100;
-                        const isHovered = hoveredEntry?.date === d.date;
+                        const isHovered = hoveredEntry?.date === d.date && hoveredEntry?.weight === d.weight;
 
                         return (
                             <circle
-                                key={d.date}
+                                key={`${d.date}-${i}`}
                                 cx={x}
                                 cy={y}
                                 r={isHovered ? "2" : "1"}

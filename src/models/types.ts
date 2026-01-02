@@ -25,6 +25,7 @@ export type FoodCategory =
     | 'sauces'         // Färdiga såser
     | 'sweeteners'     // Sötningsmedel (sirap, socker)
     | 'baking'         // Bakvaror (mjöl, bakpulver)
+    | 'supplements'    // Kosttillskott (proteinpulver, vitaminer)
     | 'other';
 
 /** Food storage type */
@@ -205,6 +206,7 @@ export interface FoodItem {
     fiber?: number;
     unit: Unit;
     category: FoodCategory;
+    brand?: string;
     storageType?: FoodStorageType;
     // Extended properties
     pricePerUnit?: number;      // Price in SEK per unit
@@ -1197,6 +1199,8 @@ export interface AppData {
     // Phase 7: Physio-AI
     injuryLogs?: InjuryLog[];
     recoveryMetrics?: RecoveryMetric[];
+    // Phase Legacy+ (Body)
+    bodyMeasurements?: BodyMeasurementEntry[];
     // Phase 12: Strength Sessions
     strengthSessions?: StrengthWorkout[];
 }
@@ -1294,6 +1298,7 @@ export const CATEGORY_LABELS: Record<FoodCategory, string> = {
     sauces: 'Såser',
     sweeteners: 'Sötningsmedel',
     baking: 'Bakvaror',
+    supplements: 'Kosttillskott',
     other: 'Övrigt'
 };
 
@@ -1368,4 +1373,32 @@ export interface RehabRoutine {
     condition?: InjuryType; // e.g., 'tightness', 'pain'
     exercises: RehabExercise[];
     estimatedDurationMin: number;
+}
+
+// ============================================
+// Body Measurements (Phase Legacy+)
+// ============================================
+
+export type BodyMeasurementType =
+    | 'waist'       // Midja
+    | 'hips'        // Höft
+    | 'chest'       // Bröst
+    | 'arm_left'    // Vänster arm
+    | 'arm_right'   // Höger arm
+    | 'thigh_left'  // Vänster lår
+    | 'thigh_right' // Höger lår
+    | 'calf_left'   // Vänster vad
+    | 'calf_right'  // Höger vad
+    | 'neck'        // Nacke
+    | 'shoulders'   // Axlar
+    | 'forearm_left' // Vänster underarm
+    | 'forearm_right'; // Höger underarm
+
+export interface BodyMeasurementEntry {
+    id: string;
+    date: string; // ISO Date YYYY-MM-DD
+    type: BodyMeasurementType;
+    value: number; // cm
+    notes?: string;
+    createdAt: string;
 }

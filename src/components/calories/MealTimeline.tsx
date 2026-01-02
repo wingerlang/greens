@@ -81,9 +81,18 @@ export function MealTimeline({
                         {dailyEntries.map((entry: MealEntry) => (
                             <div
                                 key={entry.id}
-                                className={`group flex items-center justify-between py-2 px-3 rounded-lg transition-all ${selectedIds.has(entry.id)
-                                        ? 'bg-emerald-500/10 border border-emerald-500/30'
-                                        : 'bg-slate-800/50 hover:bg-slate-800'
+                                draggable
+                                onDragStart={(e) => {
+                                    e.dataTransfer.setData('entryId', entry.id);
+                                    e.dataTransfer.effectAllowed = 'move';
+                                    (e.currentTarget as HTMLElement).classList.add('opacity-50');
+                                }}
+                                onDragEnd={(e) => {
+                                    (e.currentTarget as HTMLElement).classList.remove('opacity-50');
+                                }}
+                                className={`group flex items-center justify-between py-2 px-3 rounded-lg transition-all cursor-move ${selectedIds.has(entry.id)
+                                    ? 'bg-emerald-500/10 border border-emerald-500/30'
+                                    : 'bg-slate-800/50 hover:bg-slate-800'
                                     }`}
                             >
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -145,7 +154,28 @@ export function MealTimeline({
     return (
         <div className="meals-timeline">
             {(Object.entries(entriesByMeal) as [MealType, MealEntry[]][]).map(([mealTypeKey, entries]) => (
-                <div key={mealTypeKey} className="meal-section">
+                <div
+                    key={mealTypeKey}
+                    className="meal-section transition-colors duration-200"
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
+                        (e.currentTarget as HTMLElement).classList.add('bg-emerald-500/5');
+                        (e.currentTarget as HTMLElement).classList.add('border-emerald-500/30');
+                    }}
+                    onDragLeave={(e) => {
+                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/5');
+                        (e.currentTarget as HTMLElement).classList.remove('border-emerald-500/30');
+                    }}
+                    onDrop={(e) => {
+                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/5');
+                        (e.currentTarget as HTMLElement).classList.remove('border-emerald-500/30');
+                        const entryId = e.dataTransfer.getData('entryId');
+                        if (entryId) {
+                            updateMealEntry(entryId, { mealType: mealTypeKey });
+                        }
+                    }}
+                >
                     <h3 className="meal-title">
                         <span className="meal-icon">
                             {mealTypeKey === 'breakfast' && '🌅'}
@@ -172,7 +202,20 @@ export function MealTimeline({
                     ) : (
                         <div className="meal-entries">
                             {entries.map((entry: MealEntry) => (
-                                <div key={entry.id} className="meal-entry">
+                                <div
+                                    key={entry.id}
+                                    className="meal-entry cursor-move transition-all active:scale-[0.98]"
+                                    draggable
+                                    onDragStart={(e) => {
+                                        e.dataTransfer.setData('entryId', entry.id);
+                                        e.dataTransfer.effectAllowed = 'move';
+                                        // Visual feedback for element being dragged
+                                        setTimeout(() => (e.target as HTMLElement).classList.add('opacity-40'), 0);
+                                    }}
+                                    onDragEnd={(e) => {
+                                        (e.target as HTMLElement).classList.remove('opacity-40');
+                                    }}
+                                >
                                     {entry.items.map((item: MealItem, idx: number) => (
                                         <div key={idx} className="entry-item">
                                             <div className="entry-info">

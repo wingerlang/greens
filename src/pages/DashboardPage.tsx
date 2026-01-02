@@ -979,6 +979,21 @@ export function DashboardPage() {
                                         <div className="flex flex-col gap-2 pt-1" onClick={e => e.stopPropagation()}>
                                             <div className="flex justify-between items-center bg-slate-100/50 dark:bg-slate-800/50 px-2 py-1 rounded-lg">
                                                 <span className={`text-xs font-black ${sleepColorClass}`}>{parseFloat(tempValue).toFixed(1)}h</span>
+                                                {parseFloat(tempValue) > 0 && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setTempValue('0');
+                                                            setVitals(prev => ({ ...prev, sleep: 0 }));
+                                                            updateVitals(selectedDate, { sleep: 0 });
+                                                            setEditing(null);
+                                                        }}
+                                                        className="w-5 h-5 flex items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-500 hover:bg-rose-200 dark:hover:bg-rose-800/50 text-xs font-bold transition-colors"
+                                                        title="Rensa sömnvärde"
+                                                    >
+                                                        ×
+                                                    </button>
+                                                )}
                                             </div>
                                             <input
                                                 autoFocus

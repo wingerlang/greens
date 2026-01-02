@@ -57,3 +57,24 @@
 - [ ] **The Matrix Follow:** Prenumerera endast på specifika kategorier från vänner (t.ex. se någons pass men dölja deras matlogg).
 - [ ] **Smart Aggregation:** Gruppera småhändelser (6 glas vatten -> 1 post) i feeden.
 - [ ] **Nocco 'o Clock:** (Implementerad prototyp) – Vidareutveckla till generella "Timers" för kosttillskott.
+
+--
+När aktvititetsloggen laddas - visa en snygg, tränings/hälso/styrkerelaterad spinner.
+
+-- MÅLSÄTTNING
+En ny målsättningssida med en enkel form där man kan ange mål, måltyp (vikt, marklyft, etc.) och målperiode (vecka, månad, år).
+Man ska kunna sätta en rad olika mål på en rad olik sätt:
+ - kaloriunderskott 500 kcal om dagen
+ - kaloritarget 1500 kcal om dagen 
+ - träna 3 gånger i veckan
+ - springa 5 gånger i veckan
+ - springa 50km i veckan som minumum ELLER som snitt över perioden
+ - lyfta 5 gånger i veckan
+ - lyfta 30 ton i veckan
+ - 2 koffeinfria dagar i veckan
+ - osv... en MÄNGD sådana olika sorts mål
+
+ Vi ska kunna presentera ett mål, redigera det, generera ett namn för det, sätta tidsperioder osv. Vi ska kunna visa det, länka till det, klicka på det, redigera och ta bort.
+ Vi ska kunna se en progress över det - t.ex. plottad tidsaxel, med målet som baseline.
+
+ På den specifika sidan ska vi kunna se våra nuvarande, historiska och framtida mål. Vi ska se statistik och hur många mål vi har, hur många vi klarat osv. Vi ska även kunna kommentera målen och beskriva dem (frivilligt). Detta är bara början. Det ska finnas MYCKET mer, det ska vara mer dynamiskt och flexibelt. Det ska vara extremt enkelt, tydligt och flexibelt. Det ska integreras sen i alla andra sidor (t.ex. kalorisidan osv).

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -21,13 +21,15 @@ const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
 
 const EMPTY_FORM: FoodItemFormData = {
     name: '',
+    brand: '',
+    defaultPortionGrams: 0,
     description: '',
     calories: 0,
     protein: 0,
     carbs: 0,
     fat: 0,
     fiber: 0,
-    unit: 'kg',
+    unit: 'g',
     category: 'other',
     storageType: 'pantry',
     pricePerUnit: 0,
@@ -81,7 +83,22 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         }
     }, [searchParams]);
 
-    const filteredItems = React.useMemo(() => {
+    const lastLoggedMap = useMemo(() => {
+        const map: Record<string, string> = {};
+        mealEntries.forEach(entry => {
+            entry.items.forEach((item) => {
+                if (item.type === 'foodItem') {
+                    const current = map[item.referenceId];
+                    if (!current || entry.date > current) {
+                        map[item.referenceId] = entry.date;
+                    }
+                }
+            });
+        });
+        return map;
+    }, [mealEntries]);
+
+    const filteredItems = useMemo(() => {
         // normalizeText imported from utils/formatters.ts
         const query = normalizeText(searchQuery);
         const matchesCategory = (item: FoodItem) => selectedCategory === 'all' || item.category === selectedCategory;
@@ -100,13 +117,14 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             if (!matchesCategory(item)) continue;
 
             const nameLower = normalizeText(item.name);
+            const brandLower = item.brand ? normalizeText(item.brand) : '';
             const descLower = item.description ? normalizeText(item.description) : '';
 
-            if (nameLower === query) {
+            if (nameLower === query || brandLower === query) {
                 exactMatches.push(item);
-            } else if (nameLower.startsWith(query)) {
+            } else if (nameLower.startsWith(query) || brandLower.startsWith(query)) {
                 startsWithMatches.push(item);
-            } else if (nameLower.includes(query) || descLower.includes(query)) {
+            } else if (nameLower.includes(query) || (brandLower && brandLower.includes(query)) || descLower.includes(query)) {
                 containsMatches.push(item);
             }
         }
@@ -146,6 +164,8 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             setEditingItem(item);
             setFormData({
                 name: item.name,
+                brand: item.brand || '',
+                defaultPortionGrams: item.defaultPortionGrams || 0,
                 description: item.description || '',
                 calories: item.calories,
                 protein: item.protein,
@@ -200,6 +220,14 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     // Handle inline cell edit
     const handleCellBlur = (item: FoodItem, field: keyof FoodItemFormData, value: string | number | boolean) => {
         updateFoodItem(item.id, { [field]: value });
+    };
+
+    // Helper to determine CO2 class for styling
+    const getCO2Class = (co2: number) => {
+        if (co2 >= 5) return 'co2-high';
+        if (co2 >= 2) return 'co2-medium';
+        if (co2 > 0) return 'co2-low';
+        return 'co2-none';
     };
 
     return (
@@ -308,21 +336,32 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 <th className="th-num">Kolh.</th>
                                 <th className="th-gluten">Gluten</th>
                                 <th className="th-co2">Klimat</th>
+                                {headless && (
+                                    <>
+                                        <th className="th-date">Skapad</th>
+                                        <th className="th-date">Senast loggad</th>
+                                    </>
+                                )}
                                 <th className="th-actions"></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {filteredItems.map(item => (
+                            {filteredItems.map((item: FoodItem) => (
                                 <tr key={item.id}>
                                     <td className="td-name">
-                                        <strong>{item.name}</strong>
-                                        {item.description && (
-                                            <span className="item-desc">{item.description}</span>
-                                        )}
+                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                            <span>
+                                                <strong>{item.name}</strong>
+                                                {item.brand && <span style={{ color: 'var(--text-secondary)', fontSize: '0.85em', marginLeft: '0.4rem' }}>{item.brand}</span>}
+                                            </span>
+                                            {item.description && (
+                                                <span className="item-desc">{item.description}</span>
+                                            )}
+                                        </div>
                                     </td>
                                     <td className="td-type">
                                         <span className={`storage-badge ${item.storageType || 'pantry'}`}>
-                                            {STORAGE_TYPE_LABELS[item.storageType || 'pantry']}
+                                            {STORAGE_TYPE_LABELS[(item.storageType || 'pantry') as FoodStorageType]}
                                         </span>
                                     </td>
                                     <td className="td-cooked">
@@ -363,7 +402,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                             type="checkbox"
                                             className="gluten-checkbox"
                                             checked={item.containsGluten || false}
-                                            onChange={(e) => handleCellBlur(item, 'containsGluten', e.target.checked)}
+                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleCellBlur(item, 'containsGluten', e.target.checked)}
                                         />
                                     </td>
                                     <td className="td-co2">
@@ -403,10 +442,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             ) : (
                 /* GRID VIEW - Card layout */
                 <div className="food-grid">
-                    {filteredItems.map(item => (
+                    {filteredItems.map((item: FoodItem) => (
                         <div key={item.id} className="food-card">
                             <div className="food-card-header">
-                                <h3>{item.name}</h3>
+                                <div>
+                                    <h3 style={{ margin: 0, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '4px' }}>
+                                        {item.name}
+                                        {item.brand && <span style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 'normal' }}>{item.brand}</span>}
+                                    </h3>
+                                </div>
                                 <span className="category-badge">{CATEGORY_LABELS[item.category]}</span>
                             </div>
                             <div className="nutrition-grid">
@@ -447,306 +491,453 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 </div>
             )}
 
-            {/* Modal Form */}
+            {/* Modal Form - Redesigned */}
             {isFormOpen && (
-                <div className="modal-overlay" onClick={handleCloseForm}>
-                    <div className="modal modal-large" onClick={(e) => e.stopPropagation()}>
-                        <h2>{editingItem ? 'Redigera Råvara' : 'Lägg till Råvara'}</h2>
-                        <form onSubmit={handleSubmit}>
-                            <div className="form-group">
-                                <label htmlFor="name">Namn</label>
-                                <input
-                                    type="text"
-                                    id="name"
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    required
-                                />
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={handleCloseForm}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') handleCloseForm();
+                        if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                            e.preventDefault();
+                            handleSubmit(e as any);
+                        }
+                    }}
+                >
+                    <div
+                        className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl w-full max-w-2xl max-h-[95vh] md:max-h-[90vh] overflow-y-auto shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div className="flex justify-between items-center p-6 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
+                            <div>
+                                <h2 className="text-xl font-black text-white">
+                                    {editingItem ? '✏️ Redigera Råvara' : '➕ Lägg till Råvara'}
+                                </h2>
+                                <p className="text-xs text-slate-500 mt-1">
+                                    <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] font-mono">ESC</kbd> stäng • <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] font-mono">Ctrl+S</kbd> spara
+                                </p>
                             </div>
-                            <div className="form-group">
-                                <label htmlFor="description">Beskrivning (t.ex. varianter)</label>
-                                <input
-                                    type="text"
-                                    id="description"
-                                    placeholder="t.ex. jasminris, basmatiris"
-                                    value={formData.description || ''}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                />
-                            </div>
-                            <div className="form-row form-row-3">
-                                <div className="form-group">
-                                    <label htmlFor="category">Kategori</label>
-                                    <select
-                                        id="category"
-                                        value={formData.category}
-                                        onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
-                                    >
-                                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                                            <option key={key} value={key}>{label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="storageType">Förvaringstyp</label>
-                                    <select
-                                        id="storageType"
-                                        value={formData.storageType || 'pantry'}
-                                        onChange={(e) => setFormData({ ...formData, storageType: e.target.value as FoodStorageType })}
-                                    >
-                                        {Object.entries(STORAGE_TYPE_LABELS).map(([key, label]) => (
-                                            <option key={key} value={key}>{label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="unit">Enhet</label>
-                                    <select
-                                        id="unit"
-                                        value={formData.unit}
-                                        onChange={(e) => setFormData({ ...formData, unit: e.target.value as Unit })}
-                                    >
-                                        {Object.entries(UNIT_LABELS).map(([key, label]) => (
-                                            <option key={key} value={key}>{label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
+                            <button
+                                onClick={handleCloseForm}
+                                className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-white hover:bg-slate-800 rounded-full transition-colors text-xl"
+                            >
+                                ×
+                            </button>
+                        </div>
 
-                            <h3 className="form-section-title">Näringsvärden (per 100g)</h3>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label htmlFor="calories">Kalorier (kcal)</label>
-                                    <input
-                                        type="number"
-                                        id="calories"
-                                        min="0"
-                                        value={formData.calories}
-                                        onChange={(e) => setFormData({ ...formData, calories: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="protein">Protein (g)</label>
-                                    <input
-                                        type="number"
-                                        id="protein"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.protein}
-                                        onChange={(e) => setFormData({ ...formData, protein: Number(e.target.value) })}
-                                    />
-                                </div>
-                            </div>
-                            <div className="form-row form-row-3">
-                                <div className="form-group">
-                                    <label htmlFor="carbs">Kolhydrater (g)</label>
-                                    <input
-                                        type="number"
-                                        id="carbs"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.carbs}
-                                        onChange={(e) => setFormData({ ...formData, carbs: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="fat">Fett (g)</label>
-                                    <input
-                                        type="number"
-                                        id="fat"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.fat}
-                                        onChange={(e) => setFormData({ ...formData, fat: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="fiber">Fiber (g)</label>
-                                    <input
-                                        type="number"
-                                        id="fiber"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.fiber}
-                                        onChange={(e) => setFormData({ ...formData, fiber: Number(e.target.value) })}
-                                    />
-                                </div>
-                            </div>
-
-                            <h3 className="form-section-title">Vitaminer & Mineraler (per 100g)</h3>
-                            <div className="form-row form-row-4">
-                                <div className="form-group">
-                                    <label htmlFor="iron">Järn (mg)</label>
-                                    <input
-                                        type="number"
-                                        id="iron"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.iron || 0}
-                                        onChange={(e) => setFormData({ ...formData, iron: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="calcium">Kalcium (mg)</label>
-                                    <input
-                                        type="number"
-                                        id="calcium"
-                                        min="0"
-                                        value={formData.calcium || 0}
-                                        onChange={(e) => setFormData({ ...formData, calcium: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="zinc">Zink (mg)</label>
-                                    <input
-                                        type="number"
-                                        id="zinc"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.zinc || 0}
-                                        onChange={(e) => setFormData({ ...formData, zinc: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="vitaminB12">B12 (µg)</label>
-                                    <input
-                                        type="number"
-                                        id="vitaminB12"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.vitaminB12 || 0}
-                                        onChange={(e) => setFormData({ ...formData, vitaminB12: Number(e.target.value) })}
-                                    />
-                                </div>
-                            </div>
-
-                            <h3 className="form-section-title">Proteinkvalitet</h3>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="checkbox-inline">
+                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                            {/* Primary: Name & Category */}
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                            Namn *
+                                        </label>
                                         <input
-                                            type="checkbox"
-                                            checked={formData.isCompleteProtein || false}
-                                            onChange={(e) => setFormData({ ...formData, isCompleteProtein: e.target.checked })}
+                                            type="text"
+                                            autoFocus
+                                            value={formData.name}
+                                            onChange={(e) => {
+                                                const name = e.target.value;
+                                                setFormData({ ...formData, name });
+
+                                                // Auto-suggest category based on name
+                                                const nameLower = name.toLowerCase();
+                                                if (nameLower.includes('pulver')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'supplements' as FoodCategory }));
+                                                } else if (nameLower.includes('bön') || nameLower.includes('lins') || nameLower.includes('kikärt')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'legumes' as FoodCategory }));
+                                                } else if (nameLower.includes('ris') || nameLower.includes('pasta') || nameLower.includes('bröd') || nameLower.includes('havre')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'grains' as FoodCategory }));
+                                                } else if (nameLower.includes('mjölk') || nameLower.includes('ost') || nameLower.includes('yoghurt')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'dairy-alt' as FoodCategory }));
+                                                } else if (nameLower.includes('tofu') || nameLower.includes('tempeh') || nameLower.includes('seitan')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'protein' as FoodCategory }));
+                                                } else if (nameLower.includes('äpple') || nameLower.includes('banan') || nameLower.includes('apelsin') || nameLower.includes('bär')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'fruits' as FoodCategory }));
+                                                } else if (nameLower.includes('spenat') || nameLower.includes('broccoli') || nameLower.includes('morot') || nameLower.includes('tomat')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'vegetables' as FoodCategory }));
+                                                } else if (nameLower.includes('mandel') || nameLower.includes('nöt') || nameLower.includes('cashew') || nameLower.includes('frö') || nameLower.includes('chia')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'nuts-seeds' as FoodCategory }));
+                                                } else if (nameLower.includes('olja') || nameLower.includes('smör')) {
+                                                    setFormData(prev => ({ ...prev, name, category: 'fats' as FoodCategory }));
+                                                }
+                                            }}
+                                            placeholder="t.ex. Kikärtor, Havregryn..."
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                                            required
                                         />
-                                        Fullvärdigt protein (innehåller alla essentiella aminosyror)
-                                    </label>
-                                </div>
-                            </div>
-                            {!formData.isCompleteProtein && (
-                                <div className="form-group">
-                                    <label>Kompletterande kategorier (behövs för fullvärdigt protein)</label>
-                                    <div className="checkbox-grid">
-                                        {['grains', 'legumes', 'nuts', 'seeds'].map(cat => (
-                                            <label key={cat} className="checkbox-inline">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={formData.complementaryCategories?.includes(cat as FoodCategory)}
-                                                    onChange={(e) => {
-                                                        const cats = formData.complementaryCategories || [];
-                                                        if (e.target.checked) {
-                                                            setFormData({ ...formData, complementaryCategories: [...cats, cat as FoodCategory] });
-                                                        } else {
-                                                            setFormData({ ...formData, complementaryCategories: cats.filter(c => c !== cat) });
-                                                        }
-                                                    }}
-                                                />
-                                                {CATEGORY_LABELS[cat as FoodCategory] || cat}
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                                Märke (frivilligt)
                                             </label>
-                                        ))}
+                                            <input
+                                                type="text"
+                                                value={formData.brand || ''}
+                                                onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                                                placeholder="t.ex. Zeta, Garant, Core..."
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                                Standardportion (frivilligt)
+                                            </label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={formData.defaultPortionGrams || ''}
+                                                    onChange={(e) => setFormData({ ...formData, defaultPortionGrams: Number(e.target.value) })}
+                                                    placeholder="t.ex. 35"
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
+                                                />
+                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-500">g/ml</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            )}
 
-                            <h3 className="form-section-title">Smart Plan Data</h3>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label htmlFor="proteinCategory">Proteinkategori (för aminosyra-balans)</label>
-                                    <select
-                                        id="proteinCategory"
-                                        value={formData.proteinCategory || ''}
-                                        onChange={(e) => setFormData({ ...formData, proteinCategory: e.target.value as any || undefined })}
-                                    >
-                                        <option value="">Ingen (ej proteinfokus)</option>
-                                        <option value="legume">Baljväxt (Bönor/Linser)</option>
-                                        <option value="grain">Spannmål (Ris/Vete)</option>
-                                        <option value="soy_quinoa">Fullvärdig (Sojaprodukter/Quinoa)</option>
-                                        <option value="seed">Frö (Solros/Pumpa)</option>
-                                        <option value="nut">Nöt (Mandel/Valnöt)</option>
-                                        <option value="vegetable">Grönsak (Broccoli/Spenat)</option>
-                                    </select>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                            Kategori
+                                        </label>
+                                        <select
+                                            value={formData.category}
+                                            onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                        >
+                                            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                                                <option key={key} value={key}>{label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                            Enhet
+                                        </label>
+                                        <select
+                                            value={formData.unit}
+                                            onChange={(e) => setFormData({ ...formData, unit: e.target.value as Unit })}
+                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                        >
+                                            {Object.entries(UNIT_LABELS).map(([key, label]) => (
+                                                <option key={key} value={key}>{label}</option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="form-group">
-                                <label>Säsonger (när är den bäst?)</label>
-                                <div className="checkbox-grid">
-                                    {[
-                                        { id: 'winter', label: 'Vinter ❄️' },
-                                        { id: 'spring', label: 'Vår 🌱' },
-                                        { id: 'summer', label: 'Sommar ☀️' },
-                                        { id: 'autumn', label: 'Höst 🍂' }
-                                    ].map(s => (
-                                        <label key={s.id} className="checkbox-inline">
+                            {/* Primary: Macros */}
+                            <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
+                                <h3 className="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">
+                                    <span>📊</span> Näringsvärden (per 100g)
+                                </h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div>
+                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Protein</label>
+                                        <div className="relative">
                                             <input
-                                                type="checkbox"
-                                                checked={formData.seasons?.includes(s.id as any)}
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={formData.protein}
                                                 onChange={(e) => {
-                                                    const current = formData.seasons || [];
-                                                    if (e.target.checked) {
-                                                        setFormData({ ...formData, seasons: [...current, s.id as any] });
-                                                    } else {
-                                                        setFormData({ ...formData, seasons: current.filter(c => c !== s.id) });
+                                                    const protein = Number(e.target.value);
+                                                    const calories = Math.round(protein * 4 + formData.carbs * 4 + formData.fat * 9);
+                                                    setFormData({ ...formData, protein, calories });
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        e.currentTarget.closest('div')?.parentElement?.nextElementSibling?.querySelector('input')?.focus();
                                                     }
                                                 }}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-right pr-8 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                                             />
-                                            {s.label}
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">g</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Kolhydrater</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={formData.carbs}
+                                                onChange={(e) => {
+                                                    const carbs = Number(e.target.value);
+                                                    const calories = Math.round(formData.protein * 4 + carbs * 4 + formData.fat * 9);
+                                                    setFormData({ ...formData, carbs, calories });
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        e.currentTarget.closest('div')?.parentElement?.nextElementSibling?.querySelector('input')?.focus();
+                                                    }
+                                                }}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-right pr-8 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">g</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Fett</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={formData.fat}
+                                                onChange={(e) => {
+                                                    const fat = Number(e.target.value);
+                                                    const calories = Math.round(formData.protein * 4 + formData.carbs * 4 + fat * 9);
+                                                    setFormData({ ...formData, fat, calories });
+                                                }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        e.currentTarget.closest('div')?.parentElement?.nextElementSibling?.querySelector('input')?.focus();
+                                                    }
+                                                }}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-right pr-8 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">g</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Kalorier</label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={formData.calories}
+                                                onChange={(e) => setFormData({ ...formData, calories: Number(e.target.value) })}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleSubmit(e as any);
+                                                    }
+                                                }}
+                                                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-right pr-12 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">kcal</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Expandable: Advanced Fields */}
+                            <details className="group">
+                                <summary className="cursor-pointer list-none flex items-center justify-between p-4 bg-slate-800/30 hover:bg-slate-800/50 rounded-2xl border border-slate-700/30 transition-colors">
+                                    <span className="text-sm font-bold text-slate-400 flex items-center gap-2">
+                                        <span>⚙️</span> Avancerade inställningar
+                                    </span>
+                                    <span className="text-slate-500 group-open:rotate-180 transition-transform">▼</span>
+                                </summary>
+
+                                <div className="mt-4 space-y-6 pl-2">
+                                    {/* Fiber */}
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Fiber (g)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={formData.fiber}
+                                                onChange={(e) => setFormData({ ...formData, fiber: Number(e.target.value) })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Pris (kr)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={formData.pricePerUnit || 0}
+                                                onChange={(e) => setFormData({ ...formData, pricePerUnit: Number(e.target.value) })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">CO₂ (kg)</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.1"
+                                                value={formData.co2PerUnit || 0}
+                                                onChange={(e) => setFormData({ ...formData, co2PerUnit: Number(e.target.value) })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Vitamins & Minerals */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-indigo-400 mb-3 flex items-center gap-2">
+                                            <span>🧬</span> Vitaminer & Mineraler
+                                        </h4>
+                                        <div className="grid grid-cols-4 gap-3">
+                                            <div>
+                                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Järn (mg)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.1"
+                                                    value={formData.iron || 0}
+                                                    onChange={(e) => setFormData({ ...formData, iron: Number(e.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Kalcium (mg)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={formData.calcium || 0}
+                                                    onChange={(e) => setFormData({ ...formData, calcium: Number(e.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Zink (mg)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.1"
+                                                    value={formData.zinc || 0}
+                                                    onChange={(e) => setFormData({ ...formData, zinc: Number(e.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">B12 (µg)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.1"
+                                                    value={formData.vitaminB12 || 0}
+                                                    onChange={(e) => setFormData({ ...formData, vitaminB12: Number(e.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Protein Quality - Custom Checkboxes */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-amber-400 mb-3 flex items-center gap-2">
+                                            <span>🥩</span> Proteinkvalitet
+                                        </h4>
+
+                                        {/* Custom Checkbox */}
+                                        <label className="flex items-center gap-3 cursor-pointer group mb-4">
+                                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${formData.isCompleteProtein
+                                                ? 'bg-emerald-500 border-emerald-500'
+                                                : 'border-slate-600 group-hover:border-slate-500'
+                                                }`}>
+                                                {formData.isCompleteProtein && (
+                                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                )}
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only"
+                                                checked={formData.isCompleteProtein || false}
+                                                onChange={(e) => setFormData({ ...formData, isCompleteProtein: e.target.checked })}
+                                            />
+                                            <span className="text-sm text-slate-300">Fullvärdigt protein (alla aminosyror)</span>
                                         </label>
-                                    ))}
-                                </div>
-                            </div>
 
-                            <h3 className="form-section-title">Extra Information</h3>
-                            <div className="form-row form-row-3">
-                                <div className="form-group">
-                                    <label htmlFor="pricePerUnit">Pris (kr/enhet)</label>
-                                    <input
-                                        type="number"
-                                        id="pricePerUnit"
-                                        min="0"
-                                        step="1"
-                                        value={formData.pricePerUnit || 0}
-                                        onChange={(e) => setFormData({ ...formData, pricePerUnit: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label htmlFor="co2PerUnit">CO₂ (kg/enhet)</label>
-                                    <input
-                                        type="number"
-                                        id="co2PerUnit"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.co2PerUnit || 0}
-                                        onChange={(e) => setFormData({ ...formData, co2PerUnit: Number(e.target.value) })}
-                                    />
-                                </div>
-                                <div className="form-group">
-                                    <label className="checkbox-inline">
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.containsGluten || false}
-                                            onChange={(e) => setFormData({ ...formData, containsGluten: e.target.checked })}
-                                        />
-                                        Innehåller gluten
-                                    </label>
-                                </div>
-                            </div>
+                                        {/* Gluten Checkbox */}
+                                        <label className="flex items-center gap-3 cursor-pointer group">
+                                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${formData.containsGluten
+                                                ? 'bg-rose-500 border-rose-500'
+                                                : 'border-slate-600 group-hover:border-slate-500'
+                                                }`}>
+                                                {formData.containsGluten && (
+                                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                    </svg>
+                                                )}
+                                            </div>
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only"
+                                                checked={formData.containsGluten || false}
+                                                onChange={(e) => setFormData({ ...formData, containsGluten: e.target.checked })}
+                                            />
+                                            <span className="text-sm text-slate-300">Innehåller gluten</span>
+                                        </label>
+                                    </div>
 
-                            <div className="form-actions">
-                                <button type="button" className="btn btn-secondary" onClick={handleCloseForm}>
+                                    {/* Seasons - Custom Checkboxes */}
+                                    <div>
+                                        <h4 className="text-xs font-bold text-sky-400 mb-3 flex items-center gap-2">
+                                            <span>📅</span> Säsonger
+                                        </h4>
+                                        <div className="flex flex-wrap gap-2">
+                                            {[
+                                                { id: 'winter', label: '❄️ Vinter', color: 'sky' },
+                                                { id: 'spring', label: '🌱 Vår', color: 'emerald' },
+                                                { id: 'summer', label: '☀️ Sommar', color: 'amber' },
+                                                { id: 'autumn', label: '🍂 Höst', color: 'orange' }
+                                            ].map(s => {
+                                                const isChecked = formData.seasons?.includes(s.id as any);
+                                                return (
+                                                    <label
+                                                        key={s.id}
+                                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-full cursor-pointer transition-all text-sm ${isChecked
+                                                            ? `bg-${s.color}-500/20 border border-${s.color}-500/50 text-${s.color}-400`
+                                                            : 'bg-slate-800 border border-slate-700 text-slate-400 hover:border-slate-600'
+                                                            }`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            className="sr-only"
+                                                            checked={isChecked || false}
+                                                            onChange={(e) => {
+                                                                const current = formData.seasons || [];
+                                                                if (e.target.checked) {
+                                                                    setFormData({ ...formData, seasons: [...current, s.id as any] });
+                                                                } else {
+                                                                    setFormData({ ...formData, seasons: current.filter(c => c !== s.id) });
+                                                                }
+                                                            }}
+                                                        />
+                                                        {s.label}
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </details>
+
+                            {/* Actions */}
+                            <div className="flex gap-3 pt-4 border-t border-slate-800">
+                                <button
+                                    type="button"
+                                    onClick={handleCloseForm}
+                                    className="flex-1 py-3 px-6 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors"
+                                >
                                     Avbryt
                                 </button>
-                                <button type="submit" className="btn btn-primary">
-                                    {editingItem ? 'Spara ändringar' : 'Lägg till'}
+                                <button
+                                    type="submit"
+                                    className="flex-1 py-3 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                                >
+                                    {editingItem ? '💾 Spara' : '➕ Lägg till'}
+                                    <kbd className="hidden md:inline px-1.5 py-0.5 bg-emerald-700/50 rounded text-[10px] font-mono">Ctrl+S</kbd>
                                 </button>
                             </div>
                         </form>

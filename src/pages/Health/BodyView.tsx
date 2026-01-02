@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { MetricFocusView } from './MetricFocusView.tsx';
+import { BodyMeasurementsModule } from '../../components/health/BodyMeasurementsModule.tsx';
 import { DaySnapshot, HealthStats } from '../../utils/healthAggregator.ts';
+
 
 interface BodyViewProps {
     snapshots: DaySnapshot[];
     stats: HealthStats;
     days: number;
-    initialTab?: 'weight' | 'sleep';
+    initialTab?: 'weight' | 'sleep' | 'measurements';
 }
-
 export function BodyView({ snapshots, stats, days, initialTab = 'weight' }: BodyViewProps) {
-    const [subTab, setSubTab] = useState<'weight' | 'sleep'>(initialTab);
+    const [subTab, setSubTab] = useState<'weight' | 'sleep' | 'measurements'>(initialTab);
 
     useEffect(() => {
         if (initialTab) setSubTab(initialTab);
@@ -40,6 +41,13 @@ export function BodyView({ snapshots, stats, days, initialTab = 'weight' }: Body
                     >
                         Sömn
                     </button>
+                    <button
+                        onClick={() => setSubTab('measurements')}
+                        className={`px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${subTab === 'measurements' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25' : 'text-slate-500 hover:text-slate-300'
+                            }`}
+                    >
+                        Mått
+                    </button>
                 </div>
             </header>
 
@@ -50,6 +58,7 @@ export function BodyView({ snapshots, stats, days, initialTab = 'weight' }: Body
                 {subTab === 'sleep' && (
                     <MetricFocusView type="sleep" snapshots={snapshots} stats={stats} days={days} />
                 )}
+                {subTab === 'measurements' && <BodyMeasurementsModule />}
             </div>
         </div>
     );
