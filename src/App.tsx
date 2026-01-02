@@ -37,6 +37,7 @@ import { MatchupPage } from './pages/MatchupPage.tsx';
 import { LifeStreamPage } from './pages/LifeStreamPage.tsx';
 import { YearInReviewPage } from './pages/YearInReviewPage.tsx';
 import { GoalsPage } from './pages/GoalsPage.tsx';
+import { ActivityStandalonePage } from './pages/ActivityStandalonePage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -141,6 +142,7 @@ export function App() {
                                                 <Route path="ars-sammanfattning" element={<YearInReviewPage />} />
                                                 <Route path="goals" element={<GoalsPage />} />
                                                 <Route path="mal" element={<GoalsPage />} />
+                                                <Route path="activity/:id" element={<ActivityStandalonePage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

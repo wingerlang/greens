@@ -4,7 +4,7 @@ import { StrengthWorkout } from '../../models/strengthTypes.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
-import { formatDuration, formatPace, getRelativeTime, formatSwedishDate } from '../../utils/dateUtils.ts';
+import { formatDuration, formatPace, getRelativeTime, formatSwedishDate, formatSpeed } from '../../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown } from '../../utils/performanceEngine.ts';
 import { HeartRateZones } from '../training/HeartRateZones.tsx';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -102,6 +102,12 @@ export function ActivityDetailModal({
     // Check if this is a manually merged activity (using our new merge system)
     const isMergedActivity = universalActivity?.mergeInfo?.isMerged === true;
     const mergeInfo = universalActivity?.mergeInfo;
+
+    // Check if THIS activity has been merged INTO another activity (i.e., it's a component)
+    const isMergedInto = universalActivity?.mergedIntoId != null;
+    const parentMergedActivity = isMergedInto
+        ? universalActivities.find(u => u.id === universalActivity?.mergedIntoId)
+        : null;
 
     // Get original activities for merged view
     const originalActivities = React.useMemo(() => {
@@ -375,6 +381,32 @@ export function ActivityDetailModal({
                             <button onClick={onClose} className="text-slate-500 hover:text-white text-2xl">×</button>
                         </div>
 
+                        {/* Warning Banner: This activity is a component of a merge */}
+                        {isMergedInto && parentMergedActivity && (
+                            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-center gap-4">
+                                <div className="text-3xl">🔒</div>
+                                <div className="flex-1">
+                                    <h4 className="text-amber-400 font-bold text-sm">Denna aktivitet är dold</h4>
+                                    <p className="text-amber-300/70 text-xs">
+                                        Den ingår i en sammanslagen aktivitet och visas normalt inte i listor.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        // Navigate to parent merged activity
+                                        setSelectedActivity && setSelectedActivity(null);
+                                        // We need to trigger opening the parent - for now, close and let user find it
+                                        // A more sophisticated approach would be to pass a callback
+                                        onClose();
+                                        // Optionally: emit an event or use context to open parent
+                                    }}
+                                    className="bg-amber-500 hover:bg-amber-400 text-slate-900 px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                                >
+                                    Visa sammanslagen →
+                                </button>
+                            </div>
+                        )}
+
                         {/* Tabs */}
                         <div className="flex border-b border-white/5">
                             <button
@@ -411,21 +443,74 @@ export function ActivityDetailModal({
 
                         {/* Source Badge + View Toggle for Merged */}
                         <div className="flex items-center justify-between gap-3 flex-wrap">
-                            {activity.source === 'strava' && activity.externalId ? (
-                                <a
-                                    href={`https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 bg-[#FC4C02]/20 text-[#FC4C02] px-3 py-1.5 rounded-lg text-xs font-bold uppercase hover:bg-[#FC4C02]/30 transition-colors"
-                                    title="Öppna i Strava"
-                                >
-                                    <span>🔥</span> Synkad från Strava ↗
-                                </a>
-                            ) : activity.source === 'strava' && (
-                                <div className="inline-flex items-center gap-2 bg-[#FC4C02]/20 text-[#FC4C02] px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
-                                    <span>🔥</span> Synkad från Strava
-                                </div>
-                            )}
+                            {(() => {
+                                // For merged activities, find the longest Strava component to link
+                                let stravaLink: string | null = null;
+                                let stravaTitle: string | null = null;
+
+                                if (isMergedActivity && originalActivities.length > 0) {
+                                    const stravaOriginals = originalActivities
+                                        .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
+                                        .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
+                                    if (stravaOriginals.length > 0) {
+                                        const longest = stravaOriginals[0];
+                                        const extId = longest.performance?.source?.externalId?.replace('strava_', '');
+                                        stravaLink = `https://www.strava.com/activities/${extId}`;
+                                        stravaTitle = longest.plan?.title || longest.performance?.notes || 'Strava Activity';
+                                    }
+                                }
+
+                                // Display Strava sync badge
+                                if (activity.source === 'strava' && activity.externalId) {
+                                    return (
+                                        <a
+                                            href={`https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 bg-[#FC4C02]/20 text-[#FC4C02] px-3 py-1.5 rounded-lg text-xs font-bold uppercase hover:bg-[#FC4C02]/30 transition-colors"
+                                            title="Öppna i Strava"
+                                        >
+                                            <span>🔥</span> Synkad från Strava ↗
+                                        </a>
+                                    );
+                                } else if (isMergedActivity && stravaLink) {
+                                    // Merged activity with Strava component - link to longest
+                                    return (
+                                        <a
+                                            href={stravaLink}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase hover:bg-emerald-500/30 transition-colors"
+                                            title={`Öppna i Strava: ${stravaTitle}`}
+                                        >
+                                            <span>⚡</span> Sammanslagen (Strava: {stravaTitle?.slice(0, 20)}{(stravaTitle?.length || 0) > 20 ? '...' : ''}) ↗
+                                        </a>
+                                    );
+                                } else if (isMergedActivity || isMerged) {
+                                    // Merged activity without Strava link
+                                    return (
+                                        <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
+                                            <span>⚡</span> Sammanslagen Aktivitet
+                                        </div>
+                                    );
+                                } else if (activity.source === 'strava') {
+                                    // Strava without externalId
+                                    return (
+                                        <div className="inline-flex items-center gap-2 bg-[#FC4C02]/20 text-[#FC4C02] px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
+                                            <span>🔥</span> Synkad från Strava
+                                        </div>
+                                    );
+                                } else if (activity.source === 'strength') {
+                                    return (
+                                        <div className="inline-flex items-center gap-2 bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
+                                            <span>💪</span> StrengthLog
+                                        </div>
+                                    );
+                                } else {
+                                    // Manual or other - do not show redundant badge if Strava source was already shown as "Synkad"
+                                    return null;
+                                }
+                            })()}
 
                             {/* Ultra Label */}
                             {activity.type === 'running' && activity.distance && activity.distance >= 42.2 && (
@@ -433,45 +518,6 @@ export function ActivityDetailModal({
                                     <span>🦅</span> Ultra
                                 </div>
                             )}
-
-                            {activity.source === 'strength' && (
-                                <div className="inline-flex items-center gap-2 bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
-                                    <span>💪</span> StrengthLog
-                                </div>
-                            )}
-                            {isMerged ? (
-                                <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
-                                    <span>⚡</span> StrengthLog + Strava
-                                </div>
-                            ) : (
-                                <div className="inline-flex items-center gap-2 bg-slate-800 text-slate-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
-                                    <span>📄</span> {activity.source}
-                                </div>
-                            )}
-
-                            {/* View Mode Toggle */}
-                            <div className="flex gap-1 bg-slate-800 rounded-lg p-1">
-                                <button
-                                    onClick={() => setViewMode('combined')}
-                                    className={`px-3 py-1 text-[10px] font-bold rounded ${viewMode === 'combined' ? 'bg-emerald-500 text-white' : 'text-slate-400 hover:text-white'}`}
-                                >
-                                    📊 Kombinerat
-                                </button>
-                                {isMerged && (
-                                    <button
-                                        onClick={() => setViewMode('diff')}
-                                        className={`px-3 py-1 text-[10px] font-bold rounded ${viewMode === 'diff' ? 'bg-amber-500 text-white' : 'text-slate-400 hover:text-white'}`}
-                                    >
-                                        ⚖️ Diff
-                                    </button>
-                                )}
-                                <button
-                                    onClick={() => setViewMode('raw')}
-                                    className={`px-3 py-1 text-[10px] font-bold rounded ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                                >
-                                    📄 Rådata
-                                </button>
-                            </div>
                         </div>
 
                         {/* DIFF VIEW */}
@@ -558,9 +604,12 @@ export function ActivityDetailModal({
                                     {(activity.distance && activity.distance > 0) ? (
                                         <div className="bg-slate-800/50 rounded-xl p-4 text-center">
                                             <p className="text-2xl font-black text-emerald-400">
-                                                {formatPace((activity.durationMinutes * 60) / activity.distance).replace('/km', '')}
+                                                {activity.type === 'cycling'
+                                                    ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
+                                                    : formatPace((activity.durationMinutes * 60) / activity.distance).replace('/km', '')
+                                                }
                                             </p>
-                                            <p className="text-xs text-slate-500 uppercase">Tempo</p>
+                                            <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
                                         </div>
                                     ) : null}
 
@@ -754,7 +803,7 @@ export function ActivityDetailModal({
                                             <thead className="bg-slate-950/50">
                                                 <tr>
                                                     <th className="px-4 py-3 text-left text-slate-500 font-bold uppercase text-[10px]">Datum</th>
-                                                    <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">Tempo</th>
+                                                    <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</th>
                                                     {activity.elevationGain !== undefined && <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">Höjd</th>}
                                                     <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">Puls</th>
                                                     <th className="px-4 py-3 text-right text-slate-500 font-bold uppercase text-[10px]">Greens</th>
@@ -770,7 +819,14 @@ export function ActivityDetailModal({
                                                     </td>
                                                     <td className="px-4 py-4 text-right">
                                                         <div className="flex flex-col items-end">
-                                                            <span className="text-white font-bold">{activity.distance ? formatPace((activity.durationMinutes * 60) / activity.distance) : '-'}</span>
+                                                            <span className="text-white font-bold">{
+                                                                activity.distance
+                                                                    ? (activity.type === 'cycling'
+                                                                        ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
+                                                                        : formatPace((activity.durationMinutes * 60) / activity.distance)
+                                                                    )
+                                                                    : '-'
+                                                            }</span>
                                                             <span className="text-[9px] text-slate-500 uppercase">{activity.distance} km</span>
                                                         </div>
                                                     </td>
@@ -797,7 +853,7 @@ export function ActivityDetailModal({
                                                             </td>
                                                             <td className="px-4 py-4 text-right">
                                                                 <div className="flex flex-col items-end">
-                                                                    <span className="text-slate-300">{aPaceSec ? formatPace(aPaceSec) : '-'}</span>
+                                                                    <span className="text-slate-300">{aPaceSec ? (activity.type === 'cycling' ? formatSpeed(aPaceSec) : formatPace(aPaceSec)) : '-'}</span>
                                                                     <span className="text-[9px] text-slate-500 uppercase">{a.distance} km</span>
                                                                 </div>
                                                             </td>
@@ -966,7 +1022,7 @@ export function ActivityDetailModal({
                         )}
 
                         {/* Action Buttons */}
-                        <div className="flex gap-3">
+                        <div className="flex gap-3 flex-wrap">
                             {isMergedActivity && (
                                 <button
                                     onClick={handleUnmerge}
@@ -992,6 +1048,15 @@ export function ActivityDetailModal({
                             >
                                 ⚡ Spara som Pass
                             </button>
+
+                            {/* Raw Data Button - Moved to bottom per user request */}
+                            <button
+                                onClick={() => setViewMode(viewMode === 'raw' ? 'combined' : 'raw')}
+                                className={`px-4 py-3 rounded-xl text-xs font-bold transition-colors ${viewMode === 'raw' ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                            >
+                                📄 Rådata
+                            </button>
+
                             <button
                                 onClick={onClose}
                                 className={`flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition-colors`}

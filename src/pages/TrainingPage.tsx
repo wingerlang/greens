@@ -1,3 +1,4 @@
+import React, { useState, useEffect, useMemo } from 'react';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { ExerciseEntry } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
@@ -27,7 +28,7 @@ import { CycleDetailModal } from '../components/training/CycleDetailModal.tsx';
 import { GoalCard } from '../components/training/GoalCard.tsx';
 import { GoalModal } from '../components/training/GoalModal.tsx';
 import { TrainingLoadCorrelation } from '../components/training/TrainingLoadCorrelation.tsx';
-import type { PerformanceGoal } from '../models/types.ts';
+import type { PerformanceGoal, TrainingCycle } from '../models/types.ts';
 import './TrainingPage.css';
 
 import { TrainingOverview } from '../components/training/TrainingOverview.tsx';
@@ -83,7 +84,7 @@ export function TrainingPage() {
     }, [universalActivities, legacyExerciseEntries]);
 
     // Handlers for Chart Interaction
-    const [selectedCycle, setSelectedCycle] = useState<any>(null);
+    const [selectedCycle, setSelectedCycle] = useState<TrainingCycle | null>(null);
     const [isCycleDetailOpen, setIsCycleDetailOpen] = useState(false);
 
     // Goal Modal State
@@ -93,12 +94,12 @@ export function TrainingPage() {
     // Tab state for main view switcher
     const [currentTab, setCurrentTab] = useState<'overview' | 'styrka' | 'kondition' | 'races' | 'hyrox'>('overview');
 
-    const handleEditCycle = (cycle: any) => {
+    const handleEditCycle = (cycle: TrainingCycle) => {
         setSelectedCycle(cycle);
         setIsCycleDetailOpen(true);
     };
 
-    const handleCreateCycleAfter = (cycle: any) => {
+    const handleCreateCycleAfter = (cycle: TrainingCycle) => {
         const endDate = new Date(cycle.endDate || cycle.startDate); // Fallback
         const nextStart = new Date(endDate.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
         // Guess next goal?
@@ -169,7 +170,13 @@ export function TrainingPage() {
 
         switch (preset) {
             case 'all':
-                setFilterStartDate(null);
+                // Find earliest date
+                if (exerciseEntries.length > 0) {
+                    const sorted = [...exerciseEntries].sort((a, b) => a.date.localeCompare(b.date));
+                    setFilterStartDate(sorted[0].date.split('T')[0]);
+                } else {
+                    setFilterStartDate(null);
+                }
                 setFilterEndDate(null);
                 break;
             case 'ytd':

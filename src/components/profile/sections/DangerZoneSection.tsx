@@ -78,7 +78,7 @@ export function DangerZoneSection() {
                 {(['meals', 'exercises', 'weight'] as const).map(type => (
                     <div key={type} className="relative">
                         {pendingReset === type ? (
-                            <div className="absolute inset-0 bg-red-950 border border-red-500 rounded-xl p-4 flex flex-col justify-center items-center gap-3 z-10 animate-in zoom-in-95">
+                            <div className="w-full h-full bg-red-950 border border-red-500 rounded-xl p-4 flex flex-col justify-center items-center gap-3 z-10 animate-in zoom-in-95">
                                 <p className="text-sm text-red-200 font-bold">Rensa {labels[type]}?</p>
                                 <div className="flex gap-2 w-full">
                                     <button

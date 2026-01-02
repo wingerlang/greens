@@ -25,6 +25,7 @@ import {
     ChevronLeft
 } from 'lucide-react';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
+import { GoalsOverviewWidget } from '../components/goals/GoalsOverviewWidget.tsx';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -1238,9 +1239,12 @@ export function DashboardPage() {
                         </div>
                     </div>
 
+                    {/* Goals Widget - New */}
+                    <GoalsOverviewWidget />
+
                     {/* Health Metrics Card */}
-                    <div className={`md:col-span-6 ${density === 'compact' ? 'p-2' : 'p-0'}`}>
-                        <div className="card glass p-5 md:p-5 rounded-[2rem] border border-white/5 relative overflow-hidden group bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full">
+                    <div className={`col-span-12 md:col-span-6 lg:col-span-4 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
+                        <div className={`h-full ${density === 'compact' ? 'p-2' : 'p-6'} bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col`}>
                             <div className="relative z-10 flex flex-col h-full">
                                 {/* Header with Title and Range Selector */}
                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 mb-4">

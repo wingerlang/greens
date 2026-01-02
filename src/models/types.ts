@@ -4,7 +4,7 @@
 import { type StrengthWorkout } from './strengthTypes.ts';
 
 /** Unit of measurement for food items and recipe ingredients */
-export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l';
+export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l' | 'cup';
 
 /** Meal type for calorie tracking entries */
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'beverage';
@@ -376,12 +376,14 @@ export type PerformanceGoalType =
     | 'distance'     // X km per period
     | 'tonnage'      // X tons per period
     | 'calories'     // Burn X kcal per period
+    | 'speed'        // X distance in Y time
     | 'combination'  // Multiple targets
     | 'milestone'    // One-time achievement (e.g., run 1000km lifetime)
     | 'streak'       // Consecutive days/weeks with activity
     | 'pb'           // Personal best (e.g., 100kg bench)
     | 'nutrition'    // Macro/calorie goals
-    | 'weight';      // Target body weight
+    | 'weight'       // Target body weight
+    | 'measurement'; // Body measurements (waist, hip, arm, etc)
 
 /** Period for goal measurement */
 export type GoalPeriod = 'daily' | 'weekly' | 'monthly' | 'once';
@@ -397,7 +399,9 @@ export interface GoalTarget {
     exerciseType?: ExerciseType;  // e.g., 'strength', 'running'
     count?: number;               // For frequency goals (sessions)
     value?: number;               // For volume/calorie goals
-    unit?: string;                // 'km', 'ton', 'kcal', 'sessions'
+    unit?: string;                // 'km', 'ton', 'kcal', 'sessions', 's'
+    timeSeconds?: number;         // For speed/time goals
+    distanceKm?: number;          // For speed goals (e.g., target 5.0 km)
     // Extended targets:
     exerciseName?: string;        // For specific exercise PBs (e.g., "Marklyft")
     nutritionType?: 'protein' | 'carbs' | 'fat' | 'calories';  // For nutrition goals
@@ -463,9 +467,11 @@ export interface ExerciseEntry {
     caloriesBurned: number;
     notes?: string;
     subType?: ExerciseSubType;
+    title?: string; // e.g. "Morning Run" or "Strava Activity Title"
     tonnage?: number;   // total kg lifted
     distance?: number;  // km
     createdAt: string;
+    source?: string;
     // Integration fields (Strava/Garmin)
     externalId?: string;          // e.g., "strava_123456"
     platform?: 'strava' | 'garmin';
@@ -865,14 +871,14 @@ export interface RecoveryMetric {
 // ============================================
 
 export type ActivityStatus = 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'MISSED';
-export type ActivitySource = 'manual' | 'strava' | 'garmin' | 'apple_health';
-
+export type DataSource = 'strava' | 'garmin' | 'apple_health' | 'manual' | 'unknown' | 'strength';
+export type ActivitySource = DataSource;
 /**
  * The Data Source for a specific part of the activity.
  * e.g., Plan came from "Coach", Performance came from "Strava"
  */
 export interface DataSourceInfo {
-    source: ActivitySource;
+    source: DataSource;
     externalId?: string;
     importedAt?: string;
 }
@@ -1230,7 +1236,8 @@ export const UNIT_LABELS: Record<Unit, string> = {
     ml: 'milliliter',
     pcs: 'styck',
     kg: 'kilogram',
-    l: 'liter'
+    l: 'liter',
+    cup: 'kopp'
 };
 
 /** Meal type display labels (Swedish) */

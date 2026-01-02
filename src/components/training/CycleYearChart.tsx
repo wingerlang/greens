@@ -245,7 +245,7 @@ export function CycleYearChart({
                         width={35}
                     />
 
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }} />
 
                     <Legend
                         wrapperStyle={{ fontSize: '10px', fontWeight: '600' }}

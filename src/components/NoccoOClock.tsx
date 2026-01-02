@@ -88,6 +88,38 @@ export function NoccoOClock() {
         }
     };
 
+    const handleRegisterCoffee = () => {
+        // Find or create Coffee food item
+        let coffeeItem = foodItems.find(f => f.name.toLowerCase() === 'kaffe' || f.name.toLowerCase() === 'coffee');
+        let coffeeId = coffeeItem?.id;
+
+        if (!coffeeItem) {
+            const newItem = addFoodItem({
+                name: 'Kaffe',
+                calories: 2,
+                protein: 0,
+                carbs: 0.3,
+                fat: 0,
+                unit: 'cup',
+                category: 'beverages'
+            });
+            coffeeId = newItem.id;
+        }
+
+        if (coffeeId) {
+            addMealEntry({
+                date: getISODate(now),
+                mealType: 'breakfast', // Usually morning
+                items: [{
+                    type: 'foodItem',
+                    referenceId: coffeeId,
+                    servings: 1
+                }]
+            });
+            setHasRegisteredToday(true);
+        }
+    };
+
     if (isCountdownPhase) {
         // Calculate time until 08:00
         // Target: Today 08:00:00
@@ -117,15 +149,27 @@ export function NoccoOClock() {
                         IT'S NOCCO 'O CLOCK
                     </h1>
 
-                    <button
-                        onClick={handleRegisterNocco}
-                        className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl overflow-hidden shadow-2xl transition-all hover:scale-105 active:scale-95"
-                    >
-                        <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full transition-transform duration-500 ease-out -skew-x-12" />
-                        <span className="relative flex items-center gap-3 text-xl font-bold text-white uppercase tracking-wider">
-                            🥤 Tagit en Nocco
-                        </span>
-                    </button>
+                    <div className="flex gap-4">
+                        <button
+                            onClick={handleRegisterNocco}
+                            className="group relative px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl overflow-hidden shadow-2xl transition-all hover:scale-105 active:scale-95"
+                        >
+                            <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full transition-transform duration-500 ease-out -skew-x-12" />
+                            <span className="relative flex items-center gap-3 text-xl font-bold text-white uppercase tracking-wider">
+                                🥤 Tagit en Nocco
+                            </span>
+                        </button>
+
+                        <button
+                            onClick={handleRegisterCoffee}
+                            className="group relative px-8 py-4 bg-gradient-to-r from-amber-700 to-orange-800 rounded-2xl overflow-hidden shadow-2xl transition-all hover:scale-105 active:scale-95"
+                        >
+                            <div className="absolute inset-0 bg-white/20 group-hover:translate-x-full transition-transform duration-500 ease-out -skew-x-12" />
+                            <span className="relative flex items-center gap-3 text-xl font-bold text-white uppercase tracking-wider">
+                                ☕ Kaffe istället
+                            </span>
+                        </button>
+                    </div>
 
                     <p className="text-blue-200/50 font-mono text-sm">(Gäller fram till 08:05)</p>
                 </div>

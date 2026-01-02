@@ -75,13 +75,20 @@ export function ActivitiesPage() {
 
     // 4. FILTER & SORT LOGIC
     const processedActivities = useMemo(() => {
+        // Pre-calculate IDs that should be hidden (components of merges)
+        const hiddenIds = new Set<string>();
+        universalActivities.forEach(u => {
+            if (u.mergedIntoId) hiddenIds.add(u.id);
+            if (u.mergeInfo?.isMerged && u.mergeInfo.originalActivityIds) {
+                u.mergeInfo.originalActivityIds.forEach(id => hiddenIds.add(id));
+            }
+        });
+
         let result = applySmartFilters(allActivities, activeSmartFilters);
 
         result = result.filter(a => {
             // Hide activities that have been merged into another activity
-            // Check if there's a corresponding universalActivity with mergedIntoId
-            const universalMatch = universalActivities.find(u => u.id === a.id);
-            if (universalMatch?.mergedIntoId) return false;
+            if (hiddenIds.has(a.id)) return false;
 
             // Source Filter
             if (sourceFilter !== 'all' && a.source !== sourceFilter) return false;
@@ -524,6 +531,9 @@ export function ActivitiesPage() {
                             <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('date')}>
                                 Datum <SortIcon colKey="date" />
                             </th>
+                            <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('title')}>
+                                Aktivitet <SortIcon colKey="title" />
+                            </th>
                             <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('type')}>
                                 Typ <SortIcon colKey="type" />
                             </th>
@@ -583,11 +593,59 @@ export function ActivitiesPage() {
                                         {activity.date.split('T')[0]}
                                     </td>
                                     <td className="px-6 py-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-white font-bold truncate max-w-[200px]" title={activity.title}>{activity.title || '-'}</span>
+                                            {/* Show sources for merged activities */}
+                                            {(() => {
+                                                const universalMatch = universalActivities.find(u => u.id === activity.id);
+                                                const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true;
+
+                                                if (isMergedActivity && universalMatch?.mergeInfo?.originalActivityIds) {
+                                                    const sources = universalMatch.mergeInfo.originalActivityIds.map(id => {
+                                                        const original = universalActivities.find(u => u.id === id); // We might need to look in filtered list too? No universal allows lookup.
+                                                        // Actually, original activities might be hidden from 'processedActivities' but exist in 'universalActivities'
+                                                        // Source isn't directly on UniversalActivity top level, it's deep.
+                                                        // Let's use performance.source.source
+                                                        return original?.performance?.source?.source || 'unknown';
+                                                    });
+
+                                                    // Dedupe and format
+                                                    const uniqueSources = Array.from(new Set(sources));
+                                                    const sourceLabel = uniqueSources.map(s => s === 'strava' ? 'Strava' : s === 'strength' ? 'Styrka' : 'Manuell').join(' + ');
+
+                                                    return (
+                                                        <span className="text-[10px] text-slate-500 italic">
+                                                            från {sourceLabel}
+                                                        </span>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
                                         <div className="flex flex-col items-start gap-1">
                                             <span className="capitalize text-white font-bold group-hover:text-emerald-400 transition-colors">{activity.type}</span>
-                                            {activity.subType === 'race' && (
-                                                <span className="text-[10px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">🏆 Tävling</span>
-                                            )}
+                                            {(() => {
+                                                // Check for Race subtype in current OR merged originals
+                                                let isRace = activity.subType === 'race';
+
+                                                const universalMatch = universalActivities.find(u => u.id === activity.id);
+                                                if (!isRace && universalMatch?.mergeInfo?.isMerged) {
+                                                    // check originals
+                                                    isRace = universalMatch.mergeInfo.originalActivityIds.some(id => {
+                                                        const original = universalActivities.find(u => u.id === id);
+                                                        return original?.performance?.subType === 'race';
+                                                    });
+                                                }
+
+                                                if (isRace) {
+                                                    return (
+                                                        <span className="text-[10px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">🏆 Tävling</span>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
                                             {activity.subType === 'interval' && (
                                                 <span className="text-[10px] uppercase font-bold bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20">⚡ Intervaller</span>
                                             )}
@@ -598,14 +656,24 @@ export function ActivitiesPage() {
                                     </td>
                                     <td className="px-6 py-4">
                                         {(() => {
-                                            // Check if this is a manually merged activity
+                                            // Check if this is a merged activity (manual or universal)
                                             const universalMatch = universalActivities.find(u => u.id === activity.id);
-                                            const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true;
+                                            const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged';
 
                                             if (isMergedActivity) {
+                                                // Create a label based on sources
+                                                const sources = universalMatch?.mergeInfo?.originalActivityIds?.map(id => {
+                                                    const original = universalActivities.find(u => u.id === id);
+                                                    return original?.performance?.source?.source || 'unknown';
+                                                }) || [];
+                                                const uniqueSources = Array.from(new Set(sources));
+                                                const label = uniqueSources.length > 0
+                                                    ? uniqueSources.map(s => s === 'strava' ? 'Strava' : s === 'strength' ? 'Styrka' : 'Manuell').join(' + ')
+                                                    : 'Sammanslagen';
+
                                                 return (
-                                                    <span className="inline-flex items-center gap-1 text-amber-400 font-bold text-[10px] uppercase tracking-wider bg-amber-500/10 px-2 py-1 rounded border border-amber-500/20">
-                                                        ⚡ Sammanslagen ({universalMatch?.mergeInfo?.originalActivityIds?.length || 0})
+                                                    <span className="inline-flex items-center gap-1 text-emerald-400 font-bold text-[10px] uppercase tracking-wider bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
+                                                        ⚡ {label}
                                                     </span>
                                                 );
                                             } else if (activity.source === 'strava') {

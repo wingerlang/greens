@@ -19,7 +19,12 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         elevationGain: a.performance.elevationGain,
         subType: a.performance.subType || (a.plan?.activityCategory === 'INTERVALS' ? 'interval' : undefined),
         tonnage: undefined, // UniversalActivity doesn't strictly track tonnage yet in performance
-        notes: a.performance.notes
+        title: a.plan?.title || a.performance?.notes || (a.performance?.source?.externalId ? 'Strava Activity' : undefined), // Use notes as title if plan title missing
+        // If we moved notes to title, should we clear notes? User said "irrelevant". 
+        // But notes might simply contain the title. safely keep it for now or duplicate.
+        // Actually, if title IS notes, maybe clear notes? Let's keep duplicate for safety unless it looks ugly.
+        // User said: "Det som ligger under 'ANTECKNING' är det riktiga namnet."
+        notes: a.performance.notes !== a.plan?.title ? a.performance.notes : undefined,
     };
 }
 

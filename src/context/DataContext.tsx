@@ -1458,6 +1458,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
     const unifiedActivities = useMemo(() => {
         const serverEntries = universalActivities
+            .filter(u => !u.mergedIntoId) // Filter out merged activities
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null);
 

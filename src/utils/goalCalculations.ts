@@ -27,6 +27,7 @@ export interface GoalProgress {
     estimatedCompletionDate?: string;
     periodStart: string;
     periodEnd: string;
+    linkedActivityId?: string; // ID of the activity that achieved the goal (e.g. for PBs/Speed)
 }
 
 export interface StreakInfo {
@@ -118,8 +119,22 @@ export function calculateFrequencyProgress(
     exerciseEntries: ExerciseEntry[]
 ): number {
     const { start, end } = getGoalPeriodDates(goal);
-    const target = goal.targets[0];
 
+    // If multiple targets, calculate total across all
+    if (goal.targets.length > 1) {
+        let totalCurrent = 0;
+        goal.targets.forEach(target => {
+            const matchingEntries = exerciseEntries.filter(e => {
+                if (e.date < start || e.date > end) return false;
+                if (target.exerciseType && e.type !== target.exerciseType) return false;
+                return true;
+            });
+            totalCurrent += matchingEntries.length;
+        });
+        return totalCurrent;
+    }
+
+    const target = goal.targets[0];
     const matchingEntries = exerciseEntries.filter(e => {
         if (e.date < start || e.date > end) return false;
         if (target?.exerciseType && e.type !== target.exerciseType) return false;
@@ -127,6 +142,61 @@ export function calculateFrequencyProgress(
     });
 
     return matchingEntries.length;
+}
+
+/**
+ * Calculate progress for a speed goal (best time for target distance).
+ * Returns the BEST time (in seconds) that meets the distance criteria within the period.
+ * If no valid activity found, returns Infinity (or a high number).
+ */
+export type SpeedProgressResult = { value: number; activityId?: string };
+
+export function calculateSpeedProgress(
+    goal: PerformanceGoal,
+    exerciseEntries: ExerciseEntry[]
+): SpeedProgressResult {
+    const { start, end } = getGoalPeriodDates(goal);
+    // Speed goals: target is X distance. We find the run during the period
+    // that has distance >= X and implies the best time.
+    // Actually, "5km in 25 min" matches a run of exactly 5km, or a longer run where the pace implies <25min for 5km.
+    // For simplicity MVP: we take any run >= target distance, calculate its average pace, and project time for target distance.
+
+    // Filter runs during period with enough distance
+    const target = goal.targets[0];
+    if (!target?.distanceKm) return { value: 0 };
+
+    const validEntries = exerciseEntries.filter(e => {
+        if (e.date < start || e.date > end) return false;
+        if (target.exerciseType === 'running' && e.type !== 'running') return false; // Default to running for speed for now
+        // Must be at least the target distance to counting "PB" style speed record?
+        // Or should we allow 4.9km? Let's be strict: >= target distance.
+        return (e.distance || 0) >= target.distanceKm!;
+    });
+
+    if (validEntries.length === 0) return { value: 0 };
+
+    // Find the best pace/speed in valid entries
+    // We want the run that implies the fastest time for the TARGET distance.
+    // If run is 10km in 60min, pace is 6min/km. 5km time is 30min.
+    // We minimize the calculated time for the target distance.
+
+    let bestTimeSeconds = Infinity;
+    let bestActivityId: string | undefined;
+
+    validEntries.forEach(e => {
+        const dist = e.distance || 0;
+        const dur = (e.durationMinutes || 0) * 60; // seconds
+        if (dist > 0 && dur > 0) {
+            const paceSecondsPerKm = dur / dist;
+            const projectedTimeFn = paceSecondsPerKm * target.distanceKm!;
+            if (projectedTimeFn < bestTimeSeconds) {
+                bestTimeSeconds = projectedTimeFn;
+                bestActivityId = e.id;
+            }
+        }
+    });
+
+    return bestTimeSeconds === Infinity ? { value: 0 } : { value: bestTimeSeconds, activityId: bestActivityId };
 }
 
 /**
@@ -139,13 +209,13 @@ export function calculateDistanceProgress(
     const { start, end } = getGoalPeriodDates(goal);
     const target = goal.targets[0];
 
-    return exerciseEntries
-        .filter(e => {
-            if (e.date < start || e.date > end) return false;
-            if (target?.exerciseType && e.type !== target.exerciseType) return false;
-            return true;
-        })
-        .reduce((sum, e) => sum + (e.distance || 0), 0);
+    const matchingEntries = exerciseEntries.filter(e => {
+        if (e.date < start || e.date > end) return false;
+        if (target?.exerciseType && e.type !== target.exerciseType) return false;
+        return true;
+    });
+
+    return matchingEntries.reduce((sum, e) => sum + (e.distance || 0), 0);
 }
 
 /**
@@ -343,6 +413,102 @@ export function calculateNutritionProgress(
 }
 
 /**
+ * Get estimated completion date based on current rate.
+ */
+export function getEstimatedCompletionDate(
+    goal: PerformanceGoal,
+    progress: GoalProgress
+): string | undefined {
+    if (!progress.isOnTrack || progress.isComplete) return undefined;
+
+    const remaining = progress.target - progress.current;
+    if (remaining <= 0) return undefined;
+
+    // Simplified projection: usage rate per day
+    // This needs real historical rate, but for now using period average
+
+    const { start } = getGoalPeriodDates(goal);
+    const startDate = new Date(start);
+    const today = new Date();
+    const daysPassed = Math.max(1, (today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    const rate = progress.current / daysPassed;
+    if (rate <= 0) return undefined;
+
+    const daysNeeded = remaining / rate;
+
+    const estimatedDate = new Date();
+    estimatedDate.setDate(estimatedDate.getDate() + Math.ceil(daysNeeded));
+
+    return estimatedDate.toISOString().split('T')[0];
+}
+
+/**
+ * Calculate detailed "Ahead/Behind" status.
+ * Returns negative value for behind, positive for ahead.
+ * Unit depends on goal type.
+ */
+export function calculateAheadBehind(
+    goal: PerformanceGoal,
+    progress: GoalProgress
+): { value: number; text: string; unit: string } {
+    const { start, end } = getGoalPeriodDates(goal);
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const today = new Date();
+
+    const totalDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+    const daysElapsed = (today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+
+    if (daysElapsed <= 0) return { value: 0, text: 'Har inte startat', unit: '' };
+    if (daysElapsed >= totalDays) return { value: 0, text: 'Avslutad', unit: '' };
+
+    const expectedProgress = (progress.target / totalDays) * daysElapsed;
+    const diff = progress.current - expectedProgress;
+
+    const unit = goal.targets[0]?.unit || '';
+    const text = diff >= 0
+        ? `+${diff.toFixed(1)} ${unit} före`
+        : `${diff.toFixed(1)} ${unit} efter`;
+
+    return { value: diff, text, unit };
+}
+
+/**
+ * Assess goal difficulty based on historical data.
+ * Returns a score 1-10 (1=Easy, 10=Impossible) and a label.
+ */
+export function assessGoalDifficulty(
+    goal: PerformanceGoal,
+    exerciseEntries: ExerciseEntry[]
+): { score: number; label: string; color: string } {
+    // Simplified heuristic:
+    // If it's a frequency goal, compare target/week vs avg sessions/week last 3 months.
+    // If distance, compare target distance vs avg distance.
+
+    // For MVP, return a static "Utmanande" for active goals
+    // In real implementation, this would query historical averages.
+    return { score: 6.5, label: 'Utmanande', color: 'text-orange-400' };
+}
+
+/**
+ * Calculate improved Performance Index (0-100+)
+ */
+export function calculatePerformanceIndex(
+    goals: PerformanceGoal[],
+    entries: ExerciseEntry[]
+): number {
+    if (goals.length === 0) return 0;
+
+    // Sum of (progress / expected_progress) for all active goals
+    let totalScore = 0;
+    let count = 0;
+
+    // ... logic implementation ...
+    return 85; // Mock for now
+}
+
+/**
  * Estimate completion date based on current progress rate.
  */
 export function estimateCompletionDate(
@@ -415,22 +581,35 @@ export function calculateGoalProgress(
         goal.nutritionMacros?.calories ||
         1;
 
+    let linkedActivityId: string | undefined;
+
     switch (goal.type) {
         case 'frequency':
             current = calculateFrequencyProgress(goal, exerciseEntries);
-            targetValue = target?.count || 1;
+            targetValue = goal.targets.reduce((sum, t) => sum + (t.count || 0), 0);
             break;
         case 'distance':
             current = calculateDistanceProgress(goal, exerciseEntries);
-            targetValue = target?.value || 1;
+            targetValue = goal.targets[0]?.value || 0;
             break;
         case 'tonnage':
             current = calculateTonnageProgress(goal, exerciseEntries);
-            targetValue = target?.value || 1;
+            targetValue = goal.targets[0]?.value || 0;
             break;
         case 'calories':
             current = calculateCaloriesProgress(goal, exerciseEntries);
-            targetValue = target?.value || 1;
+            targetValue = goal.targets[0]?.value || 0;
+            break;
+        case 'speed':
+            const speedResult = calculateSpeedProgress(goal, exerciseEntries);
+            // Handling return object or number for backward compat if needed, but we changed signature
+            if (typeof speedResult === 'object') {
+                current = speedResult.value;
+                linkedActivityId = speedResult.activityId;
+            } else {
+                current = speedResult;
+            }
+            targetValue = goal.targets[0]?.timeSeconds || 0; // Target for speed is usually a time to beat
             break;
         case 'streak':
             const streakInfo = calculateStreak(
@@ -502,10 +681,12 @@ export function calculateGoalProgress(
         percentage,
         trend,
         isComplete,
-        isOnTrack: isGoalOnTrack(goal, current, targetValue),
+        isOnTrack: percentage >= ((100 / (getDaysRemaining(goal) || 1)) * 1), // rudimentary check
         daysRemaining,
         estimatedCompletionDate: !isComplete ? estimateCompletionDate(goal, current, targetValue) : undefined,
-        periodStart: start,
-        periodEnd: end
+        periodStart: getGoalPeriodDates(goal).start,
+        periodEnd: getGoalPeriodDates(goal).end,
+        linkedActivityId
     };
 }
+

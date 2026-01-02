@@ -10,38 +10,22 @@ import { ActivityDetailModal } from '../components/activities/ActivityDetailModa
 import { WeeklyVolumeChart } from '../components/training/WeeklyVolumeChart.tsx';
 import { WeeklyDistanceChart } from '../components/training/WeeklyDistanceChart.tsx';
 import { PersonalBest } from '../models/strengthTypes.ts';
+import { calculateGoalProgress } from '../utils/goalCalculations.ts';
 import type { UniversalActivity } from '../models/types.ts';
+
 
 function formatYearRange(years: number[]) {
     if (years.length === 0) return '';
     if (years.length === 1) return years[0].toString();
-
     const sorted = [...years].sort((a, b) => a - b);
-    const result: string[] = [];
-    let start = sorted[0];
-    let end = sorted[0];
-
-    for (let i = 1; i <= sorted.length; i++) {
-        if (i < sorted.length && sorted[i] === end + 1) {
-            end = sorted[i];
-        } else {
-            if (start === end) {
-                result.push(start.toString());
-            } else {
-                result.push(`${start}–${end}`);
-            }
-            if (i < sorted.length) {
-                start = sorted[i];
-                end = sorted[i];
-            }
-        }
-    }
-
-    return result.join(', ');
+    // Check if consecutive
+    const isConsecutive = sorted.every((y, i) => i === 0 || y === sorted[i - 1] + 1);
+    if (isConsecutive) return `${sorted[0]} - ${sorted[sorted.length - 1]}`;
+    return sorted.join(', ');
 }
 
 export function YearInReviewPage() {
-    const { universalActivities = [], strengthSessions = [] } = useData();
+    const { universalActivities = [], strengthSessions = [], performanceGoals = [], unifiedActivities = [] } = useData();
     const { token } = useAuth();
     const [selectedActivity, setSelectedActivity] = useState<UniversalActivity | null>(null);
     const [strengthPBs, setStrengthPBs] = useState<PersonalBest[]>([]);
@@ -61,13 +45,23 @@ export function YearInReviewPage() {
         if (yearsParam) {
             return yearsParam.split(',').map(Number).filter(n => !isNaN(n));
         }
+        // Try localStorage
+        const saved = localStorage.getItem('yir_years');
+        if (saved) {
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                // ignore
+            }
+        }
         return [new Date().getFullYear()];
     });
 
-    // Sync to URL
+    // Sync to URL & LocalStorage
     useEffect(() => {
         if (selectedYears.length > 0) {
             setSearchParams({ years: selectedYears.join(',') }, { replace: true });
+            localStorage.setItem('yir_years', JSON.stringify(selectedYears));
         }
     }, [selectedYears, setSearchParams]);
 
@@ -80,7 +74,7 @@ export function YearInReviewPage() {
             } else {
                 next = [...prev, year];
             }
-            return next.sort();
+            return next.sort((a, b) => a - b);
         });
     };
 
@@ -101,10 +95,21 @@ export function YearInReviewPage() {
 
     // 1. Filter Data for the selected years
     const yearlyActivities = useMemo(() => {
-        return universalActivities.filter(a => {
-            const d = new Date(a.date);
-            return selectedYears.includes(d.getFullYear());
-        }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        // Pre-calculate IDs that should be hidden (components of merges)
+        const hiddenIds = new Set<string>();
+        universalActivities.forEach((u: UniversalActivity) => {
+            if (u.mergedIntoId) hiddenIds.add(u.id);
+            if (u.mergeInfo?.isMerged && u.mergeInfo.originalActivityIds) {
+                u.mergeInfo.originalActivityIds.forEach(id => hiddenIds.add(id));
+            }
+        });
+
+        return universalActivities
+            .filter((a: UniversalActivity) => !hiddenIds.has(a.id)) // Filter out merged components AND merged-into activities
+            .filter((a: UniversalActivity) => {
+                const d = new Date(a.date);
+                return selectedYears.includes(d.getFullYear());
+            }).sort((a: UniversalActivity, b: UniversalActivity) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [universalActivities, selectedYears]);
 
     // 1.1 Filter Strength Sessions for the selected years (Source of Truth for Strength)
@@ -114,6 +119,20 @@ export function YearInReviewPage() {
             return selectedYears.includes(d.getFullYear());
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [strengthSessions, selectedYears]);
+
+    // 1.2 Filter Goals for the selected years
+    const yearlyGoals = useMemo(() => {
+        if (selectedYears.length === 0) return [];
+        const startOfYear = new Date(Math.min(...selectedYears), 0, 1).toISOString();
+        const endOfYear = new Date(Math.max(...selectedYears), 11, 31, 23, 59, 59, 999).toISOString(); // End of last day
+
+        return performanceGoals.filter(goal => {
+            // Check if goal overlaps with selected years
+            const goalStart = goal.startDate;
+            const goalEnd = goal.endDate || new Date().toISOString(); // Open-ended goals assumed active
+            return goalStart <= endOfYear && goalEnd >= startOfYear;
+        });
+    }, [performanceGoals, selectedYears]);
 
     // 2. Aggregate Stats
     const stats = useMemo(() => {
@@ -143,7 +162,7 @@ export function YearInReviewPage() {
         });
         strengthPRs = yearlyStrengthPBs.length;
 
-        yearlyActivities.forEach(a => {
+        yearlyActivities.forEach((a: UniversalActivity) => {
             const dist = a.performance?.distanceKm || 0;
             const time = a.performance?.durationMinutes || 0;
             const cals = a.performance?.calories || 0;
@@ -223,13 +242,13 @@ export function YearInReviewPage() {
 
         // Highlights - Top 3
         const longestRuns = [...yearlyActivities]
-            .filter(a => a.performance?.activityType === 'running')
-            .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0))
+            .filter((a: UniversalActivity) => a.performance?.activityType === 'running')
+            .sort((a: UniversalActivity, b: UniversalActivity) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0))
             .slice(0, 3);
 
         const fastestRuns = [...yearlyActivities]
-            .filter(a => a.performance?.activityType === 'running' && (a.performance?.distanceKm || 0) > 5)
-            .sort((a, b) => {
+            .filter((a: UniversalActivity) => a.performance?.activityType === 'running' && (a.performance?.distanceKm || 0) > 5)
+            .sort((a: UniversalActivity, b: UniversalActivity) => {
                 const paceA = (a.performance?.durationMinutes || 0) / (a.performance?.distanceKm || 1);
                 const paceB = (b.performance?.durationMinutes || 0) / (b.performance?.distanceKm || 1);
                 return paceA - paceB;
@@ -237,7 +256,21 @@ export function YearInReviewPage() {
             .slice(0, 3);
 
         const maxScores = [...yearlyActivities]
-            .map(a => ({ activity: a, score: calculatePerformanceScore({ ...a, durationMinutes: a.performance?.durationMinutes || 0, distance: a.performance?.distanceKm } as any) }))
+            .map((a: UniversalActivity) => {
+                // Map UniversalActivity to the format expected by calculatePerformanceScore
+                const mappedActivity = {
+                    ...a,
+                    type: a.performance?.activityType || 'other',
+                    activityType: a.performance?.activityType || 'other',
+                    durationMinutes: a.performance?.durationMinutes || 0,
+                    distance: a.performance?.distanceKm || 0,
+                    distanceKm: a.performance?.distanceKm || 0,
+                    heartRateAvg: a.performance?.avgHeartRate || 0,
+                    avgHeartRate: a.performance?.avgHeartRate || 0,
+                    elevationGain: a.performance?.elevationGain || 0,
+                };
+                return { activity: a, score: calculatePerformanceScore(mappedActivity, []) };
+            })
             .sort((a, b) => b.score - a.score)
             .slice(0, 3);
 
@@ -278,7 +311,7 @@ export function YearInReviewPage() {
             longestGap,
             totalTonnage
         };
-    }, [yearlyActivities, yearlyStrengthSessions, strengthPBs]);
+    }, [yearlyActivities, yearlyStrengthSessions, strengthPBs, selectedYears]);
 
     // 3. Monthly Breakdown Data
     const monthlyData = useMemo(() => {
@@ -290,7 +323,7 @@ export function YearInReviewPage() {
             count: 0
         }));
 
-        yearlyActivities.forEach(a => {
+        yearlyActivities.forEach((a: UniversalActivity) => {
             const m = new Date(a.date).getMonth();
             if (months[m]) {
                 months[m].dist += (a.performance?.distanceKm || 0);
@@ -310,7 +343,7 @@ export function YearInReviewPage() {
         const intervalDays = paceInterval === '1d' ? 1 : paceInterval === '1w' ? 7 : paceInterval === '2w' ? 14 : paceInterval === '1m' ? 30 : 90;
         const buckets = new Map<number, { totalTime: number, totalDist: number, firstDate: Date }>();
 
-        yearlyActivities.forEach(a => {
+        yearlyActivities.forEach((a: UniversalActivity) => {
             if (a.performance?.activityType === 'running' && (a.performance.distanceKm || 0) > 0) {
                 const d = new Date(a.date);
                 const daysSinceStart = Math.floor((d.getTime() - startDate.getTime()) / 86400000);
@@ -325,9 +358,9 @@ export function YearInReviewPage() {
             }
         });
 
-        const totalDays = selectedYears.length * 366;
+        const totalDays = selectedYears.length * 366; // Approximation for max buckets
         const maxBuckets = Math.ceil(totalDays / intervalDays);
-        return Array.from({ length: maxBuckets }, (_, i) => {
+        const result = Array.from({ length: maxBuckets }, (_, i) => {
             const data = buckets.get(i);
             if (!data || data.totalDist === 0) return { bucket: i, pace: null, date: null };
             return {
@@ -335,7 +368,9 @@ export function YearInReviewPage() {
                 pace: data.totalTime / data.totalDist,
                 date: data.firstDate
             };
-        });
+        }).filter(d => d.date !== null); // Filter out empty buckets for cleaner chart
+
+        return result;
     }, [yearlyActivities, paceInterval, selectedYears]);
 
     const smoothedDurationData = useMemo(() => {
@@ -345,7 +380,7 @@ export function YearInReviewPage() {
         const intervalDays = durationInterval === '1d' ? 1 : durationInterval === '1w' ? 7 : durationInterval === '2w' ? 14 : durationInterval === '1m' ? 30 : 90;
         const buckets = new Map<number, { totalTime: number, count: number, firstDate: Date }>();
 
-        yearlyActivities.forEach(a => {
+        yearlyActivities.forEach((a: UniversalActivity) => {
             const d = new Date(a.date);
             const daysSinceStart = Math.floor((d.getTime() - startDate.getTime()) / 86400000);
             const bucketIndex = Math.floor(daysSinceStart / intervalDays);
@@ -358,9 +393,9 @@ export function YearInReviewPage() {
             });
         });
 
-        const totalDays = selectedYears.length * 366;
+        const totalDays = selectedYears.length * 366; // Approximation for max buckets
         const maxBuckets = Math.ceil(totalDays / intervalDays);
-        return Array.from({ length: maxBuckets }, (_, i) => {
+        const result = Array.from({ length: maxBuckets }, (_, i) => {
             const data = buckets.get(i);
             if (!data || data.count === 0) return { bucket: i, avgDuration: 0, date: null };
             return {
@@ -368,7 +403,9 @@ export function YearInReviewPage() {
                 avgDuration: Math.round(data.totalTime / data.count),
                 date: data.firstDate
             };
-        });
+        }).filter(d => d.date !== null); // Filter out empty buckets for cleaner chart
+
+        return result;
     }, [yearlyActivities, durationInterval, selectedYears]);
 
     // Strength Workouts for Volume Chart - Use direct source
@@ -385,7 +422,7 @@ export function YearInReviewPage() {
             let current = new Date(start);
 
             const activityMap = new Map();
-            yearlyActivities.forEach(a => {
+            yearlyActivities.forEach((a: UniversalActivity) => {
                 const d = new Date(a.date);
                 if (d.getFullYear() !== year) return;
                 const date = a.date.split('T')[0];
@@ -511,6 +548,55 @@ export function YearInReviewPage() {
                 </div>
             </div>
 
+            {/* GOALS SECTION */}
+            {yearlyGoals.length > 0 && (
+                <div className="space-y-6">
+                    <h3 className="text-2xl font-black flex items-center gap-2">
+                        <span>🎯</span> Måluppfyllelse
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {yearlyGoals.map(goal => {
+                            const progress = calculateGoalProgress(goal, unifiedActivities);
+                            const percent = Math.min(100, Math.round(progress.percentage));
+                            const isCompleted = progress.isComplete;
+                            const isFailed = !isCompleted && new Date(goal.endDate || '') < new Date() && goal.period !== 'daily' && goal.period !== 'weekly'; // Simple fail check
+
+                            return (
+                                <div key={goal.id} className={`p-4 rounded-2xl border ${isCompleted ? 'bg-emerald-900/20 border-emerald-500/30' : isFailed ? 'bg-red-900/20 border-red-500/30' : 'bg-slate-900/50 border-white/5'
+                                    }`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div className="text-3xl">{goal.icon || '🎯'}</div>
+                                        {isCompleted ? (
+                                            <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full">KLARAT</span>
+                                        ) : isFailed ? (
+                                            <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs font-bold rounded-full">MISSAT</span>
+                                        ) : (
+                                            <span className="px-2 py-1 bg-blue-500/20 text-blue-400 text-xs font-bold rounded-full">PÅGÅR</span>
+                                        )}
+                                    </div>
+                                    <h4 className="font-bold text-sm mb-1 line-clamp-1" title={goal.name}>{goal.name}</h4>
+                                    <p className="text-xs text-slate-400 mb-3">{goal.description || 'Ingen beskrivning'}</p>
+
+                                    <div className="space-y-1">
+                                        <div className="flex justify-between text-xs font-bold">
+                                            <span>{Math.round(progress.current)} {goal.targets[0]?.unit}</span>
+                                            <span className="text-slate-500">/ {progress.target}</span>
+                                        </div>
+                                        <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full transition-all duration-1000 ${isCompleted ? 'bg-emerald-500' : isFailed ? 'bg-red-500' : 'bg-blue-500'}`}
+                                                style={{ width: `${percent}%` }}
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-right text-slate-500">{percent}%</p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+
             {/* MAIN CHART SECTION */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {/* Monthly Progress Chart */}
@@ -526,12 +612,19 @@ export function YearInReviewPage() {
                                 <YAxis yAxisId="dist" stroke="#10b981" fontSize={12} tickLine={false} axisLine={false} unit="km" />
                                 <YAxis yAxisId="time" orientation="right" stroke="#6366f1" fontSize={12} tickLine={false} axisLine={false} unit="h" />
                                 <Tooltip
+                                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
                                     contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
-                                    formatter={(value: any, name: string) => [
-                                        name === 'dist' ? `${Math.round(value)} km` : `${Math.round(value)} h`,
-                                        name === 'dist' ? 'Distans' : 'Tid'
-                                    ]}
                                     labelStyle={{ color: '#cbd5e1' }}
+                                    formatter={(value: any, name: string) => {
+                                        // If name is the dataKey, we might get 'dist' or 'time' potentially? 
+                                        // But Recharts usually passes the `name` prop if present.
+                                        // Let's rely on checking the user facing name.
+                                        const isDist = name === 'Distans (km)';
+                                        return [
+                                            isDist ? `${Math.round(value)} km` : `${Math.round(value)} h`,
+                                            isDist ? 'Distans' : 'Tid'
+                                        ];
+                                    }}
                                 />
                                 <Legend wrapperStyle={{ paddingTop: '20px' }} />
                                 <Bar yAxisId="dist" name="Distans (km)" dataKey="dist" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />

@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { PerformanceGoal, PerformanceGoalType, GoalPeriod, GoalTarget, ExerciseType, TrainingCycle, GoalCategory, GoalStatus } from '../../models/types.ts';
+import React, { useState, useEffect, useMemo } from 'react';
+import { PerformanceGoal, PerformanceGoalType, GoalPeriod, GoalTarget, ExerciseType, TrainingCycle, GoalCategory, WeightEntry } from '../../models/types.ts';
+import { useData } from '../../context/DataContext.tsx';
 
-const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
+const EXERCISE_TYPES: { type: ExerciseType | undefined; icon: string; label: string }[] = [
+    { type: undefined, icon: '🎯', label: 'All träning' },
     { type: 'running', icon: '🏃', label: 'Löpning' },
     { type: 'cycling', icon: '🚴', label: 'Cykling' },
     { type: 'strength', icon: '🏋️', label: 'Styrka' },
@@ -10,6 +12,35 @@ const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
     { type: 'yoga', icon: '🧘', label: 'Yoga' },
     { type: 'other', icon: '✨', label: 'Annat' },
 ];
+
+// Goal type options with categories
+const GOAL_TYPES = [
+    { id: 'frequency', label: 'Frekvens', icon: '🔢', desc: 'X gånger per period', category: 'training' },
+    { id: 'distance', label: 'Distans', icon: '📏', desc: 'Springa/cykla X km', category: 'training' },
+    { id: 'tonnage', label: 'Tonnage', icon: '🏋️', desc: 'Lyft X ton', category: 'training' },
+    { id: 'calories', label: 'Kalorier', icon: '🔥', desc: 'Bränn X kcal', category: 'training' },
+    { id: 'speed', label: 'Hastighet', icon: '⏱️', desc: 'X km på Y min', category: 'training' },
+    { id: 'weight', label: 'Vikt', icon: '⚖️', desc: 'Kropsvikt upp/ner/stabil', category: 'body' },
+    { id: 'measurement', label: 'Mått', icon: '📐', desc: 'Midja, höft, arm etc', category: 'body' },
+    { id: 'streak', label: 'Streak', icon: '🔥', desc: 'Träna X dagar i rad', category: 'lifestyle' },
+    { id: 'nutrition', label: 'Kost', icon: '🥗', desc: 'Protein, kalorier', category: 'nutrition' },
+];
+
+// Measurement types
+const MEASUREMENT_TYPES = [
+    { id: 'waist', label: 'Midja', icon: '📏' },
+    { id: 'hip', label: 'Höft', icon: '📏' },
+    { id: 'chest', label: 'Bröst', icon: '📏' },
+    { id: 'arm', label: 'Överarm', icon: '💪' },
+    { id: 'thigh', label: 'Lår', icon: '🦵' },
+    { id: 'neck', label: 'Nacke', icon: '📏' },
+];
+
+// Weight direction options
+type WeightDirection = 'down' | 'stable' | 'up';
+
+// Duration preset type
+type DurationPreset = '30d' | '3m' | '6m' | '12m' | 'custom' | 'ongoing';
 
 interface GoalModalProps {
     isOpen: boolean;
@@ -20,21 +51,106 @@ interface GoalModalProps {
 }
 
 export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: GoalModalProps) {
+    // Basic state
     const [name, setName] = useState('');
     const [type, setType] = useState<PerformanceGoalType>('frequency');
     const [period, setPeriod] = useState<GoalPeriod>('weekly');
-    const [cycleId, setCycleId] = useState<string | undefined>(undefined);
-    const [hasEndDate, setHasEndDate] = useState(false);
-    const [endDate, setEndDate] = useState('');
 
     // Target inputs
-    const [targetExerciseType, setTargetExerciseType] = useState<ExerciseType>('strength');
-    const [targetCount, setTargetCount] = useState('3');
+    const [frequencyTargets, setFrequencyTargets] = useState<GoalTarget[]>([
+        { exerciseType: 'strength', count: 3, unit: 'sessions' }
+    ]);
     const [targetValue, setTargetValue] = useState('');
-    const [targetUnit, setTargetUnit] = useState('');
+    const [targetUnit, setTargetUnit] = useState('km');
+
+    // Speed goal specifics
+    const [targetDistance, setTargetDistance] = useState('');
+    const [targetTimeMinutes, setTargetTimeMinutes] = useState('');
+    const [targetTimeSeconds, setTargetTimeSeconds] = useState('');
+
+    // Weight goal specifics
+    const [weightDirection, setWeightDirection] = useState<WeightDirection>('down');
+    const [targetWeight, setTargetWeight] = useState('');
+    const [currentWeight, setCurrentWeight] = useState('');
+    const [weeklyRate, setWeeklyRate] = useState('0.5');
+
+    // Measurement goal specifics
+    const [measurementType, setMeasurementType] = useState('waist');
+    const [measurementDirection, setMeasurementDirection] = useState<WeightDirection>('down');
+    const [targetMeasurement, setTargetMeasurement] = useState('');
+    const [currentMeasurement, setCurrentMeasurement] = useState('');
+
+    // Combo goals (weight + measurement)
+    const [includeWeight, setIncludeWeight] = useState(true);
+    const [includeMeasurement, setIncludeMeasurement] = useState(false);
+
+    // Duration / Period
+    const [durationPreset, setDurationPreset] = useState<DurationPreset>('ongoing');
+    const [customStartDate, setCustomStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [customEndDate, setCustomEndDate] = useState('');
 
     // Smart input
     const [smartInput, setSmartInput] = useState('');
+
+    // Track if using new weight vs existing
+    const [useExistingWeight, setUseExistingWeight] = useState(true);
+
+    // Get weight data from context
+    const { weightEntries = [] } = useData();
+
+    // Get latest weight entry
+    const latestWeight = useMemo(() => {
+        if (!weightEntries.length) return null;
+        const sorted = [...weightEntries].sort((a, b) =>
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+        return sorted[0];
+    }, [weightEntries]);
+
+    // Format weight date nicely
+    const formatWeightDate = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const now = new Date();
+        const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return 'idag';
+        if (diffDays === 1) return 'igår';
+        if (diffDays < 7) return `för ${diffDays} dagar sedan`;
+        return date.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+    };
+
+    // Calculate end date based on preset
+    const calculatedEndDate = useMemo(() => {
+        const start = new Date(customStartDate);
+        switch (durationPreset) {
+            case '30d':
+                return new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+            case '3m':
+                return new Date(start.getFullYear(), start.getMonth() + 3, start.getDate()).toISOString().split('T')[0];
+            case '6m':
+                return new Date(start.getFullYear(), start.getMonth() + 6, start.getDate()).toISOString().split('T')[0];
+            case '12m':
+                return new Date(start.getFullYear() + 1, start.getMonth(), start.getDate()).toISOString().split('T')[0];
+            case 'custom':
+                return customEndDate;
+            default:
+                return '';
+        }
+    }, [durationPreset, customStartDate, customEndDate]);
+
+    // Format date nicely
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return '';
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('sv-SE', { day: 'numeric', month: 'short', year: 'numeric' });
+    };
+
+    // Days until end
+    const daysUntilEnd = useMemo(() => {
+        if (!calculatedEndDate) return null;
+        const end = new Date(calculatedEndDate);
+        const now = new Date();
+        return Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    }, [calculatedEndDate]);
 
     // Reset on modal open/close
     useEffect(() => {
@@ -42,75 +158,112 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             setName(editingGoal.name);
             setType(editingGoal.type);
             setPeriod(editingGoal.period);
-            setCycleId(editingGoal.cycleId);
-            setHasEndDate(!!editingGoal.endDate);
-            setEndDate(editingGoal.endDate || '');
-            if (editingGoal.targets[0]) {
-                setTargetExerciseType(editingGoal.targets[0].exerciseType || 'strength');
-                setTargetCount(editingGoal.targets[0].count?.toString() || '');
-                setTargetValue(editingGoal.targets[0].value?.toString() || '');
-                setTargetUnit(editingGoal.targets[0].unit || '');
+            if (editingGoal.endDate) {
+                setDurationPreset('custom');
+                setCustomEndDate(editingGoal.endDate);
+            } else {
+                setDurationPreset('ongoing');
+            }
+            setCustomStartDate(editingGoal.startDate || new Date().toISOString().split('T')[0]);
+            if (editingGoal.type === 'frequency') {
+                setFrequencyTargets(editingGoal.targets);
+            } else if (editingGoal.type === 'speed') {
+                const t = editingGoal.targets[0];
+                if (t) {
+                    setTargetDistance(t.distanceKm?.toString() || '');
+                    const totalSec = t.timeSeconds || 0;
+                    const min = Math.floor(totalSec / 60);
+                    const sec = totalSec % 60;
+                    setTargetTimeMinutes(min.toString());
+                    setTargetTimeSeconds(sec.toString());
+                }
+            } else if (editingGoal.targets[0]) {
+                const target = editingGoal.targets[0];
+                setTargetValue(target.value?.toString() || '');
+                setTargetUnit(target.unit || '');
+            }
+
+            // Weight specific reset
+            if (editingGoal.type === 'weight' || editingGoal.type === 'measurement') {
+                setTargetWeight(editingGoal.targetWeight?.toString() || '');
+                setWeightDirection(editingGoal.targetWeightRate && editingGoal.targetWeightRate > 0 ? 'up' : 'down');
             }
         } else if (isOpen) {
-            // Reset to defaults
             setName('');
             setType('frequency');
             setPeriod('weekly');
-            setCycleId(undefined);
-            setHasEndDate(false);
-            setEndDate('');
-            setTargetExerciseType('strength');
-            setTargetCount('3');
+            setDurationPreset('ongoing');
+            setCustomStartDate(new Date().toISOString().split('T')[0]);
+            setCustomEndDate('');
+            setFrequencyTargets([{ exerciseType: 'strength', count: 3, unit: 'sessions' }]);
             setTargetValue('');
-            setTargetUnit('');
+            setTargetUnit('km');
+            setTargetDistance('');
+            setTargetTimeMinutes('');
+            setTargetTimeSeconds('');
             setSmartInput('');
+            setWeightDirection('down');
+            setTargetWeight('');
+            setCurrentWeight('');
+            setWeeklyRate('0.5');
+            setMeasurementType('waist');
+            setMeasurementDirection('down');
+            setTargetMeasurement('');
+            setCurrentMeasurement('');
+            setIncludeWeight(true);
+            setIncludeMeasurement(false);
         }
     }, [isOpen, editingGoal]);
+
+    // Pre-fill weight when switching to weight goal type
+    useEffect(() => {
+        if ((type === 'weight' || type === 'measurement') && latestWeight && useExistingWeight && !currentWeight) {
+            setCurrentWeight(latestWeight.weight.toString());
+        }
+    }, [type, latestWeight, useExistingWeight, currentWeight]);
 
     // Smart input parsing
     useEffect(() => {
         if (!smartInput.trim()) return;
-
         const lower = smartInput.toLowerCase();
 
         // Pattern: "3x styrka/vecka"
         const freqMatch = lower.match(/(\d+)\s*x?\s*(löpning|löp|styrka|cykling|promenad|simning|yoga|annat)/);
         if (freqMatch) {
             setType('frequency');
-            setTargetCount(freqMatch[1]);
             const typeMap: Record<string, ExerciseType> = {
                 'löpning': 'running', 'löp': 'running',
-                'styrka': 'strength',
-                'cykling': 'cycling',
-                'promenad': 'walking',
-                'simning': 'swimming',
-                'yoga': 'yoga',
-                'annat': 'other'
+                'styrka': 'strength', 'cykling': 'cycling',
+                'promenad': 'walking', 'simning': 'swimming',
+                'yoga': 'yoga', 'annat': 'other'
             };
-            setTargetExerciseType(typeMap[freqMatch[2]] || 'strength');
+            setFrequencyTargets([{
+                exerciseType: typeMap[freqMatch[2]] || 'strength',
+                count: parseInt(freqMatch[1]),
+                unit: 'sessions'
+            }]);
             setName(smartInput);
         }
 
-        // Pattern: "50 km/vecka" or "4 ton/vecka"
+        // Pattern: "50 km/vecka"
         const volMatch = lower.match(/(\d+(?:[.,]\d+)?)\s*(km|ton|kcal)/);
         if (volMatch) {
-            const value = volMatch[1];
-            const unit = volMatch[2];
-            setTargetValue(value);
-            setTargetUnit(unit);
-            if (unit === 'km') setType('distance');
-            else if (unit === 'ton') setType('tonnage');
-            else if (unit === 'kcal') setType('calories');
+            setTargetValue(volMatch[1]);
+            setTargetUnit(volMatch[2]);
+            if (volMatch[2] === 'km') setType('distance');
+            else if (volMatch[2] === 'ton') setType('tonnage');
+            else if (volMatch[2] === 'kcal') setType('calories');
             setName(smartInput);
         }
 
-        // Period detection - Swedish natural language patterns
-        if (lower.includes('/dag') || lower.includes('om dagen') || lower.includes('per dag') || lower.includes(' dagen')) {
+        // Period detection
+        if (lower.includes('/dag') || lower.includes('om dagen') || lower.includes('per dag')) {
             setPeriod('daily');
-        } else if (lower.includes('/vecka') || lower.includes('om veckan') || lower.includes('per vecka') || lower.includes('i veckan')) {
+        } else if (lower.includes('/vecka') || lower.includes('per vecka') || lower.includes('i veckan')) {
             setPeriod('weekly');
+        } else if (lower.includes('/månad') || lower.includes('per månad') || lower.includes('i månaden')) {
+            setPeriod('monthly');
         }
-
     }, [smartInput]);
 
     // ESC to close
@@ -123,228 +276,835 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
     }, [isOpen, onClose]);
 
     const handleSubmit = () => {
-        const targets: GoalTarget[] = [{
-            exerciseType: type === 'frequency' ? targetExerciseType : undefined,
-            count: type === 'frequency' ? parseInt(targetCount) || 0 : undefined,
-            value: type !== 'frequency' ? parseFloat(targetValue) || 0 : undefined,
-            unit: type !== 'frequency' ? targetUnit : 'sessions'
-        }];
-
-        // Determine category based on goal type
+        let targets: GoalTarget[] = [];
         let category: GoalCategory = 'training';
-        if (type === 'nutrition') category = 'nutrition';
-        else if (type === 'weight') category = 'body';
-        else if (type === 'streak' && targetExerciseType === 'yoga') category = 'lifestyle';
+        let goalName = name;
 
-        onSave({
-            name: name || `${targetCount}x ${targetExerciseType}`,
-            type,
+        // Build targets based on type
+        switch (type) {
+            case 'frequency':
+                targets = frequencyTargets.map(t => ({
+                    ...t,
+                    count: parseInt(t.count as any) || 0,
+                    unit: 'sessions'
+                }));
+                if (!goalName) {
+                    goalName = targets.map(t => {
+                        const et = EXERCISE_TYPES.find(e => e.type === t.exerciseType);
+                        return `${t.count}x ${et?.label || 'Träning'}`;
+                    }).join(' + ');
+                }
+                break;
+
+            case 'distance':
+            case 'tonnage':
+            case 'calories':
+                targets = [{
+                    value: parseFloat(targetValue) || 0,
+                    unit: targetUnit
+                }];
+                if (!goalName) goalName = `${targetValue} ${targetUnit}`;
+                break;
+
+            case 'speed':
+                // Calculate total seconds
+                const totalSeconds = (parseInt(targetTimeMinutes) || 0) * 60 + (parseInt(targetTimeSeconds) || 0);
+                targets = [{
+                    distanceKm: parseFloat(targetDistance),
+                    timeSeconds: totalSeconds,
+                    unit: 's'
+                }];
+                if (!goalName) {
+                    const min = Math.floor(totalSeconds / 60);
+                    const sec = totalSeconds % 60;
+                    const timeStr = `${min}:${sec.toString().padStart(2, '0')}`;
+                    const distStr = targetDistance;
+                    goalName = `${distStr}km på ${timeStr}`;
+                }
+                break;
+
+            case 'weight':
+            case 'measurement':
+                category = 'body';
+                const weightTarget = includeWeight ? parseFloat(targetWeight) : undefined;
+                const measureTarget = includeMeasurement ? parseFloat(targetMeasurement) : undefined;
+                targets = [{
+                    value: weightTarget || measureTarget || 0,
+                    unit: includeWeight ? 'kg' : 'cm'
+                }];
+                if (!goalName) {
+                    const parts = [];
+                    if (includeWeight) {
+                        const dirLabel = weightDirection === 'down' ? 'Gå ner' : weightDirection === 'up' ? 'Gå upp' : 'Håll';
+                        parts.push(`${dirLabel} till ${targetWeight}kg`);
+                    }
+                    if (includeMeasurement) {
+                        const mt = MEASUREMENT_TYPES.find(m => m.id === measurementType);
+                        const dirLabel = measurementDirection === 'down' ? '↓' : measurementDirection === 'up' ? '↑' : '=';
+                        parts.push(`${mt?.label || measurementType} ${dirLabel} ${targetMeasurement}cm`);
+                    }
+                    goalName = parts.join(' + ') || 'Kroppsmål';
+                }
+                break;
+
+            case 'streak':
+                const streakT = frequencyTargets[0];
+                targets = [{
+                    exerciseType: streakT.exerciseType,
+                    count: parseInt(streakT.count as any) || 7,
+                    unit: 'days'
+                }];
+                if (!goalName) {
+                    const label = EXERCISE_TYPES.find(e => e.type === streakT.exerciseType)?.label || 'Träning';
+                    goalName = `${streakT.count} dagars ${label}-streak`;
+                }
+                break;
+
+            case 'nutrition':
+                category = 'nutrition';
+                targets = [{
+                    value: parseFloat(targetValue) || 0,
+                    unit: targetUnit,
+                    nutritionType: targetUnit === 'g' ? 'protein' : 'calories'
+                }];
+                if (!goalName) goalName = `${targetValue}${targetUnit} protein`;
+                break;
+        }
+
+        const goalData: Omit<PerformanceGoal, 'id' | 'createdAt'> = {
+            name: goalName,
+            type: type === 'measurement' ? 'weight' : type, // Map measurement to weight type
             period,
             targets,
-            cycleId,
-            startDate: editingGoal?.startDate || new Date().toISOString().split('T')[0],
-            endDate: hasEndDate && endDate ? endDate : undefined,
+            startDate: customStartDate,
+            endDate: calculatedEndDate || undefined,
             category,
-            status: editingGoal?.status || 'active'
-        });
+            status: editingGoal?.status || 'active',
+            // Weight-specific fields
+            targetWeight: type === 'weight' || type === 'measurement' ? parseFloat(targetWeight) || undefined : undefined,
+            targetWeightRate: type === 'weight' ? parseFloat(weeklyRate) || undefined : undefined,
+            milestoneProgress: type === 'weight' ? parseFloat(currentWeight) || undefined : undefined,
+        };
 
+        onSave(goalData);
         onClose();
     };
 
     if (!isOpen) return null;
 
+    const isBodyGoal = type === 'weight' || type === 'measurement';
+
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
-            <div className="w-full max-w-xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4" onClick={e => e.stopPropagation()}>
-                <div className="p-6 border-b border-white/5">
-                    <h2 className="text-xl font-black text-white">
-                        {editingGoal ? 'Redigera Mål' : 'Nytt Mål'}
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 backdrop-blur-md animate-in fade-in" onClick={onClose}>
+            <div
+                className="w-full max-w-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="p-6 border-b border-white/5 bg-gradient-to-r from-emerald-500/5 to-transparent">
+                    <h2 className="text-2xl font-black text-white tracking-tight">
+                        {editingGoal ? '✏️ Redigera Mål' : '🎯 Nytt Mål'}
                     </h2>
-                    <p className="text-xs text-slate-500 mt-1">
-                        Definiera ditt tränings- eller kostmål
+                    <p className="text-sm text-slate-500 mt-1">
+                        Definiera och spåra dina framsteg
                     </p>
                 </div>
 
-                <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+                <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
                     {/* Smart Input */}
-                    <div className="p-4 bg-emerald-500/5 rounded-xl border border-emerald-500/20">
-                        <label className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider mb-2 block">
-                            ✨ Smart Input
+                    <div className="p-4 bg-gradient-to-r from-emerald-500/10 to-purple-500/5 rounded-2xl border border-emerald-500/20">
+                        <label className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider mb-2 flex items-center gap-2">
+                            <span>✨</span> Smart Input
+                            <span className="text-slate-500 normal-case">– skriv naturligt</span>
                         </label>
                         <input
                             type="text"
-                            placeholder="t.ex. '3x styrka om dagen' eller 'löpning 50km per vecka'"
+                            placeholder="t.ex. '3x styrka om veckan' eller '50km per månad'"
                             value={smartInput}
                             onChange={e => setSmartInput(e.target.value)}
-                            className="w-full bg-slate-900 border border-emerald-500/30 rounded-xl p-3 text-white text-sm focus:border-emerald-500 transition-all outline-none"
+                            className="w-full bg-slate-950/50 border border-emerald-500/30 rounded-xl p-3.5 text-white text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none placeholder:text-slate-600"
                         />
+                    </div>
+
+                    {/* Goal Type Selection */}
+                    <div className="space-y-3">
+                        <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">1</span>
+                            Välj måltyp
+                        </label>
+                        <div className="grid grid-cols-4 gap-2">
+                            {GOAL_TYPES.slice(0, 4).map(opt => (
+                                <button
+                                    key={opt.id}
+                                    onClick={() => setType(opt.id as PerformanceGoalType)}
+                                    className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${type === opt.id
+                                        ? 'bg-emerald-500 text-slate-950 border-emerald-500 shadow-lg shadow-emerald-500/20'
+                                        : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:border-white/10'
+                                        }`}
+                                >
+                                    <span className="text-xl">{opt.icon}</span>
+                                    <span className="text-[10px] font-bold uppercase">{opt.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                            {GOAL_TYPES.slice(4).map(opt => (
+                                <button
+                                    key={opt.id}
+                                    onClick={() => setType(opt.id as PerformanceGoalType)}
+                                    className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${type === opt.id
+                                        ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20'
+                                        : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:border-white/10'
+                                        }`}
+                                >
+                                    <span className="text-xl">{opt.icon}</span>
+                                    <span className="text-[10px] font-bold uppercase">{opt.label}</span>
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-xs text-slate-600 italic pl-1">
+                            {GOAL_TYPES.find(t => t.id === type)?.desc}
+                        </p>
                     </div>
 
                     {/* Name */}
                     <div className="space-y-2">
-                        <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Namn</label>
+                        <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">2</span>
+                            Namnge målet
+                        </label>
                         <input
                             type="text"
-                            placeholder="t.ex. Veckoträning"
+                            placeholder="t.ex. 'Sommarform 2026' eller 'Styrka 3x'"
                             value={name}
                             onChange={e => setName(e.target.value)}
-                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white focus:border-emerald-500/50 transition-all outline-none"
+                            className="w-full bg-slate-950/50 border border-white/10 rounded-xl p-3.5 text-white focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none"
                         />
                     </div>
 
-                    {/* Goal Type */}
-                    <div className="space-y-2">
-                        <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Typ</label>
-                        <div className="grid grid-cols-4 gap-2">
-                            {[
-                                { id: 'frequency', label: 'Frekvens', icon: '🔢' },
-                                { id: 'distance', label: 'Distans', icon: '📏' },
-                                { id: 'tonnage', label: 'Tonnage', icon: '🏋️' },
-                                { id: 'calories', label: 'Kalorier', icon: '🔥' },
-                            ].map(opt => (
-                                <button
-                                    key={opt.id}
-                                    onClick={() => setType(opt.id as PerformanceGoalType)}
-                                    className={`p-2 rounded-xl border flex flex-col items-center gap-1 transition-all ${type === opt.id
-                                        ? 'bg-emerald-500 text-slate-950 border-emerald-500'
-                                        : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
-                                        }`}
-                                >
-                                    <span className="text-lg">{opt.icon}</span>
-                                    <span className="text-[9px] font-bold uppercase">{opt.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Target Config */}
-                    {type === 'frequency' && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Aktivitet</label>
-                                <select
-                                    value={targetExerciseType}
-                                    onChange={e => setTargetExerciseType(e.target.value as ExerciseType)}
-                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                                >
-                                    {EXERCISE_TYPES.map(t => (
-                                        <option key={t.type} value={t.type}>{t.icon} {t.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Antal</label>
-                                <input
-                                    type="number"
-                                    value={targetCount}
-                                    onChange={e => setTargetCount(e.target.value)}
-                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {type !== 'frequency' && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
-                                <input
-                                    type="number"
-                                    placeholder="50"
-                                    value={targetValue}
-                                    onChange={e => setTargetValue(e.target.value)}
-                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Enhet</label>
-                                <select
-                                    value={targetUnit}
-                                    onChange={e => setTargetUnit(e.target.value)}
-                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                                >
-                                    <option value="km">km</option>
-                                    <option value="ton">ton</option>
-                                    <option value="kcal">kcal</option>
-                                </select>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Period */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Period</label>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setPeriod('weekly')}
-                                    className={`flex-1 p-2 rounded-xl border text-xs font-bold ${period === 'weekly' ? 'bg-emerald-500 text-slate-950 border-emerald-500' : 'bg-slate-900/50 text-slate-400 border-white/5'
-                                        }`}
-                                >
-                                    Vecka
-                                </button>
-                                <button
-                                    onClick={() => setPeriod('daily')}
-                                    className={`flex-1 p-2 rounded-xl border text-xs font-bold ${period === 'daily' ? 'bg-emerald-500 text-slate-950 border-emerald-500' : 'bg-slate-900/50 text-slate-400 border-white/5'
-                                        }`}
-                                >
-                                    Dag
-                                </button>
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] uppercase font-bold text-slate-500">Koppla till Period</label>
-                            <select
-                                value={cycleId || ''}
-                                onChange={e => setCycleId(e.target.value || undefined)}
-                                className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-sm"
-                            >
-                                <option value="">Ingen (Tills vidare)</option>
-                                {cycles.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
-                    {/* End Date Toggle */}
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="checkbox"
-                            checked={hasEndDate}
-                            onChange={e => setHasEndDate(e.target.checked)}
-                            className="w-4 h-4 rounded"
-                        />
-                        <label className="text-xs text-slate-400">
-                            Ange slutdatum (annars "Tills vidare")
+                    {/* Target Configuration based on type */}
+                    <div className="space-y-3">
+                        <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">3</span>
+                            Konfigurera mål
                         </label>
+
+                        {/* Frequency Config */}
+                        {type === 'frequency' && (
+                            <div className="space-y-4">
+                                {frequencyTargets.map((target, idx) => (
+                                    <div key={idx} className="p-4 bg-slate-950/30 rounded-xl border border-white/5 space-y-4 relative">
+                                        {frequencyTargets.length > 1 && (
+                                            <button
+                                                onClick={() => {
+                                                    const newTargets = [...frequencyTargets];
+                                                    newTargets.splice(idx, 1);
+                                                    setFrequencyTargets(newTargets);
+                                                }}
+                                                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500/20 transition-all text-xs"
+                                            >
+                                                ✕
+                                            </button>
+                                        )}
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500 flex justify-between">
+                                                <span>Aktivitet</span>
+                                                {target.exerciseType === undefined && <span className="text-emerald-500">All träning</span>}
+                                            </label>
+                                            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
+                                                {EXERCISE_TYPES.map(t => (
+                                                    <button
+                                                        key={t.label}
+                                                        onClick={() => {
+                                                            const newTargets = [...frequencyTargets];
+                                                            newTargets[idx] = { ...target, exerciseType: t.type };
+                                                            setFrequencyTargets(newTargets);
+                                                        }}
+                                                        title={t.label}
+                                                        className={`p-2 rounded-lg border flex flex-col items-center gap-1 transition-all ${target.exerciseType === t.type
+                                                            ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                            : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                            }`}
+                                                    >
+                                                        <span className="text-base">{t.icon}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500">Antal gånger</label>
+                                            <div className="flex items-center gap-4">
+                                                <input
+                                                    type="number"
+                                                    value={target.count}
+                                                    onChange={e => {
+                                                        const newTargets = [...frequencyTargets];
+                                                        newTargets[idx] = { ...target, count: parseInt(e.target.value) || 0 };
+                                                        setFrequencyTargets(newTargets);
+                                                    }}
+                                                    className="flex-1 bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                                />
+                                                <span className="text-slate-500 font-bold text-sm uppercase">gånger</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                <button
+                                    onClick={() => setFrequencyTargets([...frequencyTargets, { exerciseType: undefined, count: 1, unit: 'sessions' }])}
+                                    className="w-full p-3 rounded-xl border border-dashed border-white/10 text-slate-500 hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-xs font-bold"
+                                >
+                                    + Lägg till typ (t.ex. 2 löpning + 3 styrka)
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Volume Config (distance/tonnage/calories) */}
+                        {(type === 'distance' || type === 'tonnage' || type === 'calories') && (
+                            <div className="grid grid-cols-2 gap-4 p-4 bg-slate-950/30 rounded-xl border border-white/5">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
+                                    <input
+                                        type="number"
+                                        placeholder="50"
+                                        value={targetValue}
+                                        onChange={e => setTargetValue(e.target.value)}
+                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Enhet</label>
+                                    <select
+                                        value={targetUnit}
+                                        onChange={e => setTargetUnit(e.target.value)}
+                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
+                                    >
+                                        {type === 'distance' && <option value="km">km</option>}
+                                        {type === 'tonnage' && <option value="ton">ton</option>}
+                                        {type === 'calories' && <option value="kcal">kcal</option>}
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Weight & Measurement Config */}
+                        {isBodyGoal && (
+                            <div className="space-y-4 p-4 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-xl border border-blue-500/10">
+                                {/* Toggle what to track */}
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => { setIncludeWeight(true); if (!includeMeasurement && type === 'measurement') setType('weight'); }}
+                                        className={`flex-1 p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${includeWeight
+                                            ? 'bg-blue-500 text-white border-blue-500'
+                                            : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                            }`}
+                                    >
+                                        <span>⚖️</span>
+                                        <span className="font-bold text-sm">Vikt</span>
+                                    </button>
+                                    <button
+                                        onClick={() => { setIncludeMeasurement(!includeMeasurement); if (!includeWeight) setIncludeWeight(true); }}
+                                        className={`flex-1 p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${includeMeasurement
+                                            ? 'bg-purple-500 text-white border-purple-500'
+                                            : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                            }`}
+                                    >
+                                        <span>📐</span>
+                                        <span className="font-bold text-sm">+ Mått</span>
+                                    </button>
+                                </div>
+
+                                {/* Weight Section */}
+                                {includeWeight && (
+                                    <div className="space-y-3 p-3 bg-slate-950/30 rounded-xl">
+                                        <div className="text-xs font-bold text-blue-400 uppercase tracking-wider">Viktmål</div>
+
+                                        {/* Direction */}
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { id: 'down', label: 'Gå ner', icon: '📉', color: 'emerald' },
+                                                { id: 'stable', label: 'Håll vikten', icon: '➡️', color: 'blue' },
+                                                { id: 'up', label: 'Gå upp', icon: '📈', color: 'purple' },
+                                            ].map(dir => (
+                                                <button
+                                                    key={dir.id}
+                                                    onClick={() => setWeightDirection(dir.id as WeightDirection)}
+                                                    className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col items-center gap-1 transition-all ${weightDirection === dir.id
+                                                        ? dir.color === 'emerald' ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                            : dir.color === 'blue' ? 'bg-blue-500 text-white border-blue-500'
+                                                                : 'bg-purple-500 text-white border-purple-500'
+                                                        : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                                        }`}
+                                                >
+                                                    <span className="text-base">{dir.icon}</span>
+                                                    <span>{dir.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Weight inputs */}
+                                        <div className="space-y-3">
+                                            {/* Pre-fill indicator */}
+                                            {latestWeight && (
+                                                <div className={`flex items-center justify-between p-2.5 rounded-lg border ${useExistingWeight
+                                                    ? 'bg-blue-500/10 border-blue-500/20'
+                                                    : 'bg-slate-900/50 border-white/5'
+                                                    }`}>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-blue-400">⚖️</span>
+                                                        <div className="text-xs">
+                                                            <span className="text-slate-400">Senaste vägning: </span>
+                                                            <span className="text-white font-bold">{latestWeight.weight} kg</span>
+                                                            <span className="text-slate-500 ml-1">({formatWeightDate(latestWeight.date)})</span>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            setUseExistingWeight(!useExistingWeight);
+                                                            if (!useExistingWeight && latestWeight) {
+                                                                setCurrentWeight(latestWeight.weight.toString());
+                                                            }
+                                                        }}
+                                                        className={`text-[10px] font-bold px-2 py-1 rounded ${useExistingWeight
+                                                            ? 'text-blue-400'
+                                                            : 'bg-emerald-500/20 text-emerald-400'
+                                                            }`}
+                                                    >
+                                                        {useExistingWeight ? '✓ Använder' : '+ Ny vägning'}
+                                                    </button>
+                                                </div>
+                                            )}
+
+                                            {/* Weight input fields */}
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                                                        Nu (kg)
+                                                        {!useExistingWeight && (
+                                                            <span className="text-emerald-400 text-[8px]">NY</span>
+                                                        )}
+                                                    </label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.1"
+                                                        placeholder={latestWeight ? latestWeight.weight.toString() : "85"}
+                                                        value={currentWeight}
+                                                        onChange={e => {
+                                                            setCurrentWeight(e.target.value);
+                                                            // If user types a different weight, mark as new
+                                                            if (latestWeight && e.target.value !== latestWeight.weight.toString()) {
+                                                                setUseExistingWeight(false);
+                                                            }
+                                                        }}
+                                                        className={`w-full border rounded-lg p-2.5 text-white text-center font-bold ${!useExistingWeight
+                                                            ? 'bg-emerald-500/10 border-emerald-500/30'
+                                                            : 'bg-slate-900 border-white/10'
+                                                            }`}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] uppercase font-bold text-slate-500">Mål (kg)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.1"
+                                                        placeholder="80"
+                                                        value={targetWeight}
+                                                        onChange={e => setTargetWeight(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] uppercase font-bold text-slate-500">kg/vecka</label>
+                                                    <select
+                                                        value={weeklyRate}
+                                                        onChange={e => setWeeklyRate(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
+                                                    >
+                                                        <option value="0.25">±0.25</option>
+                                                        <option value="0.5">±0.5</option>
+                                                        <option value="0.75">±0.75</option>
+                                                        <option value="1">±1.0</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            {/* New weight notice */}
+                                            {!useExistingWeight && (
+                                                <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                                                    <span className="text-emerald-400">✨</span>
+                                                    <span className="text-xs text-emerald-300">
+                                                        En ny vägning på <strong>{currentWeight || '?'} kg</strong> kommer registreras
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Estimated time */}
+                                        {currentWeight && targetWeight && (
+                                            <div className="text-xs text-slate-500 text-center pt-2 border-t border-white/5">
+                                                {(() => {
+                                                    const diff = Math.abs(parseFloat(targetWeight) - parseFloat(currentWeight));
+                                                    const weeks = Math.ceil(diff / parseFloat(weeklyRate));
+                                                    return `≈ ${weeks} veckor för att nå målet`;
+                                                })()}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Measurement Section */}
+                                {includeMeasurement && (
+                                    <div className="space-y-3 p-3 bg-slate-950/30 rounded-xl">
+                                        <div className="text-xs font-bold text-purple-400 uppercase tracking-wider">Kroppsmått</div>
+
+                                        {/* Measurement type */}
+                                        <div className="grid grid-cols-6 gap-1.5">
+                                            {MEASUREMENT_TYPES.map(m => (
+                                                <button
+                                                    key={m.id}
+                                                    onClick={() => setMeasurementType(m.id)}
+                                                    className={`p-2 rounded-lg border text-[10px] font-bold transition-all ${measurementType === m.id
+                                                        ? 'bg-purple-500 text-white border-purple-500'
+                                                        : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                                        }`}
+                                                >
+                                                    {m.label}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Direction */}
+                                        <div className="grid grid-cols-3 gap-2">
+                                            {[
+                                                { id: 'down', label: 'Minska', icon: '📉' },
+                                                { id: 'stable', label: 'Håll', icon: '➡️' },
+                                                { id: 'up', label: 'Öka', icon: '📈' },
+                                            ].map(dir => (
+                                                <button
+                                                    key={dir.id}
+                                                    onClick={() => setMeasurementDirection(dir.id as WeightDirection)}
+                                                    className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${measurementDirection === dir.id
+                                                        ? 'bg-purple-500 text-white border-purple-500'
+                                                        : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                                        }`}
+                                                >
+                                                    <span>{dir.icon}</span>
+                                                    <span>{dir.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Measurement inputs */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] uppercase font-bold text-slate-500">Nu (cm)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    placeholder="90"
+                                                    value={currentMeasurement}
+                                                    onChange={e => setCurrentMeasurement(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-[9px] uppercase font-bold text-slate-500">Mål (cm)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.5"
+                                                    placeholder="85"
+                                                    value={targetMeasurement}
+                                                    onChange={e => setTargetMeasurement(e.target.value)}
+                                                    className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Streak Config */}
+                        {type === 'streak' && (
+                            <div className="p-4 bg-gradient-to-br from-orange-500/5 to-red-500/5 rounded-xl border border-orange-500/10 space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Aktivitet</label>
+                                    <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
+                                        {EXERCISE_TYPES.map(t => (
+                                            <button
+                                                key={t.label}
+                                                onClick={() => {
+                                                    const newTargets = [...frequencyTargets];
+                                                    newTargets[0] = { ...newTargets[0], exerciseType: t.type };
+                                                    setFrequencyTargets(newTargets);
+                                                }}
+                                                title={t.label}
+                                                className={`p-2 rounded-lg border flex flex-col items-center gap-1 transition-all ${frequencyTargets[0]?.exerciseType === t.type
+                                                    ? 'bg-orange-500 text-white border-orange-500'
+                                                    : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                    }`}
+                                            >
+                                                <span className="text-base">{t.icon}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Dagar i rad</label>
+                                    <input
+                                        type="number"
+                                        value={frequencyTargets[0]?.count}
+                                        onChange={e => {
+                                            const newTargets = [...frequencyTargets];
+                                            newTargets[0] = { ...newTargets[0], count: parseInt(e.target.value) || 0 };
+                                            setFrequencyTargets(newTargets);
+                                        }}
+                                        placeholder="7"
+                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Nutrition Config */}
+                        {type === 'nutrition' && (
+                            <div className="grid grid-cols-2 gap-4 p-4 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-xl border border-green-500/10">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
+                                    <input
+                                        type="number"
+                                        placeholder="150"
+                                        value={targetValue}
+                                        onChange={e => setTargetValue(e.target.value)}
+                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Typ</label>
+                                    <select
+                                        value={targetUnit}
+                                        onChange={e => setTargetUnit(e.target.value)}
+                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
+                                    >
+                                        <option value="g">🥩 Protein (g)</option>
+                                        <option value="kcal">🔥 Kalorier (kcal)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        )}
+
+
+                        {/* Speed Config */}
+                        {type === 'speed' && (
+                            <div className="p-4 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 rounded-xl border border-blue-500/10 space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Mål</label>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex-1 space-y-1">
+                                            <label className="text-[9px] uppercase text-slate-400">Distans (km)</label>
+                                            <input
+                                                type="number"
+                                                step="0.1"
+                                                value={targetDistance}
+                                                onChange={e => setTargetDistance(e.target.value)}
+                                                placeholder="5.0"
+                                                className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                            />
+                                        </div>
+                                        <div className="flex-1 space-y-1">
+                                            <label className="text-[9px] uppercase text-slate-400">Tid (mm:ss)</label>
+                                            <div className="flex gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={targetTimeMinutes}
+                                                    onChange={e => setTargetTimeMinutes(e.target.value)}
+                                                    placeholder="25"
+                                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                                />
+                                                <span className="self-center font-bold text-slate-500">:</span>
+                                                <input
+                                                    type="number"
+                                                    value={targetTimeSeconds}
+                                                    onChange={e => setTargetTimeSeconds(e.target.value)}
+                                                    placeholder="00"
+                                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-xs text-center text-slate-500">
+                                        Löphastighet: <strong>{targetDistance && targetTimeMinutes ? ((parseFloat(targetTimeMinutes) + (parseFloat(targetTimeSeconds) || 0) / 60) / parseFloat(targetDistance)).toFixed(2) : '-'}</strong> min/km
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                    {hasEndDate && (
-                        <input
-                            type="date"
-                            value={endDate}
-                            onChange={e => setEndDate(e.target.value)}
-                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                        />
-                    )}
+
+                    {/* Period & Duration */}
+                    <div className="space-y-3">
+                        <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">4</span>
+                            Tidsperiod
+                        </label>
+
+                        <div className="p-4 bg-slate-950/30 rounded-xl border border-white/5 space-y-4">
+                            {/* Start Date Presets */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Startdatum</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { label: 'Idag', val: new Date().toISOString().split('T')[0] },
+                                        { label: 'Imorgon', val: new Date(Date.now() + 86400000).toISOString().split('T')[0] },
+                                        {
+                                            label: 'Måndag', val: (() => {
+                                                const d = new Date();
+                                                d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
+                                                return d.toISOString().split('T')[0];
+                                            })()
+                                        },
+                                        {
+                                            label: '1:a i mån', val: (() => {
+                                                const d = new Date();
+                                                d.setMonth(d.getMonth() + 1);
+                                                d.setDate(1);
+                                                return d.toISOString().split('T')[0];
+                                            })()
+                                        }
+                                    ].map(opt => (
+                                        <button
+                                            key={opt.label}
+                                            onClick={() => setCustomStartDate(opt.val)}
+                                            className={`p-2 rounded-lg border text-xs font-bold transition-all ${customStartDate === opt.val
+                                                ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                }`}
+                                        >
+                                            {opt.label}
+                                        </button>
+                                    ))}
+                                </div>
+                                <input
+                                    type="date"
+                                    value={customStartDate}
+                                    onChange={e => setCustomStartDate(e.target.value)}
+                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-sm font-bold mt-2"
+                                />
+                            </div>
+
+                            {!isBodyGoal && type !== 'streak' && type !== 'speed' && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Upprepning</label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {[
+                                            { id: 'daily', label: 'Dagligen', icon: '📅' },
+                                            { id: 'weekly', label: 'Veckovis', icon: '📆' },
+                                            { id: 'monthly', label: 'Månadsvis', icon: '🗓️' },
+                                            { id: 'once', label: 'Engångs', icon: '🎯' },
+                                        ].map(p => (
+                                            <button
+                                                key={p.id}
+                                                onClick={() => setPeriod(p.id as GoalPeriod)}
+                                                className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col items-center gap-1 transition-all ${period === p.id
+                                                    ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                    : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                    }`}
+                                            >
+                                                <span>{p.icon}</span>
+                                                <span>{p.label}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Duration presets */}
+                            <div className="space-y-2">
+                                <label className="text-[10px] uppercase font-bold text-slate-500">Varaktighet</label>
+                                <div className="grid grid-cols-6 gap-1.5">
+                                    {[
+                                        { id: 'ongoing', label: 'Tills vidare', short: '∞' },
+                                        { id: '30d', label: '30 dagar', short: '30d' },
+                                        { id: '3m', label: '3 månader', short: '3m' },
+                                        { id: '6m', label: '6 månader', short: '6m' },
+                                        { id: '12m', label: '12 månader', short: '12m' },
+                                        { id: 'custom', label: 'Anpassad', short: '📅' },
+                                    ].map(d => (
+                                        <button
+                                            key={d.id}
+                                            onClick={() => setDurationPreset(d.id as DurationPreset)}
+                                            title={d.label}
+                                            className={`p-2.5 rounded-lg border text-xs font-bold transition-all ${durationPreset === d.id
+                                                ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                }`}
+                                        >
+                                            {d.short}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Custom date picker */}
+                            {durationPreset === 'custom' && (
+                                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-900/50 rounded-lg">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] uppercase font-bold text-slate-500">Startdatum</label>
+                                        <input
+                                            type="date"
+                                            value={customStartDate}
+                                            onChange={e => setCustomStartDate(e.target.value)}
+                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-sm"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] uppercase font-bold text-slate-500">Slutdatum</label>
+                                        <input
+                                            type="date"
+                                            value={customEndDate}
+                                            onChange={e => setCustomEndDate(e.target.value)}
+                                            min={customStartDate}
+                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-sm"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Duration summary */}
+                            {durationPreset !== 'ongoing' && calculatedEndDate && (
+                                <div className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-emerald-400">📆</span>
+                                        <span className="text-sm text-white">
+                                            {formatDate(customStartDate)} → {formatDate(calculatedEndDate)}
+                                        </span>
+                                    </div>
+                                    <span className="text-xs font-bold text-emerald-400">
+                                        {daysUntilEnd} dagar
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </div>
 
                 {/* Actions */}
-                <div className="p-6 border-t border-white/5 flex gap-3 justify-end">
+                <div className="p-6 border-t border-white/5 flex gap-3 justify-end bg-slate-950/50">
                     <button
                         onClick={onClose}
-                        className="px-6 py-3 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-bold text-xs uppercase transition-all"
+                        className="px-6 py-3 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-bold text-sm transition-all"
                     >
                         Avbryt
                     </button>
                     <button
                         onClick={handleSubmit}
-                        className="px-8 py-3 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/20 uppercase text-xs tracking-wider"
+                        className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/25 text-sm tracking-wide"
                     >
-                        {editingGoal ? 'Spara' : 'Skapa Mål'}
+                        {editingGoal ? '💾 Spara' : '✨ Skapa Mål'}
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

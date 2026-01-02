@@ -71,3 +71,13 @@ export function formatSecondsToTime(totalSeconds: number): string {
     }
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
+
+/**
+ * Format speed in km/h
+ */
+export function formatSpeed(secondsPerKm: number): string {
+    if (!secondsPerKm || !isFinite(secondsPerKm)) return '—';
+    // speed (km/h) = 3600 / secondsPerKm
+    const speed = 3600 / secondsPerKm;
+    return `${speed.toFixed(1)} km/h`;
+}

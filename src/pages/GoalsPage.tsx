@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import {
     useActiveGoals,
@@ -15,8 +14,9 @@ import {
 } from '../hooks/useGoalProgress';
 import { GoalProgressRing, MiniProgressRing } from '../components/goals/GoalProgressRing';
 import { GoalCelebration } from '../components/goals/GoalCelebration';
+import { GoalDetailModal } from '../components/goals/GoalDetailModal';
 import { GoalModal } from '../components/training/GoalModal';
-import type { PerformanceGoal, GoalCategory } from '../models/types';
+import type { PerformanceGoal, GoalCategory, PerformanceGoalType, GoalPeriod } from '../models/types';
 import './GoalsPage.css';
 
 // Category config
@@ -38,11 +38,111 @@ const GOAL_TYPE_ICONS: Record<string, string> = {
     pb: '⚡',
     nutrition: '🥗',
     weight: '⚖️',
+    measurement: '📐',
     combination: '🎯'
 };
 
+// Quick templates for common goals
+interface GoalTemplate {
+    name: string;
+    icon: string;
+    type: PerformanceGoalType;
+    period: GoalPeriod;
+    category: GoalCategory;
+    targetCount?: number;
+    targetValue?: number;
+    targetUnit?: string;
+    exerciseType?: string;
+    description: string;
+}
+
+const GOAL_TEMPLATES: GoalTemplate[] = [
+    {
+        name: '3x Styrkepass',
+        icon: '💪',
+        type: 'frequency',
+        period: 'weekly',
+        category: 'training',
+        targetCount: 3,
+        exerciseType: 'strength',
+        description: 'Tre styrkepass per vecka'
+    },
+    {
+        name: '30 km Löpning',
+        icon: '🏃',
+        type: 'distance',
+        period: 'weekly',
+        category: 'training',
+        targetValue: 30,
+        targetUnit: 'km',
+        exerciseType: 'running',
+        description: 'Springa 30 km per vecka'
+    },
+    {
+        name: '7 Dagars Streak',
+        icon: '🔥',
+        type: 'streak',
+        period: 'daily',
+        category: 'lifestyle',
+        targetValue: 7,
+        description: 'Träna varje dag i en vecka'
+    },
+    {
+        name: '150g Protein',
+        icon: '🥩',
+        type: 'nutrition',
+        period: 'daily',
+        category: 'nutrition',
+        targetValue: 150,
+        targetUnit: 'g',
+        description: 'Dagligt proteinmål'
+    },
+    {
+        name: '10 000 kcal/vecka',
+        icon: '🔥',
+        type: 'calories',
+        period: 'weekly',
+        category: 'training',
+        targetValue: 10000,
+        targetUnit: 'kcal',
+        description: 'Bränn 10 000 kcal per vecka'
+    },
+    {
+        name: '5 Ton Lyftat',
+        icon: '🏋️',
+        type: 'tonnage',
+        period: 'weekly',
+        category: 'training',
+        targetValue: 5,
+        targetUnit: 'ton',
+        description: 'Lyft 5 ton per vecka'
+    },
+    {
+        name: 'Gå ner 5 kg',
+        icon: '⚖️',
+        type: 'weight',
+        period: 'once',
+        category: 'body',
+        targetValue: 5,
+        targetUnit: 'kg',
+        description: 'Viktminskning på 3 månader'
+    },
+    {
+        name: 'Minska midja',
+        icon: '📐',
+        type: 'measurement',
+        period: 'once',
+        category: 'body',
+        targetValue: 5,
+        targetUnit: 'cm',
+        description: 'Minska midjemått med 5 cm'
+    },
+];
+
+// Sorting options
+type SortOption = 'progress' | 'deadline' | 'category' | 'name';
+
 export function GoalsPage() {
-    const navigate = useNavigate();
     const { performanceGoals = [], trainingCycles = [], addGoal, updateGoal, deleteGoal } = useData();
 
     // State
@@ -51,6 +151,10 @@ export function GoalsPage() {
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
     const [celebratingGoal, setCelebratingGoal] = useState<PerformanceGoal | null>(null);
     const [showCompleted, setShowCompleted] = useState(false);
+    const [showTemplates, setShowTemplates] = useState(false);
+    const [sortBy, setSortBy] = useState<SortOption>('progress');
+    const [sortAsc, setSortAsc] = useState(false);
+    const [viewingGoal, setViewingGoal] = useState<PerformanceGoal | null>(null);
 
     // Hooks
     const activeGoals = useActiveGoals();
@@ -59,11 +163,36 @@ export function GoalsPage() {
     const goalsByCategory = useGoalsByCategory();
     const trainingStreak = useTrainingStreak();
 
-    // Filter goals by category
+    // Filter and sort goals
     const filteredGoals = useMemo(() => {
-        if (selectedCategory === 'all') return activeGoals;
-        return activeGoals.filter(({ goal }) => goal.category === selectedCategory);
-    }, [activeGoals, selectedCategory]);
+        let goals = selectedCategory === 'all'
+            ? [...activeGoals]
+            : activeGoals.filter(({ goal }) => goal.category === selectedCategory);
+
+        // Sort
+        goals.sort((a, b) => {
+            let comparison = 0;
+            switch (sortBy) {
+                case 'progress':
+                    comparison = b.progress.percentage - a.progress.percentage;
+                    break;
+                case 'deadline':
+                    const aDeadline = a.progress.daysRemaining ?? Infinity;
+                    const bDeadline = b.progress.daysRemaining ?? Infinity;
+                    comparison = aDeadline - bDeadline;
+                    break;
+                case 'category':
+                    comparison = (a.goal.category || 'training').localeCompare(b.goal.category || 'training');
+                    break;
+                case 'name':
+                    comparison = a.goal.name.localeCompare(b.goal.name);
+                    break;
+            }
+            return sortAsc ? -comparison : comparison;
+        });
+
+        return goals;
+    }, [activeGoals, selectedCategory, sortBy, sortAsc]);
 
     const handleEditGoal = (goal: PerformanceGoal) => {
         setEditingGoal(goal);
@@ -79,7 +208,6 @@ export function GoalsPage() {
         if (editingGoal) {
             updateGoal(editingGoal.id, goalData);
         } else {
-            // Add default category and status for new goals
             addGoal({
                 ...goalData,
                 category: goalData.category || 'training',
@@ -101,6 +229,51 @@ export function GoalsPage() {
         if (confirm('Är du säker på att du vill ta bort detta mål?')) {
             deleteGoal(goalId);
         }
+    };
+
+    const handleUseTemplate = (template: GoalTemplate) => {
+        const goalData: any = {
+            name: template.name,
+            type: template.type,
+            period: template.period,
+            category: template.category,
+            status: 'active',
+            startDate: new Date().toISOString().split('T')[0],
+            targets: [{
+                exerciseType: template.exerciseType,
+                count: template.targetCount,
+                value: template.targetValue,
+                unit: template.targetUnit
+            }]
+        };
+
+        if (template.type === 'streak') {
+            goalData.milestoneValue = template.targetValue;
+        }
+
+        addGoal(goalData);
+        setShowTemplates(false);
+    };
+
+    const toggleSort = (option: SortOption) => {
+        if (sortBy === option) {
+            setSortAsc(!sortAsc);
+        } else {
+            setSortBy(option);
+            setSortAsc(false);
+        }
+    };
+
+    // Format progress numbers nicely
+    const formatProgress = (current: number, target: number, unit?: string) => {
+        const formatNum = (n: number) => {
+            if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+            if (n >= 100) return Math.round(n).toString();
+            if (n >= 10) return n.toFixed(1);
+            return n.toFixed(2);
+        };
+
+        return `${formatNum(current)} / ${formatNum(target)}${unit ? ` ${unit}` : ''}`;
     };
 
     return (
@@ -156,6 +329,11 @@ export function GoalsPage() {
                             <span className="stat-value">{trainingStreak.current}</span>
                             <span className="stat-label">Dagars Streak</span>
                         </div>
+                        {trainingStreak.best > trainingStreak.current && (
+                            <span className="stat-best" title="Personbästa">
+                                🏆 {trainingStreak.best}
+                            </span>
+                        )}
                     </div>
                     <div className="stat-card">
                         <span className="stat-icon">📈</span>
@@ -197,18 +375,74 @@ export function GoalsPage() {
             <section className="goals-section">
                 <div className="section-header">
                     <h2>Aktiva Mål</h2>
-                    <button className="add-goal-btn" onClick={handleNewGoal}>
-                        + Nytt Mål
-                    </button>
+                    <div className="section-controls">
+                        {/* Sort buttons */}
+                        <div className="sort-controls">
+                            <span className="sort-label">Sortera:</span>
+                            <button
+                                className={`sort-btn ${sortBy === 'progress' ? 'active' : ''}`}
+                                onClick={() => toggleSort('progress')}
+                            >
+                                📊 {sortBy === 'progress' && (sortAsc ? '↑' : '↓')}
+                            </button>
+                            <button
+                                className={`sort-btn ${sortBy === 'deadline' ? 'active' : ''}`}
+                                onClick={() => toggleSort('deadline')}
+                            >
+                                ⏰ {sortBy === 'deadline' && (sortAsc ? '↑' : '↓')}
+                            </button>
+                            <button
+                                className={`sort-btn ${sortBy === 'name' ? 'active' : ''}`}
+                                onClick={() => toggleSort('name')}
+                            >
+                                Aa {sortBy === 'name' && (sortAsc ? '↑' : '↓')}
+                            </button>
+                        </div>
+                        <button
+                            className="template-btn"
+                            onClick={() => setShowTemplates(!showTemplates)}
+                        >
+                            ✨ Mallar
+                        </button>
+                        <button className="add-goal-btn" onClick={handleNewGoal}>
+                            + Nytt Mål
+                        </button>
+                    </div>
                 </div>
+
+                {/* Quick Templates */}
+                {showTemplates && (
+                    <div className="templates-grid">
+                        {GOAL_TEMPLATES.map((template, i) => (
+                            <button
+                                key={i}
+                                className="template-card"
+                                onClick={() => handleUseTemplate(template)}
+                            >
+                                <span className="template-icon">{template.icon}</span>
+                                <div className="template-info">
+                                    <span className="template-name">{template.name}</span>
+                                    <span className="template-desc">{template.description}</span>
+                                </div>
+                                <span className="template-badge" style={{
+                                    background: CATEGORY_CONFIG[template.category].color + '20',
+                                    color: CATEGORY_CONFIG[template.category].color
+                                }}>
+                                    {template.period === 'daily' ? '/dag' : '/vecka'}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 {filteredGoals.length > 0 ? (
                     <div className="goals-grid">
                         {filteredGoals.map(({ goal, progress }) => (
                             <div
                                 key={goal.id}
-                                className={`goal-card ${progress.isComplete ? 'complete' : ''} ${!progress.isOnTrack ? 'off-track' : ''}`}
+                                className={`goal-card ${progress.isComplete ? 'complete' : ''} ${!progress.isOnTrack && !progress.isComplete ? 'off-track' : ''}`}
                                 style={{ '--accent': CATEGORY_CONFIG[goal.category || 'training'].color } as React.CSSProperties}
+                                onClick={() => setViewingGoal(goal)}
                             >
                                 {/* Category badge */}
                                 <div className="goal-category-badge">
@@ -219,11 +453,11 @@ export function GoalsPage() {
                                 <div className="goal-ring">
                                     <GoalProgressRing
                                         percentage={progress.percentage}
-                                        size={80}
-                                        strokeWidth={6}
+                                        size={90}
+                                        strokeWidth={7}
                                         color={CATEGORY_CONFIG[goal.category || 'training'].color}
                                     >
-                                        <span className="text-lg">{GOAL_TYPE_ICONS[goal.type] || '🎯'}</span>
+                                        <span className="text-xl">{GOAL_TYPE_ICONS[goal.type] || '🎯'}</span>
                                     </GoalProgressRing>
                                 </div>
 
@@ -231,9 +465,12 @@ export function GoalsPage() {
                                 <div className="goal-info">
                                     <h3 className="goal-name">{goal.name}</h3>
                                     <div className="goal-meta">
-                                        <span className="goal-progress">
-                                            {progress.current.toFixed(1)} / {progress.target}
-                                            {goal.targets[0]?.unit ? ` ${goal.targets[0].unit}` : ''}
+                                        <span className="goal-progress-text">
+                                            {formatProgress(
+                                                progress.current,
+                                                progress.target,
+                                                goal.targets[0]?.unit
+                                            )}
                                         </span>
                                         <span className="goal-period">
                                             {goal.period === 'daily' ? '/dag' :
@@ -242,12 +479,15 @@ export function GoalsPage() {
                                         </span>
                                     </div>
 
-                                    {/* Progress bar */}
-                                    <div className="goal-progress-bar">
-                                        <div
-                                            className="goal-progress-fill"
-                                            style={{ width: `${Math.min(100, progress.percentage)}%` }}
-                                        />
+                                    {/* Progress bar with percentage */}
+                                    <div className="goal-progress-container">
+                                        <div className="goal-progress-bar">
+                                            <div
+                                                className="goal-progress-fill"
+                                                style={{ width: `${Math.min(100, progress.percentage)}%` }}
+                                            />
+                                        </div>
+                                        <span className="goal-percentage">{Math.round(progress.percentage)}%</span>
                                     </div>
 
                                     {/* Status badges */}
@@ -261,8 +501,8 @@ export function GoalsPage() {
                                         {progress.daysRemaining !== undefined && progress.daysRemaining <= 3 && !progress.isComplete && (
                                             <span className="badge badge-urgent">⏰ {progress.daysRemaining}d kvar</span>
                                         )}
-                                        {goal.streakCurrent && goal.streakCurrent > 0 && (
-                                            <span className="badge badge-streak">🔥 {goal.streakCurrent}</span>
+                                        {progress.trend === 'up' && !progress.isComplete && (
+                                            <span className="badge badge-trending">📈 Trending</span>
                                         )}
                                     </div>
                                 </div>
@@ -280,12 +520,14 @@ export function GoalsPage() {
                                     <button
                                         className="action-btn edit"
                                         onClick={() => handleEditGoal(goal)}
+                                        title="Redigera"
                                     >
                                         ✏️
                                     </button>
                                     <button
                                         className="action-btn delete"
                                         onClick={() => handleDeleteGoal(goal.id)}
+                                        title="Ta bort"
                                     >
                                         🗑️
                                     </button>
@@ -297,10 +539,18 @@ export function GoalsPage() {
                     <div className="goals-empty">
                         <span className="empty-icon">🎯</span>
                         <h3>Inga aktiva mål</h3>
-                        <p>Skapa ditt första mål för att börja spåra dina framsteg!</p>
-                        <button className="add-goal-btn large" onClick={handleNewGoal}>
-                            + Skapa Mål
-                        </button>
+                        <p>Skapa ditt första mål eller välj från mallarna!</p>
+                        <div className="empty-actions">
+                            <button
+                                className="template-btn large"
+                                onClick={() => setShowTemplates(true)}
+                            >
+                                ✨ Välj Mall
+                            </button>
+                            <button className="add-goal-btn large" onClick={handleNewGoal}>
+                                + Skapa Mål
+                            </button>
+                        </div>
                     </div>
                 )}
             </section>
@@ -341,7 +591,7 @@ export function GoalsPage() {
             )}
 
             {/* Floating Action Button */}
-            <button className="goals-fab" onClick={handleNewGoal}>
+            <button className="goals-fab" onClick={handleNewGoal} title="Nytt mål">
                 <span>+</span>
             </button>
 
@@ -362,6 +612,19 @@ export function GoalsPage() {
                     onNewGoal={() => {
                         setCelebratingGoal(null);
                         handleNewGoal();
+                    }}
+                />
+            )}
+
+            {/* Goal Detail Modal */}
+            {viewingGoal && (
+                <GoalDetailModal
+                    goal={viewingGoal}
+                    onClose={() => setViewingGoal(null)}
+                    onEdit={() => {
+                        setEditingGoal(viewingGoal);
+                        setViewingGoal(null);
+                        setIsModalOpen(true);
                     }}
                 />
             )}
