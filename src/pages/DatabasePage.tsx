@@ -11,6 +11,7 @@ import {
     UNIT_LABELS,
 } from '../models/types.ts';
 import { normalizeText } from '../utils/formatters.ts';
+import { parseNutritionText } from '../utils/nutritionParser.ts';
 import './DatabasePage.css';
 
 const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
@@ -209,6 +210,20 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             addFoodItem(formData);
         }
         handleCloseForm();
+    };
+
+    const handleSmartPaste = (text: string) => {
+        if (!text) return;
+        const parsed = parseNutritionText(text);
+
+        setFormData(prev => ({
+            ...prev,
+            calories: parsed.calories !== undefined ? parsed.calories : prev.calories,
+            protein: parsed.protein !== undefined ? parsed.protein : prev.protein,
+            carbs: parsed.carbs !== undefined ? parsed.carbs : prev.carbs,
+            fat: parsed.fat !== undefined ? parsed.fat : prev.fat,
+            fiber: parsed.fiber !== undefined ? parsed.fiber : prev.fiber,
+        }));
     };
 
     const handleDelete = (id: string) => {
@@ -631,6 +646,21 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                         </select>
                                     </div>
                                 </div>
+                            </div>
+
+                            {/* Smart Paste - New Feature */}
+                            <div className="bg-emerald-500/5 rounded-2xl p-4 border border-emerald-500/10">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-500/70 mb-2 flex items-center gap-2">
+                                    <span>✨</span> Smart Närings-tolkare
+                                </label>
+                                <textarea
+                                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 min-h-[80px] resize-none"
+                                    placeholder="Klistra in näringstabell här (t.ex. från en hemsida) så fyller vi i värdena automatiskt..."
+                                    onChange={(e) => handleSmartPaste(e.target.value)}
+                                />
+                                <p className="text-[9px] text-slate-500 mt-2 italic">
+                                    Parserar automatiskt protein, kolhydrater, fett, fiber och kcal (prioriterar kcal framför kJ).
+                                </p>
                             </div>
 
                             {/* Primary: Macros */}
