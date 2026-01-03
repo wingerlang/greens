@@ -8,11 +8,22 @@ export interface GoalTemplate {
     suggestedGoal: Omit<PerformanceGoal, 'id' | 'createdAt' | 'periodId' | 'startDate'>;
 }
 
-export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
-    switch (focusType) {
-        case 'weight_loss':
-            return [
-                {
+export const getPeriodTemplates = (focusTypes: PeriodFocus[], userStats?: { weight?: number, waist?: number }): GoalTemplate[] => {
+    let templates: GoalTemplate[] = [];
+    const seenKeys = new Set<string>();
+
+    const addTemplate = (t: GoalTemplate) => {
+        if (!seenKeys.has(t.defaultKey)) {
+            seenKeys.add(t.defaultKey);
+            templates.push(t);
+        }
+    };
+
+    // Helper to generate templates based on type
+    const generateTemplates = (type: PeriodFocus) => {
+        switch (type) {
+            case 'weight_loss':
+                addTemplate({
                     type: 'weight',
                     label: 'Målvikt',
                     description: 'Sätt ett mål för din kroppsvikt.',
@@ -24,11 +35,12 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         category: 'body',
                         status: 'active',
                         targets: [],
-                        targetWeight: 75, // Default placeholder
-                        targetWeightRate: -0.5
+                        targetWeight: userStats?.weight ? Math.round(userStats.weight * 0.95) : 75,
+                        targetWeightRate: -0.5,
+                        milestoneProgress: userStats?.weight // Current weight
                     }
-                },
-                {
+                });
+                addTemplate({
                     type: 'calories',
                     label: 'Kalorimål',
                     description: 'Håll ett dagligt kaloriunderskott.',
@@ -41,8 +53,8 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         status: 'active',
                         targets: [{ nutritionType: 'calories', value: 2000 }]
                     }
-                },
-                {
+                });
+                addTemplate({
                     type: 'measurement',
                     label: 'Midjemått',
                     description: 'Följ ditt midjemått över tid.',
@@ -53,15 +65,15 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         period: 'weekly',
                         category: 'body',
                         status: 'active',
-                        targets: [{ value: 80, unit: 'cm' }], // Placeholder
-                        description: 'Minska midjemåttet'
+                        targets: [{ value: userStats?.waist ? Math.round(userStats.waist * 0.95) : 80, unit: 'cm' }],
+                        description: 'Minska midjemåttet',
+                        milestoneProgress: userStats?.waist // Start value
                     }
-                }
-            ];
+                });
+                break;
 
-        case 'strength':
-            return [
-                {
+            case 'strength':
+                addTemplate({
                     type: 'frequency',
                     label: 'Träningsfrekvens',
                     description: 'Antal styrkepass per vecka.',
@@ -74,8 +86,8 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         status: 'active',
                         targets: [{ exerciseType: 'strength', count: 3 }]
                     }
-                },
-                {
+                });
+                addTemplate({
                     type: 'tonnage',
                     label: 'Veckovolym (Tonnage)',
                     description: 'Total lyft volym per vecka.',
@@ -88,12 +100,11 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         status: 'active',
                         targets: [{ exerciseType: 'strength', value: 10000, unit: 'kg' }]
                     }
-                }
-            ];
+                });
+                break;
 
-        case 'endurance':
-            return [
-                {
+            case 'endurance':
+                addTemplate({
                     type: 'distance',
                     label: 'Veckodistans',
                     description: 'Total sträcka (löpning/cykling) per vecka.',
@@ -106,8 +117,8 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         status: 'active',
                         targets: [{ exerciseType: 'running', value: 20, unit: 'km' }]
                     }
-                },
-                {
+                });
+                addTemplate({
                     type: 'activity',
                     label: 'Löppass',
                     description: 'Antal löppass per vecka.',
@@ -120,13 +131,12 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         status: 'active',
                         targets: [{ exerciseType: 'running', count: 3 }]
                     }
-                }
-            ];
+                });
+                break;
 
-        case 'habit':
-        case 'general':
-            return [
-                {
+            case 'habit':
+            case 'general':
+                addTemplate({
                     type: 'activity',
                     label: 'Aktivitet',
                     description: 'Rör på dig 30 minuter om dagen.',
@@ -137,10 +147,10 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         period: 'daily',
                         category: 'lifestyle',
                         status: 'active',
-                        targets: [{ value: 30, unit: 'min' }] // Loose interpretation
+                        targets: [{ value: 30, unit: 'min' }]
                     }
-                },
-                {
+                });
+                addTemplate({
                     type: 'calories',
                     label: 'Hälsosamma Val',
                     description: 'Följ din kostplan 80% av tiden.',
@@ -151,12 +161,13 @@ export const getPeriodTemplates = (focusType: PeriodFocus): GoalTemplate[] => {
                         period: 'weekly',
                         category: 'nutrition',
                         status: 'active',
-                        targets: [{ count: 5 }] // 5 days a week
+                        targets: [{ count: 5 }]
                     }
-                }
-            ];
+                });
+                break;
+        }
+    };
 
-        default:
-            return [];
-    }
+    focusTypes.forEach(generateTemplates);
+    return templates;
 };

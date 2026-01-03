@@ -1,9 +1,11 @@
-import React, { useState, useMemo } from 'react';
-import { X, Calendar, Target, Activity, Dumbbell, Flame, Check } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { X, Calendar, Target, Activity, Dumbbell, Flame, Check, Edit3 } from 'lucide-react';
 import { TrainingPeriod, PeriodFocus, PerformanceGoal } from '../../../models/types';
 import { getPeriodTemplates, GoalTemplate } from './templates';
 import { GoalTemplateRow } from './GoalTemplateRow';
 import { useData } from '../../../context/DataContext';
+import { SmartDurationPicker } from '../../common/SmartDurationPicker';
+import { GoalModal } from '../GoalModal';
 
 interface PeriodWizardProps {
     isOpen: boolean;
@@ -14,22 +16,44 @@ interface PeriodWizardProps {
 type WizardStep = 1 | 2 | 3;
 
 export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onSave }) => {
-    const { addTrainingPeriod, addGoal } = useData();
+    const { addTrainingPeriod, addGoal, getLatestWeight, getLatestWaist } = useData();
     const [step, setStep] = useState<WizardStep>(1);
 
     // Step 1 State
     const [name, setName] = useState('');
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-    const [endDate, setEndDate] = useState(new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]); // Default 90 days
-    const [focus, setFocus] = useState<PeriodFocus>('general');
+    const [endDate, setEndDate] = useState(''); // Empty = ongoing/custom logic in SmartPicker
+    const [foci, setFoci] = useState<Set<PeriodFocus>>(new Set(['general']));
 
     // Step 2 State
     const [selectedTemplates, setSelectedTemplates] = useState<Set<string>>(new Set());
 
     // Step 3 State
     const [configuredGoals, setConfiguredGoals] = useState<Omit<PerformanceGoal, 'id' | 'createdAt' | 'periodId'>[]>([]);
+    const [advancedEditIndex, setAdvancedEditIndex] = useState<number | null>(null);
 
-    const availableTemplates = useMemo(() => getPeriodTemplates(focus), [focus]);
+    // Fetch user stats for templates
+    const userStats = useMemo(() => ({
+        weight: getLatestWeight(),
+        waist: getLatestWaist()
+    }), [getLatestWeight, getLatestWaist]);
+
+    const availableTemplates = useMemo(() =>
+        getPeriodTemplates(Array.from(foci), userStats),
+    [foci, userStats]);
+
+    // Reset when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setStep(1);
+            setName('');
+            setStartDate(new Date().toISOString().split('T')[0]);
+            setEndDate('');
+            setFoci(new Set(['general']));
+            setSelectedTemplates(new Set());
+            setConfiguredGoals([]);
+        }
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -43,7 +67,7 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
                 .map(t => ({
                     ...t.suggestedGoal,
                     startDate: startDate, // Inherit dates
-                    endDate: endDate
+                    endDate: endDate || undefined // Undefined if ongoing
                 }));
             setConfiguredGoals(goals);
             setStep(3);
@@ -53,14 +77,15 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
     };
 
     const handleSubmit = async () => {
+        const focusList = Array.from(foci);
         // 1. Create Period
         const period = await addTrainingPeriod({
             name,
             startDate,
-            endDate,
-            focusType: focus,
-            userId: 'current', // Backend handles this or DataContext infers
-            description: `Träningsperiod med fokus på ${focus}`
+            endDate: endDate || '2099-12-31', // Fallback for sorting, though UI shows "Ongoing"
+            focusType: focusList[0] || 'general', // Primary focus for display (can be extended to array later)
+            userId: 'current',
+            description: `Träningsperiod med fokus på ${focusList.map(f => FOCUS_LABELS[f]).join(', ')}`
         });
 
         // 2. Create Goals
@@ -77,6 +102,17 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
         onClose();
     };
 
+    const toggleFocus = (key: PeriodFocus) => {
+        const next = new Set(foci);
+        if (next.has(key)) {
+            // Don't allow empty set
+            if (next.size > 1) next.delete(key);
+        } else {
+            next.add(key);
+        }
+        setFoci(next);
+    };
+
     const toggleTemplate = (key: string) => {
         const next = new Set(selectedTemplates);
         if (next.has(key)) next.delete(key);
@@ -84,12 +120,21 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
         setSelectedTemplates(next);
     };
 
+    const FOCUS_LABELS: Record<string, string> = {
+        weight_loss: 'Viktminskning',
+        strength: 'Styrka',
+        endurance: 'Kondition',
+        general: 'Hälsa',
+        habit: 'Vanor'
+    };
+
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="bg-[#1e1e24] w-full max-w-2xl rounded-2xl border border-white/10 shadow-2xl flex flex-col max-h-[90vh]">
+        <>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm pt-20">
+            <div className="bg-[#1e1e24] w-full max-w-2xl rounded-2xl border border-white/10 shadow-2xl flex flex-col max-h-[85vh]">
 
                 {/* Header */}
-                <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                <div className="p-6 border-b border-white/10 flex justify-between items-center bg-white/5">
                     <div>
                         <h2 className="text-xl font-bold text-white">Starta Träningsperiod</h2>
                         <div className="flex items-center gap-2 mt-1">
@@ -123,60 +168,46 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <label className="block text-sm font-medium text-white/70 mb-2">Startdatum</label>
-                                    <div className="relative">
-                                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={16} />
-                                        <input
-                                            type="date"
-                                            className="w-full bg-black/30 border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:border-emerald-500"
-                                            value={startDate}
-                                            onChange={e => setStartDate(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-white/70 mb-2">Slutdatum</label>
-                                    <div className="relative">
-                                        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" size={16} />
-                                        <input
-                                            type="date"
-                                            className="w-full bg-black/30 border border-white/10 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:border-emerald-500"
-                                            value={endDate}
-                                            onChange={e => setEndDate(e.target.value)}
-                                        />
-                                    </div>
-                                </div>
+                            <SmartDurationPicker
+                                startDate={startDate}
+                                endDate={endDate}
+                                onChange={(s, e) => {
+                                    setStartDate(s);
+                                    setEndDate(e);
+                                }}
+                            />
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-white/70 mb-3">Välj Fokus</label>
+                                <label className="block text-sm font-medium text-white/70 mb-3">Välj Fokus (Flera möjliga)</label>
                                 <div className="grid grid-cols-2 gap-3">
                                     <FocusCard
                                         id="weight_loss"
                                         label="Deff / Vikt"
                                         icon={<Flame className="text-orange-400" />}
-                                        selected={focus === 'weight_loss'}
-                                        onClick={() => setFocus('weight_loss')}
+                                        selected={foci.has('weight_loss')}
+                                        onClick={() => toggleFocus('weight_loss')}
                                     />
                                     <FocusCard
                                         id="strength"
                                         label="Styrka / Bygga"
                                         icon={<Dumbbell className="text-blue-400" />}
-                                        selected={focus === 'strength'}
-                                        onClick={() => setFocus('strength')}
+                                        selected={foci.has('strength')}
+                                        onClick={() => toggleFocus('strength')}
                                     />
                                     <FocusCard
                                         id="endurance"
                                         label="Kondition"
                                         icon={<Activity className="text-emerald-400" />}
-                                        selected={focus === 'endurance'}
-                                        onClick={() => setFocus('endurance')}
+                                        selected={foci.has('endurance')}
+                                        onClick={() => toggleFocus('endurance')}
                                     />
                                     <FocusCard
                                         id="general"
                                         label="Hälsa & Vanor"
                                         icon={<Target className="text-purple-400" />}
-                                        selected={focus === 'general'}
-                                        onClick={() => setFocus('general')}
+                                        selected={foci.has('general')}
+                                        onClick={() => toggleFocus('general')}
                                     />
                                 </div>
                             </div>
@@ -188,10 +219,12 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
                         <div className="space-y-6">
                             <div className="text-center mb-6">
                                 <h3 className="text-lg font-bold text-white">Rekommenderade Mål</h3>
-                                <p className="text-white/50 text-sm">Baserat på ditt fokus "{focus}" föreslår vi följande:</p>
+                                <p className="text-white/50 text-sm">
+                                    Baserat på {Array.from(foci).map(f => FOCUS_LABELS[f]).join(' + ')}:
+                                </p>
                             </div>
 
-                            <div className="space-y-3">
+                            <div className="space-y-3 max-h-[60vh] overflow-y-auto">
                                 {availableTemplates.map(template => (
                                     <div
                                         key={template.defaultKey}
@@ -231,15 +264,25 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
 
                             <div className="space-y-3">
                                 {configuredGoals.map((goal, index) => (
-                                    <GoalTemplateRow
-                                        key={index}
-                                        goal={goal}
-                                        onChange={(updated) => {
-                                            const newGoals = [...configuredGoals];
-                                            newGoals[index] = updated;
-                                            setConfiguredGoals(newGoals);
-                                        }}
-                                    />
+                                    <div key={index} className="flex gap-2">
+                                        <div className="flex-1">
+                                            <GoalTemplateRow
+                                                goal={goal}
+                                                onChange={(updated) => {
+                                                    const newGoals = [...configuredGoals];
+                                                    newGoals[index] = updated;
+                                                    setConfiguredGoals(newGoals);
+                                                }}
+                                            />
+                                        </div>
+                                        <button
+                                            onClick={() => setAdvancedEditIndex(index)}
+                                            className="px-3 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 flex items-center justify-center text-white/50 hover:text-emerald-400 transition-colors"
+                                            title="Avancerad redigering"
+                                        >
+                                            <Edit3 size={16} />
+                                        </button>
+                                    </div>
                                 ))}
                             </div>
                         </div>
@@ -270,6 +313,32 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
                 </div>
             </div>
         </div>
+
+        {/* Advanced Edit Modal (Overlay) */}
+        {advancedEditIndex !== null && (
+            <GoalModal
+                isOpen={true}
+                onClose={() => setAdvancedEditIndex(null)}
+                onSave={(updated) => {
+                    const newGoals = [...configuredGoals];
+                    newGoals[advancedEditIndex] = {
+                        ...updated,
+                        // Ensure required missing keys from updated (which is partial in context of edit)
+                        category: updated.category || 'training',
+                        status: updated.status || 'active'
+                    } as any;
+                    setConfiguredGoals(newGoals);
+                    setAdvancedEditIndex(null);
+                }}
+                cycles={[]} // Not needed here
+                editingGoal={{
+                    ...configuredGoals[advancedEditIndex],
+                    id: 'temp',
+                    createdAt: new Date().toISOString()
+                } as PerformanceGoal}
+            />
+        )}
+        </>
     );
 };
 
