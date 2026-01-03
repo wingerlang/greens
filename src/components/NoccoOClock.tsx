@@ -41,10 +41,6 @@ export function NoccoOClock() {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
-    // Debugging/Dev: Uncomment to test at specific times
-    // const currentHour = 12;
-    // const currentMinute = 57;
-
     const isCountdownPhase = currentHour === 7 && currentMinute >= 45;
     const isActionPhase = currentHour === 8 && currentMinute < 5;
 
