@@ -6,6 +6,7 @@ import { GoalTemplateRow } from './GoalTemplateRow';
 import { useData } from '../../../context/DataContext';
 import { SmartDurationPicker } from '../../common/SmartDurationPicker';
 import { GoalModal } from '../GoalModal';
+import { useScrollLock } from '../../../hooks/useScrollLock';
 
 interface PeriodWizardProps {
     isOpen: boolean;
@@ -54,6 +55,8 @@ export const PeriodWizard: React.FC<PeriodWizardProps> = ({ isOpen, onClose, onS
             setConfiguredGoals([]);
         }
     }, [isOpen]);
+
+    useScrollLock(isOpen);
 
     if (!isOpen) return null;
 

@@ -51,7 +51,7 @@ export const getPeriodTemplates = (focusTypes: PeriodFocus[], userStats?: { weig
                         period: 'daily',
                         category: 'nutrition',
                         status: 'active',
-                        targets: [{ nutritionType: 'calories', value: 2000 }]
+                        targets: [{ nutritionType: 'calories', value: 2000, unit: 'kcal' }]
                     }
                 });
                 addTemplate({
@@ -98,7 +98,7 @@ export const getPeriodTemplates = (focusTypes: PeriodFocus[], userStats?: { weig
                         period: 'weekly',
                         category: 'training',
                         status: 'active',
-                        targets: [{ exerciseType: 'strength', value: 10000, unit: 'kg' }]
+                        targets: [{ exerciseType: 'strength', value: 10, unit: 'ton' }]
                     }
                 });
                 break;
