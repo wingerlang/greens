@@ -252,6 +252,8 @@ export async function getStrengthStats(userId: string): Promise<StrengthStats> {
         }
     }
 
+    const { currentStreak, longestStreak } = calculateStreaks(allWorkouts);
+
     return {
         userId,
         totalWorkouts: allWorkouts.length,
@@ -262,9 +264,126 @@ export async function getStrengthStats(userId: string): Promise<StrengthStats> {
         volumeThisWeek,
         volumeThisMonth,
         muscleGroupVolume,
-        currentStreak: 0, // TODO: Calculate
-        longestStreak: 0,
+        currentStreak,
+        longestStreak,
         lastWorkoutDate: allWorkouts[0]?.date
+    };
+}
+
+/**
+ * Get ISO week string (YYYY-Www)
+ */
+export function getIsoWeek(dateStr: string): string {
+    const d = new Date(dateStr);
+    const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    const dayNum = date.getUTCDay() || 7;
+    date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+}
+
+/**
+ * Calculate streaks based on weekly consistency.
+ * A streak is defined as consecutive weeks with at least one workout.
+ * Current streak counts backwards from current or previous week.
+ */
+export function calculateStreaks(workouts: StrengthWorkout[]): { currentStreak: number; longestStreak: number } {
+    if (workouts.length === 0) {
+        return { currentStreak: 0, longestStreak: 0 };
+    }
+
+    // Get current time context
+    const now = new Date();
+    const currentWeek = getIsoWeek(now.toISOString().split('T')[0]);
+    const lastWeekDate = new Date(now);
+    lastWeekDate.setDate(lastWeekDate.getDate() - 7);
+    const previousWeek = getIsoWeek(lastWeekDate.toISOString().split('T')[0]);
+
+    // Map WeekString -> Date (any date in that week) to facilitate streak gaps calculation
+    const weekToDate = new Map<string, string>(); // week -> YYYY-MM-DD
+    for (const w of workouts) {
+        const iso = getIsoWeek(w.date);
+        if (!weekToDate.has(iso)) {
+            weekToDate.set(iso, w.date);
+        }
+    }
+
+    const sortedUniqueWeeks = Array.from(weekToDate.keys()).sort().reverse();
+
+    if (sortedUniqueWeeks.length === 0) return { currentStreak: 0, longestStreak: 0 };
+
+    // Calculate Longest Streak
+    let maxStreak = 1;
+    let curStreak = 1;
+
+    for (let i = 0; i < sortedUniqueWeeks.length - 1; i++) {
+        const thisWeek = sortedUniqueWeeks[i];
+        const nextWeek = sortedUniqueWeeks[i+1]; // older
+
+        // Check if nextWeek is exactly 1 week before thisWeek
+        const d1 = new Date(weekToDate.get(thisWeek)!);
+        const d2 = new Date(weekToDate.get(nextWeek)!);
+
+        // Calculate week difference
+        // We rely on getIsoWeek on (d1 - 7 days) == nextWeek?
+        // Since d1 and d2 can be any day in the week (e.g. Mon and Sun),
+        // simple time diff isn't enough.
+        // But we can check: getIsoWeek(d1 - 7 days) === nextWeek?
+
+        // Warning: d1 might be Monday, d1-7 is previous Monday.
+        // We need to align them?
+        // Actually, if we just convert (d1 - 7 days) to ISO week string, it should match nextWeek.
+        // BUT `d1` is just *some* date in the week.
+        // If `d1` is a Tuesday, `d1-7` is previous Tuesday, which is in the previous week.
+        // So yes, `getIsoWeek(d1 - 7 days)` should return the previous week string.
+
+        const d1Obj = new Date(weekToDate.get(thisWeek)!);
+        // Ensure we are working with UTC dates to avoid DST issues affecting "7 days ago" logic?
+        // Or just use local time, usually fine for -7 days unless crossing DST boundary at midnight.
+        // Let's safer: subtract 7 days.
+        const prevWeekDate = new Date(d1Obj);
+        prevWeekDate.setDate(prevWeekDate.getDate() - 7);
+        const expectedPrevWeek = getIsoWeek(prevWeekDate.toISOString().split('T')[0]);
+
+        if (nextWeek === expectedPrevWeek) {
+            curStreak++;
+        } else {
+            if (curStreak > maxStreak) maxStreak = curStreak;
+            curStreak = 1;
+        }
+    }
+    if (curStreak > maxStreak) maxStreak = curStreak;
+
+    // Calculate Current Streak
+    // It must start at currentWeek or previousWeek
+    let activeStreak = 0;
+    const latestWeek = sortedUniqueWeeks[0];
+
+    if (latestWeek === currentWeek || latestWeek === previousWeek) {
+        // We are active. The streak is the first sequence in sortedUniqueWeeks
+        // We can just reuse the logic above, but stop at first break.
+        activeStreak = 1;
+        for (let i = 0; i < sortedUniqueWeeks.length - 1; i++) {
+            const thisWeek = sortedUniqueWeeks[i];
+            const nextWeek = sortedUniqueWeeks[i+1];
+
+            const d1Obj = new Date(weekToDate.get(thisWeek)!);
+            const prevWeekDate = new Date(d1Obj);
+            prevWeekDate.setDate(prevWeekDate.getDate() - 7);
+            const expectedPrevWeek = getIsoWeek(prevWeekDate.toISOString().split('T')[0]);
+
+            if (nextWeek === expectedPrevWeek) {
+                activeStreak++;
+            } else {
+                break;
+            }
+        }
+    }
+
+    return {
+        currentStreak: activeStreak,
+        longestStreak: maxStreak
     };
 }
 
@@ -305,5 +424,6 @@ export const strengthRepo = {
     resetExercise,
     importWorkouts,
     getStrengthStats,
+    calculateStreaks, // Exported for testing
     clearUserStrengthData
 };
