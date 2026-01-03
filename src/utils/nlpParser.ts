@@ -537,6 +537,7 @@ function parseFood(input: string): OmniboxIntent | null {
         /([\d.,]+)\s*(l|liter)\b/i,
         /([\d.,]+)\s*(st|stycken?|pcs)\b/i,
         /([\d.,]+)\s*(port|portion(?:er)?)\b/i,
+        /([\d.,]+)(port)\b/i,  // Shorthand: "2port" without space
         /([\d.,]+)\s*(dl|deciliter)\b/i,
         /([\d.,]+)\s*(msk|matsked(?:ar)?)\b/i,
         /([\d.,]+)\s*(tsk|tesked(?:ar)?)\b/i,

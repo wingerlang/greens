@@ -30,7 +30,7 @@ interface OmniboxProps {
 
 // Navigation routes for slash commands
 const NAVIGATION_ROUTES = [
-    { path: '/calories', label: 'Kalorier', aliases: ['kalorier', 'kcal', 'cal', 'calories'], icon: '🔥' },
+    { path: '/calories', label: 'Kalorier', aliases: ['kalorier', 'kcal', 'cal', 'calories'], icon: '◎' },
     { path: '/recipes', label: 'Recept', aliases: ['recept', 'recipes', 'recipe'], icon: '📖' },
     { path: '/planera', label: 'Veckoplanering', aliases: ['planera', 'plan', 'vecka', 'weekly'], icon: '📅' },
     { path: '/training', label: 'Träning', aliases: ['träning', 'training', 'gym', 'workout'], icon: '💪' },
@@ -133,9 +133,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         if (!isManual && intent.type === 'vitals') {
             setDraftVitalAmount(intent.data.amount || null);
         }
-        // Sync food drafts from intent
+        // Sync food drafts from intent - only sync quantity if explicitly parsed (not default 100g)
         if (intent.type === 'food' && lockedFood) {
-            if (intent.data.quantity) setDraftFoodQuantity(intent.data.quantity);
+            // Only update quantity if it's a non-default value OR a specific unit is given
+            const hasExplicitQuantity = intent.data.quantity &&
+                (intent.data.quantity !== 100 || (intent.data.unit && intent.data.unit !== 'g'));
+            if (hasExplicitQuantity) setDraftFoodQuantity(intent.data.quantity);
             if (intent.data.mealType) setDraftFoodMealType(intent.data.mealType);
             if (intent.date) setDraftFoodDate(intent.date);
         }
@@ -670,13 +673,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                             <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
                                 <div className="flex items-center gap-4 text-sm">
                                     <span className="text-slate-400">
-                                        🔥 <span className="font-bold text-white">{Math.round(lockedFood.calories * (draftFoodQuantity || 100) / 100)}</span> kcal
+                                        <span className="text-amber-400 font-bold">{Math.round(lockedFood.calories * (draftFoodQuantity || 100) / 100)}</span> kcal
                                     </span>
                                     <span className="text-slate-400">
-                                        🥩 <span className="font-bold text-white">{Math.round(lockedFood.protein * (draftFoodQuantity || 100) / 100)}</span>g prot
+                                        <span className="text-rose-400 font-bold">{Math.round(lockedFood.protein * (draftFoodQuantity || 100) / 100)}</span>g prot
                                     </span>
                                     <span className="text-slate-400">
-                                        🍞 <span className="font-bold text-white">{Math.round((lockedFood.carbs || 0) * (draftFoodQuantity || 100) / 100)}</span>g kolh
+                                        <span className="text-indigo-400 font-bold">{Math.round((lockedFood.carbs || 0) * (draftFoodQuantity || 100) / 100)}</span>g kolh
                                     </span>
                                 </div>
                                 <div className="text-xs text-slate-500">
@@ -988,7 +991,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                     {recentFoods.map((item, idx) => (
                                         <div
                                             key={item.id}
-                                            onClick={() => logFoodItem(item, item.usageStats.avgGrams)}
+                                            onClick={() => lockFood(item)}
                                             className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
                                                 ? 'bg-emerald-500/20 text-emerald-400'
                                                 : 'hover:bg-white/5 text-white'

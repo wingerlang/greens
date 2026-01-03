@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import {
@@ -20,6 +21,7 @@ import { normalizeText } from '../utils/formatters.ts';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const {
         foodItems,
         recipes,
@@ -39,7 +41,18 @@ export function CaloriesPage() {
 
     const { settings } = useSettings();
 
-    const [selectedDate, setSelectedDate] = useState(getISODate());
+    // Initialize from URL or default to today
+    const urlDate = searchParams.get('date');
+    const [selectedDate, setSelectedDate] = useState(urlDate || getISODate());
+
+    // Sync URL when date changes
+    useEffect(() => {
+        const current = searchParams.get('date');
+        if (current !== selectedDate) {
+            setSearchParams({ date: selectedDate });
+        }
+    }, [selectedDate, searchParams, setSearchParams]);
+
     const [isFormOpen, setIsFormOpen] = useState(false);
 
     // Smart meal type default based on time of day
