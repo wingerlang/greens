@@ -21,6 +21,7 @@ import {
     MapPin,
     Heart
 } from 'lucide-react';
+import { NutritionLabel } from './shared/NutritionLabel.tsx';
 
 interface OmniboxProps {
     isOpen: boolean;
@@ -671,17 +672,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
                             {/* Calculated Nutrients Preview */}
                             <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
-                                <div className="flex items-center gap-4 text-sm">
-                                    <span className="text-slate-400">
-                                        <span className="text-amber-400 font-bold">{Math.round(lockedFood.calories * (draftFoodQuantity || 100) / 100)}</span> kcal
-                                    </span>
-                                    <span className="text-slate-400">
-                                        <span className="text-rose-400 font-bold">{Math.round(lockedFood.protein * (draftFoodQuantity || 100) / 100)}</span>g prot
-                                    </span>
-                                    <span className="text-slate-400">
-                                        <span className="text-indigo-400 font-bold">{Math.round((lockedFood.carbs || 0) * (draftFoodQuantity || 100) / 100)}</span>g kolh
-                                    </span>
-                                </div>
+                                <NutritionLabel
+                                    calories={lockedFood.calories * (draftFoodQuantity || 100) / 100}
+                                    protein={lockedFood.protein * (draftFoodQuantity || 100) / 100}
+                                    carbs={(lockedFood.carbs || 0) * (draftFoodQuantity || 100) / 100}
+                                    variant="compact"
+                                    size="md"
+                                />
                                 <div className="text-xs text-slate-500">
                                     för {draftFoodQuantity || 100}g
                                 </div>

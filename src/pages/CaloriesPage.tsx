@@ -18,6 +18,7 @@ import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdo
 import { NutritionInsights } from '../components/calories/NutritionInsights.tsx';
 import { MacroDistribution } from '../components/calories/MacroDistribution.tsx';
 import { normalizeText } from '../utils/formatters.ts';
+import { DatePicker } from '../components/shared/DatePicker.tsx';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
@@ -371,22 +372,11 @@ export function CaloriesPage() {
                 </button>
             </div>
 
-            <div className="date-nav">
-                <button className="btn btn-ghost" onClick={() => navigateDate(-1)}>
-                    ← Föregående
-                </button>
-                <div className="current-date">
-                    <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                    />
-                    {isToday && <span className="today-badge">Idag</span>}
-                </div>
-                <button className="btn btn-ghost" onClick={() => navigateDate(1)}>
-                    Nästa →
-                </button>
-            </div>
+            <DatePicker
+                selectedDate={selectedDate}
+                onDateChange={setSelectedDate}
+                showLabel={false}
+            />
 
             {unloggedPlannedMeals.length > 0 && (
                 <div className="planned-meals-banner">
