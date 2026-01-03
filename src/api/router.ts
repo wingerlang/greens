@@ -10,6 +10,7 @@ import { handleFeedRoutes } from "./handlers/feed.ts";
 import { handleGoalRoutes } from "./handlers/goals.ts";
 import { handlePeriodRoutes } from "./handlers/periods.ts";
 import { handleParserRoutes } from "./handlers/parser.ts";
+import { handleGetCommunityStats } from "./handlers/statistics.ts";
 
 export async function router(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -46,6 +47,7 @@ export async function router(req: Request): Promise<Response> {
         if (url.pathname.startsWith("/api/goals")) return await handleGoalRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/periods")) return await handlePeriodRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/parse-url")) return await handleParserRoutes(req, url, headers);
+        if (url.pathname === "/api/stats/community") return await handleGetCommunityStats(req);
 
         return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
     } catch (e) {
