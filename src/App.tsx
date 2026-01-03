@@ -12,6 +12,7 @@ import { PantryPage } from './pages/PantryPage.tsx';
 import { RecipesPage } from './pages/RecipesPage.tsx';
 import { CaloriesPage } from './pages/CaloriesPage.tsx';
 import { ProfilePage } from './pages/ProfilePage.tsx';
+import { TrainingPeriodPage } from './pages/TrainingPeriodPage.tsx';
 import { TrainingPage } from './pages/TrainingPage.tsx';
 import { PlanningPage } from './pages/PlanningPage.tsx';
 import { ApiPage } from './pages/ApiPage.tsx';
@@ -96,6 +97,7 @@ export function App() {
                                                 <Route path="database" element={<DatabasePage />} />
                                                 <Route path="databas" element={<DatabasePage />} />
                                                 <Route path="calories" element={<CaloriesPage />} />
+                                                <Route path="training/period/:id?" element={<TrainingPeriodPage />} />
                                                 <Route path="training" element={<TrainingPage />} />
                                                 <Route path="profile" element={<ProfilePage />} />
                                                 <Route path="health" element={<HealthPage />} />
