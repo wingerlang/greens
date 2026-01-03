@@ -934,7 +934,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                             onChange={e => setTargetUnit(e.target.value)}
                                             className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
                                         >
-                                            <option value="g">🥩 Protein (g)</option>
+                                            <option value="g">🌱 Protein (g)</option>
                                             <option value="kcal">🔥 Kalorier (kcal)</option>
                                         </select>
                                     </div>

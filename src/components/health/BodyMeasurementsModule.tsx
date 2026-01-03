@@ -32,7 +32,8 @@ export const BodyMeasurementsModule: React.FC = () => {
 
     // Filter available History
     const history = useMemo(() => {
-        return bodyMeasurements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        // Use a non-mutating sort for history
+        return [...bodyMeasurements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [bodyMeasurements]);
 
     // Graph Data Transformation
@@ -44,12 +45,16 @@ export const BodyMeasurementsModule: React.FC = () => {
             const current = dateMap.get(d);
             current[entry.type] = entry.value;
         });
+        // Sort chart data as well
         return Array.from(dateMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [history]);
 
     const getLatestValue = (type: BodyMeasurementType) => {
-        const sorted = bodyMeasurements.filter(m => m.type === type).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        return sorted.length > 0 ? sorted[0].value : undefined;
+        const entries = bodyMeasurements.filter(m => m.type === type);
+        if (entries.length === 0) return undefined;
+        // Sort to get the latest
+        const sorted = [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        return sorted[0].value;
     };
 
     const handleSave = () => {

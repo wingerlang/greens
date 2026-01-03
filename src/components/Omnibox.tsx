@@ -8,6 +8,7 @@ import {
     ExerciseIntensity,
     FoodItem,
     MealType,
+    BodyMeasurementType,
 } from '../models/types.ts';
 import {
     Search,
@@ -35,10 +36,10 @@ const NAVIGATION_ROUTES = [
     { path: '/recipes', label: 'Recept', aliases: ['recept', 'recipes', 'recipe'], icon: '📖' },
     { path: '/planera', label: 'Veckoplanering', aliases: ['planera', 'plan', 'vecka', 'weekly'], icon: '📅' },
     { path: '/training', label: 'Träning', aliases: ['träning', 'training', 'gym', 'workout'], icon: '💪' },
-    { path: '/health', label: 'Hälsa', aliases: ['hälsa', 'health', 'halsa'], icon: '❤️' },
     { path: '/pantry', label: 'Skafferi', aliases: ['skafferi', 'pantry', 'förråd'], icon: '🗄️' },
     { path: '/database', label: 'Databas', aliases: ['databas', 'database', 'db', 'livsmedel'], icon: '📊' },
     { path: '/', label: 'Dashboard', aliases: ['hem', 'home', 'start', 'dashboard'], icon: '🏠' },
+    { path: '/health', label: 'Hälsa / Mått', aliases: ['hälsa', 'health', 'halsa', 'mått', 'mät', 'body', 'measurements', 'vikt', 'weight', 'sömn', 'sleep', 'träning'], icon: '📏' },
 ];
 
 // Exercise types
@@ -67,6 +68,22 @@ const VITALS_INFO: Record<string, { icon: any; label: string; unit: string; bg: 
     nocco: { icon: Zap, label: 'Nocco', unit: 'st', bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
     energy: { icon: Zap, label: 'Energidryck', unit: 'st', bg: 'bg-yellow-500/20', text: 'text-yellow-400' },
     steps: { icon: Search, label: 'Steg', unit: 'steg', bg: 'bg-green-500/20', text: 'text-green-400' },
+};
+
+const MEASUREMENT_INFO: Record<BodyMeasurementType, { label: string; icon: string }> = {
+    waist: { label: 'Midja', icon: '📏' },
+    hips: { label: 'Höft', icon: '🍑' },
+    chest: { label: 'Bröst', icon: '👕' },
+    arm_left: { label: 'V. Överarm', icon: '💪' },
+    arm_right: { label: 'H. Överarm', icon: '💪' },
+    thigh_left: { label: 'V. Lår', icon: '🦵' },
+    thigh_right: { label: 'H. Lår', icon: '🦵' },
+    calf_left: { label: 'V. Vad', icon: '🦵' },
+    calf_right: { label: 'H. Vad', icon: '🦵' },
+    neck: { label: 'Nacke', icon: '🧣' },
+    shoulders: { label: 'Axlar', icon: '👔' },
+    forearm_left: { label: 'V. Underarm', icon: '💪' },
+    forearm_right: { label: 'H. Underarm', icon: '💪' },
 };
 
 // Category emoji mapping
@@ -104,7 +121,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         mealEntries,
         addExercise,
         calculateExerciseCalories,
-        users
+        users,
+        addBodyMeasurement
     } = useData();
 
 
@@ -124,6 +142,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     const [draftFoodMealType, setDraftFoodMealType] = useState<MealType | null>(null);
     const [draftFoodDate, setDraftFoodDate] = useState<string | null>(null);
 
+    // Measurement drafts
+    const [draftMeasurementType, setDraftMeasurementType] = useState<BodyMeasurementType | null>(null);
+    const [draftMeasurementValue, setDraftMeasurementValue] = useState<number | null>(null);
+    const [draftMeasurementDate, setDraftMeasurementDate] = useState<string | null>(null);
+
     // Sync draft from intent
     useEffect(() => {
         if (!isManual && intent.type === 'exercise') {
@@ -136,12 +159,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         }
         // Sync food drafts from intent - only sync quantity if explicitly parsed (not default 100g)
         if (intent.type === 'food' && lockedFood) {
-            // Only update quantity if it's a non-default value OR a specific unit is given
-            const hasExplicitQuantity = intent.data.quantity &&
-                (intent.data.quantity !== 100 || (intent.data.unit && intent.data.unit !== 'g'));
-            if (hasExplicitQuantity) setDraftFoodQuantity(intent.data.quantity);
-            if (intent.data.mealType) setDraftFoodMealType(intent.data.mealType);
+            const foodData = intent.data;
+            const hasExplicitQuantity = !!(foodData.quantity &&
+                (foodData.quantity !== 100 || (foodData.unit && foodData.unit !== 'g')));
+            if (hasExplicitQuantity && typeof foodData.quantity === 'number') {
+                setDraftFoodQuantity(foodData.quantity);
+            }
+            if (foodData.mealType) setDraftFoodMealType(foodData.mealType);
             if (intent.date) setDraftFoodDate(intent.date);
+        }
+
+        if (!isManual && intent.type === 'measurement') {
+            if (intent.data.measurementType) setDraftMeasurementType(intent.data.measurementType);
+            setDraftMeasurementValue(intent.data.value ?? null);
+            setDraftMeasurementDate(intent.date || null);
         }
     }, [intent, isManual, lockedFood]);
 
@@ -157,6 +188,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             setDraftFoodQuantity(null);
             setDraftFoodMealType(null);
             setDraftFoodDate(null);
+            setDraftMeasurementType(null);
+            setDraftMeasurementValue(null);
+            setDraftMeasurementDate(null);
         }
     }, [input]);
 
@@ -276,33 +310,34 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     }, [input, users, isSlashMode, intent]);
 
 
-
-    // Auto-lock: When there's exactly one exact match, auto-lock it
+    // Auto-lock: Only when there's exactly ONE matching result
+    // Don't auto-lock if there are multiple items that could match (e.g., "bulgur" and "bulgur kokt")
     useEffect(() => {
         if (lockedFood) return; // Already locked
         if (foodResults.length === 0) return;
 
-        // Check for exact name match
         const searchQuery = intent.type === 'food' && intent.data.query
             ? intent.data.query.toLowerCase().trim()
             : input.toLowerCase().trim();
 
-        const exactMatch = foodResults.find(
-            item => item.name.toLowerCase() === searchQuery
-        );
-
-        if (exactMatch) {
+        // Only auto-lock if there's EXACTLY one result
+        if (foodResults.length === 1) {
+            const item = foodResults[0];
             setLockedFood({
-                ...exactMatch,
-                usageStats: foodUsageStats[exactMatch.id] || undefined
+                ...item,
+                usageStats: foodUsageStats[item.id] || undefined
             });
-            // Set initial drafts
-            const stats = foodUsageStats[exactMatch.id];
+            const stats = foodUsageStats[item.id];
             const foodData = intent.type === 'food' ? intent.data : null;
-            setDraftFoodQuantity(foodData?.quantity || stats?.avgGrams || 100);
+            const initialQty = foodData?.quantity || stats?.avgGrams || 100;
+            setDraftFoodQuantity(initialQty);
             setDraftFoodMealType(foodData?.mealType || null);
             setDraftFoodDate(intent.date || null);
+            return;
         }
+
+        // If exact match exists but there are other items starting with the query, DON'T auto-lock
+        // User should choose explicitly
     }, [foodResults, lockedFood, intent, input, foodUsageStats]);
 
     // Combined selectable items for keyboard nav
@@ -385,7 +420,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         setShowFeedback(true);
         setInput('');
         setLockedFood(null);
-        setTimeout(() => onClose(), 800);
+        // Removed onClose() to allow multiple logging as requested
     };
 
     // Lock a food item for detailed editing
@@ -395,7 +430,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             usageStats: item.usageStats || undefined
         });
         const stats = foodUsageStats[item.id];
-        setDraftFoodQuantity(intent.type === 'food' && intent.data.quantity ? intent.data.quantity : (stats?.avgGrams || 100));
+        const initialQty = (intent.type === 'food' && intent.data.quantity) ? intent.data.quantity : (stats?.avgGrams || 100);
+        setDraftFoodQuantity(initialQty);
         setDraftFoodMealType(intent.type === 'food' && intent.data.mealType ? intent.data.mealType : null);
         setDraftFoodDate(intent.date || null);
     };
@@ -432,7 +468,6 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
         setShowFeedback(true);
         setInput('');
-        setTimeout(() => onClose(), 800);
     };
 
     const handleVitalsAction = () => {
@@ -453,7 +488,25 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         updateVitals(date, updates);
         setShowFeedback(true);
         setInput('');
-        setTimeout(() => onClose(), 800);
+    };
+
+    const handleMeasurementAction = () => {
+        if (intent.type !== 'measurement') return;
+
+        const type = draftMeasurementType || intent.data.measurementType;
+        const value = draftMeasurementValue || intent.data.value;
+        const date = draftMeasurementDate || intent.date || new Date().toISOString().split('T')[0];
+
+        if (!type || !value) return;
+
+        addBodyMeasurement({
+            type,
+            value,
+            date
+        });
+
+        setShowFeedback(true);
+        setInput('');
     };
 
     const handleExecute = () => {
@@ -499,11 +552,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             addWeightEntry(intent.data.weight, date);
             setShowFeedback(true);
             setInput('');
-            setTimeout(() => onClose(), 800);
         } else if (intent.type === 'exercise') {
             handleExerciseAction();
         } else if (intent.type === 'vitals') {
             handleVitalsAction();
+        } else if (intent.type === 'measurement') {
+            handleMeasurementAction();
         } else if (intent.type === 'food' && intent.data.query) {
             navigate(`/calories?search=${encodeURIComponent(intent.data.query)}`);
             onClose();
@@ -800,6 +854,70 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                 onClick={handleExerciseAction}
                             >
                                 <span>Logga Träning</span>
+                                <ArrowRight size={16} />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* MEASUREMENT MODULE */}
+                    {!isSlashMode && !lockedFood && intent.type === 'measurement' && (
+                        <div className="p-4 space-y-4">
+                            <div className="px-3 py-2 bg-fuchsia-500/10 border-l-4 border-fuchsia-500 rounded-r-lg flex items-center gap-2">
+                                <Search size={16} className="text-fuchsia-500" />
+                                <span className="text-xs font-bold uppercase tracking-wider text-fuchsia-400">Kroppsmått</span>
+                                {isManual && <span className="ml-auto text-[10px] uppercase font-bold text-slate-400 bg-white/10 px-2 py-0.5 rounded-full">Manuellt ändrad</span>}
+                            </div>
+
+                            {/* Measurement Type Selector */}
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+                                {Object.entries(MEASUREMENT_INFO).map(([type, info]) => (
+                                    <button
+                                        key={type}
+                                        onClick={() => { setDraftMeasurementType(type as BodyMeasurementType); setIsManual(true); }}
+                                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all min-w-[80px] ${(draftMeasurementType || intent.data.measurementType) === type
+                                            ? 'border-fuchsia-500 bg-fuchsia-500/20'
+                                            : 'border-transparent hover:bg-white/5'
+                                            }`}
+                                    >
+                                        <span className="text-2xl">{info.icon}</span>
+                                        <span className="text-[10px] font-bold text-slate-400 text-center">{info.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Value Input */}
+                            <div className="bg-slate-800/50 rounded-xl p-6 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                                    <span className="text-6xl">📏</span>
+                                </div>
+                                <div className="flex justify-between items-start mb-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400">Mått (cm)</label>
+                                    <span className="text-[10px] font-bold uppercase text-fuchsia-400">
+                                        📅 {draftMeasurementDate || intent.date || 'Idag'}
+                                    </span>
+                                </div>
+                                <div className="flex items-baseline gap-2">
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        value={draftMeasurementValue || intent.data.value || ''}
+                                        onChange={(e) => { setDraftMeasurementValue(parseFloat(e.target.value)); setIsManual(true); }}
+                                        className="w-full text-5xl font-black bg-transparent border-b-2 border-slate-600 focus:border-fuchsia-500 outline-none text-white"
+                                        placeholder="0.0"
+                                    />
+                                    <span className="text-2xl font-bold text-slate-500">cm</span>
+                                </div>
+                            </div>
+
+                            <button
+                                className={`w-full py-3 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all ${(draftMeasurementType || intent.data.measurementType) && (draftMeasurementValue || intent.data.value)
+                                    ? 'bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-fuchsia-500/20'
+                                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                    }`}
+                                onClick={handleMeasurementAction}
+                                disabled={!((draftMeasurementType || intent.data.measurementType) && (draftMeasurementValue || intent.data.value))}
+                            >
+                                <span>Spara mått</span>
                                 <ArrowRight size={16} />
                             </button>
                         </div>

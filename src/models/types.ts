@@ -213,6 +213,7 @@ export interface FoodItem {
     co2PerUnit?: number;        // CO2 emission in kg per unit
     containsGluten?: boolean;   // Whether the item contains gluten
     isCooked?: boolean;         // Whether this is the cooked version (affects kcal)
+    packageWeight?: number;     // Total weight of a full package (e.g. 275g)
     defaultPortionGrams?: number; // Default portion size in grams (e.g., banana = 120g)
     gramsPerDl?: number;        // Weight in grams for 1 dl
     yieldFactor?: number;       // Cooked weight / Raw weight (e.g. 2.5 for rice)
@@ -233,6 +234,7 @@ export interface FoodItem {
     complementaryCategories?: FoodCategory[]; // Categories that complete the protein
     proteinCategory?: ProteinCategory;        // For amino acid balancing
     seasons?: Season[];                       // Best seasons for this item
+    ingredients?: string;                     // List of ingredients
     createdAt: string;
     updatedAt: string;
 }

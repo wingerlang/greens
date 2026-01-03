@@ -11,7 +11,7 @@ import {
     UNIT_LABELS,
 } from '../models/types.ts';
 import { normalizeText } from '../utils/formatters.ts';
-import { parseNutritionText } from '../utils/nutritionParser.ts';
+import { parseNutritionText, extractFromJSONLD, cleanProductName, extractBrand, extractPackagingWeight } from '../utils/nutritionParser.ts';
 import './DatabasePage.css';
 
 const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
@@ -23,6 +23,7 @@ const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
 const EMPTY_FORM: FoodItemFormData = {
     name: '',
     brand: '',
+    packageWeight: 0,
     defaultPortionGrams: 0,
     description: '',
     calories: 0,
@@ -45,6 +46,7 @@ const EMPTY_FORM: FoodItemFormData = {
     complementaryCategories: [],
     proteinCategory: undefined,
     seasons: [],
+    ingredients: '',
 };
 
 type ViewMode = 'grid' | 'list';
@@ -56,6 +58,8 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const [detailItem, setDetailItem] = useState<FoodItem | null>(null);
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
     const [formData, setFormData] = useState<FoodItemFormData>(EMPTY_FORM);
+    const [isParsingUrl, setIsParsingUrl] = useState(false);
+    const [urlParseError, setUrlParseError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
     const [selectedCategory, setSelectedCategory] = useState<FoodCategory | 'all'>('all');
     const [viewMode, setViewMode] = useState<ViewMode>('list');
@@ -188,6 +192,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 complementaryCategories: item.complementaryCategories || [],
                 proteinCategory: item.proteinCategory,
                 seasons: item.seasons || [],
+                ingredients: item.ingredients || '',
             });
         } else {
             setEditingItem(null);
@@ -212,17 +217,97 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         handleCloseForm();
     };
 
-    const handleSmartPaste = (text: string) => {
+    const handleSmartPaste = async (text: string) => {
         if (!text) return;
+        setUrlParseError(null);
+
+        // Calculate known brands for smart fuzzy matching
+        const knownBrands = Array.from(new Set(foodItems.map(f => f.brand).filter(Boolean))) as string[];
+
+        // URL Detection
+        const urlMatch = text.match(/(https?:\/\/[^\s]+)/i);
+        if (urlMatch) {
+            const url = urlMatch[1];
+            setIsParsingUrl(true);
+            try {
+                const token = localStorage.getItem('auth_token');
+                const res = await fetch('http://localhost:8000/api/parse-url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!res.ok) throw new Error('Kunde inte hämta sidan. Kontrollera URL:en.');
+
+                const data = await res.json();
+
+                // 1. Try JSON-LD first (most reliable)
+                let results = extractFromJSONLD(data.jsonLds || []);
+
+                // 2. Supplement with text parsing
+                const textResults = parseNutritionText(data.text);
+
+                // 3. Extract Metadata
+                const brand = results.brand || extractBrand(data.text, knownBrands);
+                const packageWeight = extractPackagingWeight(data.text);
+                const name = cleanProductName(data.title, data.h1) || results.name || textResults.name;
+
+                // 4. Combine results
+                const finalResults = {
+                    name,
+                    brand,
+                    packageWeight,
+                    calories: results.calories ?? textResults.calories,
+                    protein: results.protein ?? textResults.protein,
+                    carbs: results.carbs ?? textResults.carbs,
+                    fat: results.fat ?? textResults.fat,
+                    fiber: results.fiber ?? textResults.fiber,
+                    ingredients: results.ingredients || textResults.ingredients,
+                    defaultPortionGrams: results.defaultPortionGrams || textResults.defaultPortionGrams
+                };
+
+                setFormData(prev => ({
+                    ...prev,
+                    name: finalResults.name || prev.name,
+                    brand: finalResults.brand || prev.brand,
+                    packageWeight: finalResults.packageWeight || prev.packageWeight,
+                    calories: finalResults.calories !== undefined ? finalResults.calories : prev.calories,
+                    protein: finalResults.protein !== undefined ? finalResults.protein : prev.protein,
+                    carbs: finalResults.carbs !== undefined ? finalResults.carbs : prev.carbs,
+                    fat: finalResults.fat !== undefined ? finalResults.fat : prev.fat,
+                    fiber: finalResults.fiber !== undefined ? finalResults.fiber : prev.fiber,
+                    ingredients: finalResults.ingredients || prev.ingredients,
+                    defaultPortionGrams: finalResults.defaultPortionGrams !== undefined ? finalResults.defaultPortionGrams : prev.defaultPortionGrams,
+                }));
+
+            } catch (err) {
+                setUrlParseError(err instanceof Error ? err.message : 'Ett fel uppstod vid hämtning.');
+            } finally {
+                setIsParsingUrl(false);
+            }
+            return;
+        }
+
+        // Standard Text Parsing
         const parsed = parseNutritionText(text);
+        const brand = extractBrand(text, knownBrands);
+        const packageWeight = extractPackagingWeight(text);
 
         setFormData(prev => ({
             ...prev,
+            name: parsed.name || prev.name,
+            brand: brand || prev.brand,
+            packageWeight: packageWeight || prev.packageWeight,
             calories: parsed.calories !== undefined ? parsed.calories : prev.calories,
             protein: parsed.protein !== undefined ? parsed.protein : prev.protein,
             carbs: parsed.carbs !== undefined ? parsed.carbs : prev.carbs,
             fat: parsed.fat !== undefined ? parsed.fat : prev.fat,
             fiber: parsed.fiber !== undefined ? parsed.fiber : prev.fiber,
+            ingredients: parsed.ingredients || prev.ingredients,
+            defaultPortionGrams: parsed.defaultPortionGrams || prev.defaultPortionGrams,
         }));
     };
 
@@ -544,123 +629,171 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
                             {/* Primary: Name & Category */}
                             <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                        Namn *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        value={formData.name}
+                                        onChange={(e) => {
+                                            const name = e.target.value;
+                                            setFormData({ ...formData, name });
+
+                                            // Auto-suggest category based on name
+                                            const nameLower = name.toLowerCase();
+                                            if (nameLower.includes('pulver')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'supplements' as FoodCategory }));
+                                            } else if (nameLower.includes('bön') || nameLower.includes('lins') || nameLower.includes('kikärt')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'legumes' as FoodCategory }));
+                                            } else if (nameLower.includes('ris') || nameLower.includes('pasta') || nameLower.includes('bröd') || nameLower.includes('havre')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'grains' as FoodCategory }));
+                                            } else if (nameLower.includes('mjölk') || nameLower.includes('ost') || nameLower.includes('yoghurt')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'dairy-alt' as FoodCategory }));
+                                            } else if (nameLower.includes('tofu') || nameLower.includes('tempeh') || nameLower.includes('seitan')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'protein' as FoodCategory }));
+                                            } else if (nameLower.includes('äpple') || nameLower.includes('banan') || nameLower.includes('apelsin') || nameLower.includes('bär')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'fruits' as FoodCategory }));
+                                            } else if (nameLower.includes('spenat') || nameLower.includes('broccoli') || nameLower.includes('morot') || nameLower.includes('tomat')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'vegetables' as FoodCategory }));
+                                            } else if (nameLower.includes('mandel') || nameLower.includes('nöt') || nameLower.includes('cashew') || nameLower.includes('frö') || nameLower.includes('chia')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'nuts-seeds' as FoodCategory }));
+                                            } else if (nameLower.includes('olja') || nameLower.includes('smör')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'fats' as FoodCategory }));
+                                            }
+                                        }}
+                                        placeholder="t.ex. Kikärtor, Havregryn..."
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                                        required
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Namn *
+                                            Märke (frivilligt)
                                         </label>
                                         <input
                                             type="text"
-                                            autoFocus
-                                            value={formData.name}
-                                            onChange={(e) => {
-                                                const name = e.target.value;
-                                                setFormData({ ...formData, name });
-
-                                                // Auto-suggest category based on name
-                                                const nameLower = name.toLowerCase();
-                                                if (nameLower.includes('pulver')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'supplements' as FoodCategory }));
-                                                } else if (nameLower.includes('bön') || nameLower.includes('lins') || nameLower.includes('kikärt')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'legumes' as FoodCategory }));
-                                                } else if (nameLower.includes('ris') || nameLower.includes('pasta') || nameLower.includes('bröd') || nameLower.includes('havre')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'grains' as FoodCategory }));
-                                                } else if (nameLower.includes('mjölk') || nameLower.includes('ost') || nameLower.includes('yoghurt')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'dairy-alt' as FoodCategory }));
-                                                } else if (nameLower.includes('tofu') || nameLower.includes('tempeh') || nameLower.includes('seitan')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'protein' as FoodCategory }));
-                                                } else if (nameLower.includes('äpple') || nameLower.includes('banan') || nameLower.includes('apelsin') || nameLower.includes('bär')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'fruits' as FoodCategory }));
-                                                } else if (nameLower.includes('spenat') || nameLower.includes('broccoli') || nameLower.includes('morot') || nameLower.includes('tomat')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'vegetables' as FoodCategory }));
-                                                } else if (nameLower.includes('mandel') || nameLower.includes('nöt') || nameLower.includes('cashew') || nameLower.includes('frö') || nameLower.includes('chia')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'nuts-seeds' as FoodCategory }));
-                                                } else if (nameLower.includes('olja') || nameLower.includes('smör')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'fats' as FoodCategory }));
-                                                }
-                                            }}
-                                            placeholder="t.ex. Kikärtor, Havregryn..."
+                                            value={formData.brand || ''}
+                                            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                                            placeholder="t.ex. Zeta, Garant..."
                                             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                                            required
                                         />
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                                Märke (frivilligt)
-                                            </label>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                            Förp. Vikt (friv.)
+                                        </label>
+                                        <div className="relative">
                                             <input
-                                                type="text"
-                                                value={formData.brand || ''}
-                                                onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                                                placeholder="t.ex. Zeta, Garant, Core..."
-                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                                                type="number"
+                                                min="0"
+                                                value={formData.packageWeight || ''}
+                                                onChange={(e) => setFormData({ ...formData, packageWeight: Number(e.target.value) })}
+                                                placeholder="t.ex. 275"
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
                                             />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">G</span>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                                Standardportion (frivilligt)
-                                            </label>
-                                            <div className="relative">
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    value={formData.defaultPortionGrams || ''}
-                                                    onChange={(e) => setFormData({ ...formData, defaultPortionGrams: Number(e.target.value) })}
-                                                    placeholder="t.ex. 35"
-                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
-                                                />
-                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-500">g/ml</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Kategori
-                                        </label>
-                                        <select
-                                            value={formData.category}
-                                            onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        >
-                                            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                                                <option key={key} value={key}>{label}</option>
-                                            ))}
-                                        </select>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Enhet
+                                            Portion (friv.)
                                         </label>
-                                        <select
-                                            value={formData.unit}
-                                            onChange={(e) => setFormData({ ...formData, unit: e.target.value as Unit })}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        >
-                                            {Object.entries(UNIT_LABELS).map(([key, label]) => (
-                                                <option key={key} value={key}>{label}</option>
-                                            ))}
-                                        </select>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={formData.defaultPortionGrams || ''}
+                                                onChange={(e) => setFormData({ ...formData, defaultPortionGrams: Number(e.target.value) })}
+                                                placeholder="t.ex. 35"
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">G</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Smart Paste - New Feature */}
-                            <div className="bg-emerald-500/5 rounded-2xl p-4 border border-emerald-500/10">
-                                <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-500/70 mb-2 flex items-center gap-2">
-                                    <span>✨</span> Smart Närings-tolkare
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                        Kategori
+                                    </label>
+                                    <select
+                                        value={formData.category}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                    >
+                                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                        Enhet
+                                    </label>
+                                    <select
+                                        value={formData.unit}
+                                        onChange={(e) => setFormData({ ...formData, unit: e.target.value as Unit })}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                    >
+                                        {Object.entries(UNIT_LABELS).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Ingredient List */}
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                    Ingredienslista (frivilligt)
                                 </label>
                                 <textarea
-                                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 min-h-[80px] resize-none"
-                                    placeholder="Klistra in näringstabell här (t.ex. från en hemsida) så fyller vi i värdena automatiskt..."
+                                    value={formData.ingredients || ''}
+                                    onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
+                                    placeholder="t.ex. Kikärtor, vatten, salt..."
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 min-h-[100px] resize-y"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1 italic">
+                                    Tips: Klistra in innehållsförteckningen här.
+                                </p>
+                            </div>
+
+                            <div className="bg-emerald-500/5 rounded-2xl p-4 border border-emerald-500/10 relative overflow-hidden">
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-500/70 mb-2 flex items-center gap-2">
+                                    <span>✨</span> Smart Närings-tolkare
+                                    {isParsingUrl && (
+                                        <div className="flex items-center gap-1.5 ml-auto">
+                                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                                            <span className="text-[9px] normal-case font-medium text-emerald-500/80">Läser webbsida...</span>
+                                        </div>
+                                    )}
+                                </label>
+                                <textarea
+                                    className={`w-full bg-slate-900/50 border ${urlParseError ? 'border-red-500/30' : 'border-slate-700/50'} rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 min-h-[80px] resize-none transition-all`}
+                                    placeholder="Klistra in näringstabell ELLER en URL här..."
+                                    disabled={isParsingUrl}
                                     onChange={(e) => handleSmartPaste(e.target.value)}
                                 />
+                                {urlParseError && (
+                                    <p className="text-[9px] text-red-400 mt-2 flex items-center gap-1">
+                                        <span>⚠️</span> {urlParseError}
+                                    </p>
+                                )}
                                 <p className="text-[9px] text-slate-500 mt-2 italic">
-                                    Parserar automatiskt protein, kolhydrater, fett, fiber och kcal (prioriterar kcal framför kJ).
+                                    Parserar protein, kolhydrater, fett, fiber och kcal automatiskt. Funkar även med URL:er!
                                 </p>
+                                {isParsingUrl && (
+                                    <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
+                                        <div className="flex flex-col items-center gap-2">
+                                            <div className="w-6 h-6 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Primary: Macros */}
@@ -864,7 +997,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                     {/* Protein Quality - Custom Checkboxes */}
                                     <div>
                                         <h4 className="text-xs font-bold text-amber-400 mb-3 flex items-center gap-2">
-                                            <span>🥩</span> Proteinkvalitet
+                                            <span>🌱</span> Proteinkvalitet
                                         </h4>
 
                                         {/* Custom Checkbox */}
@@ -1034,6 +1167,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                     </div>
                                 </div>
                             </div>
+
+                            {detailItem.ingredients && (
+                                <div className="detail-section full-width">
+                                    <h3 className="detail-title text-amber-200">🥗 Ingredienser</h3>
+                                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                        {detailItem.ingredients}
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="detail-section full-width">
                                 <h3 className="detail-title text-amber-400">📜 Logghistorik</h3>

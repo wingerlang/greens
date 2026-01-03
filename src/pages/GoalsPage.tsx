@@ -93,7 +93,7 @@ const GOAL_TEMPLATES: GoalTemplate[] = [
     },
     {
         name: '150g Protein',
-        icon: '🥩',
+        icon: '🌱',
         type: 'nutrition',
         period: 'daily',
         category: 'nutrition',
@@ -490,12 +490,12 @@ export function GoalsPage() {
                         <button className="add-goal-btn" onClick={handleNewGoal}>
                             + Nytt Mål
                         </button>
-                            <button
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 text-sm transition-colors"
-                                onClick={() => setIsPeriodWizardOpen(true)}
-                            >
-                                🚀 Starta Period
-                            </button>
+                        <button
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 text-sm transition-colors"
+                            onClick={() => setIsPeriodWizardOpen(true)}
+                        >
+                            🚀 Starta Period
+                        </button>
                     </div>
                 </div>
 
@@ -580,15 +580,15 @@ export function GoalsPage() {
                                                 {CATEGORY_CONFIG[goal.category || 'training'].icon}
                                             </div>
 
-                                            {/* Progress Ring */}
+                                            {/* Progress Ring - Smaller */}
                                             <div className="goal-ring">
                                                 <GoalProgressRing
                                                     percentage={progress.percentage}
-                                                    size={90}
-                                                    strokeWidth={7}
+                                                    size={60}
+                                                    strokeWidth={5}
                                                     color={CATEGORY_CONFIG[goal.category || 'training'].color}
                                                 >
-                                                    <span className="text-xl">{GOAL_TYPE_ICONS[goal.type] || '🎯'}</span>
+                                                    <span className="text-sm">{GOAL_TYPE_ICONS[goal.type] || '🎯'}</span>
                                                 </GoalProgressRing>
                                             </div>
 
@@ -609,8 +609,12 @@ export function GoalsPage() {
                                                                 goal.period === 'monthly' ? '/månad' : 'totalt'}
                                                     </span>
                                                 </div>
-                                                <div className="text-[10px] text-slate-500 font-mono mt-1">
-                                                    {goal.startDate} {goal.endDate ? ` - ${goal.endDate}` : ' -> Tills vidare'}
+                                                <div className="text-[9px] text-slate-500 font-mono">
+                                                    {goal.period === 'weekly' && progress.periodStart && progress.periodEnd
+                                                        ? `${progress.periodStart} - ${progress.periodEnd}`
+                                                        : goal.startDate && goal.endDate
+                                                            ? `${goal.startDate} - ${goal.endDate}`
+                                                            : goal.startDate || ''}
                                                 </div>
 
                                                 {/* Progress bar with percentage */}
@@ -635,11 +639,7 @@ export function GoalsPage() {
                                                     {progress.daysRemaining !== undefined && progress.daysRemaining <= 3 && !progress.isComplete && (
                                                         <span className="badge badge-urgent">
                                                             ⏰ {progress.daysRemaining}d kvar
-                                                            {goal.period === 'weekly' ? ' av v.' : ''}
                                                         </span>
-                                                    )}
-                                                    {progress.trend === 'up' && !progress.isComplete && (
-                                                        <span className="badge badge-trending">📈 Trending</span>
                                                     )}
                                                 </div>
                                             </div>

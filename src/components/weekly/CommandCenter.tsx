@@ -712,7 +712,7 @@ export function CommandCenter({ autoFocus = false, onAfterAction, className = ''
 
                                                 <div className="mt-3 flex items-center gap-4 text-xs text-slate-500 font-medium">
                                                     <span>🔥 ~{getNutrients(foodMatch).cal * (draftQuantity || 100) / 100} kcal</span>
-                                                    <span>🥩 ~{getNutrients(foodMatch).prot * (draftQuantity || 100) / 100}g prot</span>
+                                                    <span>🌱 ~{getNutrients(foodMatch).prot * (draftQuantity || 100) / 100}g prot</span>
                                                 </div>
                                             </div>
                                             <button

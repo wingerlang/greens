@@ -75,7 +75,19 @@ export function MealTimeline({
         const firstItem = entry.items[0];
 
         return (
-            <div key={entry.id} className={`group relative flex items-center justify-between p-3 bg-slate-900/40 border border-white/5 rounded-2xl hover:border-white/10 transition-all gap-4 ${isCompact ? '' : 'mb-2'}`}>
+            <div
+                key={entry.id}
+                className={`group relative flex items-center justify-between p-3 bg-slate-900/40 border border-white/5 rounded-2xl hover:border-white/10 transition-all gap-4 ${isCompact ? '' : 'mb-2'} cursor-move`}
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('entryId', entry.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    (e.currentTarget as HTMLElement).style.opacity = '0.5';
+                }}
+                onDragEnd={(e) => {
+                    (e.currentTarget as HTMLElement).style.opacity = '1';
+                }}
+            >
                 {/* Left: Name + Brand */}
                 <div className="flex items-center gap-3 min-w-0" style={{ flex: '0 0 32%' }}>
                     {isCompact && (
@@ -105,7 +117,7 @@ export function MealTimeline({
 
                 {/* Center: Protein, Carbs, Fat - Centered in whole row */}
                 <div className="hidden sm:flex flex-1 justify-center items-center gap-6 text-[10px] font-black uppercase tracking-tight whitespace-nowrap overflow-hidden px-4">
-                    <span className="text-rose-400" title="Protein">🥩 {Math.round(totalNutrition.protein)}g</span>
+                    <span className="text-rose-400" title="Protein">🌱 {Math.round(totalNutrition.protein)}g</span>
                     <span className="text-indigo-400" title="Kolhydrater">🍞 {Math.round(totalNutrition.carbs)}g</span>
                     <span className="text-orange-400" title="Fett">🥑 {Math.round(totalNutrition.fat)}g</span>
                 </div>
@@ -236,25 +248,45 @@ export function MealTimeline({
                 <div
                     key={mealTypeKey}
                     className="meal-section"
-                    onDragOver={(e) => { e.preventDefault(); (e.currentTarget as HTMLElement).classList.add('bg-emerald-500/5'); }}
-                    onDragLeave={(e) => { (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/5'); }}
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).classList.add('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
+                    }}
+                    onDragLeave={(e) => {
+                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
+                    }}
                     onDrop={(e) => {
-                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/5');
+                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
                         const entryId = e.dataTransfer.getData('entryId');
                         if (entryId) updateMealEntry(entryId, { mealType: mealTypeKey });
                     }}
                 >
                     <div className="flex items-center justify-between mb-4 px-2">
-                        <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
-                            <span className="text-lg">
-                                {mealTypeKey === 'breakfast' && '🌅'}
-                                {mealTypeKey === 'lunch' && '☀️'}
-                                {mealTypeKey === 'dinner' && '🌙'}
-                                {mealTypeKey === 'snack' && '🍎'}
-                                {mealTypeKey === 'beverage' && '🥤'}
-                            </span>
-                            {MEAL_TYPE_LABELS[mealTypeKey]}
-                        </h3>
+                        <div className="flex items-center gap-4">
+                            <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
+                                <span className="text-lg">
+                                    {mealTypeKey === 'breakfast' && '🌅'}
+                                    {mealTypeKey === 'lunch' && '☀️'}
+                                    {mealTypeKey === 'dinner' && '🌙'}
+                                    {mealTypeKey === 'snack' && '🍎'}
+                                    {mealTypeKey === 'beverage' && '🥤'}
+                                </span>
+                                {MEAL_TYPE_LABELS[mealTypeKey]}
+                            </h3>
+                            {entries.length > 0 && (
+                                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left duration-500">
+                                    <div className="h-4 w-[1px] bg-slate-800" />
+                                    <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-tighter">
+                                        <span className="text-emerald-500">
+                                            {Math.round(entries.reduce((sum, e) => sum + e.items.reduce((acc, it) => acc + getItemCalories(it), 0), 0))} kcal
+                                        </span>
+                                        <span className="text-rose-400">
+                                            🌱 {Math.round(entries.reduce((sum, e) => sum + e.items.reduce((acc, it) => acc + (getItemNutrition?.(it).protein || 0), 0), 0))}g
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                         {entries.length === 0 && (
                             <button
                                 className="text-[10px] font-black uppercase text-emerald-500 hover:text-emerald-400"

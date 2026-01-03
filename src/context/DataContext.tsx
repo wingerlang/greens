@@ -1513,7 +1513,19 @@ export function DataProvider({ children }: DataProviderProps) {
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null);
 
-        const normalizedServer = serverEntries.map(e => ({ ...e, source: 'strava' }));
+        const normalizedServer = serverEntries.map(e => {
+            const u = universalActivities.find(item => item.id === e.id);
+            return {
+                ...e,
+                source: 'strava' as const,
+                avgHeartRate: u?.performance?.avgHeartRate,
+                maxHeartRate: u?.performance?.maxHeartRate,
+                _mergeData: {
+                    strava: e,
+                    universalActivity: u
+                }
+            };
+        });
         const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' }));
 
         // Convert strength workouts to ExerciseEntry format

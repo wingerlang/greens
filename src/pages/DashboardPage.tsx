@@ -311,11 +311,96 @@ const WeightSparkline = ({
     );
 };
 
-// No longer using generic InfoCard, but keeping the concept in the main render if needed?
-// Actually I replaced usages of InfoCard with inline code in the previous version (Step 1722),
-// but defined it anyway. I will remove it if unused, or keep it if I use it.
-// Looking at previous code, I didn't actually use InfoCard in the return statement!
-// I mainly used the inline divs. So I will omit InfoCard to clean up.
+const DayHoverCard = ({
+    date,
+    activities,
+    nutrition,
+    onActivityClick
+}: {
+    date: string,
+    activities: any[],
+    nutrition: any,
+    onActivityClick: (act: any) => void
+}) => {
+    const navigate = useNavigate();
+    const dayName = new Date(date).toLocaleDateString('sv-SE', { weekday: 'long' });
+    const formattedDate = new Date(date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+
+    return (
+        <div className="absolute z-[100] bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="p-3 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center">
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{dayName}</span>
+                    <span className="text-xs font-bold text-white">{formattedDate}</span>
+                </div>
+                <div className="text-right">
+                    <div className="text-[10px] font-black text-slate-500 uppercase">Energi</div>
+                    <div className="text-xs font-black text-emerald-400">{Math.round(nutrition.calories)} kcal</div>
+                </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-3 space-y-3">
+                {/* Activities */}
+                {activities.length > 0 ? (
+                    <div className="space-y-1.5">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-1">Träning</div>
+                        <div className="space-y-1">
+                            {activities.map(act => {
+                                const typeDef = EXERCISE_TYPES.find(t => t.type === act.type);
+                                return (
+                                    <div
+                                        key={act.id}
+                                        onClick={(e) => { e.stopPropagation(); onActivityClick(act); }}
+                                        className="flex items-center gap-2 p-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-700 transition-colors cursor-pointer group"
+                                    >
+                                        <div className="text-sm">{typeDef?.icon || '💪'}</div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[11px] font-bold text-slate-200 truncate group-hover:text-white">{typeDef?.label || act.type}</div>
+                                            <div className="text-[9px] text-slate-500">{act.durationMinutes} min {act.distance ? `• ${act.distance} km` : ''}</div>
+                                        </div>
+                                        <ChevronRight size={10} className="text-slate-600 group-hover:text-white" />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center py-2">
+                        <span className="text-[10px] text-slate-600 italic">Ingen träning loggad</span>
+                    </div>
+                )}
+
+                {/* Nutrition Summary (Mini) */}
+                <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-700/50">
+                    <div className="text-center">
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Prot</div>
+                        <div className="text-[10px] font-black text-rose-400">🌱 {Math.round(nutrition.protein)}g</div>
+                    </div>
+                    <div className="text-center border-l border-slate-700/50">
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Kolh</div>
+                        <div className="text-[10px] font-black text-blue-400">{Math.round(nutrition.carbs)}g</div>
+                    </div>
+                    <div className="text-center border-l border-slate-700/50">
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Fett</div>
+                        <div className="text-[10px] font-black text-amber-400">{Math.round(nutrition.fat)}g</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Footer Link */}
+            <div
+                onClick={() => navigate(`/calories?date=${date}`)}
+                className="bg-slate-800/80 p-2 text-center border-t border-slate-700/50 hover:bg-indigo-600 transition-colors cursor-pointer group/footer"
+            >
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/footer:text-white flex items-center justify-center gap-1">
+                    Se Detaljer <ChevronRight size={10} />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export function DashboardPage() {
     const navigate = useNavigate();
@@ -353,6 +438,7 @@ export function DashboardPage() {
     const [bulkInput, setBulkInput] = useState("");
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [weightRange, setWeightRange] = useState<'14d' | '30d' | '3m' | '1y' | 'all'>('1y');
+    const [hoveredDay, setHoveredDay] = useState<string | null>(null);
 
     const changeDate = (days: number) => {
         const d = new Date(selectedDate);
@@ -1412,7 +1498,20 @@ export function DashboardPage() {
                                                 const hasTraining = dayActivities.length > 0;
 
                                                 return (
-                                                    <div key={date} className={`flex-1 flex flex-col items-center ${isToday ? 'z-10' : ''}`}>
+                                                    <div
+                                                        key={date}
+                                                        className={`flex-1 flex flex-col items-center cursor-pointer relative ${isToday ? 'z-10' : ''}`}
+                                                        onMouseEnter={() => setHoveredDay(date)}
+                                                        onMouseLeave={() => setHoveredDay(null)}
+                                                    >
+                                                        {hoveredDay === date && (
+                                                            <DayHoverCard
+                                                                date={date}
+                                                                activities={dayActivities}
+                                                                nutrition={calculateDailyNutrition(date)}
+                                                                onActivityClick={(act) => setSelectedActivity(act)}
+                                                            />
+                                                        )}
                                                         {/* Day Label */}
                                                         <span className={`text-[10px] font-bold mb-2 ${isToday ? 'text-white' : 'text-slate-500'}`}>
                                                             {dayLabels[dayOfWeek]}
