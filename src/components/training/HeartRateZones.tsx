@@ -69,7 +69,7 @@ export function HeartRateZones({ avgHeartRate, maxHeartRate, duration, age = 30 
             {/* Zone Bar Visualization */}
             <div className="relative h-8 bg-slate-800 rounded-lg overflow-hidden flex">
                 {ZONES.map((zone, idx) => {
-                    const width = zone.maxPct - zone.minPct; // 10% each
+                    const width = (zone.maxPct - zone.minPct) * 2; // Scale to fill (50-100 range = 50 units. 100/50 = 2x)
                     const isActive = zone.name === zoneInfo.zone.name;
                     return (
                         <div
@@ -95,7 +95,7 @@ export function HeartRateZones({ avgHeartRate, maxHeartRate, duration, age = 30 
                 <div
                     className="absolute top-0 bottom-0 w-0.5 bg-white shadow-lg"
                     style={{
-                        left: `${Math.min(100, Math.max(0, zoneInfo.hrPct - 50))}%`,
+                        left: `${Math.min(100, Math.max(0, (zoneInfo.hrPct - 50) * 2))}%`,
                         boxShadow: '0 0 10px rgba(255,255,255,0.8)'
                     }}
                 />

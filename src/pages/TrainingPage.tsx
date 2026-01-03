@@ -66,17 +66,13 @@ export function TrainingPage() {
     // Fetch Universal Activities from Server - REMOVED (Handled by DataContext now)
     // const { activities: universalActivities } = useUniversalActivities(365);
 
-    // Merge Data
+    // Merge Data - combine server and local entries
     const exerciseEntries = useMemo(() => {
         const serverEntries = (universalActivities || [])
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null);
 
-        // Combine with legacy local entries, preferring server data if duplicates exist?
-        // For now, let's just concatenate but maybe unique by ID if they share non-uuid IDs (unlikely)
-        // Actually, if we are moving to server, we should probably prioritized server.
-        // But for visual continuity, let's show all.
-        // Identify duplicates by ID?
+        // Combine: prefer server entries, add unique legacy entries
         const serverIds = new Set(serverEntries.map(e => e.id));
         const uniqueLegacy = (legacyExerciseEntries || []).filter(e => !serverIds.has(e.id));
 

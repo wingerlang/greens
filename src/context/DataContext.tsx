@@ -902,17 +902,23 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [emitFeedEvent]);
 
     const updateExercise = useCallback((id: string, updates: Partial<ExerciseEntry>) => {
+        // Update local exerciseEntries
         setExerciseEntries(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
 
-        // Optimistic update done, syncing...
-        // Note: storageService needs to support updateExercise or similar if we want persistence
-        // For now, mirroring how other updates work or minimal implementation
-        // storageService.updateExercise(id, updates); // If exists
-
-        // Since we don't have a direct atomic update in storage service for exercises yet shown, 
-        // we might rely on the auto-save effect for now, but skipping auto-save for atomic updates 
-        // is usually preferred. Let's rely on auto-save for this iteration as adding a full 
-        // service method is out of scope for just UI unifying, but we should mark it.
+        // ALSO update universalActivities if this ID matches a server activity
+        // This ensures Strava activities get their subType updated and persisted
+        setUniversalActivities(prev => prev.map(ua => {
+            if (ua.id === id) {
+                return {
+                    ...ua,
+                    performance: {
+                        ...ua.performance,
+                        subType: updates.subType || ua.performance?.subType
+                    }
+                } as UniversalActivity;
+            }
+            return ua;
+        }));
     }, []);
 
     const deleteExercise = useCallback((id: string) => {

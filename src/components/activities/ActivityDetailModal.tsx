@@ -10,7 +10,10 @@ import { HeartRateZones } from '../training/HeartRateZones.tsx';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 import { EXERCISE_TYPES, INTENSITIES } from '../training/ExerciseModal.tsx';
+
 import { ExerciseType, ExerciseIntensity, ExerciseSubType } from '../../models/types.ts';
+import { WorkoutStructureCard } from './WorkoutStructureCard.tsx';
+import { parseWorkout } from '../../utils/workoutParser.ts';
 
 // Expandable Exercise Component - click to show sets
 function ExpandableExercise({ exercise }: { exercise: any }) {
@@ -81,7 +84,7 @@ export function ActivityDetailModal({
 }: ActivityDetailModalProps) {
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
-    const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits' | 'merge'>('stats');
+    const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis'>('stats');
     const [showScoreInfo, setShowScoreInfo] = useState(false);
     const [isUnmerging, setIsUnmerging] = useState(false);
 
@@ -105,9 +108,27 @@ export function ActivityDetailModal({
 
     // Check if THIS activity has been merged INTO another activity (i.e., it's a component)
     const isMergedInto = universalActivity?.mergedIntoId != null;
+
     const parentMergedActivity = isMergedInto
         ? universalActivities.find(u => u.id === universalActivity?.mergedIntoId)
         : null;
+
+    // Parse workout for analysis & categorization
+    const parsedWorkout = React.useMemo(() => {
+        const title = universalActivity?.plan?.title || activity.type || 'Workout';
+        const desc = universalActivity?.plan?.description || activity.notes || '';
+        return parseWorkout(title, desc);
+    }, [universalActivity, activity]);
+
+    // Auto-populate subtype in edit form if detected
+    useEffect(() => {
+        if (isEditing && editForm.subType === 'default' && parsedWorkout?.suggestedSubType &&
+            parsedWorkout.suggestedSubType !== 'default' && parsedWorkout.suggestedSubType !== 'tempo') {
+            // Note: 'tempo' in parser currently mapped to 'interval' usually, but double checking valid types
+            // Valid types: interval, long-run, race, tonnage, competition
+            setEditForm(prev => ({ ...prev, subType: parsedWorkout.suggestedSubType as any }));
+        }
+    }, [isEditing, parsedWorkout]);
 
     // Get original activities for merged view
     const originalActivities = React.useMemo(() => {
@@ -173,6 +194,44 @@ export function ActivityDetailModal({
             .sort((a, b) => b.date.localeCompare(a.date))
             .slice(0, 5);
     }, [activity, allActivities]);
+
+    // Apply Category Helper - Updates the EXISTING activity's subType
+    const handleApplyCategory = (category: ExerciseSubType) => {
+        // Always update the existing activity - never create a duplicate
+        updateExercise(activity.id, { subType: category });
+
+        // Give immediate feedback
+        const categoryLabel = category === 'interval' ? 'Intervaller' :
+            category === 'long-run' ? 'Långpass' :
+                category === 'race' ? 'Tävling' : category;
+        alert(`✅ Kategorin uppdaterad till '${categoryLabel}'.`);
+        onClose(); // Close to force refresh of data in list view
+    };
+
+    // Auto-apply category if confidence is high
+    useEffect(() => {
+        // Only if we have a suggestion and current is default
+        if (parsedWorkout?.suggestedSubType &&
+            parsedWorkout.suggestedSubType !== 'default' &&
+            (activity.subType === 'default' || !activity.subType)) {
+
+            // "High Confidence" Logic:
+            // 1. If it's explicitly 'long-run' or 'tempo' (keyword match), we trust it.
+            // 2. If it's 'interval', we want to see > 2 interval segments or a high segment count.
+            //    (A single interval might be a misinterpretation of a steady run with a lap)
+
+            const isKeywordMatch = parsedWorkout.suggestedSubType === 'long-run' || parsedWorkout.suggestedSubType === 'tempo';
+            const intervalCount = parsedWorkout.segments.filter(s => s.type === 'INTERVAL').length;
+            const isSolidIntervals = parsedWorkout.suggestedSubType === 'interval' && intervalCount >= 2;
+
+            if (isKeywordMatch || isSolidIntervals) {
+                // Auto-apply!
+                handleApplyCategory(parsedWorkout.suggestedSubType as any);
+                // Toast or Console log? User requested it happens automatically.
+                // We rely on UI update to show the change.
+            }
+        }
+    }, [parsedWorkout, activity.subType, activity.source]); // activity.subType dep ensures we don't loop if it changes
 
     // Handle Save
     const handleSave = async (e: React.FormEvent) => {
@@ -394,7 +453,6 @@ export function ActivityDetailModal({
                                 <button
                                     onClick={() => {
                                         // Navigate to parent merged activity
-                                        setSelectedActivity && setSelectedActivity(null);
                                         // We need to trigger opening the parent - for now, close and let user find it
                                         // A more sophisticated approach would be to pass a callback
                                         onClose();
@@ -439,6 +497,12 @@ export function ActivityDetailModal({
                                     <span>⚡</span> Sammanslagen ({originalActivities.length})
                                 </button>
                             )}
+                            <button
+                                onClick={() => setActiveTab('analysis')}
+                                className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'analysis' ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                            >
+                                <span>🧩</span> Analys
+                            </button>
                         </div>
 
                         {/* Source Badge + View Toggle for Merged */}
@@ -772,6 +836,40 @@ export function ActivityDetailModal({
                                     </div>
                                 )}
                             </>
+                        )}
+
+                        {/* ANALYSIS TAB */}
+                        {activeTab === 'analysis' && (
+                            <div className="space-y-4">
+                                {/* Suggestion Banner */}
+                                {parsedWorkout?.suggestedSubType &&
+                                    parsedWorkout.suggestedSubType !== 'default' &&
+                                    (activity.subType === 'default' || !activity.subType) && (
+                                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between animate-in slide-in-from-top-2">
+                                            <div>
+                                                <p className="text-xs font-bold text-amber-400 uppercase flex items-center gap-2">
+                                                    <span>💡</span> Förslag: {parsedWorkout.suggestedSubType === 'interval' ? 'Intervaller' : parsedWorkout.suggestedSubType === 'long-run' ? 'Långpass' : parsedWorkout.suggestedSubType}
+                                                </p>
+                                                <p className="text-[10px] text-amber-200/70">
+                                                    Analysen tyder på att detta är ett {parsedWorkout.suggestedSubType === 'interval' ? 'intervallpass' : 'långpass'}.
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    handleApplyCategory(parsedWorkout.suggestedSubType as any);
+                                                }}
+                                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold rounded-lg transition-colors"
+                                            >
+                                                Uppdatera
+                                            </button>
+                                        </div>
+                                    )}
+
+                                <WorkoutStructureCard
+                                    title={universalActivity?.plan?.title || activity.type || 'Workout'}
+                                    description={universalActivity?.plan?.description || activity.notes || ''}
+                                />
+                            </div>
                         )}
 
                         {/* RAW DATA VIEW */}

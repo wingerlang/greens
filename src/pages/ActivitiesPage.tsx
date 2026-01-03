@@ -527,46 +527,52 @@ export function ActivitiesPage() {
                 <table className="w-full text-left text-sm text-slate-400">
                     <thead className="bg-slate-950/80 text-xs uppercase font-bold text-slate-500 border-b border-white/5 sticky top-0 z-10 backdrop-blur-md">
                         <tr>
-                            <th className="w-10"></th> {/* Merge selection column */}
-                            <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('date')}>
+                            <th className="w-8 px-1"></th> {/* Merge selection column */}
+                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('date')}>
                                 Datum <SortIcon colKey="date" />
                             </th>
-                            <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('title')}>
+                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('title')}>
                                 Aktivitet <SortIcon colKey="title" />
                             </th>
-                            <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('type')}>
+                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('type')}>
                                 Typ <SortIcon colKey="type" />
                             </th>
-                            <th className="px-6 py-4 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('source')}>
+                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('source')}>
                                 Källa <SortIcon colKey="source" />
                             </th>
-                            <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('durationMinutes')}>
-                                Tid <SortIcon colKey="durationMinutes" />
+                            <th className="px-3 py-2 cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('durationMinutes')}>
+                                Info <SortIcon colKey="durationMinutes" />
                             </th>
-                            {processedActivities.some(a => a.distance) && (
-                                <>
-                                    <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('distance')}>
-                                        Dist <SortIcon colKey="distance" />
-                                    </th>
-                                    <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('pace')}>
-                                        Tempo <SortIcon colKey="pace" />
-                                    </th>
-                                </>
-                            )}
-                            {processedActivities.some(a => a.tonnage) && (
-                                <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('tonnage')}>
-                                    Ton <SortIcon colKey="tonnage" />
-                                </th>
-                            )}
-                            <th className="px-6 py-4 text-right cursor-pointer hover:text-white transition-colors select-none" onClick={() => handleSort('score')}>
-                                Poäng <SortIcon colKey="score" />
-                            </th>
-                            <th className="px-6 py-4">Notering</th>
+                            <th className="px-3 py-2">Not.</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
                         {processedActivities.map((activity, i) => {
                             const isSelectedForMerge = selectedForMerge.has(activity.id);
+                            const universalMatch = universalActivities.find(u => u.id === activity.id);
+                            const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged';
+
+                            // Get title for merged activities
+                            let displayTitle = activity.title || '-';
+                            if (displayTitle === '-' && isMergedActivity && universalMatch?.mergeInfo?.originalActivityIds) {
+                                // Try to get Strava title from one of the originals
+                                for (const origId of universalMatch.mergeInfo.originalActivityIds) {
+                                    const origActivity = universalActivities.find(u => u.id === origId);
+                                    if (origActivity?.plan?.title || origActivity?.performance?.notes) {
+                                        displayTitle = origActivity.plan?.title || origActivity.performance?.notes || '-';
+                                        break;
+                                    }
+                                }
+                            }
+
+                            // Calculate pace
+                            const pace = activity.distance && activity.durationMinutes > 0
+                                ? (activity.durationMinutes / activity.distance).toFixed(2).replace('.', ':')
+                                : null;
+
+                            // Score
+                            const score = calculatePerformanceScore(activity, allActivities);
+
                             return (
                                 <tr
                                     key={activity.id || i}
@@ -577,10 +583,10 @@ export function ActivitiesPage() {
                                     onClick={() => handleSetSelectedActivity(activity)}
                                 >
                                     {/* Mark for merge button */}
-                                    <td className="w-10 px-2">
+                                    <td className="w-8 px-1">
                                         <button
                                             onClick={(e) => toggleMergeSelection(activity.id, i, e)}
-                                            className={`opacity-0 group-hover:opacity-100 transition-all w-6 h-6 rounded-md flex items-center justify-center ${isSelectedForMerge
+                                            className={`opacity-0 group-hover:opacity-100 transition-all w-5 h-5 rounded flex items-center justify-center text-xs ${isSelectedForMerge
                                                 ? 'opacity-100 bg-indigo-500 text-white'
                                                 : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
                                                 }`}
@@ -589,161 +595,82 @@ export function ActivitiesPage() {
                                             {isSelectedForMerge ? '✓' : '+'}
                                         </button>
                                     </td>
-                                    <td className="px-6 py-4 font-mono text-white whitespace-nowrap">
-                                        {activity.date.split('T')[0]}
+                                    <td className="px-3 py-2 font-mono text-white text-xs whitespace-nowrap">
+                                        {activity.date.split('T')[0].slice(5)}
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col">
-                                            <span className="text-white font-bold truncate max-w-[200px]" title={activity.title}>{activity.title || '-'}</span>
-                                            {/* Show sources for merged activities */}
-                                            {(() => {
-                                                const universalMatch = universalActivities.find(u => u.id === activity.id);
-                                                const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true;
-
-                                                if (isMergedActivity && universalMatch?.mergeInfo?.originalActivityIds) {
-                                                    const sources = universalMatch.mergeInfo.originalActivityIds.map(id => {
-                                                        const original = universalActivities.find(u => u.id === id); // We might need to look in filtered list too? No universal allows lookup.
-                                                        // Actually, original activities might be hidden from 'processedActivities' but exist in 'universalActivities'
-                                                        // Source isn't directly on UniversalActivity top level, it's deep.
-                                                        // Let's use performance.source.source
-                                                        return original?.performance?.source?.source || 'unknown';
-                                                    });
-
-                                                    // Dedupe and format
-                                                    const uniqueSources = Array.from(new Set(sources));
-                                                    const sourceLabel = uniqueSources.map(s => s === 'strava' ? 'Strava' : s === 'strength' ? 'Styrka' : 'Manuell').join(' + ');
-
-                                                    return (
-                                                        <span className="text-[10px] text-slate-500 italic">
-                                                            från {sourceLabel}
-                                                        </span>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
+                                    <td className="px-3 py-2">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-white font-bold text-xs truncate max-w-[180px]" title={displayTitle}>
+                                                {displayTitle}
+                                            </span>
+                                            {isMergedActivity && (
+                                                <span className="text-[9px] text-slate-500 italic">
+                                                    ⚡ {universalMatch?.mergeInfo?.originalActivityIds?.length || 2} aktiviteter
+                                                </span>
+                                            )}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col items-start gap-1">
-                                            <span className="capitalize text-white font-bold group-hover:text-emerald-400 transition-colors">{activity.type}</span>
-                                            {(() => {
-                                                // Check for Race subtype in current OR merged originals
-                                                let isRace = activity.subType === 'race';
-
-                                                const universalMatch = universalActivities.find(u => u.id === activity.id);
-                                                if (!isRace && universalMatch?.mergeInfo?.isMerged) {
-                                                    // check originals
-                                                    isRace = universalMatch.mergeInfo.originalActivityIds.some(id => {
-                                                        const original = universalActivities.find(u => u.id === id);
-                                                        return original?.performance?.subType === 'race';
-                                                    });
-                                                }
-
-                                                if (isRace) {
-                                                    return (
-                                                        <span className="text-[10px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20">🏆 Tävling</span>
-                                                    );
-                                                }
-                                                return null;
-                                            })()}
+                                    <td className="px-3 py-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="capitalize text-white font-bold text-xs">{activity.type}</span>
+                                            {/* Score badge inline */}
+                                            <span
+                                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
+                                                        score >= 60 ? 'bg-indigo-500/20 text-indigo-400' :
+                                                            'bg-slate-500/20 text-slate-400'
+                                                    }`}
+                                                title={`Poäng: ${score}`}
+                                            >
+                                                {score}
+                                            </span>
                                             {activity.subType === 'interval' && (
-                                                <span className="text-[10px] uppercase font-bold bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded border border-red-500/20">⚡ Intervaller</span>
+                                                <span className="text-[8px] uppercase font-bold bg-red-500/20 text-red-400 px-1 rounded" title="Intervallpass">⚡</span>
                                             )}
                                             {activity.subType === 'long-run' && (
-                                                <span className="text-[10px] uppercase font-bold bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/20">🏃 Långpass</span>
+                                                <span className="text-[8px] uppercase font-bold bg-blue-500/20 text-blue-400 px-1 rounded" title="Långpass">🏃</span>
+                                            )}
+                                            {activity.subType === 'race' && (
+                                                <span className="text-[8px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1 rounded" title="Tävling">🏆</span>
                                             )}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">
+                                    <td className="px-3 py-2">
                                         {(() => {
-                                            // Check if this is a merged activity (manual or universal)
-                                            const universalMatch = universalActivities.find(u => u.id === activity.id);
-                                            const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged';
-
                                             if (isMergedActivity) {
-                                                // Create a label based on sources
-                                                const sources = universalMatch?.mergeInfo?.originalActivityIds?.map(id => {
-                                                    const original = universalActivities.find(u => u.id === id);
-                                                    return original?.performance?.source?.source || 'unknown';
-                                                }) || [];
-                                                const uniqueSources = Array.from(new Set(sources));
-                                                const label = uniqueSources.length > 0
-                                                    ? uniqueSources.map(s => s === 'strava' ? 'Strava' : s === 'strength' ? 'Styrka' : 'Manuell').join(' + ')
-                                                    : 'Sammanslagen';
-
                                                 return (
-                                                    <span className="inline-flex items-center gap-1 text-emerald-400 font-bold text-[10px] uppercase tracking-wider bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
-                                                        ⚡ {label}
-                                                    </span>
+                                                    <span className="text-emerald-400 font-bold text-[9px] uppercase">⚡ Merged</span>
                                                 );
                                             } else if (activity.source === 'strava') {
                                                 return (
-                                                    <span className="inline-flex items-center gap-1 text-[#FC4C02] font-bold text-[10px] uppercase tracking-wider bg-[#FC4C02]/10 px-2 py-1 rounded">
-                                                        🔥 Strava
-                                                    </span>
-                                                );
-                                            } else if (activity.source === 'merged') {
-                                                return (
-                                                    <span className="inline-flex items-center gap-1 text-emerald-400 font-bold text-[10px] uppercase tracking-wider bg-emerald-500/10 px-2 py-1 rounded">
-                                                        ⚡ Merged
-                                                    </span>
+                                                    <span className="text-[#FC4C02] font-bold text-[9px] uppercase">🔥 Strava</span>
                                                 );
                                             } else if (activity.source === 'strength') {
                                                 return (
-                                                    <span className="inline-flex items-center gap-1 text-purple-400 font-bold text-[10px] uppercase tracking-wider bg-purple-500/10 px-2 py-1 rounded">
-                                                        💪 Strength
-                                                    </span>
+                                                    <span className="text-purple-400 font-bold text-[9px] uppercase">💪 Styrka</span>
                                                 );
                                             } else {
                                                 return (
-                                                    <span className="inline-flex items-center gap-1 text-blue-400 font-bold text-[10px] uppercase tracking-wider bg-blue-500/10 px-2 py-1 rounded">
-                                                        ✏️ Manuell
-                                                    </span>
+                                                    <span className="text-blue-400 font-bold text-[9px] uppercase">✏️ Man</span>
                                                 );
                                             }
                                         })()}
                                     </td>
-                                    <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                        {activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}
-                                    </td>
-                                    {
-                                        processedActivities.some(a => a.distance) && (
-                                            <>
-                                                <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                                    {activity.distance ? `${activity.distance.toFixed(1)}` : '-'}
-                                                </td>
-                                                <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                                    {activity.distance ? (
-                                                        <div className="flex flex-col items-end">
-                                                            <span className="text-[10px] opacity-70">{(activity.durationMinutes / activity.distance).toFixed(2).replace('.', ':')} /km</span>
-                                                            {activity.elevationGain && activity.elevationGain > 0 && (
-                                                                <span className="text-[10px] text-indigo-400 font-bold" title="Grade Adjusted Pace (Lutningsjusterat tempo)">
-                                                                    GAP: {(calculateGAP((activity.durationMinutes * 60) / activity.distance, activity.elevationGain, activity.distance) / 60).toFixed(2).replace('.', ':')}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ) : '-'}
-                                                </td>
-                                            </>
-                                        )
-                                    }
-                                    {
-                                        processedActivities.some(a => a.tonnage) && (
-                                            <td className="px-6 py-4 text-right font-mono text-slate-300">
-                                                {activity.tonnage ? `${(activity.tonnage / 1000).toFixed(1)} t` : '-'}
-                                            </td>
-                                        )
-                                    }
-                                    <td className="px-6 py-4 text-right">
-                                        <div className={`inline-flex items-center justify-center w-8 h-8 rounded-full font-black text-[10px] border ${calculatePerformanceScore(activity) >= 80 ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400' :
-                                            calculatePerformanceScore(activity) >= 60 ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400' :
-                                                'bg-slate-500/20 border-slate-500/50 text-slate-400'
-                                            }`}>
-                                            {calculatePerformanceScore(activity)}
+                                    <td className="px-3 py-2">
+                                        <div className="flex flex-col text-[10px] font-mono text-slate-300 leading-tight">
+                                            <span>{formatDuration(activity.durationMinutes * 60)}</span>
+                                            {activity.distance && (
+                                                <span className="text-slate-400">{activity.distance.toFixed(1)} km</span>
+                                            )}
+                                            {pace && (
+                                                <span className="text-indigo-400">{pace}/km</span>
+                                            )}
+                                            {activity.tonnage && (
+                                                <span className="text-purple-400">{(activity.tonnage / 1000).toFixed(1)}t</span>
+                                            )}
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4 text-xs italic opacity-50 truncate max-w-[150px]">
-                                        {activity.notes}
+                                    <td className="px-3 py-2 text-[10px] italic opacity-50 truncate max-w-[80px]" title={activity.notes || ''}>
+                                        {activity.notes ? (activity.notes.length > 15 ? activity.notes.slice(0, 15) + '…' : activity.notes) : '-'}
                                     </td>
                                 </tr>
                             );

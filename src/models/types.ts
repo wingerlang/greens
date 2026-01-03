@@ -476,6 +476,7 @@ export interface ExerciseEntry {
     source?: string;
     // Integration fields (Strava/Garmin)
     externalId?: string;          // e.g., "strava_123456"
+    overridesActivityId?: string; // ID of activity this manual entry supersedes (e.g., to "tag" a Strava activity locally)
     platform?: 'strava' | 'garmin';
     heartRateAvg?: number;
     heartRateMax?: number;

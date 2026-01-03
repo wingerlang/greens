@@ -16,11 +16,12 @@ export function CompressedActivityList({ activities }: CompressedActivityListPro
             <table className="w-full text-left border-collapse">
                 <thead>
                     <tr className="border-b border-white/5 bg-slate-950/40">
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest">Datum</th>
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest">Typ & Titel</th>
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Dist (KM)</th>
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest">Tempo</th>
-                        <th className="px-4 py-3 text-[9px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                        <th className="px-2 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">Datum</th>
+                        <th className="px-2 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">Typ & Titel</th>
+                        <th className="px-2 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Dist (KM)</th>
+                        <th className="px-2 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Tid / Volym</th>
+                        <th className="px-2 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">Tempo</th>
+                        <th className="px-2 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">Status</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
@@ -30,28 +31,44 @@ export function CompressedActivityList({ activities }: CompressedActivityListPro
                                 className={`group cursor-pointer transition-colors hover:bg-white/[0.02] ${expandedId === activity.id ? 'bg-indigo-500/5' : ''}`}
                                 onClick={() => setExpandedId(expandedId === activity.id ? null : activity.id)}
                             >
-                                <td className="px-4 py-3 whitespace-nowrap">
+                                <td className="px-2 py-2 whitespace-nowrap">
                                     <span className="text-[10px] font-bold text-slate-400">{activity.date.split('-').slice(1).join('/')}</span>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-2 py-2">
                                     <div className="flex flex-col">
-                                        <span className={`text-[8px] font-black uppercase tracking-tighter mb-0.5 ${activity.category === 'LONG_RUN' ? 'text-amber-400' :
-                                            activity.category === 'INTERVALS' ? 'text-rose-400' : 'text-indigo-400'
-                                            }`}>
-                                            {activity.category.replace('_', ' ')}
-                                        </span>
+                                        <div className="flex items-center gap-1 mb-0.5">
+                                            <span className={`text-[8px] font-black uppercase tracking-tighter ${activity.category === 'LONG_RUN' ? 'text-amber-400' :
+                                                activity.category === 'INTERVALS' ? 'text-rose-400' : 'text-indigo-400'
+                                                }`}>
+                                                {activity.category.replace('_', ' ')}
+                                            </span>
+                                            {/* Strava Badge (simulated if name contains Strava, or if we had source field) */}
+                                            {/* Assuming activity has source or we just rely on type */}
+                                        </div>
                                         <span className="text-xs font-black text-white truncate max-w-[150px]">{activity.title}</span>
                                     </div>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-2 py-2">
                                     <span className={`text-sm font-black ${activity.category === 'LONG_RUN' ? 'text-amber-400' : 'text-white'}`}>
                                         {activity.estimatedDistance}
                                     </span>
                                 </td>
-                                <td className="px-4 py-3 tabular-nums">
+                                <td className="px-2 py-2 whitespace-nowrap">
+                                    {/* Time or Tonnage */}
+                                    {(activity as any).tonnage ? (
+                                        <span className="text-xs font-black text-indigo-400">
+                                            {((activity as any).tonnage / 1000).toFixed(1)} t
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs font-bold text-slate-300">
+                                            {formatSecondsToTime(((activity.durationMinutes || 0) * 60))}
+                                        </span>
+                                    )}
+                                </td>
+                                <td className="px-2 py-2 tabular-nums">
                                     <span className="text-xs font-bold text-slate-300">{activity.targetPace}</span>
                                 </td>
-                                <td className="px-4 py-3">
+                                <td className="px-2 py-2">
                                     <div className="flex items-center gap-2">
                                         <div className={`w-1.5 h-1.5 rounded-full ${activity.status === 'COMPLETED' ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-amber-500'}`} />
                                         <span className={`text-[9px] font-black uppercase tracking-tight ${activity.status === 'COMPLETED' ? 'text-emerald-400' : 'text-amber-400'}`}>
