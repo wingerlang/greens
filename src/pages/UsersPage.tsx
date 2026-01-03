@@ -120,6 +120,22 @@ export function UsersPage() {
                     </p>
                 </div>
 
+                {/* Tabs */}
+                <div className="flex gap-2 bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+                    <Link
+                        to="/community"
+                        className="px-6 py-2 rounded-lg text-sm font-bold transition-all bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
+                    >
+                        Medlemmar
+                    </Link>
+                    <Link
+                        to="/community/stats"
+                        className="px-6 py-2 rounded-lg text-sm font-bold transition-all text-gray-400 hover:text-white hover:bg-slate-800"
+                    >
+                        Statistik
+                    </Link>
+                </div>
+
                 {/* Controls */}
                 <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto items-center">
                     <div className="relative group min-w-[300px] w-full md:w-auto">

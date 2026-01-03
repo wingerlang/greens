@@ -62,16 +62,34 @@ export function CommunityStatsPage() {
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-end gap-6 border-b border-slate-800 pb-8">
-                <div>
-                    <h1 className="text-4xl font-black text-white mb-2 tracking-tight">Statistik</h1>
-                    <p className="text-gray-400">
-                        Jämför dig mot {stats.global.totalUsers} andra atleter i communityt.
-                    </p>
+            <div className="space-y-6 border-b border-slate-800 pb-8">
+                <div className="flex flex-col md:flex-row justify-between items-end gap-6">
+                    <div>
+                        <h1 className="text-4xl font-black text-white mb-2 tracking-tight">Statistik</h1>
+                        <p className="text-gray-400">
+                            Jämför dig mot {stats.global.totalUsers} andra atleter i communityt.
+                        </p>
+                    </div>
+
+                    {/* Main Nav Tabs */}
+                    <div className="flex gap-2 bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+                        <Link
+                            to="/community"
+                            className="px-6 py-2 rounded-lg text-sm font-bold transition-all text-gray-400 hover:text-white hover:bg-slate-800"
+                        >
+                            Medlemmar
+                        </Link>
+                        <Link
+                            to="/community/stats"
+                            className="px-6 py-2 rounded-lg text-sm font-bold transition-all bg-emerald-600 text-white shadow-lg shadow-emerald-500/20"
+                        >
+                            Statistik
+                        </Link>
+                    </div>
                 </div>
 
-                {/* Tabs */}
-                <div className="flex gap-2 bg-slate-900/50 p-1 rounded-xl border border-slate-800">
+                {/* Page Sub-Tabs */}
+                <div className="flex gap-2">
                     {(['overview', 'strength', 'cardio'] as const).map(tab => (
                         <button
                             key={tab}
