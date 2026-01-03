@@ -1,0 +1,20 @@
+[0m[32mTask[0m [0m[36mserver[0m deno run -A --unstable-kv --watch --env src/api/main.ts
+[0m[38;5;12mWatcher[0m Process started.
+[0m[1m[31merror[0m: Uncaught SyntaxError: The requested module '../services/statisticsService.ts' does not provide an export named 'getCommunityStats'
+import { getCommunityStats } from '../services/statisticsService.ts';
+[0m[31m         ^[0m
+    at [0m[1m[3m<anonymous>[0m ([0m[2m[38;5;245mfile:///app/[0m[0m[36msrc/api/handlers/statistics.ts[0m:[0m[33m2[0m:[0m[33m10[0m)
+[0m[38;5;12mWatcher[0m Process failed. Restarting on file change...
+[0m[38;5;12mWatcher[0m [0m[38;5;245mRestarting! File change detected: "/app/src/api/services/statisticsService.ts"[0m
+✅ Database already seeded.
+🚀 Starting Greens Backend API on port 8000...
+Listening on http://0.0.0.0:8000/ (http://localhost:8000/)
+Regenerating Community Stats...
+[Stats] Fetching strength workouts for 5 users...
+fetchStrength: 54.9ms
+[Stats] Fetched 350 workouts total.
+[Stats] Fetching activities for 5 users...
+fetchActivities: 10.2ms
+[Stats] Fetched 209 activities total.
+fetchGoals: 1.56ms
+calcStats: 9.20ms
