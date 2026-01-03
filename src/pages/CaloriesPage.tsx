@@ -11,7 +11,6 @@ import {
 } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { calculateAdaptiveGoals } from '../utils/performanceEngine.ts';
-import { MacroSummary } from '../components/calories/MacroSummary.tsx';
 import { MealTimeline } from '../components/calories/MealTimeline.tsx';
 import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
@@ -19,6 +18,8 @@ import { NutritionInsights } from '../components/calories/NutritionInsights.tsx'
 import { MacroDistribution } from '../components/calories/MacroDistribution.tsx';
 import { normalizeText } from '../utils/formatters.ts';
 import { DatePicker } from '../components/shared/DatePicker.tsx';
+import { CalorieRing } from '../components/shared/CalorieRing.tsx';
+import { MacroBars } from '../components/shared/MacroBars.tsx';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
@@ -290,6 +291,41 @@ export function CaloriesPage() {
         return 0;
     };
 
+    const getItemBrand = (item: MealItem): string | undefined => {
+        if (item.type === 'foodItem') {
+            const food = getFoodItem(item.referenceId);
+            return food?.brand;
+        }
+        return undefined;
+    };
+
+    const getItemNutrition = (item: MealItem) => {
+        if (item.type === 'recipe') {
+            const recipeWithNutrition = getRecipeWithNutrition(item.referenceId);
+            if (recipeWithNutrition) {
+                const n = recipeWithNutrition.nutritionPerServing;
+                return {
+                    calories: Math.round(n.calories * item.servings),
+                    protein: Math.round(n.protein * item.servings),
+                    carbs: Math.round(n.carbs * item.servings),
+                    fat: Math.round(n.fat * item.servings)
+                };
+            }
+        } else {
+            const food = getFoodItem(item.referenceId);
+            if (food) {
+                const mult = item.servings / 100;
+                return {
+                    calories: Math.round(food.calories * mult),
+                    protein: Math.round(food.protein * mult),
+                    carbs: Math.round((food.carbs || 0) * mult),
+                    fat: Math.round((food.fat || 0) * mult)
+                };
+            }
+        }
+        return { calories: 0, protein: 0, carbs: 0, fat: 0 };
+    };
+
     const navigateDate = (days: number) => {
         const date = new Date(selectedDate);
         date.setDate(date.getDate() + days);
@@ -339,24 +375,16 @@ export function CaloriesPage() {
 
     return (
         <div className="calories-page">
-            <header className="page-header">
-                <div>
-                    <h1>Kalorier</h1>
-                    <p className="page-subtitle">Logga måltider och följ dina makron</p>
-                </div>
-                <div className="flex gap-2">
-                    <button
-                        className={`btn ${showInsights ? 'btn-primary' : 'btn-secondary'} btn-sm shadow-sm`}
-                        onClick={() => setShowInsights(!showInsights)}
-                    >
-                        {showInsights ? '📉 Dölj Insikter' : '📈 Visa Trender'}
-                    </button>
-                    <button className="btn btn-primary" onClick={() => setIsFormOpen(true)}>
-                        + Logga måltid
-                    </button>
-                </div>
-            </header>
+            {/* Date Picker at top */}
+            <div className="my-6">
+                <DatePicker
+                    selectedDate={selectedDate}
+                    onDateChange={setSelectedDate}
+                    size="lg"
+                />
+            </div>
 
+            {/* View mode toggle */}
             <div className="flex justify-center gap-2 mb-4">
                 <button
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'compact' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}
@@ -371,12 +399,6 @@ export function CaloriesPage() {
                     📋 Detaljerad
                 </button>
             </div>
-
-            <DatePicker
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-                showLabel={false}
-            />
 
             {unloggedPlannedMeals.length > 0 && (
                 <div className="planned-meals-banner">
@@ -416,105 +438,133 @@ export function CaloriesPage() {
                 </div>
             )}
 
-            {showInsights ? (
-                <NutritionInsights onDateSelect={setSelectedDate} />
-            ) : (
-                <>
-                    <MacroSummary nutrition={dailyNutrition} goals={goals} viewMode={viewMode} />
-                    {dailyEntries.length > 0 && (
+            <>
+                {/* Combined Summary Card + Smart Meal Clustering (Macro Distribution) side by side */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mx-4 my-6">
+                    {/* Summary Card (Ring + Bars) */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6 overflow-hidden">
+                        <div className="flex flex-col sm:flex-row items-center gap-8">
+                            <div className="shrink-0">
+                                <CalorieRing
+                                    calories={dailyNutrition.calories}
+                                    calorieGoal={goals.calories}
+                                    protein={dailyNutrition.protein}
+                                    proteinGoal={goals.protein}
+                                    size="lg"
+                                />
+                            </div>
+                            <div className="flex-1 w-full border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800 pt-6 sm:pt-0 sm:pl-8">
+                                <MacroBars
+                                    calories={dailyNutrition.calories}
+                                    calorieGoal={goals.calories}
+                                    protein={dailyNutrition.protein}
+                                    proteinGoal={goals.protein}
+                                    carbs={dailyNutrition.carbs}
+                                    carbsGoal={goals.carbs || 250}
+                                    fat={dailyNutrition.fat}
+                                    fatGoal={goals.fat || 80}
+                                    size="md"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Smart Meal Clustering (Macro Distribution) */}
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6">
                         <MacroDistribution
                             entries={dailyEntries}
                             foodItems={foodItems}
                             recipes={recipes}
                         />
-                    )}
+                    </div>
+                </div>
 
-                    {/* Vitals Summary */}
-                    {/* Vitals Summary */}
-                    <div className="mx-4 mt-6 p-4 bg-slate-900/50 border border-white/5 rounded-2xl grid grid-cols-3 gap-4">
-                        {/* Water */}
-                        <div
-                            className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                            onClick={() => handleCardClick('water', currentVitals.water || 0)}
-                        >
-                            <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Vatten</span>
-                            <div className="flex items-center gap-1.5 h-8">
-                                {editing === 'water' ? (
-                                    <input
-                                        autoFocus
-                                        type="number"
-                                        value={tempValue}
-                                        onChange={(e) => setTempValue(e.target.value)}
-                                        onBlur={() => handleSave('water')}
-                                        onKeyDown={(e) => handleKeyDown(e, 'water')}
-                                        onClick={e => e.stopPropagation()}
-                                        className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                                    />
-                                ) : (
-                                    <>
-                                        <span className="text-xl">💧</span>
-                                        <span className="text-lg font-bold text-white">{currentVitals.water || 0}</span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Caffeine */}
-                        <div
-                            className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                            onClick={() => handleCardClick('caffeine', currentVitals.caffeine || 0)}
-                        >
-                            <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Koffein</span>
-                            <div className="flex items-center gap-1.5 h-8">
-                                {editing === 'caffeine' ? (
-                                    <input
-                                        autoFocus
-                                        type="number"
-                                        value={tempValue}
-                                        onChange={(e) => setTempValue(e.target.value)}
-                                        onBlur={() => handleSave('caffeine')}
-                                        onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
-                                        onClick={e => e.stopPropagation()}
-                                        className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                                    />
-                                ) : (
-                                    <>
-                                        <span className="text-xl">☕</span>
-                                        <span className="text-lg font-bold text-white">{currentVitals.caffeine || 0}<span className="text-[10px] text-slate-500 ml-0.5">mg</span></span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Alcohol */}
-                        <div
-                            className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                            onClick={() => handleCardClick('alcohol', currentVitals.alcohol || 0)}
-                        >
-                            <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Alkohol</span>
-                            <div className="flex items-center gap-1.5 h-8">
-                                {editing === 'alcohol' ? (
-                                    <input
-                                        autoFocus
-                                        type="number"
-                                        value={tempValue}
-                                        onChange={(e) => setTempValue(e.target.value)}
-                                        onBlur={() => handleSave('alcohol')}
-                                        onKeyDown={(e) => handleKeyDown(e, 'alcohol')}
-                                        onClick={e => e.stopPropagation()}
-                                        className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                                    />
-                                ) : (
-                                    <>
-                                        <span className="text-xl">🍷</span>
-                                        <span className="text-lg font-bold text-white">{currentVitals.alcohol || 0}<span className="text-[10px] text-slate-500 ml-0.5">e</span></span>
-                                    </>
-                                )}
-                            </div>
+                {/* Vitals Summary */}
+                {/* Vitals Summary */}
+                <div className="mx-4 mt-6 p-4 bg-slate-900/50 border border-white/5 rounded-2xl grid grid-cols-3 gap-4">
+                    {/* Water */}
+                    <div
+                        className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                        onClick={() => handleCardClick('water', currentVitals.water || 0)}
+                    >
+                        <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Vatten</span>
+                        <div className="flex items-center gap-1.5 h-8">
+                            {editing === 'water' ? (
+                                <input
+                                    autoFocus
+                                    type="number"
+                                    value={tempValue}
+                                    onChange={(e) => setTempValue(e.target.value)}
+                                    onBlur={() => handleSave('water')}
+                                    onKeyDown={(e) => handleKeyDown(e, 'water')}
+                                    onClick={e => e.stopPropagation()}
+                                    className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                                />
+                            ) : (
+                                <>
+                                    <span className="text-xl">💧</span>
+                                    <span className="text-lg font-bold text-white">{currentVitals.water || 0}</span>
+                                </>
+                            )}
                         </div>
                     </div>
-                </>
-            )}
+
+                    {/* Caffeine */}
+                    <div
+                        className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                        onClick={() => handleCardClick('caffeine', currentVitals.caffeine || 0)}
+                    >
+                        <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Koffein</span>
+                        <div className="flex items-center gap-1.5 h-8">
+                            {editing === 'caffeine' ? (
+                                <input
+                                    autoFocus
+                                    type="number"
+                                    value={tempValue}
+                                    onChange={(e) => setTempValue(e.target.value)}
+                                    onBlur={() => handleSave('caffeine')}
+                                    onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
+                                    onClick={e => e.stopPropagation()}
+                                    className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                                />
+                            ) : (
+                                <>
+                                    <span className="text-xl">☕</span>
+                                    <span className="text-lg font-bold text-white">{currentVitals.caffeine || 0}<span className="text-[10px] text-slate-500 ml-0.5">mg</span></span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Alcohol */}
+                    <div
+                        className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                        onClick={() => handleCardClick('alcohol', currentVitals.alcohol || 0)}
+                    >
+                        <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Alkohol</span>
+                        <div className="flex items-center gap-1.5 h-8">
+                            {editing === 'alcohol' ? (
+                                <input
+                                    autoFocus
+                                    type="number"
+                                    value={tempValue}
+                                    onChange={(e) => setTempValue(e.target.value)}
+                                    onBlur={() => handleSave('alcohol')}
+                                    onKeyDown={(e) => handleKeyDown(e, 'alcohol')}
+                                    onClick={e => e.stopPropagation()}
+                                    className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                                />
+                            ) : (
+                                <>
+                                    <span className="text-xl">🍷</span>
+                                    <span className="text-lg font-bold text-white">{currentVitals.alcohol || 0}<span className="text-[10px] text-slate-500 ml-0.5">e</span></span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </>
+
 
             <MealTimeline
                 viewMode={viewMode}
@@ -522,11 +572,18 @@ export function CaloriesPage() {
                 entriesByMeal={entriesByMeal}
                 getItemName={getItemName}
                 getItemCalories={getItemCalories}
+                getItemBrand={getItemBrand}
+                getItemNutrition={getItemNutrition}
                 updateMealEntry={updateMealEntry}
                 handleDeleteEntry={handleDeleteEntry}
                 setIsFormOpen={setIsFormOpen}
                 setMealType={setMealType}
                 setBreakdownItem={setBreakdownItem}
+                onReplaceItem={(item, entryId) => {
+                    // Open quick add modal to replace the item
+                    setMealType(dailyEntries.find(e => e.id === entryId)?.mealType || 'snack');
+                    setIsFormOpen(true);
+                }}
                 selectedIds={selectedIds}
                 onToggleSelect={handleToggleSelect}
                 onSelectAll={handleSelectAll}
@@ -574,6 +631,25 @@ export function CaloriesPage() {
                 foodItems={foodItems}
                 getFoodItem={getFoodItem}
             />
+
+            {/* Trends Section - always shown at bottom as requested */}
+            <section className="mx-4 mt-12 mb-8">
+                <div className="flex items-center justify-between mb-6 px-2">
+                    <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Utveckling & Trender</h3>
+                </div>
+                <NutritionInsights onDateSelect={setSelectedDate} />
+            </section>
+
+            {/* Bottom actions sticky or floating footer could be here, but user asked for trends directly underst */}
+            <div className="fixed bottom-6 right-6 flex flex-col gap-2">
+                <button
+                    className="w-14 h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-95"
+                    onClick={() => setIsFormOpen(true)}
+                    title="Logga måltid"
+                >
+                    +
+                </button>
+            </div>
         </div>
     );
 }

@@ -65,24 +65,7 @@ export function MacroDistribution({ entries, foodItems, recipes }: MacroDistribu
     const maxMacros = Math.max(...Object.values(distribution).map(s => s.calories), 1);
 
     return (
-        <div className="macro-distribution mx-4 mb-8 bg-slate-900/40 border border-white/5 rounded-3xl p-6">
-            <div className="flex justify-between items-center mb-6">
-                <div>
-                    <h3 className="text-base font-black text-white flex items-center gap-2">
-                        <span>🍱</span> Smart Meal Clustering
-                    </h3>
-                    <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Analys av dygnsrytm & fördelning</p>
-                </div>
-                {totalProtein > 0 && (
-                    <div className="text-right">
-                        <div className={`text-xs font-bold ${proteinTimingScore > 20 ? 'text-emerald-400' : 'text-amber-400'}`}>
-                            {proteinTimingScore > 20 ? '✅ Bra timing' : '⚠️ Förskjut protein'}
-                        </div>
-                        <div className="text-[9px] text-slate-500">{Math.round(proteinTimingScore)}% av protein till frukost</div>
-                    </div>
-                )}
-            </div>
-
+        <div className="macro-distribution h-full">
             <div className="grid grid-cols-1 gap-4">
                 {(Object.entries(distribution) as [MealType, any][]).map(([mType, data]) => {
                     const calories = Math.round(data.calories);
