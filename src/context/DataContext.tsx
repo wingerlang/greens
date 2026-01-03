@@ -1744,9 +1744,23 @@ export function DataProvider({ children }: DataProviderProps) {
             });
         }, []),
         deleteTrainingPeriod: useCallback((id) => {
+            // 1. Remove period locally
             setTrainingPeriods(prev => prev.filter(p => p.id !== id));
             skipAutoSave.current = true;
             storageService.deletePeriod(id).catch(e => console.error("Failed to delete period", e));
+
+            // 2. Unlink goals locally (Orphan them)
+            setPerformanceGoals(prev => prev.map(g => {
+                if (g.periodId === id) {
+                    const updated = { ...g, periodId: undefined };
+                    // We should also sync this update to backend, but to avoid 10 calls,
+                    // we rely on the user eventually saving or us doing a bulk update.
+                    // For correctness, we fire individual updates.
+                    storageService.saveGoal(updated).catch(e => console.error("Failed to unlink goal", e));
+                    return updated;
+                }
+                return g;
+            }));
         }, []),
 
         // Smart Coach Implementation
