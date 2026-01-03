@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { parseOmniboxInput } from '../utils/nlpParser.ts';
+import { performSmartSearch } from '../utils/searchUtils.ts';
 import {
     ExerciseType,
     ExerciseIntensity,
@@ -239,20 +240,19 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
         // Use parsed query from intent (cleaner) or fall back to raw input
         const searchQuery = intent.type === 'food' && intent.data.query
-            ? intent.data.query.toLowerCase()
-            : input.toLowerCase();
+            ? intent.data.query
+            : input;
 
-        return foodItems
-            .filter(item =>
-                item.name.toLowerCase().includes(searchQuery) ||
-                item.category?.toLowerCase().includes(searchQuery)
-            )
-            .slice(0, 6)
-            .map(item => ({
-                ...item,
-                type: 'food' as const,
-                usageStats: foodUsageStats[item.id] || null
-            }));
+        return performSmartSearch(searchQuery, foodItems, {
+            textFn: (item) => item.name,
+            categoryFn: (item) => item.category,
+            usageCountFn: (item) => foodUsageStats[item.id]?.count || 0,
+            limit: 6
+        }).map(item => ({
+            ...item,
+            type: 'food' as const,
+            usageStats: foodUsageStats[item.id] || null
+        }));
     }, [input, foodItems, foodUsageStats, isSlashMode, intent, lockedFood]);
 
     // User search results
