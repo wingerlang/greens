@@ -1344,89 +1344,142 @@ export function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* 7-Day Performance Summary */}
+                    {/* 7-Day Performance Summary - Horizontal Timeline */}
                     <div className="col-span-12 md:col-span-12">
-                        <div className={`w-full ${density === 'compact' ? 'p-3' : 'p-6'} bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm`}>
-                            <div className="flex items-center justify-between mb-4 px-2">
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Senaste 7 Dagarna</h3>
-                                <div className="flex gap-2">
-                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-white"></div><span className="text-[9px] text-slate-400">Kcal</span></div>
-                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div><span className="text-[9px] text-slate-400">Träning</span></div>
+                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800`}>
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1 h-4 bg-indigo-500 rounded-full"></div>
+                                    <h3 className="text-xs font-black uppercase tracking-widest text-white">Senaste 7 Dagarna</h3>
+                                </div>
+                                <div className="flex gap-4">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                        <span className="text-[10px] text-slate-400 uppercase font-bold">Träning</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full bg-slate-600"></div>
+                                        <span className="text-[10px] text-slate-400 uppercase font-bold">Idag</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-3">
-                                {Array.from({ length: 7 }, (_, i) => {
+                            {/* Horizontal Timeline */}
+                            {(() => {
+                                const days = Array.from({ length: 7 }, (_, i) => {
                                     const d = new Date();
                                     d.setDate(d.getDate() - (6 - i));
                                     return d.toISOString().split('T')[0];
-                                }).reverse().map((date) => {
-                                    const nutrition = calculateDailyNutrition(date);
-                                    const cal = nutrition.calories || 0;
-                                    const targetCal = settings.dailyCalorieGoal || 2500;
-                                    const training = unifiedActivities.filter(a => a.date === date);
-                                    const dayVitals = getVitalsForDate(date);
+                                });
 
-                                    const dayLabel = new Date(date).toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'short' });
-                                    const isToday = date === new Date().toISOString().split('T')[0];
+                                const dayLabels = ['SÖN', 'MÅN', 'TIS', 'ONS', 'TORS', 'FRE', 'LÖR'];
 
-                                    // Status Logic
-                                    const isCalGood = cal > 0 && Math.abs(cal - targetCal) < 300;
-                                    const isTrained = training.length > 0;
-                                    const isSleepGood = (dayVitals.sleep || 0) >= 7;
+                                // Calculate totals
+                                let totalMinutes = 0;
+                                let totalTonnage = 0;
+                                let totalDistance = 0;
+                                let cardioCount = 0;
+                                let strengthCount = 0;
 
-                                    return (
-                                        <div key={date} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${isToday ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+                                days.forEach(date => {
+                                    const dayActivities = unifiedActivities.filter(a => a.date === date);
+                                    dayActivities.forEach(a => {
+                                        totalMinutes += a.durationMinutes || 0;
+                                        totalTonnage += (a.tonnage || 0) / 1000;
+                                        totalDistance += a.distance || 0;
+                                        if (a.type === 'strength') strengthCount++;
+                                        else cardioCount++;
+                                    });
+                                });
 
-                                            {/* Date Section */}
-                                            <div className="w-32 flex flex-col justify-center">
-                                                <div className={`text-xs font-bold capitalize ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}>
-                                                    {dayLabel}
-                                                </div>
-                                                {isToday && <div className="text-[9px] font-black uppercase text-slate-300 tracking-wider">Idag</div>}
+                                const totalHours = Math.floor(totalMinutes / 60);
+                                const remainingMins = totalMinutes % 60;
+                                const completedWorkouts = cardioCount + strengthCount;
+
+                                return (
+                                    <>
+                                        {/* Timeline Row */}
+                                        <div className="flex items-end justify-between mb-8 relative">
+                                            {/* Baseline */}
+                                            <div className="absolute bottom-3 left-0 right-0 h-px bg-slate-700"></div>
+
+                                            {days.map((date, i) => {
+                                                const d = new Date(date);
+                                                const dayOfWeek = d.getDay();
+                                                const isToday = date === new Date().toISOString().split('T')[0];
+                                                const dayActivities = unifiedActivities.filter(a => a.date === date);
+                                                const hasTraining = dayActivities.length > 0;
+
+                                                return (
+                                                    <div key={date} className={`flex-1 flex flex-col items-center ${isToday ? 'z-10' : ''}`}>
+                                                        {/* Day Label */}
+                                                        <span className={`text-[10px] font-bold mb-2 ${isToday ? 'text-white' : 'text-slate-500'}`}>
+                                                            {dayLabels[dayOfWeek]}
+                                                        </span>
+
+                                                        {/* Activity Bar or Dot */}
+                                                        {isToday ? (
+                                                            <div className="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-1">
+                                                                <div className="w-2 h-2 rounded-full bg-slate-500"></div>
+                                                            </div>
+                                                        ) : hasTraining ? (
+                                                            <div
+                                                                className="w-1.5 rounded-full bg-emerald-500 mb-1"
+                                                                style={{ height: `${Math.min(dayActivities.reduce((sum, a) => sum + (a.durationMinutes || 30), 0) / 2, 40)}px` }}
+                                                            ></div>
+                                                        ) : (
+                                                            <div className="w-2 h-2 rounded-full bg-slate-700 mb-1"></div>
+                                                        )}
+
+                                                        {/* Baseline Dot */}
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${hasTraining ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Stats Row */}
+                                        <div className="grid grid-cols-4 gap-4">
+                                            {/* Total Tid */}
+                                            <div className="space-y-1">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Tid</div>
+                                                <div className="text-2xl font-black text-white">{totalHours}h {remainingMins}m</div>
+                                                <div className="text-[10px] text-slate-500">{completedWorkouts} Slutförda pass</div>
                                             </div>
 
-                                            {/* Training Summary or Resting State */}
-                                            <div className="flex-1 flex flex-wrap gap-2 justify-start px-4">
-                                                {isTrained ? (
-                                                    training.map((t, idx) => (
-                                                        <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 text-emerald-600 rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                                                            <Dumbbell size={10} weight="fill" />
-                                                            <span>{t.title || (t.type === 'strength' ? 'Styrka' : 'Pass')}</span>
-                                                        </div>
-                                                    ))
-                                                ) : (
-                                                    <span className="text-[10px] font-medium text-slate-300 dark:text-slate-700 italic">Vilodag</span>
-                                                )}
+                                            {/* Volym */}
+                                            <div className="space-y-1 border-l border-slate-800 pl-4">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Volym</div>
+                                                <div className="text-2xl font-black text-emerald-400">{totalTonnage.toFixed(1)} Ton</div>
+                                                <div className="text-[10px] text-slate-500">Styrketräning</div>
                                             </div>
 
-                                            {/* Stats (Cal/Sleep) */}
-                                            <div className="flex items-center gap-4">
-                                                {/* Sleep */}
-                                                <div className="flex items-center gap-1.5" title={`${dayVitals.sleep || 0} timmar sömn`}>
-                                                    <Moon size={12} weight={isSleepGood ? "fill" : "regular"} className={isSleepGood ? "text-indigo-400" : "text-slate-300 dark:text-slate-700"} />
-                                                    <span className={`text-[10px] font-bold ${isSleepGood ? 'text-slate-700 dark:text-slate-300' : 'text-slate-300 dark:text-slate-600'}`}>{dayVitals.sleep || '-'}h</span>
-                                                </div>
+                                            {/* Distans */}
+                                            <div className="space-y-1 border-l border-slate-800 pl-4">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Distans</div>
+                                                <div className="text-2xl font-black text-indigo-400">{totalDistance.toFixed(1)} Km</div>
+                                                <div className="text-[10px] text-slate-500">Löpning / Gång</div>
+                                            </div>
 
-                                                {/* Calories */}
-                                                <div className="flex flex-col items-end w-20">
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-xs font-black text-slate-900 dark:text-white">{cal}</span>
-                                                        <span className="text-[8px] font-bold text-slate-400">kcal</span>
-                                                    </div>
-                                                    {/* Mini Progress Bar */}
-                                                    <div className="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full mt-0.5 overflow-hidden">
-                                                        <div
-                                                            className={`h-full rounded-full ${cal > targetCal + 300 ? 'bg-rose-400' : isCalGood ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-                                                            style={{ width: `${Math.min((cal / targetCal) * 100, 100)}%` }}
-                                                        />
-                                                    </div>
+                                            {/* Typ */}
+                                            <div className="space-y-2 border-l border-slate-800 pl-4">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Typ</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                                    <span className="text-xs text-slate-300">Kondition {cardioCount > 0 ? Math.round((cardioCount / (cardioCount + strengthCount)) * 100) : 0}%</span>
+                                                    <span className="text-[10px] text-slate-500">({cardioCount} pass)</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                                                    <span className="text-xs text-slate-300">Styrka {strengthCount > 0 ? Math.round((strengthCount / (cardioCount + strengthCount)) * 100) : 0}%</span>
+                                                    <span className="text-[10px] text-slate-500">({strengthCount} pass)</span>
                                                 </div>
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
 
