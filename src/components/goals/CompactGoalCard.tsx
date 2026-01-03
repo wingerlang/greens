@@ -44,6 +44,10 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
         if (goal.type === 'weight') return `${goal.targetWeight} kg`;
         if (!t) return '';
         if (goal.type === 'frequency') return `${t.count}x/${goal.period === 'weekly' ? 'v' : 'p'}`;
+        if (goal.type === 'streak') {
+            const suffix = goal.category === 'nutrition' || goal.category === 'lifestyle' ? 'dagar' : 'pass';
+            return `${t.count} ${suffix}`;
+        }
         return `${formatValue(t.value || 0)} ${t.unit}`;
     })();
 
