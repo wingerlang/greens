@@ -19,6 +19,7 @@ export const GoalTemplateRow: React.FC<GoalTemplateRowProps> = ({ goal, onChange
     const getUnit = () => {
         if (goal.type === 'weight') return 'kg';
         if (goal.type === 'nutrition') return 'kcal';
+        if (goal.type === 'streak') return goal.category === 'nutrition' ? 'dagar' : 'pass';
         if (goal.targets && goal.targets.length > 0) return goal.targets[0].unit || (goal.targets[0].count ? 'pass' : '');
         return '';
     };

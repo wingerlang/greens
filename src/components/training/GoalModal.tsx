@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { PerformanceGoal, PerformanceGoalType, GoalPeriod, GoalTarget, ExerciseType, TrainingCycle, GoalCategory, WeightEntry } from '../../models/types.ts';
 import { useData } from '../../context/DataContext.tsx';
+import { useScrollLock } from '../../hooks/useScrollLock.ts';
+import { calculateCalorieTarget, calculateVolumeStats } from '../../utils/smartGoalCalculations.ts';
 
 const EXERCISE_TYPES: { type: ExerciseType | undefined; icon: string; label: string }[] = [
     { type: undefined, icon: '🎯', label: 'All träning' },
@@ -95,8 +97,8 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
     // Track if using new weight vs existing
     const [useExistingWeight, setUseExistingWeight] = useState(true);
 
-    // Get weight data from context
-    const { weightEntries = [] } = useData();
+    // Get data from context
+    const { weightEntries = [], calculateBMR, exerciseEntries = [] } = useData();
 
     // Get latest weight entry
     const latestWeight = useMemo(() => {
@@ -106,6 +108,19 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
         );
         return sorted[0];
     }, [weightEntries]);
+
+    // Smart Stats
+    const volumeStats = useMemo(() => {
+        if (type === 'tonnage') return calculateVolumeStats(exerciseEntries, 'strength', 'ton');
+        if (type === 'distance') return calculateVolumeStats(exerciseEntries, 'running', 'km'); // Assuming running
+        return null;
+    }, [type, exerciseEntries]);
+
+    const calorieSmartData = useMemo(() => {
+        if (type !== 'nutrition') return null;
+        const bmr = calculateBMR();
+        return calculateCalorieTarget(bmr, 'moderate', 'cut'); // Default to cut
+    }, [type, calculateBMR]);
 
     // Format weight date nicely
     const formatWeightDate = (dateStr: string) => {
@@ -390,6 +405,8 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
         onClose();
     };
 
+    useScrollLock(isOpen);
+
     if (!isOpen) return null;
 
     const isBodyGoal = type === 'weight' || type === 'measurement';
@@ -563,29 +580,57 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
 
                         {/* Volume Config (distance/tonnage/calories) */}
                         {(type === 'distance' || type === 'tonnage' || type === 'calories') && (
-                            <div className="grid grid-cols-2 gap-4 p-4 bg-slate-950/30 rounded-xl border border-white/5">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
-                                    <input
-                                        type="number"
-                                        placeholder="50"
-                                        value={targetValue}
-                                        onChange={e => setTargetValue(e.target.value)}
-                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
-                                    />
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-950/30 rounded-xl border border-white/5">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
+                                        <input
+                                            type="number"
+                                            placeholder="50"
+                                            value={targetValue}
+                                            onChange={e => setTargetValue(e.target.value)}
+                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Enhet</label>
+                                        <select
+                                            value={targetUnit}
+                                            onChange={e => setTargetUnit(e.target.value)}
+                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
+                                        >
+                                            {type === 'distance' && <option value="km">km</option>}
+                                            {type === 'tonnage' && <option value="ton">ton</option>}
+                                            {type === 'calories' && <option value="kcal">kcal</option>}
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Enhet</label>
-                                    <select
-                                        value={targetUnit}
-                                        onChange={e => setTargetUnit(e.target.value)}
-                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                                    >
-                                        {type === 'distance' && <option value="km">km</option>}
-                                        {type === 'tonnage' && <option value="ton">ton</option>}
-                                        {type === 'calories' && <option value="kcal">kcal</option>}
-                                    </select>
-                                </div>
+
+                                {/* Smart Suggestions for Volume */}
+                                {volumeStats && (volumeStats.avg30d > 0) && (
+                                    <div className="p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
+                                        <div className="text-[10px] font-bold text-blue-400 uppercase mb-2 flex justify-between">
+                                            <span>Snitt (Veckovis)</span>
+                                            <span>{volumeStats.avg30d.toFixed(1)} {volumeStats.unit} (30d)</span>
+                                        </div>
+                                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                                            {[
+                                                { label: 'Samma', val: volumeStats.avg30d },
+                                                { label: '+10%', val: volumeStats.avg30d * 1.1 },
+                                                { label: '+15%', val: volumeStats.avg30d * 1.15 },
+                                                { label: '+30%', val: volumeStats.avg30d * 1.3 },
+                                            ].map(opt => (
+                                                <button
+                                                    key={opt.label}
+                                                    onClick={() => setTargetValue(Math.round(opt.val).toString())}
+                                                    className="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs rounded border border-blue-500/20 whitespace-nowrap"
+                                                >
+                                                    {opt.label} ({Math.round(opt.val)})
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -870,28 +915,48 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
 
                         {/* Nutrition Config */}
                         {type === 'nutrition' && (
-                            <div className="grid grid-cols-2 gap-4 p-4 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-xl border border-green-500/10">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
-                                    <input
-                                        type="number"
-                                        placeholder="150"
-                                        value={targetValue}
-                                        onChange={e => setTargetValue(e.target.value)}
-                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
-                                    />
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-4 p-4 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-xl border border-green-500/10">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
+                                        <input
+                                            type="number"
+                                            placeholder="150"
+                                            value={targetValue}
+                                            onChange={e => setTargetValue(e.target.value)}
+                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Typ</label>
+                                        <select
+                                            value={targetUnit}
+                                            onChange={e => setTargetUnit(e.target.value)}
+                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
+                                        >
+                                            <option value="g">🥩 Protein (g)</option>
+                                            <option value="kcal">🔥 Kalorier (kcal)</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Typ</label>
-                                    <select
-                                        value={targetUnit}
-                                        onChange={e => setTargetUnit(e.target.value)}
-                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                                    >
-                                        <option value="g">🥩 Protein (g)</option>
-                                        <option value="kcal">🔥 Kalorier (kcal)</option>
-                                    </select>
-                                </div>
+
+                                {/* Smart Calorie Estimate */}
+                                {calorieSmartData && targetUnit === 'kcal' && (
+                                    <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-[10px] font-bold text-emerald-400 uppercase">✨ Smart Estimat</span>
+                                            <button
+                                                onClick={() => setTargetValue(calorieSmartData.target.toString())}
+                                                className="text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-2 py-1 rounded"
+                                            >
+                                                Använd {calorieSmartData.target}
+                                            </button>
+                                        </div>
+                                        <div className="text-xs text-slate-400">
+                                            {calorieSmartData.explanation}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
