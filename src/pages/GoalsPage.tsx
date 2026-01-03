@@ -17,6 +17,8 @@ import { GoalProgressRing, MiniProgressRing } from '../components/goals/GoalProg
 import { GoalCelebration } from '../components/goals/GoalCelebration';
 import { GoalDetailModal } from '../components/goals/GoalDetailModal';
 import { GoalModal } from '../components/training/GoalModal';
+import { PeriodWizard } from '../components/training/period/PeriodWizard'; // New Wizard
+import { useNavigate } from 'react-router-dom';
 import type { PerformanceGoal, GoalCategory, PerformanceGoalType, GoalPeriod } from '../models/types';
 import './GoalsPage.css';
 
@@ -144,11 +146,13 @@ const GOAL_TEMPLATES: GoalTemplate[] = [
 type SortOption = 'progress' | 'deadline' | 'category' | 'name';
 
 export function GoalsPage() {
-    const { performanceGoals = [], trainingCycles = [], addGoal, updateGoal, deleteGoal } = useData();
+    const { performanceGoals = [], trainingCycles = [], trainingPeriods = [], addGoal, updateGoal, deleteGoal } = useData();
+    const navigate = useNavigate();
 
     // State
     const [selectedCategory, setSelectedCategory] = useState<GoalCategory | 'all'>('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isPeriodWizardOpen, setIsPeriodWizardOpen] = useState(false); // New State
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
     const [celebratingGoal, setCelebratingGoal] = useState<PerformanceGoal | null>(null);
     const [showCompleted, setShowCompleted] = useState(false);
@@ -163,6 +167,12 @@ export function GoalsPage() {
     const viewingGoal = useMemo(() =>
         viewingGoalId ? performanceGoals.find(g => g.id === viewingGoalId) || null : null,
         [viewingGoalId, performanceGoals]);
+
+    // Active Training Period
+    const activePeriod = useMemo(() => {
+        const today = new Date().toISOString().split('T')[0];
+        return trainingPeriods.find(p => p.startDate <= today && p.endDate >= today) || trainingPeriods[0]; // fallback
+    }, [trainingPeriods]);
 
     // Hooks
     const activeGoals = useActiveGoals();
@@ -293,13 +303,37 @@ export function GoalsPage() {
     return (
         <div className="goals-page">
             {/* Hero Section */}
-            <header className="goals-hero">
+            <header className="goals-hero relative">
                 <div className="goals-hero-content">
                     <div className="goals-hero-text">
                         <h1>🎯 Mina Mål</h1>
                         <p className="goals-subtitle">
                             Spåra, uppnå och fira dina framsteg
                         </p>
+
+                        {/* New Feature: Active Period Card */}
+                        {activePeriod ? (
+                            <button
+                                onClick={() => navigate(`/training/period/${activePeriod.id}`)}
+                                className="mt-4 flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl hover:bg-emerald-500/20 transition-all text-left group"
+                            >
+                                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                                    🚀
+                                </div>
+                                <div>
+                                    <div className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Aktiv Period</div>
+                                    <div className="font-bold text-white group-hover:text-emerald-300 transition-colors">{activePeriod.name}</div>
+                                </div>
+                                <div className="ml-auto text-emerald-400/50 group-hover:text-emerald-400">→</div>
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => setIsPeriodWizardOpen(true)}
+                                className="mt-4 inline-flex items-center gap-2 text-xs font-bold bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg text-white/70 hover:text-white transition-all"
+                            >
+                                ✨ Starta Träningsperiod
+                            </button>
+                        )}
                     </div>
 
                     {/* Summary Ring */}
@@ -421,6 +455,12 @@ export function GoalsPage() {
                         <button className="add-goal-btn" onClick={handleNewGoal}>
                             + Nytt Mål
                         </button>
+                            <button
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 text-sm transition-colors"
+                                onClick={() => setIsPeriodWizardOpen(true)}
+                            >
+                                🚀 Starta Period
+                            </button>
                     </div>
                 </div>
 
@@ -622,6 +662,15 @@ export function GoalsPage() {
                 onSave={handleSaveGoal}
                 cycles={trainingCycles}
                 editingGoal={editingGoal}
+            />
+
+            {/* Period Wizard */}
+            <PeriodWizard
+                isOpen={isPeriodWizardOpen}
+                onClose={() => setIsPeriodWizardOpen(false)}
+                onSave={() => {
+                    // Refresh handled by context, maybe show celebration?
+                }}
             />
 
             {/* Celebration Modal */}

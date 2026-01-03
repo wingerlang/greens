@@ -7,6 +7,8 @@ import { handleActivityRoutes } from "./handlers/activities.ts";
 import { handleAdminRoutes } from "./handlers/admin.ts";
 import { handleStrengthRoutes } from "./handlers/strength.ts";
 import { handleFeedRoutes } from "./handlers/feed.ts";
+import { handleGoalRoutes } from "./handlers/goals.ts";
+import { handlePeriodRoutes } from "./handlers/periods.ts";
 
 export async function router(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -40,6 +42,8 @@ export async function router(req: Request): Promise<Response> {
         if (url.pathname.startsWith("/api/admin")) return await handleAdminRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/strength")) return await handleStrengthRoutes(req, url, headers);
         if (url.pathname.startsWith("/api/feed")) return await handleFeedRoutes(req, url, headers);
+        if (url.pathname.startsWith("/api/goals")) return await handleGoalRoutes(req, url, headers);
+        if (url.pathname.startsWith("/api/periods")) return await handlePeriodRoutes(req, url, headers);
 
         return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
     } catch (e) {

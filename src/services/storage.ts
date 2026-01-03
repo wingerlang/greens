@@ -4,7 +4,7 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan } from '../models/types.ts';
+import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 
 // ============================================
@@ -20,6 +20,10 @@ export interface StorageService {
     deleteWeeklyPlan(id: string): Promise<void>;
     addWeightEntry(weight: number, date: string): Promise<void>;
     addMealEntry(meal: any): Promise<void>;
+    saveGoal(goal: PerformanceGoal): Promise<void>;
+    deleteGoal(id: string): Promise<void>;
+    savePeriod(period: TrainingPeriod): Promise<void>;
+    deletePeriod(id: string): Promise<void>;
     createFeedEvent(event: any): Promise<any>;
     // Clear specific data from local cache
     clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
@@ -265,6 +269,73 @@ export class LocalStorageService implements StorageService {
             }
         }
     }
+
+    async saveGoal(goal: PerformanceGoal): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('http://localhost:8000/api/goals', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(goal)
+                });
+                if (!res.ok) throw new Error('API sync failed');
+            } catch (e) {
+                console.error('[Storage] Goal sync failed:', e);
+            }
+        }
+    }
+
+    async deleteGoal(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`http://localhost:8000/api/goals?id=${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) {
+                console.error('[Storage] Goal delete failed:', e);
+            }
+        }
+    }
+
+    async savePeriod(period: TrainingPeriod): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('http://localhost:8000/api/periods', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(period)
+                });
+                if (!res.ok) throw new Error('API sync failed');
+            } catch (e) {
+                console.error('[Storage] Period sync failed:', e);
+            }
+        }
+    }
+
+    async deletePeriod(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`http://localhost:8000/api/periods?id=${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) {
+                console.error('[Storage] Period delete failed:', e);
+            }
+        }
+    }
+
     async createFeedEvent(event: any): Promise<any> {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
