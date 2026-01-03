@@ -441,6 +441,25 @@ export interface PerformanceGoal {
     };
     targetWeight?: number;        // For weight goals (target kg)
     targetWeightRate?: number;    // Rate of change (kg per week)
+    periodId?: string;            // Link to TrainingPeriod
+}
+
+// ============================================
+// Training Periods (Goals 2.0)
+// ============================================
+
+export type PeriodFocus = 'weight_loss' | 'strength' | 'endurance' | 'general' | 'habit';
+
+export interface TrainingPeriod {
+    id: string;
+    userId: string;
+    name: string;
+    description?: string;
+    startDate: string;
+    endDate: string;
+    focusType: PeriodFocus;
+    createdAt: string;
+    updatedAt: string;
 }
 
 /** Available exercise categories */

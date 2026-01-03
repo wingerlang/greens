@@ -5,6 +5,8 @@ import { activityRepo } from "../repositories/activityRepository.ts";
 import { mealRepo } from "../repositories/mealRepository.ts";
 import { weightRepo } from "../repositories/weightRepository.ts";
 import { strengthRepo } from "../repositories/strengthRepository.ts";
+import { goalRepo } from "../repositories/goalRepository.ts";
+import { periodRepo } from "../repositories/periodRepository.ts";
 
 export async function getUserData(userId: string): Promise<AppData | null> {
     const res = await kv.get(["user_profiles", userId]);
@@ -17,6 +19,19 @@ export async function getUserData(userId: string): Promise<AppData | null> {
         pantryItems: [],
         pantryQuantities: {},
     };
+
+    // 0. Fetch Goals & Periods (Migration Support)
+    // We combine legacy goals (from blob) with new repo goals.
+    const repoGoals = await goalRepo.getGoals(userId);
+    const legacyGoals = userData.performanceGoals || [];
+    // Simple de-duplication by ID (Repo takes precedence)
+    const goalMap = new Map();
+    legacyGoals.forEach(g => goalMap.set(g.id, g));
+    repoGoals.forEach(g => goalMap.set(g.id, g));
+    userData.performanceGoals = Array.from(goalMap.values());
+
+    // Fetch periods
+    (userData as any).trainingPeriods = await periodRepo.getPeriods(userId);
 
     // 1. Fetch meals (Source of truth is now mealRepo)
     const meals = await mealRepo.getMealsInRange(userId, "2000-01-01", "2099-12-31");
@@ -78,6 +93,23 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
     }
 
     // 2. Save the rest as a profile blob (excluding large/granular items)
+    // NOTE: performanceGoals are now excluded because they are handled via repo.
+    // However, if we don't exclude them, they just sit there as legacy.
+    // Ideally we strip them to keep blob small.
+    // We also intercept them here to save to repo during migration.
+
+    if (data.performanceGoals && data.performanceGoals.length > 0) {
+        for (const goal of data.performanceGoals) {
+            await goalRepo.saveGoal(userId, goal);
+        }
+    }
+
+    if ((data as any).trainingPeriods && (data as any).trainingPeriods.length > 0) {
+        for (const period of (data as any).trainingPeriods) {
+            await periodRepo.savePeriod(userId, period);
+        }
+    }
+
     const {
         foodItems,
         recipes,
@@ -85,8 +117,12 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         mealEntries,
         weightEntries,
         strengthSessions,
+        performanceGoals, // Exclude from blob
         ...userSpecificData
     } = data;
+
+    // Remove trainingPeriods from userSpecificData if it exists (it's typed as any above)
+    delete (userSpecificData as any).trainingPeriods;
 
     await kv.set(["user_profiles", userId], { ...userSpecificData, updatedAt: new Date().toISOString() });
 

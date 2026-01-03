@@ -43,7 +43,8 @@ import {
     type StrengthMuscleGroup,
     type StrengthExercise,
     type UserPrivacy,
-    type BodyMeasurementEntry // Phase Legacy+
+    type BodyMeasurementEntry, // Phase Legacy+
+    type TrainingPeriod
 } from '../models/types.ts';
 import { type StrengthWorkout } from '../models/strengthTypes.ts';
 import { storageService } from '../services/storage.ts';
@@ -158,6 +159,12 @@ interface DataContextType {
     deleteGoal: (id: string) => void;
     getGoalsForCycle: (cycleId: string) => PerformanceGoal[];
 
+    // Training Periods CRUD
+    trainingPeriods: TrainingPeriod[];
+    addTrainingPeriod: (data: Omit<TrainingPeriod, 'id' | 'createdAt' | 'updatedAt'>) => TrainingPeriod;
+    updateTrainingPeriod: (id: string, updates: Partial<TrainingPeriod>) => void;
+    deleteTrainingPeriod: (id: string) => void;
+
     // Smart Coach CRUD
     coachConfig: CoachConfig | undefined;
     plannedActivities: PlannedActivity[];
@@ -230,6 +237,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [trainingCycles, setTrainingCycles] = useState<TrainingCycle[]>([]);
     const [strengthSessions, setStrengthSessions] = useState<StrengthWorkout[]>([]);
     const [performanceGoals, setPerformanceGoals] = useState<PerformanceGoal[]>([]);
+    const [trainingPeriods, setTrainingPeriods] = useState<TrainingPeriod[]>([]);
     const [coachConfig, setCoachConfig] = useState<CoachConfig | undefined>(undefined);
     const [plannedActivities, setPlannedActivities] = useState<PlannedActivity[]>([]);
 
@@ -447,6 +455,9 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.performanceGoals) {
             setPerformanceGoals(data.performanceGoals || []);
         }
+        if ((data as any).trainingPeriods) {
+            setTrainingPeriods((data as any).trainingPeriods || []);
+        }
         if (data.coachConfig) {
             setCoachConfig(data.coachConfig);
         }
@@ -491,6 +502,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 trainingCycles,
                 strengthSessions,
                 performanceGoals,
+                trainingPeriods,
                 coachConfig,
                 plannedActivities,
                 // Phase 8
@@ -1681,17 +1693,61 @@ export function DataProvider({ children }: DataProviderProps) {
                 createdAt: new Date().toISOString()
             };
             setPerformanceGoals(prev => [...prev, newGoal]);
+            // Persist Granularly
+            skipAutoSave.current = true;
+            storageService.saveGoal(newGoal).catch(e => console.error("Failed to save goal", e));
             return newGoal;
         }, []),
         updateGoal: useCallback((id, updates) => {
-            setPerformanceGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+            setPerformanceGoals(prev => {
+                const next = prev.map(g => g.id === id ? { ...g, ...updates } : g);
+                const updatedGoal = next.find(g => g.id === id);
+                if (updatedGoal) {
+                    skipAutoSave.current = true;
+                    storageService.saveGoal(updatedGoal).catch(e => console.error("Failed to update goal", e));
+                }
+                return next;
+            });
         }, []),
         deleteGoal: useCallback((id) => {
             setPerformanceGoals(prev => prev.filter(g => g.id !== id));
+            skipAutoSave.current = true;
+            storageService.deleteGoal(id).catch(e => console.error("Failed to delete goal", e));
         }, []),
         getGoalsForCycle: useCallback((cycleId) => {
             return performanceGoals.filter(g => g.cycleId === cycleId);
         }, [performanceGoals]),
+
+        // Training Periods CRUD
+        trainingPeriods,
+        addTrainingPeriod: useCallback((data) => {
+            const newPeriod: TrainingPeriod = {
+                ...data,
+                id: generateId(),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            setTrainingPeriods(prev => [...prev, newPeriod]);
+            skipAutoSave.current = true;
+            storageService.savePeriod(newPeriod).catch(e => console.error("Failed to save period", e));
+            return newPeriod;
+        }, []),
+        updateTrainingPeriod: useCallback((id, updates) => {
+            setTrainingPeriods(prev => {
+                const next = prev.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p);
+                const updatedPeriod = next.find(p => p.id === id);
+                if (updatedPeriod) {
+                    skipAutoSave.current = true;
+                    storageService.savePeriod(updatedPeriod).catch(e => console.error("Failed to update period", e));
+                }
+                return next;
+            });
+        }, []),
+        deleteTrainingPeriod: useCallback((id) => {
+            setTrainingPeriods(prev => prev.filter(p => p.id !== id));
+            skipAutoSave.current = true;
+            storageService.deletePeriod(id).catch(e => console.error("Failed to delete period", e));
+        }, []),
 
         // Smart Coach Implementation
         coachConfig,
