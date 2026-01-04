@@ -11,8 +11,10 @@ import { handleGoalRoutes } from "./handlers/goals.ts";
 import { handlePeriodRoutes } from "./handlers/periods.ts";
 import { handleParserRoutes } from "./handlers/parser.ts";
 import { handleGetCommunityStats } from "./handlers/statistics.ts";
+import { logError, logMetric } from "./utils/logger.ts";
 
 export async function router(req: Request): Promise<Response> {
+    const start = performance.now();
     const url = new URL(req.url);
     const method = req.method;
 
@@ -28,30 +30,60 @@ export async function router(req: Request): Promise<Response> {
         return new Response(null, { headers });
     }
 
+    let response: Response;
+
     try {
         // Dispatch to handlers
-        if (url.pathname.startsWith("/api/auth")) return await handleAuthRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/user")) return await handleUserRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/u/")) return await handleUserRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/users")) return await handleUserRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/data")) return await handleDataRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/meals")) return await handleDataRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/weight")) return await handleDataRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/foods")) return await handleDataRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/strava")) return await handleStravaRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/social")) return await handleSocialRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/activities")) return await handleActivityRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/admin")) return await handleAdminRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/strength")) return await handleStrengthRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/feed")) return await handleFeedRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/goals")) return await handleGoalRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/periods")) return await handlePeriodRoutes(req, url, headers);
-        if (url.pathname.startsWith("/api/parse-url")) return await handleParserRoutes(req, url, headers);
-        if (url.pathname === "/api/stats/community") return await handleGetCommunityStats(req);
-
-        return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
+        if (url.pathname.startsWith("/api/auth")) {
+            response = await handleAuthRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/user")) {
+            response = await handleUserRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/u/")) {
+            response = await handleUserRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/users")) {
+            response = await handleUserRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/data")) {
+            response = await handleDataRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/meals")) {
+            response = await handleDataRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/weight")) {
+            response = await handleDataRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/foods")) {
+            response = await handleDataRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/strava")) {
+            response = await handleStravaRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/social")) {
+            response = await handleSocialRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/activities")) {
+            response = await handleActivityRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/admin")) {
+            response = await handleAdminRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/strength")) {
+            response = await handleStrengthRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/feed")) {
+            response = await handleFeedRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/goals")) {
+            response = await handleGoalRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/periods")) {
+            response = await handlePeriodRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/parse-url")) {
+            response = await handleParserRoutes(req, url, headers);
+        } else if (url.pathname === "/api/stats/community") {
+            response = await handleGetCommunityStats(req);
+        } else {
+            response = new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
+        }
     } catch (e) {
         console.error("Internal Server Error:", e);
-        return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+        // Log to KV
+        await logError(e instanceof Error ? e : String(e), { url: url.toString(), method }, undefined, url.pathname);
+        response = new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
     }
+
+    // Metrics Logging
+    const duration = performance.now() - start;
+    await logMetric("response_time", duration, { path: url.pathname, method, status: String(response.status) });
+    await logMetric("request_count", 1, { path: url.pathname, method, status: String(response.status) });
+
+    return response;
 }

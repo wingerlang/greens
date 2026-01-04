@@ -1,11 +1,62 @@
 import { getAllUsers, sanitizeUser, getUserById, saveUser } from "../db/user.ts";
 import { getAllSessions } from "../db/session.ts";
 import { authenticate, hasRole } from "../middleware.ts";
+import { getErrorLogs, getMetrics } from "../utils/logger.ts";
+import { kv } from "../kv.ts";
 
 export async function handleAdminRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const ctx = await authenticate(req);
     if (!ctx || !hasRole(ctx, 'admin')) {
         return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), { status: 403, headers });
+    }
+
+    if (url.pathname === "/api/admin/health") {
+        const memory = Deno.memoryUsage();
+        const system = {
+            denoVersion: Deno.version,
+            memory: {
+                rss: Math.round(memory.rss / 1024 / 1024) + " MB",
+                heapTotal: Math.round(memory.heapTotal / 1024 / 1024) + " MB",
+                heapUsed: Math.round(memory.heapUsed / 1024 / 1024) + " MB",
+            },
+            pid: Deno.pid,
+            uptime: Math.round(performance.now() / 1000) + " s",
+            // Approx KV check
+            kvStatus: "connected" // Implicit if we are here
+        };
+        return new Response(JSON.stringify(system), { headers });
+    }
+
+    if (url.pathname === "/api/admin/logs") {
+        const logs = await getErrorLogs(100);
+        return new Response(JSON.stringify({ logs }), { headers });
+    }
+
+    if (url.pathname === "/api/admin/metrics") {
+        const responseTimes = await getMetrics("response_time", 500);
+        const reqCounts = await getMetrics("request_count", 500);
+
+        // Simple aggregation
+        const avgResponseTime = responseTimes.length > 0
+            ? responseTimes.reduce((acc, curr) => acc + curr.value, 0) / responseTimes.length
+            : 0;
+
+        return new Response(JSON.stringify({
+            metrics: {
+                avgResponseTime,
+                totalRequestsLogged: reqCounts.length,
+                recentResponseTimes: responseTimes.slice(0, 50)
+            }
+        }), { headers });
+    }
+
+    if (url.pathname === "/api/admin/database") {
+        // Count keys (approx)
+        let keyCount = 0;
+        for await (const _entry of kv.list({ prefix: [] })) {
+            keyCount++;
+        }
+        return new Response(JSON.stringify({ keyCount }), { headers });
     }
 
     if (url.pathname === "/api/admin/users") {

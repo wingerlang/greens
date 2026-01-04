@@ -5,6 +5,7 @@ import { type FoodItem, CATEGORY_LABELS, UNIT_LABELS } from '../models/types.ts'
 import { UsersModule } from '../components/admin/UsersModule.tsx';
 import { RoadmapModule } from '../components/admin/RoadmapModule.tsx';
 import { SystemGeneratorModule } from '../components/admin/SystemGeneratorModule.tsx';
+import { HealthModule } from '../components/admin/HealthModule.tsx';
 import { DatabasePage } from './DatabasePage.tsx';
 import { ApiPage } from './ApiPage.tsx';
 import { DocumentationPage } from '../components/DocumentationPage.tsx';
@@ -16,7 +17,7 @@ export const AdminPage: React.FC = () => {
     const [search, setSearch] = useState('');
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
 
-    const activeTab = searchParams.get('tab') || 'audit';
+    const activeTab = searchParams.get('tab') || 'health';
     const setActiveTab = (tab: string) => setSearchParams({ tab });
 
     const handleExport = () => {
@@ -85,8 +86,14 @@ export const AdminPage: React.FC = () => {
             {/* Tab Navigation */}
             <div className="flex border-b border-slate-800 gap-6 overflow-x-auto no-scrollbar">
                 <button
+                    onClick={() => setActiveTab('health')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'health' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    🩺 Health
+                </button>
+                <button
                     onClick={() => setActiveTab('audit')}
-                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'audit' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'audit' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
                     🔍 Audit
                 </button>
@@ -127,6 +134,12 @@ export const AdminPage: React.FC = () => {
                     🔧 Verktyg
                 </button>
             </div>
+
+            {activeTab === 'health' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <HealthModule />
+                </div>
+            )}
 
             {activeTab === 'audit' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
