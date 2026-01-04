@@ -888,15 +888,30 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [foodItems, recipes, calculateRecipeNutrition, emitFeedEvent]);
 
     const updateMealEntry = useCallback((id: string, data: Partial<MealEntryFormData>): void => {
-        setMealEntries((prev: MealEntry[]) =>
-            prev.map((entry: MealEntry) =>
+        setMealEntries((prev: MealEntry[]) => {
+            const next = prev.map((entry: MealEntry) =>
                 entry.id === id ? { ...entry, ...data } : entry
-            )
-        );
+            );
+
+            // Sync via Granular API
+            const updated = next.find(e => e.id === id);
+            if (updated) {
+                skipAutoSave.current = true;
+                storageService.updateMealEntry(updated).catch(e => console.error("Failed to update meal", e));
+            }
+            return next;
+        });
     }, []);
 
     const deleteMealEntry = useCallback((id: string): void => {
-        setMealEntries((prev: MealEntry[]) => prev.filter((entry: MealEntry) => entry.id !== id));
+        setMealEntries((prev: MealEntry[]) => {
+            const entry = prev.find(e => e.id === id);
+            if (entry) {
+                skipAutoSave.current = true;
+                storageService.deleteMealEntry(id, entry.date).catch(e => console.error("Failed to delete meal", e));
+            }
+            return prev.filter((entry: MealEntry) => entry.id !== id);
+        });
     }, []);
 
     // ============================================
@@ -1049,13 +1064,28 @@ export function DataProvider({ children }: DataProviderProps) {
     const updateWeightEntry = useCallback((id: string, weight: number, date: string, waist?: number) => {
         setWeightEntries(prev => {
             const next = prev.map(w => w.id === id ? { ...w, weight, date, waist } : w);
+
+            // Sync via Granular API
+            const updated = next.find(w => w.id === id);
+            if (updated) {
+                skipAutoSave.current = true;
+                storageService.updateWeightEntry(updated).catch(e => console.error("Failed to update weight", e));
+            }
+
             // Re-sort in case date changed
             return next.sort((a, b) => b.date.localeCompare(a.date));
         });
     }, []);
 
     const deleteWeightEntry = useCallback((id: string) => {
-        setWeightEntries(prev => prev.filter(w => w.id !== id));
+        setWeightEntries(prev => {
+            const entry = prev.find(w => w.id === id);
+            if (entry) {
+                skipAutoSave.current = true;
+                storageService.deleteWeightEntry(id, entry.date).catch(e => console.error("Failed to delete weight", e));
+            }
+            return prev.filter(w => w.id !== id);
+        });
     }, []);
 
     const getLatestWeight = useCallback((): number => {
