@@ -5,15 +5,17 @@ import { ComparisonBar } from '../components/charts/ComparisonBar.tsx';
 import { RadarProfile } from '../components/charts/RadarProfile.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useData } from '../context/DataContext.tsx';
-import { Link } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { calculate1RM, PersonalBest } from '../models/strengthTypes.ts';
 import { PBHoverCard } from '../components/charts/PBHoverCard.tsx';
 
 export function CommunityStatsPage() {
+    const navigate = useNavigate();
+    const { tab } = useParams<{ tab: string }>();
 
     function StatCard({ label, value, unit, icon, color }: { label: string, value: string, unit: string, icon: string, color: string }) {
         return (
-            <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex flex-col items-center text-center hover:bg-slate-800/50 transition-colors">
+            <div className="bg-slate-900/50 border border-slate-800 p-6 rounded-2xl flex flex-col items-center text-center hover:bg-slate-800/50 transition-colors shrink-0 min-w-[160px]">
                 <div className="text-3xl mb-2">{icon}</div>
                 <div className={`text-3xl lg:text-4xl font-black ${color} mb-1 tracking-tight`}>
                     {value}<span className="text-lg text-gray-500 ml-1 font-bold">{unit}</span>
@@ -26,10 +28,15 @@ export function CommunityStatsPage() {
     const { user } = useAuth();
     const { strengthSessions, exerciseEntries, unifiedActivities } = useData();
 
-
     const [stats, setStats] = useState<CommunityStats | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'overview' | 'strength' | 'cardio'>('overview');
+
+    // Derived tab state from URL
+    const activeTab = (tab as 'overview' | 'strength' | 'cardio') || 'overview';
+    const setActiveTab = (newTab: string) => {
+        navigate(`/statistik/${newTab}`);
+    };
+
     const [exerciseSearch, setExerciseSearch] = useState('');
     const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
 
@@ -543,13 +550,36 @@ export function CommunityStatsPage() {
 
         const filteredExerciseStats = Object.values(stats.strength.exercises)
             .filter(ex => ex.name.toLowerCase().includes(exerciseSearch.toLowerCase()))
-            .map(ex => ({
-                ...ex,
-                userPB: getUserPB(ex.name),
-                sortScore: exerciseSortMode === 'popular' ? ex.athleteCount :
-                    exerciseSortMode === 'strongest' ? (getUserPB(ex.name) / ex.avg1RM) :
-                        (ex.avg1RM / (getUserPB(ex.name) || 0.1))
-            }))
+            .map(ex => {
+                const pb = getUserPB(ex.name);
+                const userSessions = getUserSessionsCount(ex.name);
+
+                // Sort Score calculation:
+                // Base score from selected mode
+                let baseScore = 0;
+                if (exerciseSortMode === 'popular') {
+                    // "Vanligaste först" - combine user sessions and total athlete count
+                    // Give high weight to user's own frequency to make it "My most common"
+                    baseScore = (userSessions * 20) + ex.athleteCount;
+                } else if (exerciseSortMode === 'strongest') {
+                    baseScore = ex.avg1RM > 0 ? (pb / ex.avg1RM) : 0;
+                } else {
+                    baseScore = pb > 0 ? (ex.avg1RM / pb) : 0;
+                }
+
+                // Penalty for no data/no sessions to keep them at the bottom
+                // If they have nether user data nor community data, they go to the absolute bottom
+                if (userSessions === 0 && ex.athleteCount === 0) baseScore -= 5000;
+                // If they have no user data, they go below anything the user HAS done
+                else if (userSessions === 0) baseScore -= 1000;
+
+                return {
+                    ...ex,
+                    userPB: pb,
+                    userSessions,
+                    sortScore: baseScore
+                };
+            })
             .sort((a, b) => b.sortScore - a.sortScore);
 
         const selectedExerciseData = (selectedExercise && stats.strength.exercises[selectedExercise.toLowerCase()]) || null;
@@ -605,29 +635,45 @@ export function CommunityStatsPage() {
                         <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
                             <div className="space-y-2">
                                 {filteredExerciseStats.map(ex => {
-                                    const pb = getUserPB(ex.name);
-                                    const diff = ((pb - ex.avg1RM) / ex.avg1RM) * 100;
+                                    const pb = ex.userPB;
+                                    const diff = ex.avg1RM > 0 ? (((pb - ex.avg1RM) / ex.avg1RM) * 100) : 0;
+                                    // Slugify for navigation
+                                    const slugifiedName = ex.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+
                                     return (
-                                        <button
-                                            key={ex.name}
-                                            onClick={() => setSelectedExercise(ex.name)}
-                                            className={`w-full text-left p-4 rounded-xl border transition-all group ${selectedExercise === ex.name ? 'bg-emerald-500/10 border-emerald-500 shadow-lg shadow-emerald-500/10' : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800/60 hover:border-slate-600'}`}
-                                        >
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <div className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors">{ex.name}</div>
-                                                    <div className="text-[10px] text-gray-500 uppercase font-bold mt-1">{ex.athleteCount} atleter</div>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="text-sm font-black text-emerald-400">{pb ? `${formatNumber(pb)} kg` : '--'}</div>
-                                                    {pb > 0 && (
-                                                        <div className={`text-[10px] font-black ${diff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                            {diff > 0 ? '+' : ''}{Math.round(diff)}%
+                                        <div key={ex.name} className="relative group">
+                                            <button
+                                                onClick={() => setSelectedExercise(ex.name)}
+                                                className={`w-full text-left p-4 rounded-xl border transition-all ${selectedExercise === ex.name ? 'bg-emerald-500/10 border-emerald-500 shadow-lg shadow-emerald-500/10' : 'bg-slate-800/40 border-slate-700/50 hover:bg-slate-800/60 hover:border-slate-600'}`}
+                                            >
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <div className="text-sm font-bold text-white group-hover:text-emerald-400 transition-colors uppercase tracking-tight">{ex.name}</div>
+                                                        <div className="flex gap-2 mt-1">
+                                                            <div className="text-[10px] text-gray-500 uppercase font-bold">{ex.athleteCount} atleter</div>
+                                                            <div className="text-[10px] text-emerald-500 uppercase font-black tracking-widest">{ex.userSessions} pass</div>
                                                         </div>
-                                                    )}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-sm font-black text-emerald-400">{pb ? `${formatNumber(pb)} kg` : '--'}</div>
+                                                        {pb > 0 && ex.avg1RM > 0 && (
+                                                            <div className={`text-[10px] font-black ${diff > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                                {diff > 0 ? '+' : ''}{Math.round(diff)}%
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        </button>
+                                            </button>
+
+                                            {/* Quick Link to My Stats */}
+                                            <Link
+                                                to={`/styrka/${slugifiedName}`}
+                                                className="absolute top-2 right-2 p-1.5 opacity-0 group-hover:opacity-100 hover:bg-emerald-500/20 rounded-lg transition-all text-emerald-500"
+                                                title="Se min statistik & modal"
+                                            >
+                                                <span className="text-xs">📊</span>
+                                            </Link>
+                                        </div>
                                     );
                                 })}
                             </div>
@@ -846,7 +892,7 @@ export function CommunityStatsPage() {
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20 px-4">
             {/* STICKY HEADER & FILTERS */}
-            <div className="sticky top-0 z-40 -mx-4 px-4 py-4 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50 shadow-xl shadow-slate-950/20 mb-8">
+            <div className="sticky top-16 z-40 -mx-4 px-4 py-4 bg-slate-950/80 backdrop-blur-xl border-b border-slate-800/50 shadow-2xl shadow-slate-950/50 mb-4 transition-all duration-300">
                 <div className="max-w-7xl mx-auto flex flex-col lg:flex-row justify-between items-center gap-6">
                     <div className="flex flex-col">
                         <h1 className="text-3xl font-black italic text-white tracking-tight uppercase flex items-center gap-3">
@@ -897,8 +943,8 @@ export function CommunityStatsPage() {
                 </div>
             </div>
 
-            {/* Tabs with Icons */}
-            <div className="flex gap-2 bg-slate-900/50 p-1.5 rounded-2xl border border-slate-800 shadow-inner">
+            {/* Tabs with Icons - Also Sticky below the filters */}
+            <div className="sticky top-[138px] lg:top-[128px] z-30 flex gap-2 bg-slate-900/80 backdrop-blur-md p-1.5 rounded-2xl border border-slate-800 shadow-xl mb-8">
                 {([
                     { key: 'overview', label: 'Översikt', icon: '📊' },
                     { key: 'strength', label: 'Styrka', icon: '💪' },
@@ -918,9 +964,11 @@ export function CommunityStatsPage() {
                 ))}
             </div>
             {/* Conditional Tab Rendering */}
-            {activeTab === 'overview' && <OverviewTabContents />}
-            {activeTab === 'strength' && <StrengthTabContents />}
-            {activeTab === 'cardio' && <CardioTabContents />}
+            <div className="relative z-10">
+                {activeTab === 'overview' && <OverviewTabContents />}
+                {activeTab === 'strength' && <StrengthTabContents />}
+                {activeTab === 'cardio' && <CardioTabContents />}
+            </div>
         </div>
     );
 };

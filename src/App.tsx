@@ -146,8 +146,8 @@ export function App() {
                                                 <Route path="goals" element={<GoalsPage />} />
                                                 <Route path="mal" element={<GoalsPage />} />
                                                 <Route path="activity/:id" element={<ActivityStandalonePage />} />
-                                                <Route path="statistics" element={<CommunityStatsPage />} />
-                                                <Route path="statistik" element={<CommunityStatsPage />} />
+                                                <Route path="statistics/:tab?" element={<CommunityStatsPage />} />
+                                                <Route path="statistik/:tab?" element={<CommunityStatsPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>
