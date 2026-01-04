@@ -17,6 +17,14 @@ export default defineConfig({
             '/api': {
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
+                configure: (proxy, _options) => {
+                    proxy.on('error', (err, _req, _res) => {
+                        // Suppress AbortError / ECONNRESET which happens on browser reload/cancel
+                        if (err.message.includes('req') && err.message.includes('cancelled')) return;
+                        if (err.message.includes('The request has been cancelled')) return;
+                        console.log('Proxy error:', err);
+                    });
+                }
             }
         }
     }
