@@ -60,6 +60,13 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
         return new Response(JSON.stringify({ success: true }), { headers });
     }
 
+    // Measurements
+    if (url.pathname === "/api/measurements" && method === "POST") {
+        const entry = await req.json();
+        await measurementRepo.saveMeasurement(userId, entry);
+        return new Response(JSON.stringify({ success: true }), { headers });
+    }
+
     // Food Database Search
     if (url.pathname === "/api/foods" && method === "GET") {
         const query = url.searchParams.get("q") || "";
@@ -108,7 +115,7 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
 
                 // Delete old image if it existed and was different
                 if (existing.imageUrl && existing.imageUrl !== updatedItem.imageUrl && existing.imageUrl.startsWith("uploads/")) {
-                     try { await Deno.remove(existing.imageUrl); } catch {}
+                    try { await Deno.remove(existing.imageUrl); } catch { }
                 }
 
             } catch (e) {

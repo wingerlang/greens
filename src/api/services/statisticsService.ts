@@ -55,7 +55,7 @@ export interface CommunityStats {
  */
 export async function fetchAllStrengthWorkouts(): Promise<StrengthWorkout[]> {
     console.time("fetchStrength");
-    const users = await getAllUsers();
+    const { users } = await getAllUsers();
     console.log(`[Stats] Fetching strength workouts for ${users.length} users...`);
 
     // Optimization: Parallel fetch
@@ -73,7 +73,7 @@ export async function fetchAllStrengthWorkouts(): Promise<StrengthWorkout[]> {
  */
 export async function fetchAllActivities(): Promise<UniversalActivity[]> {
     console.time("fetchActivities");
-    const users = await getAllUsers();
+    const { users } = await getAllUsers();
     console.log(`[Stats] Fetching activities for ${users.length} users...`);
 
     const activityPromises = users.map(user => activityRepo.getActivitiesByDateRange(user.id, '2000-01-01', '2099-12-31'));
@@ -90,7 +90,7 @@ export async function fetchAllActivities(): Promise<UniversalActivity[]> {
  */
 export async function fetchAllGoals(): Promise<any[]> {
     console.time("fetchGoals");
-    const users = await getAllUsers();
+    const { users } = await getAllUsers();
     let allGoals: any[] = [];
 
     for (const user of users) {

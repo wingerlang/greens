@@ -191,18 +191,14 @@ export function MonthlyTrainingTable({ exercises, year }: MonthlyTrainingTablePr
                 <div className="p-3">Månad</div>
                 <div className="grid grid-cols-[1.6fr_0.4fr] divide-x divide-white/5">
                     {/* Specific Stats Columns */}
-                    <div className={`grid ${activeTab === 'all' ? 'grid-cols-[2fr_2fr_1fr_1fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                    <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1fr_1fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
                         {activeTab === 'all' ? (
                             <>
-                                <div className="grid grid-cols-3 divide-x divide-white/5 border-r border-white/5">
-                                    <div className="p-2 text-center text-emerald-500/70">Km</div>
-                                    <div className="p-2 text-center text-emerald-500/70">H</div>
-                                    <div className="p-2 text-center text-emerald-500/70">St</div>
+                                <div className="p-2 text-right border-r border-white/5 text-emerald-500/70">
+                                    Distans <span className="text-slate-600">•</span> Tid <span className="text-slate-600">•</span> Pass
                                 </div>
-                                <div className="grid grid-cols-3 divide-x divide-white/5 border-r border-white/5">
-                                    <div className="p-2 text-center text-indigo-500/70">Ton</div>
-                                    <div className="p-2 text-center text-indigo-500/70">H</div>
-                                    <div className="p-2 text-center text-indigo-500/70">St</div>
+                                <div className="p-2 text-right border-r border-white/5 text-indigo-500/70">
+                                    Volym <span className="text-slate-600">•</span> Tid <span className="text-slate-600">•</span> Pass
                                 </div>
                                 <div className="p-2 text-right">Övrigt (h)</div>
                                 <div className="p-2 text-right">% Andel</div>
@@ -281,30 +277,22 @@ export function MonthlyTrainingTable({ exercises, year }: MonthlyTrainingTablePr
                                     </div>
                                     <div className="grid grid-cols-[1.6fr_0.4fr] divide-x divide-white/5 pointer-events-none">
                                         {/* Specific Data */}
-                                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[2fr_2fr_1fr_1fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1fr_1fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
                                             {activeTab === 'all' ? (
                                                 <>
-                                                    <div className="grid grid-cols-3 divide-x divide-white/5 border-r border-white/5 font-mono text-[11px]">
-                                                        <div className="p-3 text-right text-emerald-400">
-                                                            {row.categories.cardio.distance > 0 ? row.categories.cardio.distance.toFixed(1).replace('.', ',') : '-'}
-                                                        </div>
-                                                        <div className="p-3 text-right text-slate-300">
-                                                            {row.categories.cardio.duration > 0 ? fmtDur(row.categories.cardio.duration) : '-'}
-                                                        </div>
-                                                        <div className="p-3 text-right text-slate-500">
-                                                            {row.categories.cardio.count || '-'}
-                                                        </div>
+                                                    <div className="p-3 text-right font-mono text-[11px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis">
+                                                        <span className="text-emerald-400 font-bold">{row.categories.cardio.distance > 0 ? row.categories.cardio.distance.toFixed(1).replace('.', ',') : '-'} km</span>
+                                                        <span className="text-slate-600 mx-1.5">•</span>
+                                                        <span className="text-slate-300">{row.categories.cardio.duration > 0 ? fmtDur(row.categories.cardio.duration) : '-'}</span>
+                                                        <span className="text-slate-600 mx-1.5">•</span>
+                                                        <span className="text-slate-500">{row.categories.cardio.count || '-'} st</span>
                                                     </div>
-                                                    <div className="grid grid-cols-3 divide-x divide-white/5 border-r border-white/5 font-mono text-[11px]">
-                                                        <div className="p-3 text-right text-indigo-400">
-                                                            {row.categories.strength.tonnage > 0 ? (row.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'}
-                                                        </div>
-                                                        <div className="p-3 text-right text-slate-300">
-                                                            {row.categories.strength.duration > 0 ? fmtDur(row.categories.strength.duration) : '-'}
-                                                        </div>
-                                                        <div className="p-3 text-right text-slate-500">
-                                                            {row.categories.strength.count || '-'}
-                                                        </div>
+                                                    <div className="p-3 text-right font-mono text-[11px] border-r border-white/5 whitespace-nowrap overflow-hidden text-ellipsis">
+                                                        <span className="text-indigo-400 font-bold">{row.categories.strength.tonnage > 0 ? (row.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
+                                                        <span className="text-slate-600 mx-1.5">•</span>
+                                                        <span className="text-slate-300">{row.categories.strength.duration > 0 ? fmtDur(row.categories.strength.duration) : '-'}</span>
+                                                        <span className="text-slate-600 mx-1.5">•</span>
+                                                        <span className="text-slate-500">{row.categories.strength.count || '-'} st</span>
                                                     </div>
                                                     <div className="p-3 text-right text-slate-500 font-mono text-[11px]">
                                                         {row.categories.other.duration > 0 ? fmtDur(row.categories.other.duration) : '-'}
@@ -366,30 +354,22 @@ export function MonthlyTrainingTable({ exercises, year }: MonthlyTrainingTablePr
                 <div className="grid grid-cols-[100px_1fr] text-sm font-bold bg-white/5 border-t border-white/10">
                     <div className="p-3 text-white">Totalt:</div>
                     <div className="grid grid-cols-[1.6fr_0.4fr] divide-x divide-white/5">
-                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[2fr_2fr_1fr_1fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
+                        <div className={`grid ${activeTab === 'all' ? 'grid-cols-[3fr_3fr_1fr_1fr]' : activeTab === 'strength' ? 'grid-cols-4' : 'grid-cols-5'}`}>
                             {activeTab === 'all' ? (
                                 <>
-                                    <div className="grid grid-cols-3 divide-x divide-white/5 border-r border-white/5">
-                                        <div className="p-3 text-right text-emerald-400">
-                                            {totals.categories.cardio.distance > 0 ? totals.categories.cardio.distance.toFixed(1).replace('.', ',') : '-'}
-                                        </div>
-                                        <div className="p-3 text-right text-slate-300">
-                                            {totals.categories.cardio.duration > 0 ? fmtDur(totals.categories.cardio.duration) : '-'}
-                                        </div>
-                                        <div className="p-3 text-right text-slate-500">
-                                            {totals.categories.cardio.count || '-'}
-                                        </div>
+                                    <div className="p-3 text-right font-mono text-xs border-r border-white/5">
+                                        <span className="text-emerald-400">{totals.categories.cardio.distance > 0 ? totals.categories.cardio.distance.toFixed(1).replace('.', ',') : '-'} km</span>
+                                        <span className="text-slate-600 mx-1.5">•</span>
+                                        <span className="text-slate-300">{totals.categories.cardio.duration > 0 ? fmtDur(totals.categories.cardio.duration) : '-'}</span>
+                                        <span className="text-slate-600 mx-1.5">•</span>
+                                        <span className="text-slate-500">{totals.categories.cardio.count || '-'} st</span>
                                     </div>
-                                    <div className="grid grid-cols-3 divide-x divide-white/5 border-r border-white/5">
-                                        <div className="p-3 text-right text-indigo-400">
-                                            {totals.categories.strength.tonnage > 0 ? (totals.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'}
-                                        </div>
-                                        <div className="p-3 text-right text-slate-300">
-                                            {totals.categories.strength.duration > 0 ? fmtDur(totals.categories.strength.duration) : '-'}
-                                        </div>
-                                        <div className="p-3 text-right text-slate-500">
-                                            {totals.categories.strength.count || '-'}
-                                        </div>
+                                    <div className="p-3 text-right font-mono text-xs border-r border-white/5">
+                                        <span className="text-indigo-400">{totals.categories.strength.tonnage > 0 ? (totals.categories.strength.tonnage / 1000).toFixed(1).replace('.', ',') : '-'} ton</span>
+                                        <span className="text-slate-600 mx-1.5">•</span>
+                                        <span className="text-slate-300">{totals.categories.strength.duration > 0 ? fmtDur(totals.categories.strength.duration) : '-'}</span>
+                                        <span className="text-slate-600 mx-1.5">•</span>
+                                        <span className="text-slate-500">{totals.categories.strength.count || '-'} st</span>
                                     </div>
                                     <div className="p-3 text-right text-slate-500">
                                         {totals.categories.other.duration > 0 ? fmtDur(totals.categories.other.duration) : '-'}
