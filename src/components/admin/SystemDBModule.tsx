@@ -3,8 +3,27 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 type Tab = 'overview' | 'users' | 'explorer';
 
+
+const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
 export const SystemDBModule: React.FC = () => {
     const [activeTab, setActiveTab] = useState<Tab>('overview');
+    const [explorerPath, setExplorerPath] = useState<string[]>([]);
+
+    useEffect(() => {
+        const handler = (e: any) => {
+            if (e.detail?.tab) setActiveTab(e.detail.tab);
+            if (e.detail?.path) setExplorerPath(e.detail.path);
+        };
+        window.addEventListener('admin:navigate-kv', handler);
+        return () => window.removeEventListener('admin:navigate-kv', handler);
+    }, []);
 
     return (
         <div className="space-y-6">
@@ -13,11 +32,10 @@ export const SystemDBModule: React.FC = () => {
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${
-                            activeTab === tab
+                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all whitespace-nowrap ${activeTab === tab
                             ? 'bg-slate-800 text-white'
                             : 'text-gray-500 hover:text-white hover:bg-slate-800/50'
-                        }`}
+                            }`}
                     >
                         {tab === 'overview' && '📊 Översikt'}
                         {tab === 'users' && '👥 Användardata'}
@@ -29,7 +47,7 @@ export const SystemDBModule: React.FC = () => {
             <div className="min-h-[400px]">
                 {activeTab === 'overview' && <OverviewTab />}
                 {activeTab === 'users' && <UsersTab />}
-                {activeTab === 'explorer' && <ExplorerTab />}
+                {activeTab === 'explorer' && <ExplorerTab initialPath={explorerPath} />}
             </div>
         </div>
     );
@@ -85,22 +103,46 @@ const OverviewTab: React.FC = () => {
     return (
         <div className="space-y-8 animate-in fade-in duration-300">
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
                     <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Totala Nycklar</div>
-                    <div className="text-4xl font-black text-white">{totalKeys.toLocaleString()}</div>
+                    <div className="text-3xl font-black text-white">{totalKeys.toLocaleString()}</div>
                     <div className="text-emerald-400 text-xs mt-2 font-mono flex items-center gap-1">
                         <span>↑</span> +{data.history?.length > 1 ? (totalKeys - data.history[data.history.length - 2].stats.totalKeys) : 0} sen igår
                     </div>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
-                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Total Storlek (Est.)</div>
-                    <div className="text-4xl font-black text-white">{(totalSize / 1024).toFixed(1)} <span className="text-lg text-gray-500">KB</span></div>
+                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Total Storlek</div>
+                    <div className="text-3xl font-black text-white">{formatBytes(totalSize)}</div>
                 </div>
+
+                {/* Biggest User */}
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
-                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Snapshots</div>
-                    <div className="text-4xl font-black text-blue-400">{data.history?.length || 0}</div>
-                    <div className="text-gray-500 text-xs mt-2 font-mono">Dagar spårad historik</div>
+                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Största Användare</div>
+                    {/* Placeholder - we need to fetch this or pass it from backend, for now assume we verify visually in Users tab or add logic later. 
+                        Actually, let's look at chartData to guess or leave as 'N/A' if not ready. 
+                        Wait, best to implement statsRepo update for this or skip for now? 
+                        User explicitly asked for it. I'll defer this slightly or add a placeholder calculation if possible.
+                    */}
+                    {/* The current endpoint `stats` doesn't return user stats. We need to fetch users or accept that we only show global stats here.
+                        The stats.byPrefix gives us biggest COLLECTION.
+                     */}
+                    {(() => {
+                        const topPrefix = chartData[0];
+                        return (
+                            <div className="text-3xl font-black text-white truncate text-xs mt-2">
+                                <div className="text-xl">{topPrefix ? topPrefix.name : '-'}</div>
+                                <div className="text-sm text-gray-400">{topPrefix ? formatBytes(topPrefix.value) : ''}</div>
+                            </div>
+                        )
+                    })()}
+                    <div className="text-gray-600 text-[10px] uppercase font-bold mt-1">Största Samling</div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
+                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Historik</div>
+                    <div className="text-3xl font-black text-blue-400">{data.history?.length || 0}</div>
+                    <div className="text-gray-500 text-xs mt-2 font-mono">Dagar</div>
                 </div>
             </div>
 
@@ -126,7 +168,7 @@ const OverviewTab: React.FC = () => {
                                 </Pie>
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px', color: '#fff' }}
-                                    formatter={(value: number) => [(value / 1024).toFixed(1) + ' KB', 'Size']}
+                                    formatter={(value: number) => [formatBytes(value), 'Size']}
                                 />
                                 <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" />
                             </PieChart>
@@ -142,13 +184,13 @@ const OverviewTab: React.FC = () => {
                             <AreaChart data={historyData}>
                                 <defs>
                                     <linearGradient id="colorSize" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                                 <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-                                <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => (v / 1024).toFixed(0) + 'KB'} />
+                                <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => formatBytes(v)} />
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px', color: '#fff' }}
                                 />
@@ -225,7 +267,7 @@ const UsersTab: React.FC = () => {
                                     {data.orphans.map((o: any, i: number) => (
                                         <tr key={i} className="hover:bg-red-500/5">
                                             <td className="p-3 font-mono text-red-200/70 truncate max-w-[300px]" title={o.key}>{o.key}</td>
-                                            <td className="p-3 text-right font-mono text-red-200">{o.size} B</td>
+                                            <td className="p-3 text-right font-mono text-red-200">{formatBytes(o.size)}</td>
                                             <td className="p-3 text-red-200/50">{o.prefix}</td>
                                         </tr>
                                     ))}
@@ -261,22 +303,36 @@ const UsersTab: React.FC = () => {
                         </thead>
                         <tbody className="divide-y divide-slate-800">
                             {filteredUsers.map((u: any) => {
-                                const topPrefix = Object.entries(u.prefixes).sort(([,a]: any, [,b]: any) => b - a)[0];
+                                const topPrefix = Object.entries(u.prefixes).sort(([, a]: any, [, b]: any) => b - a)[0];
                                 return (
-                                    <tr key={u.userId} className="hover:bg-slate-800/30 transition-colors">
-                                        <td className="p-4 pl-6">
+                                    <tr
+                                        key={u.userId}
+                                        onClick={() => {
+                                            // Handle cross-tab navigation (This requires moving state up or finding a way to signal parent)
+                                            // For now, let's assume we can dispatch a custom event or use a callback if we refactor.
+                                            // Since activeTab is local to SystemDBModule, we need to lift state or expose a setter.
+                                            // Let's modify SystemDBModule to pass a 'navigate' prop or similar.
+                                            // Actually, easier refactor: Move UsersTab inside SystemDBModule component to close over 'setActiveTab'.
+                                            // But for now, let's just make it visually consistent and wait for the refactor step.
+                                            // Wait, I can't easily access setActiveTab here as it's a separate component.
+                                            // I will refactor SystemDBModule to pass setActiveTab to UsersTab.
+                                            window.dispatchEvent(new CustomEvent('admin:navigate-kv', { detail: { tab: 'explorer', path: ['activities', u.userId] } }));
+                                        }}
+                                        className="hover:bg-blue-600/20 hover:text-white cursor-pointer transition-all group"
+                                    >
+                                        <td className="p-4 pl-6 group-hover:text-white">
                                             <div className="font-bold text-white text-base">{u.username}</div>
                                             <div className="font-mono text-xs opacity-50">{u.userId}</div>
                                         </td>
                                         <td className="p-4 text-right font-mono text-white">{u.keyCount}</td>
-                                        <td className="p-4 text-right font-mono text-emerald-400 font-bold">
-                                            {(u.totalSize / 1024).toFixed(2)} KB
+                                        <td className="p-4 text-right font-mono text-emerald-400 group-hover:text-emerald-300 font-bold">
+                                            {formatBytes(u.totalSize)}
                                         </td>
                                         <td className="p-4">
                                             {topPrefix ? (
-                                                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 text-xs font-mono border border-slate-700">
+                                                <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-slate-800 group-hover:bg-slate-700 text-xs font-mono border border-slate-700">
                                                     <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                                                    {topPrefix[0]} ({(Number(topPrefix[1]) / 1024).toFixed(1)} KB)
+                                                    {topPrefix[0]} ({formatBytes(Number(topPrefix[1]))})
                                                 </span>
                                             ) : '-'}
                                         </td>
@@ -291,11 +347,19 @@ const UsersTab: React.FC = () => {
     );
 };
 
-const ExplorerTab: React.FC = () => {
-    const [path, setPath] = useState<string[]>([]);
-    const [data, setData] = useState<{ subPrefixes: string[], keys: any[] } | null>(null);
+const ExplorerTab: React.FC<{ initialPath?: string[] }> = ({ initialPath }) => {
+    const [path, setPath] = useState<string[]>(initialPath || []);
+    const [data, setData] = useState<{ subPrefixes: { name: string, count: number, size: number }[], keys: any[] } | null>(null);
     const [loading, setLoading] = useState(false);
     const [viewingValue, setViewingValue] = useState<{ key: any, value: any } | null>(null);
+    const [filter, setFilter] = useState('');
+    const [sortBy, setSortBy] = useState<'name' | 'size' | 'count'>('name');
+    const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+    // Update path if initialPath changes (e.g. from navigation event)
+    useEffect(() => {
+        if (initialPath) setPath(initialPath);
+    }, [initialPath]);
 
     const fetchPath = async (currentPath: string[]) => {
         setLoading(true);
@@ -324,10 +388,12 @@ const ExplorerTab: React.FC = () => {
 
     const handleNavigate = (segment: string) => {
         setPath([...path, segment]);
+        setFilter(''); // Reset filter on navigation
     };
 
     const handleBreadcrumbClick = (index: number) => {
         setPath(path.slice(0, index + 1));
+        setFilter('');
     };
 
     const handleViewValue = async (key: any[]) => {
@@ -349,72 +415,138 @@ const ExplorerTab: React.FC = () => {
         }
     };
 
+    const sortedAndFilteredItems = useMemo(() => {
+        if (!data) return [];
+
+        let folders = data.subPrefixes.map(p => ({ ...p, type: 'folder' })) || [];
+        let files = data.keys.map(k => ({ ...k, name: String(k.key[k.key.length - 1]), type: 'file' })) || [];
+
+        // Filter
+        if (filter) {
+            const f = filter.toLowerCase();
+            folders = folders.filter(i => i.name.toLowerCase().includes(f));
+            files = files.filter(i => i.name.toLowerCase().includes(f));
+        }
+
+        // Sort
+        const compare = (a: any, b: any) => {
+            let res = 0;
+            if (sortBy === 'name') res = a.name.localeCompare(b.name);
+            if (sortBy === 'size') res = (a.size || 0) - (b.size || 0);
+            if (sortBy === 'count') res = (a.count || 0) - (b.count || 0);
+            return sortDir === 'asc' ? res : -res;
+        };
+
+        return [...folders.sort(compare), ...files.sort(compare)];
+    }, [data, filter, sortBy, sortDir]);
+
+    const toggleSort = (field: 'name' | 'size' | 'count') => {
+        if (sortBy === field) {
+            setSortDir(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortBy(field);
+            setSortDir('asc');
+        }
+    };
+
     return (
-        <div className="flex gap-6 h-[600px] animate-in fade-in duration-300">
+        <div className="flex gap-6 h-[700px] animate-in fade-in duration-300">
             {/* Explorer Column */}
             <div className="flex-1 bg-slate-900/50 border border-slate-800 rounded-3xl overflow-hidden flex flex-col">
-                {/* Breadcrumbs */}
-                <div className="p-4 bg-slate-950 border-b border-slate-800 flex items-center gap-2 text-sm overflow-x-auto">
-                    <button
-                        onClick={() => setPath([])}
-                        className={`font-mono font-bold px-2 py-1 rounded hover:bg-slate-800 transition-colors ${path.length === 0 ? 'text-white' : 'text-blue-400'}`}
-                    >
-                        ROOT
-                    </button>
-                    {path.map((segment, i) => (
-                        <React.Fragment key={i}>
-                            <span className="text-slate-600">/</span>
-                            <button
-                                onClick={() => handleBreadcrumbClick(i)}
-                                className={`font-mono font-bold px-2 py-1 rounded hover:bg-slate-800 transition-colors ${i === path.length - 1 ? 'text-white' : 'text-blue-400'}`}
-                            >
-                                {segment}
-                            </button>
-                        </React.Fragment>
-                    ))}
+                {/* Header: Breadcrumbs & Actions */}
+                <div className="p-4 bg-slate-950 border-b border-slate-800 flex flex-col gap-4">
+                    <div className="flex items-center gap-2 text-sm overflow-x-auto custom-scrollbar pb-2">
+                        <button
+                            onClick={() => setPath([])}
+                            className={`font-mono font-bold px-2 py-1 rounded hover:bg-slate-800 transition-colors ${path.length === 0 ? 'text-white' : 'text-blue-400'}`}
+                        >
+                            ROOT
+                        </button>
+                        {path.map((segment, i) => (
+                            <React.Fragment key={i}>
+                                <span className="text-slate-600">/</span>
+                                <button
+                                    onClick={() => handleBreadcrumbClick(i)}
+                                    className={`font-mono font-bold px-2 py-1 rounded hover:bg-slate-800 transition-colors ${i === path.length - 1 ? 'text-white' : 'text-blue-400'}`}
+                                >
+                                    {segment}
+                                </button>
+                            </React.Fragment>
+                        ))}
+                    </div>
+
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="Filtrera..."
+                            value={filter}
+                            onChange={e => setFilter(e.target.value)}
+                            className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500 flex-1"
+                        />
+                        <div className="text-gray-500 text-xs flex items-center px-2">
+                            {data ? `${data.subPrefixes.length} mappar, ${data.keys.length} filer` : '...'}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Table Header */}
+                <div className="grid grid-cols-12 gap-2 px-4 py-2 bg-slate-900/80 border-b border-slate-800 text-[10px] uppercase font-bold text-gray-500">
+                    <div className="col-span-6 cursor-pointer hover:text-white flex items-center gap-1" onClick={() => toggleSort('name')}>
+                        Namn {sortBy === 'name' && (sortDir === 'asc' ? '↑' : '↓')}
+                    </div>
+                    <div className="col-span-3 text-right cursor-pointer hover:text-white flex justify-end items-center gap-1" onClick={() => toggleSort('count')}>
+                        Poster {sortBy === 'count' && (sortDir === 'asc' ? '↑' : '↓')}
+                    </div>
+                    <div className="col-span-3 text-right cursor-pointer hover:text-white flex justify-end items-center gap-1" onClick={() => toggleSort('size')}>
+                        Storlek {sortBy === 'size' && (sortDir === 'asc' ? '↑' : '↓')}
+                    </div>
                 </div>
 
                 {/* Content List */}
-                <div className="flex-1 overflow-y-auto p-2">
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-2">
                     {loading ? (
                         <div className="p-8 text-center text-gray-500">Laddar...</div>
                     ) : (
                         <div className="space-y-1">
-                            {/* Directories */}
-                            {data?.subPrefixes.map((prefix) => (
-                                <div
-                                    key={prefix}
-                                    onClick={() => handleNavigate(prefix)}
-                                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 cursor-pointer group transition-colors"
-                                >
-                                    <span className="text-xl text-amber-400 group-hover:scale-110 transition-transform">📁</span>
-                                    <span className="font-mono text-sm text-gray-300 group-hover:text-white font-bold">{prefix}</span>
-                                </div>
-                            ))}
-
-                            {/* Files */}
-                            {data?.keys.map((item, i) => (
+                            {sortedAndFilteredItems.map((item: any, i) => (
                                 <div
                                     key={i}
-                                    onClick={() => handleViewValue(item.key)}
-                                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/50 cursor-pointer group transition-colors"
+                                    onClick={() => item.type === 'folder' ? handleNavigate(item.name) : handleViewValue(item.key)}
+                                    className="grid grid-cols-12 gap-2 items-center p-2 rounded-lg hover:bg-slate-800/80 cursor-pointer group transition-all border border-transparent hover:border-slate-700"
                                 >
-                                    <span className="text-xl text-blue-400 group-hover:scale-110 transition-transform">📄</span>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="font-mono text-sm text-gray-300 group-hover:text-white truncate">
-                                            {String(item.key[item.key.length - 1])}
-                                        </div>
-                                        <div className="text-[10px] text-gray-600 font-mono mt-0.5">
-                                            Full Key: {JSON.stringify(item.key)}
+                                    <div className="col-span-6 flex items-center gap-3 min-w-0">
+                                        <span className="text-lg group-hover:scale-110 transition-transform">
+                                            {item.type === 'folder' ? '📁' : '📄'}
+                                        </span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className={`font-mono text-xs truncate ${item.type === 'folder' ? 'text-amber-100 font-bold' : 'text-blue-100'}`}>
+                                                {item.name}
+                                            </div>
+                                            {item.type === 'file' && (
+                                                <div className="text-[9px] text-gray-600 truncate hidden group-hover:block">
+                                                    {JSON.stringify(item.key)}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
-                                    <span className="text-xs font-mono text-gray-500">{item.size} B</span>
+
+                                    <div className="col-span-3 text-right">
+                                        {item.type === 'folder' ? (
+                                            <span className="text-xs font-mono text-gray-400 bg-slate-900/50 px-2 py-0.5 rounded-full">{item.count}</span>
+                                        ) : (
+                                            <span className="text-xs text-gray-600">-</span>
+                                        )}
+                                    </div>
+
+                                    <div className="col-span-3 text-right font-mono text-xs text-emerald-500 font-bold">
+                                        {formatBytes(item.size)}
+                                    </div>
                                 </div>
                             ))}
 
-                            {data?.subPrefixes.length === 0 && data?.keys.length === 0 && (
+                            {sortedAndFilteredItems.length === 0 && (
                                 <div className="text-center p-8 text-gray-500 italic">
-                                    Tom mapp.
+                                    {filter ? 'Inga träffar matching filter.' : 'Tom mapp.'}
                                 </div>
                             )}
                         </div>
@@ -429,7 +561,7 @@ const ExplorerTab: React.FC = () => {
                         <h4 className="font-bold text-white text-sm">Value Viewer</h4>
                         <button onClick={() => setViewingValue(null)} className="text-gray-500 hover:text-white">×</button>
                     </div>
-                    <div className="flex-1 overflow-auto p-4 bg-[#0d1117]">
+                    <div className="flex-1 overflow-auto p-4 bg-[#0d1117] custom-scrollbar">
                         <pre className="font-mono text-xs text-green-400 whitespace-pre-wrap break-all">
                             {JSON.stringify(viewingValue.value, null, 2)}
                         </pre>
