@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import {
@@ -15,7 +15,7 @@ import {
 import type { WeeklyPlan } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
-import { useHealth } from '../hooks/useHealth.ts'; // Import
+import { useHealth } from '../hooks/useHealth.ts';
 import { RecipeSelectionModal } from '../components/RecipeSelectionModal.tsx';
 import printJS from 'print-js';
 import './PlanningPage.css';
@@ -91,7 +91,7 @@ export function PlanningPage() {
     const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate());
 
     // Use useHealth for the current week start to estimate goals (imperfect if cycle changes mid-week but good enough)
-    const { targetCalories, activeCycle } = useHealth(currentWeekStart);
+    const { targetCalories } = useHealth(currentWeekStart);
 
     const { getOptimizationSuggestion } = useSmartPlanner(recipes, foodItems);
     const [selectedSlot, setSelectedSlot] = useState<{ day: Weekday; meal: MealType } | null>(null);
@@ -196,7 +196,7 @@ export function PlanningPage() {
             return quickSnack || nameHints.some(hint => recipe.name.toLowerCase().includes(hint));
         }
 
-        return true; // Default: suitable for main meals
+        return true;
     };
 
     // Generate smart suggestions for a slot

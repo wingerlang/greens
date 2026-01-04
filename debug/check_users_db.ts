@@ -1,5 +1,5 @@
 
-import { getAllUsers } from "./src/api/db/user.ts";
+import { getAllUsers } from "../src/api/db/user.ts";
 
 async function checkUsers() {
     console.log("Checking DB Users directly...");

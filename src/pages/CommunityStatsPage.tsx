@@ -1,13 +1,10 @@
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { statisticsService, CommunityStats } from '../services/statisticsService.ts';
 import { ComparisonBar } from '../components/charts/ComparisonBar.tsx';
 import { RadarProfile } from '../components/charts/RadarProfile.tsx';
-import { useAuth } from '../context/AuthContext.tsx';
-import { Link } from 'react-router-dom';
 
 export function CommunityStatsPage() {
-    const { user } = useAuth();
     const [stats, setStats] = useState<CommunityStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'overview' | 'strength' | 'cardio'>('overview');

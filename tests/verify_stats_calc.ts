@@ -1,5 +1,5 @@
 
-import { calculateGlobalStats, CommunityStats } from '../src/api/services/statisticsService.ts';
+import { calculateGlobalStats } from '../src/api/services/statisticsService.ts';
 import { StrengthWorkout } from '../src/models/strengthTypes.ts';
 import { UniversalActivity } from '../src/models/types.ts';
 

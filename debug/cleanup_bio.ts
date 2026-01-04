@@ -1,6 +1,5 @@
 
-import { kv } from "./src/api/kv.ts";
-import { getUser, saveUser } from "./src/api/db/user.ts";
+import { getUser, saveUser } from "../src/api/db/user.ts";
 
 async function cleanup() {
     console.log("🧹 Cleaning up user bio...");

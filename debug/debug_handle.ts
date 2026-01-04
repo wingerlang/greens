@@ -1,6 +1,5 @@
 
-import { kv } from "./src/api/kv.ts";
-import { getUser, getUserById } from "./src/api/db/user.ts";
+import { kv } from "../src/api/kv.ts";
 
 async function debug() {
     console.log("🔍 Debugging Handle Lookup...");

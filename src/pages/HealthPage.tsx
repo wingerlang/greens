@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
@@ -28,7 +28,7 @@ export function HealthPage() {
     const { settings } = useSettings();
 
     // Fetch Universal Activities (Strava/Garmin)
-    const { activities: fetchedUniversalActivities, loading: loadingActivities } = useUniversalActivities(365);
+    const { activities: fetchedUniversalActivities } = useUniversalActivities(365);
 
     // Fetch Strength Workouts
     const [strengthWorkouts, setStrengthWorkouts] = useState<StrengthWorkout[]>([]);
@@ -200,18 +200,6 @@ export function HealthPage() {
     }, [snapshots, timeframe, selectedPeriod]);
 
     const stats = useMemo(() => calculateHealthStats(finalSnapshots), [finalSnapshots]);
-
-    const goalTheme = useMemo(() => {
-        if (settings.trainingGoal === 'bulk') return { primary: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', text: 'text-amber-400', label: 'Bulk-fokus' };
-        if (settings.trainingGoal === 'deff') return { primary: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.1)', text: 'text-sky-400', label: 'Deff-fokus' };
-        return { primary: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', text: 'text-emerald-400', label: 'Balans-fokus' };
-    }, [settings.trainingGoal]);
-
-    const healthScore = useMemo(() => {
-        const baseScore = (stats.proteinQualityScore + Math.min(100, (stats.avgSleep / 8) * 100) + Math.min(100, (stats.avgWater / (settings.dailyWaterGoal || 8)) * 100)) / 3;
-        const consistencyPenalty = (100 - stats.loggingConsistency) * 0.2;
-        return Math.max(0, Math.min(100, Math.round(baseScore - consistencyPenalty)));
-    }, [stats, settings]);
 
     const handleTabChange = (tab: string) => {
         const isSwedishPath = window.location.pathname.includes('/hälsa') || window.location.pathname.includes('/halsa');

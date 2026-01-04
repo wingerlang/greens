@@ -15,7 +15,6 @@ import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
 import { UniversalActivity } from '../models/types.ts';
 import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate } from '../models/types.ts';
-// import { useUniversalActivities } from '../hooks/useUniversalActivities.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import {
     parseOmniboxInput,
@@ -62,9 +61,6 @@ export function TrainingPage() {
     } = useData();
 
     const navigate = useNavigate();
-
-    // Fetch Universal Activities from Server - REMOVED (Handled by DataContext now)
-    // const { activities: universalActivities } = useUniversalActivities(365);
 
     // Merge Data - combine server and local entries
     const exerciseEntries = useMemo(() => {

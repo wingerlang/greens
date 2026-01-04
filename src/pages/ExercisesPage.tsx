@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { HYROX_WORKOUTS } from '../utils/hyroxWorkouts.ts';
 

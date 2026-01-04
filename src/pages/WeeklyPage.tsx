@@ -3,7 +3,7 @@
  * Main weekly meal planning view with day cards
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { useCooking } from '../context/CookingModeProvider.tsx';
@@ -11,7 +11,6 @@ import {
     type Weekday,
     type MealType,
     type WeeklyPlan,
-    type PlannedMeal,
     type Recipe,
     WEEKDAYS,
     getWeekStartDate,
@@ -50,13 +49,6 @@ function formatDateForCard(weekStart: string, dayIndex: number): { dateStr: stri
         dateStr: `${day} ${month}.`,
         dateNumber: day,
     };
-}
-
-function isToday(weekStart: string, dayIndex: number): boolean {
-    const date = new Date(weekStart);
-    date.setDate(date.getDate() + dayIndex);
-    const today = new Date();
-    return date.toDateString() === today.toDateString();
 }
 
 // ============================================
@@ -334,7 +326,7 @@ export function WeeklyPage() {
     }
 
     // Get suggestions for modal
-    const getSuggestionsForSlot = (day: Weekday, meal: MealType) => {
+    const getSuggestionsForSlot = () => {
         // This integrates with existing suggestion logic
         return [];
     };

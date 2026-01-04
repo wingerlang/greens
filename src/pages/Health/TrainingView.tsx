@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { TrainingOverview } from '../../components/training/TrainingOverview.tsx';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { StyrkaView } from './StyrkaView.tsx';

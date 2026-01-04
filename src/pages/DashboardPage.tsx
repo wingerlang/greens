@@ -531,10 +531,10 @@ export function DashboardPage() {
     const proteinTarget = settings.dailyProteinGoal || 160;
     const proteinCurrent = dailyNutrition.protein;
 
-    const carbsTarget = settings.dailyCarbsGoal || 250; // Default estimate
+    const carbsTarget = settings.dailyCarbsGoal || 250;
     const carbsCurrent = dailyNutrition.carbs;
 
-    const fatTarget = settings.dailyFatGoal || 80; // Default estimate
+    const fatTarget = settings.dailyFatGoal || 80;
     const fatCurrent = dailyNutrition.fat;
 
     // 3. Weight & Measurement Logic
@@ -697,7 +697,7 @@ export function DashboardPage() {
     } else if (todaysPlan) {
         // Show Planned
         let icon = '📅';
-        let label = todaysPlan.type as string; // defaults to existing type string if match fails
+        let label = todaysPlan.type as string;
 
         if (todaysPlan.type === 'RUN') {
             const runDef = EXERCISE_TYPES.find(t => t.type === 'running');
@@ -774,7 +774,7 @@ export function DashboardPage() {
         { id: 'caffeine', isDone: isCaffeineDone, component: null },
     ].sort((a, b) => {
         if (a.isDone === b.isDone) return 0;
-        return a.isDone ? 1 : -1; // Done Items at Bottom
+        return a.isDone ? 1 : -1;
     });
 
     return (

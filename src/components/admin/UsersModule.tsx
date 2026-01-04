@@ -4,7 +4,6 @@ import { useAuth } from '../../context/AuthContext.tsx';
 import { User } from '../../models/types.ts';
 
 export const UsersModule: React.FC = () => {
-    // const { users, currentUser, setCurrentUser } = useData(); // Legacy
     const { user: authUser } = useAuth();
     const [apiUsers, setApiUsers] = useState<User[]>([]);
 
