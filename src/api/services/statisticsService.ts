@@ -8,7 +8,7 @@ import { UniversalActivity } from '../../models/types.ts';
 
 // Cache key
 const CACHE_KEY = ['community_stats_cache'];
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL_MS = 0; // Temporarily disabled for debugging - was: 24 * 60 * 60 * 1000
 
 export interface CommunityStats {
     updatedAt: string;
@@ -21,9 +21,9 @@ export interface CommunityStats {
         totalGoalsAchieved: number;
     };
     averages: {
-        distancePerUser: number;
-        tonnagePerUser: number;
-        workoutsPerUser: number;
+        distancePerUserPerMonth: number;
+        tonnagePerUserPerMonth: number;
+        workoutsPerUserPerMonth: number;
         sessionDurationMinutes: number;
     };
     strength: {
@@ -121,9 +121,9 @@ export function calculateGlobalStats(
             totalGoalsAchieved: 0
         },
         averages: {
-            distancePerUser: 0,
-            tonnagePerUser: 0,
-            workoutsPerUser: 0,
+            distancePerUserPerMonth: 0,
+            tonnagePerUserPerMonth: 0,
+            workoutsPerUserPerMonth: 0,
             sessionDurationMinutes: 0
         },
         strength: {
@@ -175,11 +175,28 @@ export function calculateGlobalStats(
     const completedGoals = goals.filter(g => g.status === 'completed' || g.isCompleted === true);
     stats.global.totalGoalsAchieved = completedGoals.length;
 
-    // Averages
-    stats.averages.distancePerUser = Math.round(stats.global.totalDistanceKm / stats.global.totalUsers);
-    stats.averages.tonnagePerUser = Math.round(stats.global.totalTonnage / stats.global.totalUsers);
-    stats.averages.workoutsPerUser = parseFloat((stats.global.totalWorkouts / stats.global.totalUsers).toFixed(1));
-    stats.averages.sessionDurationMinutes = Math.round(stats.global.totalDurationMinutes / (stats.global.totalWorkouts || 1));
+    // Averages (Approx. Monthly)
+    const allDates = [...workouts.map(w => w.date), ...activities.map(a => a.date)].sort();
+    let lifespanMonths = 1;
+    if (allDates.length > 1) {
+        const start = new Date(allDates[0]);
+        const end = new Date(allDates[allDates.length - 1]);
+        lifespanMonths = Math.max(1, (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1);
+    }
+
+    const totalUsers = Math.max(1, stats.global.totalUsers);
+
+    // Fix: Ensure we don't divide by zero and handle cases where lifespan is long but activity is low
+    // If lifespan > 1, we divide by it. 
+    stats.averages.distancePerUserPerMonth = Math.round(stats.global.totalDistanceKm / totalUsers / lifespanMonths);
+    stats.averages.tonnagePerUserPerMonth = Math.round(stats.global.totalTonnage / totalUsers / lifespanMonths);
+
+    // Workouts per month: If < 0.1, it might show as 0. Let's keep one decimal but ensure it's at least usually reasonable.
+    // If totalWorkouts is 0, it stays 0.
+    stats.averages.workoutsPerUserPerMonth = parseFloat((stats.global.totalWorkouts / totalUsers / lifespanMonths).toFixed(1));
+
+    // Session duration: Average per workout, guard against 0 workouts
+    stats.averages.sessionDurationMinutes = Math.round(stats.global.totalDurationMinutes / Math.max(1, stats.global.totalWorkouts));
 
     // 4. Strength Benchmarks
     const exerciseStats: Record<string, {

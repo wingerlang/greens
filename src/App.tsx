@@ -39,6 +39,7 @@ import { LifeStreamPage } from './pages/LifeStreamPage.tsx';
 import { YearInReviewPage } from './pages/YearInReviewPage.tsx';
 import { GoalsPage } from './pages/GoalsPage.tsx';
 import { ActivityStandalonePage } from './pages/ActivityStandalonePage.tsx';
+import { CommunityStatsPage } from './pages/CommunityStatsPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -145,6 +146,8 @@ export function App() {
                                                 <Route path="goals" element={<GoalsPage />} />
                                                 <Route path="mal" element={<GoalsPage />} />
                                                 <Route path="activity/:id" element={<ActivityStandalonePage />} />
+                                                <Route path="statistics" element={<CommunityStatsPage />} />
+                                                <Route path="statistik" element={<CommunityStatsPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

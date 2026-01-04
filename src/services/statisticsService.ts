@@ -13,9 +13,9 @@ export interface CommunityStats {
         totalGoalsAchieved: number;
     };
     averages: {
-        distancePerUser: number;
-        tonnagePerUser: number;
-        workoutsPerUser: number;
+        distancePerUserPerMonth: number;
+        tonnagePerUserPerMonth: number;
+        workoutsPerUserPerMonth: number;
         sessionDurationMinutes: number;
     };
     strength: {
