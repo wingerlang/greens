@@ -604,22 +604,47 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: now,
             updatedAt: now,
         };
+        // Optimistic update
         setFoodItems((prev: FoodItem[]) => [...prev, newItem]);
+
+        // Sync to API and update local state with server response (e.g. permanent Image URL)
+        skipAutoSave.current = true;
+        storageService.createFoodItem(newItem).then((serverItem) => {
+             if (serverItem) {
+                 setFoodItems(prev => prev.map(i => i.id === newItem.id ? serverItem : i));
+             }
+        }).catch(e => console.error("Failed to sync food:", e));
+
         return newItem;
     }, []);
 
     const updateFoodItem = useCallback((id: string, data: Partial<FoodItemFormData>): void => {
-        setFoodItems((prev: FoodItem[]) =>
-            prev.map((item: FoodItem) =>
+        setFoodItems((prev: FoodItem[]) => {
+            const next = prev.map((item: FoodItem) =>
                 item.id === id
                     ? { ...item, ...data, updatedAt: new Date().toISOString() }
                     : item
-            )
-        );
+            );
+
+            // Sync updated item
+            const updatedItem = next.find(i => i.id === id);
+            if (updatedItem) {
+                skipAutoSave.current = true;
+                storageService.updateFoodItem(updatedItem).then((serverItem) => {
+                    if (serverItem) {
+                         setFoodItems(current => current.map(i => i.id === id ? serverItem : i));
+                    }
+                }).catch(e => console.error("Failed to sync food:", e));
+            }
+
+            return next;
+        });
     }, []);
 
     const deleteFoodItem = useCallback((id: string): void => {
         setFoodItems((prev: FoodItem[]) => prev.filter((item: FoodItem) => item.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteFoodItem(id).catch(e => console.error("Failed to delete food:", e));
     }, []);
 
     const getFoodItem = useCallback((id: string): FoodItem | undefined => {
