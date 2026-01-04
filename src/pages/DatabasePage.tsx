@@ -192,7 +192,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 proteinCategory: item.proteinCategory,
                 seasons: item.seasons || [],
                 ingredients: item.ingredients || '',
-                packageWeight: item.packageWeight || 0,
+
             });
         } else {
             setEditingItem(null);
@@ -339,7 +339,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             applyParsedData({ ...parsed, text });
 
         } catch (err) {
-             setParseError(err instanceof Error ? err.message : 'Kunde inte läsa bilden.');
+            setParseError(err instanceof Error ? err.message : 'Kunde inte läsa bilden.');
         } finally {
             setIsParsing(false);
         }
@@ -531,7 +531,11 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                         )}
                                     </td>
                                     <td className="td-name">
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <div
+                                            style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
+                                            onClick={() => handleOpenForm(item)}
+                                            className="hover:text-emerald-400 transition-colors"
+                                        >
                                             <span>
                                                 <strong>{item.name}</strong>
                                                 {item.brand && <span style={{ color: 'var(--text-secondary)', fontSize: '0.85em', marginLeft: '0.4rem' }}>{item.brand}</span>}
@@ -600,13 +604,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                         >
                                             📋
                                         </button>
-                                        <button
-                                            className="btn btn-ghost btn-sm"
-                                            onClick={() => handleOpenForm(item)}
-                                            title="Redigera"
-                                        >
-                                            ✏️
-                                        </button>
+
                                         <button
                                             className="btn btn-ghost btn-sm btn-danger"
                                             onClick={() => handleDelete(item.id)}

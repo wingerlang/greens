@@ -88,7 +88,7 @@ export function MealTimeline({
                     (e.currentTarget as HTMLElement).style.opacity = '1';
                 }}
             >
-                {/* Left: Name + Brand */}
+                {/* Left: Name + Brand + Time */}
                 <div className="flex items-center gap-3 min-w-0" style={{ flex: '0 0 32%' }}>
                     {isCompact && (
                         <input
@@ -99,9 +99,14 @@ export function MealTimeline({
                         />
                     )}
                     {isCompact && (
-                        <span className="text-[10px] uppercase text-slate-500 w-10 shrink-0 font-black">
-                            {MEAL_TYPE_LABELS[entry.mealType].substring(0, 3)}
-                        </span>
+                        <div className="flex flex-col items-center w-10 shrink-0">
+                            <span className="text-[10px] uppercase text-slate-500 font-black">
+                                {MEAL_TYPE_LABELS[entry.mealType].substring(0, 3)}
+                            </span>
+                            <span className="text-[9px] text-slate-600 font-mono">
+                                {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        </div>
                     )}
                     <div className="flex flex-col min-w-0">
                         <span className="text-sm font-bold text-slate-200 truncate">
@@ -110,6 +115,11 @@ export function MealTimeline({
                         {firstItem && getItemBrand?.(firstItem) && (
                             <span className="text-[10px] text-slate-500 font-medium tracking-tight">
                                 {getItemBrand(firstItem)}
+                            </span>
+                        )}
+                        {!isCompact && (
+                            <span className="text-[10px] text-slate-600 font-medium md:hidden">
+                                {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                         )}
                     </div>

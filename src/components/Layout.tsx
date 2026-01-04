@@ -4,6 +4,8 @@ import { Omnibox } from './Omnibox.tsx';
 import { GlobalExerciseModal } from './training/GlobalExerciseModal.tsx';
 import { NoccoOClock } from './NoccoOClock.tsx';
 import { ExerciseType } from '../models/types.ts';
+import { NutritionBreakdownModal } from './calories/NutritionBreakdownModal.tsx';
+import { useData } from '../context/DataContext.tsx';
 
 interface LayoutProps {
     children: ReactNode;
@@ -31,6 +33,29 @@ export function Layout({ children }: LayoutProps) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    const { recipes, foodItems, getFoodItem } = useData();
+    const [nutritionBreakdownItem, setNutritionBreakdownItem] = useState<{ type: 'recipe' | 'foodItem'; referenceId: string; servings: number } | null>(null);
+
+    // Handle 'breakdown' query param globally
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const breakdownId = params.get('breakdown');
+        if (breakdownId) {
+            const recipe = recipes.find(r => r.id === breakdownId);
+            if (recipe) {
+                setNutritionBreakdownItem({ type: 'recipe', referenceId: recipe.id, servings: 1 });
+            } else {
+                const food = foodItems.find(f => f.id === breakdownId);
+                if (food) {
+                    setNutritionBreakdownItem({ type: 'foodItem', referenceId: food.id, servings: 100 });
+                }
+            }
+            // Clean up URL without reload
+            const newUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, '', newUrl);
+        }
+    }, [recipes, foodItems]); // Dependencies on data to ensure we can find the item
+
     return (
         <div className="min-h-screen flex flex-col relative">
             <NoccoOClock />
@@ -39,6 +64,10 @@ export function Layout({ children }: LayoutProps) {
                 isOpen={isOmniboxOpen}
                 onClose={() => setIsOmniboxOpen(false)}
                 onOpenTraining={handleOpenTraining}
+                onOpenNutrition={(item) => {
+                    setIsOmniboxOpen(false);
+                    setNutritionBreakdownItem(item);
+                }}
             />
 
             <GlobalExerciseModal
@@ -47,6 +76,17 @@ export function Layout({ children }: LayoutProps) {
                 initialType={trainingModalDefaults.type}
                 initialInput={trainingModalDefaults.input}
             />
+
+            {nutritionBreakdownItem && (
+                <NutritionBreakdownModal
+                    item={nutritionBreakdownItem}
+                    onClose={() => setNutritionBreakdownItem(null)}
+                    recipes={recipes}
+                    foodItems={foodItems}
+                    getFoodItem={getFoodItem}
+                />
+            )}
+
             <Navigation onOpenOmnibox={() => setIsOmniboxOpen(true)} />
             <main className="flex-1 w-full max-w-[1536px] mx-auto p-3 md:p-6">
                 {children}

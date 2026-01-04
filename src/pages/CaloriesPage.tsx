@@ -57,6 +57,8 @@ export function CaloriesPage() {
 
     const [isFormOpen, setIsFormOpen] = useState(false);
 
+
+
     // Smart meal type default based on time of day
     const getDefaultMealType = (): MealType => {
         const hour = new Date().getHours();
@@ -223,14 +225,12 @@ export function CaloriesPage() {
     };
 
     const handleDeleteEntry = (id: string) => {
-        if (confirm('Ta bort denna måltid?')) {
-            deleteMealEntry(id);
-            setSelectedIds(prev => {
-                const next = new Set(prev);
-                next.delete(id);
-                return next;
-            });
-        }
+        deleteMealEntry(id);
+        setSelectedIds(prev => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+        });
     };
 
     const handleToggleSelect = (id: string) => {

@@ -21,7 +21,8 @@ import {
     Flame,
     ArrowRight,
     MapPin,
-    Heart
+    Heart,
+    Info
 } from 'lucide-react';
 import { NutritionLabel } from './shared/NutritionLabel.tsx';
 
@@ -29,7 +30,9 @@ interface OmniboxProps {
     isOpen: boolean;
     onClose: () => void;
     onOpenTraining?: (defaults: { type?: ExerciseType; input?: string }) => void;
+    onOpenNutrition?: (item: { type: 'recipe' | 'foodItem'; referenceId: string; servings: number }) => void;
 }
+
 
 // Navigation routes for slash commands
 const NAVIGATION_ROUTES = [
@@ -108,7 +111,7 @@ const getCategoryEmoji = (category?: string): string => {
     }
 };
 
-export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
+export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: OmniboxProps) {
     const navigate = useNavigate();
     const [input, setInput] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -138,6 +141,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     const [isManual, setIsManual] = useState(false);
 
     // Locked food state - when a food is matched with high confidence
+    // Locked food state - when a food is matched with high confidence
+    const [lastLoggedItem, setLastLoggedItem] = useState<{ name: string; brand?: string; id: string; calories: number; quantity: number } | null>(null);
     const [lockedFood, setLockedFood] = useState<(FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } }) | null>(null);
     const [draftFoodQuantity, setDraftFoodQuantity] = useState<number | null>(null);
     const [draftFoodMealType, setDraftFoodMealType] = useState<MealType | null>(null);
@@ -282,7 +287,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             : input;
 
         return performSmartSearch(searchQuery, foodItems, {
-            textFn: (item) => item.name,
+            textFn: (item) => `${item.name} ${item.brand || ''}`,
             categoryFn: (item) => item.category,
             usageCountFn: (item) => foodUsageStats[item.id]?.count || 0,
             limit: 6
@@ -417,6 +422,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             }]
         });
 
+        setLastLoggedItem({
+            name: item.name,
+            brand: item.brand,
+            id: item.id,
+            calories: Math.round(item.calories * quantity / 100),
+            quantity
+        });
         setShowFeedback(true);
         setInput('');
         setLockedFood(null);
@@ -430,7 +442,22 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             usageStats: item.usageStats || undefined
         });
         const stats = foodUsageStats[item.id];
-        const initialQty = (intent.type === 'food' && intent.data.quantity) ? intent.data.quantity : (stats?.avgGrams || 100);
+        // Determine initial quantity
+        let initialQty = 100;
+
+        if (intent.type === 'food' && intent.data.quantity) {
+            // If user explicitly typed "X port", we multiply by default portion size
+            if (intent.data.unit === 'portion') {
+                const portionSize = item.defaultPortionGrams || 100;
+                initialQty = intent.data.quantity * portionSize;
+            } else {
+                initialQty = intent.data.quantity;
+            }
+        } else {
+            // Fallback: Default portion -> Average logged amount -> 100g
+            initialQty = item.defaultPortionGrams || stats?.avgGrams || 100;
+        }
+
         setDraftFoodQuantity(initialQty);
         setDraftFoodMealType(intent.type === 'food' && intent.data.mealType ? intent.data.mealType : null);
         setDraftFoodDate(intent.date || null);
@@ -585,7 +612,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     return (
         <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[20vh] bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
             <div className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300" onClick={e => e.stopPropagation()}>
-                <div className="p-4 flex items-center gap-4 border-b border-white/5">
+                <div className="p-4 flex items-center gap-4 border-b border-white/5 relative">
                     <span className="text-xl">{isSlashMode ? '🧭' : '✨'}</span>
                     <input
                         ref={inputRef}
@@ -596,14 +623,54 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleExecute()}
                     />
-                    {showFeedback && (
-                        <div className="absolute right-16 px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full animate-in fade-in zoom-in duration-300">
-                            ✨ Sparat!
+                    {showFeedback && lastLoggedItem && (
+                        <div className="absolute top-full left-0 right-0 z-50 p-4 bg-slate-800 border-b border-white/5 shadow-xl animate-in slide-in-from-top-2 duration-300 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center text-xl">✅</div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-white text-sm">{lastLoggedItem.name}</span>
+                                        {lastLoggedItem.brand && (
+                                            <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
+                                                {lastLoggedItem.brand}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-emerald-400 font-bold">
+                                        {lastLoggedItem.calories} kcal <span className="text-slate-500 font-normal">({Math.round(lastLoggedItem.quantity)}g) loggat</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (onOpenNutrition && lastLoggedItem) {
+                                        onOpenNutrition({
+                                            type: 'foodItem', // Assuming food item for now as logging recipes isn't fully integrated here yet
+                                            referenceId: lastLoggedItem.id,
+                                            servings: lastLoggedItem.quantity
+                                        });
+                                        onClose();
+                                    } else {
+                                        navigate(`/calories?date=${new Date().toISOString().split('T')[0]}&breakdown=${lastLoggedItem.id}`);
+                                        onClose();
+                                    }
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-white transition-colors"
+                            >
+                                <Info size={14} />
+                                <span>Mer info</span>
+                                <ArrowRight size={14} className="opacity-50" />
+                            </button>
                         </div>
                     )}
-                    <kbd className="hidden md:inline-flex h-6 items-center gap-1 rounded border border-white/10 bg-white/5 px-2 font-mono text-[10px] font-medium text-slate-400">
-                        ESC
-                    </kbd>
+                    {showFeedback && !lastLoggedItem && (
+                        <div className="absolute right-16 px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full animate-in fade-in zoom-in duration-300">
+                            Loggat!
+                        </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                        <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-slate-500 bg-white/5 rounded border border-white/10">esc</kbd>
+                    </div>
                 </div>
 
                 {/* Preview / Results Area */}
@@ -660,7 +727,33 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                     {getCategoryEmoji(lockedFood.category)}
                                 </div>
                                 <div className="flex-1">
-                                    <h3 className="text-xl font-bold text-white">{lockedFood.name}</h3>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-xl font-bold text-white">{lockedFood.name}</h3>
+                                        {lockedFood.brand && (
+                                            <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
+                                                {lockedFood.brand}
+                                            </span>
+                                        )}
+                                        <button
+                                            className="p-1 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 ml-1"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onOpenNutrition) {
+                                                    onOpenNutrition({
+                                                        type: 'foodItem',
+                                                        referenceId: lockedFood.id,
+                                                        servings: draftFoodQuantity || 100 // Use draft quantity if set
+                                                    });
+                                                } else {
+                                                    navigate(`/calories?date=${new Date().toISOString().split('T')[0]}&breakdown=${lockedFood.id}`);
+                                                }
+                                                onClose();
+                                            }}
+                                            title="Mer info"
+                                        >
+                                            <Info size={16} />
+                                        </button>
+                                    </div>
                                     <div className="text-xs text-slate-400 flex items-center gap-2 mt-1">
                                         <span className="uppercase">{lockedFood.category || 'Livsmedel'}</span>
                                         {lockedFood.usageStats && (
@@ -1059,15 +1152,28 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                                 {getCategoryEmoji(item.category)}
                                             </div>
                                             <div>
-                                                <div className="font-medium">{item.name}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="font-medium">{item.name}</div>
+                                                    {item.brand && (
+                                                        <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
+                                                            {item.brand}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="text-[10px] text-slate-500 flex items-center gap-2">
                                                     <span className="uppercase tracking-wide">{item.category || 'Övrigt'}</span>
+                                                    {item.brand && (
+                                                        <>
+                                                            <span className="text-slate-600">•</span>
+                                                            <span className="text-slate-400">{item.brand}</span>
+                                                        </>
+                                                    )}
+                                                    <span className="text-slate-600">•</span>
+                                                    <span className="text-slate-400">{Math.round(item.protein)}g protein</span>
                                                     {item.usageStats && (
                                                         <>
                                                             <span className="text-slate-600">•</span>
-                                                            <span className="text-emerald-500/70">{item.usageStats.count}x loggad</span>
-                                                            <span className="text-slate-600">•</span>
-                                                            <span>snitt {Math.round(item.usageStats.avgGrams)}g</span>
+                                                            <span className="text-emerald-500/70">{item.usageStats.count}x</span>
                                                         </>
                                                     )}
                                                 </div>
@@ -1149,7 +1255,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }
