@@ -168,7 +168,6 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 name: item.name,
                 brand: item.brand || '',
                 imageUrl: item.imageUrl || '',
-                packageWeight: item.packageWeight || 0,
                 defaultPortionGrams: item.defaultPortionGrams || 0,
                 description: item.description || '',
                 calories: item.calories,
@@ -533,12 +532,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                     <td className="td-name">
                                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                                             <span>
-                                                <strong
-                                                    onClick={() => handleOpenForm(item)}
-                                                    className="cursor-pointer hover:text-emerald-400 hover:underline transition-colors"
-                                                >
-                                                    {item.name}
-                                                </strong>
+                                                <strong>{item.name}</strong>
                                                 {item.brand && <span style={{ color: 'var(--text-secondary)', fontSize: '0.85em', marginLeft: '0.4rem' }}>{item.brand}</span>}
                                             </span>
                                             {item.description && (

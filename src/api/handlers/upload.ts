@@ -14,8 +14,14 @@ export async function handleUploadRoutes(req: Request, url: URL, headers: Header
                 return new Response(JSON.stringify({ error: "No file uploaded" }), { status: 400, headers });
             }
 
+            const ext = (file.name.split('.').pop() || "").toLowerCase();
+            const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'avif'];
+
+            if (!allowedExts.includes(ext)) {
+                return new Response(JSON.stringify({ error: "Invalid file type. Only images allowed." }), { status: 400, headers });
+            }
+
             const uuid = crypto.randomUUID();
-            const ext = file.name.split('.').pop() || "jpg";
             const filename = `${uuid}.${ext}`;
             const uploadPath = `uploads/temp/${filename}`;
 

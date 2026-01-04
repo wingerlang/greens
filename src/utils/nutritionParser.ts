@@ -23,42 +23,47 @@ export const parseNutritionText = (inputText: string): ParsedNutrition => {
     const result: ParsedNutrition = {};
     if (!inputText) return result;
 
-    // Normalize: lowercase and standardize decimals
-    const normalized = inputText.toLowerCase().replace(/,/g, '.');
+    // 1. Advanced Normalization
+    let normalized = inputText
+        .replace(/,/g, '.')               // Standardize decimals (70,9 -> 70.9)
+        .replace(/(\d)\s+\./g, '$1.')     // Fix "70 .9" -> "70.9"
+        .replace(/\.\s+(\d)/g, '.$1')     // Fix "70. 9" -> "70.9"
+        .replace(/\s(\d)\s+(\d)\s/g, ' $1$2 ') // Fix spaced digits "1 268" -> "1268" (risky, but common for kJ)
+        .toLowerCase();
+
+    // Fix common OCR errors
+    normalized = normalized
+        .replace(/o(\.\d)/g, '0$1')       // "O.4" -> "0.4"
+        .replace(/(\d)\s*g\b/g, '$1 g');  // Ensure space before unit "70.9g" -> "70.9 g" to help regex
 
     const findValue = (keywords: string[], excludeKeywords: string[] = []): number | undefined => {
         for (const kw of keywords) {
+            // Escape keyword
             const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-            // Priority 1: Immediate proximity (e.g. "147kcal", "Protein: 14g")
-            // Keyword followed by number with only punctuation/whitespace
-            const patternImm1 = new RegExp(`${escapedKw}\\s*[:=-]?\\s*(\\d+(?:\\.\\d+)?)`, 'i');
+            // Regex Construction:
+            // 1. Keyword boundary (\b) to avoid partial matches
+            // 2. Flexible separator ( colon, dash, equals, whitespace)
+            // 3. Capture group for number
+
+            // Priority 1: "Protein 14g" or "Protein: 14"
+            const patternImm1 = new RegExp(`\\b${escapedKw}\\s*[:=-]?\\s*(\\d+(?:\\.\\d+)?)`, 'i');
             const matchImm1 = normalized.match(patternImm1);
             if (matchImm1) return parseFloat(matchImm1[1]);
 
-            // Number followed by keyword with only unit/whitespace
-            const patternImm2 = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(?:g|gram|kcal|kj)?\\s*${escapedKw}`, 'i');
+            // Priority 2: "14g Protein"
+            const patternImm2 = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(?:g|gram|kcal|kj)?\\s*\\b${escapedKw}\\b`, 'i');
             const matchImm2 = normalized.match(patternImm2);
             if (matchImm2) return parseFloat(matchImm2[1]);
 
-            // Priority 2: Flexible distance (if no immediate match found)
-            // Keyword followed by number within 20 chars (strictly same line)
-            const patternFlex1 = new RegExp(`${escapedKw}[^\\d\\n]{0,20}(\\d+(?:\\.\\d+)?)`, 'i');
+            // Priority 3: Loose search (same line)
+            // Look for keyword, then ignore up to 20 non-digit chars, then capture number
+            const patternFlex1 = new RegExp(`\\b${escapedKw}\\b[^\\d\\n]{0,30}(\\d+(?:\\.\\d+)?)`, 'i');
             const matchFlex1 = normalized.match(patternFlex1);
             if (matchFlex1) {
                 const val = parseFloat(matchFlex1[1]);
+                // Verify no exclusion keywords in between
                 const fragment = normalized.substring(matchFlex1.index!, matchFlex1.index! + matchFlex1[0].length);
-                if (!excludeKeywords.some(ex => fragment.includes(ex))) {
-                    return val;
-                }
-            }
-
-            // Number followed by keyword within 20 chars (strictly same line)
-            const patternFlex2 = new RegExp(`(\\d+(?:\\.\\d+)?)?[^\\d\\n]{0,20}${escapedKw}`, 'i');
-            const matchFlex2 = normalized.match(patternFlex2);
-            if (matchFlex2 && matchFlex2[1]) {
-                const val = parseFloat(matchFlex2[1]);
-                const fragment = normalized.substring(matchFlex2.index!, matchFlex2.index! + matchFlex2[0].length);
                 if (!excludeKeywords.some(ex => fragment.includes(ex))) {
                     return val;
                 }
@@ -68,8 +73,15 @@ export const parseNutritionText = (inputText: string): ParsedNutrition => {
     };
 
     // 1. Calories ( kcal > kj )
-    const kcal = findValue(['kcal', 'kalori', 'calorie']);
-    if (kcal !== undefined) {
+    const kcal = findValue(['kcal', 'kalori', 'calorie', 'energi']);
+    if (kcal !== undefined && kcal > 0) {
+        // If we matched "Energi: 303", it might be raw number.
+        // Usually Energi has two values: 1200kJ / 300kcal.
+        // Regex might catch 1200 first.
+        // Let's refine: try explicit 'kcal' search first (already done above in loop).
+        // If value > 1000 and we suspect it's kJ, convert?
+        // Heuristic: If > 800 and not explicitly kcal, assume kJ? No, butter is 700kcal.
+        // Safe bet: trust the parser. But "Energi 303kcal / 1268kJ" -> "Energi 303".
         result.calories = kcal;
     } else {
         const kj = findValue(['kj']);
@@ -80,36 +92,63 @@ export const parseNutritionText = (inputText: string): ParsedNutrition => {
     result.protein = findValue(['protein', 'äggvita', 'prot']);
 
     // 3. Carbohydrates
-    result.carbs = findValue(['kolhydrat', 'carbohydrate', 'carbs', 'cho']);
+    // "Kolhydrat" often precedes "varav sockerarter".
+    // If we match "Kolhydrat" we want the first number.
+    result.carbs = findValue(['kolhydrat', 'carbohydrate', 'carbs', 'cho'], ['socker', 'sugar', 'varav']);
 
     // 4. Fat
-    result.fat = findValue(['fett', 'fat', 'lipids'], ['mättat', 'saturated', 'enkelomättat', 'fleromättat']);
+    // "Fett" often precedes "mättat fett".
+    result.fat = findValue(['fett', 'fat', 'lipids'], ['mättat', 'saturated', 'enkelomättat', 'fleromättat', 'trans']);
 
     // 5. Fiber
-    result.fiber = findValue(['fiber', 'fibrer']);
+    result.fiber = findValue(['fiber', 'fibrer', 'kostfiber']);
 
-    // Higher-level extraction (Name, Ingredients)
-    // We use lowercased original text to preserve commas for ingredients
-    const textLower = inputText.toLowerCase();
-
-    // 6. Name extraction (e.g. "Pizzakit")
-    // If it's the first line and not numeric, it's likely the name
+    // 6. Name Extraction (Improved)
     const lines = inputText.split('\n').filter(l => l.trim().length > 0);
-    if (lines.length > 0) {
-        const firstLine = lines[0].trim();
-        if (!firstLine.match(/^\d/) && firstLine.length < 50) {
-            result.name = firstLine;
+    const blacklist = [
+        'innehåll', 'innehållsförteckning', 'ingredienser',
+        'näringsvärde', 'näringsdeklaration', 'per 100g',
+        'per 100 g', 'deklaration', 'nutrition', 'facts',
+        'ingredients', 'energy', 'energi'
+    ];
+
+    for (const line of lines) {
+        const cleaned = line.trim();
+        // Skip short noise or numeric lines
+        if (cleaned.length < 3 || cleaned.match(/^\d/)) continue;
+
+        // Skip headers
+        if (blacklist.some(bl => cleaned.toLowerCase().includes(bl))) continue;
+
+        // Found a candidate!
+        if (cleaned.length < 60) {
+            result.name = cleaned;
+            break;
         }
     }
 
-    // 7. Ingredients Extraction - Use textLower to preserve commas
-    const ingredientKeywords = ['ingredienser', 'ingredients', 'innehållsförteckning', 'innehåll'];
+    // 7. Ingredients Extraction (Improved)
+    const textLower = inputText.toLowerCase();
+    const ingredientKeywords = ['ingredienser', 'ingredients', 'innehållsförteckning']; // Priority order
+
     for (const kw of ingredientKeywords) {
-        const pattern = new RegExp(`${kw}\\s*[:=-]?\\s*([^\\d\\n][^\\n]{10,2000})`, 'i');
+        // 1. Look for Header followed by content (possibly next line)
+        // Match boundary, then colon/whitespace, then capture until double-newline or end
+        // [^#]* is a trick to match across lines but stop at some point?
+        // Actually, ingredients usually end at "Näringsvärde".
+
+        const pattern = new RegExp(`\\b${kw}\\b[:;]?\\s*([\\s\\S]+?)(\n\\s*näring|\n\\s*energi|$)`, 'i');
         const match = textLower.match(pattern);
-        if (match) {
-            result.ingredients = match[1].trim();
-            break;
+
+        if (match && match[1]) {
+            let candidate = match[1].trim();
+            // Cleanup: if it starts with "..." or similar
+            candidate = candidate.replace(/^[:\-.]+\s*/, '');
+            // Limit length to avoid capturing whole document
+            if (candidate.length > 5 && candidate.length < 2000) {
+                result.ingredients = candidate;
+                break;
+            }
         }
     }
 
@@ -206,9 +245,8 @@ export const extractPackagingWeight = (text: string): number | undefined => {
     }
 
     // Pattern 2: Look for any standalone weight like "275 g" that appears often or early
-    // This is riskier so we look for common package sizes
     // We specifically exclude "100g" because it usually refers to the nutrition table
-    const standalonePattern = /(\d+(?:\.\d+)?)\s*(g|kg|ml|l)\\b/gi;
+    const standalonePattern = /(\d+(?:\.\d+)?)\s*(g|kg|ml|l)\b/gi;
     const matches = Array.from(lower.matchAll(standalonePattern));
     if (matches.length > 0) {
         for (const m of matches) {
@@ -248,8 +286,6 @@ export const extractBrand = (text: string, knownBrands: string[] = []): string |
     }
 
     // 2. SMART FEATURE: Fuzzy match against known brands
-    // If we have a list of brands from our database, check if any of them appear in the text
-    // Sort known brands by length desc to match "Oatly" before "Oat"
     const sortedBrands = [...knownBrands].sort((a, b) => b.length - a.length);
 
     for (const brand of sortedBrands) {

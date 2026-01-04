@@ -59,8 +59,6 @@ export async function router(req: Request): Promise<Response> {
             response = await handleDataRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/weight")) {
             response = await handleDataRoutes(req, url, headers);
-        } else if (url.pathname.startsWith("/api/measurements")) {
-            response = await handleDataRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/foods")) {
             response = await handleDataRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/strava")) {
