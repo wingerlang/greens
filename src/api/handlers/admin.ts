@@ -12,6 +12,18 @@ export async function handleAdminRoutes(req: Request, url: URL, headers: Headers
 
     if (url.pathname === "/api/admin/health") {
         const memory = Deno.memoryUsage();
+        const sessions = await getAllSessions();
+        const activeSessions = sessions.filter(s => {
+            const lastSeen = s.lastSeen ? new Date(s.lastSeen).getTime() : new Date(s.start).getTime();
+            return Date.now() - lastSeen < 5 * 60 * 1000;
+        }).length;
+
+        // Count keys (approx)
+        let keyCount = 0;
+        for await (const _entry of kv.list({ prefix: [] })) {
+            keyCount++;
+        }
+
         const system = {
             denoVersion: Deno.version,
             memory: {
@@ -21,8 +33,10 @@ export async function handleAdminRoutes(req: Request, url: URL, headers: Headers
             },
             pid: Deno.pid,
             uptime: Math.round(performance.now() / 1000) + " s",
-            // Approx KV check
-            kvStatus: "connected" // Implicit if we are here
+            kvStatus: "connected",
+            dbSize: keyCount,
+            activeSessions,
+            totalSessions: sessions.length
         };
         return new Response(JSON.stringify(system), { headers });
     }

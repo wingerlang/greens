@@ -37,13 +37,6 @@ export const AdminPage: React.FC = () => {
         URL.revokeObjectURL(url);
     };
 
-    const stats = useMemo(() => ({
-        totalFoods: foodItems.length,
-        totalRecipes: recipes.length,
-        incompleteFoods: foodItems.filter(f => f.calories === 0 || !f.category || f.category === 'other').length,
-        missingMicros: foodItems.filter(f => !f.iron && !f.zinc && !f.vitaminB12).length
-    }), [foodItems, recipes]);
-
     const filteredItems = useMemo(() => {
         return foodItems.filter(f => {
             const matchesSearch = f.name.toLowerCase().includes(search.toLowerCase());
@@ -74,14 +67,6 @@ export const AdminPage: React.FC = () => {
                     </button>
                 </div>
             </header>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard label="Totala Råvaror" value={stats.totalFoods} icon="🍎" />
-                <StatCard label="Totala Recept" value={stats.totalRecipes} icon="📖" />
-                <StatCard label="Ofullständiga" value={stats.incompleteFoods} icon="🔴" color="text-red-400" />
-                <StatCard label="Saknar Mikros" value={stats.missingMicros} icon="🟡" color="text-amber-400" />
-            </div>
 
             {/* Tab Navigation */}
             <div className="flex border-b border-slate-800 gap-6 overflow-x-auto no-scrollbar">
@@ -408,12 +393,3 @@ const AdminEditModal: React.FC<{
     );
 };
 
-const StatCard: React.FC<{ label: string, value: number, icon: string, color?: string }> = ({ label, value, icon, color = "text-white" }) => (
-    <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex items-center justify-between">
-        <div>
-            <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{label}</div>
-            <div className={`text-3xl font-black ${color}`}>{value}</div>
-        </div>
-        <div className="text-3xl opacity-50">{icon}</div>
-    </div>
-);
