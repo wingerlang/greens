@@ -90,31 +90,43 @@ export class KvInspectorService {
      * Lists keys under a specific prefix.
      * Acts like a directory listing.
      */
-    async listKeys(prefix: unknown[]): Promise<{ subPrefixes: string[], keys: { key: unknown[], size: number }[] }> {
+    async listKeys(prefix: unknown[]): Promise<{ subPrefixes: { name: string, count: number, size: number }[], keys: { key: unknown[], size: number }[] }> {
         const iter = kv.list({ prefix });
-        const subPrefixes = new Set<string>();
+        const subPrefixMap = new Map<string, { count: number, size: number }>();
         const keys: { key: unknown[], size: number }[] = [];
 
         for await (const entry of iter) {
             const remainingKey = entry.key.slice(prefix.length);
 
             if (remainingKey.length === 0) {
-                // Exact match (shouldn't happen with prefix list, but safe to ignore)
                 continue;
             }
 
+            const valueSize = safeStringify(entry.value).length;
+            const keySize = safeStringify(entry.key).length;
+            const entrySize = valueSize + keySize;
+
             if (remainingKey.length === 1) {
-                // Leaf node (File)
-                const valueSize = safeStringify(entry.value).length;
                 keys.push({ key: entry.key, size: valueSize });
             } else {
-                // Folder
-                subPrefixes.add(String(remainingKey[0]));
+                const folderName = String(remainingKey[0]);
+                if (!subPrefixMap.has(folderName)) {
+                    subPrefixMap.set(folderName, { count: 0, size: 0 });
+                }
+                const stats = subPrefixMap.get(folderName)!;
+                stats.count++;
+                stats.size += entrySize;
             }
         }
 
+        const subPrefixes = Array.from(subPrefixMap.entries()).map(([name, stats]) => ({
+            name,
+            count: stats.count,
+            size: stats.size
+        })).sort((a, b) => a.name.localeCompare(b.name));
+
         return {
-            subPrefixes: Array.from(subPrefixes).sort(),
+            subPrefixes,
             keys: keys.sort((a, b) => String(a.key).localeCompare(String(b.key)))
         };
     }

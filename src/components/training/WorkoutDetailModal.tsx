@@ -1,6 +1,6 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, calculate1RM, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, calculate1RM, isWeightedDistanceExercise, isDistanceBasedExercise, isTimeBasedExercise } from '../../models/strengthTypes.ts';
 import { UniversalActivity } from '../../models/types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { SimilarWorkouts } from './SimilarWorkouts.tsx';
@@ -225,6 +225,7 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                 <div className="space-y-6">
                     {uniqueExercises.map((exercise, idx) => {
                         const isWeightedDist = isWeightedDistanceExercise(exercise.exerciseName);
+                        const isTimeBased = isTimeBasedExercise(exercise.exerciseName);
                         // Cast to boolean to ensure type safety
                         const isDist = !!isDistanceBasedExercise(exercise.exerciseName);
 
@@ -265,6 +266,12 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                                                         <th className="px-4 py-2 text-right">Tempo</th>
                                                         <th className="px-4 py-2 text-right">Distans</th>
                                                         <th className="px-4 py-2 text-right">Tid</th>
+                                                    </>
+                                                ) : isTimeBased ? (
+                                                    <>
+                                                        <th className="px-4 py-2 text-right">Vikt</th>
+                                                        <th className="px-4 py-2 text-right">Tid</th>
+                                                        <th className="px-4 py-2 text-right text-slate-500">Not</th>
                                                     </>
                                                 ) : (
                                                     <>
@@ -323,6 +330,20 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                                                                     </td>
                                                                     <td className="px-4 py-2 text-right text-emerald-400 font-mono">
                                                                         {set.time || '-'}
+                                                                    </td>
+                                                                </>
+                                                            ) : isTimeBased ? (
+                                                                <>
+                                                                    <td className="px-4 py-2 text-right">
+                                                                        <span className={`font-bold ${isBest1RM ? 'text-white' : 'text-slate-200'}`}>
+                                                                            {weightDisplay}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className={`px-4 py-2 text-right font-bold ${isBest1RM ? 'text-emerald-400' : 'text-cyan-400'}`}>
+                                                                        {set.time || '-'}
+                                                                    </td>
+                                                                    <td className="px-4 py-2 text-right text-slate-600 italic">
+                                                                        -
                                                                     </td>
                                                                 </>
                                                             ) : (
@@ -430,6 +451,6 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                     </button>
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

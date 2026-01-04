@@ -26,6 +26,7 @@ export type FoodCategory =
     | 'sweeteners'     // Sötningsmedel (sirap, socker)
     | 'baking'         // Bakvaror (mjöl, bakpulver)
     | 'supplements'    // Kosttillskott (proteinpulver, vitaminer)
+    | 'cereals'        // Müsli & flingor
     | 'other';
 
 /** Food storage type */
@@ -1226,6 +1227,7 @@ export interface AppData {
     bodyMeasurements?: BodyMeasurementEntry[];
     // Phase 12: Strength Sessions
     strengthSessions?: StrengthWorkout[];
+    trainingPeriods?: TrainingPeriod[];
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */
@@ -1322,6 +1324,7 @@ export const CATEGORY_LABELS: Record<FoodCategory, string> = {
     sweeteners: 'Sötningsmedel',
     baking: 'Bakvaror',
     supplements: 'Kosttillskott',
+    cereals: 'Müsli & flingor',
     other: 'Övrigt'
 };
 

@@ -293,16 +293,29 @@ export function GoalsPage() {
     };
 
     // Format progress numbers nicely
-    const formatProgress = (current: number, target: number, unit?: string) => {
+    const formatProgress = (current: number, target: number, unit?: string, type?: GoalCategory | string) => {
+        // Handle "styrkepass" or frequency specifically
+        if (unit === 'x/v' || (!unit && type === 'frequency')) {
+            return `${current} av ${target}st`;
+        }
+
+        // Auto-convert heavy weights to tons
+        if (unit === 'kg' && target >= 1000) {
+            const currentTon = current / 1000;
+            const targetTon = target / 1000;
+            return `${currentTon.toFixed(2)} / ${targetTon.toFixed(1)} ton`;
+        }
+
         const formatNum = (n: number) => {
-            if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-            // If it's effectively an integer, show as integer
+            if (unit === 'ton') return n.toFixed(1);
+            if (n >= 1000 && unit !== 'kcal') return `${(n / 1000).toFixed(1)}k`;
             if (Math.abs(n % 1) < 0.01) return Math.round(n).toString();
             if (n >= 10) return parseFloat(n.toFixed(1)).toString();
             return parseFloat(n.toFixed(2)).toString();
         };
 
-        return `${formatNum(current)} / ${formatNum(target)}${unit ? ` ${unit}` : ''}`;
+        const unitDisplay = (!unit || unit === 'undefined') ? '' : ` ${unit}`;
+        return `${formatNum(current)} / ${formatNum(target)}${unitDisplay}`;
     };
 
     // Group goals by Period (only if All is selected)
@@ -600,7 +613,8 @@ export function GoalsPage() {
                                                         {formatProgress(
                                                             progress.current,
                                                             progress.target,
-                                                            goal.targets[0]?.unit
+                                                            goal.targets[0]?.unit,
+                                                            goal.type
                                                         )}
                                                     </span>
                                                     <span className="goal-period">

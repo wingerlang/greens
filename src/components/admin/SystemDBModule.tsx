@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
-type Tab = 'overview' | 'users' | 'explorer';
+type Tab = 'overview' | 'users' | 'explorer' | 'logs';
 
 
 const formatBytes = (bytes: number) => {
@@ -28,7 +28,7 @@ export const SystemDBModule: React.FC = () => {
     return (
         <div className="space-y-6">
             <div className="flex gap-4 border-b border-slate-800 pb-2 overflow-x-auto">
-                {(['overview', 'users', 'explorer'] as Tab[]).map(tab => (
+                {(['overview', 'users', 'explorer', 'logs'] as Tab[]).map(tab => (
                     <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -40,6 +40,7 @@ export const SystemDBModule: React.FC = () => {
                         {tab === 'overview' && '📊 Översikt'}
                         {tab === 'users' && '👥 Användardata'}
                         {tab === 'explorer' && '📂 Utforskare'}
+                        {tab === 'logs' && '📜 Systemloggar'}
                     </button>
                 ))}
             </div>
@@ -48,6 +49,7 @@ export const SystemDBModule: React.FC = () => {
                 {activeTab === 'overview' && <OverviewTab />}
                 {activeTab === 'users' && <UsersTab />}
                 {activeTab === 'explorer' && <ExplorerTab initialPath={explorerPath} />}
+                {activeTab === 'logs' && <LogsTab />}
             </div>
         </div>
     );
@@ -79,11 +81,22 @@ const OverviewTab: React.FC = () => {
 
     const chartData = useMemo(() => {
         if (!data?.stats?.byPrefix) return [];
-        return Object.entries(data.stats.byPrefix).map(([name, val]: [string, any]) => ({
+        const entries = Object.entries(data.stats.byPrefix).map(([name, val]: [string, any]) => ({
             name,
             value: val.size,
             count: val.count
         })).sort((a, b) => b.value - a.value);
+
+        if (entries.length <= 10) return entries;
+
+        const top = entries.slice(0, 10);
+        const others = entries.slice(10).reduce((acc, curr) => ({
+            name: 'Övriga',
+            value: acc.value + curr.value,
+            count: acc.count + curr.count
+        }), { name: 'Övriga', value: 0, count: 0 });
+
+        return [...top, others];
     }, [data]);
 
     const historyData = useMemo(() => {
@@ -116,12 +129,12 @@ const OverviewTab: React.FC = () => {
                     <div className="text-3xl font-black text-white">{formatBytes(totalSize)}</div>
                 </div>
 
-                {/* Biggest User */}
+                {/* Biggest Entry */}
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
-                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Största Användare</div>
+                    <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Största Entry</div>
                     {/* Placeholder - we need to fetch this or pass it from backend, for now assume we verify visually in Users tab or add logic later. 
                         Actually, let's look at chartData to guess or leave as 'N/A' if not ready. 
-                        Wait, best to implement statsRepo update for this or skip for now? 
+                        Wait, best to implement statsRepo update for this or skip for now?
                         User explicitly asked for it. I'll defer this slightly or add a placeholder calculation if possible.
                     */}
                     {/* The current endpoint `stats` doesn't return user stats. We need to fetch users or accept that we only show global stats here.
@@ -168,6 +181,8 @@ const OverviewTab: React.FC = () => {
                                 </Pie>
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px', color: '#fff' }}
+                                    itemStyle={{ color: '#fff' }}
+                                    labelStyle={{ color: '#fff' }}
                                     formatter={(value: number) => [formatBytes(value), 'Size']}
                                 />
                                 <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" />
@@ -193,6 +208,7 @@ const OverviewTab: React.FC = () => {
                                 <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => formatBytes(v)} />
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px', color: '#fff' }}
+                                    itemStyle={{ color: '#fff' }}
                                 />
                                 <Area type="monotone" dataKey="size" stroke="#3b82f6" fillOpacity={1} fill="url(#colorSize)" strokeWidth={3} />
                             </AreaChart>
@@ -431,7 +447,7 @@ const ExplorerTab: React.FC<{ initialPath?: string[] }> = ({ initialPath }) => {
         // Sort
         const compare = (a: any, b: any) => {
             let res = 0;
-            if (sortBy === 'name') res = a.name.localeCompare(b.name);
+            if (sortBy === 'name') res = (a.name || '').localeCompare(b.name || '');
             if (sortBy === 'size') res = (a.size || 0) - (b.size || 0);
             if (sortBy === 'count') res = (a.count || 0) - (b.count || 0);
             return sortDir === 'asc' ? res : -res;
@@ -571,6 +587,113 @@ const ExplorerTab: React.FC<{ initialPath?: string[] }> = ({ initialPath }) => {
                     </div>
                 </div>
             )}
+        </div>
+    );
+};
+
+const LogsTab: React.FC = () => {
+    const [logs, setLogs] = useState<any[]>([]);
+    const [type, setType] = useState<'error' | 'metric'>('error');
+    const [loading, setLoading] = useState(false);
+
+    const fetchLogs = async () => {
+        setLoading(true);
+        try {
+            const token = localStorage.getItem('auth_token');
+            const res = await fetch(`/api/admin/kv/logs?type=${type}&limit=100`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const json = await res.json();
+            setLogs(json.logs || []);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLogs();
+        const interval = setInterval(fetchLogs, 5000);
+        return () => clearInterval(interval);
+    }, [type]);
+
+    return (
+        <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="flex justify-between items-center">
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setType('error')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono border ${type === 'error' ? 'bg-red-500/20 border-red-500 text-red-400' : 'border-slate-800 text-gray-500 hover:text-white'}`}
+                    >
+                        ERROR LOGS
+                    </button>
+                    <button
+                        onClick={() => setType('metric')}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold font-mono border ${type === 'metric' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'border-slate-800 text-gray-500 hover:text-white'}`}
+                    >
+                        METRICS STREAM
+                    </button>
+                </div>
+                <div className="text-xs text-gray-500 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Live Refresh (5s)
+                </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-900 rounded-xl overflow-hidden min-h-[500px] flex flex-col">
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left text-xs font-mono">
+                        <thead className="bg-slate-900 text-gray-500 sticky top-0">
+                            <tr>
+                                <th className="p-3">Timestamp</th>
+                                <th className="p-3">{type === 'error' ? 'Level' : 'Name'}</th>
+                                <th className="p-3 w-full">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50">
+                            {(logs || []).map((log, i) => (
+                                <tr key={i} className="hover:bg-slate-900/50 text-gray-300">
+                                    <td className="p-3 text-gray-500 whitespace-nowrap">
+                                        {type === 'error' ? (log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '-') : (log.value?.timestamp ? new Date(log.value.timestamp).toLocaleTimeString() : '-')}
+                                    </td>
+                                    {type === 'error' ? (
+                                        <td className="p-3">
+                                            <span className="px-1.5 py-0.5 rounded bg-red-900/30 text-red-400 border border-red-900/50">
+                                                {log.level || 'UNKNOWN'}
+                                            </span>
+                                        </td>
+                                    ) : (
+                                        <td className="p-3 text-blue-400">
+                                            {log.key ? log.key[1] : '?'}
+                                        </td>
+                                    )}
+                                    <td className="p-3">
+                                        {type === 'error' ? (
+                                            <div>
+                                                <div className="text-white mb-0.5">{log.message || 'No message'}</div>
+                                                {log.context && <div className="text-gray-600 truncate max-w-[400px]">{JSON.stringify(log.context)}</div>}
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-4">
+                                                <span className="text-emerald-400 font-bold">{log.value?.value}</span>
+                                                {log.value?.tags && <span className="text-gray-600 truncate max-w-[400px]">{JSON.stringify(log.value.tags)}</span>}
+                                            </div>
+                                        )}
+                                    </td>
+                                </tr>
+                            ))}
+                            {(!logs || logs.length === 0) && (
+                                <tr>
+                                    <td colSpan={3} className="p-8 text-center text-gray-600 italic">
+                                        {loading ? 'Laddar loggar...' : 'Inga loggar hittades.'}
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 };

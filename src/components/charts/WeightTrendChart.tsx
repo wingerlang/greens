@@ -269,33 +269,30 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
     };
 
     return (
-        <div className="flex-1 p-4 flex flex-col h-full">
-            {/* Header */}
-            <div className="flex justify-between items-start mb-4">
-                <div>
-                    <div className="text-2xl font-black text-white">
-                        {currentWeight.toFixed(1)} <span className="text-sm text-slate-400">kg</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-sm font-bold ${weightChange > 0 ? 'text-rose-400' : weightChange < 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
+        <div className="flex-1 flex flex-col h-full relative group">
+            {/* Chart Area - Full fill */}
+            <div className="flex-1 relative w-full min-h-[120px]">
+                {/* Header Info - Overlay - Moved up slightly and added background to prevent overlap issues */}
+                <div className="absolute -top-2 left-0 z-10 pointer-events-none p-1 rounded-lg">
+                    <div className="flex items-baseline gap-2">
+                        <div className="text-2xl font-black text-white">
+                            {currentWeight.toFixed(1)} <span className="text-sm text-slate-400">kg</span>
+                        </div>
+                        <div className={`text-sm font-bold ${weightChange > 0 ? 'text-rose-400' : weightChange < 0 ? 'text-emerald-400' : 'text-slate-400'}`}>
                             {weightChange > 0 ? '+' : ''}{weightChange.toFixed(1)} kg
-                        </span>
-                        <span className="text-[10px] text-slate-500">
-                            sedan {sortedEntries[0].date}
-                        </span>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-slate-500 mt-0.5">
+                        <span>sedan {sortedEntries[0].date}</span>
+                        {/* Trend Legend - Compact */}
+                        <div className="flex gap-2 opacity-60">
+                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Ner</span>
+                            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-rose-500" /> Upp</span>
+                        </div>
                     </div>
                 </div>
-                {/* Trend Legend */}
-                <div className="flex gap-2 text-[9px]">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" /> Ner</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-rose-500" /> Upp</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500" /> Stabil</span>
-                </div>
-            </div>
 
-            {/* Chart Area - Reduced height */}
-            <div className="flex-1 relative min-h-[70px] max-h-[90px] w-full">
-                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full overflow-visible pt-16 pb-4">
                     {/* Grid lines */}
                     <line x1="0" y1="0" x2="100" y2="0" stroke="#334155" strokeWidth="0.5" strokeOpacity="0.5" />
                     <line x1="0" y1="50" x2="100" y2="50" stroke="#334155" strokeWidth="0.5" strokeOpacity="0.3" />
@@ -379,15 +376,15 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                     );
                 })()}
 
-                {/* Y-axis labels */}
-                <div className="absolute left-0 top-0 bottom-0 -ml-6 flex flex-col justify-between text-[9px] text-slate-500 font-mono py-1 h-full pointer-events-none">
+                {/* Y-axis labels - Integrated on the right side logic or keep left but better constrained */}
+                <div className="absolute right-0 top-10 bottom-0 flex flex-col justify-between text-[9px] text-slate-500 font-mono py-1 pointer-events-none opacity-50">
                     <span>{maxW.toFixed(0)}</span>
                     <span>{((maxW + minW) / 2).toFixed(0)}</span>
                     <span>{minW.toFixed(0)}</span>
                 </div>
 
                 {/* X-axis labels */}
-                <div className="absolute -bottom-5 left-0 right-0 flex justify-between text-[9px] text-slate-500 font-medium pointer-events-none">
+                <div className="absolute bottom-0 left-0 right-0 flex justify-between text-[9px] text-slate-500 font-medium pointer-events-none translate-y-full pt-1">
                     {xLabels.map((l, i) => (
                         <span key={i} style={{ position: 'absolute', left: `${l.pos}%`, transform: 'translateX(-50%)' }}>
                             {l.label}

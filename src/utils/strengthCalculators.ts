@@ -65,3 +65,75 @@ export function estimate1RM(weight: number, reps: number): number {
     return weight * (1 + effectiveReps / 30);
 }
 
+export function calculateAverage1RM(weight: number, reps: number) {
+    if (reps === 1) return {
+        average: weight,
+        epley: weight,
+        brzycki: weight,
+        lander: weight,
+        lombardi: weight,
+        mayhew: weight,
+        oconner: weight,
+        wathan: weight
+    };
+
+    // Formulas
+    const epley = weight * (1 + reps / 30);
+    const brzycki = weight * (36 / (37 - reps));
+    const lander = (100 * weight) / (101.3 - 2.67123 * reps);
+    const lombardi = weight * Math.pow(reps, 0.10);
+    const mayhew = (100 * weight) / (52.2 + (41.9 * Math.exp(-0.055 * reps)));
+    const oconner = weight * (1 + 0.025 * reps);
+    const wathan = (100 * weight) / (48.8 + (53.8 * Math.exp(-0.075 * reps)));
+
+    const all = [epley, brzycki, lander, lombardi, mayhew, oconner, wathan];
+    const sum = all.reduce((a, b) => a + b, 0);
+    const average = sum / all.length;
+
+    return {
+        average: Math.round(average * 10) / 10,
+        epley: Math.round(epley * 10) / 10,
+        brzycki: Math.round(brzycki * 10) / 10,
+        lander: Math.round(lander * 10) / 10,
+        lombardi: Math.round(lombardi * 10) / 10,
+        mayhew: Math.round(mayhew * 10) / 10,
+        oconner: Math.round(oconner * 10) / 10,
+        wathan: Math.round(wathan * 10) / 10
+    };
+}
+
+export interface Plate {
+    weight: number;
+    count: number;
+    color?: string; // e.g., 'red', 'blue'
+}
+
+export function calculatePlateLoading(
+    targetWeight: number,
+    barWeight: number = 20,
+    availablePlates: number[] = [25, 20, 15, 10, 5, 2.5, 1.25]
+): { plates: Plate[]; remainder: number } {
+    if (targetWeight <= barWeight) return { plates: [], remainder: 0 };
+
+    let neededPerSide = (targetWeight - barWeight) / 2;
+    const loadedPlates: Plate[] = [];
+
+    // Sort available plates descending
+    const sortedPlates = [...availablePlates].sort((a, b) => b - a);
+
+    for (const plate of sortedPlates) {
+        if (neededPerSide >= plate) {
+            const count = Math.floor(neededPerSide / plate);
+            if (count > 0) {
+                loadedPlates.push({ weight: plate, count: count });
+                neededPerSide -= count * plate;
+                neededPerSide = Math.round(neededPerSide * 1000) / 1000; // Fix float precision
+            }
+        }
+    }
+
+    return {
+        plates: loadedPlates,
+        remainder: neededPerSide * 2 // Total remaining weight
+    };
+}

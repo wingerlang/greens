@@ -825,7 +825,10 @@ export function StrengthPage() {
                                                             </div>
                                                             {u.isTimeBased && u.maxTimeFormatted ? (
                                                                 <div className="border-l border-white/5 pl-3">
-                                                                    <p className="text-lg font-black text-cyan-400">{u.maxTimeFormatted}</p>
+                                                                    <p className="text-lg font-black text-cyan-400">
+                                                                        {u.e1RM && u.e1RM > 0 ? <>{u.e1RM}kg <span className="text-sm font-normal text-slate-500">x</span> </> : ''}
+                                                                        {u.maxTimeFormatted}
+                                                                    </p>
                                                                     <p className="text-[8px] text-slate-600 uppercase">rekord</p>
                                                                 </div>
                                                             ) : u.isWeightedDistance && (u.e1RM || u.maxDistance) ? (
