@@ -19,6 +19,14 @@ export async function handleUploadRoutes(req: Request, url: URL, headers: Header
             const filename = `${uuid}.${ext}`;
             const uploadPath = `uploads/temp/${filename}`;
 
+            try {
+                await Deno.mkdir("uploads/temp", { recursive: true });
+            } catch (err) {
+                if (!(err instanceof Deno.errors.AlreadyExists)) {
+                    throw err;
+                }
+            }
+
             await Deno.writeFile(uploadPath, file.stream());
 
             return new Response(JSON.stringify({ tempUrl: uploadPath }), { headers });
@@ -43,7 +51,7 @@ export async function handleUploadRoutes(req: Request, url: URL, headers: Header
             try {
                 await Deno.stat(tempUrl);
             } catch {
-                 return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers });
+                return new Response(JSON.stringify({ error: "File not found" }), { status: 404, headers });
             }
 
             // Read file buffer
@@ -66,8 +74,8 @@ export async function handleUploadRoutes(req: Request, url: URL, headers: Header
             }), { headers });
 
         } catch (e) {
-             console.error("OCR error:", e);
-             return new Response(JSON.stringify({ error: "OCR failed: " + (e instanceof Error ? e.message : String(e)) }), { status: 500, headers });
+            console.error("OCR error:", e);
+            return new Response(JSON.stringify({ error: "OCR failed: " + (e instanceof Error ? e.message : String(e)) }), { status: 500, headers });
         }
     }
 

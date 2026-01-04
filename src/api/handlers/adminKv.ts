@@ -1,7 +1,6 @@
 import { authenticate, hasRole } from "../middleware.ts";
 import { statsRepo } from "../repositories/statsRepository.ts";
 import { kvInspector } from "../services/kvInspectorService.ts";
-import { kv } from "../kv.ts";
 import { logError, getErrorLogs } from "../utils/logger.ts";
 import { safeStringify } from "../utils/jsonUtils.ts";
 import { kv } from "../kv.ts";
