@@ -11,6 +11,7 @@ import { handleGoalRoutes } from "./handlers/goals.ts";
 import { handlePeriodRoutes } from "./handlers/periods.ts";
 import { handleParserRoutes } from "./handlers/parser.ts";
 import { handleGetCommunityStats } from "./handlers/statistics.ts";
+import { handleAdminKvRoutes } from "./handlers/adminKv.ts";
 import { logError, logMetric } from "./utils/logger.ts";
 
 export async function router(req: Request): Promise<Response> {
@@ -56,6 +57,8 @@ export async function router(req: Request): Promise<Response> {
             response = await handleSocialRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/activities")) {
             response = await handleActivityRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/admin/kv")) {
+            response = await handleAdminKvRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/admin")) {
             response = await handleAdminRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/strength")) {
