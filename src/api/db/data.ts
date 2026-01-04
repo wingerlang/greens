@@ -7,7 +7,6 @@ import { weightRepo } from "../repositories/weightRepository.ts";
 import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { goalRepo } from "../repositories/goalRepository.ts";
 import { periodRepo } from "../repositories/periodRepository.ts";
-import { measurementRepo } from "../repositories/measurementRepository.ts";
 
 export async function getUserData(userId: string): Promise<AppData | null> {
     const res = await kv.get(["user_profiles", userId]);
@@ -44,12 +43,6 @@ export async function getUserData(userId: string): Promise<AppData | null> {
     const weightHistory = await weightRepo.getWeightHistory(userId);
     if (weightHistory.length > 0) {
         userData.weightEntries = weightHistory;
-    }
-
-    // 2.5 Fetch body measurements
-    const measureHistory = await measurementRepo.getMeasurementHistory(userId);
-    if (measureHistory.length > 0) {
-        userData.bodyMeasurements = measureHistory;
     }
 
     // 3. Merge activities
@@ -99,13 +92,6 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         }
     }
 
-    // 2.5 Sync measurements
-    if (data.bodyMeasurements && data.bodyMeasurements.length > 0) {
-        for (const entry of data.bodyMeasurements) {
-            await measurementRepo.saveMeasurement(userId, entry);
-        }
-    }
-
     // 2. Save the rest as a profile blob (excluding large/granular items)
     // NOTE: performanceGoals are now excluded because they are handled via repo.
     // However, if we don't exclude them, they just sit there as legacy.
@@ -130,7 +116,6 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         universalActivities,
         mealEntries,
         weightEntries,
-        bodyMeasurements,
         strengthSessions,
         performanceGoals, // Exclude from blob
         ...userSpecificData

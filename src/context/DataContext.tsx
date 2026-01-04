@@ -1493,10 +1493,6 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString()
         };
         setBodyMeasurements(prev => [...prev, newEntry]);
-
-        // Persist
-        skipAutoSave.current = true;
-        storageService.addBodyMeasurement(newEntry).catch(e => console.error("Failed to sync measurement", e));
     }, []);
 
     const updateBodyMeasurement = useCallback((id: string, updates: Partial<BodyMeasurementEntry>) => {

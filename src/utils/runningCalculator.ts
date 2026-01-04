@@ -202,3 +202,65 @@ export function estimateCardioCalories(type: 'running' | 'cycling', durationSeco
 
     return 0;
 }
+
+export function calculateRiegelTime(currentSeconds: number, currentDistKm: number, targetDistKm: number): number {
+    if (currentDistKm <= 0 || targetDistKm <= 0) return 0;
+    // T2 = T1 * (D2 / D1)^1.06
+    return Math.round(currentSeconds * Math.pow((targetDistKm / currentDistKm), 1.06));
+}
+
+export function calculateCooperVO2(distanceMeters: number): number {
+    // (Distance - 504.9) / 44.73
+    const vo2 = (distanceMeters - 504.9) / 44.73;
+    return Math.max(0, Math.round(vo2 * 10) / 10);
+}
+
+export function getCooperGrade(distanceMeters: number, age: number, gender: 'male' | 'female'): string {
+    // Simplified grading logic
+    // Using widely available standard tables roughly
+
+    // Male
+    if (gender === 'male') {
+        if (age < 30) {
+            if (distanceMeters > 2800) return 'Excellent';
+            if (distanceMeters > 2400) return 'Good';
+            if (distanceMeters > 2200) return 'Average';
+            if (distanceMeters > 1600) return 'Bad';
+            return 'Very Bad';
+        } else if (age < 50) {
+            if (distanceMeters > 2700) return 'Excellent';
+            if (distanceMeters > 2300) return 'Good';
+            if (distanceMeters > 2100) return 'Average';
+            if (distanceMeters > 1500) return 'Bad';
+            return 'Very Bad';
+        } else {
+            if (distanceMeters > 2500) return 'Excellent';
+            if (distanceMeters > 2100) return 'Good';
+            if (distanceMeters > 1900) return 'Average';
+            if (distanceMeters > 1300) return 'Bad';
+            return 'Very Bad';
+        }
+    }
+    // Female
+    else {
+        if (age < 30) {
+            if (distanceMeters > 2700) return 'Excellent';
+            if (distanceMeters > 2200) return 'Good';
+            if (distanceMeters > 1800) return 'Average';
+            if (distanceMeters > 1500) return 'Bad';
+            return 'Very Bad';
+        } else if (age < 50) {
+            if (distanceMeters > 2500) return 'Excellent';
+            if (distanceMeters > 2000) return 'Good';
+            if (distanceMeters > 1700) return 'Average';
+            if (distanceMeters > 1400) return 'Bad';
+            return 'Very Bad';
+        } else {
+            if (distanceMeters > 2300) return 'Excellent';
+            if (distanceMeters > 1900) return 'Good';
+            if (distanceMeters > 1500) return 'Average';
+            if (distanceMeters > 1100) return 'Bad';
+            return 'Very Bad';
+        }
+    }
+}

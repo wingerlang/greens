@@ -17,7 +17,6 @@ import { TrainingPage } from './pages/TrainingPage.tsx';
 import { PlanningPage } from './pages/PlanningPage.tsx';
 import { ApiPage } from './pages/ApiPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
-import { AdminKVPage } from './pages/AdminKVPage.tsx';
 import { DocumentationPage } from './components/DocumentationPage.tsx';
 import { HealthPage } from './pages/HealthPage.tsx';
 import { CompetitionPage } from './pages/CompetitionPage.tsx';
@@ -48,6 +47,9 @@ import { ToolsPaceConverterPage } from './pages/tools/ToolsPaceConverterPage.tsx
 import { ToolsHealthPage } from './pages/tools/ToolsHealthPage.tsx';
 import { ToolsPowerPage } from './pages/tools/ToolsPowerPage.tsx';
 import { ToolsMacroPage } from './pages/tools/ToolsMacroPage.tsx';
+import { ToolsCooperPage } from './pages/tools/ToolsCooperPage.tsx';
+import { ToolsHeartRatePage } from './pages/tools/ToolsHeartRatePage.tsx';
+import { ToolsStrengthStandardsPage } from './pages/tools/ToolsStrengthStandardsPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -124,16 +126,6 @@ export function App() {
                                                         <AdminPage />
                                                     </RequireAdmin>
                                                 } />
-                                                <Route path="admin" element={
-                                                    <RequireAdmin>
-                                                        <AdminPage />
-                                                    </RequireAdmin>
-                                                } />
-                                                <Route path="admin/database" element={
-                                                    <RequireAdmin>
-                                                        <AdminKVPage />
-                                                    </RequireAdmin>
-                                                } />
                                                 <Route path="api" element={<ApiPage />} />
                                                 <Route path="docs" element={<DocumentationPage />} />
                                                 <Route path="community" element={<UsersPage />} />
@@ -175,6 +167,9 @@ export function App() {
                                                 <Route path="tools/health" element={<ToolsHealthPage />} />
                                                 <Route path="tools/power" element={<ToolsPowerPage />} />
                                                 <Route path="tools/macros" element={<ToolsMacroPage />} />
+                                                <Route path="tools/cooper" element={<ToolsCooperPage />} />
+                                                <Route path="tools/hr" element={<ToolsHeartRatePage />} />
+                                                <Route path="tools/standards" element={<ToolsStrengthStandardsPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>
