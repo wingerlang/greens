@@ -48,6 +48,12 @@ export function ToolsPage() {
                     desc: "BMI, BMR, TDEE och kalkylator för viktnedgång.",
                     path: "/tools/health",
                     color: "from-rose-500 to-pink-500"
+                },
+                {
+                    name: "Makrofördelning",
+                    desc: "Räkna ut fördelning av Protein, Kolhydrater och Fett.",
+                    path: "/tools/macros",
+                    color: "from-pink-500 to-fuchsia-500"
                 }
             ]
         }

@@ -52,3 +52,27 @@ export function calculateCalorieDeficit(
         targetCalories: tdee - dailyDeficit
     };
 }
+
+export interface MacroSplit {
+    protein: number;
+    carbs: number;
+    fat: number;
+}
+
+export function calculateMacros(calories: number, split: { p: number, c: number, f: number }): MacroSplit {
+    if (calories <= 0) return { protein: 0, carbs: 0, fat: 0 };
+
+    // Split is percentages (e.g., 40, 40, 20)
+    // Protein & Carbs = 4 kcal/g
+    // Fat = 9 kcal/g
+
+    const pCals = calories * (split.p / 100);
+    const cCals = calories * (split.c / 100);
+    const fCals = calories * (split.f / 100);
+
+    return {
+        protein: Math.round(pCals / 4),
+        carbs: Math.round(cCals / 4),
+        fat: Math.round(fCals / 9)
+    };
+}

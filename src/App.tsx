@@ -46,6 +46,7 @@ import { ToolsRacePredictorPage } from './pages/tools/ToolsRacePredictorPage.tsx
 import { ToolsPaceConverterPage } from './pages/tools/ToolsPaceConverterPage.tsx';
 import { ToolsHealthPage } from './pages/tools/ToolsHealthPage.tsx';
 import { ToolsPowerPage } from './pages/tools/ToolsPowerPage.tsx';
+import { ToolsMacroPage } from './pages/tools/ToolsMacroPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -162,6 +163,7 @@ export function App() {
                                                 <Route path="tools/pace" element={<ToolsPaceConverterPage />} />
                                                 <Route path="tools/health" element={<ToolsHealthPage />} />
                                                 <Route path="tools/power" element={<ToolsPowerPage />} />
+                                                <Route path="tools/macros" element={<ToolsMacroPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

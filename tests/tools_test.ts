@@ -5,6 +5,7 @@ import {
   calculateBMR,
   calculateTDEE,
   calculateCalorieDeficit,
+  calculateMacros,
 } from "../src/utils/healthCalculators.ts";
 import {
   estimate1RM,
@@ -46,6 +47,17 @@ Deno.test("calculateCalorieDeficit", () => {
   const result = calculateCalorieDeficit(85, 80, 70, 2500); // 70 days = 10 weeks
   assertEquals(result.dailyDeficit > 540 && result.dailyDeficit < 560, true);
   assertEquals(result.targetCalories, 2500 - result.dailyDeficit);
+});
+
+Deno.test("calculateMacros", () => {
+  // 2000 kcal, 40% P, 40% C, 20% F
+  // P: 800 kcal / 4 = 200g
+  // C: 800 kcal / 4 = 200g
+  // F: 400 kcal / 9 = 44.44... -> 44g
+  const result = calculateMacros(2000, { p: 40, c: 40, f: 20 });
+  assertEquals(result.protein, 200);
+  assertEquals(result.carbs, 200);
+  assertEquals(result.fat, 44);
 });
 
 // --- Strength Tests ---
