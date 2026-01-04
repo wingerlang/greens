@@ -90,7 +90,7 @@ export const AdminPage: React.FC = () => {
                     📦 Matdatabas
                 </button>
                 <button
-                    onClick={() => window.location.href = '/admin/database'}
+                    onClick={() => setActiveTab('systemdb')}
                     className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'systemdb' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
                     💾 System DB

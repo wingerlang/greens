@@ -143,7 +143,9 @@ export function ToolsOneRepMaxPage() {
 
                             {/* Plates */}
                             {loadingResult.plates.length > 0 ? (
-                                loadingResult.plates.map((plate, idx) => (
+                                loadingResult.plates.flatMap((plate) =>
+                                    Array(plate.count).fill(plate)
+                                ).map((plate, idx) => (
                                     <div key={idx} className="flex flex-col items-center gap-1 group relative">
                                         <div
                                             className={`
@@ -156,9 +158,6 @@ export function ToolsOneRepMaxPage() {
                                         >
                                             <span className="rotate-90 whitespace-nowrap">{plate.weight}</span>
                                         </div>
-                                        {plate.count > 1 && (
-                                            <div className="absolute -top-6 text-xs font-bold text-slate-400">x{plate.count}</div>
-                                        )}
                                     </div>
                                 ))
                             ) : (

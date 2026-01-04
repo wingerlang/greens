@@ -60,13 +60,6 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
         return new Response(JSON.stringify({ success: true }), { headers });
     }
 
-    // Measurements
-    if (url.pathname === "/api/measurements" && method === "POST") {
-        const entry = await req.json();
-        await measurementRepo.saveMeasurement(userId, entry);
-        return new Response(JSON.stringify({ success: true }), { headers });
-    }
-
     // Food Database Search
     if (url.pathname === "/api/foods" && method === "GET") {
         const query = url.searchParams.get("q") || "";
