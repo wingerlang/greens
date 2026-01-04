@@ -1,15 +1,45 @@
-import React, { useState } from 'react';
-import { calculateAverage1RM, calculatePlateLoading, type Plate } from '../../utils/strengthCalculators.ts';
+import { useState, useMemo } from 'react';
+import { calculateAverage1RM, calculatePlateLoading } from '../../utils/strengthCalculators.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useData } from '../../context/DataContext.tsx';
+import { getPersonalRecords, PERCENTAGE_MAP } from '../../utils/strengthStatistics.ts';
 
 export function ToolsOneRepMaxPage() {
     const { user } = useAuth();
+    const { strengthSessions } = useData();
     const [weight, setWeight] = useState(100);
     const [reps, setReps] = useState(5);
 
+    // Exercise Selection
+    const [selectedExercise, setSelectedExercise] = useState<string>('');
+
+    // Extract unique exercises for dropdown
+    const availableExercises = useMemo(() => {
+        const set = new Set<string>();
+        strengthSessions.forEach(s => {
+            s.exercises.forEach(e => set.add(e.exerciseName));
+        });
+        return Array.from(set).sort();
+    }, [strengthSessions]);
+
+    // Get Personal Records for selected exercise
+    const personalRecords = useMemo(() => {
+        if (!selectedExercise) return {};
+        return getPersonalRecords(selectedExercise, strengthSessions);
+    }, [selectedExercise, strengthSessions]);
+
     const handleUseMyData = () => {
-        // Mock data fetch for last lift
-        // setWeight(user.lastLift || 100);
+        // If an exercise is selected, we could try to find the latest lift?
+        // For now, let's just use the logic from the old version or user.lastLift
+        // The original logic was mocked. Let's make it smart if an exercise is selected.
+        if (selectedExercise && personalRecords) {
+            // Find the "best" record (highest e1RM)
+            const bestRep = Object.values(personalRecords).sort((a, b) => b.e1rm - a.e1rm)[0];
+            if (bestRep) {
+                setWeight(bestRep.weight);
+                setReps(bestRep.reps);
+            }
+        }
     };
 
     // Plate Loader State
@@ -28,20 +58,40 @@ export function ToolsOneRepMaxPage() {
             </div>
 
             {/* Main Calculator */}
-            <div className="grid md:grid-cols-2 gap-6">
+            <div className="grid lg:grid-cols-2 gap-6">
                 <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 space-y-6 relative">
                     <div className="flex justify-between items-center">
                         <h2 className="text-xl font-bold text-white">Indata</h2>
-                        <button
-                            onClick={handleUseMyData}
-                            className="text-xs bg-white/5 hover:bg-white/10 text-emerald-400 px-3 py-1.5 rounded-lg font-medium transition-colors border border-emerald-500/20"
-                            title="Hämta senaste pass"
-                        >
-                            Hämta min data
-                        </button>
+                        {selectedExercise && (
+                            <button
+                                type="button"
+                                onClick={handleUseMyData}
+                                className="text-xs bg-white/5 hover:bg-white/10 text-emerald-400 px-3 py-1.5 rounded-lg font-medium transition-colors border border-emerald-500/20"
+                                title="Använd mitt bästa rekord för denna övning"
+                            >
+                                Hämta bästa
+                            </button>
+                        )}
                     </div>
 
                     <div className="space-y-4">
+                        {/* Exercise Selector */}
+                        {user && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-400 mb-1">Övning (för historik)</label>
+                                <select
+                                    value={selectedExercise}
+                                    onChange={(e) => setSelectedExercise(e.target.value)}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                >
+                                    <option value="">-- Välj övning (Valfritt) --</option>
+                                    {availableExercises.map(ex => (
+                                        <option key={ex} value={ex}>{ex}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+
                         <div>
                             <label className="block text-sm font-medium text-slate-400 mb-1">Vikt (kg)</label>
                             <input
@@ -69,6 +119,7 @@ export function ToolsOneRepMaxPage() {
                                 <div className="text-4xl font-bold text-emerald-400">{maxResults.average} kg</div>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setTargetWeight(maxResults.average)}
                                 className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
                             >
@@ -78,31 +129,93 @@ export function ToolsOneRepMaxPage() {
                     </div>
                 </div>
 
-                {/* Results Table */}
-                <div className="bg-slate-900 border border-white/5 rounded-3xl p-6">
-                    <h2 className="text-xl font-bold text-white mb-4">Procenttabell</h2>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                        {[100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50].map(pct => (
-                            <div key={pct} className="flex justify-between items-center p-3 rounded-xl hover:bg-white/5 transition-colors">
-                                <span className={`font-bold ${pct >= 90 ? 'text-white' : 'text-slate-400'}`}>{pct}%</span>
-                                <span className="font-mono text-emerald-400">{Math.round(maxResults.average * (pct / 100))} kg</span>
-                            </div>
-                        ))}
+                {/* Results Table - REPLACES OLD PERCENT TABLE */}
+                <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 overflow-hidden flex flex-col">
+                    <h2 className="text-xl font-bold text-white mb-4">Rep Max Tabell</h2>
+                    <div className="flex-1 overflow-auto custom-scrollbar -mx-2 px-2">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                            <tr className="text-xs text-slate-500 border-b border-white/5">
+                                <th className="py-2 px-2 font-medium">Reps</th>
+                                <th className="py-2 px-2 font-medium">%</th>
+                                <th className="py-2 px-2 font-medium">Vikt</th>
+                                {selectedExercise && (
+                                    <>
+                                        <th className="py-2 px-2 font-medium text-right">Mitt PB</th>
+                                        <th className="py-2 px-2 font-medium text-right">e1RM</th>
+                                        <th className="py-2 px-2 font-medium text-right">Diff</th>
+                                    </>
+                                )}
+                            </tr>
+                            </thead>
+                            <tbody className="text-sm">
+                            {Array.from({ length: 15 }, (_, i) => i + 1).map(r => {
+                                const pct = PERCENTAGE_MAP[r] || 0;
+                                const calcWeight = Math.round(maxResults.average * (pct / 100));
+                                const isInputRow = r === reps;
+                                const myRecord = personalRecords[r];
+
+                                // Diff calculation
+                                let diffElem = null;
+                                let myE1RM = null;
+
+                                if (myRecord) {
+                                    myE1RM = myRecord.e1rm;
+                                    const diffVal = myE1RM - maxResults.average;
+                                    const diffPct = ((myE1RM - maxResults.average) / maxResults.average) * 100;
+                                    const isPositive = diffVal >= 0;
+
+                                    diffElem = (
+                                        <span className={isPositive ? 'text-emerald-400' : 'text-red-400'}>
+                                            {isPositive ? '+' : ''}{Math.round(diffPct)}%
+                                        </span>
+                                    );
+                                }
+
+                                return (
+                                    <tr
+                                        key={r}
+                                        className={`
+                                            border-b border-white/5 last:border-0 transition-colors
+                                            ${isInputRow ? 'bg-emerald-500/10' : 'hover:bg-white/5'}
+                                        `}
+                                    >
+                                        <td className="py-2 px-2 font-bold text-white">{r}</td>
+                                        <td className="py-2 px-2 text-slate-400">{pct}%</td>
+                                        <td className="py-2 px-2 font-mono text-emerald-400">{calcWeight} kg</td>
+                                        {selectedExercise && (
+                                            <>
+                                                <td className="py-2 px-2 text-right text-white">
+                                                    {myRecord ? `${myRecord.weight} kg` : '-'}
+                                                </td>
+                                                <td className="py-2 px-2 text-right text-slate-400">
+                                                    {myE1RM ? `${myE1RM}` : '-'}
+                                                </td>
+                                                <td className="py-2 px-2 text-right font-medium">
+                                                    {diffElem || '-'}
+                                                </td>
+                                            </>
+                                        )}
+                                    </tr>
+                                );
+                            })}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
-            {/* Formulas Breakdown */}
+            {/* Formulas Breakdown - COMPACT VERSION */}
             <div className="bg-slate-900 border border-white/5 rounded-3xl p-6">
                 <h2 className="text-xl font-bold text-white mb-4">Formler</h2>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <ResultCard label="Epley" value={maxResults.epley} />
-                    <ResultCard label="Brzycki" value={maxResults.brzycki} />
-                    <ResultCard label="Lander" value={maxResults.lander} />
-                    <ResultCard label="Lombardi" value={maxResults.lombardi} />
-                    <ResultCard label="Mayhew" value={maxResults.mayhew} />
-                    <ResultCard label="O'Conner" value={maxResults.oconner} />
-                    <ResultCard label="Wathan" value={maxResults.wathan} />
+                <div className="flex flex-wrap gap-3">
+                    <CompactResultCard label="Epley" value={maxResults.epley} />
+                    <CompactResultCard label="Brzycki" value={maxResults.brzycki} />
+                    <CompactResultCard label="Lander" value={maxResults.lander} />
+                    <CompactResultCard label="Lombardi" value={maxResults.lombardi} />
+                    <CompactResultCard label="Mayhew" value={maxResults.mayhew} />
+                    <CompactResultCard label="O'Conner" value={maxResults.oconner} />
+                    <CompactResultCard label="Wathan" value={maxResults.wathan} />
                 </div>
             </div>
 
@@ -187,11 +300,11 @@ export function ToolsOneRepMaxPage() {
     );
 }
 
-function ResultCard({ label, value }: { label: string, value: number }) {
+function CompactResultCard({ label, value }: { label: string, value: number }) {
     return (
-        <div className="bg-slate-950 p-4 rounded-xl border border-white/5">
-            <div className="text-xs text-slate-500 mb-1">{label}</div>
-            <div className="text-lg font-bold text-white">{value} kg</div>
+        <div className="bg-slate-950 px-4 py-2 rounded-lg border border-white/5 flex items-center gap-2">
+            <span className="text-xs text-slate-500 uppercase font-bold">{label}:</span>
+            <span className="text-sm font-bold text-white">{value}</span>
         </div>
     );
 }
