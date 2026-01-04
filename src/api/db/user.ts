@@ -63,13 +63,14 @@ export async function getUserById(id: string): Promise<DBUser | null> {
     return user;
 }
 
-export async function getAllUsers(limit: number = 100, cursor?: string): Promise<{ users: DBUser[], cursor: string }> {
-    const iter = kv.list({ prefix: ['users'] }, { limit, cursor });
+export async function getAllUsers(): Promise<DBUser[]> {
+    const iter = kv.list({ prefix: ['users'] });
     const users: DBUser[] = [];
+    // I decided not to perform a code edit here but rather will run a script.
     for await (const entry of iter) {
         users.push(entry.value as DBUser);
     }
-    return { users, cursor: iter.cursor };
+    return users;
 }
 
 export async function saveUser(user: DBUser): Promise<void> {

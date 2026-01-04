@@ -27,6 +27,8 @@ import {
   calculateWilks,
   calculateIPFPoints
 } from "../src/utils/strengthCalculators.ts";
+import { analyzeStrengthHistory, type ExerciseAnalysis } from "../src/utils/strengthAnalysis.ts";
+import type { StrengthWorkout } from "../src/models/strengthTypes.ts";
 
 // --- Health Tests ---
 
@@ -162,4 +164,39 @@ Deno.test("Strength Standards (Wilks/IPF)", () => {
   // IPF
   const ipf = calculateIPFPoints(80, 500, 'male');
   assertEquals(ipf > 0, true);
+});
+
+Deno.test("analyzeStrengthHistory", () => {
+  const mockSessions: StrengthWorkout[] = [
+    {
+      id: "1", date: "2023-01-01", userId: "u1", name: "Legs", totalVolume: 0, totalSets: 0, totalReps: 0, uniqueExercises: 0, source: 'manual', createdAt: "", updatedAt: "",
+      exercises: [
+        {
+          exerciseId: "e1", exerciseName: "Back Squat",
+          sets: [{ setNumber: 1, reps: 5, weight: 100 }, { setNumber: 2, reps: 1, weight: 120 }]
+        }
+      ]
+    },
+    {
+      id: "2", date: "2023-01-08", userId: "u1", name: "Legs 2", totalVolume: 0, totalSets: 0, totalReps: 0, uniqueExercises: 0, source: 'manual', createdAt: "", updatedAt: "",
+      exercises: [
+        {
+          exerciseId: "e1", exerciseName: "Squat",
+          sets: [{ setNumber: 1, reps: 5, weight: 105 }] // PB for 5 reps
+        }
+      ]
+    }
+  ];
+
+  const analysis = analyzeStrengthHistory(mockSessions, "Squat");
+
+  assertEquals(analysis.totalWorkouts, 2);
+  assertEquals(analysis.bestRepMaxes[5].weight, 105); // Best 5 rep set
+  assertEquals(analysis.bestRepMaxes[1].weight, 120); // Best 1 rep set
+
+  // 120x1 -> 1RM ~120
+  // 105x5 -> 1RM ~105 * (1 + 5/30) = 105 * 1.166 = 122.5
+  // So best Est 1RM should be from the 5 rep set
+  const bestEst = analysis.allTimeBest1RM?.estimated1RM || 0;
+  assertEquals(bestEst > 121, true);
 });

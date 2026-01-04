@@ -29,7 +29,8 @@ export function useHealth(date: string = getISODate()) {
         exerciseEntries,
         calculateDailyNutrition,
         weightEntries,
-        getLatestWeight
+        getLatestWeight,
+        strengthSessions
     } = useData();
 
     const { settings } = useSettings();
@@ -112,6 +113,7 @@ export function useHealth(date: string = getISODate()) {
         currentGoal,
         activeCycle,
         cycleProgress,
-        dailyExercises // Added
+        dailyExercises, // Added
+        strengthSessions
     };
 }

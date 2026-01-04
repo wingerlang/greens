@@ -207,7 +207,6 @@ export interface FoodItem {
     unit: Unit;
     category: FoodCategory;
     brand?: string;
-    imageUrl?: string; // URL to product image (uploads/food-images/...)
     storageType?: FoodStorageType;
     // Extended properties
     pricePerUnit?: number;      // Price in SEK per unit

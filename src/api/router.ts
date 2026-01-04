@@ -12,9 +12,7 @@ import { handlePeriodRoutes } from "./handlers/periods.ts";
 import { handleParserRoutes } from "./handlers/parser.ts";
 import { handleGetCommunityStats } from "./handlers/statistics.ts";
 import { handleAdminKvRoutes } from "./handlers/adminKv.ts";
-import { handleUploadRoutes } from "./handlers/upload.ts";
 import { logError, logMetric } from "./utils/logger.ts";
-import { serveDir } from "https://deno.land/std@0.208.0/http/file_server.ts";
 
 export async function router(req: Request): Promise<Response> {
     const start = performance.now();
@@ -31,14 +29,6 @@ export async function router(req: Request): Promise<Response> {
 
     if (method === "OPTIONS") {
         return new Response(null, { headers });
-    }
-
-    // Static File Serving for Uploads
-    if (url.pathname.startsWith("/uploads/")) {
-        return await serveDir(req, {
-            fsRoot: "./uploads",
-            urlRoot: "uploads",
-        });
     }
 
     let response: Response;
@@ -81,8 +71,6 @@ export async function router(req: Request): Promise<Response> {
             response = await handlePeriodRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/parse-url")) {
             response = await handleParserRoutes(req, url, headers);
-        } else if (url.pathname.startsWith("/api/upload-temp") || url.pathname.startsWith("/api/parse-image")) {
-            response = await handleUploadRoutes(req, url, headers);
         } else if (url.pathname === "/api/stats/community") {
             response = await handleGetCommunityStats(req);
         } else {

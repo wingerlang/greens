@@ -188,17 +188,15 @@ export const cleanProductName = (title: string, h1?: string): string => {
  */
 export const extractPackagingWeight = (text: string): number | undefined => {
     if (!text) return undefined;
-    const lower = text.toLowerCase().replace(/,/g, '.'); // Normalize decimals
+    const lower = text.toLowerCase();
 
     // Pattern 1: Look for explicit weight/size keywords
-    const weightKeywords = ['vikt', 'innehåll', 'nettovikt', 'mängd', 'storlek', 'portionsstorlek', 'netto'];
+    const weightKeywords = ['vikt', 'innehåll', 'nettovikt', 'mängd', 'storlek', 'portionsstorlek'];
     for (const kw of weightKeywords) {
-        // Must NOT match "per 100g" or similar table headers
-        // Negative lookahead to ensure we don't match "vikt per 100g"
-        const pattern = new RegExp(`${kw}\\D*?(?!per\\s*100)(\\d+(?:\\.\\d+)?)\\s*(g|kg|ml|l)\\b`, 'i');
+        const pattern = new RegExp(`${kw}\\D*?(\\d+(?:[\\.,]\\d+)?)\\s*(g|kg|ml|l)\\b`, 'i');
         const match = lower.match(pattern);
         if (match) {
-            let val = parseFloat(match[1]);
+            let val = parseFloat(match[1].replace(',', '.'));
             const unit = match[2];
             if (unit === 'kg' || unit === 'l') val *= 1000;
             return val;
@@ -207,18 +205,15 @@ export const extractPackagingWeight = (text: string): number | undefined => {
 
     // Pattern 2: Look for any standalone weight like "275 g" that appears often or early
     // This is riskier so we look for common package sizes
-    // We specifically exclude "100g" because it usually refers to the nutrition table
-    const standalonePattern = /(\d+(?:\.\d+)?)\s*(g|kg|ml|l)\\b/gi;
+    const standalonePattern = /(\d+(?:\.\d+)?)\s*(g|kg|ml|l)\b/gi;
     const matches = Array.from(lower.matchAll(standalonePattern));
     if (matches.length > 0) {
+        // Return the first one if it looks like a package size (e.g. > 10)
         for (const m of matches) {
             let val = parseFloat(m[1]);
             const unit = m[2];
             if (unit === 'kg' || unit === 'l') val *= 1000;
-
-            // Heuristic: package sizes are usually between 5g and 5kg
-            // AND specifically avoid exactly 100g unless it is explicitly marked as "netto" (handled above)
-            if (val > 5 && val < 5000 && val !== 100) return val;
+            if (val > 5 && val < 5000) return val; // Heuristic: package sizes are usually between 5g and 5kg
         }
     }
 
@@ -233,29 +228,18 @@ export const extractBrand = (text: string, knownBrands: string[] = []): string |
     const lower = text.toLowerCase();
 
     // 1. Look for "Varumärke: Schysst käk"
-    const brandKeywords = ['varumärke', 'brand', 'märke', 'tillverkare', 'producerad av', 'från'];
+    const brandKeywords = ['varumärke', 'brand', 'märke', 'tillverkare'];
     for (const kw of brandKeywords) {
-        // Capture text until next newline or punctuation
-        const pattern = new RegExp(`${kw}\\s*[:=-]?\\s*([^\\n\\.\\,\\|©®]{2,30})`, 'i');
+        const pattern = new RegExp(`${kw}\\D*?([^\\n\\.\\,\\|©®]{2,30})`, 'i');
         const match = lower.match(pattern);
-        if (match) {
-            // Clean up common noise words
-            let candidate = match[1].trim();
-            if (candidate && !['sweden', 'sverige', 'ab'].includes(candidate.toLowerCase())) {
-                 return candidate.replace(/\b(ab|as|oy)\b/gi, '').trim(); // Remove corporate suffix
-            }
-        }
+        if (match) return match[1].trim();
     }
 
     // 2. SMART FEATURE: Fuzzy match against known brands
     // If we have a list of brands from our database, check if any of them appear in the text
-    // Sort known brands by length desc to match "Oatly" before "Oat"
-    const sortedBrands = [...knownBrands].sort((a, b) => b.length - a.length);
-
-    for (const brand of sortedBrands) {
+    for (const brand of knownBrands) {
         if (brand.length < 3) continue;
         const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        // Look for whole word match
         const pattern = new RegExp(`\\b${escaped}\\b`, 'i');
         if (pattern.test(text)) return brand;
     }

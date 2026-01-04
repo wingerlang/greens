@@ -1,23 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { calculateAverage1RM, calculatePlateLoading, type Plate } from '../../utils/strengthCalculators.ts';
+import { analyzeStrengthHistory } from '../../utils/strengthAnalysis.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useHealth } from '../../hooks/useHealth.ts';
 
 export function ToolsOneRepMaxPage() {
     const { user } = useAuth();
+    const { strengthSessions } = useHealth();
+
+    // Core Calculator State
     const [weight, setWeight] = useState(100);
     const [reps, setReps] = useState(5);
-
-    const handleUseMyData = () => {
-        // Mock data fetch for last lift
-        // setWeight(user.lastLift || 100);
-    };
 
     // Plate Loader State
     const [targetWeight, setTargetWeight] = useState(100);
     const [barWeight, setBarWeight] = useState(20);
 
+    // Analysis State
+    const [selectedExercise, setSelectedExercise] = useState('Squat');
+    const [showAnalysis, setShowAnalysis] = useState(false);
+
+    // Calculations
     const maxResults = calculateAverage1RM(weight, reps);
     const loadingResult = calculatePlateLoading(targetWeight, barWeight);
+
+    // Analysis Logic
+    const analysis = useMemo(() => {
+        if (!strengthSessions || strengthSessions.length === 0) return null;
+        return analyzeStrengthHistory(strengthSessions, selectedExercise);
+    }, [strengthSessions, selectedExercise]);
+
+    const commonExercises = ['Squat', 'Bench Press', 'Deadlift', 'Overhead Press', 'Pull Up', 'Dips'];
+
+    const handleUseStats = (w: number, r: number) => {
+        setWeight(w);
+        setReps(r);
+        setTargetWeight(calculateAverage1RM(w, r).average);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
 
     return (
         <div className="space-y-8 animate-fade-in">
@@ -27,19 +47,114 @@ export function ToolsOneRepMaxPage() {
                 <p className="text-slate-400">Beräkna ditt max och se hur du ska lasta stången.</p>
             </div>
 
+            {/* Analysis Section (Logged in users only) */}
+            {user && (
+                <div className="bg-gradient-to-br from-slate-900 to-slate-950 border border-white/10 rounded-3xl p-6 shadow-2xl shadow-black/50 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none"></div>
+
+                    <div className="relative z-10">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                            <div>
+                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                    <span className="text-2xl">📈</span> Din Träningsdata
+                                </h2>
+                                <p className="text-xs text-slate-400 mt-1">Baserat på dina loggade styrkepass.</p>
+                            </div>
+
+                            <div className="flex gap-2 overflow-x-auto pb-2 w-full md:w-auto">
+                                {commonExercises.map(ex => (
+                                    <button
+                                        key={ex}
+                                        onClick={() => setSelectedExercise(ex)}
+                                        className={`px-3 py-1.5 text-xs font-bold rounded-lg whitespace-nowrap transition-all ${
+                                            selectedExercise === ex
+                                            ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
+                                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                                        }`}
+                                    >
+                                        {ex}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {analysis && analysis.totalWorkouts > 0 ? (
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <StatCard
+                                        label="Bästa Est. 1RM"
+                                        value={`${Math.round(analysis.allTimeBest1RM?.estimated1RM || 0)} kg`}
+                                        sub={`${analysis.allTimeBest1RM?.weight}kg x ${analysis.allTimeBest1RM?.reps}`}
+                                        color="text-emerald-400"
+                                    />
+                                    <StatCard
+                                        label="Senaste 3 mån"
+                                        value={`${Math.round(analysis.recentBest1RM?.estimated1RM || 0)} kg`}
+                                        sub={analysis.recentBest1RM ? `${analysis.recentBest1RM.weight}kg x ${analysis.recentBest1RM.reps}` : '-'}
+                                        color="text-blue-400"
+                                    />
+                                    <StatCard label="Antal Pass" value={analysis.totalWorkouts} color="text-white" />
+                                    <StatCard label="Totala Set" value={analysis.totalSets} color="text-slate-400" />
+                                </div>
+
+                                <div className="bg-slate-950/50 rounded-xl p-4 border border-white/5">
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Prestationskurva (Bästa set)</h3>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead>
+                                                <tr className="text-xs text-slate-500 border-b border-white/5">
+                                                    <th className="pb-2 pl-2">Reps</th>
+                                                    <th className="pb-2">Vikt</th>
+                                                    <th className="pb-2">Est. 1RM</th>
+                                                    <th className="pb-2 text-right">Datum</th>
+                                                    <th className="pb-2"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5">
+                                                {[1, 2, 3, 4, 5, 6, 8, 10, 12].map(r => {
+                                                    const stat = analysis.bestRepMaxes[r];
+                                                    if (!stat) return null;
+                                                    const isBest = stat.estimated1RM === analysis.allTimeBest1RM?.estimated1RM;
+
+                                                    return (
+                                                        <tr key={r} className={`group hover:bg-white/5 transition-colors ${isBest ? 'bg-emerald-500/5' : ''}`}>
+                                                            <td className="py-2 pl-2 font-bold text-white">{r}</td>
+                                                            <td className="py-2 text-slate-300">{stat.weight} kg</td>
+                                                            <td className={`py-2 font-mono font-bold ${isBest ? 'text-emerald-400' : 'text-slate-400'}`}>
+                                                                {Math.round(stat.estimated1RM)} kg
+                                                            </td>
+                                                            <td className="py-2 text-right text-xs text-slate-500">{stat.date}</td>
+                                                            <td className="py-2 text-right pr-2">
+                                                                <button
+                                                                    onClick={() => handleUseStats(stat.weight, stat.reps)}
+                                                                    className="text-xs bg-white/10 hover:bg-white/20 text-white px-2 py-1 rounded transition-colors opacity-0 group-hover:opacity-100"
+                                                                >
+                                                                    Använd
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center py-10 bg-slate-950/30 rounded-2xl border border-white/5 border-dashed">
+                                <div className="text-2xl mb-2">🤷‍♂️</div>
+                                <div className="text-slate-400 font-medium">Ingen data hittades för {selectedExercise}</div>
+                                <div className="text-xs text-slate-600 mt-1">Logga pass med exakt detta namn för att se statistik.</div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
             {/* Main Calculator */}
             <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 space-y-6 relative">
-                    <div className="flex justify-between items-center">
-                        <h2 className="text-xl font-bold text-white">Indata</h2>
-                        <button
-                            onClick={handleUseMyData}
-                            className="text-xs bg-white/5 hover:bg-white/10 text-emerald-400 px-3 py-1.5 rounded-lg font-medium transition-colors border border-emerald-500/20"
-                            title="Hämta senaste pass"
-                        >
-                            Hämta min data
-                        </button>
-                    </div>
+                <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 space-y-6">
+                    <h2 className="text-xl font-bold text-white">Kalkylator</h2>
 
                     <div className="space-y-4">
                         <div>
@@ -65,7 +180,7 @@ export function ToolsOneRepMaxPage() {
                     <div className="pt-4 border-t border-white/5">
                         <div className="flex items-end gap-2">
                             <div className="flex-1">
-                                <div className="text-sm text-slate-500 font-medium mb-1">DITT UPPSKATTADE MAX</div>
+                                <div className="text-sm text-slate-500 font-medium mb-1">UPPSKATTAT MAX (1RM)</div>
                                 <div className="text-4xl font-bold text-emerald-400">{maxResults.average} kg</div>
                             </div>
                             <button
@@ -81,10 +196,10 @@ export function ToolsOneRepMaxPage() {
                 {/* Results Table */}
                 <div className="bg-slate-900 border border-white/5 rounded-3xl p-6">
                     <h2 className="text-xl font-bold text-white mb-4">Procenttabell</h2>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                    <div className="space-y-1 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                         {[100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50].map(pct => (
-                            <div key={pct} className="flex justify-between items-center p-3 rounded-xl hover:bg-white/5 transition-colors">
-                                <span className={`font-bold ${pct >= 90 ? 'text-white' : 'text-slate-400'}`}>{pct}%</span>
+                            <div key={pct} className="flex justify-between items-center px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
+                                <span className={`text-sm font-bold ${pct >= 90 ? 'text-white' : 'text-slate-400'}`}>{pct}%</span>
                                 <span className="font-mono text-emerald-400">{Math.round(maxResults.average * (pct / 100))} kg</span>
                             </div>
                         ))}
@@ -183,6 +298,16 @@ export function ToolsOneRepMaxPage() {
                     </div>
                 </div>
             </div>
+        </div>
+    );
+}
+
+function StatCard({ label, value, sub, color }: { label: string, value: number | string, sub?: string, color: string }) {
+    return (
+        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5">
+            <div className="text-xs text-slate-500 uppercase tracking-wider mb-1">{label}</div>
+            <div className={`text-2xl font-bold ${color}`}>{value}</div>
+            {sub && <div className="text-xs text-slate-400 mt-1">{sub}</div>}
         </div>
     );
 }
