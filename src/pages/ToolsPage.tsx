@@ -12,6 +12,12 @@ export function ToolsPage() {
                     desc: "Beräkna ditt max och se hur du ska lasta stången.",
                     path: "/tools/1rm",
                     color: "from-blue-500 to-indigo-500"
+                },
+                {
+                    name: "Styrkestandard",
+                    desc: "Wilks & IPF poäng för att jämföra din styrka.",
+                    path: "/tools/standards",
+                    color: "from-indigo-500 to-violet-500"
                 }
             ]
         },
@@ -21,7 +27,7 @@ export function ToolsPage() {
             tools: [
                 {
                     name: "Race Predictor",
-                    desc: "Förutspå tider på 5k, 10k, Mara baserat på VDOT.",
+                    desc: "Förutspå tider på 5k, 10k, Mara baserat på VDOT & Riegel.",
                     path: "/tools/race",
                     color: "from-emerald-500 to-teal-500"
                 },
@@ -32,10 +38,22 @@ export function ToolsPage() {
                     color: "from-teal-500 to-cyan-500"
                 },
                 {
+                    name: "Coopers Test",
+                    desc: "Uppskatta VO2max baserat på 12 minuters löpning.",
+                    path: "/tools/cooper",
+                    color: "from-cyan-500 to-sky-500"
+                },
+                {
+                    name: "Pulszoner",
+                    desc: "Beräkna pulszoner (Karvonen & Maxpuls).",
+                    path: "/tools/hr",
+                    color: "from-sky-500 to-blue-500"
+                },
+                {
                     name: "Energiberäknare",
                     desc: "Räkna ut kalorier för Cykling (Watt) och Löpning.",
                     path: "/tools/power",
-                    color: "from-cyan-500 to-sky-500"
+                    color: "from-blue-500 to-indigo-500"
                 }
             ]
         },

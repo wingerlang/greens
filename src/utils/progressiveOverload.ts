@@ -795,21 +795,6 @@ export function getUnderperformers(
                 }
             }
             e1RMValue = maxExtraWeight > 0 ? maxExtraWeight : null;
-
-            // E.g. "Weighted Dip" with +36kg.
-        } else if (isTime && lastPB) {
-            // For time based, we might have "Static hold" with weight.
-            // If we have a PB with extraWeight, prioritize high weight+time?
-            // Or just show the max time PB.
-            // The bug report says: "Exercise, Static hold (one hand)",Set,1,weight,36,time,00:01:00
-            // Currently it shows "0".
-            // If type is time, e1RMValue (which implies weight) is likely 0 or null if we just look at 'value'.
-            // For display purposes, 'e1RMValue' in this list is often used as the "primary metric".
-            // We should store what we want to display.
-            e1RMValue = lastPB.value; // timestamp
-            if (lastPB && (lastPB as any).extraWeight) {
-                e1RMValue = (lastPB as any).extraWeight;
-            }
         } else if (!isTime && lastPB) {
             e1RMValue = lastPB.value || null;
         }

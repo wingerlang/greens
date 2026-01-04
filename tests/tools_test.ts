@@ -18,8 +18,15 @@ import {
   calculateDistance,
   estimateCardioCalories,
   calculateVDOT,
-  predictRaceTime
+  predictRaceTime,
+  calculateRiegelTime,
+  calculateCooperVO2
 } from "../src/utils/runningCalculator.ts";
+
+import {
+  calculateWilks,
+  calculateIPFPoints
+} from "../src/utils/strengthCalculators.ts";
 
 // --- Health Tests ---
 
@@ -131,4 +138,28 @@ Deno.test("calculateVDOT and predictRaceTime", () => {
   // VDOT 50 10k is ~41:20 (2480s)
   const predictedTime = predictRaceTime(50, 10);
   assertEquals(predictedTime > 2400 && predictedTime < 2600, true);
+});
+
+Deno.test("calculateRiegelTime", () => {
+  // 5k in 20 min -> 10k prediction
+  // T2 = 20 * (10/5)^1.06 = 20 * 2.085 = 41.7 mins
+  const t2 = calculateRiegelTime(1200, 5, 10);
+  assertEquals(t2 > 2400 && t2 < 2600, true);
+});
+
+Deno.test("calculateCooperVO2", () => {
+  // 2400m in 12 mins
+  // (2400 - 504.9) / 44.73 = 1895.1 / 44.73 = 42.36
+  const vo2 = calculateCooperVO2(2400);
+  assertEquals(Math.abs(vo2 - 42.4) < 0.5, true);
+});
+
+Deno.test("Strength Standards (Wilks/IPF)", () => {
+  // Wilks
+  const wilks = calculateWilks(80, 500, 'male');
+  assertEquals(wilks > 300, true);
+
+  // IPF
+  const ipf = calculateIPFPoints(80, 500, 'male');
+  assertEquals(ipf > 0, true);
 });

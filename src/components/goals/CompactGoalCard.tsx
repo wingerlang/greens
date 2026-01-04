@@ -43,20 +43,12 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
         const t = goal.targets[0];
         if (goal.type === 'weight') return `${goal.targetWeight} kg`;
         if (!t) return '';
-        if (goal.type === 'frequency') {
-            const count = t.count || t.value || 0;
-            const suffix = goal.period === 'weekly' ? 'st/vecka' : 'ggr';
-            return `${count} ${suffix}`;
-        }
+        if (goal.type === 'frequency') return `${t.count}x/${goal.period === 'weekly' ? 'v' : 'p'}`;
         if (goal.type === 'streak') {
             const suffix = goal.category === 'nutrition' || goal.category === 'lifestyle' ? 'dagar' : 'pass';
             return `${t.count} ${suffix}`;
         }
-        // Special case for tonnage to avoid "10.0k ton" or "10.0k kg"
-        if (goal.type === 'tonnage') {
-            return `${t.value} ton`;
-        }
-        return `${formatValue(t.value || 0, t.unit)} ${t.unit || ''}`;
+        return `${formatValue(t.value || 0)} ${t.unit}`;
     })();
 
     const progressText = (() => {

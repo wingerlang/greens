@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
-import { convertPaceToTime, formatSeconds } from '../../utils/runningCalculator.ts';
+import { convertPaceToTime, convertTimeToPace, formatSeconds } from '../../utils/runningCalculator.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
+import { useHealth } from '../../hooks/useHealth.ts';
 
 export function ToolsPaceConverterPage() {
+    const { user } = useAuth();
+    const { exerciseEntries } = useHealth();
+
     // Pace state: MM and SS
     const [minutes, setMinutes] = useState(5);
     const [seconds, setSeconds] = useState(0);
@@ -24,6 +29,35 @@ export function ToolsPaceConverterPage() {
         { name: "100 miles", km: 160.934 }
     ];
 
+    const pbs = React.useMemo(() => {
+        if (!exerciseEntries || exerciseEntries.length === 0) return [];
+        const found = [];
+        const targets = [5, 10, 21.0975, 42.195];
+
+        targets.forEach(dist => {
+             const match = exerciseEntries
+                .filter(e => e.type === 'running' && e.distance && Math.abs(e.distance - dist) < (dist * 0.05))
+                .sort((a, b) => (a.durationMinutes - b.durationMinutes))[0];
+
+             if (match && match.distance && match.durationMinutes) {
+                 const pace = (match.durationMinutes * 60) / match.distance;
+                 found.push({
+                     name: dist > 40 ? 'Maraton' : dist > 20 ? 'Halvmaraton' : `${dist}km`,
+                     pace,
+                     date: match.date
+                 });
+             }
+        });
+        return found;
+    }, [exerciseEntries]);
+
+    const setPaceFromSeconds = (totalSeconds: number) => {
+        const m = Math.floor(totalSeconds / 60);
+        const s = Math.round(totalSeconds % 60);
+        setMinutes(m);
+        setSeconds(s);
+    };
+
     return (
         <div className="space-y-8 animate-fade-in">
              <div>
@@ -33,7 +67,24 @@ export function ToolsPaceConverterPage() {
 
             <div className="grid md:grid-cols-2 gap-6">
                 <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 h-fit">
-                    <h2 className="text-xl font-bold text-white mb-6">Ditt tempo</h2>
+                    <div className="flex justify-between items-center mb-6">
+                        <h2 className="text-xl font-bold text-white">Ditt tempo</h2>
+                        {pbs.length > 0 && (
+                            <select
+                                onChange={(e) => setPaceFromSeconds(Number(e.target.value))}
+                                className="bg-slate-950 border border-white/10 text-xs text-slate-400 rounded-lg px-2 py-1 focus:outline-none focus:border-emerald-500"
+                                defaultValue=""
+                            >
+                                <option value="" disabled>Hämta från PB</option>
+                                {pbs.map((pb, idx) => (
+                                    <option key={idx} value={pb.pace}>
+                                        {pb.name} ({formatSeconds(pb.pace)}/km)
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                    </div>
+
                     <div className="flex items-end gap-2">
                         <div className="flex-1">
                             <label className="block text-sm font-medium text-slate-400 mb-1">Minuter</label>
@@ -60,11 +111,11 @@ export function ToolsPaceConverterPage() {
 
                 <div className="bg-slate-900 border border-white/5 rounded-3xl p-6">
                     <h2 className="text-xl font-bold text-white mb-4">Tidtabell</h2>
-                    <div className="space-y-2">
+                    <div className="space-y-1 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
                         {distances.map(dist => {
                             const time = convertPaceToTime(dist.km, paceSecondsPerKm);
                             return (
-                                <div key={dist.name} className="flex justify-between items-center p-3 rounded-xl hover:bg-white/5 transition-colors">
+                                <div key={dist.name} className="flex justify-between items-center px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
                                     <span className="font-medium text-slate-300">{dist.name}</span>
                                     <span className="font-bold text-emerald-400 font-mono text-lg">{formatSeconds(time)}</span>
                                 </div>

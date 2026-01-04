@@ -1,8 +1,7 @@
 import { authenticate, hasRole } from "../middleware.ts";
 import { statsRepo } from "../repositories/statsRepository.ts";
 import { kvInspector } from "../services/kvInspectorService.ts";
-import { kv } from "../kv.ts";
-import { logError, getErrorLogs } from "../utils/logger.ts";
+import { logError } from "../utils/logger.ts";
 import { safeStringify } from "../utils/jsonUtils.ts";
 import { kv } from "../kv.ts";
 
@@ -78,23 +77,6 @@ export async function handleAdminKvRoutes(req: Request, url: URL, headers: Heade
             return new Response(safeStringify({ value }), { headers });
         }
 
-        // GET /api/admin/kv/logs
-        if (url.pathname === "/api/admin/kv/logs" && req.method === "GET") {
-            const type = url.searchParams.get('type') || 'error';
-            const limit = Number(url.searchParams.get('limit')) || 100;
-
-            let logs: any[] = [];
-            if (type === 'error') {
-                logs = await getErrorLogs(limit);
-            } else if (type === 'metric') {
-                const iter = kv.list({ prefix: ['metrics'] }, { limit, reverse: true });
-                for await (const entry of iter) {
-                    logs.push({ key: entry.key, value: entry.value });
-                }
-            }
-
-            return new Response(safeStringify({ logs }), { headers });
-        }
         return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
 
     } catch (e) {
