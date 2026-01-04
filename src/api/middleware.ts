@@ -1,5 +1,6 @@
 import { getSession, touchSession } from "./db/session.ts";
 import { getUserById, DBUser } from "./db/user.ts";
+import { logMetric, logError } from "./utils/logger.ts";
 
 export interface AuthContext {
     user: DBUser;
