@@ -107,7 +107,7 @@ export class ReconciliationService {
     private async emitStravaFeedEvent(userId: string, activity: StravaActivity, privacy: any) {
         const typeLabel = (activity.type).replace('Run', 'Löpning').replace('Ride', 'Cykling').replace('Walk', 'Promenad');
         const distanceKm = activity.distance ? (Math.round(activity.distance / 10) / 100) : 0;
-        const durationMin = Math.round(activity.moving_time / 60);
+        const durationMin = Math.round(activity.elapsed_time / 60);
 
         const mapping: Record<string, string> = {
             'Run': 'running', 'TrailRun': 'running', 'VirtualRun': 'running',

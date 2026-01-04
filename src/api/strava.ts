@@ -326,9 +326,9 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
         platform: 'strava' as const,
         date: activity.start_date_local.split('T')[0],
         type: mapStravaType(activity.type),
-        durationMinutes: Math.round(activity.moving_time / 60),
+        durationMinutes: Math.round(activity.elapsed_time / 60), // Use elapsed time
         intensity: estimateIntensity(activity),
-        caloriesBurned: activity.calories || Math.round(activity.moving_time / 60 * 8), // Estimate if missing
+        caloriesBurned: activity.calories || Math.round(activity.elapsed_time / 60 * 8),
         distance: activity.distance ? Math.round(activity.distance / 10) / 100 : undefined, // Convert to km
         notes: activity.name,
         heartRateAvg: activity.average_heartrate,
@@ -340,21 +340,8 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
     };
 }
 
-// ==========================================
-// Check if credentials are configured
-// ==========================================
+// ...
 
-export function isStravaConfigured(): boolean {
-    return Boolean(STRAVA_CLIENT_ID && STRAVA_CLIENT_SECRET);
-}
-
-// ==========================================
-// Universal Activity Mapping (Database Overhaul)
-// ==========================================
-
-/**
- * Convert Strava activity to Universal Activity Performance Section
- */
 export function mapStravaToPerformance(activity: StravaActivity): ActivityPerformanceSection {
     return {
         source: {
@@ -363,8 +350,8 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
             importedAt: new Date().toISOString()
         },
         distanceKm: activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
-        durationMinutes: Math.round(activity.moving_time / 60),
-        calories: activity.calories || Math.round((activity.moving_time / 60) * 8), // Rough estimate fallback
+        durationMinutes: Math.round(activity.elapsed_time / 60), // Use elapsed time
+        calories: activity.calories || Math.round((activity.elapsed_time / 60) * 8), // Use elapsed time for fallback
 
         avgHeartRate: activity.average_heartrate,
         maxHeartRate: activity.max_heartrate,
