@@ -40,6 +40,12 @@ import { YearInReviewPage } from './pages/YearInReviewPage.tsx';
 import { GoalsPage } from './pages/GoalsPage.tsx';
 import { ActivityStandalonePage } from './pages/ActivityStandalonePage.tsx';
 import { CommunityStatsPage } from './pages/CommunityStatsPage.tsx';
+import { ToolsPage } from './pages/ToolsPage.tsx';
+import { ToolsOneRepMaxPage } from './pages/tools/ToolsOneRepMaxPage.tsx';
+import { ToolsRacePredictorPage } from './pages/tools/ToolsRacePredictorPage.tsx';
+import { ToolsPaceConverterPage } from './pages/tools/ToolsPaceConverterPage.tsx';
+import { ToolsHealthPage } from './pages/tools/ToolsHealthPage.tsx';
+import { ToolsPowerPage } from './pages/tools/ToolsPowerPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -148,6 +154,14 @@ export function App() {
                                                 <Route path="activity/:id" element={<ActivityStandalonePage />} />
                                                 <Route path="statistics/:tab?" element={<CommunityStatsPage />} />
                                                 <Route path="statistik/:tab?" element={<CommunityStatsPage />} />
+
+                                                <Route path="tools" element={<ToolsPage />} />
+                                                <Route path="verktyg" element={<ToolsPage />} />
+                                                <Route path="tools/1rm" element={<ToolsOneRepMaxPage />} />
+                                                <Route path="tools/race" element={<ToolsRacePredictorPage />} />
+                                                <Route path="tools/pace" element={<ToolsPaceConverterPage />} />
+                                                <Route path="tools/health" element={<ToolsHealthPage />} />
+                                                <Route path="tools/power" element={<ToolsPowerPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>
