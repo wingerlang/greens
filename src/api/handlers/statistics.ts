@@ -5,8 +5,9 @@ export async function handleGetCommunityStats(req: Request): Promise<Response> {
     try {
         const url = new URL(req.url);
         const force = url.searchParams.get('refresh') === 'true';
+        const period = url.searchParams.get('period') || 'all';
 
-        const stats = await getCommunityStats(force);
+        const stats = await getCommunityStats(force, period);
 
         return new Response(JSON.stringify(stats), {
             headers: {
