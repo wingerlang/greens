@@ -63,6 +63,7 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
             isDistanceBased: boolean;
             maxDistance: number;
             maxDistanceUnit: string;
+            maxReps: number;
         }> = {};
 
         workouts.forEach(w => {
@@ -92,7 +93,8 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         isWeightedDistance: isWeightedDistanceExercise(ex.exerciseName),
                         isDistanceBased: isDistanceBasedExercise(ex.exerciseName),
                         maxDistance: pb?.distance || 0,
-                        maxDistanceUnit: pb?.distanceUnit || 'm'
+                        maxDistanceUnit: pb?.distanceUnit || 'm',
+                        maxReps: 0
                     };
                 }
 
@@ -128,7 +130,10 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         }
                     } else if (stats[key].isBW && set.reps > 0 && (!set.extraWeight || set.extraWeight === 0)) {
                         // Pure bodyweight (no extra weight) - track max reps instead
-                        // Don't update maxWeight/estimated1RM since there's no added weight
+                        if (set.reps > stats[key].maxReps) {
+                            stats[key].maxReps = set.reps;
+                            stats[key].maxWeightDate = w.date; // Use this date for "PB" date if it's the best reps
+                        }
                     }
                 });
 
@@ -324,6 +329,9 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                                                     )}
                                                     {ex.estimated1RM > 0 && ex.estimated1RM !== ex.maxWeight && (
                                                         <span className="text-amber-400/60 font-bold text-xs">{ex.estimated1RM}kg <span className="text-[9px] text-slate-500">e1RM</span></span>
+                                                    )}
+                                                    {ex.maxWeight === 0 && ex.estimated1RM === 0 && ex.maxReps > 0 && (
+                                                        <span className="text-sky-400 font-bold">{ex.maxReps} <span className="text-[9px] text-slate-500">reps</span></span>
                                                     )}
                                                 </>
                                             ) : (

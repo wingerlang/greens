@@ -3,6 +3,7 @@ import { getUserData, saveUserData } from "../db/data.ts";
 import { mealRepo } from "../repositories/mealRepository.ts";
 import { weightRepo } from "../repositories/weightRepository.ts";
 import { foodRepo } from "../repositories/foodRepository.ts";
+import { measurementRepo } from "../repositories/measurementRepository.ts";
 
 export async function handleDataRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const method = req.method;
@@ -43,6 +44,13 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
     if (url.pathname === "/api/weight" && method === "POST") {
         const entry = await req.json();
         await weightRepo.saveWeight(userId, entry);
+        return new Response(JSON.stringify({ success: true }), { headers });
+    }
+
+    // Measurements
+    if (url.pathname === "/api/measurements" && method === "POST") {
+        const entry = await req.json();
+        await measurementRepo.saveMeasurement(userId, entry);
         return new Response(JSON.stringify({ success: true }), { headers });
     }
 

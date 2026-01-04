@@ -17,6 +17,7 @@ import { TrainingPage } from './pages/TrainingPage.tsx';
 import { PlanningPage } from './pages/PlanningPage.tsx';
 import { ApiPage } from './pages/ApiPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
+import { AdminKVPage } from './pages/AdminKVPage.tsx';
 import { DocumentationPage } from './components/DocumentationPage.tsx';
 import { HealthPage } from './pages/HealthPage.tsx';
 import { CompetitionPage } from './pages/CompetitionPage.tsx';
@@ -114,6 +115,16 @@ export function App() {
                                                 <Route path="admin" element={
                                                     <RequireAdmin>
                                                         <AdminPage />
+                                                    </RequireAdmin>
+                                                } />
+                                                <Route path="admin" element={
+                                                    <RequireAdmin>
+                                                        <AdminPage />
+                                                    </RequireAdmin>
+                                                } />
+                                                <Route path="admin/database" element={
+                                                    <RequireAdmin>
+                                                        <AdminKVPage />
                                                     </RequireAdmin>
                                                 } />
                                                 <Route path="api" element={<ApiPage />} />
