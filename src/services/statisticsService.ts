@@ -13,9 +13,9 @@ export interface CommunityStats {
         totalGoalsAchieved: number;
     };
     averages: {
-        distancePerUser: number;
-        tonnagePerUser: number;
-        workoutsPerUser: number;
+        distancePerUserPerMonth: number;
+        tonnagePerUserPerMonth: number;
+        workoutsPerUserPerMonth: number;
         sessionDurationMinutes: number;
     };
     strength: {
@@ -25,6 +25,8 @@ export interface CommunityStats {
             avg1RM: number;
             max1RM: number;
             avgTonnage: number;
+            athleteCount: number;
+            avgSets: number;
         }>;
         topExercises: string[];
     };
@@ -39,9 +41,9 @@ export interface CommunityStats {
 }
 
 export const statisticsService = {
-    async getCommunityStats(): Promise<CommunityStats | null> {
+    async getCommunityStats(period: string = 'all'): Promise<CommunityStats | null> {
         try {
-            const res = await fetch('/api/stats/community');
+            const res = await fetch(`/api/stats/community?period=${period}`);
             if (!res.ok) throw new Error('Failed to fetch stats');
             return await res.json();
         } catch (e) {

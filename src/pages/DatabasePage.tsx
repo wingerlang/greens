@@ -52,7 +52,7 @@ const EMPTY_FORM: FoodItemFormData = {
 type ViewMode = 'grid' | 'list';
 
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
-    const { foodItems, mealEntries, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
+    const { foodItems, recipes, mealEntries, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
     const [searchParams, setSearchParams] = useSearchParams();
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [detailItem, setDetailItem] = useState<FoodItem | null>(null);
@@ -149,6 +149,13 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
+
+    const stats = useMemo(() => ({
+        totalFoods: foodItems.length,
+        totalRecipes: recipes.length,
+        incompleteFoods: foodItems.filter(f => f.calories === 0 || !f.category || f.category === 'other').length,
+        missingMicros: foodItems.filter(f => !f.iron && !f.zinc && !f.vitaminB12).length
+    }), [foodItems, recipes]);
 
     const handleOpenForm = (item?: FoodItem) => {
         if (item) {
@@ -346,6 +353,13 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                     </div>
                 </header>
             )}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <StatCard label="Totala Råvaror" value={stats.totalFoods} icon="🍎" />
+                <StatCard label="Totala Recept" value={stats.totalRecipes} icon="📖" />
+                <StatCard label="Ofullständiga" value={stats.incompleteFoods} icon="🔴" color="text-red-400" />
+                <StatCard label="Saknar Mikros" value={stats.missingMicros} icon="🟡" color="text-amber-400" />
+            </div>
 
             <div className="filters">
                 <input
@@ -1198,3 +1212,13 @@ function getCO2Class(value: number): string {
     if (value <= 1.0) return 'co2-medium';
     return 'co2-high';
 }
+
+const StatCard: React.FC<{ label: string, value: number, icon: string, color?: string }> = ({ label, value, icon, color = "text-white" }) => (
+    <div className="bg-slate-900 border border-slate-800 p-4 md:p-6 rounded-2xl flex items-center justify-between shadow-lg">
+        <div>
+            <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{label}</div>
+            <div className={`text-2xl md:text-3xl font-black ${color}`}>{value}</div>
+        </div>
+        <div className="text-2xl md:text-3xl opacity-50">{icon}</div>
+    </div>
+);

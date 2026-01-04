@@ -17,7 +17,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             const sessionId = await createSession(user.id);
             return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { status: 201, headers });
         } catch (e) {
-            return new Response(JSON.stringify({ error: e.message }), { status: 400, headers });
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 400, headers });
         }
     }
 
@@ -40,7 +40,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             const sessionId = await createSession(user.id);
             return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { headers });
         } catch (e) {
-            return new Response(JSON.stringify({ error: e.message }), { status: 400, headers });
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 400, headers });
         }
     }
 
