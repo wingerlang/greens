@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { statisticsService, CommunityStats } from '../services/statisticsService.ts';
 import { ComparisonBar } from '../components/charts/ComparisonBar.tsx';
 import { RadarProfile } from '../components/charts/RadarProfile.tsx';
@@ -27,7 +27,6 @@ export function CommunityStatsPage() {
 
     const { user } = useAuth();
     const { strengthSessions, exerciseEntries, unifiedActivities } = useData();
-
     const [stats, setStats] = useState<CommunityStats | null>(null);
     const [loading, setLoading] = useState(true);
 

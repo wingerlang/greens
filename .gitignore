@@ -2,7 +2,9 @@ node_modules/
 dist
 .vite/
 .venv/
+greens.db
 greens.db-shm
 greens.db-wal
 *.log
 .DS_Store
+*.mjs

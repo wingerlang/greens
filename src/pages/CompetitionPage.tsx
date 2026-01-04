@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { COMPETITION_PRESETS, calculateDailyPoints } from '../utils/competitionEngine.ts';
 import { Competition, CompetitionRule, CompetitionParticipant } from '../models/types.ts';
@@ -7,7 +7,7 @@ import './CompetitionPage.css';
 type ViewMode = 'list' | 'details' | 'create' | 'edit';
 
 export function CompetitionPage() {
-    const { competitions, addCompetition, updateCompetition, deleteCompetition, currentUser, users, dailyVitals, exerciseEntries, mealEntries, calculateDailyNutrition, weightEntries } = useData();
+    const { competitions, addCompetition, updateCompetition, deleteCompetition, currentUser, users, dailyVitals, exerciseEntries, calculateDailyNutrition, weightEntries } = useData();
     const [viewMode, setViewMode] = useState<ViewMode>('list');
     const [activeCompId, setActiveCompId] = useState<string | null>(null);
 

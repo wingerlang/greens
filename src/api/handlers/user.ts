@@ -1,5 +1,5 @@
 import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } from "../db/session.ts";
-import { getUserById, resetUserData, getAllUsers, saveUser, sanitizeUser } from "../db/user.ts"; // Note: resetUserData to be moved or imported
+import { getUserById, getAllUsers, saveUser, sanitizeUser } from "../db/user.ts";
 import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { kv } from "../kv.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
@@ -49,7 +49,6 @@ async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weig
             data.vitals = data.vitals.map((v: any) => ({ ...v, caffeine: undefined }));
         }
     } else if (type === 'food') {
-        // 'food' is essentially same as 'meals' - the actual food log entries
         data.mealEntries = [];
     }
 
@@ -117,8 +116,6 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
 
             // 3. Return Sanitized User
-            // Note: We return basic info. Privacy checks (is locked?) are handled by frontend or we can enforce here.
-            // For now, returning public info is safe.
             return new Response(JSON.stringify({ ...sanitizeUser(user) }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });

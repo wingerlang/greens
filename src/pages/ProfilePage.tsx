@@ -1,12 +1,11 @@
 // ProfilePage - Main orchestrator component
 // All logic has been extracted into reusable hooks and components
 
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { type MealType, MEAL_TYPE_LABELS } from '../models/types.ts';
 import { useData } from '../context/DataContext.tsx';
-import { useAuth } from '../context/AuthContext.tsx';
 import { profileService, type ProfileData } from '../services/profileService.ts';
 
 // Import profile components
@@ -40,8 +39,6 @@ const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 export function ProfilePage() {
     const { settings, updateSettings, toggleMealVisibility, theme, toggleTheme } = useSettings();
-    const { user: authUser } = useAuth();
-    const { users } = useData();
     const navigate = useNavigate();
 
     // Profile state

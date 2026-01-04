@@ -1,0 +1,415 @@
+[0m[32mCheck[0m file:///C:/repos/greens/src/pages/StrengthPage.tsx
+[0m[1mTS2307 [0m[ERROR]: Cannot find module 'file:///C:/repos/greens/src/api/db.ts'.
+    at [0m[36mfile:///C:/repos/greens/src/context/AuthContext.tsx[0m:[0m[33m3[0m:[0m[33m33[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'h' implicitly has an 'any' type.
+        exerciseHistory.forEach(h => {
+[0m[31m                                ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m76[0m:[0m[33m33[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'e' implicitly has an 'any' type.
+            const exerciseEntries = h.workout.exercises.filter(e =>
+[0m[31m                                                               ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m78[0m:[0m[33m64[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'e' implicitly has an 'any' type.
+            const allSets = exerciseEntries.flatMap(e => e.sets);
+[0m[31m                                                    ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m86[0m:[0m[33m53[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'set' implicitly has an 'any' type.
+            allSets.forEach(set => {
+[0m[31m                            ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m88[0m:[0m[33m29[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'sum' implicitly has an 'any' type.
+    const totalSets = useMemo(() => exerciseHistory.reduce((sum, h) => sum + h.sets, 0), [exerciseHistory]);
+[0m[31m                                                            ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m122[0m:[0m[33m61[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'h' implicitly has an 'any' type.
+    const totalSets = useMemo(() => exerciseHistory.reduce((sum, h) => sum + h.sets, 0), [exerciseHistory]);
+[0m[31m                                                                 ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m122[0m:[0m[33m66[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'h' implicitly has an 'any' type.
+    const totalVolume = exerciseHistory.reduce((sum: number, h) => sum + h.volume, 0);
+[0m[31m                                                             ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m123[0m:[0m[33m62[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'prev' implicitly has an 'any' type.
+        return exerciseHistory.reduce((prev, curr) => (curr.maxWeight > prev.maxWeight ? curr : prev), exerciseHistory[0]);
+[0m[31m                                       ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m128[0m:[0m[33m40[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'curr' implicitly has an 'any' type.
+        return exerciseHistory.reduce((prev, curr) => (curr.maxWeight > prev.maxWeight ? curr : prev), exerciseHistory[0]);
+[0m[31m                                             ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m128[0m:[0m[33m46[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'prev' implicitly has an 'any' type.
+        return exerciseHistory.reduce((prev, curr) => (curr.est1RM > prev.est1RM ? curr : prev), exerciseHistory[0]);
+[0m[31m                                       ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m134[0m:[0m[33m40[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'curr' implicitly has an 'any' type.
+        return exerciseHistory.reduce((prev, curr) => (curr.est1RM > prev.est1RM ? curr : prev), exerciseHistory[0]);
+[0m[31m                                             ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m134[0m:[0m[33m46[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'h' implicitly has an 'any' type.
+                                        {activeData.map((h, i) => {
+[0m[31m                                                         ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m243[0m:[0m[33m58[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'i' implicitly has an 'any' type.
+                                        {activeData.map((h, i) => {
+[0m[31m                                                            ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m243[0m:[0m[33m61[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'h' implicitly has an 'any' type.
+                                            {exerciseHistory.slice().reverse().map(h => (
+[0m[31m                                                                                   ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m305[0m:[0m[33m84[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'acc' implicitly has an 'any' type.
+                                    const groupedPRs = prProgression.reduce((acc, pr) => {
+[0m[31m                                                                             ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m335[0m:[0m[33m78[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'pr' implicitly has an 'any' type.
+                                    const groupedPRs = prProgression.reduce((acc, pr) => {
+[0m[31m                                                                                  ~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m335[0m:[0m[33m83[0m
+
+[0m[1mTS2488 [0m[ERROR]: Type 'unknown' must have a '[Symbol.iterator]()' method that returns an iterator.
+                                                    const sortedPrs = [...prs].sort((a, b) => (b.weight || 0) - (a.weight || 0));
+[0m[31m                                                                          ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m348[0m:[0m[33m75[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                    const isMulti = prs.length > 1;
+[0m[31m                                                                    ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m349[0m:[0m[33m69[0m
+
+[0m[1mTS7053 [0m[ERROR]: Element implicitly has an 'any' type because expression of type '0' can't be used to index type '{}'.
+  Property '0' does not exist on type '{}'.
+                                                        const d2 = new Date(prevGroup[0].date);
+[0m[31m                                                                            ~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m356[0m:[0m[33m77[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                                            #{prProgression.indexOf(prs[0]) + 1}
+[0m[31m                                                                                                    ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m387[0m:[0m[33m101[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m390[0m:[0m[33m148[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                                                <p className="text-sm font-black text-white">{prs[0].weight} kg</p>
+[0m[31m                                                                                                                              ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m392[0m:[0m[33m127[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m393[0m:[0m[33m133[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m451[0m:[0m[33m137[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m451[0m:[0m[33m160[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                                                        const isBW = prs[0].isBodyweight || prs[0].weight === 0;
+[0m[31m                                                                                                     ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m455[0m:[0m[33m102[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                                                        const isBW = prs[0].isBodyweight || prs[0].weight === 0;
+[0m[31m                                                                                                                            ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m455[0m:[0m[33m125[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m456[0m:[0m[33m116[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m456[0m:[0m[33m144[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                                                        return calculate1RM(calcWeight, prs[0].reps || 0);
+[0m[31m                                                                                                                        ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m457[0m:[0m[33m121[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m460[0m:[0m[33m84[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m460[0m:[0m[33m124[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m460[0m:[0m[33m155[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m462[0m:[0m[33m90[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m462[0m:[0m[33m130[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m463[0m:[0m[33m133[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                                                        {prs[0].daysSinceLast !== undefined && (
+[0m[31m                                                                                         ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m465[0m:[0m[33m90[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                                                            <span>{prs[0].daysSinceLast}d</span>
+[0m[31m                                                                                                   ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m466[0m:[0m[33m100[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'prs' is of type 'unknown'.
+                                                                            onClick={() => onSelectWorkout?.(prs[0].workout)}
+[0m[31m                                                                                                             ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/ExerciseDetailModal.tsx[0m:[0m[33m473[0m:[0m[33m110[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'name' implicitly has an 'any' type.
+                    {allExerciseNames.map(name => (
+[0m[31m                                          ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/PRResearchCenter.tsx[0m:[0m[33m286[0m:[0m[33m43[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'item' implicitly has an 'any' type.
+                                    {globalAnalysis?.topCoOccurrence.map(item => (
+[0m[31m                                                                         ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/PRResearchCenter.tsx[0m:[0m[33m378[0m:[0m[33m74[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'item' implicitly has an 'any' type.
+                                        {globalAnalysis?.recordHierarchy.map(item => (
+[0m[31m                                                                             ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/PRResearchCenter.tsx[0m:[0m[33m399[0m:[0m[33m78[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 's' implicitly has an 'any' type.
+                {streaks.slice(0, 3).map((s, i) => (
+[0m[31m                                          ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/StrengthStreaks.tsx[0m:[0m[33m63[0m:[0m[33m43[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'i' implicitly has an 'any' type.
+                {streaks.slice(0, 3).map((s, i) => (
+[0m[31m                                             ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/StrengthStreaks.tsx[0m:[0m[33m63[0m:[0m[33m46[0m
+
+[0m[1mTS7053 [0m[ERROR]: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ name: string; sets: number; reps: number; volume: number; count: number; isBW: boolean; }'.
+            return mult * (a[sortBy] - b[sortBy]);
+[0m[31m                           ~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/TopExercisesTable.tsx[0m:[0m[33m52[0m:[0m[33m28[0m
+
+[0m[1mTS7053 [0m[ERROR]: Element implicitly has an 'any' type because expression of type 'any' can't be used to index type '{ name: string; sets: number; reps: number; volume: number; count: number; isBW: boolean; }'.
+            return mult * (a[sortBy] - b[sortBy]);
+[0m[31m                                       ~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/TopExercisesTable.tsx[0m:[0m[33m52[0m:[0m[33m40[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'ex' implicitly has an 'any' type.
+                        {exerciseStats.map((ex, i) => (
+[0m[31m                                            ~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/TopExercisesTable.tsx[0m:[0m[33m99[0m:[0m[33m45[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'i' implicitly has an 'any' type.
+                        {exerciseStats.map((ex, i) => (
+[0m[31m                                                ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/TopExercisesTable.tsx[0m:[0m[33m99[0m:[0m[33m49[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'b' implicitly has an 'any' type.
+                {breaks.slice(0, 6).map((b, i) => {
+[0m[31m                                         ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/TrainingBreaks.tsx[0m:[0m[33m49[0m:[0m[33m42[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'i' implicitly has an 'any' type.
+                {breaks.slice(0, 6).map((b, i) => {
+[0m[31m                                            ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/TrainingBreaks.tsx[0m:[0m[33m49[0m:[0m[33m45[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'd' implicitly has an 'any' type.
+        weeklyData.forEach((d, i) => {
+[0m[31m                            ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WeeklyVolumeChart.tsx[0m:[0m[33m101[0m:[0m[33m29[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'i' implicitly has an 'any' type.
+        weeklyData.forEach((d, i) => {
+[0m[31m                               ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WeeklyVolumeChart.tsx[0m:[0m[33m101[0m:[0m[33m32[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 't' implicitly has an 'any' type.
+        const obs = new ResizeObserver(() => setLayoutTick(t => t + 1));
+[0m[31m                                                           ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WeeklyVolumeChart.tsx[0m:[0m[33m120[0m:[0m[33m60[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'd' implicitly has an 'any' type.
+    const maxVolume = Math.max(...weeklyData.map(d => d.volume), 1) * 1.15;
+[0m[31m                                                 ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WeeklyVolumeChart.tsx[0m:[0m[33m125[0m:[0m[33m50[0m
+
+[0m[1mTS7031 [0m[ERROR]: Binding element 'week' implicitly has an 'any' type.
+                    weeklyData.forEach(({ week, volume, rollingAvg }, i) => {
+[0m[31m                                          ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WeeklyVolumeChart.tsx[0m:[0m[33m272[0m:[0m[33m43[0m
+
+[0m[1mTS7031 [0m[ERROR]: Binding element 'volume' implicitly has an 'any' type.
+                    weeklyData.forEach(({ week, volume, rollingAvg }, i) => {
+[0m[31m                                                ~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WeeklyVolumeChart.tsx[0m:[0m[33m272[0m:[0m[33m49[0m
+
+[0m[1mTS7031 [0m[ERROR]: Binding element 'rollingAvg' implicitly has an 'any' type.
+                    weeklyData.forEach(({ week, volume, rollingAvg }, i) => {
+[0m[31m                                                        ~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WeeklyVolumeChart.tsx[0m:[0m[33m272[0m:[0m[33m57[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'i' implicitly has an 'any' type.
+                    weeklyData.forEach(({ week, volume, rollingAvg }, i) => {
+[0m[31m                                                                      ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WeeklyVolumeChart.tsx[0m:[0m[33m272[0m:[0m[33m71[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'exercise' implicitly has an 'any' type.
+                    {uniqueExercises.map((exercise, idx) => (
+[0m[31m                                          ~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WorkoutDetailModal.tsx[0m:[0m[33m100[0m:[0m[33m43[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'idx' implicitly has an 'any' type.
+                    {uniqueExercises.map((exercise, idx) => (
+[0m[31m                                                    ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WorkoutDetailModal.tsx[0m:[0m[33m100[0m:[0m[33m53[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'set' implicitly has an 'any' type.
+                                {exercise.sets.map((set, sIdx) => {
+[0m[31m                                                    ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WorkoutDetailModal.tsx[0m:[0m[33m121[0m:[0m[33m53[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'sIdx' implicitly has an 'any' type.
+                                {exercise.sets.map((set, sIdx) => {
+[0m[31m                                                         ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/training/WorkoutDetailModal.tsx[0m:[0m[33m121[0m:[0m[33m58[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'w' implicitly has an 'any' type.
+        const dates = workouts.map(w => w.date).sort();
+[0m[31m                                   ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m156[0m:[0m[33m36[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'w' implicitly has an 'any' type.
+        workouts.forEach(w => {
+[0m[31m                         ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m162[0m:[0m[33m26[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'w' implicitly has an 'any' type.
+        return workouts.filter(w => {
+[0m[31m                               ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m175[0m:[0m[33m32[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'ex' implicitly has an 'any' type.
+            w.exercises.forEach((ex, exIdx) => {
+[0m[31m                                 ~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m202[0m:[0m[33m34[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'exIdx' implicitly has an 'any' type.
+            w.exercises.forEach((ex, exIdx) => {
+[0m[31m                                     ~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m202[0m:[0m[33m38[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'set' implicitly has an 'any' type.
+                ex.sets.forEach((set, setIdx) => {
+[0m[31m                                 ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m206[0m:[0m[33m34[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'setIdx' implicitly has an 'any' type.
+                ex.sets.forEach((set, setIdx) => {
+[0m[31m                                      ~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m206[0m:[0m[33m39[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'pb' implicitly has an 'any' type.
+        return derivedPersonalBests.filter(pb => {
+[0m[31m                                           ~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m259[0m:[0m[33m44[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'sum' implicitly has an 'any' type.
+        const volume = filteredWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
+[0m[31m                                                ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m282[0m:[0m[33m49[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'w' implicitly has an 'any' type.
+        const volume = filteredWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
+[0m[31m                                                     ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m282[0m:[0m[33m54[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'year' implicitly has an 'any' type.
+                        {availableYears.map(year => (
+[0m[31m                                            ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m352[0m:[0m[33m45[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'y' implicitly has an 'any' type.
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m375[0m:[0m[33m157[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'acc' implicitly has an 'any' type.
+                            const grouped = filteredPBs.reduce((acc, pb) => {
+[0m[31m                                                                ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m495[0m:[0m[33m65[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'pb' implicitly has an 'any' type.
+                            const grouped = filteredPBs.reduce((acc, pb) => {
+[0m[31m                                                                     ~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m495[0m:[0m[33m70[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'b' is of type 'unknown'.
+                                .sort((a, b) => b[0].date.localeCompare(a[0].date))
+[0m[31m                                                ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m504[0m:[0m[33m49[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'a' is of type 'unknown'.
+                                .sort((a, b) => b[0].date.localeCompare(a[0].date))
+[0m[31m                                                                        ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m504[0m:[0m[33m73[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'pbs' is of type 'unknown'.
+                                    const latestPb = pbs[0];
+[0m[31m                                                     ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m507[0m:[0m[33m54[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'pbs' is of type 'unknown'.
+                                                    {pbs.length} REKORD
+[0m[31m                                                     ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m533[0m:[0m[33m54[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'pbs' is of type 'unknown'.
+                                                {pbs.slice(0, 3).map((singlePb, idx) => (
+[0m[31m                                                 ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m538[0m:[0m[33m50[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'singlePb' implicitly has an 'any' type.
+                                                {pbs.slice(0, 3).map((singlePb, idx) => (
+[0m[31m                                                                      ~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m538[0m:[0m[33m71[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'idx' implicitly has an 'any' type.
+                                                {pbs.slice(0, 3).map((singlePb, idx) => (
+[0m[31m                                                                                ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m538[0m:[0m[33m81[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'pbs' is of type 'unknown'.
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m541[0m:[0m[33m106[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'pbs' is of type 'unknown'.
+                                                {pbs.length > 3 && (
+[0m[31m                                                 ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m562[0m:[0m[33m50[0m
+
+[0m[1mTS18046 [0m[ERROR]: 'pbs' is of type 'unknown'.
+                                                        + {pbs.length - 3} fler rekord i historiken
+[0m[31m                                                           ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m567[0m:[0m[33m60[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'workout' implicitly has an 'any' type.
+                        {filteredWorkouts.map(workout => (
+[0m[31m                                              ~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/StrengthPage.tsx[0m:[0m[33m705[0m:[0m[33m47[0m
+
+Found 88 errors.
+
+[0m[1m[31merror[0m: Type checking failed.

@@ -1,0 +1,1 @@
+Name,Category,Calories,Protein,Fat,Carbs,Fiber,Sugar,AddedSugar,WholeGrains,SaturatedFat,MonounsaturatedFat,PolyunsaturatedFat,Cholesterol,VitaminD,VitaminB12,Iron,Zinc,Calcium,Omega3,Omega6,IsVegan

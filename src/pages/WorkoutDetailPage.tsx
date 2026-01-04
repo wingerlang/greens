@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ALL_WORKOUTS } from '../data/workouts/index.ts';
 import { WorkoutAnalyzer } from '../components/workouts/WorkoutAnalyzer.tsx';

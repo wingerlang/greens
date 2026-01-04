@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
-import { useAuth } from '../context/AuthContext.tsx';
 import { useSearchParams } from 'react-router-dom';
 import { CoachCalendar } from '../components/coach/CoachCalendar.tsx';
 import { CoachSetup } from '../components/coach/CoachSetup.tsx';
