@@ -6,6 +6,7 @@ import { UsersModule } from '../components/admin/UsersModule.tsx';
 import { RoadmapModule } from '../components/admin/RoadmapModule.tsx';
 import { SystemGeneratorModule } from '../components/admin/SystemGeneratorModule.tsx';
 import { HealthModule } from '../components/admin/HealthModule.tsx';
+import { SystemDBModule } from '../components/admin/SystemDBModule.tsx';
 import { DatabasePage } from './DatabasePage.tsx';
 import { ApiPage } from './ApiPage.tsx';
 import { DocumentationPage } from '../components/DocumentationPage.tsx';
@@ -86,7 +87,13 @@ export const AdminPage: React.FC = () => {
                     onClick={() => setActiveTab('database')}
                     className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'database' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                    📦 Databas
+                    📦 Matdatabas
+                </button>
+                <button
+                    onClick={() => setActiveTab('systemdb')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'systemdb' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    💾 System DB
                 </button>
                 <button
                     onClick={() => setActiveTab('users')}
@@ -245,6 +252,12 @@ export const AdminPage: React.FC = () => {
             {activeTab === 'database' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <DatabasePage headless={true} />
+                </div>
+            )}
+
+            {activeTab === 'systemdb' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <SystemDBModule />
                 </div>
             )}
 
