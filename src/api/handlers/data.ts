@@ -53,10 +53,91 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
         return new Response(JSON.stringify({ success: true }), { headers });
     }
 
+    if (url.pathname.startsWith("/api/meals/") && method === "PUT") {
+        const id = url.pathname.split("/").pop()!;
+        const updates = await req.json();
+
+        // 1. Check if updates include the date (required for lookup)
+        if (!updates.date) {
+             return new Response(JSON.stringify({ error: "Date is required for updates" }), { status: 400, headers });
+        }
+
+        // 2. Fetch existing to ensure we don't overwrite with partial data
+        const existingList = await mealRepo.getMealsByDate(userId, updates.date);
+        const existing = existingList.find(m => m.id === id);
+
+        if (!existing) {
+             return new Response(JSON.stringify({ error: "Meal not found" }), { status: 404, headers });
+        }
+
+        // 3. Merge and Save
+        const merged = { ...existing, ...updates, id }; // Ensure ID matches
+        await mealRepo.saveMeal(userId, merged);
+
+        return new Response(JSON.stringify({ success: true }), { headers });
+    }
+
+    if (url.pathname.startsWith("/api/meals/") && method === "DELETE") {
+        const id = url.pathname.split("/").pop()!;
+        // We need the date to delete. Either passed in query param or body.
+        // Standard REST DELETE often doesn't have body. Query param is best.
+        const date = url.searchParams.get("date");
+        if (!date) return new Response(JSON.stringify({ error: "Date required" }), { status: 400, headers });
+        await mealRepo.deleteMeal(userId, date, id);
+        return new Response(JSON.stringify({ success: true }), { headers });
+    }
+
     // Weight
     if (url.pathname === "/api/weight" && method === "POST") {
         const entry = await req.json();
         await weightRepo.saveWeight(userId, entry);
+        return new Response(JSON.stringify({ success: true }), { headers });
+    }
+
+    if (url.pathname.startsWith("/api/weight/") && method === "PUT") {
+        const id = url.pathname.split("/").pop()!;
+        const updates = await req.json();
+
+        // 1. Fetch existing (WeightRepo is simple Key-Value, but key includes date)
+        // We need the date. If date is not in updates, we can't easily find the old key if date changed.
+        // Assuming date cannot be changed via PUT, or if it is, frontend provides it.
+        // But weightRepo uses [date, id]. If date changes, it's a move (delete + create).
+        // Let's assume date is constant or provided.
+
+        // If we don't know the date, we might have to scan history? No, too expensive.
+        // Frontend MUST provide date for weight updates.
+        if (!updates.date) {
+            return new Response(JSON.stringify({ error: "Date is required" }), { status: 400, headers });
+        }
+
+        // 2. We can try to get the specific weight entry?
+        // WeightRepo doesn't expose getSingleWeight(date, id). It has getWeightHistory.
+        // We can implement a quick lookup or just overwrite if we trust the frontend sending full object.
+        // But to be safe against partials:
+        const history = await weightRepo.getWeightHistory(userId);
+        const existing = history.find(w => w.id === id);
+
+        if (!existing) {
+             return new Response(JSON.stringify({ error: "Weight entry not found" }), { status: 404, headers });
+        }
+
+        const merged = { ...existing, ...updates, id };
+
+        // Edge case: If date changed, we need to delete the old one?
+        // existing.date vs merged.date
+        if (existing.date !== merged.date) {
+            await weightRepo.deleteWeight(userId, existing.date, id);
+        }
+
+        await weightRepo.saveWeight(userId, merged);
+        return new Response(JSON.stringify({ success: true }), { headers });
+    }
+
+    if (url.pathname.startsWith("/api/weight/") && method === "DELETE") {
+        const id = url.pathname.split("/").pop()!;
+        const date = url.searchParams.get("date");
+        if (!date) return new Response(JSON.stringify({ error: "Date required" }), { status: 400, headers });
+        await weightRepo.deleteWeight(userId, date, id);
         return new Response(JSON.stringify({ success: true }), { headers });
     }
 
