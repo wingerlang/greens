@@ -1,4 +1,5 @@
 import { getSession } from "../db/session.ts";
+import { getUserById } from "../db/user.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
 import { mealRepo } from "../repositories/mealRepository.ts";
 import { weightRepo } from "../repositories/weightRepository.ts";
@@ -16,7 +17,18 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
 
     // --- Legacy Monolithic Routes ---
     if (url.pathname === "/api/data" && method === "GET") {
-        const targetUserId = url.searchParams.get("userId") || userId;
+        let targetUserId = userId;
+        const requestedUserId = url.searchParams.get("userId");
+
+        if (requestedUserId && requestedUserId !== userId) {
+            const user = await getUserById(userId);
+            if (user?.role === "admin") {
+                targetUserId = requestedUserId;
+            } else {
+                return new Response(JSON.stringify({ error: "Unauthorized access to other user data" }), { status: 403, headers });
+            }
+        }
+
         const data = await getUserData(targetUserId);
         return new Response(JSON.stringify(data || {}), { headers });
     }

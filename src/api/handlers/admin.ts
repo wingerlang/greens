@@ -74,7 +74,9 @@ export async function handleAdminRoutes(req: Request, url: URL, headers: Headers
     }
 
     if (url.pathname === "/api/admin/users") {
-        const users = await getAllUsers();
+        // Implement pagination via query params?
+        // For now, let's just fetch the first 100 which is the default of the updated getAllUsers
+        const { users } = await getAllUsers(100);
         const sessions = await getAllSessions();
         const now = Date.now();
         const onlineUserIds = new Set(sessions
