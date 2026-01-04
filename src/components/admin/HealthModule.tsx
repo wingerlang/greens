@@ -11,6 +11,9 @@ interface SystemInfo {
     pid: number;
     uptime: string;
     kvStatus: string;
+    dbSize: number;
+    activeSessions: number;
+    totalSessions: number;
 }
 
 interface LogEntry {
@@ -98,12 +101,35 @@ export const HealthModule: React.FC = () => {
                     <div className="text-xl font-mono text-blue-400">{system?.memory.rss || '-'}</div>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
-                    <div className="text-xs text-gray-500 font-bold uppercase mb-1">Heap Used</div>
-                    <div className="text-xl font-mono text-purple-400">{system?.memory.heapUsed || '-'}</div>
+                    <div className="text-xs text-gray-500 font-bold uppercase mb-1">Databas (Keys)</div>
+                    <div className="text-xl font-mono text-amber-400">{system?.dbSize || '-'}</div>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
                     <div className="text-xs text-gray-500 font-bold uppercase mb-1">Deno Version</div>
                     <div className="text-xl font-mono text-gray-300">v{system?.denoVersion?.deno || '?'}</div>
+                </div>
+            </div>
+
+            {/* Activity Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                    <div className="text-xs text-gray-500 font-bold uppercase mb-1">Aktiva Användare</div>
+                    <div className="text-xl font-mono text-green-400 flex items-center gap-2">
+                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                         {system?.activeSessions || 0}
+                    </div>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                    <div className="text-xs text-gray-500 font-bold uppercase mb-1">Totalt Sessioner</div>
+                    <div className="text-xl font-mono text-gray-300">{system?.totalSessions || 0}</div>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                    <div className="text-xs text-gray-500 font-bold uppercase mb-1">Requests (Logged)</div>
+                    <div className="text-xl font-mono text-sky-400">{metrics?.totalRequestsLogged || 0}</div>
+                </div>
+                <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+                    <div className="text-xs text-gray-500 font-bold uppercase mb-1">Avg Latency</div>
+                    <div className="text-xl font-mono text-pink-400">{Math.round(metrics?.avgResponseTime || 0)} ms</div>
                 </div>
             </div>
 
