@@ -10,6 +10,7 @@ import {
     FoodItem,
     MealType,
     BodyMeasurementType,
+    MealItem,
 } from '../models/types.ts';
 import {
     Search,
@@ -123,7 +124,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         addExercise,
         calculateExerciseCalories,
         users,
-        addBodyMeasurement
+        addBodyMeasurement,
+        weightEntries,
+        bodyMeasurements
     } = useData();
 
 
@@ -139,6 +142,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
     // Locked food state - when a food is matched with high confidence
     const [lockedFood, setLockedFood] = useState<(FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } }) | null>(null);
+    const [lastLoggedItem, setLastLoggedItem] = useState<(FoodItem & { quantity: number; mealType: string }) | null>(null);
     const [draftFoodQuantity, setDraftFoodQuantity] = useState<number | null>(null);
     const [draftFoodMealType, setDraftFoodMealType] = useState<MealType | null>(null);
     const [draftFoodDate, setDraftFoodDate] = useState<string | null>(null);
@@ -192,6 +196,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             setDraftMeasurementType(null);
             setDraftMeasurementValue(null);
             setDraftMeasurementDate(null);
+            // Don't reset lastLoggedItem here to allow suggestions to persist until explicit close or new search
+            if (input.length > 0) setLastLoggedItem(null); // Clear suggestions if user starts typing a new search
         }
     }, [input]);
 
@@ -212,21 +218,31 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
     // Calculate food usage stats from meal entries
     const foodUsageStats = useMemo(() => {
-        const stats: Record<string, { count: number; lastUsed: string; totalGrams: number; avgGrams: number }> = {};
+        const stats: Record<string, { count: number; lastUsed: string; totalGrams: number; avgGrams: number; isUniform: boolean; commonQuantity: number }> = {};
 
         mealEntries.forEach(entry => {
             entry.items.forEach(item => {
                 if (item.type === 'foodItem') {
                     const grams = item.servings || 100; // servings is grams in this app
                     if (!stats[item.referenceId]) {
-                        stats[item.referenceId] = { count: 0, lastUsed: entry.date, totalGrams: 0, avgGrams: 100 };
+                        stats[item.referenceId] = {
+                            count: 0,
+                            lastUsed: entry.date,
+                            totalGrams: 0,
+                            avgGrams: 100,
+                            isUniform: true,
+                            commonQuantity: grams
+                        };
                     }
-                    stats[item.referenceId].count++;
-                    stats[item.referenceId].totalGrams += grams;
-                    stats[item.referenceId].avgGrams = stats[item.referenceId].totalGrams / stats[item.referenceId].count;
-                    if (entry.date > stats[item.referenceId].lastUsed) {
-                        stats[item.referenceId].lastUsed = entry.date;
-                    }
+
+                    const s = stats[item.referenceId];
+                    // Update stats
+                    s.count++;
+                    s.totalGrams += grams;
+                    s.avgGrams = s.totalGrams / s.count;
+
+                    if (entry.date > s.lastUsed) s.lastUsed = entry.date;
+                    if (s.commonQuantity !== grams) s.isUniform = false;
                 }
             });
         });
@@ -265,7 +281,82 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         }
 
         return recents;
+        return recents;
     }, [mealEntries, foodItems, foodUsageStats]);
+
+    // Recent measurements (based on intent)
+    const recentMeasurements = useMemo(() => {
+        if (!input) return [];
+
+        if (intent.type === 'weight') {
+            return (weightEntries || []).slice(0, 5).map(w => ({
+                id: w.id,
+                date: w.date,
+                value: w.weight,
+                unit: 'kg',
+                label: 'Vikt',
+                icon: '⚖️'
+            }));
+        }
+
+        if (intent.type === 'measurement') {
+            const type = draftMeasurementType || intent.data.measurementType;
+            if (!type) return [];
+
+            const info = MEASUREMENT_INFO[type];
+            return (bodyMeasurements || [])
+                .filter(m => m.type === type)
+                .sort((a, b) => b.date.localeCompare(a.date))
+                .slice(0, 5)
+                .map(m => ({
+                    id: m.id,
+                    date: m.date,
+                    value: m.value,
+                    unit: 'cm',
+                    label: info?.label || type,
+                    icon: info?.icon || '📏'
+                }));
+        }
+
+        return [];
+    }, [intent, weightEntries, bodyMeasurements, draftMeasurementType, input]);
+
+    // Frequently Eaten Together Engine
+    const frequentlyEatenWith = useMemo(() => {
+        if (!lastLoggedItem) return [];
+
+        const targetId = lastLoggedItem.id;
+        const pairCounts: Record<string, number> = {};
+        let totalOccurrences = 0;
+
+        mealEntries.forEach(entry => {
+            // Check if meal contains target
+            if (entry.items.some(i => i.referenceId === targetId)) {
+                totalOccurrences++;
+                entry.items.forEach(item => {
+                    if (item.referenceId !== targetId && item.type === 'foodItem') {
+                        pairCounts[item.referenceId] = (pairCounts[item.referenceId] || 0) + 1;
+                    }
+                });
+            }
+        });
+
+        return Object.entries(pairCounts)
+            .map(([id, count]) => {
+                const item = foodItems.find(f => f.id === id);
+                if (!item) return null;
+                return {
+                    ...item,
+                    type: 'suggestion' as const,
+                    coOccurrenceCount: count,
+                    affinity: Math.round((count / totalOccurrences) * 100),
+                    usageStats: foodUsageStats[id]
+                };
+            })
+            .filter((i): i is NonNullable<typeof i> => i !== null)
+            .sort((a, b) => b.coOccurrenceCount - a.coOccurrenceCount)
+            .slice(0, 5);
+    }, [lastLoggedItem, mealEntries, foodItems, foodUsageStats]);
 
     // Food search results with usage stats
     const foodResults = useMemo(() => {
@@ -282,9 +373,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             : input;
 
         return performSmartSearch(searchQuery, foodItems, {
-            textFn: (item) => item.name,
+            textFn: (item) => item.brand ? `${item.name} ${item.brand}` : item.name,
             categoryFn: (item) => item.category,
             usageCountFn: (item) => foodUsageStats[item.id]?.count || 0,
+            boostFn: (item) => {
+                const lastUsed = foodUsageStats[item.id]?.lastUsed;
+                if (lastUsed) {
+                    const diffHours = (new Date().getTime() - new Date(lastUsed).getTime()) / (1000 * 60 * 60);
+                    if (diffHours < 24) return 500; // Massive boost for items used in last 24h
+                }
+                return 0;
+            },
             limit: 6
         }).map(item => ({
             ...item,
@@ -323,15 +422,30 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         // Only auto-lock if there's EXACTLY one result
         if (foodResults.length === 1) {
             const item = foodResults[0];
+            const stats = foodUsageStats[item.id]; // Get stats BEFORE locking state
+
             setLockedFood({
                 ...item,
-                usageStats: foodUsageStats[item.id] || undefined
+                usageStats: stats ? { count: stats.count, lastUsed: stats.lastUsed, avgGrams: stats.avgGrams } : undefined
             });
-            const stats = foodUsageStats[item.id];
-            const foodData = intent.type === 'food' ? intent.data : null;
-            const initialQty = foodData?.quantity || stats?.avgGrams || 100;
+
+            // Default Quantity Logic:
+            // 1. If all historical logs are same value => use that
+            // 2. If item has a default portion => use that
+            // 3. Fallback => 100g
+            let initialQty = 100;
+            const intentQty = intent.type === 'food' ? intent.data.quantity : undefined;
+
+            if (intentQty) {
+                initialQty = intentQty;
+            } else if (stats && stats.isUniform) {
+                initialQty = stats.commonQuantity;
+            } else if (item.defaultPortionGrams) {
+                initialQty = item.defaultPortionGrams;
+            }
+
             setDraftFoodQuantity(initialQty);
-            setDraftFoodMealType(foodData?.mealType || null);
+            setDraftFoodMealType((intent.type === 'food' && intent.data.mealType) || null);
             setDraftFoodDate(intent.date || null);
             return;
         }
@@ -347,8 +461,15 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
         const items: any[] = [];
         if (userResults.length > 0) items.push(...userResults.map(u => ({ itemType: 'user' as const, ...u })));
-        if (foodResults.length > 0) items.push(...foodResults.map(f => ({ itemType: 'food' as const, ...f })));
-        if (!input && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
+
+        // Add suggestions if available and no search input
+        if (!input && frequentlyEatenWith.length > 0) {
+            items.push(...frequentlyEatenWith.map(f => ({ itemType: 'suggestion' as const, ...f })));
+        } else if (foodResults.length > 0) {
+            items.push(...foodResults.map(f => ({ itemType: 'food' as const, ...f })));
+        }
+
+        if (!input && frequentlyEatenWith.length === 0 && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
 
         return items;
     }, [isSlashMode, navSuggestions, foodResults, userResults, input, recentFoods, lockedFood]);
@@ -420,6 +541,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         setShowFeedback(true);
         setInput('');
         setLockedFood(null);
+        setLastLoggedItem({ ...item, quantity, mealType }); // Trigger suggestions state
         // Removed onClose() to allow multiple logging as requested
     };
 
@@ -533,7 +655,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         }
 
         // Handle food selection - lock it instead of immediately logging
-        if (selectableItems.length > 0 && (selectableItems[selectedIndex]?.itemType === 'food' || selectableItems[selectedIndex]?.itemType === 'recent')) {
+        if (selectableItems.length > 0 && (selectableItems[selectedIndex]?.itemType === 'food' || selectableItems[selectedIndex]?.itemType === 'recent' || selectableItems[selectedIndex]?.itemType === 'suggestion')) {
             const selectedFood = selectableItems[selectedIndex] as FoodItem & { usageStats?: { avgGrams: number; count: number; lastUsed: string } };
             if (selectedFood) {
                 lockFood(selectedFood);
@@ -637,6 +759,40 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                             <div className="px-2 py-1 text-[10px] text-slate-600 text-center">
                                 ↑↓ navigera • Enter för att öppna
                             </div>
+                        </div>
+                    )}
+
+                    {!isSlashMode && !lockedFood && !input && lastLoggedItem && frequentlyEatenWith.length > 0 && (
+                        <div className="px-2 py-2">
+                            <div className="px-2 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2 border-b border-white/5 mb-1">
+                                <span>🔗</span> Loggas ofta med {lastLoggedItem.name}
+                            </div>
+                            {frequentlyEatenWith.map((item, idx) => (
+                                <div
+                                    key={item.id}
+                                    onClick={() => lockFood(item)}
+                                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
+                                        ? 'bg-purple-500/20 text-purple-300'
+                                        : 'hover:bg-white/5 text-white'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-xl">{getCategoryEmoji(item.category)}</div>
+                                        <div>
+                                            <div className="font-medium flex items-center gap-2">
+                                                {item.name}
+                                                {item.brand && <span className="text-[10px] text-slate-500 bg-white/5 px-1.5 rounded">{item.brand}</span>}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500">
+                                                {item.affinity}% chans • snitt {Math.round(item.usageStats?.avgGrams || 100)}g
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-xs font-mono opacity-50">
+                                        {item.calories} kcal
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
 
@@ -856,6 +1012,28 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                 <span>Logga Träning</span>
                                 <ArrowRight size={16} />
                             </button>
+                        </div>
+                    )}
+
+                    {/* MEASUREMENT / WEIGHT HISTORY MODULE */}
+                    {!isSlashMode && !lockedFood && (intent.type === 'weight' || intent.type === 'measurement') && recentMeasurements.length > 0 && (
+                        <div className="px-2 py-2">
+                            <div className="px-2 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2 border-b border-white/5 mb-1">
+                                <span>📜</span> Senaste historik
+                            </div>
+                            {recentMeasurements.map((m, idx) => (
+                                <div key={m.id} className="flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-white/5 text-white">
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-xl">{m.icon}</div>
+                                        <div>
+                                            <div className="font-medium">{m.value} {m.unit}</div>
+                                            <div className="text-[10px] text-slate-500">
+                                                {formatRelativeDate(m.date)} • {m.date}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
 

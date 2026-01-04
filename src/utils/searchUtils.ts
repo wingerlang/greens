@@ -50,6 +50,7 @@ export function performSmartSearch<T>(
         textFn: (item: T) => string;
         categoryFn?: (item: T) => string | undefined; // Category for fallback search
         usageCountFn?: (item: T) => number; // Return usage count
+        boostFn?: (item: T) => number; // Arbitrary score boost (e.g. for recency)
         limit?: number;
     }
 ): T[] {
@@ -78,7 +79,7 @@ export function performSmartSearch<T>(
             score = 80;
             matchType = 'prefix';
         } else if (lowerText.includes(' ' + rawQuery)) {
-             // Word boundary match (e.g. "Svensk Öl")
+            // Word boundary match (e.g. "Svensk Öl")
             score = 75;
             matchType = 'contains'; // High value contains
         } else if (lowerText.endsWith(rawQuery)) {
@@ -124,22 +125,17 @@ export function performSmartSearch<T>(
         }
 
         // 4. Usage Boosting
-        // We want highly used items to "jump" up a tier, but not override exact matches unless heavily used
-        // Example: "Öl" query.
-        // "Starköl" (EndsWith, 70 pts) + High Usage (+20) = 90.
-        // "Ölkorv" (StartsWith, 80 pts) + Low Usage (+0) = 80.
-        // Result: Starköl wins.
         if (score > 0 && options.usageCountFn) {
             const count = options.usageCountFn(item);
             if (count > 0) {
-                // Logarithmic boost.
-                // 1 usage = 0 pts
-                // 10 usages = 10 pts
-                // 100 usages = 20 pts
-                // 1000 usages = 30 pts
                 const boost = Math.log10(count) * 10;
                 score += boost;
             }
+        }
+
+        // 5. Arbitrary Boost (e.g. Recency)
+        if (score > 0 && options.boostFn) {
+            score += options.boostFn(item);
         }
 
         return { item, score, matchType };

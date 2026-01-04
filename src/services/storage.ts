@@ -4,7 +4,7 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod } from '../models/types.ts';
+import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type BodyMeasurementEntry } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 
 // ============================================
@@ -19,6 +19,7 @@ export interface StorageService {
     saveWeeklyPlan(plan: WeeklyPlan): Promise<void>;
     deleteWeeklyPlan(id: string): Promise<void>;
     addWeightEntry(weight: number, date: string): Promise<void>;
+    addBodyMeasurement(entry: BodyMeasurementEntry): Promise<void>;
     addMealEntry(meal: any): Promise<void>;
     saveGoal(goal: PerformanceGoal): Promise<void>;
     deleteGoal(id: string): Promise<void>;
@@ -244,6 +245,27 @@ export class LocalStorageService implements StorageService {
                 if (!res.ok) throw new Error('API sync failed');
 
                 console.log('[Storage] Weight synced via Granular API');
+            } catch (e) {
+                console.error('[Storage] Fallback to full sync due to error:', e);
+            }
+        }
+    }
+
+    async addBodyMeasurement(entry: BodyMeasurementEntry): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('http://localhost:8000/api/measurements', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(entry)
+                });
+
+                if (!res.ok) throw new Error('API sync failed');
+                console.log('[Storage] Measurement synced via Granular API');
             } catch (e) {
                 console.error('[Storage] Fallback to full sync due to error:', e);
             }

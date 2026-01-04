@@ -262,8 +262,17 @@ function parseSetData(values: string[], bodyWeight?: number): StrengthSet {
 
     // Fix edge cases:
     // 1. Distance-based sets with 0 reps should be 1 rep (e.g. Sled Push)
-    if (set.reps === 0 && (set.distance || 0) > 0) {
+    if (set.reps === 0 && ((set.distance || 0) > 0 || (set.timeSeconds || 0) > 0)) {
         set.reps = 1;
+    }
+
+    // 2. Calculate Tempo for Distance-based exercises (Rowing etc) if missing
+    if (!set.tempo && (set.distance || 0) > 0 && (set.timeSeconds || 0) > 0 && set.distanceUnit === 'm') {
+        // Calculate seconds per 500m
+        const secondsPer500 = (set.timeSeconds! / set.distance!) * 500;
+        const mins = Math.floor(secondsPer500 / 60);
+        const secs = Math.floor(secondsPer500 % 60);
+        set.tempo = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')} / 500m`;
     }
 
     return set;

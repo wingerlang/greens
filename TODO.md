@@ -17,8 +17,6 @@
 ## 🛠️ Tekniska fixar & smågodis (PRIO 2)
 *Problemet: Små hinder i användarupplevelsen och datakvalitet.*
 
-- [ ] **Sökning på Matdatabas (Unicode Fix):**
-    - [ ] Åtgärda bugg där "öl" ger 0 träffar men "Öl s" fungerar (problem med 2-teckens sökningar + svenska tecken).
 - [ ] **Import Refinements (strengthLogParser.ts):**
     - [ ] **Burpee broad jump:** Parsa `distanceKm` och konvertera korrekt till meter.
     - [ ] **Sled push:** Defaulta `reps` till 1 om avstånd finns men reps är 0.

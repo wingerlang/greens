@@ -213,16 +213,16 @@ export const ActiveGoalsCard: React.FC = () => {
         >
             {/* Header */}
             <div className="flex items-center justify-between mb-3 relative z-10 px-1">
-                <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-indigo-500/20 rounded-full text-indigo-400 ring-1 ring-white/5">
+                <div className="flex items-center gap-2 flex-nowrap min-w-0">
+                    <div className="p-1.5 bg-indigo-500/20 rounded-full text-indigo-400 ring-1 ring-white/5 shrink-0">
                         <Target size={14} />
                     </div>
-                    <div>
-                        <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none mb-0.5">Pågående Mål</h3>
-                        <div className="text-white text-xs font-bold leading-none">{activeGoals.length} aktiva fokus</div>
+                    <div className="flex flex-row items-baseline gap-2 truncate min-w-0">
+                        <h3 className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Pågående Mål</h3>
+                        <div className="text-white text-xs font-bold leading-none truncate">{activeGoals.length} aktiva fokus</div>
                     </div>
                 </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400">
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 shrink-0 ml-2">
                     <TrendingUp size={14} />
                 </div>
             </div>
