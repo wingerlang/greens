@@ -71,7 +71,6 @@ export async function handleAdminKvRoutes(req: Request, url: URL, headers: Heade
 
             return new Response(safeStringify({ logs }), { headers });
         }
-
         return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
 
     } catch (e) {

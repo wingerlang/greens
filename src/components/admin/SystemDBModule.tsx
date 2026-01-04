@@ -134,7 +134,7 @@ const OverviewTab: React.FC = () => {
                     <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Största Entry</div>
                     {/* Placeholder - we need to fetch this or pass it from backend, for now assume we verify visually in Users tab or add logic later. 
                         Actually, let's look at chartData to guess or leave as 'N/A' if not ready. 
-                        Wait, best to implement statsRepo update for this or skip for now? 
+                        Wait, best to implement statsRepo update for this or skip for now?
                         User explicitly asked for it. I'll defer this slightly or add a placeholder calculation if possible.
                     */}
                     {/* The current endpoint `stats` doesn't return user stats. We need to fetch users or accept that we only show global stats here.
