@@ -4,3 +4,5 @@ dist
 .venv/
 greens.db-shm
 greens.db-wal
+*.log
+.DS_Store
