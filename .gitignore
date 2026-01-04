@@ -8,3 +8,6 @@ greens.db-wal
 *.log
 .DS_Store
 *.mjs
+vite.config.ts.timestamp*
+uploads/temp/
+uploads/food-images/
