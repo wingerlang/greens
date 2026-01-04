@@ -13,6 +13,14 @@ export class FoodRepository {
         return res.value;
     }
 
+    async deleteFood(id: string): Promise<void> {
+        const food = await this.getFood(id);
+        if (food) {
+            await kv.delete(["foods", id]);
+            await kv.delete(["foods_by_name", food.name.toLowerCase()]);
+        }
+    }
+
     async searchFoods(query: string, limit = 50): Promise<FoodItem[]> {
         const iter = kv.list<FoodItem>({ prefix: ["foods"] });
         const results: FoodItem[] = [];

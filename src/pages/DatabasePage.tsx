@@ -23,6 +23,7 @@ const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
 const EMPTY_FORM: FoodItemFormData = {
     name: '',
     brand: '',
+    imageUrl: '',
     packageWeight: 0,
     defaultPortionGrams: 0,
     description: '',
@@ -58,11 +59,14 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const [detailItem, setDetailItem] = useState<FoodItem | null>(null);
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
     const [formData, setFormData] = useState<FoodItemFormData>(EMPTY_FORM);
-    const [isParsingUrl, setIsParsingUrl] = useState(false);
-    const [urlParseError, setUrlParseError] = useState<string | null>(null);
+    const [isParsing, setIsParsing] = useState(false);
+    const [parseError, setParseError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
     const [selectedCategory, setSelectedCategory] = useState<FoodCategory | 'all'>('all');
     const [viewMode, setViewMode] = useState<ViewMode>('list');
+
+    // Drag and drop state
+    const [isDragging, setIsDragging] = useState(false);
 
     // Update URL param when detailItem changes
     useEffect(() => {
@@ -163,6 +167,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             setFormData({
                 name: item.name,
                 brand: item.brand || '',
+                imageUrl: item.imageUrl || '',
                 defaultPortionGrams: item.defaultPortionGrams || 0,
                 description: item.description || '',
                 calories: item.calories,
@@ -186,6 +191,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 proteinCategory: item.proteinCategory,
                 seasons: item.seasons || [],
                 ingredients: item.ingredients || '',
+                packageWeight: item.packageWeight || 0,
             });
         } else {
             setEditingItem(null);
@@ -210,84 +216,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         handleCloseForm();
     };
 
-    const handleSmartPaste = async (text: string) => {
-        if (!text) return;
-        setUrlParseError(null);
+    // --- SMART PARSING LOGIC ---
 
+    const applyParsedData = (parsed: any) => {
         // Calculate known brands for smart fuzzy matching
         const knownBrands = Array.from(new Set(foodItems.map(f => f.brand).filter(Boolean))) as string[];
 
-        // URL Detection
-        const urlMatch = text.match(/(https?:\/\/[^\s]+)/i);
-        if (urlMatch) {
-            const url = urlMatch[1];
-            setIsParsingUrl(true);
-            try {
-                const token = localStorage.getItem('auth_token');
-                const res = await fetch('http://localhost:8000/api/parse-url', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': token ? `Bearer ${token}` : ''
-                    },
-                    body: JSON.stringify({ url })
-                });
-
-                if (!res.ok) throw new Error('Kunde inte hämta sidan. Kontrollera URL:en.');
-
-                const data = await res.json();
-
-                // 1. Try JSON-LD first (most reliable)
-                let results = extractFromJSONLD(data.jsonLds || []);
-
-                // 2. Supplement with text parsing
-                const textResults = parseNutritionText(data.text);
-
-                // 3. Extract Metadata
-                const brand = results.brand || extractBrand(data.text, knownBrands);
-                const packageWeight = extractPackagingWeight(data.text);
-                const name = cleanProductName(data.title, data.h1) || results.name || textResults.name;
-
-                // 4. Combine results
-                const finalResults = {
-                    name,
-                    brand,
-                    packageWeight,
-                    calories: results.calories ?? textResults.calories,
-                    protein: results.protein ?? textResults.protein,
-                    carbs: results.carbs ?? textResults.carbs,
-                    fat: results.fat ?? textResults.fat,
-                    fiber: results.fiber ?? textResults.fiber,
-                    ingredients: results.ingredients || textResults.ingredients,
-                    defaultPortionGrams: results.defaultPortionGrams || textResults.defaultPortionGrams
-                };
-
-                setFormData(prev => ({
-                    ...prev,
-                    name: finalResults.name || prev.name,
-                    brand: finalResults.brand || prev.brand,
-                    packageWeight: finalResults.packageWeight || prev.packageWeight,
-                    calories: finalResults.calories !== undefined ? finalResults.calories : prev.calories,
-                    protein: finalResults.protein !== undefined ? finalResults.protein : prev.protein,
-                    carbs: finalResults.carbs !== undefined ? finalResults.carbs : prev.carbs,
-                    fat: finalResults.fat !== undefined ? finalResults.fat : prev.fat,
-                    fiber: finalResults.fiber !== undefined ? finalResults.fiber : prev.fiber,
-                    ingredients: finalResults.ingredients || prev.ingredients,
-                    defaultPortionGrams: finalResults.defaultPortionGrams !== undefined ? finalResults.defaultPortionGrams : prev.defaultPortionGrams,
-                }));
-
-            } catch (err) {
-                setUrlParseError(err instanceof Error ? err.message : 'Ett fel uppstod vid hämtning.');
-            } finally {
-                setIsParsingUrl(false);
-            }
-            return;
-        }
-
-        // Standard Text Parsing
-        const parsed = parseNutritionText(text);
-        const brand = extractBrand(text, knownBrands);
-        const packageWeight = extractPackagingWeight(text);
+        // Enhance parsed data with our heuristics
+        const brand = parsed.brand || extractBrand(parsed.text || '', knownBrands);
+        const packageWeight = parsed.packageWeight || extractPackagingWeight(parsed.text || '');
 
         setFormData(prev => ({
             ...prev,
@@ -300,9 +237,139 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             fat: parsed.fat !== undefined ? parsed.fat : prev.fat,
             fiber: parsed.fiber !== undefined ? parsed.fiber : prev.fiber,
             ingredients: parsed.ingredients || prev.ingredients,
-            defaultPortionGrams: parsed.defaultPortionGrams || prev.defaultPortionGrams,
+            defaultPortionGrams: parsed.defaultPortionGrams !== undefined ? parsed.defaultPortionGrams : prev.defaultPortionGrams,
         }));
     };
+
+    const handleTextPaste = async (text: string) => {
+        if (!text) return;
+        setParseError(null);
+
+        // URL Detection
+        const urlMatch = text.match(/(https?:\/\/[^\s]+)/i);
+        if (urlMatch) {
+            const url = urlMatch[1];
+            setIsParsing(true);
+            try {
+                const token = localStorage.getItem('auth_token');
+                const res = await fetch('/api/parse-url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!res.ok) throw new Error('Kunde inte hämta sidan. Kontrollera URL:en.');
+
+                const data = await res.json();
+
+                // 1. JSON-LD
+                let results = extractFromJSONLD(data.jsonLds || []);
+                // 2. Text fallback
+                const textResults = parseNutritionText(data.text);
+
+                // Combine
+                const finalResults = {
+                    ...results,
+                    // If JSON-LD missed something, try text
+                    calories: results.calories ?? textResults.calories,
+                    protein: results.protein ?? textResults.protein,
+                    carbs: results.carbs ?? textResults.carbs,
+                    fat: results.fat ?? textResults.fat,
+                    fiber: results.fiber ?? textResults.fiber,
+                    name: cleanProductName(data.title, data.h1) || results.name || textResults.name,
+                    text: data.text // Pass full text for further brand extraction
+                };
+
+                applyParsedData(finalResults);
+
+            } catch (err) {
+                setParseError(err instanceof Error ? err.message : 'Ett fel uppstod vid hämtning.');
+            } finally {
+                setIsParsing(false);
+            }
+            return;
+        }
+
+        // Standard Text Parsing
+        const parsed = parseNutritionText(text);
+        applyParsedData({ ...parsed, text });
+    };
+
+    const handleImageUpload = async (file: File) => {
+        setIsParsing(true);
+        setParseError(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const token = localStorage.getItem('auth_token');
+            const uploadRes = await fetch('/api/upload-temp', {
+                method: 'POST',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: formData
+            });
+
+            if (!uploadRes.ok) throw new Error('Uppladdning misslyckades');
+            const { tempUrl } = await uploadRes.json();
+
+            // Set the image preview immediately
+            setFormData(prev => ({ ...prev, imageUrl: tempUrl }));
+
+            // Trigger OCR
+            const parseRes = await fetch('/api/parse-image', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ tempUrl })
+            });
+
+            if (!parseRes.ok) throw new Error('OCR-analys misslyckades');
+            const { text, parsed } = await parseRes.json();
+
+            // Apply results
+            applyParsedData({ ...parsed, text });
+
+        } catch (err) {
+             setParseError(err instanceof Error ? err.message : 'Kunde inte läsa bilden.');
+        } finally {
+            setIsParsing(false);
+        }
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        // Check for file in clipboard
+        if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+            const file = e.clipboardData.files[0];
+            if (file.type.startsWith('image/')) {
+                e.preventDefault();
+                handleImageUpload(file);
+                return;
+            }
+        }
+        // Otherwise standard text paste handled by onChange of textarea
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            if (file.type.startsWith('image/')) {
+                handleImageUpload(file);
+            }
+        }
+    };
+
+    // --- End Smart Logic ---
+
 
     const handleDelete = (id: string) => {
         if (confirm('Är du säker på att du vill ta bort denna råvara?')) {
@@ -320,6 +387,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         if (co2 >= 2) return 'co2-medium';
         if (co2 > 0) return 'co2-low';
         return 'co2-none';
+    };
+
+    // Helper to get image source (handles temp vs permanent)
+    const getImgSrc = (url: string) => {
+        if (!url) return '';
+        // If it's a relative path from our uploads, prepend / (though <img src="uploads/..."> works if base is right)
+        // Usually safer to be absolute relative to root
+        if (url.startsWith('uploads/')) return `/${url}`;
+        return url;
     };
 
     return (
@@ -424,6 +500,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                     <table className="food-table">
                         <thead>
                             <tr>
+                                <th className="th-img w-12">Bild</th>
                                 <th className="th-name">Råvara</th>
                                 <th className="th-type">Typ</th>
                                 <th className="th-cooked">Tillagad</th>
@@ -435,18 +512,23 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 <th className="th-num">Kolh.</th>
                                 <th className="th-gluten">Gluten</th>
                                 <th className="th-co2">Klimat</th>
-                                {headless && (
-                                    <>
-                                        <th className="th-date">Skapad</th>
-                                        <th className="th-date">Senast loggad</th>
-                                    </>
-                                )}
                                 <th className="th-actions"></th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredItems.map((item: FoodItem) => (
                                 <tr key={item.id}>
+                                    <td className="td-img">
+                                        {item.imageUrl && (
+                                            <div className="w-10 h-10 rounded-md overflow-hidden bg-slate-800">
+                                                <img
+                                                    src={getImgSrc(item.imageUrl)}
+                                                    alt={item.name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="td-name">
                                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                                             <span>
@@ -543,6 +625,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 <div className="food-grid">
                     {filteredItems.map((item: FoodItem) => (
                         <div key={item.id} className="food-card">
+                            {item.imageUrl && (
+                                <div className="h-32 w-full overflow-hidden bg-slate-800 border-b border-slate-700/50">
+                                    <img
+                                        src={getImgSrc(item.imageUrl)}
+                                        alt={item.name}
+                                        className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity"
+                                    />
+                                </div>
+                            )}
                             <div className="food-card-header">
                                 <div>
                                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '4px' }}>
@@ -626,6 +717,88 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+
+                            {/* Smart Parser - Now with Image Support */}
+                            <div
+                                className={`bg-emerald-500/5 rounded-2xl p-4 border relative overflow-hidden transition-all ${isDragging ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-emerald-500/10'}`}
+                                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                onDragLeave={() => setIsDragging(false)}
+                                onDrop={handleDrop}
+                            >
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-500/70 mb-2 flex items-center gap-2">
+                                    <span>✨</span> Smart Närings-tolkare
+                                    {isParsing && (
+                                        <div className="flex items-center gap-1.5 ml-auto">
+                                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                                            <span className="text-[9px] normal-case font-medium text-emerald-500/80">Analyserar...</span>
+                                        </div>
+                                    )}
+                                </label>
+
+                                <div className="flex gap-4">
+                                    <div className="flex-1 relative">
+                                        <textarea
+                                            className={`w-full bg-slate-900/50 border ${parseError ? 'border-red-500/30' : 'border-slate-700/50'} rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 min-h-[80px] resize-none transition-all`}
+                                            placeholder="Klistra in näringstabell, URL eller BILD..."
+                                            disabled={isParsing}
+                                            onChange={(e) => handleTextPaste(e.target.value)}
+                                            onPaste={handlePaste}
+                                        />
+
+                                        {/* Image Upload Button (Hidden input + Label) */}
+                                        <div className="absolute right-2 bottom-2">
+                                            <input
+                                                type="file"
+                                                id="img-upload"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+                                            />
+                                            <label
+                                                htmlFor="img-upload"
+                                                className="cursor-pointer p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg flex items-center justify-center transition-colors"
+                                                title="Ladda upp bild"
+                                            >
+                                                📷
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Image Preview */}
+                                    {formData.imageUrl && (
+                                        <div className="w-24 h-24 shrink-0 bg-slate-900 rounded-xl border border-slate-700/50 overflow-hidden relative group">
+                                            <img
+                                                src={getImgSrc(formData.imageUrl)}
+                                                alt="Preview"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity"
+                                                onClick={() => setFormData(p => ({ ...p, imageUrl: '' }))}
+                                            >
+                                                Ta bort
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {parseError && (
+                                    <p className="text-[9px] text-red-400 mt-2 flex items-center gap-1">
+                                        <span>⚠️</span> {parseError}
+                                    </p>
+                                )}
+                                <p className="text-[9px] text-slate-500 mt-2 italic">
+                                    Stödjer text, URL och bilder (OCR). Klistra in bild direkt (Ctrl+V) eller dra & släpp!
+                                </p>
+
+                                {isDragging && (
+                                    <div className="absolute inset-0 bg-emerald-500/20 backdrop-blur-sm flex items-center justify-center border-2 border-emerald-500 border-dashed rounded-2xl pointer-events-none">
+                                        <span className="text-emerald-300 font-bold animate-bounce">Släpp bilden här!</span>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Primary: Name & Category */}
                             <div className="space-y-4">
                                 <div>
@@ -760,39 +933,6 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 <p className="text-[10px] text-slate-500 mt-1 italic">
                                     Tips: Klistra in innehållsförteckningen här.
                                 </p>
-                            </div>
-
-                            <div className="bg-emerald-500/5 rounded-2xl p-4 border border-emerald-500/10 relative overflow-hidden">
-                                <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-500/70 mb-2 flex items-center gap-2">
-                                    <span>✨</span> Smart Närings-tolkare
-                                    {isParsingUrl && (
-                                        <div className="flex items-center gap-1.5 ml-auto">
-                                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                                            <span className="text-[9px] normal-case font-medium text-emerald-500/80">Läser webbsida...</span>
-                                        </div>
-                                    )}
-                                </label>
-                                <textarea
-                                    className={`w-full bg-slate-900/50 border ${urlParseError ? 'border-red-500/30' : 'border-slate-700/50'} rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 min-h-[80px] resize-none transition-all`}
-                                    placeholder="Klistra in näringstabell ELLER en URL här..."
-                                    disabled={isParsingUrl}
-                                    onChange={(e) => handleSmartPaste(e.target.value)}
-                                />
-                                {urlParseError && (
-                                    <p className="text-[9px] text-red-400 mt-2 flex items-center gap-1">
-                                        <span>⚠️</span> {urlParseError}
-                                    </p>
-                                )}
-                                <p className="text-[9px] text-slate-500 mt-2 italic">
-                                    Parserar protein, kolhydrater, fett, fiber och kcal automatiskt. Funkar även med URL:er!
-                                </p>
-                                {isParsingUrl && (
-                                    <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-[1px] flex items-center justify-center pointer-events-none">
-                                        <div className="flex flex-col items-center gap-2">
-                                            <div className="w-6 h-6 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
-                                        </div>
-                                    </div>
-                                )}
                             </div>
 
                             {/* Primary: Macros */}
@@ -1114,6 +1254,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             <h2>{detailItem.name}</h2>
                             <button className="btn-close" onClick={() => setDetailItem(null)}>×</button>
                         </div>
+                        {detailItem.imageUrl && (
+                            <div className="w-full h-48 bg-slate-900 overflow-hidden relative">
+                                <img
+                                    src={getImgSrc(detailItem.imageUrl)}
+                                    alt={detailItem.name}
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        )}
                         <div className="detail-grid">
                             <div className="detail-section">
                                 <h3 className="detail-title text-emerald-400">📊 Näringsvärde (100g)</h3>

@@ -25,6 +25,9 @@ export interface StorageService {
     savePeriod(period: TrainingPeriod): Promise<void>;
     deletePeriod(id: string): Promise<void>;
     createFeedEvent(event: any): Promise<any>;
+    createFoodItem(food: any): Promise<any>;
+    updateFoodItem(food: any): Promise<any>;
+    deleteFoodItem(id: string): Promise<void>;
     // Clear specific data from local cache
     clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
 }
@@ -357,6 +360,72 @@ export class LocalStorageService implements StorageService {
             }
         }
         return null;
+    }
+
+    async createFoodItem(food: any): Promise<any> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('http://localhost:8000/api/foods', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(food)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.item; // Return updated item (e.g. with permanent image URL)
+                } else {
+                    throw new Error('API create failed');
+                }
+            } catch (e) {
+                console.error('[Storage] Food create failed:', e);
+            }
+        }
+        return food; // Fallback to local
+    }
+
+    async updateFoodItem(food: any): Promise<any> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`http://localhost:8000/api/foods/${food.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(food)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.item; // Return updated item
+                } else {
+                    throw new Error('API update failed');
+                }
+            } catch (e) {
+                console.error('[Storage] Food update failed:', e);
+            }
+        }
+        return food; // Fallback
+    }
+
+    async deleteFoodItem(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`http://localhost:8000/api/foods/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) {
+                console.error('[Storage] Food delete failed:', e);
+            }
+        }
     }
 
     /**
