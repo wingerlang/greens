@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -88,20 +88,6 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         }
     }, [searchParams]);
 
-    const lastLoggedMap = useMemo(() => {
-        const map: Record<string, string> = {};
-        mealEntries.forEach(entry => {
-            entry.items.forEach((item) => {
-                if (item.type === 'foodItem') {
-                    const current = map[item.referenceId];
-                    if (!current || entry.date > current) {
-                        map[item.referenceId] = entry.date;
-                    }
-                }
-            });
-        });
-        return map;
-    }, [mealEntries]);
 
     const filteredItems = useMemo(() => {
         // normalizeText imported from utils/formatters.ts
@@ -329,7 +315,6 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         updateFoodItem(item.id, { [field]: value });
     };
 
-    // Helper to determine CO2 class for styling
     const getCO2Class = (co2: number) => {
         if (co2 >= 5) return 'co2-high';
         if (co2 >= 2) return 'co2-medium';

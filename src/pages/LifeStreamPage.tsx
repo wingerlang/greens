@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
     Activity,
-    Filter,
     Settings,
     RefreshCw,
     TrendingUp,
     Users,
-    ChevronRight,
     Search
 } from 'lucide-react';
 import { useData } from '../context/DataContext.tsx';
@@ -185,7 +183,7 @@ export function LifeStreamPage() {
                             <p className="text-sm font-bold text-slate-500">Hämtar flöde...</p>
                         </div>
                     ) : events.length > 0 ? (
-                        events.map((event, index) => (
+                        events.map((event) => (
                             <FeedEventCard
                                 key={event.id}
                                 event={event}

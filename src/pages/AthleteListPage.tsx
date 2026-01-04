@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useCoachAthlete } from '../../context/CoachAthleteContext.tsx';
 import { CoachAthleteRelation } from '../../models/types.ts';
 
@@ -11,7 +11,7 @@ export function AthleteListPage() {
 
     const myAthletes = getMyAthletes();
     const myCoach = getMyCoach();
-    const pendingInvitations = relations.filter(r => r.athleteId === 'me' && r.status === 'pending'); // Simplified
+    const pendingInvitations = relations.filter(r => r.athleteId === 'me' && r.status === 'pending');
 
     const handleInvite = async () => {
         if (!inviteEmail || !inviteName) return;

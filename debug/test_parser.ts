@@ -1,4 +1,4 @@
-import { parseNutritionText, extractPackagingWeight } from './src/utils/nutritionParser.ts';
+import { parseNutritionText, extractPackagingWeight } from '../src/utils/nutritionParser.ts';
 
 const testCases = [
     {

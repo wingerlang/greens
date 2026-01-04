@@ -1,10 +1,8 @@
-import React, { useState } from 'react';
 import { useGarmin } from '../hooks/useGarmin.ts';
 import { StravaConnectionCard } from '../components/integrations/StravaConnectionCard.tsx';
 
 export function IntegrationsPage() {
     const { isSyncing, lastSync, syncMetrics } = useGarmin();
-    const [mockGarminConnected, setMockGarminConnected] = useState(false);
 
     return (
         <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-8 pb-32">
@@ -55,7 +53,6 @@ export function IntegrationsPage() {
                             <button
                                 onClick={() => {
                                     syncMetrics();
-                                    setMockGarminConnected(true);
                                 }}
                                 disabled={isSyncing}
                                 className={`px-5 py-2.5 rounded-lg font-bold uppercase tracking-wider text-sm transition-all border border-white/10

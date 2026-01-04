@@ -1,7 +1,7 @@
 
-import { kv } from "./src/api/kv.ts";
-import { getUserById } from "./src/api/db/user.ts";
-import { SocialRepository } from "./src/api/repositories/socialRepository.ts";
+import { kv } from "../src/api/kv.ts";
+import { getUserById } from "../src/api/db/user.ts";
+import { SocialRepository } from "../src/api/repositories/socialRepository.ts";
 
 async function verify() {
     console.log("🧪 Verifying Follow Logic...");

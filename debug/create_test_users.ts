@@ -1,7 +1,7 @@
 
-import { createUser, getUser } from "./src/api/db/user.ts";
-import { getUserData, saveUserData } from "./src/api/db/data.ts";
-import { UserSettings } from "./src/models/types.ts";
+import { createUser, getUser } from "../src/api/db/user.ts";
+import { getUserData, saveUserData } from "../src/api/db/data.ts";
+import { UserSettings } from "../src/models/types.ts";
 
 async function createTestUsers() {
     console.log("🚀 Creating test users...");

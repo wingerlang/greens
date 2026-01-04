@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { ALL_WORKOUTS } from '../data/workouts/index.ts';
 import { WorkoutCard } from '../components/workouts/WorkoutCard.tsx';
 import { WorkoutDetailModal } from '../components/workouts/WorkoutDetailModal.tsx';

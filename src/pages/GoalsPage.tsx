@@ -3,7 +3,7 @@
  * Route: /goals
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import {
@@ -17,7 +17,7 @@ import { GoalProgressRing, MiniProgressRing } from '../components/goals/GoalProg
 import { GoalCelebration } from '../components/goals/GoalCelebration';
 import { GoalDetailModal } from '../components/goals/GoalDetailModal';
 import { GoalModal } from '../components/training/GoalModal';
-import { PeriodWizard } from '../components/training/period/PeriodWizard'; // New Wizard
+import { PeriodWizard } from '../components/training/period/PeriodWizard';
 import { CompactGoalCard } from '../components/goals/CompactGoalCard';
 import { useNavigate } from 'react-router-dom';
 import type { PerformanceGoal, GoalCategory, PerformanceGoalType, GoalPeriod } from '../models/types';
@@ -153,7 +153,7 @@ export function GoalsPage() {
     // State
     const [selectedCategory, setSelectedCategory] = useState<GoalCategory | 'all'>('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isPeriodWizardOpen, setIsPeriodWizardOpen] = useState(false); // New State
+    const [isPeriodWizardOpen, setIsPeriodWizardOpen] = useState(false);
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
     const [celebratingGoal, setCelebratingGoal] = useState<PerformanceGoal | null>(null);
     const [showCompleted, setShowCompleted] = useState(false);
@@ -172,7 +172,7 @@ export function GoalsPage() {
     // Active Training Period
     const activePeriod = useMemo(() => {
         const today = new Date().toISOString().split('T')[0];
-        return trainingPeriods.find(p => p.startDate <= today && p.endDate >= today) || trainingPeriods[0]; // fallback
+        return trainingPeriods.find(p => p.startDate <= today && p.endDate >= today) || trainingPeriods[0];
     }, [trainingPeriods]);
 
     // Hooks
