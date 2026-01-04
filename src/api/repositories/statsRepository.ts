@@ -1,4 +1,5 @@
 import { kv } from "../kv.ts";
+import { safeStringify } from "../utils/jsonUtils.ts";
 
 export interface SystemStats {
     totalKeys: number;
@@ -28,8 +29,8 @@ export class StatsRepository {
             totalKeys++;
 
             // Estimate size: key size + serialized value size
-            const valueSize = JSON.stringify(entry.value).length;
-            const keySize = JSON.stringify(entry.key).length;
+            const valueSize = safeStringify(entry.value).length;
+            const keySize = safeStringify(entry.key).length;
             const entrySize = valueSize + keySize;
 
             totalSize += entrySize;

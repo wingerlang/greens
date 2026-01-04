@@ -1,5 +1,6 @@
 import { kv } from "../kv.ts";
 import { getAllUsers } from "../db/user.ts";
+import { safeStringify } from "../utils/jsonUtils.ts";
 
 export interface UserStorageUsage {
     userId: string;
@@ -57,8 +58,8 @@ export class KvInspectorService {
                 if (key.length > 1) userId = String(key[1]);
             }
 
-            const valueSize = JSON.stringify(entry.value).length;
-            const keySize = JSON.stringify(entry.key).length;
+            const valueSize = safeStringify(entry.value).length;
+            const keySize = safeStringify(entry.key).length;
             const entrySize = valueSize + keySize;
 
             if (userId) {
@@ -71,7 +72,7 @@ export class KvInspectorService {
                     // Orphaned data
                     orphans.push({
                         prefix: rootPrefix,
-                        key: JSON.stringify(key),
+                        key: safeStringify(key),
                         size: entrySize,
                         inferredUserId: userId
                     });
@@ -98,13 +99,13 @@ export class KvInspectorService {
             const remainingKey = entry.key.slice(prefix.length);
 
             if (remainingKey.length === 0) {
-                 // Exact match (shouldn't happen with prefix list, but safe to ignore)
-                 continue;
+                // Exact match (shouldn't happen with prefix list, but safe to ignore)
+                continue;
             }
 
             if (remainingKey.length === 1) {
                 // Leaf node (File)
-                const valueSize = JSON.stringify(entry.value).length;
+                const valueSize = safeStringify(entry.value).length;
                 keys.push({ key: entry.key, size: valueSize });
             } else {
                 // Folder

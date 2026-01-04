@@ -2,11 +2,12 @@ import { authenticate, hasRole } from "../middleware.ts";
 import { statsRepo } from "../repositories/statsRepository.ts";
 import { kvInspector } from "../services/kvInspectorService.ts";
 import { logError } from "../utils/logger.ts";
+import { safeStringify } from "../utils/jsonUtils.ts";
 
 export async function handleAdminKvRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const ctx = await authenticate(req);
     if (!ctx || !hasRole(ctx, 'admin')) {
-        return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), { status: 403, headers });
+        return new Response(safeStringify({ error: "Forbidden: Admin access required" }), { status: 403, headers });
     }
 
     try {
@@ -19,13 +20,13 @@ export async function handleAdminKvRoutes(req: Request, url: URL, headers: Heade
 
             const history = await statsRepo.getStatsHistory(30);
 
-            return new Response(JSON.stringify({ stats: currentStats, history }), { headers });
+            return new Response(safeStringify({ stats: currentStats, history }), { headers });
         }
 
         // GET /api/admin/kv/users
         if (url.pathname === "/api/admin/kv/users" && req.method === "GET") {
             const data = await kvInspector.getUserStorageUsage();
-            return new Response(JSON.stringify(data), { headers });
+            return new Response(safeStringify(data), { headers });
         }
 
         // POST /api/admin/kv/entries (List directory)
@@ -37,7 +38,7 @@ export async function handleAdminKvRoutes(req: Request, url: URL, headers: Heade
             }
 
             const data = await kvInspector.listKeys(prefix);
-            return new Response(JSON.stringify(data), { headers });
+            return new Response(safeStringify(data), { headers });
         }
 
         // POST /api/admin/kv/entry (Get Value)
@@ -49,7 +50,7 @@ export async function handleAdminKvRoutes(req: Request, url: URL, headers: Heade
             }
 
             const value = await kvInspector.getKeyValue(key);
-            return new Response(JSON.stringify({ value }), { headers });
+            return new Response(safeStringify({ value }), { headers });
         }
 
         return new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
