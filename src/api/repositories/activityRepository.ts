@@ -67,6 +67,19 @@ export class ActivityRepository {
     }
 
     /**
+     * Get ALL activities for a user (efficient stream)
+     */
+    async getAllActivities(userId: string): Promise<UniversalActivity[]> {
+        const prefix = ['activities', userId];
+        const iter = kv.list<UniversalActivity>({ prefix });
+        const activities: UniversalActivity[] = [];
+        for await (const entry of iter) {
+            activities.push(entry.value);
+        }
+        return activities;
+    }
+
+    /**
      * Find an activity by its external ID (e.g., Strava ID)
      * Uses secondary index.
      */

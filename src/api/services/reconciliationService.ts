@@ -1,8 +1,15 @@
 import { UniversalActivity } from '../../models/types.ts';
 import { activityRepo } from '../repositories/activityRepository.ts';
-import { createUniversalFromStrava, mapStravaToPerformance, StravaActivity } from '../strava.ts';
+import { createUniversalFromStrava, mapStravaToPerformance, StravaActivity, getAllStravaActivities } from '../strava.ts';
 import { FeedRepository } from '../repositories/feedRepository.ts';
 import { getUserById } from '../db/user.ts';
+
+export interface SyncDiffReport {
+    newActivities: StravaActivity[];
+    changedActivities: { strava: StravaActivity; existing: UniversalActivity; changes: string[] }[];
+    matchedCount: number;
+    totalStrava: number;
+}
 
 /**
  * Reconciliation Service
@@ -11,13 +18,145 @@ import { getUserById } from '../db/user.ts';
 export class ReconciliationService {
 
     /**
-     * Reconcile a list of Strava activities for a user.
+     * Scan Strava activities and report differences without saving.
+     */
+    async scanStravaActivities(userId: string, accessToken: string, options: { fromDate?: string } = {}): Promise<SyncDiffReport> {
+        // 1. Fetch Local Activities
+        const localActivities = await activityRepo.getAllActivities(userId);
+        const localMap = new Map<string, UniversalActivity>();
+
+        // Map by External ID (strava_12345)
+        localActivities.forEach(a => {
+            if (a.performance?.source?.source === 'strava' && a.performance.source.externalId) {
+                localMap.set(a.performance.source.externalId, a);
+            }
+        });
+
+        // 2. Fetch All Strava Activities (filtered by date if provided)
+        const fetchOptions: { after?: number } = {};
+        if (options.fromDate) {
+            fetchOptions.after = Math.floor(new Date(options.fromDate).getTime() / 1000);
+        }
+
+        const stravaActivities = await getAllStravaActivities(accessToken, fetchOptions);
+
+        // 3. Diff
+        const report: SyncDiffReport = {
+            newActivities: [],
+            changedActivities: [],
+            matchedCount: 0,
+            totalStrava: stravaActivities.length
+        };
+
+        for (const s of stravaActivities) {
+            const externalId = s.id.toString();
+            const existing = localMap.get(externalId);
+
+            if (!existing) {
+                report.newActivities.push(s);
+            } else {
+                // Check for significant differences (e.g. Elapsed Time fix)
+                const changes: string[] = [];
+
+                // Compare Duration (Elapsed vs stored)
+                const stravaDurationMin = Math.round(s.elapsed_time / 60);
+                if (Math.abs(stravaDurationMin - (existing.performance?.durationMinutes || 0)) > 1) {
+                    changes.push(`Duration: ${existing.performance?.durationMinutes} -> ${stravaDurationMin} min`);
+                }
+
+                if (changes.length > 0) {
+                    report.changedActivities.push({ strava: s, existing, changes });
+                } else {
+                    report.matchedCount++;
+                }
+            }
+        }
+
+        return report;
+    }
+
+    /**
+     * Import or Update specific activities
+     */
+    async syncActivities(
+        userId: string,
+        activitiesToSync: StravaActivity[],
+        options: { forceUpdate?: boolean } = {}
+    ): Promise<{ created: number; updated: number; failed: number }> {
+        let created = 0;
+        let updated = 0;
+        let failed = 0;
+        const user = await getUserById(userId);
+
+        for (const stravaActivity of activitiesToSync) {
+            try {
+                const externalId = stravaActivity.id.toString();
+                const existing = await activityRepo.getActivityByExternalId(userId, 'strava', externalId);
+
+                if (!existing) {
+                    // CREATE NEW
+                    // Try to match with Plan first (Legacy logic)
+                    const dateISO = stravaActivity.start_date_local.split('T')[0];
+                    const candidates = await activityRepo.getActivitiesByDateRange(userId, dateISO, dateISO);
+                    const planMatch = this.findBestMatch(stravaActivity, candidates.filter(c => c.status === 'PLANNED'));
+
+                    if (planMatch) {
+                        await this.mergeActivity(planMatch, stravaActivity);
+                        created++; // Count as created/synced
+                    } else {
+                        const newActivity = createUniversalFromStrava(stravaActivity, userId);
+                        await activityRepo.saveActivity(newActivity);
+                        created++;
+                    }
+                    // Emit feed event for new stuff
+                    await this.emitStravaFeedEvent(userId, stravaActivity, user?.privacy);
+
+                } else if (options.forceUpdate) {
+                    // UPDATE EXISTING
+                    // Protect Merge Info?
+                    // If activity is merged (has `mergeInfo`), we verify if we should touch it.
+                    // Actually, if we update performance data from Strava, the merge is still valid (Planned + Strava Perf).
+                    // We just update the `performance` section.
+
+                    // Update performance data
+                    const freshPerformance = mapStravaToPerformance(stravaActivity);
+
+                    // Maintain existing sub-fields if needed? 
+                    // Usually fresh mapped data is better.
+
+                    existing.performance = {
+                        ...existing.performance,
+                        ...freshPerformance,
+                        // Preserve any manually added notes?
+                        notes: existing.performance?.notes || freshPerformance.notes
+                    };
+                    existing.updatedAt = new Date().toISOString();
+
+                    await activityRepo.saveActivity(existing);
+                    updated++;
+                }
+            } catch (err) {
+                console.error(`Failed to sync activity ${stravaActivity.id}`, err);
+                failed++;
+            }
+        }
+
+        return { created, updated, failed };
+    }
+
+    /**
+     * Reconcile a list of Strava activities for a user (Legacy/Auto mode)
      */
     async reconcileStravaActivities(userId: string, stravaActivities: StravaActivity[]): Promise<{
         imported: number;
         merged: number;
         skipped: number;
     }> {
+        const report = await this.scanStravaActivities(userId, '', { fromDate: stravaActivities[0]?.start_date }); // Roughly
+        // ... (We could reimplement this using syncActivities, but keep legacy for now if needed)
+        // Actually, let's keep the existing logic intact for now or forward to sync?
+
+        // Re-implementing logic to be safe and compatible with previous code
         let imported = 0;
         let merged = 0;
         let skipped = 0;
@@ -105,6 +244,12 @@ export class ReconciliationService {
      * Helper to emit a feed event for a Strava activity
      */
     private async emitStravaFeedEvent(userId: string, activity: StravaActivity, privacy: any) {
+        // Only emit if recent (last 3 days)
+        const date = new Date(activity.start_date_local);
+        const now = new Date();
+        const daysDiff = (now.getTime() - date.getTime()) / (1000 * 3600 * 24);
+        if (daysDiff > 3) return;
+
         const typeLabel = (activity.type).replace('Run', 'Löpning').replace('Ride', 'Cykling').replace('Walk', 'Promenad');
         const distanceKm = activity.distance ? (Math.round(activity.distance / 10) / 100) : 0;
         const durationMin = Math.round(activity.elapsed_time / 60);

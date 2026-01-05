@@ -51,6 +51,7 @@ import { ToolsCooperPage } from './pages/tools/ToolsCooperPage.tsx';
 import { ToolsHeartRatePage } from './pages/tools/ToolsHeartRatePage.tsx';
 import { ToolsStrengthStandardsPage } from './pages/tools/ToolsStrengthStandardsPage.tsx';
 import DebugBar from './components/debug/DebugBar.tsx';
+import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -165,6 +166,8 @@ export function App() {
                                                 <Route path="verktyg" element={<ToolsPage />} />
                                                 <Route path="tools/1rm" element={<ToolsOneRepMaxPage />} />
                                                 <Route path="tools/race" element={<ToolsRacePredictorPage />} />
+                                                <Route path="tools/race-planner" element={<ToolsRacePlannerPage />} />
+                                                <Route path="tools/race-predictor" element={<ToolsRacePredictorPage />} />
                                                 <Route path="tools/pace" element={<ToolsPaceConverterPage />} />
                                                 <Route path="tools/health" element={<ToolsHealthPage />} />
                                                 <Route path="tools/power" element={<ToolsPowerPage />} />

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
 
+import { StravaActivityImportModal } from './StravaActivityImportModal.tsx';
+
 interface StravaAthlete {
     id: number;
     name: string;
@@ -32,6 +34,7 @@ export function StravaConnectionCard() {
     const [status, setStatus] = useState<StravaStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [connecting, setConnecting] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Check connection status on mount
     useEffect(() => {
@@ -91,29 +94,7 @@ export function StravaConnectionCard() {
     };
 
     const handleSync = async () => {
-        if (!token) return;
-        setConnecting(true); // Reuse connecting state for basic loading indication
-        try {
-            const res = await fetch('/api/strava/sync?full=true', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-
-            if (data.success) {
-                const { imported, merged, skipped } = data.result;
-                alert(`Synk klar!\n📥 ${imported} nya pass\n🔄 ${merged} matchade pass\n⏭️ ${skipped} redan synkade`);
-                checkStatus(); // Refresh last sync time
-                await refreshData(); // Refresh app data to show new activities
-            } else {
-                alert('Synk misslyckades: ' + (data.error || 'Okänt fel'));
-            }
-        } catch (err) {
-            console.error(err);
-            alert('Kunde inte nå servern');
-        } finally {
-            setConnecting(false);
-        }
+        setIsImportModalOpen(true);
     };
 
     const handleDisconnect = async () => {
@@ -141,6 +122,11 @@ export function StravaConnectionCard() {
 
     return (
         <div className="bg-gradient-to-br from-orange-500/10 to-slate-900 rounded-2xl border border-orange-500/20 overflow-hidden">
+            <StravaActivityImportModal
+                isOpen={isImportModalOpen}
+                onClose={() => setIsImportModalOpen(false)}
+            />
+
             {/* Header */}
             <div className="p-6 flex items-center justify-between border-b border-white/5">
                 <div className="flex items-center gap-4">
