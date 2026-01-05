@@ -31,7 +31,9 @@ const TYPE_ICONS: Record<string, string> = {
 export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, onDelete, onClick }) => {
     const progress = useGoalProgress(goal);
     const color = CATEGORY_COLORS[goal.category] || CATEGORY_COLORS.training;
-    const percentage = Math.min(100, Math.max(0, progress?.percentage || 0));
+    const percentage = (progress?.percentage && !isNaN(progress.percentage))
+        ? Math.min(100, Math.max(0, progress.percentage))
+        : 0;
 
     // Helper to format values compactly
     const formatValue = (val: number, unit?: string) => {

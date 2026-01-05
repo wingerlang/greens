@@ -421,7 +421,8 @@ export function DashboardPage() {
         getLatestWaist,
         plannedActivities,
         unifiedActivities,
-        weightEntries
+        weightEntries,
+        trainingPeriods
     } = useData();
 
     const [selectedDate, setSelectedDate] = useState(getISODate());
@@ -525,7 +526,10 @@ export function DashboardPage() {
     const dailyNutrition = calculateDailyNutrition(selectedDate);
     const consumed = dailyNutrition.calories;
     const burned = health.dailyCaloriesBurned || 0;
-    const target = settings.dailyCalorieGoal || 2500;
+
+    // Determine target based on hierarchy: Active Period Goal > Settings > Default
+    const activePeriod = trainingPeriods.find(p => selectedDate >= p.startDate && selectedDate <= p.endDate);
+    const target = activePeriod?.nutritionGoal?.calories || settings.dailyCalorieGoal || 2500;
 
     // 2. Macros
     const proteinTarget = settings.dailyProteinGoal || 160;
