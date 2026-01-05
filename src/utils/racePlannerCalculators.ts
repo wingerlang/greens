@@ -106,6 +106,7 @@ export const CARB_TARGET_PRESETS = [
 // --- Carb Source Presets ---
 
 export const CARB_SOURCE_PRESETS = [
+    { id: 'auto', label: 'Auto (Väderanpassad)', gelPct: 50, drinkPct: 50 }, // Values overridden by logic
     { id: 'gel_only', label: 'Endast gel', gelPct: 100, drinkPct: 0 },
     { id: 'gel_heavy', label: '70% Gel / 30% Dryck', gelPct: 70, drinkPct: 30 },
     { id: 'balanced', label: '50% / 50%', gelPct: 50, drinkPct: 50 },
@@ -318,18 +319,33 @@ export interface GlycogenState {
     bloodGlucoseG: number; // Available immediate
     pace: number; // min/km
     isBonking: boolean;
+    // NEW: Hydration tracking
+    fluidBalanceL: number; // Positive = over-hydrated, Negative = dehydrated
+    sweatLossL: number; // Cumulative sweat loss
+    fluidIntakeL: number; // Cumulative fluid intake
+    // NEW: Caffeine tracking
+    caffeineMg: number; // Current caffeine in system (with decay)
+}
+
+export interface SimulationResult {
+    timeline: GlycogenState[];
+    crashTime: number | null;
+    finishTime: number;
+    peakCaffeineMg: number;
+    peakCaffeineTimeMin: number;
 }
 
 /**
- * Simulates the race and glycogen levels.
+ * Simulates the race with glycogen, hydration, and caffeine levels.
  */
 export function simulateRace(
     profile: RaceProfile,
     runner: RunnerProfile,
     intakeEvents: IntakeEvent[],
     initialGlycogen: number = 500,
-    weatherPenalty: number = 1.0
-): { timeline: GlycogenState[], crashTime: number | null, finishTime: number } {
+    weatherPenalty: number = 1.0,
+    preRaceCaffeineMg: number = 0 // NEW: Pre-race caffeine taken 30 min before
+): SimulationResult {
 
     const timeStepMinutes = 5; // Simulation resolution
     const targetPaceMinKm = (profile.targetTimeSeconds / 60) / profile.distanceKm;
@@ -350,10 +366,23 @@ export function simulateRace(
     const carbRatio = getCarbRatio(intensity);
     const carbBurnPerMinuteG = (kcalPerMinute * carbRatio) / 4; // 4 kcal per gram of carb
 
+    // Hydration: sweat rate per minute
+    const sweatPerMinuteL = runner.sweatRateLh / 60;
+
     let currentGlycogen = initialGlycogen;
     let currentTime = 0;
     let currentDist = 0;
     let crashTime: number | null = null;
+
+    // NEW: Hydration tracking
+    let cumulativeSweatL = 0;
+    let cumulativeFluidL = 0;
+
+    // NEW: Caffeine tracking - pre-race caffeine has already been metabolizing for 30 min
+    // Caffeine peaks at 45-60 min, so 30 min pre-race = near peak at race start
+    let currentCaffeine = calculateCaffeineRemaining(preRaceCaffeineMg, 30);
+    let peakCaffeine = currentCaffeine;
+    let peakCaffeineTime = 0;
 
     const timeline: GlycogenState[] = [];
 
@@ -364,7 +393,11 @@ export function simulateRace(
         glycogenStoreG: currentGlycogen,
         bloodGlucoseG: 5, // Baseline
         pace: adjustedPaceMinKm,
-        isBonking: false
+        isBonking: false,
+        fluidBalanceL: 0,
+        sweatLossL: 0,
+        fluidIntakeL: 0,
+        caffeineMg: Math.round(currentCaffeine)
     });
 
     const sortedEvents = [...intakeEvents].sort((a, b) => a.distanceKm - b.distanceKm);
@@ -373,64 +406,104 @@ export function simulateRace(
     while (currentDist < profile.distanceKm) {
         // Step forward
         currentTime += timeStepMinutes;
-        const distInc = (speedKph * timeStepMinutes) / 60;
+
+        // Apply Bonk Penalty if empty
+        let effectiveSpeedKph = speedKph;
+        let effectivePace = adjustedPaceMinKm;
+
+        if (currentGlycogen <= 0) {
+            // Severe slowdown: 25% slower
+            effectiveSpeedKph *= 0.75;
+            effectivePace /= 0.75;
+        }
+
+        const distInc = (effectiveSpeedKph * timeStepMinutes) / 60;
         currentDist += distInc;
 
-        // Burn
-        // Bonk penalty? If glycogen < 0, pace drops drastically (e.g., +20%)
+        // --- Glycogen Burn ---
+        // Burn depends on INTENSITY, but if we slow down due to fatigue/bonk, 
+        // strictly speaking intensity drops, but efficiency drops too.
+        // For simplicity, keep burn rate constant for now (struggling to maintain pace)
+        // or reduce it? Usually you burn less if you go slower, but it feels harder.
+        // Let's keep it constant as the "Demand" of trying to run. 
+        // Actually, if you bonk, you CAN'T burn glycogen (none left), you burn fat.
+        // But for the math of "deficit", we keep subtracting.
         let currentBurn = carbBurnPerMinuteG * timeStepMinutes;
 
-        // Intake
-        // Check if we passed any events in this step
+        // --- Hydration: Sweat loss ---
+        // Sweat rate might decrease if intensity drops, but let's assume stress is high.
+        cumulativeSweatL += sweatPerMinuteL * timeStepMinutes;
+
+        // --- Caffeine decay ---
+        // Caffeine half-life ~5h, decay per step
+        currentCaffeine = calculateCaffeineRemaining(currentCaffeine, timeStepMinutes);
+
+        // --- Intake: Check if we passed any events in this step ---
         let intakeCarbs = 0;
-        // Simple approximation: if we passed the event distance in this step
+        let intakeFluidL = 0;
+        let intakeCaffeine = 0;
+
         while (eventIndex < sortedEvents.length && sortedEvents[eventIndex].distanceKm <= currentDist) {
             const evt = sortedEvents[eventIndex];
             if (evt.product) {
                 intakeCarbs += evt.product.carbsG * evt.amount;
-            } else {
-                // Generic fallback if product not linked but amount implies carbs?
-                // Assume amount is grams for generic? No, Type says 'amount' is count.
-                // We'll rely on product being set or handling elsewhere.
-                // For now, assume 0 if no product.
+                intakeFluidL += (evt.product.liquidMl * evt.amount) / 1000;
+                intakeCaffeine += evt.product.caffeineMg * evt.amount;
             }
             eventIndex++;
         }
 
-        // Absorption Limit (e.g., 90g/h ~ 1.5g/min max)
-        // We add intake to store directly for simplified "Body Battery" model,
-        // but in reality gut absorption is the bottleneck.
-        // Let's cap the effective addition to store to mimic absorption delay?
-        // Or just assume simple bucket model for MVP.
+        // Apply intake
         currentGlycogen += intakeCarbs;
+        cumulativeFluidL += intakeFluidL;
+        currentCaffeine += intakeCaffeine;
 
-        // Subtract Burn
+        // Track peak caffeine
+        if (currentCaffeine > peakCaffeine) {
+            peakCaffeine = currentCaffeine;
+            peakCaffeineTime = currentTime;
+        }
+
+        // Subtract glycogen burn
         currentGlycogen -= currentBurn;
 
         // Check Bonk
         let isBonking = false;
         if (currentGlycogen <= 0) {
             if (crashTime === null) crashTime = currentTime * 60;
-            currentGlycogen = 0; // Floor at 0
+            currentGlycogen = 0; // Floor at 0 (visually), but keep counting deficit? 
+            // Actually for logic we need to know it's empty.
+            // But if we clamp to 0, how do we recover?
+            // If intake comes, it adds positive.
+            // So we should allow negative internally? 
+            // No, the prompt says "isBonking" is true.
+            // Effectively, if <=0, we are bonking.
             isBonking = true;
-            // Slow down simulation for next steps?
-            // MVP: Just mark it.
         }
+
+        // Calculate fluid balance
+        const fluidBalance = cumulativeFluidL - cumulativeSweatL;
 
         timeline.push({
             timeSeconds: currentTime * 60,
             distanceKm: currentDist,
             glycogenStoreG: Math.round(currentGlycogen),
             bloodGlucoseG: 5,
-            pace: adjustedPaceMinKm,
-            isBonking
+            pace: effectivePace, // Use effective pace
+            isBonking,
+            fluidBalanceL: Math.round(fluidBalance * 100) / 100,
+            sweatLossL: Math.round(cumulativeSweatL * 100) / 100,
+            fluidIntakeL: Math.round(cumulativeFluidL * 100) / 100,
+            caffeineMg: Math.round(currentCaffeine)
         });
     }
 
     return {
         timeline,
         crashTime,
-        finishTime: timeline[timeline.length - 1].timeSeconds
+        finishTime: timeline[timeline.length - 1].timeSeconds,
+        peakCaffeineMg: Math.round(peakCaffeine),
+        peakCaffeineTimeMin: peakCaffeineTime
     };
 }
 
@@ -565,6 +638,15 @@ const DEFAULT_DRINK: NutritionProduct = {
     isDrink: true
 };
 
+// --- Weather Presets ---
+
+export const WEATHER_PRESETS = [
+    { id: 'chilly', label: 'Kyligt', temp: 5, humidity: 60, icon: '❄️' },
+    { id: 'casual', label: 'Behagligt', temp: 15, humidity: 50, icon: '⛅' },
+    { id: 'warm', label: 'Varmt', temp: 22, humidity: 60, icon: '☀️' },
+    { id: 'hot', label: 'Hetta', temp: 28, humidity: 70, icon: '🔥' }
+] as const;
+
 export interface GenerateIntakeOptions {
     distanceKm: number;
     targetTimeMinutes: number;
@@ -618,8 +700,10 @@ export function generateIntakeEvents(options: GenerateIntakeOptions): {
     const drinkCarbs = totalCarbsNeeded * (drinkPercent / 100);
 
     // Calculate number of each
+    // Use ceil for drink to assume at least one bottle if any drink pct requested (avoids 0ml bug)
+    // Use round for gel
     const gelCount = gel.carbsG > 0 ? Math.round(gelCarbs / gel.carbsG) : 0;
-    const drinkCount = drink.carbsG > 0 ? Math.round(drinkCarbs / drink.carbsG) : 0;
+    const drinkCount = drink.carbsG > 0 ? (drinkPercent > 0 ? Math.ceil(drinkCarbs / drink.carbsG) : 0) : 0;
 
     const totalIntakes = gelCount + drinkCount;
     if (totalIntakes === 0) {
@@ -657,7 +741,10 @@ export function generateIntakeEvents(options: GenerateIntakeOptions): {
 
         if (useGel && gelIndex < gelCount) {
             // Determine if caffeinated
-            const useCafGel = includeCaffeine && (!caffeineInLastThird || km >= lastThirdStart);
+            // Caffeine peaks at ~45-60 min after intake, so start earlier (50% of race)
+            // This ensures peak effect for the hardest part of the race (60-80% mark)
+            const caffeineStartKm = distanceKm * 0.5; // Start caffeine at halfway
+            const useCafGel = includeCaffeine && (!caffeineInLastThird || km >= caffeineStartKm);
 
             events.push({
                 distanceKm: km,

@@ -15,6 +15,7 @@ import {
     CARB_TARGET_PRESETS,
     CARB_SOURCE_PRESETS,
     TEMPO_PRESETS,
+    WEATHER_PRESETS,
     suggestSweatPreset,
     suggestCarbSourceDistribution,
     generateIntakeEvents,
@@ -24,7 +25,7 @@ import {
     EnergyBreakdown
 } from '../../utils/racePlannerCalculators';
 import { useAuth } from '../../context/AuthContext';
-import { ArrowLeft, Play, Save, Trash2, Battery, Droplet, Thermometer, ShoppingBag, Clock, AlertTriangle, ChevronDown, ChevronUp, Coffee, Zap, Settings2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Play, Save, Trash2, Battery, Droplet, Thermometer, ShoppingBag, Clock, AlertTriangle, ChevronDown, ChevronUp, Coffee, Zap, Settings2, Sparkles, Activity } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Link } from 'react-router-dom';
 
@@ -136,7 +137,7 @@ export function ToolsRacePlannerPage() {
     // NEW: Nutrition Mode & Settings
     const [nutritionMode, setNutritionMode] = useState<'simple' | 'advanced'>('simple');
     const [carbsPerHour, setCarbsPerHour] = useState(60);
-    const [carbSourcePreset, setCarbSourcePreset] = useState('balanced');
+    const [carbSourcePreset, setCarbSourcePreset] = useState('auto'); // Default to Auto
     const [caffeinePreset, setCaffeinePreset] = useState('moderate');
     const [includePreRaceCaffeine, setIncludePreRaceCaffeine] = useState(true);
 
@@ -229,8 +230,12 @@ export function ToolsRacePlannerPage() {
         const penalty = calculateWeatherPenaltyFactor(environment.temperatureC, environment.humidityPercent);
         setWeatherPenalty(penalty);
 
-        // 2. Sim
-        const res = simulateRace(raceProfile, runnerProfile, intakeEvents, 500, penalty); // 500g start
+        // 2. Pre-race caffeine from preset
+        const caffeinePresetData = CAFFEINE_PRESETS.find(p => p.id === caffeinePreset);
+        const preRaceCaffeine = includePreRaceCaffeine ? (caffeinePresetData?.preRaceMg || 0) : 0;
+
+        // 3. Sim with hydration & caffeine tracking
+        const res = simulateRace(raceProfile, runnerProfile, intakeEvents, 500, penalty, preRaceCaffeine);
         setSimResult(res);
 
         // 3. Splits
@@ -297,17 +302,26 @@ export function ToolsRacePlannerPage() {
     // --- Helpers ---
 
     const handleGenerateSimpleIntake = () => {
-        const carbSource = CARB_SOURCE_PRESETS.find(p => p.id === carbSourcePreset) || CARB_SOURCE_PRESETS[2];
+        const carbSource = CARB_SOURCE_PRESETS.find(p => p.id === carbSourcePreset) || CARB_SOURCE_PRESETS[0];
         const caffeinePresetData = CAFFEINE_PRESETS.find(p => p.id === caffeinePreset);
+
+        // Resolve Auto preset
+        let gelPercent: number = carbSource.gelPct;
+        let drinkPercent: number = carbSource.drinkPct;
+
+        if (carbSource.id === 'auto') {
+            gelPercent = suggestedCarbSource.gelPct;
+            drinkPercent = suggestedCarbSource.drinkPct;
+        }
 
         const result = generateIntakeEvents({
             distanceKm: raceProfile.distanceKm,
             targetTimeMinutes: raceProfile.targetTimeSeconds / 60,
             carbsPerHour,
-            gelPercent: carbSource.gelPct,
-            drinkPercent: carbSource.drinkPct,
+            gelPercent,
+            drinkPercent,
             includeCaffeine: (caffeinePresetData?.duringRaceMg || 0) > 0,
-            caffeineInLastThird: true
+            caffeineInLastThird: true // Will use the 50% start rule logic
         });
 
         setIntakeEvents(result.events);
@@ -509,6 +523,22 @@ export function ToolsRacePlannerPage() {
 
                         {/* Environment */}
                         <ConfigSection title="Miljö" icon={<Thermometer size={18} />}>
+                            <div className="flex gap-2 mb-4 overflow-x-auto pb-1 no-scrollbar">
+                                {WEATHER_PRESETS.map(p => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => setEnvironment({
+                                            ...environment,
+                                            temperatureC: p.temp,
+                                            humidityPercent: p.humidity
+                                        })}
+                                        className="bg-slate-800 hover:bg-slate-700 border border-white/10 rounded-lg px-3 py-2 text-xs flex items-center gap-2 transition-colors whitespace-nowrap min-w-fit"
+                                    >
+                                        <span className="text-base">{p.icon}</span>
+                                        <span className="font-medium text-slate-300">{p.label}</span>
+                                    </button>
+                                ))}
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Temp" suffix="°C">
                                     <input
@@ -597,6 +627,11 @@ export function ToolsRacePlannerPage() {
                                                 />
                                             ))}
                                         </div>
+                                        {carbSourcePreset === 'auto' && (
+                                            <p className="text-[10px] text-emerald-400 mt-1">
+                                                Valt baserat på väder: {suggestedCarbSource.gelPct}% Gel / {suggestedCarbSource.drinkPct}% Dryck
+                                            </p>
+                                        )}
                                     </div>
 
                                     {/* Caffeine */}
@@ -616,9 +651,24 @@ export function ToolsRacePlannerPage() {
                                             ))}
                                         </div>
                                         {caffeinePreset !== 'none' && (
-                                            <p className="text-[10px] text-slate-500">
-                                                {CAFFEINE_PRESETS.find(p => p.id === caffeinePreset)?.preRaceMg}mg före + {CAFFEINE_PRESETS.find(p => p.id === caffeinePreset)?.duringRaceMg}mg under lopp
-                                            </p>
+                                            <div className="space-y-2 mt-2">
+                                                <label className="flex items-center gap-2 text-sm">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={includePreRaceCaffeine}
+                                                        onChange={(e) => setIncludePreRaceCaffeine(e.target.checked)}
+                                                        className="rounded bg-slate-800 border-white/20"
+                                                    />
+                                                    <span className="text-slate-300">Koffein före start (30 min)</span>
+                                                    <span className="text-emerald-400 text-xs">
+                                                        +{CAFFEINE_PRESETS.find(p => p.id === caffeinePreset)?.preRaceMg}mg
+                                                    </span>
+                                                </label>
+                                                <p className="text-[10px] text-slate-500">
+                                                    Totalt: {includePreRaceCaffeine ? CAFFEINE_PRESETS.find(p => p.id === caffeinePreset)?.preRaceMg : 0}mg före +
+                                                    {CAFFEINE_PRESETS.find(p => p.id === caffeinePreset)?.duringRaceMg}mg under lopp
+                                                </p>
+                                            </div>
                                         )}
                                     </div>
 
@@ -756,169 +806,299 @@ export function ToolsRacePlannerPage() {
                 {activeTab === 'plan' && simResult && (
                     <div className="space-y-8 animate-fade-in">
 
-                        {/* Summary Cards - Row 1 */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
-                                <div className="text-slate-400 text-xs font-bold uppercase mb-1">Sluttid (Est)</div>
-                                <div className="text-2xl font-black text-white">{formatTime(simResult.finishTime)}</div>
-                                <div className="text-xs text-emerald-400">Tempo: {splits[0]?.paceMinKm} /km</div>
-                            </div>
-                            <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
-                                <div className="text-slate-400 text-xs font-bold uppercase mb-1">Crash Point</div>
-                                <div className={`text-2xl font-black ${simResult.crashTime ? 'text-red-500' : 'text-emerald-500'}`}>
-                                    {simResult.crashTime ? `${Math.round(simResult.crashTime / 60)} min` : 'Aldrig'}
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                            {/* Editable Target Time */}
+                            <div className="bg-slate-900 rounded-xl p-3 border border-emerald-500/30 flex flex-col justify-between">
+                                <div className="text-slate-400 text-[10px] font-bold uppercase mb-1 flex items-center gap-1">
+                                    <Clock size={12} /> Måltid
                                 </div>
-                                <div className="text-xs text-slate-500">Glykogen tar slut</div>
-                            </div>
-                            <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
-                                <div className="text-slate-400 text-xs font-bold uppercase mb-1">Total Energi</div>
-                                <div className="text-2xl font-black text-amber-400">
-                                    {intakeEvents.reduce((acc, e) => acc + (e.product?.carbsG || 0) * e.amount, 0)}g
+                                <div className="flex items-center justify-center bg-slate-950/50 rounded p-1 border border-white/5 mb-1">
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={24}
+                                        value={Math.floor(raceProfile.targetTimeSeconds / 3600)}
+                                        onChange={(e) => {
+                                            const h = parseInt(e.target.value) || 0;
+                                            const m = Math.floor((raceProfile.targetTimeSeconds % 3600) / 60);
+                                            setRaceProfile({ ...raceProfile, targetTimeSeconds: h * 3600 + m * 60 });
+                                        }}
+                                        className="w-7 bg-transparent text-lg font-black text-white text-center outline-none p-0 appearance-none"
+                                    />
+                                    <span className="text-slate-600 text-sm pb-1">:</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={59}
+                                        value={Math.floor((raceProfile.targetTimeSeconds % 3600) / 60)}
+                                        onChange={(e) => {
+                                            const h = Math.floor(raceProfile.targetTimeSeconds / 3600);
+                                            const m = parseInt(e.target.value) || 0;
+                                            setRaceProfile({ ...raceProfile, targetTimeSeconds: h * 3600 + m * 60 });
+                                        }}
+                                        className="w-7 bg-transparent text-lg font-black text-white text-center outline-none p-0 appearance-none"
+                                    />
                                 </div>
-                                <div className="text-xs text-slate-500">Kolhydrater</div>
+                                <button
+                                    onClick={runSimulation}
+                                    className="text-[10px] text-emerald-400 hover:text-emerald-300 text-center w-full uppercase font-bold tracking-wider"
+                                >
+                                    ↻ Uppdatera
+                                </button>
                             </div>
-                            <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
-                                <div className="text-slate-400 text-xs font-bold uppercase mb-1">Väderfaktor</div>
-                                <div className="text-2xl font-black text-blue-400">
-                                    {Math.round((weatherPenalty - 1) * 100)}%
-                                </div>
-                                <div className="text-xs text-slate-500">Tidspåslag</div>
-                            </div>
-                        </div>
 
-                        {/* Summary Cards - Row 2: NEW Hydration & Energy */}
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {/* Estimated Time */}
+                            <div className="bg-slate-900 rounded-xl p-3 border border-white/5 flex flex-col justify-between">
+                                <div className="text-slate-400 text-[10px] font-bold uppercase mb-1 flex items-center gap-1">
+                                    <Activity size={12} /> Sluttid (Est)
+                                </div>
+                                <div className="text-xl font-black text-white">
+                                    {formatTime(simResult.finishTime)}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                    {formatTime(simResult.finishTime / raceProfile.distanceKm).substring(3, 8)}/km
+                                </div>
+                            </div>
+
+                            {/* Bonk Prediction */}
+                            <div className={`rounded-xl p-3 border flex flex-col justify-between ${simResult.crashTime ? 'bg-red-900/10 border-red-500/50' : 'bg-slate-900 border-white/5'}`}>
+                                <div className="text-slate-400 text-[10px] font-bold uppercase mb-1 flex items-center gap-1">
+                                    <AlertTriangle size={12} className={simResult.crashTime ? "text-red-500" : "text-slate-600"} />
+                                    Väggen?
+                                </div>
+                                <div className={`text-xl font-black ${simResult.crashTime ? 'text-red-500' : 'text-emerald-500'}`}>
+                                    {simResult.crashTime ? `${Math.floor(simResult.crashTime / 60)} min` : "Nej"}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                    {simResult.crashTime ? `~${(simResult.crashTime / 60 / (simResult.finishTime / 60) * raceProfile.distanceKm).toFixed(1)} km` : "Energi räcker"}
+                                </div>
+                            </div>
+
                             {/* Hydration Status */}
                             {hydrationSummary && (
-                                <div className={`bg-slate-900 rounded-xl p-4 border ${hydrationSummary.hydrationStatus === 'critical' ? 'border-red-500/50' :
-                                        hydrationSummary.hydrationStatus === 'warning' ? 'border-amber-500/50' : 'border-white/5'
+                                <div className={`rounded-xl p-3 border flex flex-col justify-between ${hydrationSummary.hydrationStatus === 'critical' ? 'bg-red-900/10 border-red-500/50' :
+                                    hydrationSummary.hydrationStatus === 'warning' ? 'bg-amber-900/10 border-amber-500/50' : 'bg-slate-900 border-white/5'
                                     }`}>
-                                    <div className="text-slate-400 text-xs font-bold uppercase mb-1 flex items-center gap-1">
+                                    <div className="text-slate-400 text-[10px] font-bold uppercase mb-1 flex items-center gap-1">
                                         <Droplet size={12} /> Vätskebalans
                                     </div>
-                                    <div className={`text-2xl font-black ${hydrationSummary.hydrationStatus === 'critical' ? 'text-red-500' :
-                                            hydrationSummary.hydrationStatus === 'warning' ? 'text-amber-400' : 'text-blue-400'
+                                    <div className={`text-xl font-black ${hydrationSummary.hydrationStatus === 'critical' ? 'text-red-500' :
+                                        hydrationSummary.hydrationStatus === 'warning' ? 'text-amber-400' : 'text-blue-400'
                                         }`}>
                                         -{hydrationSummary.netDeficitL}L
                                     </div>
-                                    <div className="text-xs text-slate-500">
-                                        {hydrationSummary.dehydrationPercent}% kroppsvikt
+                                    <div className="text-[10px] text-slate-500">
+                                        {hydrationSummary.dehydrationPercent}% av BV
                                     </div>
                                 </div>
                             )}
 
-                            {/* Weight Loss */}
-                            {hydrationSummary && (
-                                <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
-                                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Viktförlust</div>
-                                    <div className="text-2xl font-black text-purple-400">
-                                        -{hydrationSummary.estimatedWeightLossKg}kg
-                                    </div>
-                                    <div className="text-xs text-slate-500">
-                                        Slutvikt: ~{Math.round((runnerProfile.weightKg - hydrationSummary.estimatedWeightLossKg) * 10) / 10}kg
-                                    </div>
+                            {/* Caffeine Peak */}
+                            <div className="bg-slate-900 rounded-xl p-3 border border-white/5 flex flex-col justify-between">
+                                <div className="text-slate-400 text-[10px] font-bold uppercase mb-1 flex items-center gap-1">
+                                    <Coffee size={12} /> Koffein Peak
                                 </div>
-                            )}
-
-                            {/* Energy Burned */}
-                            {energyBreakdown && (
-                                <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
-                                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Förbrukning</div>
-                                    <div className="text-2xl font-black text-orange-400">
-                                        {energyBreakdown.totalKcalBurned} kcal
-                                    </div>
-                                    <div className="text-xs text-slate-500">
-                                        Carbs: {energyBreakdown.carbsG}g • Fett: {energyBreakdown.fatG}g
-                                    </div>
+                                <div className="text-xl font-black text-amber-500">
+                                    {simResult.peakCaffeineMg} mg
                                 </div>
-                            )}
-
-                            {/* Carb Balance */}
-                            {energyBreakdown && (
-                                <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
-                                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Kolhydratsbalans</div>
-                                    <div className={`text-2xl font-black ${energyBreakdown.netCarbBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        {energyBreakdown.netCarbBalance >= 0 ? '+' : ''}{energyBreakdown.netCarbBalance}g
-                                    </div>
-                                    <div className="text-xs text-slate-500">
-                                        Intag {energyBreakdown.carbsIntakeG}g / Förbruk {energyBreakdown.carbsG}g
-                                    </div>
+                                <div className="text-[10px] text-slate-500">
+                                    Vid {Math.round(simResult.peakCaffeineTimeMin)} min
                                 </div>
-                            )}
+                            </div>
                         </div>
 
-                        {/* Timeline Chart */}
-                        <div className="bg-slate-900 border border-white/5 rounded-2xl p-6 h-96">
-                            <h3 className="font-bold text-lg mb-4">Body Battery Timeline</h3>
-                            <ResponsiveContainer width="100%" height="100%">
-                                <LineChart data={simResult.timeline}>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-                                    <XAxis
-                                        dataKey="distanceKm"
-                                        stroke="#666"
-                                        label={{ value: 'Km', position: 'insideBottomRight', offset: -5 }}
-                                        tickFormatter={(val) => Math.round(val).toString()}
-                                    />
-                                    <YAxis
-                                        yAxisId="glyco"
-                                        stroke="#eab308"
-                                        label={{ value: 'Glykogen (g)', angle: -90, position: 'insideLeft' }}
-                                    />
-                                    <RechartsTooltip
-                                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#333' }}
-                                        labelFormatter={(val) => `Distans: ${Math.round(val)} km`}
-                                    />
-                                    <Legend />
-                                    <Line
-                                        yAxisId="glyco"
-                                        type="monotone"
-                                        dataKey="glycogenStoreG"
-                                        stroke="#eab308"
-                                        strokeWidth={2}
-                                        name="Glykogen (g)"
-                                        dot={false}
-                                    />
-                                    <ReferenceLine y={0} yAxisId="glyco" stroke="red" strokeDasharray="3 3" />
-                                </LineChart>
-                            </ResponsiveContainer>
+
+
+                        {/* Timeline Chart - ENHANCED */}
+                        <div className="bg-slate-900 border border-white/5 rounded-2xl p-6">
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-bold flex items-center gap-2 text-sm"><Activity size={16} className="text-emerald-400" /> Lopp-Simulator</h3>
+                                <div className="flex gap-4 text-[10px]">
+                                    <span className="flex items-center gap-1"><span className="w-3 h-1 bg-emerald-500 rounded-full"></span> Glykogen</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-blue-500 border-dashed border-t border-transparent" style={{ borderTopStyle: 'dashed', borderWidth: '1px' }}></span> Vätska</span>
+                                    <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-amber-500 border-dashed border-t border-transparent" style={{ borderTopStyle: 'dashed', borderWidth: '1px' }}></span> Koffein</span>
+                                </div>
+                            </div>
+                            <div className="h-[300px] w-full">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={simResult.timeline}>
+                                        <CartesianGrid strokeDasharray="3 3" stroke="#333" />
+                                        <XAxis
+                                            dataKey="distanceKm"
+                                            stroke="#666"
+                                            label={{ value: 'Km', position: 'insideBottomRight', offset: -5 }}
+                                            tickFormatter={(val) => Math.round(val).toString()}
+                                        />
+                                        {/* Glycogen Y-Axis (left) */}
+                                        <YAxis
+                                            yAxisId="glyco"
+                                            orientation="left"
+                                            stroke="#eab308"
+                                            domain={[0, 600]}
+                                            label={{ value: 'Glykogen (g)', angle: -90, position: 'insideLeft' }}
+                                        />
+                                        {/* Hydration Y-Axis (right, hidden) */}
+                                        <YAxis
+                                            yAxisId="fluid"
+                                            orientation="right"
+                                            stroke="#3b82f6"
+                                            domain={[-3, 1]}
+                                            hide
+                                        />
+                                        {/* Caffeine Y-Axis (right) */}
+                                        <YAxis
+                                            yAxisId="caffeine"
+                                            orientation="right"
+                                            stroke="#f59e0b"
+                                            domain={[0, 400]}
+                                            label={{ value: 'Koffein (mg)', angle: 90, position: 'insideRight' }}
+                                        />
+                                        <RechartsTooltip
+                                            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#333' }}
+                                            labelFormatter={(val) => `Distans: ${Math.round(val)} km`}
+                                            formatter={(value: number, name: string) => {
+                                                if (name.includes('Vätska')) return [`${value.toFixed(2)} L`, name];
+                                                if (name.includes('Koffein')) return [`${Math.round(value)} mg`, name];
+                                                return [`${Math.round(value)} g`, name];
+                                            }}
+                                        />
+                                        <Legend />
+                                        {/* Glycogen Line */}
+                                        <Line
+                                            yAxisId="glyco"
+                                            type="monotone"
+                                            dataKey="glycogenStoreG"
+                                            stroke="#10b981"
+                                            strokeWidth={3}
+                                            dot={false}
+                                            name="Glykogen (g)"
+                                            activeDot={{ r: 4, stroke: '#fff', strokeWidth: 2 }}
+                                            isAnimationActive={false}
+                                            style={{ filter: 'drop-shadow(0px 0px 4px rgba(16, 185, 129, 0.5))' }}
+                                        />
+                                        {/* Fluid Balance Line */}
+                                        <Line
+                                            yAxisId="fluid"
+                                            type="monotone"
+                                            dataKey="fluidBalanceL"
+                                            stroke="#3b82f6"
+                                            strokeWidth={2}
+                                            name="Vätska (L)"
+                                            dot={false}
+                                            strokeDasharray="4 4"
+                                            isAnimationActive={false}
+                                        />
+                                        {/* Caffeine Line */}
+                                        <Line
+                                            yAxisId="caffeine"
+                                            type="monotone"
+                                            dataKey="caffeineMg"
+                                            stroke="#f59e0b"
+                                            strokeWidth={2}
+                                            name="Koffein (mg)"
+                                            dot={false}
+                                            strokeDasharray="4 4"
+                                            isAnimationActive={false}
+                                        />
+                                        {/* Zero reference for glycogen */}
+                                        <ReferenceLine y={0} yAxisId="glyco" stroke="red" strokeDasharray="3 3" />
+                                        {/* Warning level for dehydration */}
+                                        <ReferenceLine y={-1.5} yAxisId="fluid" stroke="#f59e0b" strokeDasharray="3 3" label={{ value: '-2% BW', fill: '#f59e0b', fontSize: 10 }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* Pre/Post & Advice */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="bg-slate-900 border border-white/5 rounded-2xl p-4 flex flex-col">
+                                <h4 className="font-bold text-emerald-400 mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
+                                    <Clock size={14} /> Före Loppet
+                                </h4>
+                                <ul className="space-y-3 text-xs text-slate-300 flex-1">
+                                    <li className="flex gap-2 items-start">
+                                        <span className="text-emerald-500 font-bold">✓</span>
+                                        <span><b>Carbo-load:</b> Ät extra kolhydrater (8-10g/kg) dagen innan.</span>
+                                    </li>
+                                    <li className="flex gap-2 items-start">
+                                        <span className="text-emerald-500 font-bold">✓</span>
+                                        <span><b>Frukost:</b> Lättsmält frukost 3-4h innan start.</span>
+                                    </li>
+                                    {includePreRaceCaffeine ? (
+                                        <li className="flex gap-2 items-start">
+                                            <span className="text-emerald-500 font-bold">✓</span>
+                                            <span><b>Koffein:</b> Inta {CAFFEINE_PRESETS.find(p => p.id === caffeinePreset)?.preRaceMg}mg koffein 30-45 min innan start.</span>
+                                        </li>
+                                    ) : (
+                                        <li className="flex gap-2 items-start">
+                                            <span className="text-slate-600 font-bold">-</span>
+                                            <span className="text-slate-500">Inget koffein innan start valt.</span>
+                                        </li>
+                                    )}
+                                    <li className="flex gap-2 items-start">
+                                        <span className="text-emerald-500 font-bold">✓</span>
+                                        <span><b>Hydrering:</b> Drick 500ml vatten 2h innan start.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div className="bg-slate-900 border border-white/5 rounded-2xl p-4 flex flex-col">
+                                <h4 className="font-bold text-blue-400 mb-3 flex items-center gap-2 text-xs uppercase tracking-wider">
+                                    <Sparkles size={14} /> Efter Målgång
+                                </h4>
+                                <ul className="space-y-3 text-xs text-slate-300 flex-1">
+                                    <li className="flex gap-2 items-start">
+                                        <span className="text-blue-500 font-bold">✓</span>
+                                        <span><b>Refill:</b> 1g kolhydrater/kg kroppsvikt direkt efter mål.</span>
+                                    </li>
+                                    <li className="flex gap-2 items-start">
+                                        <span className="text-blue-500 font-bold">✓</span>
+                                        <span><b>Protein:</b> Få i dig 20-30g protein för muskelreparation.</span>
+                                    </li>
+                                    {hydrationSummary && hydrationSummary.netDeficitL > 0.5 && (
+                                        <li className="flex gap-2 items-start">
+                                            <span className="text-blue-500 font-bold">✓</span>
+                                            <span><b>Vätska:</b> Drick ca {(hydrationSummary.netDeficitL * 1.5).toFixed(1)}L vätska under em/kvällen.</span>
+                                        </li>
+                                    )}
+                                </ul>
+                            </div>
                         </div>
 
                         {/* Split Table */}
-                        <div className="bg-slate-900 border border-white/5 rounded-2xl overflow-hidden">
-                            <div className="p-4 border-b border-white/5 font-bold">Splits & Action Plan</div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-slate-950 text-slate-400 uppercase font-bold text-xs">
+                        <div className="bg-slate-900 border border-white/5 rounded-2xl overflow-hidden mt-6">
+                            <div className="p-3 border-b border-white/5 font-bold flex justify-between items-center bg-slate-950/30">
+                                <span className="text-sm">Splits & Action Plan</span>
+                                <span className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Schema</span>
+                            </div>
+                            <div className="overflow-x-auto max-h-[400px] custom-scrollbar">
+                                <table className="w-full text-left border-collapse">
+                                    <thead className="bg-slate-950 text-slate-500 uppercase font-bold text-[10px] sticky top-0 z-10 border-b border-white/10">
                                         <tr>
-                                            <th className="px-4 py-3">Km</th>
-                                            <th className="px-4 py-3">Tid</th>
-                                            <th className="px-4 py-3">Tempo</th>
-                                            <th className="px-4 py-3">Action</th>
+                                            <th className="px-3 py-2 w-16">Km</th>
+                                            <th className="px-3 py-2 w-20">Tid</th>
+                                            <th className="px-3 py-2 w-20">Tempo</th>
+                                            <th className="px-3 py-2">Energi & Vätska</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-white/5">
+                                    <tbody className="divide-y divide-white/5 text-[11px]">
                                         {splits.map((split, i) => {
-                                            // Check for intake events near this km (within 0.5km)
-                                            const actions = intakeEvents.filter(e => Math.abs(e.distanceKm - split.km) < 2.5 && e.distanceKm >= (split.km - 4));
-                                            // Since splits are every 1km, we should group events differently or just show near matches.
-                                            // Actually, let's just highlight if there is an event roughly here.
-                                            // Better: Match EXACT km or ranges.
-                                            // For the table, let's just check if an event exists at this KM.
                                             const exactActions = intakeEvents.filter(e => Math.abs(e.distanceKm - split.km) < 0.5);
-
-                                            // Only show every 5km or if action exists to save space
+                                            // Show every 5km OR if there is an action
                                             if (split.km % 5 !== 0 && exactActions.length === 0 && split.km !== Math.ceil(raceProfile.distanceKm)) return null;
 
+                                            const isActionRow = exactActions.length > 0;
+
                                             return (
-                                                <tr key={i} className="hover:bg-white/5">
-                                                    <td className="px-4 py-3 font-mono">{split.km}</td>
-                                                    <td className="px-4 py-3 font-mono text-slate-300">{formatTime(split.cumulativeSeconds)}</td>
-                                                    <td className="px-4 py-3 font-mono text-emerald-400">{split.paceMinKm}</td>
-                                                    <td className="px-4 py-3">
+                                                <tr key={i} className={`hover:bg-white/5 transition-colors ${isActionRow ? 'bg-emerald-900/5' : ''}`}>
+                                                    <td className="px-3 py-1.5 font-mono text-slate-400 border-r border-white/5">{split.km}</td>
+                                                    <td className="px-3 py-1.5 font-mono text-slate-300">{formatTime(split.cumulativeSeconds)}</td>
+                                                    <td className="px-3 py-1.5 font-mono text-emerald-500">{split.paceMinKm}</td>
+                                                    <td className="px-3 py-1.5">
                                                         {exactActions.map((a, ai) => (
-                                                            <div key={ai} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-500/20 text-blue-300 text-xs mr-2">
-                                                                <Droplet size={10} />
-                                                                {a.amount}x {a.product?.name}
+                                                            <div key={ai} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 text-[10px] mr-2 shadow-sm">
+                                                                {a.product?.type === 'liquid' ? <Droplet size={8} className="text-blue-400" /> : <Zap size={8} className="text-amber-400" />}
+                                                                <span className="font-bold text-white">{a.amount}x</span> {a.product?.name}
                                                             </div>
                                                         ))}
                                                     </td>
