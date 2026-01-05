@@ -52,6 +52,7 @@ import { ToolsHeartRatePage } from './pages/tools/ToolsHeartRatePage.tsx';
 import { ToolsStrengthStandardsPage } from './pages/tools/ToolsStrengthStandardsPage.tsx';
 import DebugBar from './components/debug/DebugBar.tsx';
 import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
+import { PlannerPage } from './components/planner/PlannerPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -106,6 +107,7 @@ export function App() {
                                                 <Route path="vecka" element={<WeeklyPage />} />
                                                 <Route path="vecka/recept/:recipeId/*" element={<WeeklyPage />} />
                                                 <Route path="planera" element={<PlanningPage />} />
+                                                <Route path="planner" element={<PlannerPage />} />
                                                 <Route path="pantry" element={<PantryPage />} />
                                                 <Route path="recipes" element={<RecipesPage />} />
                                                 <Route path="database" element={<DatabasePage />} />
