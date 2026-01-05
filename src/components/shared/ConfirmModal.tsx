@@ -26,10 +26,15 @@ export function ConfirmModal({
     useEffect(() => {
         if (!isOpen) return;
         const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                onClose();
+            }
         };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        // Use capture phase to intercept the event before it bubbles up to other modals/handlers
+        window.addEventListener('keydown', handleKeyDown, { capture: true });
+        return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
     }, [isOpen, onClose]);
 
     if (!isOpen) return null;
@@ -91,6 +96,7 @@ export function ConfirmModal({
                         {cancelText}
                     </button>
                     <button
+                        autoFocus
                         onClick={() => {
                             onConfirm();
                             onClose();
