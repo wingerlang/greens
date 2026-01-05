@@ -4,7 +4,7 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod } from '../models/types.ts';
+import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 
 // ============================================
@@ -18,7 +18,7 @@ export interface StorageService {
     getWeeklyPlan(weekStartDate: string): Promise<WeeklyPlan | undefined>;
     saveWeeklyPlan(plan: WeeklyPlan): Promise<void>;
     deleteWeeklyPlan(id: string): Promise<void>;
-    addWeightEntry(weight: number, date: string): Promise<void>;
+    addWeightEntry(entry: WeightEntry): Promise<void>;
     addMealEntry(meal: any): Promise<void>;
     saveGoal(goal: PerformanceGoal): Promise<void>;
     deleteGoal(id: string): Promise<void>;
@@ -239,7 +239,7 @@ export class LocalStorageService implements StorageService {
         await this.save(data);
     }
 
-    async addWeightEntry(weight: number, date: string): Promise<void> {
+    async addWeightEntry(entry: WeightEntry): Promise<void> {
         // 1. API Optimization: Send ONLY weight entry
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
@@ -250,7 +250,7 @@ export class LocalStorageService implements StorageService {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ weight, date })
+                    body: JSON.stringify(entry)
                 });
 
                 if (!res.ok) throw new Error('API sync failed');

@@ -39,6 +39,8 @@ export function CaloriesPage() {
         getPlannedMealsForDate,
         getExercisesForDate,
         getVitalsForDate,
+        trainingPeriods,
+        performanceGoals,
     } = useData();
 
     const { settings } = useSettings();
@@ -368,8 +370,17 @@ export function CaloriesPage() {
     };
 
     const goals = useMemo(() => {
-        return calculateAdaptiveGoals(settings as any, dailyExercises);
-    }, [settings, dailyExercises]);
+        // Check for active training period
+        const activePeriod = trainingPeriods.find(p => selectedDate >= p.startDate && selectedDate <= p.endDate);
+
+        // Look up the nutrition goal from performanceGoals linked to this period
+        const nutritionGoal = activePeriod
+            ? performanceGoals.find(g => g.periodId === activePeriod.id && g.type === 'nutrition' && g.status === 'active')
+            : undefined;
+        const periodTarget = nutritionGoal?.nutritionMacros?.calories || activePeriod?.nutritionGoal?.calories;
+
+        return calculateAdaptiveGoals(settings as any, dailyExercises, periodTarget);
+    }, [settings, dailyExercises, trainingPeriods, selectedDate, performanceGoals]);
 
     const [showInsights, setShowInsights] = useState(false);
 

@@ -668,7 +668,7 @@ export function calculateGoalProgress(
             current = 0;
     }
 
-    const percentage = targetValue > 0 ? Math.min(100, (current / targetValue) * 100) : 0;
+    const percentage = (targetValue > 0 && !isNaN(targetValue) && !isNaN(current)) ? Math.min(100, (current / targetValue) * 100) : 0;
     const isComplete = percentage >= 100;
     const daysRemaining = getDaysRemaining(goal);
 

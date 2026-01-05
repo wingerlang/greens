@@ -90,6 +90,13 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
     // Weight
     if (url.pathname === "/api/weight" && method === "POST") {
         const entry = await req.json();
+
+        // Validation: Ensure required fields exist
+        if (typeof entry.weight !== 'number' || !entry.date || !entry.id) {
+            console.error('[API] Invalid weight entry payload:', entry);
+            return new Response(JSON.stringify({ error: "Invalid weight entry: weight(number), date(string), id(string) required" }), { status: 400, headers });
+        }
+
         await weightRepo.saveWeight(userId, entry);
         return new Response(JSON.stringify({ success: true }), { headers });
     }

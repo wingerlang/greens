@@ -461,6 +461,12 @@ export interface TrainingPeriod {
     startDate: string;
     endDate: string;
     focusType: PeriodFocus;
+    nutritionGoal?: {
+        calories: number;
+        protein?: number;
+        carbs?: number;
+        fat?: number;
+    };
     createdAt: string;
     updatedAt: string;
 }

@@ -610,9 +610,9 @@ export function DataProvider({ children }: DataProviderProps) {
         // Sync to API and update local state with server response (e.g. permanent Image URL)
         skipAutoSave.current = true;
         storageService.createFoodItem(newItem).then((serverItem) => {
-             if (serverItem) {
-                 setFoodItems(prev => prev.map(i => i.id === newItem.id ? serverItem : i));
-             }
+            if (serverItem) {
+                setFoodItems(prev => prev.map(i => i.id === newItem.id ? serverItem : i));
+            }
         }).catch(e => console.error("Failed to sync food:", e));
 
         return newItem;
@@ -632,7 +632,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 skipAutoSave.current = true;
                 storageService.updateFoodItem(updatedItem).then((serverItem) => {
                     if (serverItem) {
-                         setFoodItems(current => current.map(i => i.id === id ? serverItem : i));
+                        setFoodItems(current => current.map(i => i.id === id ? serverItem : i));
                     }
                 }).catch(e => console.error("Failed to sync food:", e));
             }
@@ -1029,7 +1029,7 @@ export function DataProvider({ children }: DataProviderProps) {
         // as a safety net, even if the granular API call fails or if reload happens before cache is consistent.
         // skipAutoSave.current = true; // REMOVED to ensure persistence
 
-        storageService.addWeightEntry(weight, date).catch(err => {
+        storageService.addWeightEntry(newEntry).catch(err => {
             console.error("Failed to sync weight:", err);
         });
 
