@@ -1024,9 +1024,10 @@ export function DataProvider({ children }: DataProviderProps) {
             return sorted;
         });
 
-        // Use new optimized API call (fire and forget)
-        // CRITICAL: Skip the next global auto-save to prevent overwriting or sending full payload
-        skipAutoSave.current = true;
+        // Sync via API but DO NOT skip auto-save.
+        // We want the subsequent auto-save loop to persist the new state to the monolithic blob
+        // as a safety net, even if the granular API call fails or if reload happens before cache is consistent.
+        // skipAutoSave.current = true; // REMOVED to ensure persistence
 
         storageService.addWeightEntry(weight, date).catch(err => {
             console.error("Failed to sync weight:", err);
