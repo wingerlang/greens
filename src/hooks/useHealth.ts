@@ -26,7 +26,7 @@ export function useHealth(date: string = getISODate()) {
     const {
         calculateBMR,
         trainingCycles,
-        exerciseEntries,
+        unifiedActivities, // Use unified activities instead of exerciseEntries
         calculateDailyNutrition,
         weightEntries,
         getLatestWeight
@@ -54,14 +54,14 @@ export function useHealth(date: string = getISODate()) {
     const currentGoal = activeCycle ? activeCycle.goal : settings.trainingGoal || 'neutral';
     const goalAdjustment = currentGoal === 'deff' ? -500 : currentGoal === 'bulk' ? 500 : 0;
 
-    // 4. Exercise & Burned
+    // 4. Exercise & Burned - Using ALL activity sources (Strava, manual, strength)
     const dailyExercises = useMemo(() =>
-        exerciseEntries.filter(e => e.date === date),
-        [exerciseEntries, date]
+        unifiedActivities.filter(e => e.date === date),
+        [unifiedActivities, date]
     );
 
     const dailyCaloriesBurned = useMemo(() =>
-        dailyExercises.reduce((sum, e) => sum + e.caloriesBurned, 0),
+        dailyExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0),
         [dailyExercises]
     );
 

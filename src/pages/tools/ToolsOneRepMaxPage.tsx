@@ -52,8 +52,9 @@ export function ToolsOneRepMaxPage() {
         return getPersonalRecords(selectedExercise, strengthSessions);
     }, [selectedExercise, strengthSessions]);
 
-    // "Smart" Personal Records - Infer strength from higher reps
-    // Key insight: If you did 15×40kg, you also implicitly did 12×40kg, 10×40kg, etc.
+    // "Smart" Personal Records - Infer strength from higher rep records
+    // Key insight: If you did 10×105kg, you also implicitly did 9×105kg, 8×105kg etc.
+    // So for 9 reps, if you have 10×105kg but only 9×50kg, the 105kg should apply
     const smartPersonalRecords = useMemo(() => {
         const STANDARD_REPS = [1, 2, 5, 8, 10, 12, 15];
         const prValues = Object.values(personalRecords);
@@ -63,8 +64,8 @@ export function ToolsOneRepMaxPage() {
         const inferred: Record<number, { weight: number, source: { weight: number, reps: number }, e1rm: number, inferred: boolean, isOverride?: boolean }> = {};
 
         STANDARD_REPS.forEach(targetRep => {
-            // Find best source: heaviest weight lifted for reps >= targetRep
-            // This captures implied strength (15×40kg means you can do 12×40kg)
+            // Find the heaviest weight lifted for reps >= targetRep
+            // If you did 10×105kg, that counts for 9, 8, 7, etc.
             let bestImplied = { weight: 0, reps: 0 };
 
             prValues.forEach(pr => {
@@ -78,11 +79,11 @@ export function ToolsOneRepMaxPage() {
             // If implied weight is higher than actual (or no actual exists)
             if (bestImplied.weight > 0 && (!actual || bestImplied.weight > actual.weight)) {
                 inferred[targetRep] = {
-                    weight: bestImplied.weight,
+                    weight: bestImplied.weight, // Same weight, not calculated
                     source: bestImplied,
                     e1rm: calculateAverage1RM(bestImplied.weight, bestImplied.reps).average,
                     inferred: true,
-                    isOverride: actual !== undefined // Mark if this overrides an actual record
+                    isOverride: actual !== undefined
                 };
             }
         });
@@ -170,27 +171,37 @@ export function ToolsOneRepMaxPage() {
         const rows: RowItem[] = [];
         const prValues = Object.values(personalRecords);
 
+        // Helper: Find best implied weight for any rep count
+        // "If you did X reps at Y kg, you can also do fewer reps at Y kg"
+        const getBestImpliedForReps = (targetRep: number) => {
+            let best = { weight: 0, reps: 0 };
+            prValues.forEach(pr => {
+                if (pr.reps >= targetRep && pr.weight > best.weight) {
+                    best = { weight: pr.weight, reps: pr.reps };
+                }
+            });
+            return best.weight > 0 ? best : null;
+        };
+
         // 1. Standard Reps - ALWAYS show, with both formula weight and PB
         STANDARD_REPS.forEach(r => {
             const formulaWeight = Math.round(maxResults.average / (1 + r / 30));
+            const actual = personalRecords[r];
+            const implied = getBestImpliedForReps(r);
 
-            // Check if smartPersonalRecords has a better/implied value (overrides actual if higher)
-            const smart = smartPersonalRecords[r];
-            if (smart) {
+            // Use best of actual vs implied
+            if (implied && (!actual || implied.weight > actual.weight)) {
+                // Inferred is better
                 rows.push({
                     reps: r,
                     formulaWeight,
-                    pbWeight: smart.weight,
+                    pbWeight: implied.weight,
                     type: 'inferred',
-                    e1rm: smart.e1rm,
-                    source: smart.source
+                    e1rm: calculateAverage1RM(implied.weight, implied.reps).average,
+                    source: implied
                 });
-                return;
-            }
-
-            // Check for actual PB (not overridden)
-            const actual = personalRecords[r];
-            if (actual) {
+            } else if (actual) {
+                // Actual is best
                 rows.push({
                     reps: r,
                     formulaWeight,
@@ -198,17 +209,16 @@ export function ToolsOneRepMaxPage() {
                     type: 'actual',
                     e1rm: calculateAverage1RM(actual.weight, actual.reps).average
                 });
-                return;
+            } else {
+                // No PB - show calculated only
+                rows.push({
+                    reps: r,
+                    formulaWeight,
+                    pbWeight: null,
+                    type: 'calculated',
+                    e1rm: Math.round(formulaWeight * (1 + r / 30))
+                });
             }
-
-            // No PB - show calculated only
-            rows.push({
-                reps: r,
-                formulaWeight,
-                pbWeight: null,
-                type: 'calculated',
-                e1rm: Math.round(formulaWeight * (1 + r / 30))
-            });
         });
 
         // 2. Non-standard Reps from actual PBs (ALL of them when expanded, selected when collapsed)
@@ -217,8 +227,24 @@ export function ToolsOneRepMaxPage() {
         const addNonStandardRow = (pr: { reps: number, weight: number }) => {
             if (!rows.some(row => row.reps === pr.reps)) {
                 const formulaWeight = Math.round(maxResults.average / (1 + pr.reps / 30));
-                const e1rm = calculateAverage1RM(pr.weight, pr.reps).average;
-                rows.push({ reps: pr.reps, formulaWeight, pbWeight: pr.weight, e1rm, type: 'actual' });
+                const implied = getBestImpliedForReps(pr.reps);
+
+                // Use best of actual vs implied
+                if (implied && implied.weight > pr.weight) {
+                    // Inferred from higher rep set is better
+                    rows.push({
+                        reps: pr.reps,
+                        formulaWeight,
+                        pbWeight: implied.weight,
+                        type: 'inferred',
+                        e1rm: calculateAverage1RM(implied.weight, implied.reps).average,
+                        source: implied
+                    });
+                } else {
+                    // Actual is best
+                    const e1rm = calculateAverage1RM(pr.weight, pr.reps).average;
+                    rows.push({ reps: pr.reps, formulaWeight, pbWeight: pr.weight, e1rm, type: 'actual' });
+                }
             }
         };
 
@@ -245,7 +271,7 @@ export function ToolsOneRepMaxPage() {
         }
 
         return rows.sort((a, b) => a.reps - b.reps);
-    }, [smartPersonalRecords, personalRecords, isExpanded, maxResults.average]);
+    }, [personalRecords, isExpanded, maxResults.average]);
 
     return (
         <div className="space-y-8 animate-fade-in pb-20">

@@ -958,6 +958,41 @@ export function DashboardPage() {
                                                         <div className={`h-full rounded-full ${consumed > target ? 'bg-rose-500' : 'bg-slate-900 dark:bg-white'}`} style={{ width: `${Math.min((consumed / target) * 100, 100)}%` }}></div>
                                                     </div>
                                                 </div>
+
+                                                {/* Training/Burned Calories */}
+                                                <div>
+                                                    <div className={`flex justify-between items-baseline mb-1`}>
+                                                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Träning</span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-emerald-500`}>
+                                                            -{Math.round(burned)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">kcal</span>
+                                                    </div>
+                                                    <div className="h-1 bg-emerald-100 dark:bg-emerald-900/30 rounded-full overflow-hidden mt-1">
+                                                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${burned > 0 ? Math.min((burned / 500) * 100, 100) : 0}%` }}></div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Net Calories */}
+                                                <div className="col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                                    <div className={`flex justify-between items-baseline mb-1`}>
+                                                        <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Netto</span>
+                                                        <span className={`text-[9px] font-bold ${(consumed - burned) > target ? 'text-rose-500' : (consumed - burned) < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                                                            {(consumed - burned) <= target ? '✓ Under mål' : '⚠ Över mål'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${(consumed - burned) > target ? 'text-rose-500' : 'text-indigo-500'}`}>
+                                                            {Math.round(consumed - burned)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">/ {target} kcal</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                                                        <div className={`h-full rounded-full ${(consumed - burned) > target ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(Math.max(0, ((consumed - burned) / target) * 100), 100)}%` }}></div>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
