@@ -61,8 +61,13 @@ export function SmartCoachDashboard({ stravaHistory }: SmartCoachDashboardProps)
                     <span className="text-2xl">🧠</span>
                     <h3 className="font-black text-white uppercase tracking-widest text-sm">Smart Coach</h3>
                 </div>
-                <div className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-tighter">
-                    Active
+                <div className="flex items-center gap-2">
+                    <Link to="/planner" className="bg-indigo-500 hover:bg-indigo-400 text-white text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-wider transition-all shadow-lg shadow-indigo-500/20">
+                        Planera Vecka
+                    </Link>
+                    <div className="bg-emerald-500/10 text-emerald-400 text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-tighter">
+                        Active
+                    </div>
                 </div>
             </div>
 
