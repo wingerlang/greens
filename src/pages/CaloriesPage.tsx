@@ -11,6 +11,7 @@ import {
 } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { calculateAdaptiveGoals } from '../utils/performanceEngine.ts';
+import { getActiveCalories } from '../utils/calorieTarget.ts';
 import { MealTimeline } from '../components/calories/MealTimeline.tsx';
 import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
@@ -370,14 +371,14 @@ export function CaloriesPage() {
     };
 
     const goals = useMemo(() => {
-        // Check for active training period
-        const activePeriod = trainingPeriods.find(p => selectedDate >= p.startDate && selectedDate <= p.endDate);
-
-        // Look up the nutrition goal from performanceGoals linked to this period
-        const nutritionGoal = activePeriod
-            ? performanceGoals.find(g => g.periodId === activePeriod.id && g.type === 'nutrition' && g.status === 'active')
-            : undefined;
-        const periodTarget = nutritionGoal?.nutritionMacros?.calories || activePeriod?.nutritionGoal?.calories;
+        // Use centralized function to get calorie target (checks targets[0].value, nutritionMacros, period, settings)
+        const periodTarget = getActiveCalories(
+            selectedDate,
+            trainingPeriods,
+            performanceGoals,
+            settings.dailyCalorieGoal,
+            2000
+        );
 
         return calculateAdaptiveGoals(settings as any, dailyExercises, periodTarget);
     }, [settings, dailyExercises, trainingPeriods, selectedDate, performanceGoals]);

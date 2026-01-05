@@ -5,6 +5,7 @@ import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate, DailyVitals } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { analyzeSleep } from '../utils/vitalsUtils.ts';
+import { getActiveCalories } from '../utils/calorieTarget.ts';
 import { EXERCISE_TYPES } from '../components/training/ExerciseModal.tsx';
 import {
     Dumbbell,
@@ -528,15 +529,14 @@ export function DashboardPage() {
     const consumed = dailyNutrition.calories;
     const burned = health.dailyCaloriesBurned || 0;
 
-    // Determine target based on hierarchy: Active Period's Nutrition Goal > Period nutritionGoal > Settings > Default
-    const activePeriod = trainingPeriods.find(p => selectedDate >= p.startDate && selectedDate <= p.endDate);
-
-    // Look up the nutrition goal from performanceGoals linked to this period
-    const nutritionGoal = activePeriod
-        ? performanceGoals.find(g => g.periodId === activePeriod.id && g.type === 'nutrition' && g.status === 'active')
-        : undefined;
-    const periodCalories = nutritionGoal?.nutritionMacros?.calories || activePeriod?.nutritionGoal?.calories;
-    const target = periodCalories || settings.dailyCalorieGoal || 2500;
+    // Determine target using centralized function (checks targets[0].value, nutritionMacros, period, settings)
+    const target = getActiveCalories(
+        selectedDate,
+        trainingPeriods,
+        performanceGoals,
+        settings.dailyCalorieGoal,
+        2500
+    );
 
     // 2. Macros
     const proteinTarget = settings.dailyProteinGoal || 160;
