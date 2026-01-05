@@ -1092,7 +1092,7 @@ export interface PlannedActivity {
     goalId?: string; // Link to a specific CoachGoal
     date: string; // ISO Date (YYYY-MM-DD)
     type: 'RUN';
-    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION';
+    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH';
     title: string;
     description: string;
     structure: {
@@ -1104,7 +1104,7 @@ export interface PlannedActivity {
     targetHrZone: number;
     estimatedDistance: number;
     // Progress Tracking
-    status: 'PLANNED' | 'COMPLETED' | 'SKIPPED';
+    status: 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'DRAFT';
     feedback?: 'EASY' | 'PERFECT' | 'HARD' | 'TOO_HARD' | 'INJURY';
     completedDate?: string;
     actualDistance?: number;

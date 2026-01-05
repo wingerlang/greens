@@ -172,6 +172,7 @@ interface DataContextType {
     generateCoachPlan: (stravaHistory: StravaActivity[], configOverride?: CoachConfig) => void;
     deletePlannedActivity: (id: string) => void;
     updatePlannedActivity: (id: string, updates: Partial<PlannedActivity>) => void;
+    savePlannedActivities: (activities: PlannedActivity[]) => void;
     completePlannedActivity: (activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => void;
     addCoachGoal: (goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => void;
     activateCoachGoal: (goalId: string) => void;
@@ -1848,6 +1849,22 @@ export function DataProvider({ children }: DataProviderProps) {
         }, []),
         updatePlannedActivity: useCallback((id, updates) => {
             setPlannedActivities(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+        }, []),
+        savePlannedActivities: useCallback((newActivities: PlannedActivity[]) => {
+            setPlannedActivities(prev => {
+                // Merge strategy: Filter out old activities on target dates if we wanted to replace
+                // But safer is to just Append and let user delete duplicates if they exist,
+                // OR filter out "PLANNED" status items on dates we are writing to.
+
+                // For now, simpler: Just Append.
+                // deduplicate by ID just in case
+                const ids = new Set(newActivities.map(a => a.id));
+                const filtered = prev.filter(a => !ids.has(a.id));
+
+                // Also, if we are overwriting a "draft" that was previously saved (not likely with new IDs)
+
+                return [...filtered, ...newActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            });
         }, []),
         completePlannedActivity: useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
             setPlannedActivities(prev => prev.map(a => {
