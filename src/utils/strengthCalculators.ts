@@ -78,23 +78,43 @@ export function calculateAverage1RM(weight: number, reps: number) {
     };
 
     // Formulas
+    // We calculate all, but will only include valid ones in the average
+
     const epley = weight * (1 + reps / 30);
-    const brzycki = weight * (36 / (37 - reps));
-    const lander = (100 * weight) / (101.3 - 2.67123 * reps);
-    const lombardi = weight * Math.pow(reps, 0.10);
-    const mayhew = (100 * weight) / (52.2 + (41.9 * Math.exp(-0.055 * reps)));
     const oconner = weight * (1 + 0.025 * reps);
+    const lombardi = weight * Math.pow(reps, 0.10);
+
+    // Unstable/Breaking formulas - only calculate if safe
+    const brzycki = reps < 37 ? weight * (36 / (37 - reps)) : null;
+    const lander = reps < 38 ? (100 * weight) / (101.3 - 2.67123 * reps) : null;
+
+    // Exponential formulas - can be overly conservative for very high reps
+    const mayhew = (100 * weight) / (52.2 + (41.9 * Math.exp(-0.055 * reps)));
     const wathan = (100 * weight) / (48.8 + (53.8 * Math.exp(-0.075 * reps)));
 
-    const all = [epley, brzycki, lander, lombardi, mayhew, oconner, wathan];
-    const sum = all.reduce((a, b) => a + b, 0);
-    const average = sum / all.length;
+    let validEstimates: number[] = [];
+
+    // Selection logic based on rep range
+    if (reps <= 15) {
+        // For standard ranges, use all standard formulas
+        validEstimates = [epley, mayhew, oconner, wathan, lombardi];
+        if (brzycki !== null) validEstimates.push(brzycki);
+        if (lander !== null) validEstimates.push(lander);
+    } else {
+        // For high reps (>15), reliability drops significantly.
+        // We rely on Epley and O'Conner which are linear and don't crash.
+        // We exclude exponential decay models that might bottom out too early.
+        validEstimates = [epley, oconner];
+    }
+
+    const sum = validEstimates.reduce((a, b) => a + b, 0);
+    const average = sum / validEstimates.length;
 
     return {
         average: Math.round(average * 10) / 10,
         epley: Math.round(epley * 10) / 10,
-        brzycki: Math.round(brzycki * 10) / 10,
-        lander: Math.round(lander * 10) / 10,
+        brzycki: brzycki !== null ? Math.round(brzycki * 10) / 10 : 0,
+        lander: lander !== null ? Math.round(lander * 10) / 10 : 0,
         lombardi: Math.round(lombardi * 10) / 10,
         mayhew: Math.round(mayhew * 10) / 10,
         oconner: Math.round(oconner * 10) / 10,

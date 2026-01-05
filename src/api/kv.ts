@@ -21,17 +21,17 @@ const kvHandler: ProxyHandler<Deno.Kv> = {
             return function (this: any, ...args: any[]) {
                 const context = getDebugContext();
                 if (!context) {
-                    return original.apply(this, args);
+                    return original.apply(target, args);
                 }
 
                 // If it's an atomic operation, we need to wrap that too
                 if (prop === 'atomic') {
-                    const atomicOp = original.apply(this, args) as Deno.AtomicOperation;
+                    const atomicOp = original.apply(target, args) as Deno.AtomicOperation;
                     return createAtomicProxy(atomicOp);
                 }
 
                 const start = performance.now();
-                const promise = original.apply(this, args);
+                const promise = original.apply(target, args);
 
                 if (promise instanceof Promise) {
                     return promise.then((result: any) => {
@@ -47,7 +47,7 @@ const kvHandler: ProxyHandler<Deno.Kv> = {
                         return result;
                     }).catch((err: any) => {
                         const duration = performance.now() - start;
-                         addDebugLog({
+                        addDebugLog({
                             type: 'kv',
                             operation: String(prop),
                             key: args[0] ? JSON.stringify(args[0]) : undefined,
@@ -73,41 +73,41 @@ function createAtomicProxy(atomic: Deno.AtomicOperation): Deno.AtomicOperation {
 
     const atomicHandler: ProxyHandler<Deno.AtomicOperation> = {
         get(target, prop, receiver) {
-             const original = Reflect.get(target, prop, receiver);
-             if (typeof original === 'function') {
-                 // @ts-ignore: Proxy typing is tricky
-                 return function (this: any, ...args: any[]) {
-                     if (prop === 'commit') {
-                         const start = performance.now();
-                         const promise = original.apply(this, args);
-                         return promise.then((result: any) => {
-                             const duration = performance.now() - start;
-                             addDebugLog({
-                                 type: 'kv',
-                                 operation: 'atomic.commit',
-                                 duration,
-                                 timestamp: Date.now(),
-                                 details: { ok: result.ok }
-                             });
-                             return result;
-                         });
-                     }
-                     // Track operations in the atomic chain if needed?
-                     // For now just tracking the commit is most important for performance
-                     // but we could track 'set', 'delete' inside atomic to see what happened.
-                     if (['set', 'delete', 'check', 'sum', 'min', 'max'].includes(String(prop))) {
-                          addDebugLog({
-                                 type: 'kv',
-                                 operation: `atomic.${String(prop)}`,
-                                 key: args[0] ? JSON.stringify(args[0]) : undefined,
-                                 duration: 0, // sync setup
-                                 timestamp: Date.now()
-                             });
-                     }
-                     return original.apply(this, args);
-                 }
-             }
-             return original;
+            const original = Reflect.get(target, prop, receiver);
+            if (typeof original === 'function') {
+                // @ts-ignore: Proxy typing is tricky
+                return function (this: any, ...args: any[]) {
+                    if (prop === 'commit') {
+                        const start = performance.now();
+                        const promise = original.apply(target, args);
+                        return promise.then((result: any) => {
+                            const duration = performance.now() - start;
+                            addDebugLog({
+                                type: 'kv',
+                                operation: 'atomic.commit',
+                                duration,
+                                timestamp: Date.now(),
+                                details: { ok: result.ok }
+                            });
+                            return result;
+                        });
+                    }
+                    // Track operations in the atomic chain if needed?
+                    // For now just tracking the commit is most important for performance
+                    // but we could track 'set', 'delete' inside atomic to see what happened.
+                    if (['set', 'delete', 'check', 'sum', 'min', 'max'].includes(String(prop))) {
+                        addDebugLog({
+                            type: 'kv',
+                            operation: `atomic.${String(prop)}`,
+                            key: args[0] ? JSON.stringify(args[0]) : undefined,
+                            duration: 0, // sync setup
+                            timestamp: Date.now()
+                        });
+                    }
+                    return original.apply(target, args);
+                }
+            }
+            return original;
         }
     }
     return new Proxy(atomic, atomicHandler);

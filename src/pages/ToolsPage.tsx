@@ -32,6 +32,12 @@ export function ToolsPage() {
                     color: "from-emerald-500 to-teal-500"
                 },
                 {
+                    name: "Race Planner",
+                    desc: "Planera ditt lopp med splittider och pacingguide.",
+                    path: "/tools/race-planner",
+                    color: "from-violet-500 to-purple-500"
+                },
+                {
                     name: "Pace Converter",
                     desc: "Omvandla tempo (min/km) till sluttider för olika distanser.",
                     path: "/tools/pace",

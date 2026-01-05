@@ -12,7 +12,8 @@ export type ExerciseRecordsMap = Record<number, RepRecord>;
 
 /**
  * Iterates through all strength sessions to find the maximum weight lifted
- * for each rep count (1-15) for a specific exercise.
+ * for each rep count for a specific exercise.
+ * Note: No upper limit on reps - we want to capture all data including high-rep sets.
  */
 export function getPersonalRecords(
     exerciseName: string,
@@ -28,8 +29,8 @@ export function getPersonalRecords(
             // Check name match
             if (normalizeExerciseName(exercise.exerciseName) === normalizedTarget) {
                 for (const set of exercise.sets) {
-                    // Only consider valid reps 1-15 and positive weight
-                    if (set.reps >= 1 && set.reps <= 15 && set.weight > 0) {
+                    // Only require valid reps (>= 1) and positive weight - NO upper limit
+                    if (set.reps >= 1 && set.weight > 0) {
                         const currentRecord = records[set.reps];
 
                         // If no record exists for this rep count, or this set is heavier

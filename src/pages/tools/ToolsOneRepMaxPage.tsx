@@ -1,23 +1,28 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { calculateAverage1RM, calculatePlateLoading } from '../../utils/strengthCalculators.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
 import { getPersonalRecords, PERCENTAGE_MAP } from '../../utils/strengthStatistics.ts';
 import { Search, X, Dumbbell, ChevronRight, Info, Copy, Check, TrendingUp, Target } from 'lucide-react';
 
+// Helper to convert exercise name to URL slug and back
+const toUrlSlug = (name: string) => name.toLowerCase().replace(/\s+/g, '-');
+const fromUrlSlug = (slug: string) => slug.replace(/-/g, ' ');
+
 export function ToolsOneRepMaxPage() {
     const { user } = useAuth();
     const { strengthSessions } = useData();
     const { exerciseName: urlExercise } = useParams<{ exerciseName?: string }>();
+    const navigate = useNavigate();
     const [weight, setWeight] = useState(100);
     const [reps, setReps] = useState(5);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
     const [copiedLink, setCopiedLink] = useState(false);
 
-    // Exercise Selection - initialize from URL if provided
-    const [selectedExercise, setSelectedExercise] = useState<string>(urlExercise ? decodeURIComponent(urlExercise) : '');
+    // Exercise Selection - initialize from URL if provided (handle slug format)
+    const [selectedExercise, setSelectedExercise] = useState<string>('');
 
     // Extract unique exercises and sort by frequency
     const exerciseStats = useMemo(() => {
@@ -83,6 +88,34 @@ export function ToolsOneRepMaxPage() {
         });
         return inferred;
     }, [personalRecords]);
+
+    // Initialize exercise from URL on mount
+    useEffect(() => {
+        if (urlExercise && exerciseStats.length > 0 && !selectedExercise) {
+            const decodedSlug = decodeURIComponent(urlExercise).toLowerCase();
+            // Find matching exercise by comparing slugs
+            const match = exerciseStats.find(e =>
+                toUrlSlug(e.name) === decodedSlug ||
+                e.name.toLowerCase() === decodedSlug ||
+                e.name.toLowerCase() === fromUrlSlug(decodedSlug)
+            );
+            if (match) {
+                setSelectedExercise(match.name);
+            }
+        }
+    }, [urlExercise, exerciseStats, selectedExercise]);
+
+    // Update URL when exercise changes
+    useEffect(() => {
+        if (selectedExercise) {
+            const newSlug = toUrlSlug(selectedExercise);
+            const currentPath = window.location.pathname;
+            // Only update if not already correct
+            if (!currentPath.includes(newSlug)) {
+                navigate(`/rm/${newSlug}`, { replace: true });
+            }
+        }
+    }, [selectedExercise, navigate]);
 
     // Auto-populate when exercise changes
     useEffect(() => {
@@ -319,7 +352,18 @@ export function ToolsOneRepMaxPage() {
 
                 {/* Results Table */}
                 <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 overflow-hidden flex flex-col h-[600px]">
-                    <h2 className="text-xl font-bold text-white mb-4">Rep Max Tabell</h2>
+                    <h2 className="text-xl font-bold text-white mb-4">
+                        {selectedExercise ? (
+                            <>
+                                <Link to={`/styrka/${encodeURIComponent(selectedExercise)}`} className="text-emerald-400 hover:text-emerald-300 transition-colors hover:underline">
+                                    {selectedExercise}
+                                </Link>
+                                <span className="text-slate-500 font-normal"> — Rep Max Tabell</span>
+                            </>
+                        ) : (
+                            'Rep Max Tabell'
+                        )}
+                    </h2>
                     <div className="flex-1 overflow-auto custom-scrollbar -mx-2 px-2">
                         <table className="w-full text-left border-collapse">
                             <thead className="sticky top-0 bg-slate-900 z-10 shadow-lg shadow-slate-900/50">
