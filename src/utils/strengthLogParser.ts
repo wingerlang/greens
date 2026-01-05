@@ -14,7 +14,7 @@ import {
     isDistanceBasedExercise,
     normalizeExerciseName,
     parseTimeToSeconds,
-    calculate1RM,
+    calculateEstimated1RM,
     PersonalBest
 } from '../models/strengthTypes.ts';
 
@@ -422,7 +422,7 @@ function trackPersonalBest(ctx: ParserContext, exercise: StrengthExercise, set: 
 
     if (calcWeight <= 0 && !isBW) return;
 
-    const estimated1RM = calculate1RM(calcWeight, set.reps);
+    const estimated1RM = calculateEstimated1RM(calcWeight, set.reps);
     const pbKey = `${exercise.id}-1rm`;
 
     const existing = ctx.personalBests.get(pbKey);

@@ -54,18 +54,26 @@ export function calculateIPFPoints(weightKg: number, totalKg: number, gender: 'm
 }
 
 /**
- * Estimated 1RM using Epley formula (more reliable for high reps than Brzycki)
+ * Generic function to calculate estimated 1RM using the "Average of All Formulas" strategy.
+ * This is the SINGLE SOURCE OF TRUTH for all 1RM estimates in the application.
+ * Returns the average rounded to 1 decimal place.
  */
-export function estimate1RM(weight: number, reps: number): number {
-    if (reps === 1) return weight;
-    if (reps <= 0) return 0;
-    // Epley formula: 1RM = weight * (1 + reps / 30)
-    // Capping reps at 12 to avoid unrealistic numbers from endurance sets
-    const effectiveReps = Math.min(reps, 12);
-    return weight * (1 + effectiveReps / 30);
+export function calculateEstimated1RM(weight: number, reps: number): number {
+    return calculateAverage1RM(weight, reps).average;
 }
 
 export function calculateAverage1RM(weight: number, reps: number) {
+    if (weight <= 0 || reps <= 0) return {
+        average: 0,
+        epley: 0,
+        brzycki: 0,
+        lander: 0,
+        lombardi: 0,
+        mayhew: 0,
+        oconner: 0,
+        wathan: 0
+    };
+
     if (reps === 1) return {
         average: weight,
         epley: weight,

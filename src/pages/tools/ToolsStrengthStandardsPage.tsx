@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { calculateWilks, calculateIPFPoints, estimate1RM } from '../../utils/strengthCalculators.ts';
+import { calculateWilks, calculateIPFPoints, calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
 import { slugify } from '../../utils/formatters.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { ExerciseEntry } from '../../models/types.ts';
@@ -130,7 +130,7 @@ export function ToolsStrengthStandardsPage() {
                             // CRITICAL: Must meet minimum weight threshold to avoid garbage data
                             if (w >= minWeight && r > 0) {
                                 // 1. Calculate eRM (Best Limit Strength Potential)
-                                const est = estimate1RM(w, r);
+                                const est = calculateEstimated1RM(w, r);
                                 if (est > maxERM) {
                                     maxERM = est;
                                     bestName = exercise.exerciseName;

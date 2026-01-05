@@ -7,7 +7,7 @@ import { WorkoutAnalyzer } from '../components/workouts/WorkoutAnalyzer.tsx';
 import { WorkoutComparisonView } from '../components/workouts/WorkoutComparisonView.tsx';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { MUSCLE_MAP, BODY_PARTS } from '../data/muscleMap.ts';
-import { calculate1RM } from '../models/strengthTypes.ts';
+import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { StrengthSet } from '../models/strengthTypes.ts';
 
 const SUBCATEGORIES: Record<string, string[]> = {
@@ -234,9 +234,9 @@ export function WorkoutBuilderPage() {
 
             let sessionMax = 0;
             if (Array.isArray(ex.sets)) {
-                sessionMax = ex.sets.reduce((max: number, s: any) => Math.max(max, calculate1RM(s.weight, s.reps)), 0);
+                sessionMax = ex.sets.reduce((max: number, s: any) => Math.max(max, calculateEstimated1RM(s.weight, s.reps)), 0);
             } else {
-                sessionMax = calculate1RM((ex as any).weight || 0, (ex as any).reps || 0);
+                sessionMax = calculateEstimated1RM((ex as any).weight || 0, (ex as any).reps || 0);
             }
 
             if (sessionMax > highestRMFound * 1.01) { // 1% buffer
@@ -270,8 +270,8 @@ export function WorkoutBuilderPage() {
 
         // Detailed model (StrengthWorkout)
         const bestSet = lastEx.sets.reduce((best: StrengthSet, current: StrengthSet) => {
-            const current1RM = calculate1RM(current.weight, current.reps);
-            const best1RM = calculate1RM(best.weight, best.reps);
+            const current1RM = calculateEstimated1RM(current.weight, current.reps);
+            const best1RM = calculateEstimated1RM(best.weight, best.reps);
             return current1RM > best1RM ? current : best;
         }, lastEx.sets[0]);
 
