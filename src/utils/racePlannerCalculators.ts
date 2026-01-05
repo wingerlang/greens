@@ -1,7 +1,7 @@
 
 /**
  * Race Planner Calculators
- * Logic for Glycogen Modeling, Weather Adjustments, and Pacing.
+ * Logic for Glycogen Modeling, Weather Adjustments, Hydration, Caffeine, and Pacing.
  */
 
 // --- Types ---
@@ -17,7 +17,7 @@ export interface RunnerProfile {
     weightKg: number;
     maxHr: number;
     restingHr: number;
-    sweatRateLh: number; // Liters per hour
+    sweatRateLh: number; // Liters per hour (can be preset or calculated)
     caffeineToleranceMg: number;
 }
 
@@ -34,6 +34,7 @@ export interface NutritionProduct {
     sodiumMg: number;
     liquidMl: number;
     isDrink: boolean; // if true, counts towards fluid intake
+    kcal?: number; // Optional, derived from carbsG if not set
 }
 
 export interface IntakeEvent {
@@ -47,6 +48,181 @@ export interface PacingStrategy {
     type: 'stable' | 'negative_split' | 'positive_split' | 'variable';
     description: string;
 }
+
+// --- NEW: Hydration & Caffeine Types ---
+
+export interface HydrationState {
+    timeMinutes: number;
+    distanceKm: number;
+    fluidLossL: number;        // Cumulative sweat loss
+    fluidIntakeL: number;      // Cumulative fluid intake
+    fluidDeficitL: number;     // Current deficit (loss - intake)
+    bodyWeightKg: number;      // Current weight (initial - deficit*0.9kg/L estimate)
+}
+
+export interface CaffeineState {
+    timeMinutes: number;
+    caffeineMgInSystem: number;  // With half-life decay
+    lastIntakeMinutes: number;   // Time since last caffeine
+}
+
+export interface EnergyBreakdown {
+    totalKcalBurned: number;
+    carbsKcal: number;
+    fatKcal: number;
+    carbsG: number;
+    fatG: number;
+    carbsIntakeG: number;
+    netCarbBalance: number; // intake - burned
+}
+
+// --- Sweat Rate Presets ---
+
+export const SWEAT_RATE_PRESETS = [
+    { id: 'low', label: 'Låg', value: 0.5, desc: 'Sval dag, lugnt tempo' },
+    { id: 'normal', label: 'Normal', value: 0.8, desc: 'Standardförhållanden' },
+    { id: 'high', label: 'Hög', value: 1.2, desc: 'Varmt eller intensivt' },
+    { id: 'extreme', label: 'Extrem', value: 1.5, desc: 'Mycket varmt väder' }
+] as const;
+
+// --- Caffeine Presets ---
+
+export const CAFFEINE_PRESETS = [
+    { id: 'none', label: 'Ingen', preRaceMg: 0, duringRaceMg: 0, desc: 'Inget koffein' },
+    { id: 'cautious', label: 'Försiktig', preRaceMg: 100, duringRaceMg: 50, desc: '~1.5 mg/kg, lägre dos' },
+    { id: 'moderate', label: 'Van', preRaceMg: 200, duringRaceMg: 100, desc: '~3 mg/kg, standarddos' },
+    { id: 'aggressive', label: 'Erfaren', preRaceMg: 300, duringRaceMg: 150, desc: '~4-5 mg/kg, hög dos' }
+] as const;
+
+// --- Carb Target Presets ---
+
+export const CARB_TARGET_PRESETS = [
+    { id: 'low', label: '40 g/h', value: 40, desc: 'Nybörjare, kort lopp' },
+    { id: 'moderate', label: '60 g/h', value: 60, desc: 'Standardrekommendation' },
+    { id: 'high', label: '90 g/h', value: 90, desc: 'Tränad mage, långt lopp' },
+    { id: 'elite', label: '120 g/h', value: 120, desc: 'Elite, dubbla transportörer' }
+] as const;
+
+// --- Carb Source Presets ---
+
+export const CARB_SOURCE_PRESETS = [
+    { id: 'gel_only', label: 'Endast gel', gelPct: 100, drinkPct: 0 },
+    { id: 'gel_heavy', label: '70% Gel / 30% Dryck', gelPct: 70, drinkPct: 30 },
+    { id: 'balanced', label: '50% / 50%', gelPct: 50, drinkPct: 50 },
+    { id: 'drink_heavy', label: '30% Gel / 70% Dryck', gelPct: 30, drinkPct: 70 },
+    { id: 'drink_only', label: 'Endast dryck', gelPct: 0, drinkPct: 100 }
+] as const;
+
+// --- Sweat Rate Calculation ---
+
+/**
+ * Estimates sweat rate based on temperature, humidity, and exercise intensity.
+ * Based on research: Base ~0.5L/h, increases with heat and intensity.
+ */
+export function calculateSweatRate(tempC: number, humidityPct: number, intensityPct: number = 0.85): number {
+    // Base rate at comfortable conditions (15C, 50% humidity)
+    let baseRate = 0.5;
+
+    // Temperature effect: +0.05 L/h per degree above 15C
+    if (tempC > 15) {
+        baseRate += (tempC - 15) * 0.05;
+    }
+
+    // Humidity effect: Higher humidity reduces evaporation efficiency, body sweats more
+    // +0.002 L/h per percentage point above 50%
+    if (humidityPct > 50) {
+        baseRate += (humidityPct - 50) * 0.002;
+    }
+
+    // Intensity effect: Higher intensity = more heat = more sweat
+    // Scale by intensity (0.5x at 50% intensity, 1.2x at 100%)
+    const intensityFactor = 0.5 + (intensityPct * 0.7);
+    baseRate *= intensityFactor;
+
+    // Cap at reasonable bounds
+    return Math.max(0.3, Math.min(2.5, baseRate));
+}
+
+/**
+ * Suggests a sweat rate preset based on conditions.
+ */
+export function suggestSweatPreset(tempC: number, humidityPct: number): string {
+    const estimated = calculateSweatRate(tempC, humidityPct);
+    if (estimated <= 0.6) return 'low';
+    if (estimated <= 1.0) return 'normal';
+    if (estimated <= 1.4) return 'high';
+    return 'extreme';
+}
+
+// --- Caffeine Simulation ---
+
+const CAFFEINE_HALF_LIFE_HOURS = 5;
+
+/**
+ * Calculates remaining caffeine in system after time elapsed.
+ * Uses exponential decay with ~5h half-life.
+ */
+export function calculateCaffeineRemaining(initialMg: number, elapsedMinutes: number): number {
+    const elapsedHours = elapsedMinutes / 60;
+    // Half-life formula: remaining = initial * (0.5)^(t/halfLife)
+    const remaining = initialMg * Math.pow(0.5, elapsedHours / CAFFEINE_HALF_LIFE_HOURS);
+    return Math.round(remaining * 10) / 10;
+}
+
+/**
+ * Simulates caffeine levels throughout a race.
+ */
+export function simulateCaffeine(
+    preRaceMg: number,
+    preRaceMinutesBefore: number,
+    intakeEvents: IntakeEvent[],
+    totalRaceMinutes: number
+): CaffeineState[] {
+    const timeline: CaffeineState[] = [];
+    const stepMinutes = 5;
+
+    // Start with pre-race caffeine already partially absorbed
+    let currentCaffeine = calculateCaffeineRemaining(preRaceMg, preRaceMinutesBefore);
+    let lastIntake = -preRaceMinutesBefore;
+
+    const caffeineEvents = intakeEvents
+        .filter(e => e.product?.caffeineMg && e.product.caffeineMg > 0)
+        .map(e => ({
+            timeMinutes: 0, // Will be calculated from distance
+            mg: (e.product?.caffeineMg || 0) * e.amount
+        }));
+
+    for (let t = 0; t <= totalRaceMinutes; t += stepMinutes) {
+        // Apply decay
+        if (t > 0) {
+            currentCaffeine = calculateCaffeineRemaining(currentCaffeine, stepMinutes);
+        }
+
+        // Add any intake at this time
+        // Note: We'd need pace info to convert km to time - for now assume linear
+        // This will be integrated properly in the main simulation
+
+        timeline.push({
+            timeMinutes: t,
+            caffeineMgInSystem: Math.round(currentCaffeine),
+            lastIntakeMinutes: t - lastIntake
+        });
+    }
+
+    return timeline;
+}
+
+// --- Energy/Calorie Calculations ---
+
+/**
+ * Calculates total kcal from a nutrition product.
+ */
+export function getProductKcal(product: NutritionProduct): number {
+    if (product.kcal) return product.kcal;
+    // Estimate: 4 kcal per gram of carbs
+    return product.carbsG * 4;
+}
+
 
 // --- Weather Adjustment ---
 
@@ -208,7 +384,7 @@ export function simulateRace(
         // Check if we passed any events in this step
         let intakeCarbs = 0;
         // Simple approximation: if we passed the event distance in this step
-        while(eventIndex < sortedEvents.length && sortedEvents[eventIndex].distanceKm <= currentDist) {
+        while (eventIndex < sortedEvents.length && sortedEvents[eventIndex].distanceKm <= currentDist) {
             const evt = sortedEvents[eventIndex];
             if (evt.product) {
                 intakeCarbs += evt.product.carbsG * evt.amount;
@@ -254,7 +430,7 @@ export function simulateRace(
     return {
         timeline,
         crashTime,
-        finishTime: timeline[timeline.length-1].timeSeconds
+        finishTime: timeline[timeline.length - 1].timeSeconds
     };
 }
 
@@ -293,7 +469,7 @@ export function generateSplits(
         }
 
         // Adjust for last partial km
-        const dist = (k > distanceKm) ? (distanceKm - (k-1)) : 1;
+        const dist = (k > distanceKm) ? (distanceKm - (k - 1)) : 1;
         const time = splitPace * dist;
 
         cumulative += time;
@@ -324,12 +500,12 @@ export function calculateDropbagLogistics(
     // Sort Kms including 0 (Start) and Finish (implicit, but we care about segments)
     // Locations: "Start", "Dropbag KM X", "Dropbag KM Y"...
 
-    const locations = [0, ...dropbagKms].sort((a,b) => a-b);
+    const locations = [0, ...dropbagKms].sort((a, b) => a - b);
     const logistics = [];
 
     for (let i = 0; i < locations.length; i++) {
         const startKm = locations[i];
-        const endKm = locations[i+1] || 9999; // 9999 represents finish/infinity
+        const endKm = locations[i + 1] || 9999; // 9999 represents finish/infinity
 
         // Filter events in this segment
         // Need to carry items for events occurring: startKm < event <= endKm
@@ -356,3 +532,308 @@ export function calculateDropbagLogistics(
 
     return logistics;
 }
+
+// --- NEW: Auto-Generate Intake Events ---
+
+/**
+ * Default gel and drink products for auto-generation.
+ */
+const DEFAULT_GEL: NutritionProduct = {
+    name: "Gel (25g)",
+    carbsG: 25,
+    caffeineMg: 0,
+    sodiumMg: 50,
+    liquidMl: 0,
+    isDrink: false
+};
+
+const DEFAULT_CAFFEINATED_GEL: NutritionProduct = {
+    name: "Gel Koffein (25g)",
+    carbsG: 25,
+    caffeineMg: 75,
+    sodiumMg: 50,
+    liquidMl: 0,
+    isDrink: false
+};
+
+const DEFAULT_DRINK: NutritionProduct = {
+    name: "Sportdryck (40g/500ml)",
+    carbsG: 40,
+    caffeineMg: 0,
+    sodiumMg: 200,
+    liquidMl: 500,
+    isDrink: true
+};
+
+export interface GenerateIntakeOptions {
+    distanceKm: number;
+    targetTimeMinutes: number;
+    carbsPerHour: number;
+    gelPercent: number; // 0-100
+    drinkPercent: number; // 0-100 (should = 100 - gelPercent)
+    includeCaffeine: boolean;
+    caffeineInLastThird: boolean; // Only add caffeine in last portion of race
+    customGel?: NutritionProduct;
+    customDrink?: NutritionProduct;
+}
+
+/**
+ * Generates evenly distributed intake events based on carb target.
+ * Returns both intake events and a summary.
+ */
+export function generateIntakeEvents(options: GenerateIntakeOptions): {
+    events: IntakeEvent[],
+    summary: {
+        totalCarbsG: number,
+        totalLiquidMl: number,
+        totalCaffeineMg: number,
+        intakeCount: number,
+        intervalMinutes: number
+    }
+} {
+    const {
+        distanceKm,
+        targetTimeMinutes,
+        carbsPerHour,
+        gelPercent,
+        drinkPercent,
+        includeCaffeine,
+        caffeineInLastThird,
+        customGel,
+        customDrink
+    } = options;
+
+    const gel = customGel || DEFAULT_GEL;
+    const cafGel = DEFAULT_CAFFEINATED_GEL;
+    const drink = customDrink || DEFAULT_DRINK;
+
+    const events: IntakeEvent[] = [];
+
+    // Calculate total carbs needed
+    const totalHours = targetTimeMinutes / 60;
+    const totalCarbsNeeded = carbsPerHour * totalHours;
+
+    // Split between gel and drink
+    const gelCarbs = totalCarbsNeeded * (gelPercent / 100);
+    const drinkCarbs = totalCarbsNeeded * (drinkPercent / 100);
+
+    // Calculate number of each
+    const gelCount = gel.carbsG > 0 ? Math.round(gelCarbs / gel.carbsG) : 0;
+    const drinkCount = drink.carbsG > 0 ? Math.round(drinkCarbs / drink.carbsG) : 0;
+
+    const totalIntakes = gelCount + drinkCount;
+    if (totalIntakes === 0) {
+        return {
+            events: [],
+            summary: {
+                totalCarbsG: 0,
+                totalLiquidMl: 0,
+                totalCaffeineMg: 0,
+                intakeCount: 0,
+                intervalMinutes: 0
+            }
+        };
+    }
+
+    // Distribute evenly across race distance
+    // Start after first km, end before last km
+    const startKm = 5; // First intake at 5km
+    const endKm = distanceKm - 2; // Last intake 2km before finish
+    const intakeRange = endKm - startKm;
+    const intervalKm = intakeRange / (totalIntakes - 1 || 1);
+
+    // Alternate or interleave gel and drink
+    // Strategy: Distribute both types evenly, interleaving
+    let gelIndex = 0;
+    let drinkIndex = 0;
+    const lastThirdStart = distanceKm * 0.67;
+
+    for (let i = 0; i < totalIntakes; i++) {
+        const km = Math.round((startKm + i * intervalKm) * 10) / 10;
+
+        // Decide if this is gel or drink
+        // Simple round-robin, weighted by count
+        const useGel = gelCount > 0 && (drinkCount === 0 || (gelIndex / gelCount) <= (drinkIndex / (drinkCount || 1)));
+
+        if (useGel && gelIndex < gelCount) {
+            // Determine if caffeinated
+            const useCafGel = includeCaffeine && (!caffeineInLastThird || km >= lastThirdStart);
+
+            events.push({
+                distanceKm: km,
+                type: 'gel',
+                amount: 1,
+                product: useCafGel ? cafGel : gel
+            });
+            gelIndex++;
+        } else if (drinkIndex < drinkCount) {
+            events.push({
+                distanceKm: km,
+                type: 'drink',
+                amount: 1,
+                product: drink
+            });
+            drinkIndex++;
+        }
+    }
+
+    // Calculate summary
+    const totalCarbsG = events.reduce((sum, e) => sum + (e.product?.carbsG || 0) * e.amount, 0);
+    const totalLiquidMl = events.reduce((sum, e) => sum + (e.product?.liquidMl || 0) * e.amount, 0);
+    const totalCaffeineMg = events.reduce((sum, e) => sum + (e.product?.caffeineMg || 0) * e.amount, 0);
+    const intervalMinutes = totalIntakes > 1 ? targetTimeMinutes / (totalIntakes - 1) : 0;
+
+    return {
+        events,
+        summary: {
+            totalCarbsG,
+            totalLiquidMl,
+            totalCaffeineMg,
+            intakeCount: events.length,
+            intervalMinutes: Math.round(intervalMinutes)
+        }
+    };
+}
+
+/**
+ * Suggests carb source distribution based on weather.
+ * Warmer = more drinks recommended.
+ */
+export function suggestCarbSourceDistribution(tempC: number): { gelPct: number, drinkPct: number, reason: string } {
+    if (tempC >= 25) {
+        return { gelPct: 30, drinkPct: 70, reason: 'Varmt väder – prioritera vätskerik energi' };
+    }
+    if (tempC >= 20) {
+        return { gelPct: 50, drinkPct: 50, reason: 'Uppvärmt – balanserad mix rekommenderas' };
+    }
+    if (tempC >= 10) {
+        return { gelPct: 70, drinkPct: 30, reason: 'Behagligt – gel-fokuserat fungerar bra' };
+    }
+    return { gelPct: 80, drinkPct: 20, reason: 'Kallt väder – minimal dryck krävs' };
+}
+
+// --- Hydration Summary ---
+
+export interface HydrationSummary {
+    totalSweatLossL: number;
+    totalFluidIntakeL: number;
+    netDeficitL: number;
+    estimatedWeightLossKg: number;
+    dehydrationPercent: number; // % of body weight
+    hydrationStatus: 'good' | 'warning' | 'critical';
+}
+
+/**
+ * Calculates hydration summary for the race.
+ */
+export function calculateHydrationSummary(
+    runnerWeightKg: number,
+    sweatRateLh: number,
+    raceTimeMinutes: number,
+    intakeEvents: IntakeEvent[]
+): HydrationSummary {
+    const raceHours = raceTimeMinutes / 60;
+    const totalSweatLossL = sweatRateLh * raceHours;
+
+    // Calculate fluid intake from drink events
+    const totalFluidIntakeL = intakeEvents.reduce((sum, e) => {
+        if (e.product?.isDrink && e.product.liquidMl) {
+            return sum + (e.product.liquidMl * e.amount) / 1000;
+        }
+        return sum;
+    }, 0);
+
+    const netDeficitL = totalSweatLossL - totalFluidIntakeL;
+
+    // Weight loss: ~1kg per liter of sweat (minus some from glycogen depletion)
+    // Glycogen is ~4g water per g glycogen, so burning 500g glycogen releases ~2kg water
+    // For simplicity: weight loss ≈ deficit * 0.9 (some water released from metabolism)
+    const estimatedWeightLossKg = netDeficitL * 0.9;
+
+    const dehydrationPercent = (netDeficitL / runnerWeightKg) * 100;
+
+    let hydrationStatus: 'good' | 'warning' | 'critical' = 'good';
+    if (dehydrationPercent >= 4) {
+        hydrationStatus = 'critical';
+    } else if (dehydrationPercent >= 2) {
+        hydrationStatus = 'warning';
+    }
+
+    return {
+        totalSweatLossL: Math.round(totalSweatLossL * 10) / 10,
+        totalFluidIntakeL: Math.round(totalFluidIntakeL * 10) / 10,
+        netDeficitL: Math.round(netDeficitL * 10) / 10,
+        estimatedWeightLossKg: Math.round(estimatedWeightLossKg * 10) / 10,
+        dehydrationPercent: Math.round(dehydrationPercent * 10) / 10,
+        hydrationStatus
+    };
+}
+
+// --- Energy Breakdown ---
+
+/**
+ * Calculates detailed energy breakdown for the race.
+ */
+export function calculateEnergyBreakdown(
+    runnerWeightKg: number,
+    distanceKm: number,
+    targetTimeMinutes: number,
+    intakeEvents: IntakeEvent[]
+): EnergyBreakdown {
+    const speedKph = distanceKm / (targetTimeMinutes / 60);
+    const raceHours = targetTimeMinutes / 60;
+
+    // Total kcal burned (1 kcal/kg/km approximation)
+    const totalKcalBurned = runnerWeightKg * distanceKm;
+
+    // Intensity estimate
+    let intensity = 0.85;
+    if (distanceKm < 10) intensity = 0.95;
+    else if (distanceKm < 22) intensity = 0.90;
+    else if (distanceKm < 45) intensity = 0.85;
+    else intensity = 0.75;
+
+    const carbRatio = getCarbRatio(intensity);
+    const carbsKcal = totalKcalBurned * carbRatio;
+    const fatKcal = totalKcalBurned * (1 - carbRatio);
+
+    const carbsG = carbsKcal / 4; // 4 kcal per gram carbs
+    const fatG = fatKcal / 9; // 9 kcal per gram fat
+
+    const carbsIntakeG = intakeEvents.reduce((sum, e) => sum + (e.product?.carbsG || 0) * e.amount, 0);
+    const netCarbBalance = carbsIntakeG - carbsG;
+
+    return {
+        totalKcalBurned: Math.round(totalKcalBurned),
+        carbsKcal: Math.round(carbsKcal),
+        fatKcal: Math.round(fatKcal),
+        carbsG: Math.round(carbsG),
+        fatG: Math.round(fatG),
+        carbsIntakeG: Math.round(carbsIntakeG),
+        netCarbBalance: Math.round(netCarbBalance)
+    };
+}
+
+// --- Tempo Presets ---
+
+export const TEMPO_PRESETS = [
+    // Marathon
+    { id: 'mara_elite', label: 'Mara Elite (Sub 2:30)', paceMinKm: '3:33', distanceKm: 42.2, targetSeconds: 9000 },
+    { id: 'mara_sub3', label: 'Mara Sub 3:00', paceMinKm: '4:16', distanceKm: 42.2, targetSeconds: 10800 },
+    { id: 'mara_sub330', label: 'Mara Sub 3:30', paceMinKm: '4:58', distanceKm: 42.2, targetSeconds: 12600 },
+    { id: 'mara_sub4', label: 'Mara Sub 4:00', paceMinKm: '5:41', distanceKm: 42.2, targetSeconds: 14400 },
+    { id: 'mara_sub430', label: 'Mara Sub 4:30', paceMinKm: '6:23', distanceKm: 42.2, targetSeconds: 16200 },
+    { id: 'mara_sub5', label: 'Mara Sub 5:00', paceMinKm: '7:06', distanceKm: 42.2, targetSeconds: 18000 },
+    // Half Marathon
+    { id: 'half_sub130', label: 'Halv Sub 1:30', paceMinKm: '4:16', distanceKm: 21.1, targetSeconds: 5400 },
+    { id: 'half_sub145', label: 'Halv Sub 1:45', paceMinKm: '4:58', distanceKm: 21.1, targetSeconds: 6300 },
+    { id: 'half_sub2', label: 'Halv Sub 2:00', paceMinKm: '5:41', distanceKm: 21.1, targetSeconds: 7200 },
+    // 10K  
+    { id: '10k_sub40', label: '10K Sub 40 min', paceMinKm: '4:00', distanceKm: 10, targetSeconds: 2400 },
+    { id: '10k_sub50', label: '10K Sub 50 min', paceMinKm: '5:00', distanceKm: 10, targetSeconds: 3000 },
+    { id: '10k_sub60', label: '10K Sub 60 min', paceMinKm: '6:00', distanceKm: 10, targetSeconds: 3600 },
+    // Ultra
+    { id: 'ultra45_sub4', label: 'Ultravasan 45 Sub 4h', paceMinKm: '5:20', distanceKm: 45, targetSeconds: 14400 },
+    { id: 'ultra90_sub10', label: 'Ultravasan 90 Sub 10h', paceMinKm: '6:40', distanceKm: 90, targetSeconds: 36000 }
+] as const;
+

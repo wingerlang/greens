@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     RaceProfile,
     RunnerProfile,
@@ -8,10 +8,23 @@ import {
     calculateWeatherPenaltyFactor,
     generateSplits,
     calculateDropbagLogistics,
-    NutritionProduct
+    NutritionProduct,
+    // NEW imports
+    SWEAT_RATE_PRESETS,
+    CAFFEINE_PRESETS,
+    CARB_TARGET_PRESETS,
+    CARB_SOURCE_PRESETS,
+    TEMPO_PRESETS,
+    suggestSweatPreset,
+    suggestCarbSourceDistribution,
+    generateIntakeEvents,
+    calculateHydrationSummary,
+    calculateEnergyBreakdown,
+    HydrationSummary,
+    EnergyBreakdown
 } from '../../utils/racePlannerCalculators';
 import { useAuth } from '../../context/AuthContext';
-import { ArrowLeft, Play, Save, Trash2, Battery, Droplet, Thermometer, ShoppingBag, Clock, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Play, Save, Trash2, Battery, Droplet, Thermometer, ShoppingBag, Clock, AlertTriangle, ChevronDown, ChevronUp, Coffee, Zap, Settings2, Sparkles } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Link } from 'react-router-dom';
 
@@ -41,12 +54,13 @@ const DISTANCE_PRESETS = [
 
 // --- Sub-components ---
 
-function ConfigSection({ title, icon, children }: { title: string, icon: any, children: React.ReactNode }) {
+function ConfigSection({ title, icon, children, badge }: { title: string, icon: any, children: React.ReactNode, badge?: string }) {
     return (
         <div className="bg-slate-900 border border-white/5 rounded-2xl p-6 space-y-4">
             <div className="flex items-center gap-2 text-emerald-400 border-b border-white/5 pb-2 mb-2">
                 {icon}
                 <h3 className="font-bold uppercase tracking-wider text-sm">{title}</h3>
+                {badge && <span className="ml-auto text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300">{badge}</span>}
             </div>
             {children}
         </div>
@@ -62,6 +76,22 @@ function InputGroup({ label, suffix, children }: { label: string, suffix?: strin
                 {suffix && <span className="absolute right-3 top-2.5 text-slate-500 text-sm">{suffix}</span>}
             </div>
         </div>
+    );
+}
+
+function PresetButton({ label, active, onClick, desc }: { label: string, active: boolean, onClick: () => void, desc?: string }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={`px-3 py-2 rounded-lg text-sm font-bold transition-all ${active
+                ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+            title={desc}
+        >
+            {label}
+        </button>
     );
 }
 
@@ -84,7 +114,7 @@ export function ToolsRacePlannerPage() {
         weightKg: 75,
         maxHr: 190,
         restingHr: 50,
-        sweatRateLh: 1.0,
+        sweatRateLh: 0.8, // Default to "normal"
         caffeineToleranceMg: 300
     });
 
@@ -103,6 +133,13 @@ export function ToolsRacePlannerPage() {
     const [dropbagKms, setDropbagKms] = useState<number[]>([]);
     const [intakeEvents, setIntakeEvents] = useState<IntakeEvent[]>([]);
 
+    // NEW: Nutrition Mode & Settings
+    const [nutritionMode, setNutritionMode] = useState<'simple' | 'advanced'>('simple');
+    const [carbsPerHour, setCarbsPerHour] = useState(60);
+    const [carbSourcePreset, setCarbSourcePreset] = useState('balanced');
+    const [caffeinePreset, setCaffeinePreset] = useState('moderate');
+    const [includePreRaceCaffeine, setIncludePreRaceCaffeine] = useState(true);
+
     // UI State
     const [activeTab, setActiveTab] = useState<'config' | 'plan' | 'logistics'>('config');
     const [savedPlans, setSavedPlans] = useState<any[]>([]);
@@ -115,6 +152,10 @@ export function ToolsRacePlannerPage() {
     const [logistics, setLogistics] = useState<any[]>([]);
     const [weatherPenalty, setWeatherPenalty] = useState(1.0);
     const [warnings, setWarnings] = useState<string[]>([]);
+
+    // NEW: Calculated summaries
+    const [hydrationSummary, setHydrationSummary] = useState<HydrationSummary | null>(null);
+    const [energyBreakdown, setEnergyBreakdown] = useState<EnergyBreakdown | null>(null);
 
     // --- Effects ---
 
@@ -202,10 +243,28 @@ export function ToolsRacePlannerPage() {
         const l = calculateDropbagLogistics(intakeEvents, dropbagKms);
         setLogistics(l);
 
-        // 5. Warnings
-        const newWarnings = [];
-        if (penalty > 1.05) newWarnings.push(`Varning: Vädret beräknas sänka din prestation med ${Math.round((penalty-1)*100)}%. Sänk tempot!`);
-        if (res.crashTime !== null) newWarnings.push(`CRASH WARNING: Glykogendepåerna tar slut vid ${Math.floor(res.crashTime/60)} minuter! Öka intaget.`);
+        // 5. NEW: Hydration Summary
+        const hydration = calculateHydrationSummary(
+            runnerProfile.weightKg,
+            runnerProfile.sweatRateLh,
+            adjustedTargetSeconds / 60,
+            intakeEvents
+        );
+        setHydrationSummary(hydration);
+
+        // 6. NEW: Energy Breakdown
+        const energy = calculateEnergyBreakdown(
+            runnerProfile.weightKg,
+            raceProfile.distanceKm,
+            adjustedTargetSeconds / 60,
+            intakeEvents
+        );
+        setEnergyBreakdown(energy);
+
+        // 7. Warnings
+        const newWarnings: string[] = [];
+        if (penalty > 1.05) newWarnings.push(`Varning: Vädret beräknas sänka din prestation med ${Math.round((penalty - 1) * 100)}%. Sänk tempot!`);
+        if (res.crashTime !== null) newWarnings.push(`CRASH WARNING: Glykogendepåerna tar slut vid ${Math.floor(res.crashTime / 60)} minuter! Öka intaget.`);
 
         // Check hourly carbs
         const totalCarbs = intakeEvents.reduce((acc, e) => acc + (e.product?.carbsG || 0) * e.amount, 0);
@@ -214,25 +273,63 @@ export function ToolsRacePlannerPage() {
         if (gPerH > 90) newWarnings.push(`Högt kolhydratsintag (${Math.round(gPerH)}g/h). Risk för magproblem om du inte tränat på det.`);
         if (gPerH < 30 && raceProfile.distanceKm > 21) newWarnings.push(`Lågt kolhydratsintag (${Math.round(gPerH)}g/h). Rekommenderas 60-90g/h för ultra.`);
 
+        // Hydration warning
+        if (hydration.hydrationStatus === 'critical') {
+            newWarnings.push(`⚠️ Kritisk dehydrering (${hydration.dehydrationPercent}%)! Öka vätskeintaget.`);
+        } else if (hydration.hydrationStatus === 'warning') {
+            newWarnings.push(`Vätskebalans: ${hydration.dehydrationPercent}% kroppsvikt förlust. Överväg mer dryck.`);
+        }
+
         setWarnings(newWarnings);
     };
 
+    // --- Suggested values based on conditions ---
+    const suggestedSweatPresetId = useMemo(() =>
+        suggestSweatPreset(environment.temperatureC, environment.humidityPercent),
+        [environment.temperatureC, environment.humidityPercent]
+    );
+
+    const suggestedCarbSource = useMemo(() =>
+        suggestCarbSourceDistribution(environment.temperatureC),
+        [environment.temperatureC]
+    );
+
     // --- Helpers ---
 
+    const handleGenerateSimpleIntake = () => {
+        const carbSource = CARB_SOURCE_PRESETS.find(p => p.id === carbSourcePreset) || CARB_SOURCE_PRESETS[2];
+        const caffeinePresetData = CAFFEINE_PRESETS.find(p => p.id === caffeinePreset);
+
+        const result = generateIntakeEvents({
+            distanceKm: raceProfile.distanceKm,
+            targetTimeMinutes: raceProfile.targetTimeSeconds / 60,
+            carbsPerHour,
+            gelPercent: carbSource.gelPct,
+            drinkPercent: carbSource.drinkPct,
+            includeCaffeine: (caffeinePresetData?.duringRaceMg || 0) > 0,
+            caffeineInLastThird: true
+        });
+
+        setIntakeEvents(result.events);
+    };
+
     const handleAddIntake = () => {
-        // Quick add helper
-        // Default: One Gel every 30 mins (approx every 5km depending on pace)
-        const count = Math.floor(raceProfile.distanceKm / 5);
-        const newEvents: IntakeEvent[] = [];
-        for(let i=1; i<=count; i++) {
-            newEvents.push({
-                distanceKm: i * 5,
-                type: 'gel',
-                amount: 1,
-                product: PRESET_PRODUCTS[0] // Default Maurten 100
-            });
+        if (nutritionMode === 'simple') {
+            handleGenerateSimpleIntake();
+        } else {
+            // Legacy: One Gel every 5km
+            const count = Math.floor(raceProfile.distanceKm / 5);
+            const newEvents: IntakeEvent[] = [];
+            for (let i = 1; i <= count; i++) {
+                newEvents.push({
+                    distanceKm: i * 5,
+                    type: 'gel',
+                    amount: 1,
+                    product: PRESET_PRODUCTS[0] // Default Maurten 100
+                });
+            }
+            setIntakeEvents(newEvents);
         }
-        setIntakeEvents(newEvents);
     };
 
     const formatTime = (secs: number) => {
@@ -283,11 +380,10 @@ export function ToolsRacePlannerPage() {
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`pb-3 border-b-2 transition-colors whitespace-nowrap ${
-                                activeTab === tab.id
+                            className={`pb-3 border-b-2 transition-colors whitespace-nowrap ${activeTab === tab.id
                                 ? 'border-emerald-500 text-emerald-400 font-bold'
                                 : 'border-transparent text-slate-400 hover:text-white'
-                            }`}
+                                }`}
                         >
                             {tab.label}
                         </button>
@@ -319,7 +415,7 @@ export function ToolsRacePlannerPage() {
                                 <select
                                     className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white focus:ring-2 focus:ring-emerald-500 outline-none"
                                     value={raceProfile.distanceKm}
-                                    onChange={e => setRaceProfile({...raceProfile, distanceKm: parseFloat(e.target.value)})}
+                                    onChange={e => setRaceProfile({ ...raceProfile, distanceKm: parseFloat(e.target.value) })}
                                 >
                                     {DISTANCE_PRESETS.map(p => (
                                         <option key={p.val} value={p.val}>{p.label}</option>
@@ -331,7 +427,7 @@ export function ToolsRacePlannerPage() {
                                         type="number"
                                         className="mt-2 w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
                                         placeholder="Ange distans..."
-                                        onChange={e => setRaceProfile({...raceProfile, distanceKm: parseFloat(e.target.value)})}
+                                        onChange={e => setRaceProfile({ ...raceProfile, distanceKm: parseFloat(e.target.value) })}
                                     />
                                 )}
                             </InputGroup>
@@ -349,9 +445,9 @@ export function ToolsRacePlannerPage() {
                                         const parts = val.split(':').map(Number);
                                         let secs = 0;
                                         if (parts.length === 3) {
-                                            secs = parts[0]*3600 + parts[1]*60 + parts[2];
+                                            secs = parts[0] * 3600 + parts[1] * 60 + parts[2];
                                         } else if (parts.length === 2) {
-                                            secs = parts[0]*3600 + parts[1]*60;
+                                            secs = parts[0] * 3600 + parts[1] * 60;
                                         } else if (parts.length === 1) {
                                             // Assume minutes if < 10, else seconds? Let's assume hours if small number?
                                             // Safer: Assume minutes.
@@ -359,7 +455,7 @@ export function ToolsRacePlannerPage() {
                                         }
 
                                         if (secs > 0) {
-                                            setRaceProfile({...raceProfile, targetTimeSeconds: secs});
+                                            setRaceProfile({ ...raceProfile, targetTimeSeconds: secs });
                                         }
                                     }}
                                 />
@@ -370,7 +466,7 @@ export function ToolsRacePlannerPage() {
                                     type="time"
                                     className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
                                     value={raceProfile.startTime}
-                                    onChange={e => setRaceProfile({...raceProfile, startTime: e.target.value})}
+                                    onChange={e => setRaceProfile({ ...raceProfile, startTime: e.target.value })}
                                 />
                             </InputGroup>
                         </ConfigSection>
@@ -383,27 +479,32 @@ export function ToolsRacePlannerPage() {
                                         type="number"
                                         className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
                                         value={runnerProfile.weightKg}
-                                        onChange={e => setRunnerProfile({...runnerProfile, weightKg: parseFloat(e.target.value)})}
-                                    />
-                                </InputGroup>
-                                <InputGroup label="Svett (L/h)" suffix="L">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
-                                        value={runnerProfile.sweatRateLh}
-                                        onChange={e => setRunnerProfile({...runnerProfile, sweatRateLh: parseFloat(e.target.value)})}
+                                        onChange={e => setRunnerProfile({ ...runnerProfile, weightKg: parseFloat(e.target.value) })}
                                     />
                                 </InputGroup>
                             </div>
-                            <InputGroup label="Maxpuls">
-                                <input
-                                    type="number"
-                                    className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
-                                    value={runnerProfile.maxHr}
-                                    onChange={e => setRunnerProfile({...runnerProfile, maxHr: parseFloat(e.target.value)})}
-                                />
-                            </InputGroup>
+
+                            {/* Sweat Rate Presets */}
+                            <div className="space-y-2">
+                                <label className="text-xs text-slate-400 uppercase font-bold flex items-center gap-2">
+                                    Svettintensitet
+                                    {suggestedSweatPresetId && (
+                                        <span className="text-[10px] text-emerald-400">(Förslag: {SWEAT_RATE_PRESETS.find(p => p.id === suggestedSweatPresetId)?.label})</span>
+                                    )}
+                                </label>
+                                <div className="flex flex-wrap gap-2">
+                                    {SWEAT_RATE_PRESETS.map(preset => (
+                                        <PresetButton
+                                            key={preset.id}
+                                            label={preset.label}
+                                            active={runnerProfile.sweatRateLh === preset.value}
+                                            onClick={() => setRunnerProfile({ ...runnerProfile, sweatRateLh: preset.value })}
+                                            desc={preset.desc}
+                                        />
+                                    ))}
+                                </div>
+                                <p className="text-[10px] text-slate-500">{runnerProfile.sweatRateLh} L/h</p>
+                            </div>
                         </ConfigSection>
 
                         {/* Environment */}
@@ -414,7 +515,7 @@ export function ToolsRacePlannerPage() {
                                         type="number"
                                         className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
                                         value={environment.temperatureC}
-                                        onChange={e => setEnvironment({...environment, temperatureC: parseFloat(e.target.value)})}
+                                        onChange={e => setEnvironment({ ...environment, temperatureC: parseFloat(e.target.value) })}
                                     />
                                 </InputGroup>
                                 <InputGroup label="Fuktighet" suffix="%">
@@ -422,73 +523,193 @@ export function ToolsRacePlannerPage() {
                                         type="number"
                                         className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
                                         value={environment.humidityPercent}
-                                        onChange={e => setEnvironment({...environment, humidityPercent: parseFloat(e.target.value)})}
+                                        onChange={e => setEnvironment({ ...environment, humidityPercent: parseFloat(e.target.value) })}
                                     />
                                 </InputGroup>
                             </div>
                             {weatherPenalty > 1.0 && (
                                 <div className="text-xs text-amber-400 font-mono mt-2">
-                                    Väderjustering: +{Math.round((weatherPenalty-1)*100)}% tid
+                                    Väderjustering: +{Math.round((weatherPenalty - 1) * 100)}% tid
                                 </div>
                             )}
                         </ConfigSection>
 
-                        {/* Nutrition Quick Add */}
-                        <ConfigSection title="Nutrition" icon={<Droplet size={18} />}>
-                            <button
-                                onClick={handleAddIntake}
-                                className="w-full py-3 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 font-bold transition-all mb-4"
-                            >
-                                Auto-generera Energiplan (1 gel / 5km)
-                            </button>
-
-                            <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                                {intakeEvents.map((evt, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 bg-slate-800 p-2 rounded text-sm">
-                                        <input
-                                            type="number"
-                                            className="w-16 bg-slate-900 border border-white/10 rounded px-2 py-1 text-right"
-                                            value={evt.distanceKm}
-                                            onChange={(e) => {
-                                                const newEvents = [...intakeEvents];
-                                                newEvents[idx].distanceKm = parseFloat(e.target.value);
-                                                setIntakeEvents(newEvents);
-                                            }}
-                                        />
-                                        <span className="text-slate-500 text-xs">km</span>
-                                        <select
-                                            className="flex-1 bg-slate-900 border border-white/10 rounded px-2 py-1 truncate"
-                                            value={evt.product?.name}
-                                            onChange={(e) => {
-                                                const prod = PRESET_PRODUCTS.find(p => p.name === e.target.value);
-                                                const newEvents = [...intakeEvents];
-                                                newEvents[idx].product = prod;
-                                                setIntakeEvents(newEvents);
-                                            }}
-                                        >
-                                            {PRESET_PRODUCTS.map(p => (
-                                                <option key={p.name} value={p.name}>{p.name}</option>
-                                            ))}
-                                        </select>
-                                        <button
-                                            onClick={() => {
-                                                const newEvents = [...intakeEvents];
-                                                newEvents.splice(idx, 1);
-                                                setIntakeEvents(newEvents);
-                                            }}
-                                            className="text-slate-500 hover:text-red-400"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                ))}
+                        {/* Nutrition - NEW WITH SIMPLE/ADVANCED MODES */}
+                        <ConfigSection title="Energi & Nutrition" icon={<Zap size={18} />} badge={nutritionMode === 'simple' ? 'Enkel' : 'Avancerad'}>
+                            {/* Mode Toggle */}
+                            <div className="flex gap-2 mb-4">
                                 <button
-                                    onClick={() => setIntakeEvents([...intakeEvents, { distanceKm: 0, type: 'gel', amount: 1, product: PRESET_PRODUCTS[0] }])}
-                                    className="w-full py-2 border border-dashed border-white/20 rounded text-slate-400 text-xs hover:text-white hover:border-white/40"
+                                    onClick={() => setNutritionMode('simple')}
+                                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${nutritionMode === 'simple' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'
+                                        }`}
                                 >
-                                    + Lägg till intag
+                                    <Sparkles size={14} /> Enkel
+                                </button>
+                                <button
+                                    onClick={() => setNutritionMode('advanced')}
+                                    className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${nutritionMode === 'advanced' ? 'bg-emerald-500 text-white' : 'bg-slate-800 text-slate-400'
+                                        }`}
+                                >
+                                    <Settings2 size={14} /> Avancerad
                                 </button>
                             </div>
+
+                            {nutritionMode === 'simple' ? (
+                                <div className="space-y-6">
+                                    {/* Carbs Per Hour */}
+                                    <div className="space-y-2">
+                                        <label className="text-xs text-slate-400 uppercase font-bold">Kolhydrater per timme</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {CARB_TARGET_PRESETS.map(preset => (
+                                                <PresetButton
+                                                    key={preset.id}
+                                                    label={preset.label}
+                                                    active={carbsPerHour === preset.value}
+                                                    onClick={() => setCarbsPerHour(preset.value)}
+                                                    desc={preset.desc}
+                                                />
+                                            ))}
+                                        </div>
+                                        <div className="flex items-center gap-2 mt-2">
+                                            <input
+                                                type="number"
+                                                className="w-20 bg-slate-800 border border-white/10 rounded-lg px-3 py-1.5 text-white text-sm"
+                                                value={carbsPerHour}
+                                                onChange={e => setCarbsPerHour(parseInt(e.target.value) || 60)}
+                                            />
+                                            <span className="text-xs text-slate-500">g/h (anpassat)</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Carb Source Distribution */}
+                                    <div className="space-y-2">
+                                        <label className="text-xs text-slate-400 uppercase font-bold flex items-center gap-2">
+                                            Energikälla
+                                            <span className="text-[10px] text-emerald-400">({suggestedCarbSource.reason})</span>
+                                        </label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {CARB_SOURCE_PRESETS.map(preset => (
+                                                <PresetButton
+                                                    key={preset.id}
+                                                    label={preset.label}
+                                                    active={carbSourcePreset === preset.id}
+                                                    onClick={() => setCarbSourcePreset(preset.id)}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Caffeine */}
+                                    <div className="space-y-2">
+                                        <label className="text-xs text-slate-400 uppercase font-bold flex items-center gap-2">
+                                            <Coffee size={12} /> Koffein
+                                        </label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {CAFFEINE_PRESETS.map(preset => (
+                                                <PresetButton
+                                                    key={preset.id}
+                                                    label={preset.label}
+                                                    active={caffeinePreset === preset.id}
+                                                    onClick={() => setCaffeinePreset(preset.id)}
+                                                    desc={preset.desc}
+                                                />
+                                            ))}
+                                        </div>
+                                        {caffeinePreset !== 'none' && (
+                                            <p className="text-[10px] text-slate-500">
+                                                {CAFFEINE_PRESETS.find(p => p.id === caffeinePreset)?.preRaceMg}mg före + {CAFFEINE_PRESETS.find(p => p.id === caffeinePreset)?.duringRaceMg}mg under lopp
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    {/* Generate Button */}
+                                    <button
+                                        onClick={handleAddIntake}
+                                        className="w-full py-3 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 font-bold transition-all"
+                                    >
+                                        ✨ Generera Energiplan
+                                    </button>
+
+                                    {/* Summary */}
+                                    {intakeEvents.length > 0 && (
+                                        <div className="bg-slate-800/50 rounded-lg p-4 space-y-2">
+                                            <div className="text-xs font-bold text-slate-300 uppercase">Genererad Plan</div>
+                                            <div className="grid grid-cols-3 gap-2 text-center">
+                                                <div>
+                                                    <div className="text-xl font-black text-emerald-400">{intakeEvents.reduce((s, e) => s + (e.product?.carbsG || 0), 0)}g</div>
+                                                    <div className="text-[10px] text-slate-500">Kolhydrater</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-xl font-black text-blue-400">{intakeEvents.reduce((s, e) => s + (e.product?.liquidMl || 0), 0)}ml</div>
+                                                    <div className="text-[10px] text-slate-500">Vätska</div>
+                                                </div>
+                                                <div>
+                                                    <div className="text-xl font-black text-amber-400">{intakeEvents.length}</div>
+                                                    <div className="text-[10px] text-slate-500">Intag</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                /* Advanced Mode - Original functionality */
+                                <div>
+                                    <button
+                                        onClick={handleAddIntake}
+                                        className="w-full py-3 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 font-bold transition-all mb-4"
+                                    >
+                                        Auto-generera (1 gel / 5km)
+                                    </button>
+
+                                    <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                        {intakeEvents.map((evt, idx) => (
+                                            <div key={idx} className="flex items-center gap-2 bg-slate-800 p-2 rounded text-sm">
+                                                <input
+                                                    type="number"
+                                                    className="w-16 bg-slate-900 border border-white/10 rounded px-2 py-1 text-right"
+                                                    value={evt.distanceKm}
+                                                    onChange={(e) => {
+                                                        const newEvents = [...intakeEvents];
+                                                        newEvents[idx].distanceKm = parseFloat(e.target.value);
+                                                        setIntakeEvents(newEvents);
+                                                    }}
+                                                />
+                                                <span className="text-slate-500 text-xs">km</span>
+                                                <select
+                                                    className="flex-1 bg-slate-900 border border-white/10 rounded px-2 py-1 truncate"
+                                                    value={evt.product?.name}
+                                                    onChange={(e) => {
+                                                        const prod = PRESET_PRODUCTS.find(p => p.name === e.target.value);
+                                                        const newEvents = [...intakeEvents];
+                                                        newEvents[idx].product = prod;
+                                                        setIntakeEvents(newEvents);
+                                                    }}
+                                                >
+                                                    {PRESET_PRODUCTS.map(p => (
+                                                        <option key={p.name} value={p.name}>{p.name}</option>
+                                                    ))}
+                                                </select>
+                                                <button
+                                                    onClick={() => {
+                                                        const newEvents = [...intakeEvents];
+                                                        newEvents.splice(idx, 1);
+                                                        setIntakeEvents(newEvents);
+                                                    }}
+                                                    className="text-slate-500 hover:text-red-400"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                        <button
+                                            onClick={() => setIntakeEvents([...intakeEvents, { distanceKm: 0, type: 'gel', amount: 1, product: PRESET_PRODUCTS[0] }])}
+                                            className="w-full py-2 border border-dashed border-white/20 rounded text-slate-400 text-xs hover:text-white hover:border-white/40"
+                                        >
+                                            + Lägg till intag
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </ConfigSection>
 
                         {/* Dropbags */}
@@ -535,7 +756,7 @@ export function ToolsRacePlannerPage() {
                 {activeTab === 'plan' && simResult && (
                     <div className="space-y-8 animate-fade-in">
 
-                        {/* Summary Cards */}
+                        {/* Summary Cards - Row 1 */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                             <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
                                 <div className="text-slate-400 text-xs font-bold uppercase mb-1">Sluttid (Est)</div>
@@ -545,7 +766,7 @@ export function ToolsRacePlannerPage() {
                             <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
                                 <div className="text-slate-400 text-xs font-bold uppercase mb-1">Crash Point</div>
                                 <div className={`text-2xl font-black ${simResult.crashTime ? 'text-red-500' : 'text-emerald-500'}`}>
-                                    {simResult.crashTime ? `${Math.round(simResult.crashTime/60)} min` : 'Aldrig'}
+                                    {simResult.crashTime ? `${Math.round(simResult.crashTime / 60)} min` : 'Aldrig'}
                                 </div>
                                 <div className="text-xs text-slate-500">Glykogen tar slut</div>
                             </div>
@@ -563,6 +784,67 @@ export function ToolsRacePlannerPage() {
                                 </div>
                                 <div className="text-xs text-slate-500">Tidspåslag</div>
                             </div>
+                        </div>
+
+                        {/* Summary Cards - Row 2: NEW Hydration & Energy */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {/* Hydration Status */}
+                            {hydrationSummary && (
+                                <div className={`bg-slate-900 rounded-xl p-4 border ${hydrationSummary.hydrationStatus === 'critical' ? 'border-red-500/50' :
+                                        hydrationSummary.hydrationStatus === 'warning' ? 'border-amber-500/50' : 'border-white/5'
+                                    }`}>
+                                    <div className="text-slate-400 text-xs font-bold uppercase mb-1 flex items-center gap-1">
+                                        <Droplet size={12} /> Vätskebalans
+                                    </div>
+                                    <div className={`text-2xl font-black ${hydrationSummary.hydrationStatus === 'critical' ? 'text-red-500' :
+                                            hydrationSummary.hydrationStatus === 'warning' ? 'text-amber-400' : 'text-blue-400'
+                                        }`}>
+                                        -{hydrationSummary.netDeficitL}L
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                        {hydrationSummary.dehydrationPercent}% kroppsvikt
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Weight Loss */}
+                            {hydrationSummary && (
+                                <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
+                                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Viktförlust</div>
+                                    <div className="text-2xl font-black text-purple-400">
+                                        -{hydrationSummary.estimatedWeightLossKg}kg
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                        Slutvikt: ~{Math.round((runnerProfile.weightKg - hydrationSummary.estimatedWeightLossKg) * 10) / 10}kg
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Energy Burned */}
+                            {energyBreakdown && (
+                                <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
+                                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Förbrukning</div>
+                                    <div className="text-2xl font-black text-orange-400">
+                                        {energyBreakdown.totalKcalBurned} kcal
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                        Carbs: {energyBreakdown.carbsG}g • Fett: {energyBreakdown.fatG}g
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Carb Balance */}
+                            {energyBreakdown && (
+                                <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
+                                    <div className="text-slate-400 text-xs font-bold uppercase mb-1">Kolhydratsbalans</div>
+                                    <div className={`text-2xl font-black ${energyBreakdown.netCarbBalance >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                        {energyBreakdown.netCarbBalance >= 0 ? '+' : ''}{energyBreakdown.netCarbBalance}g
+                                    </div>
+                                    <div className="text-xs text-slate-500">
+                                        Intag {energyBreakdown.carbsIntakeG}g / Förbruk {energyBreakdown.carbsG}g
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Timeline Chart */}
@@ -702,8 +984,8 @@ export function ToolsRacePlannerPage() {
                                                 <li className="flex items-start gap-3 text-amber-300">
                                                     <div className="mt-1 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
                                                     <div>
-                                                        <strong>Pannlampa krävs!</strong><br/>
-                                                        Du går i mål ca {finishDate.toTimeString().substring(0,5)}, vilket är efter solnedgång ({environment.sunsetTime}).
+                                                        <strong>Pannlampa krävs!</strong><br />
+                                                        Du går i mål ca {finishDate.toTimeString().substring(0, 5)}, vilket är efter solnedgång ({environment.sunsetTime}).
                                                     </div>
                                                 </li>
                                             );
