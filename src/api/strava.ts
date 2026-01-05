@@ -14,10 +14,6 @@ const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
 const STRAVA_API_BASE = 'https://www.strava.com/api/v3';
 
-export function isStravaConfigured(): boolean {
-    return !!STRAVA_CLIENT_ID && !!STRAVA_CLIENT_SECRET;
-}
-
 // ==========================================
 // Types
 // ==========================================
@@ -47,8 +43,6 @@ export interface StravaActivity {
     calories?: number;
     average_speed: number;     // m/s
     max_speed: number;         // m/s
-    average_watts?: number;
-    max_watts?: number;
     has_heartrate: boolean;
     pr_count: number;
     kudos_count: number;
@@ -241,44 +235,6 @@ export async function getStravaActivities(
 }
 
 /**
- * recursively fetches ALL activities (handling pagination)
- */
-export async function getAllStravaActivities(
-    accessToken: string,
-    options: { before?: number; after?: number } = {},
-    onProgress?: (count: number) => void
-): Promise<StravaActivity[]> {
-    let allActivities: StravaActivity[] = [];
-    let page = 1;
-    const PER_PAGE = 200; // Maximize efficiency
-
-    while (true) {
-        const batch = await getStravaActivities(accessToken, {
-            ...options,
-            page,
-            perPage: PER_PAGE
-        });
-
-        if (!batch || batch.length === 0) {
-            break;
-        }
-
-        allActivities = [...allActivities, ...batch];
-        if (onProgress) onProgress(allActivities.length);
-
-        if (batch.length < PER_PAGE) {
-            break; // Reached end of list
-        }
-
-        page++;
-        // Polite delay to avoid hammering API too hard if many pages
-        await new Promise(r => setTimeout(r, 100));
-    }
-
-    return allActivities;
-}
-
-/**
  * Get detailed activity with laps, zones, etc.
  */
 export async function getStravaActivityDetail(activityId: number, accessToken: string): Promise<StravaActivity | null> {
@@ -385,27 +341,6 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
 }
 
 // ...
-// Assuming StravaActivity interface is defined elsewhere and includes these properties:
-// interface StravaActivity {
-//     // ... existing properties
-//     max_speed: number;         // m/s
-//     average_watts?: number;    // watts
-//     max_watts?: number;        // watts
-//     has_heartrate: boolean;
-//     pr_count: number;
-//     kudos_count: number;
-//     achievement_count: number;
-//     // ... other properties
-// }
-
-// Assuming ActivityPerformanceSection interface is defined elsewhere and needs these properties:
-// interface ActivityPerformanceSection {
-//     // ... existing properties
-//     averageWatts?: number;
-//     maxWatts?: number;
-//     averageSpeed?: number; // km/h
-//     // ... other properties
-// }
 
 export function mapStravaToPerformance(activity: StravaActivity): ActivityPerformanceSection {
     return {
@@ -421,10 +356,6 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
         avgHeartRate: activity.average_heartrate,
         maxHeartRate: activity.max_heartrate,
         elevationGain: activity.total_elevation_gain,
-
-        averageWatts: activity.average_watts,
-        maxWatts: activity.max_watts,
-        averageSpeed: activity.average_speed ? activity.average_speed * 3.6 : 0, // m/s to km/h
 
         activityType: mapStravaType(activity.type),
         notes: activity.name,

@@ -8,5 +8,3 @@ greens.db-wal
 *.log
 .DS_Store
 *.mjs
-uploads
-swe.traineddata

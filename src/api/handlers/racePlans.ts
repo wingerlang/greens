@@ -1,5 +1,5 @@
 import { kv } from "../kv.ts";
-import { RaceProfile, RunnerProfile, IntakeEvent, PacingStrategy } from "../../utils/racePlannerCalculators.ts";
+import { RaceProfile, RunnerProfile, IntakeEvent, PacingStrategy, NutritionStrategy } from "../../utils/racePlannerCalculators.ts";
 import { getSession } from "../db/session.ts";
 
 export interface RacePlan {
@@ -20,6 +20,7 @@ export interface RacePlan {
 
     // Strategy
     pacingStrategy: PacingStrategy;
+    nutritionStrategy?: NutritionStrategy; // Optional for backward compatibility
 
     // Logistics
     intakeEvents: IntakeEvent[];

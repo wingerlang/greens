@@ -13,11 +13,14 @@ export interface RaceProfile {
     startTime: string; // HH:MM
 }
 
+export type SweatProfile = 'low' | 'medium' | 'high' | 'custom';
+
 export interface RunnerProfile {
     weightKg: number;
     maxHr: number;
     restingHr: number;
-    sweatRateLh: number; // Liters per hour
+    sweatProfile: SweatProfile;
+    customSweatRateLh?: number;
     caffeineToleranceMg: number;
 }
 
@@ -48,146 +51,138 @@ export interface PacingStrategy {
     description: string;
 }
 
+export interface NutritionStrategy {
+    carbsPerHour: number; // 40, 60, 90, 120
+    drinkRatio: number; // 0.0 to 1.0 (0 = all gel, 1 = all drink)
+    useCaffeine: boolean;
+}
+
+// --- Constants ---
+
+export const SWEAT_RATES: Record<SweatProfile, number> = {
+    low: 0.8,
+    medium: 1.2,
+    high: 1.8,
+    custom: 1.2
+};
+
+export const STANDARD_PRODUCTS = {
+    GEL: { name: "Gel (Standard)", carbsG: 25, caffeineMg: 0, sodiumMg: 20, liquidMl: 0, isDrink: false },
+    GEL_CAF: { name: "Gel (Caffeine)", carbsG: 25, caffeineMg: 100, sodiumMg: 20, liquidMl: 0, isDrink: false },
+    DRINK: { name: "Sport Drink (500ml)", carbsG: 40, caffeineMg: 0, sodiumMg: 50, liquidMl: 500, isDrink: true },
+    WATER: { name: "Water (250ml)", carbsG: 0, caffeineMg: 0, sodiumMg: 0, liquidMl: 250, isDrink: true }
+};
+
 // --- Weather Adjustment ---
 
-/**
- * Calculates a performance penalty based on heat and humidity.
- * Based on research indicating ~1% slowdown per 1°C above ~15°C (wet bulb adjusted).
- * Simplified model:
- * - Base ideal: 10-15°C.
- * - For every degree > 15, add 0.5% to 1.5% time depending on humidity.
- */
 export function calculateWeatherPenaltyFactor(tempC: number, humidity: number): number {
-    if (tempC <= 15) return 1.0; // No penalty
-
+    if (tempC <= 15) return 1.0;
     const excessTemp = tempC - 15;
-    // Humidity factor: 0.5 (low) to 1.5 (high)
-    // If humidity is 50%, factor is 1.0. If 100%, 1.5. If 0%, 0.5.
-    const humidityFactor = 0.5 + (humidity / 100);
-
-    // Percentage loss per degree excess
-    // Commonly cited: 1.5% to 3% slowing for significant heat
-    // Let's use a conservative 0.5% - 1.0% per degree range adjusted by humidity
-    // "Runners slow by 1.5% for every 10F (5.5C) above 60F (15C)" -> ~0.27% per degree C (Generic)
-    // "Elites slow 1 sec/km per degree C above 15" -> ~0.3-0.5%
-    // Our user requirement: "1.5% time per degree over 15" (This is aggressive but requested as heuristic)
-    // We will scale this 1.5% request by humidity.
-    // If 100% humidity: 1.5%. If 50% humidity: 1.0%.
-
-    // Let's stick closer to the User Request but dampen it slightly for low humidity?
-    // User said: "t.ex. +1.5% tid per grad över 15°C"
-
-    const penaltyPerDegree = 0.015 * (0.5 + (humidity / 200)); // 0.5 to 1.0 multiplier
-
-    // Actually, user explicitly asked for 1.5%. Let's prioritize that but allow humidity to make it worse/better.
-    // Let's assume 1.5% is at "standard" humidity (~60%).
-
-    // Revised logic:
-    // Base penalty: 1.0% per degree.
-    // Humidity penalty: Add 0.01% per percentage point of humidity if temp > 20?
-
-    // Let's implement the specific request: 1.5% per degree > 15°C.
-    // We will modulate it slightly by humidity:
-    // Factor = 1 + (Excess * 0.015 * (HumidityCorrection))
-
-    const humidityCorrection = 0.8 + (0.4 * (humidity / 100)); // 0.8 (dry) to 1.2 (wet)
+    const humidityCorrection = 0.8 + (0.4 * (humidity / 100));
     const totalPenaltyPct = excessTemp * 0.015 * humidityCorrection;
-
     return 1 + totalPenaltyPct;
 }
 
-// --- Glycogen Modeling ---
+// --- Logic ---
 
-/**
- * Estimates energy expenditure (kcal/min) based on weight and speed.
- * Formula: ~1 kcal/kg/km.
- */
 export function estimateKcalBurnRate(weightKg: number, speedKph: number): number {
-    // 1 kcal per kg per km
-    // kcal/hour = weight * speed
-    // kcal/min = (weight * speed) / 60
     return (weightKg * speedKph) / 60;
 }
 
-/**
- * Estimates Carbohydrate vs Fat oxidation ratio (RER) based on intensity.
- * Intensity % of VDOT or Max HR.
- * Simplified linear model:
- * 50% Intensity -> 20% Carbs, 80% Fat (RER 0.80 ish)
- * 70% Intensity -> 50% Carbs, 50% Fat
- * 85% Intensity -> 85% Carbs, 15% Fat
- * 100% Intensity -> 100% Carbs (RER 1.0)
- *
- * Returns ratio of energy from carbs (0.0 - 1.0)
- */
 export function getCarbRatio(intensityPct: number): number {
-    // Sigmoidal or Exponential curve is better, but linear-ish segments work
     if (intensityPct < 0.5) return 0.2;
     if (intensityPct >= 1.0) return 1.0;
-
-    // Interpolate between 0.5 (20%) and 1.0 (100%)
-    // Linear fit: y = mx + c
-    // (0.5, 0.2), (1.0, 1.0)
-    // m = 0.8 / 0.5 = 1.6
-    // y - 0.2 = 1.6(x - 0.5) => y = 1.6x - 0.8 + 0.2 => 1.6x - 0.6
-
     const ratio = (1.6 * intensityPct) - 0.6;
     return Math.max(0.1, Math.min(1.0, ratio));
 }
 
-export interface GlycogenState {
+export function getSweatRate(profile: RunnerProfile): number {
+    if (profile.sweatProfile === 'custom' && profile.customSweatRateLh) {
+        return profile.customSweatRateLh;
+    }
+    return SWEAT_RATES[profile.sweatProfile] || 1.2;
+}
+
+export interface SimState {
     timeSeconds: number;
     distanceKm: number;
-    glycogenStoreG: number; // Current store
-    bloodGlucoseG: number; // Available immediate
-    pace: number; // min/km
+    glycogenStoreG: number;
+    fluidDeficitL: number;
+    caffeineMg: number;
+    weightLossKg: number;
+    pace: number;
     isBonking: boolean;
 }
 
 /**
- * Simulates the race and glycogen levels.
+ * Simulates the race including Glycogen, Hydration, Caffeine.
  */
 export function simulateRace(
     profile: RaceProfile,
     runner: RunnerProfile,
     intakeEvents: IntakeEvent[],
     initialGlycogen: number = 500,
-    weatherPenalty: number = 1.0
-): { timeline: GlycogenState[], crashTime: number | null, finishTime: number } {
+    weatherPenalty: number = 1.0,
+    paceAdjustmentFactor: number = 1.0 // User tuning (0.9 = faster, 1.1 = slower)
+): {
+    timeline: SimState[],
+    crashTime: number | null,
+    finishTime: number,
+    totalFluidLossL: number,
+    totalFluidIntakeL: number,
+    finalWeightLossKg: number
+} {
+    const timeStepMinutes = 5;
 
-    const timeStepMinutes = 5; // Simulation resolution
-    const targetPaceMinKm = (profile.targetTimeSeconds / 60) / profile.distanceKm;
-    const adjustedPaceMinKm = targetPaceMinKm * weatherPenalty;
-    const speedKph = 60 / adjustedPaceMinKm;
+    // Effective Pace
+    const basePaceMinKm = (profile.targetTimeSeconds / 60) / profile.distanceKm;
+    const weatherPace = basePaceMinKm * weatherPenalty;
+    const finalPace = weatherPace * paceAdjustmentFactor;
 
-    // Est. Intensity (Very rough)
-    // Assume A-goal is around Threshold or High-Aerobic.
-    // We can guess intensity based on distance.
-    // 5k: 100%, 10k: 95%, 21k: 90%, 42k: 85%, 100k: 70%.
-    let intensity = 0.85;
-    if (profile.distanceKm < 10) intensity = 0.98;
-    else if (profile.distanceKm < 22) intensity = 0.92;
-    else if (profile.distanceKm < 45) intensity = 0.85;
-    else intensity = 0.70; // Ultra
+    const speedKph = 60 / finalPace;
+
+    // Intensity Model
+    // Adjust intensity based on the ratio of Final Pace vs Base Pace (A-Goal)
+    // If running slower (factor > 1), intensity drops.
+    // If factor is 1.1 (10% slower), intensity roughly drops by same ratio?
+    let baseIntensity = 0.85;
+    if (profile.distanceKm < 10) baseIntensity = 0.98;
+    else if (profile.distanceKm < 22) baseIntensity = 0.92;
+    else if (profile.distanceKm < 45) baseIntensity = 0.85;
+    else baseIntensity = 0.70;
+
+    // Adjust intensity: Intensity is inversely proportional to pace
+    const intensity = baseIntensity * (basePaceMinKm / finalPace);
 
     const kcalPerMinute = estimateKcalBurnRate(runner.weightKg, speedKph);
     const carbRatio = getCarbRatio(intensity);
-    const carbBurnPerMinuteG = (kcalPerMinute * carbRatio) / 4; // 4 kcal per gram of carb
+    const carbBurnPerMinuteG = (kcalPerMinute * carbRatio) / 4;
+    const sweatRateLh = getSweatRate(runner);
+    const sweatPerMinuteL = sweatRateLh / 60;
 
     let currentGlycogen = initialGlycogen;
+    let currentFluidDeficit = 0;
+    let currentCaffeine = 0; // Active plasma caffeine
     let currentTime = 0;
     let currentDist = 0;
     let crashTime: number | null = null;
+    let totalFluidIntake = 0;
 
-    const timeline: GlycogenState[] = [];
+    const timeline: SimState[] = [];
 
-    // Add start state
+    // Caffeine Half-Life ~5 hours. Decay constant k.
+    // C(t) = C0 * e^(-kt). Half life t1/2 = ln(2)/k => k = ln(2)/5.
+    const kCaf = Math.log(2) / (5 * 60); // per minute
+
+    // Initial state
     timeline.push({
         timeSeconds: 0,
         distanceKm: 0,
         glycogenStoreG: currentGlycogen,
-        bloodGlucoseG: 5, // Baseline
-        pace: adjustedPaceMinKm,
+        fluidDeficitL: 0,
+        caffeineMg: 0,
+        weightLossKg: 0,
+        pace: finalPace,
         isBonking: false
     });
 
@@ -195,58 +190,69 @@ export function simulateRace(
     let eventIndex = 0;
 
     while (currentDist < profile.distanceKm) {
-        // Step forward
         currentTime += timeStepMinutes;
         const distInc = (speedKph * timeStepMinutes) / 60;
         currentDist += distInc;
 
-        // Burn
-        // Bonk penalty? If glycogen < 0, pace drops drastically (e.g., +20%)
-        let currentBurn = carbBurnPerMinuteG * timeStepMinutes;
+        // Glycogen Burn
+        currentGlycogen -= (carbBurnPerMinuteG * timeStepMinutes);
 
-        // Intake
-        // Check if we passed any events in this step
+        // Fluid Loss
+        const stepSweat = sweatPerMinuteL * timeStepMinutes;
+        currentFluidDeficit += stepSweat;
+
+        // Caffeine Decay
+        currentCaffeine = currentCaffeine * Math.exp(-kCaf * timeStepMinutes);
+
+        // Intake Processing
         let intakeCarbs = 0;
-        // Simple approximation: if we passed the event distance in this step
+        let intakeFluid = 0;
+        let intakeCaffeine = 0;
+
         while(eventIndex < sortedEvents.length && sortedEvents[eventIndex].distanceKm <= currentDist) {
             const evt = sortedEvents[eventIndex];
             if (evt.product) {
                 intakeCarbs += evt.product.carbsG * evt.amount;
-            } else {
-                // Generic fallback if product not linked but amount implies carbs?
-                // Assume amount is grams for generic? No, Type says 'amount' is count.
-                // We'll rely on product being set or handling elsewhere.
-                // For now, assume 0 if no product.
+                intakeFluid += (evt.product.liquidMl || 0) * evt.amount / 1000; // ml to L
+                intakeCaffeine += evt.product.caffeineMg * evt.amount;
             }
             eventIndex++;
         }
 
-        // Absorption Limit (e.g., 90g/h ~ 1.5g/min max)
-        // We add intake to store directly for simplified "Body Battery" model,
-        // but in reality gut absorption is the bottleneck.
-        // Let's cap the effective addition to store to mimic absorption delay?
-        // Or just assume simple bucket model for MVP.
         currentGlycogen += intakeCarbs;
+        currentFluidDeficit -= intakeFluid;
+        currentCaffeine += intakeCaffeine;
+        totalFluidIntake += intakeFluid;
 
-        // Subtract Burn
-        currentGlycogen -= currentBurn;
+        // Floor Deficit (cannot have negative deficit -> hydrated)
+        // Actually, you can be hyperhydrated but for this model we floor at 0 deficit (max hydration).
+        // Let's allow negative to show "sloshing" risk?
+        // No, let's keep it simple: 0 is fully hydrated. Positive is deficit.
+        if (currentFluidDeficit < 0) currentFluidDeficit = 0;
 
-        // Check Bonk
+        // Bonk Check
         let isBonking = false;
         if (currentGlycogen <= 0) {
             if (crashTime === null) crashTime = currentTime * 60;
-            currentGlycogen = 0; // Floor at 0
+            currentGlycogen = 0;
             isBonking = true;
-            // Slow down simulation for next steps?
-            // MVP: Just mark it.
         }
+
+        // Weight Loss (Sweat Deficit + Glycogen Burned + Fat Burned?)
+        // Glycogen binds 3-4g water. So burning 500g glycogen releases ~2kg water?
+        // That water is available for hydration internally.
+        // For simple scale weight: Fluid Deficit (L ~ kg) is the main driver.
+        // Let's just track Fluid Deficit as proxy for acute weight loss.
+        const estWeightLoss = currentFluidDeficit;
 
         timeline.push({
             timeSeconds: currentTime * 60,
             distanceKm: currentDist,
             glycogenStoreG: Math.round(currentGlycogen),
-            bloodGlucoseG: 5,
-            pace: adjustedPaceMinKm,
+            fluidDeficitL: Math.round(currentFluidDeficit * 100) / 100,
+            caffeineMg: Math.round(currentCaffeine),
+            weightLossKg: Math.round(estWeightLoss * 10) / 10,
+            pace: finalPace,
             isBonking
         });
     }
@@ -254,11 +260,90 @@ export function simulateRace(
     return {
         timeline,
         crashTime,
-        finishTime: timeline[timeline.length-1].timeSeconds
+        finishTime: timeline[timeline.length-1].timeSeconds,
+        totalFluidLossL: timeline[timeline.length-1].fluidDeficitL + totalFluidIntake, // Roughly total sweat
+        totalFluidIntakeL: totalFluidIntake,
+        finalWeightLossKg: timeline[timeline.length-1].weightLossKg
     };
 }
 
-// --- Pacing Strategy ---
+// --- Generator ---
+
+export function generateNutritionPlan(
+    distanceKm: number,
+    targetTimeSeconds: number, // Total time
+    strategy: NutritionStrategy
+): IntakeEvent[] {
+    const hours = targetTimeSeconds / 3600;
+    const totalCarbsNeeded = strategy.carbsPerHour * hours;
+
+    // Ratios (Carb contribution)
+    const drinkCarbs = totalCarbsNeeded * strategy.drinkRatio;
+    const gelCarbs = totalCarbsNeeded * (1 - strategy.drinkRatio);
+
+    // Products
+    // Drink: Standard 40g per 500ml bottle
+    const drinkCount = Math.round(drinkCarbs / 40);
+    // Gel: Standard 25g
+    const gelCount = Math.round(gelCarbs / 25);
+
+    const events: IntakeEvent[] = [];
+
+    // Distribute Drinks (Regular intervals)
+    if (drinkCount > 0) {
+        const drinkIntervalKm = distanceKm / (drinkCount + 1);
+        for(let i=1; i<=drinkCount; i++) {
+            events.push({
+                distanceKm: Math.round(i * drinkIntervalKm * 10) / 10,
+                type: 'drink',
+                amount: 1,
+                product: STANDARD_PRODUCTS.DRINK
+            });
+        }
+    }
+
+    // Distribute Gels
+    if (gelCount > 0) {
+        const gelIntervalKm = distanceKm / (gelCount + 1);
+        for(let i=1; i<=gelCount; i++) {
+            // Caffeine Strategy: If enabled, every 3rd gel is Caffeine?
+            // Or just load at start + end?
+            // Simple: Every other?
+            // Let's make the last gel caffeinated for kick, and one in middle.
+            let product = STANDARD_PRODUCTS.GEL;
+            if (strategy.useCaffeine) {
+                // If index is odd?
+                if (i % 2 !== 0) product = STANDARD_PRODUCTS.GEL_CAF;
+            }
+
+            events.push({
+                distanceKm: Math.round(i * gelIntervalKm * 10) / 10,
+                type: 'gel',
+                amount: 1,
+                product: product
+            });
+        }
+    }
+
+    // Add Water Events?
+    // We should assume water stations every X km.
+    // For now, let's just add generic water every 5km if drinkRatio is low?
+    if (strategy.drinkRatio < 0.5) {
+        const stations = Math.floor(distanceKm / 5);
+        for(let i=1; i<=stations; i++) {
+            events.push({
+                distanceKm: i * 5,
+                type: 'drink',
+                amount: 1,
+                product: STANDARD_PRODUCTS.WATER
+            });
+        }
+    }
+
+    return events.sort((a,b) => a.distanceKm - b.distanceKm);
+}
+
+// --- Splits ---
 
 export interface Split {
     km: number;
@@ -281,24 +366,20 @@ export function generateSplits(
         let splitPace = avgPace;
 
         if (strategy === 'negative') {
-            // Start 5% slower, end 5% faster
             const progress = k / distanceKm;
-            const factor = 1.05 - (0.10 * progress); // 1.05 -> 0.95
+            const factor = 1.05 - (0.10 * progress);
             splitPace = avgPace * factor;
         } else if (strategy === 'positive') {
-            // Start 5% faster, end 5% slower
             const progress = k / distanceKm;
             const factor = 0.95 + (0.10 * progress);
             splitPace = avgPace * factor;
         }
 
-        // Adjust for last partial km
         const dist = (k > distanceKm) ? (distanceKm - (k-1)) : 1;
         const time = splitPace * dist;
 
         cumulative += time;
 
-        // Format pace min/km
         const mins = Math.floor(splitPace / 60);
         const secs = Math.round(splitPace % 60);
         const paceStr = `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -314,32 +395,20 @@ export function generateSplits(
     return splits;
 }
 
-// --- Dropbag Logic ---
+// --- Dropbag ---
 
 export function calculateDropbagLogistics(
     intakeEvents: IntakeEvent[],
     dropbagKms: number[]
 ): { location: string, items: Record<string, number> }[] {
-
-    // Sort Kms including 0 (Start) and Finish (implicit, but we care about segments)
-    // Locations: "Start", "Dropbag KM X", "Dropbag KM Y"...
-
     const locations = [0, ...dropbagKms].sort((a,b) => a-b);
     const logistics = [];
 
     for (let i = 0; i < locations.length; i++) {
         const startKm = locations[i];
-        const endKm = locations[i+1] || 9999; // 9999 represents finish/infinity
-
-        // Filter events in this segment
-        // Need to carry items for events occurring: startKm < event <= endKm
-        // Actually, usually you pickup at startKm to use UNTIL endKm.
-        // So events: startKm <= event < endKm?
-        // Let's assume you pick up everything needed for the NEXT leg at the CURRENT station.
+        const endKm = locations[i+1] || 9999;
 
         const segmentEvents = intakeEvents.filter(e => e.distanceKm >= startKm && e.distanceKm < endKm);
-
-        // Aggregate
         const items: Record<string, number> = {};
 
         for (const evt of segmentEvents) {
@@ -353,6 +422,5 @@ export function calculateDropbagLogistics(
             items
         });
     }
-
     return logistics;
 }

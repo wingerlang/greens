@@ -12,8 +12,6 @@ interface TrainingOverviewProps {
 }
 
 export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick }: TrainingOverviewProps) {
-    const [statFilter, setStatFilter] = React.useState<'all' | 'run' | 'bike' | 'strength'>('all');
-
     const stats = useMemo(() => {
         const now = new Date();
         const currentYear = now.getFullYear();
@@ -21,48 +19,24 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
         const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
         const lastMonthYear = currentMonth === 0 ? currentYear - 1 : currentYear;
 
-        // Base Filter (Period)
-        // If filtered, 'yearExercises' represents the entire active period (passed from parent)
-        // If NO filter from parent, default to current year
-        const baseExercises = isFiltered ? exercises : exercises.filter(e => new Date(e.date).getFullYear() === currentYear);
-
-        // Apply Local Type Filter
-        const yearExercises = baseExercises.filter(e => {
-            if (statFilter === 'all') return true;
-            const t = e.type.toLowerCase();
-            if (statFilter === 'run') return t.includes('run') || t.includes('löp');
-            if (statFilter === 'bike') return t.includes('cycl') || t.includes('cyk');
-            if (statFilter === 'strength') return t.includes('strength') || t.includes('styrk') || t.includes('gym');
-            return true;
-        });
+        // If filtered, 'yearExercises' represents the entire active period
+        // NEW: If isFiltered is false, we default to current year.
+        const yearExercises = isFiltered ? exercises : exercises.filter(e => new Date(e.date).getFullYear() === currentYear);
 
         const monthExercises = exercises.filter(e => {
             const d = new Date(e.date);
-            // Apply Type Filter to Month too
-            const matchesType = statFilter === 'all' ||
-                (statFilter === 'run' && (e.type.includes('run') || e.type.includes('löp'))) ||
-                (statFilter === 'bike' && (e.type.includes('cycl') || e.type.includes('cyk'))) ||
-                (statFilter === 'strength' && (e.type.includes('strength') || e.type.includes('styrk')));
-
-            return matchesType && d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
         });
-
         const lastMonthExercises = exercises.filter(e => {
             const d = new Date(e.date);
-            // Apply Type Filter to Last Month too
-            const matchesType = statFilter === 'all' ||
-                (statFilter === 'run' && (e.type.includes('run') || e.type.includes('löp'))) ||
-                (statFilter === 'bike' && (e.type.includes('cycl') || e.type.includes('cyk'))) ||
-                (statFilter === 'strength' && (e.type.includes('strength') || e.type.includes('styrk')));
-
-            return matchesType && d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
+            return d.getMonth() === lastMonth && d.getFullYear() === lastMonthYear;
         });
 
         const sumDistance = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => sum + (e.distance || 0), 0);
         const sumDuration = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => sum + e.durationMinutes, 0);
         const count = (exs: ExerciseEntry[]) => exs.length;
 
-        const longestRun = yearExercises.filter(e => (e.type as string) === 'running' || (e.type as string) === 'löpning' || (e.type as string).includes('cycl')).reduce((max, e) => (e.distance || 0) > (max.distance || 0) ? e : max, { distance: 0 } as ExerciseEntry);
+        const longestRun = yearExercises.filter(e => (e.type as string) === 'running' || (e.type as string) === 'löpning').reduce((max, e) => (e.distance || 0) > (max.distance || 0) ? e : max, { distance: 0 } as ExerciseEntry);
 
         const heavyLiftVolume = yearExercises.filter(e => (e.type as string) === 'strength' || (e.type as string) === 'gym' || (e.type as string) === 'styrka').reduce((sum, e) => sum + (e.tonnage || 0), 0);
         const maxStrengthSession = yearExercises.filter(e => (e.type as string) === 'strength' || (e.type as string) === 'gym' || (e.type as string) === 'styrka').reduce((max, e) => (max.tonnage || 0) > (e.tonnage || 0) ? max : e, {} as ExerciseEntry);
@@ -76,12 +50,6 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
             }, {} as ExerciseEntry);
 
         const fastestPace = fastestPaceSession.id ? (fastestPaceSession.durationMinutes / (fastestPaceSession.distance || 1)) : 999;
-
-        // For Cycling, maybe we want Max Watts?
-        const maxWattSession = yearExercises
-            .filter(e => ((e.type as string).includes('cycl') && (e as any).averageWatts))
-            .reduce((best, e) => (e as any).averageWatts > ((best as any).averageWatts || 0) ? e : best, {} as ExerciseEntry);
-
 
         const maxEnergySession = yearExercises.reduce((max, e) => (e.caloriesBurned || 0) > (max.caloriesBurned || 0) ? e : max, {} as ExerciseEntry);
 
@@ -112,41 +80,13 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                 fastestPaceSession,
                 heavyLiftVolume,
                 maxStrengthSession,
-                maxEnergySession,
-                maxWattSession // New
+                maxEnergySession
             }
         };
-    }, [exercises, statFilter, isFiltered]); // Depend on statFilter
+    }, [exercises]);
 
     return (
         <>
-            <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-                <button
-                    onClick={() => setStatFilter('all')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'all' ? 'bg-slate-700 text-white border-slate-600' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                >
-                    Alla
-                </button>
-                <button
-                    onClick={() => setStatFilter('run')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'run' ? 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                >
-                    🏃 Löpning
-                </button>
-                <button
-                    onClick={() => setStatFilter('bike')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'bike' ? 'bg-sky-900/30 text-sky-400 border-sky-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                >
-                    🚴 Cykling
-                </button>
-                <button
-                    onClick={() => setStatFilter('strength')}
-                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider border transition-all ${statFilter === 'strength' ? 'bg-indigo-900/30 text-indigo-400 border-indigo-500/30' : 'text-slate-500 border-transparent hover:bg-slate-800'}`}
-                >
-                    🏋️ Styrka
-                </button>
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                 {/* Year Stats */}
                 <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-6 relative overflow-hidden group hover:border-emerald-500/20 transition-all">
@@ -156,7 +96,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                             {periodLabel || `Årsvolym ${new Date().getFullYear()}`}
                         </h3>
                         <span className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-white/5 uppercase">
-                            {isFiltered ? 'FILTRERAD PERIOD' : 'ALLA ACTIVITETER'}
+                            {isFiltered ? 'FILTRERAD PERIOD' : 'ALLA AKTIVITETER'}
                         </span>
                     </div>
                     <div className="space-y-4">
@@ -264,49 +204,30 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
                     className="bg-slate-900/30 border border-white/5 p-4 rounded-xl flex flex-col justify-center items-center text-center hover:bg-white/5 transition-all group"
                 >
                     <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">🏔️</span>
-                    <span className="text-[10px] uppercase font-bold text-slate-500">
-                        {isFiltered ? 'Periodens Längsta' : 'Årets Längsta'}
-                    </span>
+                    <span className="text-[10px] uppercase font-bold text-slate-500">{isFiltered ? 'Periodens Längsta' : 'Årets Längsta'}</span>
                     <span className="text-xl font-black text-white">{(stats.insights.longestRun.distance || 0).toFixed(1).replace('.', ',')} <span className="text-sm text-slate-500">km</span></span>
                     <span className="text-[9px] text-slate-600 mt-1">
                         {stats.insights.longestRun.date ? new Date(stats.insights.longestRun.date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) : '-'}
                     </span>
                 </button>
 
-                {statFilter === 'bike' && (stats.insights.maxWattSession as any)?.id ? (
-                    <button
-                        onClick={() => (stats.insights.maxWattSession as any).id && onExerciseClick?.(stats.insights.maxWattSession as any)}
-                        className="bg-slate-900/30 border border-white/5 p-4 rounded-xl flex flex-col justify-center items-center text-center hover:bg-white/5 transition-all group"
-                    >
-                        <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">⚡</span>
-                        <span className="text-[10px] uppercase font-bold text-slate-500">Högsta Effekt</span>
-                        <span className="text-xl font-black text-sky-400">
-                            {(stats.insights.maxWattSession as any).averageWatts || 0}
-                            <span className="text-sm text-slate-500"> W</span>
-                        </span>
-                        <span className="text-[9px] text-slate-600 mt-1">
-                            {(stats.insights.maxWattSession as any).date ? new Date((stats.insights.maxWattSession as any).date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) : 'Snittwatt'}
-                        </span>
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => stats.insights.fastestPaceSession.id && onExerciseClick?.(stats.insights.fastestPaceSession)}
-                        disabled={!stats.insights.fastestPaceSession.id}
-                        className="bg-slate-900/30 border border-white/5 p-4 rounded-xl flex flex-col justify-center items-center text-center hover:bg-white/5 transition-all group"
-                    >
-                        <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">⚡</span>
-                        <span className="text-[10px] uppercase font-bold text-slate-500">Snabbaste (3k+)</span>
-                        <span className="text-xl font-black text-emerald-400">
-                            {stats.insights.fastestPace
-                                ? `${Math.floor(stats.insights.fastestPace)}:${Math.round((stats.insights.fastestPace % 1) * 60).toString().padStart(2, '0')}`
-                                : '-'}
-                            <span className="text-sm text-slate-500"> /km</span>
-                        </span>
-                        <span className="text-[9px] text-slate-600 mt-1">
-                            {stats.insights.fastestPaceSession.date ? new Date(stats.insights.fastestPaceSession.date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) : 'Tempo'}
-                        </span>
-                    </button>
-                )}
+                <button
+                    onClick={() => stats.insights.fastestPaceSession.id && onExerciseClick?.(stats.insights.fastestPaceSession)}
+                    disabled={!stats.insights.fastestPaceSession.id}
+                    className="bg-slate-900/30 border border-white/5 p-4 rounded-xl flex flex-col justify-center items-center text-center hover:bg-white/5 transition-all group"
+                >
+                    <span className="text-2xl mb-2 group-hover:scale-110 transition-transform">⚡</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-500">Snabbaste (3k+)</span>
+                    <span className="text-xl font-black text-emerald-400">
+                        {stats.insights.fastestPace
+                            ? `${Math.floor(stats.insights.fastestPace)}:${Math.round((stats.insights.fastestPace % 1) * 60).toString().padStart(2, '0')}`
+                            : '-'}
+                        <span className="text-sm text-slate-500"> /km</span>
+                    </span>
+                    <span className="text-[9px] text-slate-600 mt-1">
+                        {stats.insights.fastestPaceSession.date ? new Date(stats.insights.fastestPaceSession.date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' }) : 'Tempo'}
+                    </span>
+                </button>
 
                 <button
                     onClick={() => stats.insights.maxStrengthSession.id && onExerciseClick?.(stats.insights.maxStrengthSession)}

@@ -217,24 +217,16 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                                                 <span>{date.day} {monthName}</span>
                                                 {isRace && <span className="text-amber-400">TÄVLING</span>}
                                             </div>
-                                            {date.exercises.map((e, idx) => {
-                                                const isRun = e.type.includes('running') || e.type.includes('löp');
-                                                const isBike = e.type.includes('cycl') || e.type.includes('cyk');
-
-                                                return (
-                                                    <div key={idx} className="flex justify-between items-center text-xs mb-1 last:mb-0">
-                                                        <span className={`capitalize ${e.subType === 'race' ? 'text-amber-400 font-bold' : 'text-white'}`}>
-                                                            {e.subType === 'race' ? '🏆 ' : ''}{e.type.replace('strength', 'Styrka').replace('running', 'Löpning').replace('cycling', 'Cykling')}
-                                                        </span>
-                                                        <span className="text-slate-400 font-mono flex items-center gap-2">
-                                                            {isBike && (e as any).averageWatts && <span className="text-sky-400 font-bold">{(e as any).averageWatts}W</span>}
-                                                            <span>
-                                                                {e.distance ? `${e.distance}km` : e.tonnage ? `${(e.tonnage / 1000).toFixed(1)}t` : `${e.durationMinutes}m`}
-                                                            </span>
-                                                        </span>
-                                                    </div>
-                                                );
-                                            })}
+                                            {date.exercises.map((e, idx) => (
+                                                <div key={idx} className="flex justify-between items-center text-xs mb-1 last:mb-0">
+                                                    <span className={`capitalize ${e.subType === 'race' ? 'text-amber-400 font-bold' : 'text-white'}`}>
+                                                        {e.subType === 'race' ? '🏆 ' : ''}{e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                    </span>
+                                                    <span className="text-slate-400 font-mono">
+                                                        {e.distance ? `${e.distance}km` : e.tonnage ? `${(e.tonnage / 1000).toFixed(1)}t` : `${e.durationMinutes}m`}
+                                                    </span>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
 

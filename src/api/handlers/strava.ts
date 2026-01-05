@@ -103,66 +103,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
         }), { headers });
     }
 
-
-    // Scan (Sync 2.0)
-    if (url.pathname === "/api/strava/scan" && method === "POST") {
-        try {
-            const stravaTokens = await getStravaTokens(session.userId);
-            if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
-
-            let accessToken = stravaTokens.accessToken;
-            if (Date.now() > stravaTokens.expiresAt) {
-                const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
-                if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
-                accessToken = refreshed.accessToken;
-                await saveStravaTokens(session.userId, { ...stravaTokens, ...refreshed });
-            }
-
-            const body = await req.json().catch(() => ({}));
-            const { fromDate } = body;
-
-            const report = await reconciliationService.scanStravaActivities(session.userId, accessToken, { fromDate });
-            return new Response(JSON.stringify(report), { headers });
-
-        } catch (e) {
-            console.error("Scan failed", e);
-            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), { status: 500, headers });
-        }
-    }
-
-    // Import (Sync 2.0)
-    if (url.pathname === "/api/strava/import" && method === "POST") {
-        try {
-            const stravaTokens = await getStravaTokens(session.userId);
-            if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
-
-            // Token refresh check (duplicate for safety)
-            if (Date.now() > stravaTokens.expiresAt) {
-                const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
-                if (refreshed) await saveStravaTokens(session.userId, { ...stravaTokens, ...refreshed });
-            }
-
-            const { activities, forceUpdate } = await req.json();
-            if (!activities || !Array.isArray(activities)) {
-                return new Response(JSON.stringify({ error: "Invalid activities payload" }), { status: 400, headers });
-            }
-
-            const result = await reconciliationService.syncActivities(session.userId, activities, { forceUpdate });
-
-            // Update last sync time? Maybe only if we synced new stuff.
-            if (result.created > 0 || result.updated > 0) {
-                await saveStravaTokens(session.userId, { ...stravaTokens, lastSync: new Date().toISOString() });
-            }
-
-            return new Response(JSON.stringify(result), { headers });
-
-        } catch (e) {
-            console.error("Import failed", e);
-            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), { status: 500, headers });
-        }
-    }
-
-    // Sync (Legacy - preserved for now)
+    // Sync
     if (url.pathname === "/api/strava/sync" && method === "POST") {
         try {
             const stravaTokens = await getStravaTokens(session.userId);
@@ -186,7 +127,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
             return new Response(JSON.stringify({ success: true, result }), { headers });
 
         } catch (e) {
-            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : 'Unknown error' }), { status: 500, headers });
+            return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
         }
     }
 

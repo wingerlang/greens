@@ -493,10 +493,6 @@ export interface ExerciseEntry {
     subType?: ExerciseSubType;
     title?: string; // e.g. "Morning Run" or "Strava Activity Title"
     tonnage?: number;   // total kg lifted
-    // Cycling / Performance
-    averageWatts?: number;
-    maxWatts?: number;
-    averageSpeed?: number; // km/h
     distance?: number;  // km
     createdAt: string;
     source?: string;
@@ -959,11 +955,6 @@ export interface ActivityPerformanceSection {
     avgHeartRate?: number;
     maxHeartRate?: number;
     elevationGain?: number;
-
-    // Cycling / Advanced
-    averageWatts?: number;
-    maxWatts?: number;
-    averageSpeed?: number; // km/h
 
     // Advanced Data (Streams)
     paceCurve?: number[]; // Pace at different distances? Or stream ref?

@@ -4,14 +4,18 @@ import {
     RunnerProfile,
     IntakeEvent,
     PacingStrategy,
+    NutritionStrategy,
     simulateRace,
     calculateWeatherPenaltyFactor,
     generateSplits,
     calculateDropbagLogistics,
-    NutritionProduct
-} from '../../utils/racePlannerCalculators';
+    generateNutritionPlan,
+    NutritionProduct,
+    SWEAT_RATES,
+    SweatProfile
+} from '../../utils/racePlannerCalculators.ts';
 import { useAuth } from '../../context/AuthContext';
-import { ArrowLeft, Play, Save, Trash2, Battery, Droplet, Thermometer, ShoppingBag, Clock, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Play, Save, Trash2, Battery, Droplet, Thermometer, ShoppingBag, Clock, AlertTriangle, ChevronDown, ChevronUp, Zap, Scale } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Link } from 'react-router-dom';
 
@@ -84,7 +88,7 @@ export function ToolsRacePlannerPage() {
         weightKg: 75,
         maxHr: 190,
         restingHr: 50,
-        sweatRateLh: 1.0,
+        sweatProfile: 'medium',
         caffeineToleranceMg: 300
     });
 
@@ -97,6 +101,12 @@ export function ToolsRacePlannerPage() {
     const [pacingStrategy, setPacingStrategy] = useState<PacingStrategy>({
         type: 'stable',
         description: 'Jämnt tempo hela loppet'
+    });
+
+    const [nutritionStrategy, setNutritionStrategy] = useState<NutritionStrategy>({
+        carbsPerHour: 60,
+        drinkRatio: 0.3, // 30% drink, 70% gel
+        useCaffeine: false
     });
 
     // Logistics
@@ -114,6 +124,7 @@ export function ToolsRacePlannerPage() {
     const [splits, setSplits] = useState<any[]>([]);
     const [logistics, setLogistics] = useState<any[]>([]);
     const [weatherPenalty, setWeatherPenalty] = useState(1.0);
+    const [paceTuning, setPaceTuning] = useState(1.0);
     const [warnings, setWarnings] = useState<string[]>([]);
 
     // --- Effects ---
@@ -122,10 +133,20 @@ export function ToolsRacePlannerPage() {
         loadPlans();
     }, [token]);
 
-    // Recalculate whenever inputs change
+    // Auto-generate nutrition when strategy changes (debounce slightly or just effect?)
+    // To avoid overwriting manual changes, we should maybe have a "Sync" flag or button?
+    // Let's make it auto-update IF the intakeEvents seem to be "generated" or empty.
+    // Simpler: Just regenerate whenever Strategy OR Distance OR Time changes.
+    // User can manually edit AFTER, but if they change strategy again, it resets.
+    useEffect(() => {
+        const events = generateNutritionPlan(raceProfile.distanceKm, raceProfile.targetTimeSeconds, nutritionStrategy);
+        setIntakeEvents(events);
+    }, [raceProfile.distanceKm, raceProfile.targetTimeSeconds, nutritionStrategy]);
+
+    // Recalculate simulation whenever inputs change
     useEffect(() => {
         runSimulation();
-    }, [raceProfile, runnerProfile, environment, pacingStrategy, dropbagKms, intakeEvents]);
+    }, [raceProfile, runnerProfile, environment, pacingStrategy, dropbagKms, intakeEvents, paceTuning]);
 
     // --- Logic ---
 
@@ -156,6 +177,7 @@ export function ToolsRacePlannerPage() {
             runnerProfile,
             environment,
             pacingStrategy,
+            nutritionStrategy,
             intakeEvents,
             dropbagKms
         };
@@ -189,12 +211,11 @@ export function ToolsRacePlannerPage() {
         setWeatherPenalty(penalty);
 
         // 2. Sim
-        const res = simulateRace(raceProfile, runnerProfile, intakeEvents, 500, penalty); // 500g start
+        const res = simulateRace(raceProfile, runnerProfile, intakeEvents, 500, penalty, paceTuning);
         setSimResult(res);
 
         // 3. Splits
-        // Adjust target time by penalty?
-        const adjustedTargetSeconds = raceProfile.targetTimeSeconds * penalty;
+        const adjustedTargetSeconds = raceProfile.targetTimeSeconds * penalty * paceTuning;
         const s = generateSplits(raceProfile.distanceKm, adjustedTargetSeconds, pacingStrategy.type as any);
         setSplits(s);
 
@@ -205,35 +226,13 @@ export function ToolsRacePlannerPage() {
         // 5. Warnings
         const newWarnings = [];
         if (penalty > 1.05) newWarnings.push(`Varning: Vädret beräknas sänka din prestation med ${Math.round((penalty-1)*100)}%. Sänk tempot!`);
-        if (res.crashTime !== null) newWarnings.push(`CRASH WARNING: Glykogendepåerna tar slut vid ${Math.floor(res.crashTime/60)} minuter! Öka intaget.`);
-
-        // Check hourly carbs
-        const totalCarbs = intakeEvents.reduce((acc, e) => acc + (e.product?.carbsG || 0) * e.amount, 0);
-        const hours = adjustedTargetSeconds / 3600;
-        const gPerH = totalCarbs / hours;
-        if (gPerH > 90) newWarnings.push(`Högt kolhydratsintag (${Math.round(gPerH)}g/h). Risk för magproblem om du inte tränat på det.`);
-        if (gPerH < 30 && raceProfile.distanceKm > 21) newWarnings.push(`Lågt kolhydratsintag (${Math.round(gPerH)}g/h). Rekommenderas 60-90g/h för ultra.`);
+        if (res.crashTime !== null) newWarnings.push(`CRASH WARNING: Glykogendepåerna tar slut vid ${Math.floor(res.crashTime/60)} minuter!`);
+        if (res.finalWeightLossKg > (runnerProfile.weightKg * 0.02)) newWarnings.push(`Varning: Vätskeförlust > 2% av kroppsvikt (${res.finalWeightLossKg}kg). Risk för sänkt prestation.`);
 
         setWarnings(newWarnings);
     };
 
     // --- Helpers ---
-
-    const handleAddIntake = () => {
-        // Quick add helper
-        // Default: One Gel every 30 mins (approx every 5km depending on pace)
-        const count = Math.floor(raceProfile.distanceKm / 5);
-        const newEvents: IntakeEvent[] = [];
-        for(let i=1; i<=count; i++) {
-            newEvents.push({
-                distanceKm: i * 5,
-                type: 'gel',
-                amount: 1,
-                product: PRESET_PRODUCTS[0] // Default Maurten 100
-            });
-        }
-        setIntakeEvents(newEvents);
-    };
 
     const formatTime = (secs: number) => {
         const h = Math.floor(secs / 3600);
@@ -253,9 +252,9 @@ export function ToolsRacePlannerPage() {
                         </Link>
                         <div>
                             <h1 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-teal-400">
-                                Race Commander
+                                Race Commander 2.0
                             </h1>
-                            <p className="text-xs text-slate-400">Ultra-Optimization Engine</p>
+                            <p className="text-xs text-slate-400">Optimization Engine</p>
                         </div>
                     </div>
 
@@ -267,7 +266,7 @@ export function ToolsRacePlannerPage() {
                                 className="flex items-center gap-2 px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-full hover:bg-emerald-500/20 text-sm font-bold transition-all"
                             >
                                 <Save size={16} />
-                                {isSaving ? 'Sparar...' : 'Spara Plan'}
+                                {isSaving ? 'Sparar...' : 'Spara'}
                             </button>
                         )}
                     </div>
@@ -278,7 +277,7 @@ export function ToolsRacePlannerPage() {
                     {[
                         { id: 'config', label: '1. Konfiguration' },
                         { id: 'plan', label: '2. Dashboard' },
-                        { id: 'logistics', label: '3. Packlista & Logistik' }
+                        { id: 'logistics', label: '3. Logistik' }
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -341,11 +340,10 @@ export function ToolsRacePlannerPage() {
                                     type="text"
                                     className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
                                     placeholder="04:00:00"
-                                    key={raceProfile.targetTimeSeconds} // Force re-render on external update
+                                    key={raceProfile.targetTimeSeconds}
                                     defaultValue={formatTime(raceProfile.targetTimeSeconds)}
                                     onBlur={e => {
                                         let val = e.target.value;
-                                        // Auto-fix "3:30" -> "03:30:00" logic
                                         const parts = val.split(':').map(Number);
                                         let secs = 0;
                                         if (parts.length === 3) {
@@ -353,11 +351,8 @@ export function ToolsRacePlannerPage() {
                                         } else if (parts.length === 2) {
                                             secs = parts[0]*3600 + parts[1]*60;
                                         } else if (parts.length === 1) {
-                                            // Assume minutes if < 10, else seconds? Let's assume hours if small number?
-                                            // Safer: Assume minutes.
                                             secs = parts[0] * 60;
                                         }
-
                                         if (secs > 0) {
                                             setRaceProfile({...raceProfile, targetTimeSeconds: secs});
                                         }
@@ -376,7 +371,7 @@ export function ToolsRacePlannerPage() {
                         </ConfigSection>
 
                         {/* Runner Data */}
-                        <ConfigSection title="Löpare" icon={<Battery size={18} />}>
+                        <ConfigSection title="Löpare & Miljö" icon={<Battery size={18} />}>
                             <div className="grid grid-cols-2 gap-4">
                                 <InputGroup label="Vikt (kg)" suffix="kg">
                                     <input
@@ -386,29 +381,31 @@ export function ToolsRacePlannerPage() {
                                         onChange={e => setRunnerProfile({...runnerProfile, weightKg: parseFloat(e.target.value)})}
                                     />
                                 </InputGroup>
-                                <InputGroup label="Svett (L/h)" suffix="L">
-                                    <input
-                                        type="number"
-                                        step="0.1"
-                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
-                                        value={runnerProfile.sweatRateLh}
-                                        onChange={e => setRunnerProfile({...runnerProfile, sweatRateLh: parseFloat(e.target.value)})}
-                                    />
+                                <InputGroup label="Svettprofil">
+                                    <select
+                                        className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white text-sm"
+                                        value={runnerProfile.sweatProfile}
+                                        onChange={e => setRunnerProfile({...runnerProfile, sweatProfile: e.target.value as any})}
+                                    >
+                                        <option value="low">Låg (0.8 L/h)</option>
+                                        <option value="medium">Medel (1.2 L/h)</option>
+                                        <option value="high">Hög (1.8 L/h)</option>
+                                        <option value="custom">Anpassad</option>
+                                    </select>
+                                    {runnerProfile.sweatProfile === 'custom' && (
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            placeholder="L/h"
+                                            className="mt-2 w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white text-sm"
+                                            value={runnerProfile.customSweatRateLh || ''}
+                                            onChange={e => setRunnerProfile({...runnerProfile, customSweatRateLh: parseFloat(e.target.value)})}
+                                        />
+                                    )}
                                 </InputGroup>
                             </div>
-                            <InputGroup label="Maxpuls">
-                                <input
-                                    type="number"
-                                    className="w-full bg-slate-800 border border-white/10 rounded-lg p-2.5 text-white"
-                                    value={runnerProfile.maxHr}
-                                    onChange={e => setRunnerProfile({...runnerProfile, maxHr: parseFloat(e.target.value)})}
-                                />
-                            </InputGroup>
-                        </ConfigSection>
 
-                        {/* Environment */}
-                        <ConfigSection title="Miljö" icon={<Thermometer size={18} />}>
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5 mt-2">
                                 <InputGroup label="Temp" suffix="°C">
                                     <input
                                         type="number"
@@ -426,75 +423,65 @@ export function ToolsRacePlannerPage() {
                                     />
                                 </InputGroup>
                             </div>
-                            {weatherPenalty > 1.0 && (
-                                <div className="text-xs text-amber-400 font-mono mt-2">
-                                    Väderjustering: +{Math.round((weatherPenalty-1)*100)}% tid
-                                </div>
-                            )}
                         </ConfigSection>
 
-                        {/* Nutrition Quick Add */}
-                        <ConfigSection title="Nutrition" icon={<Droplet size={18} />}>
-                            <button
-                                onClick={handleAddIntake}
-                                className="w-full py-3 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 font-bold transition-all mb-4"
-                            >
-                                Auto-generera Energiplan (1 gel / 5km)
-                            </button>
+                        {/* Nutrition Strategy */}
+                        <ConfigSection title="Nutrition Strategi" icon={<Zap size={18} />}>
+                            {/* Carbs Per Hour */}
+                            <InputGroup label={`Energi: ${nutritionStrategy.carbsPerHour}g / timme`}>
+                                <input
+                                    type="range"
+                                    min="20" max="120" step="10"
+                                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                    value={nutritionStrategy.carbsPerHour}
+                                    onChange={e => setNutritionStrategy({...nutritionStrategy, carbsPerHour: parseInt(e.target.value)})}
+                                />
+                                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                                    <span>20g</span>
+                                    <span>60g</span>
+                                    <span>90g</span>
+                                    <span>120g</span>
+                                </div>
+                            </InputGroup>
 
-                            <div className="max-h-64 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                                {intakeEvents.map((evt, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 bg-slate-800 p-2 rounded text-sm">
-                                        <input
-                                            type="number"
-                                            className="w-16 bg-slate-900 border border-white/10 rounded px-2 py-1 text-right"
-                                            value={evt.distanceKm}
-                                            onChange={(e) => {
-                                                const newEvents = [...intakeEvents];
-                                                newEvents[idx].distanceKm = parseFloat(e.target.value);
-                                                setIntakeEvents(newEvents);
-                                            }}
-                                        />
-                                        <span className="text-slate-500 text-xs">km</span>
-                                        <select
-                                            className="flex-1 bg-slate-900 border border-white/10 rounded px-2 py-1 truncate"
-                                            value={evt.product?.name}
-                                            onChange={(e) => {
-                                                const prod = PRESET_PRODUCTS.find(p => p.name === e.target.value);
-                                                const newEvents = [...intakeEvents];
-                                                newEvents[idx].product = prod;
-                                                setIntakeEvents(newEvents);
-                                            }}
-                                        >
-                                            {PRESET_PRODUCTS.map(p => (
-                                                <option key={p.name} value={p.name}>{p.name}</option>
-                                            ))}
-                                        </select>
-                                        <button
-                                            onClick={() => {
-                                                const newEvents = [...intakeEvents];
-                                                newEvents.splice(idx, 1);
-                                                setIntakeEvents(newEvents);
-                                            }}
-                                            className="text-slate-500 hover:text-red-400"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                ))}
-                                <button
-                                    onClick={() => setIntakeEvents([...intakeEvents, { distanceKm: 0, type: 'gel', amount: 1, product: PRESET_PRODUCTS[0] }])}
-                                    className="w-full py-2 border border-dashed border-white/20 rounded text-slate-400 text-xs hover:text-white hover:border-white/40"
-                                >
-                                    + Lägg till intag
-                                </button>
+                            {/* Drink Ratio */}
+                            <InputGroup label={`Källa: ${(1-nutritionStrategy.drinkRatio)*100}% Gel / ${nutritionStrategy.drinkRatio*100}% Sportdryck`}>
+                                <input
+                                    type="range"
+                                    min="0" max="1" step="0.1"
+                                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                                    value={nutritionStrategy.drinkRatio}
+                                    onChange={e => setNutritionStrategy({...nutritionStrategy, drinkRatio: parseFloat(e.target.value)})}
+                                />
+                                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                                    <span>Bara Gels</span>
+                                    <span>50/50</span>
+                                    <span>Bara Dryck</span>
+                                </div>
+                            </InputGroup>
+
+                            {/* Caffeine */}
+                            <div className="flex items-center justify-between bg-slate-800 p-3 rounded-lg border border-white/5">
+                                <div className="flex items-center gap-2">
+                                    <Battery className="text-amber-400" size={16} />
+                                    <span className="text-sm font-bold">Optimera Koffein</span>
+                                </div>
+                                <input
+                                    type="checkbox"
+                                    checked={nutritionStrategy.useCaffeine}
+                                    onChange={e => setNutritionStrategy({...nutritionStrategy, useCaffeine: e.target.checked})}
+                                    className="w-5 h-5 rounded border-gray-600 text-emerald-500 focus:ring-emerald-500"
+                                />
+                            </div>
+
+                            <div className="text-xs text-slate-500 mt-2">
+                                * Planen genereras automatiskt. Du kan justera individuella händelser under Logistik om det behövs.
                             </div>
                         </ConfigSection>
 
                         {/* Dropbags */}
                         <ConfigSection title="Dropbags" icon={<ShoppingBag size={18} />}>
                             <div className="space-y-2">
-                                <p className="text-xs text-slate-400">Ange vid vilka KM du har dropbags:</p>
                                 {dropbagKms.map((km, idx) => (
                                     <div key={idx} className="flex gap-2">
                                         <input
@@ -535,13 +522,34 @@ export function ToolsRacePlannerPage() {
                 {activeTab === 'plan' && simResult && (
                     <div className="space-y-8 animate-fade-in">
 
+                        {/* Tuning Controls */}
+                        <div className="bg-slate-900 border border-white/5 rounded-xl p-4 flex flex-col md:flex-row gap-6 items-center">
+                            <div className="flex-1 w-full">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-sm font-bold text-emerald-400">Justera Tempo (Tuning)</span>
+                                    <span className="text-sm font-mono">{Math.round((paceTuning-1)*100)}%</span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0.8" max="1.2" step="0.01"
+                                    className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-400"
+                                    value={paceTuning}
+                                    onChange={e => setPaceTuning(parseFloat(e.target.value))}
+                                />
+                                <div className="flex justify-between text-xs text-slate-500 mt-1">
+                                    <span>Snabbare (Risk)</span>
+                                    <span>Normal</span>
+                                    <span>Långsammare (Safe)</span>
+                                </div>
+                            </div>
+                            <div className="text-center px-4 border-l border-white/10">
+                                <div className="text-xs text-slate-400 uppercase">Est Sluttid</div>
+                                <div className="text-2xl font-black">{formatTime(simResult.finishTime)}</div>
+                            </div>
+                        </div>
+
                         {/* Summary Cards */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
-                                <div className="text-slate-400 text-xs font-bold uppercase mb-1">Sluttid (Est)</div>
-                                <div className="text-2xl font-black text-white">{formatTime(simResult.finishTime)}</div>
-                                <div className="text-xs text-emerald-400">Tempo: {splits[0]?.paceMinKm} /km</div>
-                            </div>
                             <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
                                 <div className="text-slate-400 text-xs font-bold uppercase mb-1">Crash Point</div>
                                 <div className={`text-2xl font-black ${simResult.crashTime ? 'text-red-500' : 'text-emerald-500'}`}>
@@ -550,15 +558,22 @@ export function ToolsRacePlannerPage() {
                                 <div className="text-xs text-slate-500">Glykogen tar slut</div>
                             </div>
                             <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
+                                <div className="text-slate-400 text-xs font-bold uppercase mb-1">Vätskeförlust</div>
+                                <div className="text-2xl font-black text-blue-400">
+                                    {simResult.finalWeightLossKg}kg
+                                </div>
+                                <div className="text-xs text-slate-500">Estimerad viktnedgång</div>
+                            </div>
+                            <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
                                 <div className="text-slate-400 text-xs font-bold uppercase mb-1">Total Energi</div>
                                 <div className="text-2xl font-black text-amber-400">
                                     {intakeEvents.reduce((acc, e) => acc + (e.product?.carbsG || 0) * e.amount, 0)}g
                                 </div>
-                                <div className="text-xs text-slate-500">Kolhydrater</div>
+                                <div className="text-xs text-slate-500">{nutritionStrategy.carbsPerHour}g/h snitt</div>
                             </div>
                             <div className="bg-slate-900 rounded-xl p-4 border border-white/5">
                                 <div className="text-slate-400 text-xs font-bold uppercase mb-1">Väderfaktor</div>
-                                <div className="text-2xl font-black text-blue-400">
+                                <div className="text-2xl font-black text-purple-400">
                                     {Math.round((weatherPenalty - 1) * 100)}%
                                 </div>
                                 <div className="text-xs text-slate-500">Tidspåslag</div>
@@ -567,20 +582,26 @@ export function ToolsRacePlannerPage() {
 
                         {/* Timeline Chart */}
                         <div className="bg-slate-900 border border-white/5 rounded-2xl p-6 h-96">
-                            <h3 className="font-bold text-lg mb-4">Body Battery Timeline</h3>
+                            <h3 className="font-bold text-lg mb-4">Body Battery & Hydration</h3>
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={simResult.timeline}>
                                     <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                                     <XAxis
                                         dataKey="distanceKm"
                                         stroke="#666"
-                                        label={{ value: 'Km', position: 'insideBottomRight', offset: -5 }}
                                         tickFormatter={(val) => Math.round(val).toString()}
                                     />
                                     <YAxis
                                         yAxisId="glyco"
                                         stroke="#eab308"
                                         label={{ value: 'Glykogen (g)', angle: -90, position: 'insideLeft' }}
+                                    />
+                                    <YAxis
+                                        yAxisId="fluid"
+                                        orientation="right"
+                                        stroke="#3b82f6"
+                                        label={{ value: 'Vätskebrist (L)', angle: 90, position: 'insideRight' }}
+                                        reversed // Deficit grows down visually? Or up? Deficit is positive number in model.
                                     />
                                     <RechartsTooltip
                                         contentStyle={{ backgroundColor: '#0f172a', borderColor: '#333' }}
@@ -596,6 +617,27 @@ export function ToolsRacePlannerPage() {
                                         name="Glykogen (g)"
                                         dot={false}
                                     />
+                                    <Line
+                                        yAxisId="fluid"
+                                        type="monotone"
+                                        dataKey="fluidDeficitL"
+                                        stroke="#3b82f6"
+                                        strokeWidth={2}
+                                        name="Vätskebrist (L)"
+                                        dot={false}
+                                    />
+                                    {nutritionStrategy.useCaffeine && (
+                                         <Line
+                                            yAxisId="glyco"
+                                            type="monotone"
+                                            dataKey="caffeineMg"
+                                            stroke="#10b981"
+                                            strokeDasharray="5 5"
+                                            strokeWidth={1}
+                                            name="Koffein (mg)"
+                                            dot={false}
+                                        />
+                                    )}
                                     <ReferenceLine y={0} yAxisId="glyco" stroke="red" strokeDasharray="3 3" />
                                 </LineChart>
                             </ResponsiveContainer>
@@ -616,15 +658,7 @@ export function ToolsRacePlannerPage() {
                                     </thead>
                                     <tbody className="divide-y divide-white/5">
                                         {splits.map((split, i) => {
-                                            // Check for intake events near this km (within 0.5km)
-                                            const actions = intakeEvents.filter(e => Math.abs(e.distanceKm - split.km) < 2.5 && e.distanceKm >= (split.km - 4));
-                                            // Since splits are every 1km, we should group events differently or just show near matches.
-                                            // Actually, let's just highlight if there is an event roughly here.
-                                            // Better: Match EXACT km or ranges.
-                                            // For the table, let's just check if an event exists at this KM.
                                             const exactActions = intakeEvents.filter(e => Math.abs(e.distanceKm - split.km) < 0.5);
-
-                                            // Only show every 5km or if action exists to save space
                                             if (split.km % 5 !== 0 && exactActions.length === 0 && split.km !== Math.ceil(raceProfile.distanceKm)) return null;
 
                                             return (
@@ -634,9 +668,11 @@ export function ToolsRacePlannerPage() {
                                                     <td className="px-4 py-3 font-mono text-emerald-400">{split.paceMinKm}</td>
                                                     <td className="px-4 py-3">
                                                         {exactActions.map((a, ai) => (
-                                                            <div key={ai} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-500/20 text-blue-300 text-xs mr-2">
-                                                                <Droplet size={10} />
-                                                                {a.amount}x {a.product?.name}
+                                                            <div key={ai} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 text-xs mr-2 mb-1 border border-white/10">
+                                                                {a.type === 'drink' ? <Droplet size={10} className="text-blue-400"/> : <Zap size={10} className="text-amber-400"/>}
+                                                                <span className={a.product?.caffeineMg ? 'text-emerald-400 font-bold' : 'text-slate-300'}>
+                                                                    {a.product?.name}
+                                                                </span>
                                                             </div>
                                                         ))}
                                                     </td>
@@ -683,48 +719,65 @@ export function ToolsRacePlannerPage() {
                             </div>
                         </div>
 
-                        {/* Equipment & Coach */}
+                        {/* Manual Override */}
                         <div className="space-y-6">
                             <div className="bg-slate-900 border border-white/5 rounded-2xl p-6">
                                 <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
-                                    <Battery className="text-emerald-400" />
-                                    Utrustningskoll
+                                    <Scale className="text-emerald-400" />
+                                    Manuell Justering
                                 </h2>
-                                <ul className="space-y-3 text-sm text-slate-300">
-                                    {/* Headlamp Logic */}
-                                    {(() => {
-                                        const finishDate = new Date(`${raceProfile.date}T${raceProfile.startTime}`);
-                                        finishDate.setSeconds(finishDate.getSeconds() + (simResult?.finishTime || 0));
-                                        const sunsetDate = new Date(`${raceProfile.date}T${environment.sunsetTime}`);
+                                <p className="text-sm text-slate-400 mb-4">
+                                    Om den genererade planen inte passar, kan du lägga till egna händelser här.
+                                    OBS: Om du ändrar strategin under konfigurationen så skrivs dessa över.
+                                </p>
 
-                                        if (finishDate > sunsetDate) {
-                                            return (
-                                                <li className="flex items-start gap-3 text-amber-300">
-                                                    <div className="mt-1 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                                                    <div>
-                                                        <strong>Pannlampa krävs!</strong><br/>
-                                                        Du går i mål ca {finishDate.toTimeString().substring(0,5)}, vilket är efter solnedgång ({environment.sunsetTime}).
-                                                    </div>
-                                                </li>
-                                            );
-                                        }
-                                        return null;
-                                    })()}
-
-                                    {/* Weather Gear */}
-                                    {environment.temperatureC < 5 && (
-                                        <li className="flex items-start gap-3">
-                                            <div className="mt-1 w-2 h-2 rounded-full bg-blue-400" />
-                                            <span>Kallt väder ({environment.temperatureC}°C). Ta med handskar och buff.</span>
-                                        </li>
-                                    )}
-                                    {environment.temperatureC > 20 && (
-                                        <li className="flex items-start gap-3">
-                                            <div className="mt-1 w-2 h-2 rounded-full bg-red-400" />
-                                            <span>Varmt väder! Is-bandana eller keps rekommenderas.</span>
-                                        </li>
-                                    )}
-                                </ul>
+                                <div className="max-h-96 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                                    {intakeEvents.map((evt, idx) => (
+                                        <div key={idx} className="flex items-center gap-2 bg-slate-800 p-2 rounded text-sm">
+                                            <input
+                                                type="number"
+                                                className="w-16 bg-slate-900 border border-white/10 rounded px-2 py-1 text-right"
+                                                value={evt.distanceKm}
+                                                onChange={(e) => {
+                                                    const newEvents = [...intakeEvents];
+                                                    newEvents[idx].distanceKm = parseFloat(e.target.value);
+                                                    setIntakeEvents(newEvents);
+                                                }}
+                                            />
+                                            <span className="text-slate-500 text-xs">km</span>
+                                            <select
+                                                className="flex-1 bg-slate-900 border border-white/10 rounded px-2 py-1 truncate"
+                                                value={evt.product?.name}
+                                                onChange={(e) => {
+                                                    const prod = PRESET_PRODUCTS.find(p => p.name === e.target.value);
+                                                    const newEvents = [...intakeEvents];
+                                                    newEvents[idx].product = prod;
+                                                    setIntakeEvents(newEvents);
+                                                }}
+                                            >
+                                                {PRESET_PRODUCTS.map(p => (
+                                                    <option key={p.name} value={p.name}>{p.name}</option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={() => {
+                                                    const newEvents = [...intakeEvents];
+                                                    newEvents.splice(idx, 1);
+                                                    setIntakeEvents(newEvents);
+                                                }}
+                                                className="text-slate-500 hover:text-red-400"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    <button
+                                        onClick={() => setIntakeEvents([...intakeEvents, { distanceKm: 0, type: 'gel', amount: 1, product: PRESET_PRODUCTS[0] }])}
+                                        className="w-full py-2 border border-dashed border-white/20 rounded text-slate-400 text-xs hover:text-white hover:border-white/40"
+                                    >
+                                        + Lägg till manuellt
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Saved Plans */}
@@ -739,6 +792,7 @@ export function ToolsRacePlannerPage() {
                                                 setEnvironment(p.environment);
                                                 setIntakeEvents(p.intakeEvents);
                                                 setDropbagKms(p.dropbagKms);
+                                                if (p.nutritionStrategy) setNutritionStrategy(p.nutritionStrategy);
                                                 setSelectedPlanId(p.id);
                                                 setActiveTab('config');
                                             }}

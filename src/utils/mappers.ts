@@ -24,9 +24,6 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         // But notes might simply contain the title. safely keep it for now or duplicate.
         // Actually, if title IS notes, maybe clear notes? Let's keep duplicate for safety unless it looks ugly.
         // User said: "Det som ligger under 'ANTECKNING' är det riktiga namnet."
-        averageWatts: a.performance.averageWatts,
-        maxWatts: a.performance.maxWatts,
-        averageSpeed: a.performance.averageSpeed,
         notes: a.performance.notes !== a.plan?.title ? a.performance.notes : undefined,
     };
 }
