@@ -67,10 +67,11 @@ export function NutritionWizard({ onSave, onCancel, initialWeight }: NutritionWi
     const [dietType, setDietType] = useState('balanced');
 
     // Diet Presets
-    const diets: Record<string, { label: string, p: number, c: number, f: number, desc: string, icon: string }> = {
+    const diets: Record<string, { label: string, p: number, c: number, f: number, desc: string, icon: string, isWeightBased?: boolean }> = {
         'balanced': { label: 'Balanserad', p: 30, c: 40, f: 30, desc: 'Jämn fördelning för hälsa.', icon: '⚖️' },
+        'muscle_optimized': { label: 'Muskel-/Deffoptimera', p: 40, c: 30, f: 30, desc: 'Optimera protein (~2.2g/kg).', icon: '🥩', isWeightBased: true },
         'high_protein': { label: 'Hög Protein', p: 40, c: 35, f: 25, desc: 'Muskelbyggnad & mättnad.', icon: '💪' },
-        'low_carb': { label: 'Lågkolhydrat', p: 40, c: 20, f: 40, desc: 'Kolhydratkänsliga.', icon: '🥩' },
+        'low_carb': { label: 'Lågkolhydrat', p: 40, c: 20, f: 40, desc: 'Kolhydratkänsliga.', icon: '🥓' },
         'keto': { label: 'Ketogen', p: 20, c: 5, f: 75, desc: 'Extremt lågt kolhydrat.', icon: '🥑' },
         'athletic': { label: 'Atleter', p: 25, c: 55, f: 20, desc: 'Hög prestation.', icon: '🏃' },
     };
@@ -102,7 +103,29 @@ export function NutritionWizard({ onSave, onCancel, initialWeight }: NutritionWi
     }, [calorieOverride, hasWeightGoal, deficitResult, tdee]);
 
     const currentDiet = diets[dietType];
-    const macros = calculateMacros(targetCalories, currentDiet);
+
+    const macros = useMemo(() => {
+        if (currentDiet.isWeightBased) {
+            // Target 2.2g protein / kg
+            const proteinGrams = Math.round(weight * 2.2);
+            const proteinCalories = proteinGrams * 4;
+
+            // Aim for 0.8g fat / kg (healthy minimum/standard)
+            const fatGrams = Math.round(weight * 0.8);
+            const fatCalories = fatGrams * 9;
+
+            // Remaining calories to carbs
+            const remainingCalories = targetCalories - proteinCalories - fatCalories;
+            const carbsGrams = Math.max(0, Math.round(remainingCalories / 4));
+
+            return {
+                protein: proteinGrams,
+                fat: fatGrams,
+                carbs: carbsGrams
+            };
+        }
+        return calculateMacros(targetCalories, currentDiet);
+    }, [targetCalories, currentDiet, weight]);
 
     const handleSave = () => {
         setIsSaving(true);

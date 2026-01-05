@@ -5,7 +5,7 @@ import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate, DailyVitals } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { analyzeSleep } from '../utils/vitalsUtils.ts';
-import { getActiveCalories } from '../utils/calorieTarget.ts';
+import { getActiveCalories, getActiveCalorieTarget } from '../utils/calorieTarget.ts';
 import { EXERCISE_TYPES } from '../components/training/ExerciseModal.tsx';
 import {
     Dumbbell,
@@ -23,7 +23,8 @@ import {
     Calendar,
     Target,
     Settings,
-    ChevronLeft
+    ChevronLeft,
+    Info
 } from 'lucide-react';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { GoalsOverviewWidget } from '../components/goals/GoalsOverviewWidget.tsx';
@@ -439,6 +440,8 @@ export function DashboardPage() {
     const [selectedActivity, setSelectedActivity] = useState<any>(null);
     const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
     const [bulkInput, setBulkInput] = useState("");
+    const [showActivityModal, setShowActivityModal] = useState(false);
+    const [isHoveringTraining, setIsHoveringTraining] = useState(false);
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [weightRange, setWeightRange] = useState<'14d' | '30d' | '3m' | '1y' | 'all'>('1y');
     const [hoveredDay, setHoveredDay] = useState<string | null>(null);
@@ -529,8 +532,8 @@ export function DashboardPage() {
     const consumed = dailyNutrition.calories;
     const burned = health.dailyCaloriesBurned || 0;
 
-    // Determine target using centralized function (checks targets[0].value, nutritionMacros, period, settings)
-    const target = getActiveCalories(
+    // Determine target using centralized function
+    const targetResult = getActiveCalorieTarget(
         selectedDate,
         trainingPeriods,
         performanceGoals,
@@ -539,15 +542,32 @@ export function DashboardPage() {
         settings.calorieMode || 'tdee',
         burned
     );
+    const target = targetResult.calories;
 
-    // 2. Macros
-    const proteinTarget = settings.dailyProteinGoal || 160;
+    // Base target (without exercise calories) for scaling and Netto comparison
+    const baseTarget = getActiveCalorieTarget(
+        selectedDate,
+        trainingPeriods,
+        performanceGoals,
+        settings.dailyCalorieGoal,
+        2500,
+        settings.calorieMode || 'tdee',
+        0
+    ).calories;
+
+    // Scaling factor for macros (only in fixed mode when training increases the goal)
+    const scalingFactor = (settings.calorieMode === 'fixed' && baseTarget > 0)
+        ? (target / baseTarget)
+        : 1;
+
+    // 2. Macros (Scaled proportionally if training calories are added)
+    const proteinTarget = Math.round((settings.dailyProteinGoal || 160) * scalingFactor);
     const proteinCurrent = dailyNutrition.protein;
 
-    const carbsTarget = settings.dailyCarbsGoal || 250;
+    const carbsTarget = Math.round((settings.dailyCarbsGoal || 250) * scalingFactor);
     const carbsCurrent = dailyNutrition.carbs;
 
-    const fatTarget = settings.dailyFatGoal || 80;
+    const fatTarget = Math.round((settings.dailyFatGoal || 80) * scalingFactor);
     const fatCurrent = dailyNutrition.fat;
 
     // 3. Weight & Measurement Logic
@@ -582,10 +602,13 @@ export function DashboardPage() {
         .slice(0, 3);
 
     const currentUserHeight = settings.height || 0;
-    const latestWeightVal = latest3Weights[0]?.weight;
+    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
     const bmi = (latestWeightVal && currentUserHeight)
         ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
         : null;
+
+    const proteinRatio = latestWeightVal > 0 ? (proteinCurrent / latestWeightVal) : 0;
+    const targetProteinRatio = latestWeightVal > 0 ? (proteinTarget / latestWeightVal) : 0;
 
     const getBMICategory = (val: number) => {
         if (val < 18.5) return { label: 'Undervikt', color: 'text-amber-400', bg: 'bg-amber-400/10' };
@@ -673,7 +696,7 @@ export function DashboardPage() {
                                 e.stopPropagation();
                                 setSelectedActivity(act);
                             }}
-                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
+                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md scale-[1.02]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
                             <div className={`${density === 'compact' ? 'text-sm p-1' : 'text-lg p-1.5'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50`}>
                                 {typeDef?.icon || '💪'}
@@ -892,15 +915,52 @@ export function DashboardPage() {
                                             innerValue={proteinCurrent}
                                             innerMax={proteinTarget}
                                             label="Kcal"
-                                            subLabel={<span>{Math.round(consumed - target)} kcal</span>}
+                                            subLabel={
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`font-black ${consumed - burned <= baseTarget ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                        {Math.round(consumed - burned)}
+                                                    </span>
+                                                    <span className="text-[7px] opacity-50 uppercase font-bold tracking-tighter">Netto kcal</span>
+                                                </div>
+                                            }
                                         />
-                                        <div className="flex-1 ml-4 overflow-hidden">
+                                        <div className="flex-1 ml-4 min-w-0">
                                             <div className={`font-black text-slate-900 dark:text-white uppercase tracking-tighter ${density === 'compact' ? 'text-[10px] mb-2' : 'text-sm mb-4'}`}>Dagens Intag</div>
                                             <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                                                 {/* Protein */}
                                                 <div>
                                                     <div className={`flex justify-between items-baseline mb-1`}>
-                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Protein</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Protein</span>
+                                                            {latestWeightVal > 0 && (
+                                                                <div className="group relative">
+                                                                    <Info size={10} className="text-slate-300 hover:text-emerald-500 cursor-help transition-colors" />
+                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-slate-900 text-[10px] text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all group-hover:translate-y-[-4px] pointer-events-none shadow-2xl border border-white/10 z-[100] leading-tight text-center">
+                                                                        <div className="flex justify-between items-center mb-2 px-1">
+                                                                            <div className="flex flex-col items-center">
+                                                                                <span className="text-[8px] uppercase opacity-50 font-bold">Nuvarande</span>
+                                                                                <span className={`text-sm font-black ${proteinRatio >= targetProteinRatio ? 'text-emerald-400' : 'text-white'}`}>{proteinRatio.toFixed(1)}</span>
+                                                                            </div>
+                                                                            <div className="h-4 w-[1px] bg-white/10" />
+                                                                            <div className="flex flex-col items-center">
+                                                                                <span className="text-[8px] uppercase opacity-50 font-bold">Mål</span>
+                                                                                <span className="text-sm font-black text-blue-400">{targetProteinRatio.toFixed(1)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <p className="text-[9px] mb-1 opacity-70">Gram protein per kg kroppsvikt</p>
+                                                                        {settings.trainingGoal === 'deff' && proteinRatio < 2.0 ? (
+                                                                            <p className="p-1.5 bg-amber-500/10 rounded-lg text-amber-400/90 italic border border-amber-500/20">Vid deff bör du ligga på drygt 2.0g/kg för att behålla muskelmassa.</p>
+                                                                        ) : proteinRatio >= targetProteinRatio ? (
+                                                                            <p className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400/90 font-bold border border-emerald-500/20">Snyggt! Du når ditt proteinmål.</p>
+                                                                        ) : (
+                                                                            <p className="opacity-70">Baserat på din senaste vikt ({latestWeightVal}kg).</p>
+                                                                        )}
+                                                                        {/* Arrow */}
+                                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-baseline gap-1">
                                                         <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-slate-900 dark:text-white`}>
@@ -962,7 +1022,11 @@ export function DashboardPage() {
                                                 </div>
 
                                                 {/* Training/Burned Calories */}
-                                                <div>
+                                                <div
+                                                    onMouseEnter={() => setIsHoveringTraining(true)}
+                                                    onMouseLeave={() => setIsHoveringTraining(false)}
+                                                    className={`transition-all rounded-lg p-1 -m-1 ${isHoveringTraining ? 'bg-emerald-500/10 ring-1 ring-emerald-500/20' : ''}`}
+                                                >
                                                     <div className={`flex justify-between items-baseline mb-1`}>
                                                         <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Träning</span>
                                                     </div>
@@ -1757,10 +1821,10 @@ export function DashboardPage() {
                                                     }
                                                     return null;
                                                 })
-                                                .filter((e): e is { date: string, weight: number, waist?: number } => e !== null);
+                                                .filter((e): e is { date: string, weight: number, waist: number | undefined } => e !== null);
 
                                             if (entries.length > 0) {
-                                                bulkAddWeightEntries(entries);
+                                                bulkAddWeightEntries(entries as any);
                                                 setBulkInput("");
                                                 setShowBulkImport(false);
                                             }
