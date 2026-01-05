@@ -50,6 +50,7 @@ import { ToolsMacroPage } from './pages/tools/ToolsMacroPage.tsx';
 import { ToolsCooperPage } from './pages/tools/ToolsCooperPage.tsx';
 import { ToolsHeartRatePage } from './pages/tools/ToolsHeartRatePage.tsx';
 import { ToolsStrengthStandardsPage } from './pages/tools/ToolsStrengthStandardsPage.tsx';
+import DebugBar from './components/debug/DebugBar.tsx';
 import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -88,6 +89,7 @@ export function App() {
                 <SettingsProvider>
                     <CookingModeProvider>
                         <BrowserRouter>
+                            <DebugBar />
                             <Routes>
                                 {/* Public Routes */}
                                 <Route path="/login" element={<LoginPage />} />
