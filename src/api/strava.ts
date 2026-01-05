@@ -370,7 +370,7 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
         platform: 'strava' as const,
         date: activity.start_date_local.split('T')[0],
         type: mapStravaType(activity.type),
-        durationMinutes: Math.round(activity.elapsed_time / 60), // Use elapsed time
+        durationMinutes: activity.elapsed_time / 60, // Use elapsed time, preserve decimal precision
         intensity: estimateIntensity(activity),
         caloriesBurned: activity.calories || Math.round(activity.elapsed_time / 60 * 8),
         distance: activity.distance ? Math.round(activity.distance / 10) / 100 : undefined, // Convert to km
@@ -415,7 +415,7 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
             importedAt: new Date().toISOString()
         },
         distanceKm: activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
-        durationMinutes: Math.round(activity.elapsed_time / 60), // Use elapsed time
+        durationMinutes: activity.elapsed_time / 60, // Use elapsed time, preserve decimal precision
         calories: activity.calories || Math.round((activity.elapsed_time / 60) * 8), // Use elapsed time for fallback
 
         avgHeartRate: activity.average_heartrate,

@@ -91,8 +91,14 @@ export function getPaceZones(vdot: number) {
  * Formats decimal pace (min/km) to "MM:SS" string
  */
 export function formatPace(decimalPace: number): string {
-    const mins = Math.floor(decimalPace);
-    const secs = Math.round((decimalPace - mins) * 60);
+    if (!decimalPace || !isFinite(decimalPace)) return '—';
+    let mins = Math.floor(decimalPace);
+    let secs = Math.round((decimalPace - mins) * 60);
+    // Handle edge case where rounding gives 60 seconds
+    if (secs >= 60) {
+        mins += 1;
+        secs = 0;
+    }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
