@@ -13,6 +13,7 @@ import { handleParserRoutes } from "./handlers/parser.ts";
 import { handleGetCommunityStats } from "./handlers/statistics.ts";
 import { handleAdminKvRoutes } from "./handlers/adminKv.ts";
 import { handleUploadRoutes } from "./handlers/upload.ts";
+import { handleRacePlanRoutes } from "./handlers/racePlans.ts";
 import { logError, logMetric } from "./utils/logger.ts";
 import { serveDir } from "https://deno.land/std@0.208.0/http/file_server.ts";
 
@@ -83,6 +84,8 @@ export async function router(req: Request): Promise<Response> {
             response = await handlePeriodRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/parse-url")) {
             response = await handleParserRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/race-plans")) {
+            response = await handleRacePlanRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/upload-temp") || url.pathname.startsWith("/api/parse-image")) {
             response = await handleUploadRoutes(req, url, headers);
         } else if (url.pathname === "/api/stats/community") {
