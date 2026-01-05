@@ -1,20 +1,23 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { calculateAverage1RM, calculatePlateLoading } from '../../utils/strengthCalculators.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
 import { getPersonalRecords, PERCENTAGE_MAP } from '../../utils/strengthStatistics.ts';
-import { Search, X, Dumbbell, ChevronRight, Info } from 'lucide-react';
+import { Search, X, Dumbbell, ChevronRight, Info, Copy, Check, TrendingUp, Target } from 'lucide-react';
 
 export function ToolsOneRepMaxPage() {
     const { user } = useAuth();
     const { strengthSessions } = useData();
+    const { exerciseName: urlExercise } = useParams<{ exerciseName?: string }>();
     const [weight, setWeight] = useState(100);
     const [reps, setReps] = useState(5);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [copiedLink, setCopiedLink] = useState(false);
 
-    // Exercise Selection
-    const [selectedExercise, setSelectedExercise] = useState<string>('');
+    // Exercise Selection - initialize from URL if provided
+    const [selectedExercise, setSelectedExercise] = useState<string>(urlExercise ? decodeURIComponent(urlExercise) : '');
 
     // Extract unique exercises and sort by frequency
     const exerciseStats = useMemo(() => {
@@ -45,33 +48,36 @@ export function ToolsOneRepMaxPage() {
     }, [selectedExercise, strengthSessions]);
 
     // "Smart" Personal Records - Infer strength from higher reps
+    // Key insight: If you did 15×40kg, you also implicitly did 12×40kg, 10×40kg, etc.
     const smartPersonalRecords = useMemo(() => {
         const STANDARD_REPS = [1, 2, 5, 8, 10, 12, 15];
         const prValues = Object.values(personalRecords);
         const records = new Map(prValues.map(pr => [pr.reps, pr]));
-        // Store inferred records
-        const inferred: Record<number, { weight: number, source: { weight: number, reps: number }, e1rm: number, inferred: boolean }> = {};
+
+        // Store inferred/override records
+        const inferred: Record<number, { weight: number, source: { weight: number, reps: number }, e1rm: number, inferred: boolean, isOverride?: boolean }> = {};
 
         STANDARD_REPS.forEach(targetRep => {
-            if (records.has(targetRep)) return;
-
-            // Find best source: heaviest weight lifted for reps > targetRep determines potential
-            let bestSource = { weight: 0, reps: 0 };
+            // Find best source: heaviest weight lifted for reps >= targetRep
+            // This captures implied strength (15×40kg means you can do 12×40kg)
+            let bestImplied = { weight: 0, reps: 0 };
 
             prValues.forEach(pr => {
-                if (pr.reps > targetRep) {
-                    if (pr.weight > bestSource.weight) {
-                        bestSource = { weight: pr.weight, reps: pr.reps };
-                    }
+                if (pr.reps >= targetRep && pr.weight > bestImplied.weight) {
+                    bestImplied = { weight: pr.weight, reps: pr.reps };
                 }
             });
 
-            if (bestSource.weight > 0) {
+            const actual = records.get(targetRep);
+
+            // If implied weight is higher than actual (or no actual exists)
+            if (bestImplied.weight > 0 && (!actual || bestImplied.weight > actual.weight)) {
                 inferred[targetRep] = {
-                    weight: bestSource.weight,
-                    source: bestSource,
-                    e1rm: calculateAverage1RM(bestSource.weight, bestSource.reps).average,
-                    inferred: true
+                    weight: bestImplied.weight,
+                    source: bestImplied,
+                    e1rm: calculateAverage1RM(bestImplied.weight, bestImplied.reps).average,
+                    inferred: true,
+                    isOverride: actual !== undefined // Mark if this overrides an actual record
                 };
             }
         });
@@ -123,7 +129,7 @@ export function ToolsOneRepMaxPage() {
         type RowItem = {
             reps: number;
             formulaWeight: number; // Weight derived from formula input
-            pbWeight: number | null; // User's actual PB weight (if exists)
+            pbWeight: number | null; // User's actual/inferred PB weight (if exists)
             e1rm: number;
             type: 'actual' | 'inferred' | 'calculated';
             source?: { weight: number, reps: number }
@@ -133,10 +139,23 @@ export function ToolsOneRepMaxPage() {
 
         // 1. Standard Reps - ALWAYS show, with both formula weight and PB
         STANDARD_REPS.forEach(r => {
-            // Calculate formula-derived weight for this rep count
             const formulaWeight = Math.round(maxResults.average / (1 + r / 30));
 
-            // Check for actual PB
+            // Check if smartPersonalRecords has a better/implied value (overrides actual if higher)
+            const smart = smartPersonalRecords[r];
+            if (smart) {
+                rows.push({
+                    reps: r,
+                    formulaWeight,
+                    pbWeight: smart.weight,
+                    type: 'inferred',
+                    e1rm: smart.e1rm,
+                    source: smart.source
+                });
+                return;
+            }
+
+            // Check for actual PB (not overridden)
             const actual = personalRecords[r];
             if (actual) {
                 rows.push({
@@ -145,20 +164,6 @@ export function ToolsOneRepMaxPage() {
                     pbWeight: actual.weight,
                     type: 'actual',
                     e1rm: calculateAverage1RM(actual.weight, actual.reps).average
-                });
-                return;
-            }
-
-            // Check for inferred PB
-            const inf = smartPersonalRecords[r];
-            if (inf) {
-                rows.push({
-                    reps: r,
-                    formulaWeight,
-                    pbWeight: inf.weight,
-                    type: 'inferred',
-                    e1rm: inf.e1rm,
-                    source: inf.source
                 });
                 return;
             }
@@ -173,10 +178,10 @@ export function ToolsOneRepMaxPage() {
             });
         });
 
-        // 2. High Reps (> 15) - From actual PBs
-        const highReps = prValues.filter(pr => pr.reps > 15).sort((a, b) => a.reps - b.reps);
+        // 2. Non-standard Reps from actual PBs (ALL of them when expanded, selected when collapsed)
+        const nonStandardReps = prValues.filter(pr => !STANDARD_REPS.includes(pr.reps)).sort((a, b) => a.reps - b.reps);
 
-        const addHighRepRow = (pr: { reps: number, weight: number }) => {
+        const addNonStandardRow = (pr: { reps: number, weight: number }) => {
             if (!rows.some(row => row.reps === pr.reps)) {
                 const formulaWeight = Math.round(maxResults.average / (1 + pr.reps / 30));
                 const e1rm = calculateAverage1RM(pr.weight, pr.reps).average;
@@ -185,10 +190,11 @@ export function ToolsOneRepMaxPage() {
         };
 
         if (isExpanded) {
-            // Show ALL high reps
-            highReps.forEach(addHighRepRow);
+            // Show ALL non-standard reps
+            nonStandardReps.forEach(addNonStandardRow);
         } else {
-            // Show Max + up to 4 others (prefer even)
+            // Show highest rep + up to 4 others (prefer even numbers, focus on high reps > 15)
+            const highReps = nonStandardReps.filter(pr => pr.reps > 15);
             if (highReps.length > 0) {
                 const maxRepObj = highReps[highReps.length - 1];
                 const others = highReps.slice(0, -1);
@@ -201,21 +207,8 @@ export function ToolsOneRepMaxPage() {
                     selected = [...selected, ...odds.slice(-(4 - selected.length))].sort((a, b) => a.reps - b.reps);
                 }
 
-                [...selected, maxRepObj].forEach(addHighRepRow);
+                [...selected, maxRepObj].forEach(addNonStandardRow);
             }
-        }
-
-        // 3. Intermediate Reps (e.g. 3, 4, 6, 7, 9, 11, 13, 14) - Only if Expanded
-        if (isExpanded) {
-            prValues.forEach(pr => {
-                if (pr.reps <= 15 && !STANDARD_REPS.includes(pr.reps)) {
-                    if (!rows.some(row => row.reps === pr.reps)) {
-                        const formulaWeight = Math.round(maxResults.average / (1 + pr.reps / 30));
-                        const e1rm = calculateAverage1RM(pr.weight, pr.reps).average;
-                        rows.push({ reps: pr.reps, formulaWeight, pbWeight: pr.weight, e1rm, type: 'actual' });
-                    }
-                }
-            });
         }
 
         return rows.sort((a, b) => a.reps - b.reps);
@@ -224,9 +217,25 @@ export function ToolsOneRepMaxPage() {
     return (
         <div className="space-y-8 animate-fade-in pb-20">
             {/* Header */}
-            <div>
-                <h1 className="text-3xl font-bold text-white mb-2">1RM Kalkylator</h1>
-                <p className="text-slate-400">Beräkna ditt max och se hur du ska lasta stången.</p>
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-bold text-white mb-2">1RM Kalkylator</h1>
+                    <p className="text-slate-400">Beräkna ditt max och se hur du ska lasta stången.</p>
+                </div>
+                {selectedExercise && (
+                    <button
+                        onClick={() => {
+                            const url = `${window.location.origin}/rm/${encodeURIComponent(selectedExercise)}`;
+                            navigator.clipboard.writeText(url);
+                            setCopiedLink(true);
+                            setTimeout(() => setCopiedLink(false), 2000);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-white/10 rounded-xl text-sm text-slate-300 hover:text-white transition-colors self-start"
+                    >
+                        {copiedLink ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                        {copiedLink ? 'Kopierad!' : 'Kopiera länk'}
+                    </button>
+                )}
             </div>
 
             {/* Main Calculator */}
@@ -356,7 +365,8 @@ export function ToolsOneRepMaxPage() {
                                         <tr
                                             key={r}
                                             onClick={() => {
-                                                setWeight(formulaWeight);
+                                                // Use PB weight when available, otherwise formula weight
+                                                setWeight(pbWeight ?? formulaWeight);
                                                 setReps(r);
                                             }}
                                             className={`
@@ -523,6 +533,98 @@ export function ToolsOneRepMaxPage() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+
+                {/* Working Sets Suggestions */}
+                <div className="bg-slate-900 border border-white/5 rounded-3xl p-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                            <Target className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white">Arbetssett-förslag</h2>
+                            <p className="text-xs text-slate-500">Baserat på ditt e1RM: <span className="text-emerald-400 font-bold">{maxResults.average} kg</span></p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {[
+                            { label: '5×5 Styrka', pct: 80, reps: 5, sets: 5 },
+                            { label: '4×6 Hypertrofi', pct: 75, reps: 6, sets: 4 },
+                            { label: '3×8 Volym', pct: 70, reps: 8, sets: 3 },
+                            { label: '3×10 Uthållighet', pct: 65, reps: 10, sets: 3 },
+                            { label: '4×12 Pump', pct: 60, reps: 12, sets: 4 },
+                            { label: '2×15 Kondition', pct: 55, reps: 15, sets: 2 },
+                        ].map(({ label, pct, reps, sets }) => {
+                            const suggestedWeight = Math.round((maxResults.average * pct) / 100 / 2.5) * 2.5; // Round to nearest 2.5kg
+                            return (
+                                <button
+                                    key={label}
+                                    onClick={() => {
+                                        setWeight(suggestedWeight);
+                                        setReps(reps);
+                                        setTargetWeight(suggestedWeight);
+                                    }}
+                                    className="bg-slate-950/50 hover:bg-slate-800/50 border border-white/5 hover:border-emerald-500/30 rounded-xl p-4 text-left transition-all group"
+                                >
+                                    <div className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1 group-hover:text-emerald-400 transition-colors">{label}</div>
+                                    <div className="text-2xl font-black text-white tracking-tight">
+                                        {suggestedWeight} <span className="text-sm text-slate-600 font-bold">kg</span>
+                                    </div>
+                                    <div className="text-xs text-slate-500 mt-1">
+                                        {sets}×{reps} @ {pct}%
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Volume Planning / RPE Guide */}
+                <div className="bg-slate-900 border border-white/5 rounded-3xl p-6">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-purple-500/10 rounded-xl border border-purple-500/20">
+                            <TrendingUp className="w-5 h-5 text-purple-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white">Volymplanering</h2>
+                            <p className="text-xs text-slate-500">RPE-baserade rekommendationer</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-3">
+                        {[
+                            { rpe: 10, label: 'Maximal (RPE 10)', desc: '0 reps i reserv', pct: 100, color: 'text-red-400 bg-red-500/10 border-red-500/20' },
+                            { rpe: 9, label: 'Nästan max (RPE 9)', desc: '1 rep i reserv', pct: 96, color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+                            { rpe: 8, label: 'Tungt (RPE 8)', desc: '2 reps i reserv', pct: 92, color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
+                            { rpe: 7, label: 'Moderat (RPE 7)', desc: '3 reps i reserv', pct: 88, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+                            { rpe: 6, label: 'Lätt (RPE 6)', desc: '4+ reps i reserv', pct: 84, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+                        ].map(({ rpe, label, desc, pct, color }) => {
+                            const rpeWeight = Math.round((maxResults.average * pct) / 100 / 2.5) * 2.5;
+                            return (
+                                <button
+                                    key={rpe}
+                                    onClick={() => {
+                                        setWeight(rpeWeight);
+                                        setTargetWeight(rpeWeight);
+                                    }}
+                                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all hover:scale-[1.01] ${color}`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="text-2xl font-black w-8">{rpe}</div>
+                                        <div>
+                                            <div className="font-bold text-sm text-white">{label}</div>
+                                            <div className="text-[10px] text-slate-400">{desc}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-lg font-black text-white">{rpeWeight} kg</div>
+                                        <div className="text-[10px] text-slate-500">{pct}% av 1RM</div>
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 

@@ -163,6 +163,8 @@ export function App() {
                                                 <Route path="tools" element={<ToolsPage />} />
                                                 <Route path="verktyg" element={<ToolsPage />} />
                                                 <Route path="tools/1rm" element={<ToolsOneRepMaxPage />} />
+                                                <Route path="tools/1rm/:exerciseName" element={<ToolsOneRepMaxPage />} />
+                                                <Route path="rm/:exerciseName?" element={<ToolsOneRepMaxPage />} />
                                                 <Route path="tools/race" element={<ToolsRacePredictorPage />} />
                                                 <Route path="tools/race-planner" element={<ToolsRacePlannerPage />} />
                                                 <Route path="tools/race-predictor" element={<ToolsRacePredictorPage />} />
