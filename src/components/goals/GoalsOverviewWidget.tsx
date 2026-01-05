@@ -75,7 +75,7 @@ export function GoalsOverviewWidget() {
                                         {goal.name}
                                     </h4>
                                     <span className="text-[10px] font-bold text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        {goal.progress.percentage.toFixed(0)}%
+                                        {(goal.progress.percentage && !isNaN(goal.progress.percentage)) ? goal.progress.percentage.toFixed(0) : 0}%
                                     </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium truncate">
@@ -100,7 +100,7 @@ export function GoalsOverviewWidget() {
                         {/* Progress Bar Background */}
                         <div
                             className="absolute bottom-0 left-0 h-0.5 bg-emerald-500/20"
-                            style={{ width: `${goal.progress.percentage}%`, backgroundColor: goal.color }}
+                            style={{ width: `${(goal.progress.percentage && !isNaN(goal.progress.percentage)) ? Math.min(100, goal.progress.percentage) : 0}%`, backgroundColor: goal.color }}
                         />
                     </div>
                 ))}

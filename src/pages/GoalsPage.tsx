@@ -622,10 +622,10 @@ export function GoalsPage() {
                                                     <div className="goal-progress-bar">
                                                         <div
                                                             className="goal-progress-fill"
-                                                            style={{ width: `${Math.min(100, progress.percentage)}%` }}
+                                                            style={{ width: `${(progress.percentage && !isNaN(progress.percentage)) ? Math.min(100, progress.percentage) : 0}%` }}
                                                         />
                                                     </div>
-                                                    <span className="goal-percentage">{Math.round(progress.percentage)}%</span>
+                                                    <span className="goal-percentage">{(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%</span>
                                                 </div>
 
                                                 {/* Status badges */}

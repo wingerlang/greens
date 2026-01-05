@@ -547,7 +547,7 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                     {/* Progress Summary */}
                     <div className="grid grid-cols-3 gap-4">
                         <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5 text-center">
-                            <div className="text-3xl font-black text-white">{Math.round(progress.percentage)}%</div>
+                            <div className="text-3xl font-black text-white">{(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%</div>
                             <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Progress</div>
                         </div>
                         <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5 text-center">
@@ -1062,7 +1062,7 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                                 <div
                                     className="absolute inset-y-0 left-0 rounded-lg transition-all duration-500"
                                     style={{
-                                        width: `${Math.min(100, progress.percentage)}%`,
+                                        width: `${(progress.percentage && !isNaN(progress.percentage)) ? Math.min(100, progress.percentage) : 0}%`,
                                         background: `linear-gradient(90deg, ${categoryConfig.color} 0%, ${categoryConfig.color}80 100%)`
                                     }}
                                 />

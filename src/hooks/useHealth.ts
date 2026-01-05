@@ -1,8 +1,8 @@
-
 import { useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { getISODate } from '../models/types.ts';
+import { getActiveCalories } from '../utils/calorieTarget.ts';
 
 export interface HealthState {
     bmr: number;
@@ -26,7 +26,8 @@ export function useHealth(date: string = getISODate()) {
     const {
         calculateBMR,
         trainingCycles,
-        unifiedActivities, // Use unified activities instead of exerciseEntries
+        performanceGoals, // Add this
+        unifiedActivities,
         calculateDailyNutrition,
         weightEntries,
         getLatestWeight
@@ -70,10 +71,16 @@ export function useHealth(date: string = getISODate()) {
     const dailyCaloriesConsumed = nutrition.calories;
 
     // 6. TDEE & Targets
-    // TDEE = BMR + Exercise + Goal
-    // Wait, typically TDEE = BMR * ActivityMultiplier + Exercise.
-    // Simplifying to: Target = BMR + Exercise + GoalAdjustment
-    const targetCalories = Math.round(bmr + dailyCaloriesBurned + goalAdjustment);
+    // Use the centralized source of truth for target calories
+    const targetCalories = getActiveCalories(
+        date,
+        trainingCycles,
+        performanceGoals,
+        settings.dailyCalorieGoal,
+        2000,
+        settings.calorieMode || 'tdee',
+        dailyCaloriesBurned
+    );
 
     const netCalories = dailyCaloriesConsumed - dailyCaloriesBurned;
     const remainingCalories = targetCalories - dailyCaloriesConsumed;

@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { PerformanceGoal, PerformanceGoalType, GoalPeriod, GoalTarget, ExerciseType, TrainingCycle, GoalCategory, WeightEntry } from '../../models/types.ts';
 import { useData } from '../../context/DataContext.tsx';
+import { useSettings } from '../../context/SettingsContext.tsx';
 import { useScrollLock } from '../../hooks/useScrollLock.ts';
 import { calculateCalorieTarget, calculateVolumeStats } from '../../utils/smartGoalCalculations.ts';
+import { NutritionWizard } from '../nutrition/NutritionWizard.tsx';
+import { getActiveCalories } from '../../utils/calorieTarget.ts';
 
 const EXERCISE_TYPES: { type: ExerciseType | undefined; icon: string; label: string }[] = [
     { type: undefined, icon: '🎯', label: 'All träning' },
@@ -97,8 +101,13 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
     // Track if using new weight vs existing
     const [useExistingWeight, setUseExistingWeight] = useState(true);
 
+    // Nutrition Wizard Integration
+    const [showNutritionWizard, setShowNutritionWizard] = useState(false);
+    const [calculatedMacros, setCalculatedMacros] = useState<{ calories: number, protein: number, carbs: number, fat: number } | null>(null);
+
     // Get data from context
-    const { weightEntries = [], calculateBMR, exerciseEntries = [] } = useData();
+    const { weightEntries = [], trainingPeriods = [], performanceGoals = [], calculateBMR, exerciseEntries = [] } = useData();
+    const { settings, updateSettings } = useSettings();
 
     // Get latest weight entry
     const latestWeight = useMemo(() => {
@@ -399,6 +408,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             targetWeight: type === 'weight' || type === 'measurement' ? parseFloat(targetWeight) || undefined : undefined,
             targetWeightRate: type === 'weight' ? parseFloat(weeklyRate) || undefined : undefined,
             milestoneProgress: type === 'weight' ? parseFloat(currentWeight) || undefined : undefined,
+            nutritionMacros: calculatedMacros || undefined,
         };
 
         onSave(goalData);
@@ -413,763 +423,808 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 backdrop-blur-md animate-in fade-in" onClick={onClose}>
-            <div
-                className="w-full max-w-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4"
-                onClick={e => e.stopPropagation()}
-            >
-                {/* Header */}
-                <div className="p-6 border-b border-white/5 bg-gradient-to-r from-emerald-500/5 to-transparent">
-                    <h2 className="text-2xl font-black text-white tracking-tight">
-                        {editingGoal ? '✏️ Redigera Mål' : '🎯 Nytt Mål'}
-                    </h2>
-                    <p className="text-sm text-slate-500 mt-1">
-                        Definiera och spåra dina framsteg
-                    </p>
+            {showNutritionWizard ? (
+                <div className="w-full max-w-xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                    <NutritionWizard
+                        onSave={(profile) => {
+                            setTargetWeight(profile.fixedCalorieBase?.toString() || ''); // Use as reference if needed
+                            setTargetValue(profile.calories.toString());
+                            setCalculatedMacros({
+                                calories: profile.calories,
+                                protein: profile.protein,
+                                carbs: profile.carbs,
+                                fat: profile.fat
+                            });
+                            // If we save in wizard, also update global settings so it "slår överallt"
+                            if (updateSettings) {
+                                updateSettings({
+                                    dailyCalorieGoal: profile.calories,
+                                    dailyProteinGoal: profile.protein,
+                                    dailyCarbsGoal: profile.carbs,
+                                    dailyFatGoal: profile.fat,
+                                    calorieMode: profile.calorieMode,
+                                    fixedCalorieBase: profile.fixedCalorieBase
+                                });
+                            }
+                            setShowNutritionWizard(false);
+                            if (type === 'weight') {
+                                // Keep weight as type, but we have macros now
+                            } else {
+                                setType('nutrition');
+                                setTargetUnit('kcal');
+                            }
+                        }}
+                        onCancel={() => setShowNutritionWizard(false)}
+                    />
                 </div>
-
-                <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
-                    {/* Smart Input */}
-                    <div className="p-4 bg-gradient-to-r from-emerald-500/10 to-purple-500/5 rounded-2xl border border-emerald-500/20">
-                        <label className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider mb-2 flex items-center gap-2">
-                            <span>✨</span> Smart Input
-                            <span className="text-slate-500 normal-case">– skriv naturligt</span>
-                        </label>
-                        <input
-                            type="text"
-                            placeholder="t.ex. '3x styrka om veckan' eller '50km per månad'"
-                            value={smartInput}
-                            onChange={e => setSmartInput(e.target.value)}
-                            className="w-full bg-slate-950/50 border border-emerald-500/30 rounded-xl p-3.5 text-white text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none placeholder:text-slate-600"
-                        />
-                    </div>
-
-                    {/* Goal Type Selection */}
-                    <div className="space-y-3">
-                        <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">1</span>
-                            Välj måltyp
-                        </label>
-                        <div className="grid grid-cols-4 gap-2">
-                            {GOAL_TYPES.slice(0, 4).map(opt => (
-                                <button
-                                    key={opt.id}
-                                    onClick={() => setType(opt.id as PerformanceGoalType)}
-                                    className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${type === opt.id
-                                        ? 'bg-emerald-500 text-slate-950 border-emerald-500 shadow-lg shadow-emerald-500/20'
-                                        : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:border-white/10'
-                                        }`}
-                                >
-                                    <span className="text-xl">{opt.icon}</span>
-                                    <span className="text-[10px] font-bold uppercase">{opt.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-4 gap-2">
-                            {GOAL_TYPES.slice(4).map(opt => (
-                                <button
-                                    key={opt.id}
-                                    onClick={() => setType(opt.id as PerformanceGoalType)}
-                                    className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${type === opt.id
-                                        ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20'
-                                        : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:border-white/10'
-                                        }`}
-                                >
-                                    <span className="text-xl">{opt.icon}</span>
-                                    <span className="text-[10px] font-bold uppercase">{opt.label}</span>
-                                </button>
-                            ))}
-                        </div>
-                        <p className="text-xs text-slate-600 italic pl-1">
-                            {GOAL_TYPES.find(t => t.id === type)?.desc}
+            ) : (
+                <div
+                    className="w-full max-w-2xl bg-gradient-to-b from-slate-900 to-slate-950 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-4"
+                    onClick={e => e.stopPropagation()}
+                >
+                    {/* Header */}
+                    <div className="p-6 border-b border-white/5 bg-gradient-to-r from-emerald-500/5 to-transparent">
+                        <h2 className="text-2xl font-black text-white tracking-tight">
+                            {editingGoal ? '✏️ Redigera Mål' : '🎯 Nytt Mål'}
+                        </h2>
+                        <p className="text-sm text-slate-500 mt-1">
+                            Definiera och spåra dina framsteg
                         </p>
                     </div>
 
-                    {/* Name */}
-                    <div className="space-y-2">
-                        <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">2</span>
-                            Namnge målet
-                        </label>
-                        <input
-                            type="text"
-                            placeholder="t.ex. 'Sommarform 2026' eller 'Styrka 3x'"
-                            value={name}
-                            onChange={e => setName(e.target.value)}
-                            className="w-full bg-slate-950/50 border border-white/10 rounded-xl p-3.5 text-white focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none"
-                        />
-                    </div>
+                    <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto">
+                        {/* Smart Input */}
+                        <div className="p-4 bg-gradient-to-r from-emerald-500/10 to-purple-500/5 rounded-2xl border border-emerald-500/20">
+                            <label className="text-[10px] uppercase font-bold text-emerald-400 tracking-wider mb-2 flex items-center gap-2">
+                                <span>✨</span> Smart Input
+                                <span className="text-slate-500 normal-case">– skriv naturligt</span>
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="t.ex. '3x styrka om veckan' eller '50km per månad'"
+                                value={smartInput}
+                                onChange={e => setSmartInput(e.target.value)}
+                                className="w-full bg-slate-950/50 border border-emerald-500/30 rounded-xl p-3.5 text-white text-sm focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 transition-all outline-none placeholder:text-slate-600"
+                            />
+                        </div>
 
-                    {/* Target Configuration based on type */}
-                    <div className="space-y-3">
-                        <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">3</span>
-                            Konfigurera mål
-                        </label>
+                        {/* Goal Type Selection */}
+                        <div className="space-y-3">
+                            <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">1</span>
+                                Välj måltyp
+                            </label>
+                            <div className="grid grid-cols-4 gap-2">
+                                {GOAL_TYPES.slice(0, 4).map(opt => (
+                                    <button
+                                        key={opt.id}
+                                        onClick={() => setType(opt.id as PerformanceGoalType)}
+                                        className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${type === opt.id
+                                            ? 'bg-emerald-500 text-slate-950 border-emerald-500 shadow-lg shadow-emerald-500/20'
+                                            : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:border-white/10'
+                                            }`}
+                                    >
+                                        <span className="text-xl">{opt.icon}</span>
+                                        <span className="text-[10px] font-bold uppercase">{opt.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-4 gap-2">
+                                {GOAL_TYPES.slice(4).map(opt => (
+                                    <button
+                                        key={opt.id}
+                                        onClick={() => setType(opt.id as PerformanceGoalType)}
+                                        className={`p-3 rounded-xl border flex flex-col items-center gap-1.5 transition-all ${type === opt.id
+                                            ? 'bg-blue-500 text-white border-blue-500 shadow-lg shadow-blue-500/20'
+                                            : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800 hover:border-white/10'
+                                            }`}
+                                    >
+                                        <span className="text-xl">{opt.icon}</span>
+                                        <span className="text-[10px] font-bold uppercase">{opt.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-slate-600 italic pl-1">
+                                {GOAL_TYPES.find(t => t.id === type)?.desc}
+                            </p>
+                        </div>
 
-                        {/* Frequency Config */}
-                        {type === 'frequency' && (
-                            <div className="space-y-4">
-                                {frequencyTargets.map((target, idx) => (
-                                    <div key={idx} className="p-4 bg-slate-950/30 rounded-xl border border-white/5 space-y-4 relative">
-                                        {frequencyTargets.length > 1 && (
-                                            <button
-                                                onClick={() => {
-                                                    const newTargets = [...frequencyTargets];
-                                                    newTargets.splice(idx, 1);
-                                                    setFrequencyTargets(newTargets);
-                                                }}
-                                                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500/20 transition-all text-xs"
-                                            >
-                                                ✕
-                                            </button>
-                                        )}
+                        {/* Name */}
+                        <div className="space-y-2">
+                            <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">2</span>
+                                Namnge målet
+                            </label>
+                            <input
+                                type="text"
+                                placeholder="t.ex. 'Sommarform 2026' eller 'Styrka 3x'"
+                                value={name}
+                                onChange={e => setName(e.target.value)}
+                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl p-3.5 text-white focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none"
+                            />
+                        </div>
 
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] uppercase font-bold text-slate-500 flex justify-between">
-                                                <span>Aktivitet</span>
-                                                {target.exerciseType === undefined && <span className="text-emerald-500">All träning</span>}
-                                            </label>
-                                            <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
-                                                {EXERCISE_TYPES.map(t => (
-                                                    <button
-                                                        key={t.label}
-                                                        onClick={() => {
+                        {/* Target Configuration based on type */}
+                        <div className="space-y-3">
+                            <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">3</span>
+                                Konfigurera mål
+                            </label>
+
+                            {/* Frequency Config */}
+                            {type === 'frequency' && (
+                                <div className="space-y-4">
+                                    {frequencyTargets.map((target, idx) => (
+                                        <div key={idx} className="p-4 bg-slate-950/30 rounded-xl border border-white/5 space-y-4 relative">
+                                            {frequencyTargets.length > 1 && (
+                                                <button
+                                                    onClick={() => {
+                                                        const newTargets = [...frequencyTargets];
+                                                        newTargets.splice(idx, 1);
+                                                        setFrequencyTargets(newTargets);
+                                                    }}
+                                                    className="absolute top-2 right-2 w-6 h-6 rounded-full bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500/20 transition-all text-xs"
+                                                >
+                                                    ✕
+                                                </button>
+                                            )}
+
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] uppercase font-bold text-slate-500 flex justify-between">
+                                                    <span>Aktivitet</span>
+                                                    {target.exerciseType === undefined && <span className="text-emerald-500">All träning</span>}
+                                                </label>
+                                                <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
+                                                    {EXERCISE_TYPES.map(t => (
+                                                        <button
+                                                            key={t.label}
+                                                            onClick={() => {
+                                                                const newTargets = [...frequencyTargets];
+                                                                newTargets[idx] = { ...target, exerciseType: t.type };
+                                                                setFrequencyTargets(newTargets);
+                                                            }}
+                                                            title={t.label}
+                                                            className={`p-2 rounded-lg border flex flex-col items-center gap-1 transition-all ${target.exerciseType === t.type
+                                                                ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                                : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                                }`}
+                                                        >
+                                                            <span className="text-base">{t.icon}</span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] uppercase font-bold text-slate-500">Antal gånger</label>
+                                                <div className="flex items-center gap-4">
+                                                    <input
+                                                        type="number"
+                                                        value={target.count}
+                                                        onChange={e => {
                                                             const newTargets = [...frequencyTargets];
-                                                            newTargets[idx] = { ...target, exerciseType: t.type };
+                                                            newTargets[idx] = { ...target, count: parseInt(e.target.value) || 0 };
                                                             setFrequencyTargets(newTargets);
                                                         }}
-                                                        title={t.label}
-                                                        className={`p-2 rounded-lg border flex flex-col items-center gap-1 transition-all ${target.exerciseType === t.type
-                                                            ? 'bg-emerald-500 text-slate-950 border-emerald-500'
-                                                            : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
-                                                            }`}
+                                                        className="flex-1 bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                                    />
+                                                    <span className="text-slate-500 font-bold text-sm uppercase">gånger</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <button
+                                        onClick={() => setFrequencyTargets([...frequencyTargets, { exerciseType: undefined, count: 1, unit: 'sessions' }])}
+                                        className="w-full p-3 rounded-xl border border-dashed border-white/10 text-slate-500 hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-xs font-bold"
+                                    >
+                                        + Lägg till typ (t.ex. 2 löpning + 3 styrka)
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Volume Config (distance/tonnage/calories) */}
+                            {(type === 'distance' || type === 'tonnage' || type === 'calories') && (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-4 p-4 bg-slate-950/30 rounded-xl border border-white/5">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
+                                            <input
+                                                type="number"
+                                                placeholder="50"
+                                                value={targetValue}
+                                                onChange={e => setTargetValue(e.target.value)}
+                                                className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                            />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500">Enhet</label>
+                                            <select
+                                                value={targetUnit}
+                                                onChange={e => setTargetUnit(e.target.value)}
+                                                className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
+                                            >
+                                                {type === 'distance' && <option value="km">km</option>}
+                                                {type === 'tonnage' && <option value="ton">ton</option>}
+                                                {type === 'calories' && <option value="kcal">kcal</option>}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Smart Suggestions for Volume */}
+                                    {volumeStats && (volumeStats.avg30d > 0) && (
+                                        <div className="p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
+                                            <div className="text-[10px] font-bold text-blue-400 uppercase mb-2 flex justify-between">
+                                                <span>Snitt (Veckovis)</span>
+                                                <span>{volumeStats.avg30d.toFixed(1)} {volumeStats.unit} (30d)</span>
+                                            </div>
+                                            <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                                                {[
+                                                    { label: 'Samma', val: volumeStats.avg30d },
+                                                    { label: '+10%', val: volumeStats.avg30d * 1.1 },
+                                                    { label: '+15%', val: volumeStats.avg30d * 1.15 },
+                                                    { label: '+30%', val: volumeStats.avg30d * 1.3 },
+                                                ].map(opt => (
+                                                    <button
+                                                        key={opt.label}
+                                                        onClick={() => setTargetValue(Math.round(opt.val).toString())}
+                                                        className="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs rounded border border-blue-500/20 whitespace-nowrap"
                                                     >
-                                                        <span className="text-base">{t.icon}</span>
+                                                        {opt.label} ({Math.round(opt.val)})
                                                     </button>
                                                 ))}
                                             </div>
                                         </div>
+                                    )}
+                                </div>
+                            )}
 
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] uppercase font-bold text-slate-500">Antal gånger</label>
-                                            <div className="flex items-center gap-4">
-                                                <input
-                                                    type="number"
-                                                    value={target.count}
-                                                    onChange={e => {
+                            {/* Weight & Measurement Config */}
+                            {isBodyGoal && (
+                                <div className="space-y-4 p-4 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-xl border border-blue-500/10">
+                                    {/* Toggle what to track */}
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => { setIncludeWeight(true); if (!includeMeasurement && type === 'measurement') setType('weight'); }}
+                                            className={`flex-1 p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${includeWeight
+                                                ? 'bg-blue-500 text-white border-blue-500'
+                                                : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                                }`}
+                                        >
+                                            <span>⚖️</span>
+                                            <span className="font-bold text-sm">Vikt</span>
+                                        </button>
+                                        <button
+                                            onClick={() => { setIncludeMeasurement(!includeMeasurement); if (!includeWeight) setIncludeWeight(true); }}
+                                            className={`flex-1 p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${includeMeasurement
+                                                ? 'bg-purple-500 text-white border-purple-500'
+                                                : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                                }`}
+                                        >
+                                            <span>📐</span>
+                                            <span className="font-bold text-sm">+ Mått</span>
+                                        </button>
+                                    </div>
+
+                                    {/* Weight Section */}
+                                    {includeWeight && (
+                                        <div className="space-y-3 p-3 bg-slate-950/30 rounded-xl">
+                                            <div className="flex justify-between items-center">
+                                                <div className="text-xs font-bold text-blue-400 uppercase tracking-wider">Viktmål</div>
+                                                <button
+                                                    onClick={() => setShowNutritionWizard(true)}
+                                                    className="text-[10px] bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-3 py-1 rounded-full font-bold flex items-center gap-1 border border-emerald-500/20 transition-all"
+                                                >
+                                                    ✨ Använd Hälsoguiden
+                                                </button>
+                                            </div>
+
+                                            {/* Direction */}
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {[
+                                                    { id: 'down', label: 'Gå ner', icon: '📉', color: 'emerald' },
+                                                    { id: 'stable', label: 'Håll vikten', icon: '➡️', color: 'blue' },
+                                                    { id: 'up', label: 'Gå upp', icon: '📈', color: 'purple' },
+                                                ].map(dir => (
+                                                    <button
+                                                        key={dir.id}
+                                                        onClick={() => setWeightDirection(dir.id as WeightDirection)}
+                                                        className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col items-center gap-1 transition-all ${weightDirection === dir.id
+                                                            ? dir.color === 'emerald' ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                                : dir.color === 'blue' ? 'bg-blue-500 text-white border-blue-500'
+                                                                    : 'bg-purple-500 text-white border-purple-500'
+                                                            : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                                            }`}
+                                                    >
+                                                        <span className="text-base">{dir.icon}</span>
+                                                        <span>{dir.label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* Weight inputs */}
+                                            <div className="space-y-3">
+                                                {/* Pre-fill indicator */}
+                                                {latestWeight && (
+                                                    <div className={`flex items-center justify-between p-2.5 rounded-lg border ${useExistingWeight
+                                                        ? 'bg-blue-500/10 border-blue-500/20'
+                                                        : 'bg-slate-900/50 border-white/5'
+                                                        }`}>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-blue-400">⚖️</span>
+                                                            <div className="text-xs">
+                                                                <span className="text-slate-400">Senaste vägning: </span>
+                                                                <span className="text-white font-bold">{latestWeight.weight} kg</span>
+                                                                <span className="text-slate-500 ml-1">({formatWeightDate(latestWeight.date)})</span>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => {
+                                                                setUseExistingWeight(!useExistingWeight);
+                                                                if (!useExistingWeight && latestWeight) {
+                                                                    setCurrentWeight(latestWeight.weight.toString());
+                                                                }
+                                                            }}
+                                                            className={`text-[10px] font-bold px-2 py-1 rounded ${useExistingWeight
+                                                                ? 'text-blue-400'
+                                                                : 'bg-emerald-500/20 text-emerald-400'
+                                                                }`}
+                                                        >
+                                                            {useExistingWeight ? '✓ Använder' : '+ Ny vägning'}
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {/* Weight input fields */}
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                                                            Nu (kg)
+                                                            {!useExistingWeight && (
+                                                                <span className="text-emerald-400 text-[8px]">NY</span>
+                                                            )}
+                                                        </label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            placeholder={latestWeight ? latestWeight.weight.toString() : "85"}
+                                                            value={currentWeight}
+                                                            onChange={e => {
+                                                                setCurrentWeight(e.target.value);
+                                                                // If user types a different weight, mark as new
+                                                                if (latestWeight && e.target.value !== latestWeight.weight.toString()) {
+                                                                    setUseExistingWeight(false);
+                                                                }
+                                                            }}
+                                                            className={`w-full border rounded-lg p-2.5 text-white text-center font-bold ${!useExistingWeight
+                                                                ? 'bg-emerald-500/10 border-emerald-500/30'
+                                                                : 'bg-slate-900 border-white/10'
+                                                                }`}
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[9px] uppercase font-bold text-slate-500">Mål (kg)</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.1"
+                                                            placeholder="80"
+                                                            value={targetWeight}
+                                                            onChange={e => setTargetWeight(e.target.value)}
+                                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[9px] uppercase font-bold text-slate-500">kg/vecka</label>
+                                                        <select
+                                                            value={weeklyRate}
+                                                            onChange={e => setWeeklyRate(e.target.value)}
+                                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
+                                                        >
+                                                            <option value="0.25">±0.25</option>
+                                                            <option value="0.5">±0.5</option>
+                                                            <option value="0.75">±0.75</option>
+                                                            <option value="1">±1.0</option>
+                                                        </select>
+                                                    </div>
+                                                </div>
+
+                                                {/* New weight notice */}
+                                                {!useExistingWeight && (
+                                                    <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                                                        <span className="text-emerald-400">✨</span>
+                                                        <span className="text-xs text-emerald-300">
+                                                            En ny vägning på <strong>{currentWeight || '?'} kg</strong> kommer registreras
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Estimated time */}
+                                            {currentWeight && targetWeight && (
+                                                <div className="text-xs text-slate-500 text-center pt-2 border-t border-white/5">
+                                                    {(() => {
+                                                        const diff = Math.abs(parseFloat(targetWeight) - parseFloat(currentWeight));
+                                                        const weeks = Math.ceil(diff / parseFloat(weeklyRate));
+                                                        return `≈ ${weeks} veckor för att nå målet`;
+                                                    })()}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Measurement Section */}
+                                    {includeMeasurement && (
+                                        <div className="space-y-3 p-3 bg-slate-950/30 rounded-xl">
+                                            <div className="text-xs font-bold text-purple-400 uppercase tracking-wider">Kroppsmått</div>
+
+                                            {/* Measurement type */}
+                                            <div className="grid grid-cols-6 gap-1.5">
+                                                {MEASUREMENT_TYPES.map(m => (
+                                                    <button
+                                                        key={m.id}
+                                                        onClick={() => setMeasurementType(m.id)}
+                                                        className={`p-2 rounded-lg border text-[10px] font-bold transition-all ${measurementType === m.id
+                                                            ? 'bg-purple-500 text-white border-purple-500'
+                                                            : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                                            }`}
+                                                    >
+                                                        {m.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* Direction */}
+                                            <div className="grid grid-cols-3 gap-2">
+                                                {[
+                                                    { id: 'down', label: 'Minska', icon: '📉' },
+                                                    { id: 'stable', label: 'Håll', icon: '➡️' },
+                                                    { id: 'up', label: 'Öka', icon: '📈' },
+                                                ].map(dir => (
+                                                    <button
+                                                        key={dir.id}
+                                                        onClick={() => setMeasurementDirection(dir.id as WeightDirection)}
+                                                        className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${measurementDirection === dir.id
+                                                            ? 'bg-purple-500 text-white border-purple-500'
+                                                            : 'bg-slate-900/50 text-slate-400 border-white/5'
+                                                            }`}
+                                                    >
+                                                        <span>{dir.icon}</span>
+                                                        <span>{dir.label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            {/* Measurement inputs */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] uppercase font-bold text-slate-500">Nu (cm)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.5"
+                                                        placeholder="90"
+                                                        value={currentMeasurement}
+                                                        onChange={e => setCurrentMeasurement(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[9px] uppercase font-bold text-slate-500">Mål (cm)</label>
+                                                    <input
+                                                        type="number"
+                                                        step="0.5"
+                                                        placeholder="85"
+                                                        value={targetMeasurement}
+                                                        onChange={e => setTargetMeasurement(e.target.value)}
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Streak Config */}
+                            {type === 'streak' && (
+                                <div className="p-4 bg-gradient-to-br from-orange-500/5 to-red-500/5 rounded-xl border border-orange-500/10 space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Aktivitet</label>
+                                        <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
+                                            {EXERCISE_TYPES.map(t => (
+                                                <button
+                                                    key={t.label}
+                                                    onClick={() => {
                                                         const newTargets = [...frequencyTargets];
-                                                        newTargets[idx] = { ...target, count: parseInt(e.target.value) || 0 };
+                                                        newTargets[0] = { ...newTargets[0], exerciseType: t.type };
                                                         setFrequencyTargets(newTargets);
                                                     }}
-                                                    className="flex-1 bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
-                                                />
-                                                <span className="text-slate-500 font-bold text-sm uppercase">gånger</span>
-                                            </div>
+                                                    title={t.label}
+                                                    className={`p-2 rounded-lg border flex flex-col items-center gap-1 transition-all ${frequencyTargets[0]?.exerciseType === t.type
+                                                        ? 'bg-orange-500 text-white border-orange-500'
+                                                        : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                        }`}
+                                                >
+                                                    <span className="text-base">{t.icon}</span>
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
-                                ))}
-
-                                <button
-                                    onClick={() => setFrequencyTargets([...frequencyTargets, { exerciseType: undefined, count: 1, unit: 'sessions' }])}
-                                    className="w-full p-3 rounded-xl border border-dashed border-white/10 text-slate-500 hover:text-emerald-400 hover:border-emerald-500/50 hover:bg-emerald-500/5 transition-all text-xs font-bold"
-                                >
-                                    + Lägg till typ (t.ex. 2 löpning + 3 styrka)
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Volume Config (distance/tonnage/calories) */}
-                        {(type === 'distance' || type === 'tonnage' || type === 'calories') && (
-                            <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-4 p-4 bg-slate-950/30 rounded-xl border border-white/5">
                                     <div className="space-y-2">
-                                        <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Dagar i rad</label>
                                         <input
                                             type="number"
-                                            placeholder="50"
-                                            value={targetValue}
-                                            onChange={e => setTargetValue(e.target.value)}
+                                            value={frequencyTargets[0]?.count}
+                                            onChange={e => {
+                                                const newTargets = [...frequencyTargets];
+                                                newTargets[0] = { ...newTargets[0], count: parseInt(e.target.value) || 0 };
+                                                setFrequencyTargets(newTargets);
+                                            }}
+                                            placeholder="7"
                                             className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] uppercase font-bold text-slate-500">Enhet</label>
-                                        <select
-                                            value={targetUnit}
-                                            onChange={e => setTargetUnit(e.target.value)}
-                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                                        >
-                                            {type === 'distance' && <option value="km">km</option>}
-                                            {type === 'tonnage' && <option value="ton">ton</option>}
-                                            {type === 'calories' && <option value="kcal">kcal</option>}
-                                        </select>
-                                    </div>
                                 </div>
+                            )}
 
-                                {/* Smart Suggestions for Volume */}
-                                {volumeStats && (volumeStats.avg30d > 0) && (
-                                    <div className="p-3 bg-blue-500/5 rounded-xl border border-blue-500/10">
-                                        <div className="text-[10px] font-bold text-blue-400 uppercase mb-2 flex justify-between">
-                                            <span>Snitt (Veckovis)</span>
-                                            <span>{volumeStats.avg30d.toFixed(1)} {volumeStats.unit} (30d)</span>
-                                        </div>
-                                        <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                                            {[
-                                                { label: 'Samma', val: volumeStats.avg30d },
-                                                { label: '+10%', val: volumeStats.avg30d * 1.1 },
-                                                { label: '+15%', val: volumeStats.avg30d * 1.15 },
-                                                { label: '+30%', val: volumeStats.avg30d * 1.3 },
-                                            ].map(opt => (
-                                                <button
-                                                    key={opt.label}
-                                                    onClick={() => setTargetValue(Math.round(opt.val).toString())}
-                                                    className="px-2 py-1 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 text-xs rounded border border-blue-500/20 whitespace-nowrap"
-                                                >
-                                                    {opt.label} ({Math.round(opt.val)})
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Weight & Measurement Config */}
-                        {isBodyGoal && (
-                            <div className="space-y-4 p-4 bg-gradient-to-br from-blue-500/5 to-purple-500/5 rounded-xl border border-blue-500/10">
-                                {/* Toggle what to track */}
-                                <div className="flex gap-3">
-                                    <button
-                                        onClick={() => { setIncludeWeight(true); if (!includeMeasurement && type === 'measurement') setType('weight'); }}
-                                        className={`flex-1 p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${includeWeight
-                                            ? 'bg-blue-500 text-white border-blue-500'
-                                            : 'bg-slate-900/50 text-slate-400 border-white/5'
-                                            }`}
-                                    >
-                                        <span>⚖️</span>
-                                        <span className="font-bold text-sm">Vikt</span>
-                                    </button>
-                                    <button
-                                        onClick={() => { setIncludeMeasurement(!includeMeasurement); if (!includeWeight) setIncludeWeight(true); }}
-                                        className={`flex-1 p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${includeMeasurement
-                                            ? 'bg-purple-500 text-white border-purple-500'
-                                            : 'bg-slate-900/50 text-slate-400 border-white/5'
-                                            }`}
-                                    >
-                                        <span>📐</span>
-                                        <span className="font-bold text-sm">+ Mått</span>
-                                    </button>
-                                </div>
-
-                                {/* Weight Section */}
-                                {includeWeight && (
-                                    <div className="space-y-3 p-3 bg-slate-950/30 rounded-xl">
-                                        <div className="text-xs font-bold text-blue-400 uppercase tracking-wider">Viktmål</div>
-
-                                        {/* Direction */}
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {[
-                                                { id: 'down', label: 'Gå ner', icon: '📉', color: 'emerald' },
-                                                { id: 'stable', label: 'Håll vikten', icon: '➡️', color: 'blue' },
-                                                { id: 'up', label: 'Gå upp', icon: '📈', color: 'purple' },
-                                            ].map(dir => (
-                                                <button
-                                                    key={dir.id}
-                                                    onClick={() => setWeightDirection(dir.id as WeightDirection)}
-                                                    className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col items-center gap-1 transition-all ${weightDirection === dir.id
-                                                        ? dir.color === 'emerald' ? 'bg-emerald-500 text-slate-950 border-emerald-500'
-                                                            : dir.color === 'blue' ? 'bg-blue-500 text-white border-blue-500'
-                                                                : 'bg-purple-500 text-white border-purple-500'
-                                                        : 'bg-slate-900/50 text-slate-400 border-white/5'
-                                                        }`}
-                                                >
-                                                    <span className="text-base">{dir.icon}</span>
-                                                    <span>{dir.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        {/* Weight inputs */}
-                                        <div className="space-y-3">
-                                            {/* Pre-fill indicator */}
-                                            {latestWeight && (
-                                                <div className={`flex items-center justify-between p-2.5 rounded-lg border ${useExistingWeight
-                                                    ? 'bg-blue-500/10 border-blue-500/20'
-                                                    : 'bg-slate-900/50 border-white/5'
-                                                    }`}>
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-blue-400">⚖️</span>
-                                                        <div className="text-xs">
-                                                            <span className="text-slate-400">Senaste vägning: </span>
-                                                            <span className="text-white font-bold">{latestWeight.weight} kg</span>
-                                                            <span className="text-slate-500 ml-1">({formatWeightDate(latestWeight.date)})</span>
-                                                        </div>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => {
-                                                            setUseExistingWeight(!useExistingWeight);
-                                                            if (!useExistingWeight && latestWeight) {
-                                                                setCurrentWeight(latestWeight.weight.toString());
-                                                            }
-                                                        }}
-                                                        className={`text-[10px] font-bold px-2 py-1 rounded ${useExistingWeight
-                                                            ? 'text-blue-400'
-                                                            : 'bg-emerald-500/20 text-emerald-400'
-                                                            }`}
-                                                    >
-                                                        {useExistingWeight ? '✓ Använder' : '+ Ny vägning'}
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {/* Weight input fields */}
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[9px] uppercase font-bold text-slate-500 flex items-center gap-1">
-                                                        Nu (kg)
-                                                        {!useExistingWeight && (
-                                                            <span className="text-emerald-400 text-[8px]">NY</span>
-                                                        )}
-                                                    </label>
-                                                    <input
-                                                        type="number"
-                                                        step="0.1"
-                                                        placeholder={latestWeight ? latestWeight.weight.toString() : "85"}
-                                                        value={currentWeight}
-                                                        onChange={e => {
-                                                            setCurrentWeight(e.target.value);
-                                                            // If user types a different weight, mark as new
-                                                            if (latestWeight && e.target.value !== latestWeight.weight.toString()) {
-                                                                setUseExistingWeight(false);
-                                                            }
-                                                        }}
-                                                        className={`w-full border rounded-lg p-2.5 text-white text-center font-bold ${!useExistingWeight
-                                                            ? 'bg-emerald-500/10 border-emerald-500/30'
-                                                            : 'bg-slate-900 border-white/10'
-                                                            }`}
-                                                    />
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[9px] uppercase font-bold text-slate-500">Mål (kg)</label>
-                                                    <input
-                                                        type="number"
-                                                        step="0.1"
-                                                        placeholder="80"
-                                                        value={targetWeight}
-                                                        onChange={e => setTargetWeight(e.target.value)}
-                                                        className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[9px] uppercase font-bold text-slate-500">kg/vecka</label>
-                                                    <select
-                                                        value={weeklyRate}
-                                                        onChange={e => setWeeklyRate(e.target.value)}
-                                                        className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
-                                                    >
-                                                        <option value="0.25">±0.25</option>
-                                                        <option value="0.5">±0.5</option>
-                                                        <option value="0.75">±0.75</option>
-                                                        <option value="1">±1.0</option>
-                                                    </select>
-                                                </div>
-                                            </div>
-
-                                            {/* New weight notice */}
-                                            {!useExistingWeight && (
-                                                <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                                                    <span className="text-emerald-400">✨</span>
-                                                    <span className="text-xs text-emerald-300">
-                                                        En ny vägning på <strong>{currentWeight || '?'} kg</strong> kommer registreras
-                                                    </span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {/* Estimated time */}
-                                        {currentWeight && targetWeight && (
-                                            <div className="text-xs text-slate-500 text-center pt-2 border-t border-white/5">
-                                                {(() => {
-                                                    const diff = Math.abs(parseFloat(targetWeight) - parseFloat(currentWeight));
-                                                    const weeks = Math.ceil(diff / parseFloat(weeklyRate));
-                                                    return `≈ ${weeks} veckor för att nå målet`;
-                                                })()}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {/* Measurement Section */}
-                                {includeMeasurement && (
-                                    <div className="space-y-3 p-3 bg-slate-950/30 rounded-xl">
-                                        <div className="text-xs font-bold text-purple-400 uppercase tracking-wider">Kroppsmått</div>
-
-                                        {/* Measurement type */}
-                                        <div className="grid grid-cols-6 gap-1.5">
-                                            {MEASUREMENT_TYPES.map(m => (
-                                                <button
-                                                    key={m.id}
-                                                    onClick={() => setMeasurementType(m.id)}
-                                                    className={`p-2 rounded-lg border text-[10px] font-bold transition-all ${measurementType === m.id
-                                                        ? 'bg-purple-500 text-white border-purple-500'
-                                                        : 'bg-slate-900/50 text-slate-400 border-white/5'
-                                                        }`}
-                                                >
-                                                    {m.label}
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        {/* Direction */}
-                                        <div className="grid grid-cols-3 gap-2">
-                                            {[
-                                                { id: 'down', label: 'Minska', icon: '📉' },
-                                                { id: 'stable', label: 'Håll', icon: '➡️' },
-                                                { id: 'up', label: 'Öka', icon: '📈' },
-                                            ].map(dir => (
-                                                <button
-                                                    key={dir.id}
-                                                    onClick={() => setMeasurementDirection(dir.id as WeightDirection)}
-                                                    className={`p-2 rounded-lg border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${measurementDirection === dir.id
-                                                        ? 'bg-purple-500 text-white border-purple-500'
-                                                        : 'bg-slate-900/50 text-slate-400 border-white/5'
-                                                        }`}
-                                                >
-                                                    <span>{dir.icon}</span>
-                                                    <span>{dir.label}</span>
-                                                </button>
-                                            ))}
-                                        </div>
-
-                                        {/* Measurement inputs */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1.5">
-                                                <label className="text-[9px] uppercase font-bold text-slate-500">Nu (cm)</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.5"
-                                                    placeholder="90"
-                                                    value={currentMeasurement}
-                                                    onChange={e => setCurrentMeasurement(e.target.value)}
-                                                    className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-[9px] uppercase font-bold text-slate-500">Mål (cm)</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.5"
-                                                    placeholder="85"
-                                                    value={targetMeasurement}
-                                                    onChange={e => setTargetMeasurement(e.target.value)}
-                                                    className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Streak Config */}
-                        {type === 'streak' && (
-                            <div className="p-4 bg-gradient-to-br from-orange-500/5 to-red-500/5 rounded-xl border border-orange-500/10 space-y-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Aktivitet</label>
-                                    <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-2">
-                                        {EXERCISE_TYPES.map(t => (
-                                            <button
-                                                key={t.label}
-                                                onClick={() => {
-                                                    const newTargets = [...frequencyTargets];
-                                                    newTargets[0] = { ...newTargets[0], exerciseType: t.type };
-                                                    setFrequencyTargets(newTargets);
-                                                }}
-                                                title={t.label}
-                                                className={`p-2 rounded-lg border flex flex-col items-center gap-1 transition-all ${frequencyTargets[0]?.exerciseType === t.type
-                                                    ? 'bg-orange-500 text-white border-orange-500'
-                                                    : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
-                                                    }`}
-                                            >
-                                                <span className="text-base">{t.icon}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Dagar i rad</label>
-                                    <input
-                                        type="number"
-                                        value={frequencyTargets[0]?.count}
-                                        onChange={e => {
-                                            const newTargets = [...frequencyTargets];
-                                            newTargets[0] = { ...newTargets[0], count: parseInt(e.target.value) || 0 };
-                                            setFrequencyTargets(newTargets);
-                                        }}
-                                        placeholder="7"
-                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
-                                    />
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Nutrition Config */}
-                        {type === 'nutrition' && (
-                            <div className="space-y-3">
-                                <div className="grid grid-cols-2 gap-4 p-4 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-xl border border-green-500/10">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
-                                        <input
-                                            type="number"
-                                            placeholder="150"
-                                            value={targetValue}
-                                            onChange={e => setTargetValue(e.target.value)}
-                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] uppercase font-bold text-slate-500">Typ</label>
-                                        <select
-                                            value={targetUnit}
-                                            onChange={e => setTargetUnit(e.target.value)}
-                                            className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
-                                        >
-                                            <option value="g">🌱 Protein (g)</option>
-                                            <option value="kcal">🔥 Kalorier (kcal)</option>
-                                        </select>
-                                    </div>
-                                </div>
-
-                                {/* Smart Calorie Estimate */}
-                                {calorieSmartData && targetUnit === 'kcal' && (
-                                    <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-bold text-emerald-400 uppercase">✨ Smart Estimat</span>
-                                            <button
-                                                onClick={() => setTargetValue(calorieSmartData.target.toString())}
-                                                className="text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-2 py-1 rounded"
-                                            >
-                                                Använd {calorieSmartData.target}
-                                            </button>
-                                        </div>
-                                        <div className="text-xs text-slate-400">
-                                            {calorieSmartData.explanation}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-
-                        {/* Speed Config */}
-                        {type === 'speed' && (
-                            <div className="p-4 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 rounded-xl border border-blue-500/10 space-y-4">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Mål</label>
-                                    <div className="flex items-center gap-4">
-                                        <div className="flex-1 space-y-1">
-                                            <label className="text-[9px] uppercase text-slate-400">Distans (km)</label>
+                            {/* Nutrition Config */}
+                            {type === 'nutrition' && (
+                                <div className="space-y-3">
+                                    <div className="grid grid-cols-2 gap-4 p-4 bg-gradient-to-br from-green-500/5 to-emerald-500/5 rounded-xl border border-green-500/10">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500">Värde</label>
                                             <input
                                                 type="number"
-                                                step="0.1"
-                                                value={targetDistance}
-                                                onChange={e => setTargetDistance(e.target.value)}
-                                                placeholder="5.0"
+                                                placeholder="150"
+                                                value={targetValue}
+                                                onChange={e => setTargetValue(e.target.value)}
                                                 className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
                                             />
                                         </div>
-                                        <div className="flex-1 space-y-1">
-                                            <label className="text-[9px] uppercase text-slate-400">Tid (mm:ss)</label>
-                                            <div className="flex gap-2">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] uppercase font-bold text-slate-500">Typ</label>
+                                            <select
+                                                value={targetUnit}
+                                                onChange={e => setTargetUnit(e.target.value)}
+                                                className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white"
+                                            >
+                                                <option value="g">🌱 Protein (g)</option>
+                                                <option value="kcal">🔥 Kalorier (kcal)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    {/* Smart Calorie Estimate */}
+                                    {calorieSmartData && targetUnit === 'kcal' && (
+                                        <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-[10px] font-bold text-emerald-400 uppercase">✨ Smart Estimat</span>
+                                                <button
+                                                    onClick={() => setTargetValue(calorieSmartData.target.toString())}
+                                                    className="text-xs bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-2 py-1 rounded"
+                                                >
+                                                    Använd {calorieSmartData.target}
+                                                </button>
+                                            </div>
+                                            <div className="text-xs text-slate-400">
+                                                {calorieSmartData.explanation}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+
+                            {/* Speed Config */}
+                            {type === 'speed' && (
+                                <div className="p-4 bg-gradient-to-br from-blue-500/5 to-cyan-500/5 rounded-xl border border-blue-500/10 space-y-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Mål</label>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex-1 space-y-1">
+                                                <label className="text-[9px] uppercase text-slate-400">Distans (km)</label>
                                                 <input
                                                     type="number"
-                                                    value={targetTimeMinutes}
-                                                    onChange={e => setTargetTimeMinutes(e.target.value)}
-                                                    placeholder="25"
-                                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
-                                                />
-                                                <span className="self-center font-bold text-slate-500">:</span>
-                                                <input
-                                                    type="number"
-                                                    value={targetTimeSeconds}
-                                                    onChange={e => setTargetTimeSeconds(e.target.value)}
-                                                    placeholder="00"
+                                                    step="0.1"
+                                                    value={targetDistance}
+                                                    onChange={e => setTargetDistance(e.target.value)}
+                                                    placeholder="5.0"
                                                     className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
                                                 />
                                             </div>
+                                            <div className="flex-1 space-y-1">
+                                                <label className="text-[9px] uppercase text-slate-400">Tid (mm:ss)</label>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="number"
+                                                        value={targetTimeMinutes}
+                                                        onChange={e => setTargetTimeMinutes(e.target.value)}
+                                                        placeholder="25"
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                                    />
+                                                    <span className="self-center font-bold text-slate-500">:</span>
+                                                    <input
+                                                        type="number"
+                                                        value={targetTimeSeconds}
+                                                        onChange={e => setTargetTimeSeconds(e.target.value)}
+                                                        placeholder="00"
+                                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-center text-lg font-bold"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="text-xs text-center text-slate-500">
+                                            Löphastighet: <strong>{targetDistance && targetTimeMinutes ? ((parseFloat(targetTimeMinutes) + (parseFloat(targetTimeSeconds) || 0) / 60) / parseFloat(targetDistance)).toFixed(2) : '-'}</strong> min/km
                                         </div>
                                     </div>
-                                    <div className="text-xs text-center text-slate-500">
-                                        Löphastighet: <strong>{targetDistance && targetTimeMinutes ? ((parseFloat(targetTimeMinutes) + (parseFloat(targetTimeSeconds) || 0) / 60) / parseFloat(targetDistance)).toFixed(2) : '-'}</strong> min/km
-                                    </div>
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            )}
+                        </div>
 
-                    {/* Period & Duration */}
-                    <div className="space-y-3">
-                        <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">4</span>
-                            Tidsperiod
-                        </label>
+                        {/* Period & Duration */}
+                        <div className="space-y-3">
+                            <label className="text-xs uppercase font-bold text-slate-400 tracking-wider flex items-center gap-2">
+                                <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">4</span>
+                                Tidsperiod
+                            </label>
 
-                        <div className="p-4 bg-slate-950/30 rounded-xl border border-white/5 space-y-4">
-                            {/* Start Date Presets */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Startdatum</label>
-                                <div className="grid grid-cols-4 gap-2">
-                                    {[
-                                        { label: 'Idag', val: new Date().toISOString().split('T')[0] },
-                                        { label: 'Imorgon', val: new Date(Date.now() + 86400000).toISOString().split('T')[0] },
-                                        {
-                                            label: 'Måndag', val: (() => {
-                                                const d = new Date();
-                                                d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
-                                                return d.toISOString().split('T')[0];
-                                            })()
-                                        },
-                                        {
-                                            label: '1:a i mån', val: (() => {
-                                                const d = new Date();
-                                                d.setMonth(d.getMonth() + 1);
-                                                d.setDate(1);
-                                                return d.toISOString().split('T')[0];
-                                            })()
-                                        }
-                                    ].map(opt => (
-                                        <button
-                                            key={opt.label}
-                                            onClick={() => setCustomStartDate(opt.val)}
-                                            className={`p-2 rounded-lg border text-xs font-bold transition-all ${customStartDate === opt.val
-                                                ? 'bg-emerald-500 text-slate-950 border-emerald-500'
-                                                : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
-                                                }`}
-                                        >
-                                            {opt.label}
-                                        </button>
-                                    ))}
-                                </div>
-                                <input
-                                    type="date"
-                                    value={customStartDate}
-                                    onChange={e => setCustomStartDate(e.target.value)}
-                                    className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-sm font-bold mt-2"
-                                />
-                            </div>
-
-                            {!isBodyGoal && type !== 'streak' && type !== 'speed' && (
+                            <div className="p-4 bg-slate-950/30 rounded-xl border border-white/5 space-y-4">
+                                {/* Start Date Presets */}
                                 <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Upprepning</label>
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Startdatum</label>
                                     <div className="grid grid-cols-4 gap-2">
                                         {[
-                                            { id: 'daily', label: 'Dagligen', icon: '📅' },
-                                            { id: 'weekly', label: 'Veckovis', icon: '📆' },
-                                            { id: 'monthly', label: 'Månadsvis', icon: '🗓️' },
-                                            { id: 'once', label: 'Engångs', icon: '🎯' },
-                                        ].map(p => (
+                                            { label: 'Idag', val: new Date().toISOString().split('T')[0] },
+                                            { label: 'Imorgon', val: new Date(Date.now() + 86400000).toISOString().split('T')[0] },
+                                            {
+                                                label: 'Måndag', val: (() => {
+                                                    const d = new Date();
+                                                    d.setDate(d.getDate() + (1 + 7 - d.getDay()) % 7);
+                                                    return d.toISOString().split('T')[0];
+                                                })()
+                                            },
+                                            {
+                                                label: '1:a i mån', val: (() => {
+                                                    const d = new Date();
+                                                    d.setMonth(d.getMonth() + 1);
+                                                    d.setDate(1);
+                                                    return d.toISOString().split('T')[0];
+                                                })()
+                                            }
+                                        ].map(opt => (
                                             <button
-                                                key={p.id}
-                                                onClick={() => setPeriod(p.id as GoalPeriod)}
-                                                className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col items-center gap-1 transition-all ${period === p.id
+                                                key={opt.label}
+                                                onClick={() => setCustomStartDate(opt.val)}
+                                                className={`p-2 rounded-lg border text-xs font-bold transition-all ${customStartDate === opt.val
                                                     ? 'bg-emerald-500 text-slate-950 border-emerald-500'
                                                     : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
                                                     }`}
                                             >
-                                                <span>{p.icon}</span>
-                                                <span>{p.label}</span>
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <input
+                                        type="date"
+                                        value={customStartDate}
+                                        onChange={e => setCustomStartDate(e.target.value)}
+                                        className="w-full bg-slate-900 border border-white/10 rounded-xl p-3 text-white text-sm font-bold mt-2"
+                                    />
+                                </div>
+
+                                {!isBodyGoal && type !== 'streak' && type !== 'speed' && (
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Upprepning</label>
+                                        <div className="grid grid-cols-4 gap-2">
+                                            {[
+                                                { id: 'daily', label: 'Dagligen', icon: '📅' },
+                                                { id: 'weekly', label: 'Veckovis', icon: '📆' },
+                                                { id: 'monthly', label: 'Månadsvis', icon: '🗓️' },
+                                                { id: 'once', label: 'Engångs', icon: '🎯' },
+                                            ].map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => setPeriod(p.id as GoalPeriod)}
+                                                    className={`p-2.5 rounded-lg border text-xs font-bold flex flex-col items-center gap-1 transition-all ${period === p.id
+                                                        ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                        : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                        }`}
+                                                >
+                                                    <span>{p.icon}</span>
+                                                    <span>{p.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Duration presets */}
+                                <div className="space-y-2">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500">Varaktighet</label>
+                                    <div className="grid grid-cols-6 gap-1.5">
+                                        {[
+                                            { id: 'ongoing', label: 'Tills vidare', short: '∞' },
+                                            { id: '30d', label: '30 dagar', short: '30d' },
+                                            { id: '3m', label: '3 månader', short: '3m' },
+                                            { id: '6m', label: '6 månader', short: '6m' },
+                                            { id: '12m', label: '12 månader', short: '12m' },
+                                            { id: 'custom', label: 'Anpassad', short: '📅' },
+                                        ].map(d => (
+                                            <button
+                                                key={d.id}
+                                                onClick={() => setDurationPreset(d.id as DurationPreset)}
+                                                title={d.label}
+                                                className={`p-2.5 rounded-lg border text-xs font-bold transition-all ${durationPreset === d.id
+                                                    ? 'bg-emerald-500 text-slate-950 border-emerald-500'
+                                                    : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
+                                                    }`}
+                                            >
+                                                {d.short}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
-                            )}
 
-                            {/* Duration presets */}
-                            <div className="space-y-2">
-                                <label className="text-[10px] uppercase font-bold text-slate-500">Varaktighet</label>
-                                <div className="grid grid-cols-6 gap-1.5">
-                                    {[
-                                        { id: 'ongoing', label: 'Tills vidare', short: '∞' },
-                                        { id: '30d', label: '30 dagar', short: '30d' },
-                                        { id: '3m', label: '3 månader', short: '3m' },
-                                        { id: '6m', label: '6 månader', short: '6m' },
-                                        { id: '12m', label: '12 månader', short: '12m' },
-                                        { id: 'custom', label: 'Anpassad', short: '📅' },
-                                    ].map(d => (
-                                        <button
-                                            key={d.id}
-                                            onClick={() => setDurationPreset(d.id as DurationPreset)}
-                                            title={d.label}
-                                            className={`p-2.5 rounded-lg border text-xs font-bold transition-all ${durationPreset === d.id
-                                                ? 'bg-emerald-500 text-slate-950 border-emerald-500'
-                                                : 'bg-slate-900/50 text-slate-400 border-white/5 hover:bg-slate-800'
-                                                }`}
-                                        >
-                                            {d.short}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Custom date picker */}
-                            {durationPreset === 'custom' && (
-                                <div className="grid grid-cols-2 gap-3 p-3 bg-slate-900/50 rounded-lg">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] uppercase font-bold text-slate-500">Startdatum</label>
-                                        <input
-                                            type="date"
-                                            value={customStartDate}
-                                            onChange={e => setCustomStartDate(e.target.value)}
-                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-sm"
-                                        />
+                                {/* Custom date picker */}
+                                {durationPreset === 'custom' && (
+                                    <div className="grid grid-cols-2 gap-3 p-3 bg-slate-900/50 rounded-lg">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] uppercase font-bold text-slate-500">Startdatum</label>
+                                            <input
+                                                type="date"
+                                                value={customStartDate}
+                                                onChange={e => setCustomStartDate(e.target.value)}
+                                                className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] uppercase font-bold text-slate-500">Slutdatum</label>
+                                            <input
+                                                type="date"
+                                                value={customEndDate}
+                                                onChange={e => setCustomEndDate(e.target.value)}
+                                                min={customStartDate}
+                                                className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-sm"
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] uppercase font-bold text-slate-500">Slutdatum</label>
-                                        <input
-                                            type="date"
-                                            value={customEndDate}
-                                            onChange={e => setCustomEndDate(e.target.value)}
-                                            min={customStartDate}
-                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-sm"
-                                        />
-                                    </div>
-                                </div>
-                            )}
+                                )}
 
-                            {/* Duration summary */}
-                            {durationPreset !== 'ongoing' && calculatedEndDate && (
-                                <div className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-emerald-400">📆</span>
-                                        <span className="text-sm text-white">
-                                            {formatDate(customStartDate)} → {formatDate(calculatedEndDate)}
+                                {/* Duration summary */}
+                                {durationPreset !== 'ongoing' && calculatedEndDate && (
+                                    <div className="flex items-center justify-between p-3 bg-emerald-500/10 rounded-lg border border-emerald-500/20">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-emerald-400">📆</span>
+                                            <span className="text-sm text-white">
+                                                {formatDate(customStartDate)} → {formatDate(calculatedEndDate)}
+                                            </span>
+                                        </div>
+                                        <span className="text-xs font-bold text-emerald-400">
+                                            {daysUntilEnd} dagar
                                         </span>
                                     </div>
-                                    <span className="text-xs font-bold text-emerald-400">
-                                        {daysUntilEnd} dagar
-                                    </span>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                {/* Actions */}
-                <div className="p-6 border-t border-white/5 flex gap-3 justify-end bg-slate-950/50">
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-3 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-bold text-sm transition-all"
-                    >
-                        Avbryt
-                    </button>
-                    <button
-                        onClick={handleSubmit}
-                        className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/25 text-sm tracking-wide"
-                    >
-                        {editingGoal ? '💾 Spara' : '✨ Skapa Mål'}
-                    </button>
+                    {/* Actions */}
+                    <div className="p-6 border-t border-white/5 flex gap-3 justify-end bg-slate-950/50">
+                        <button
+                            onClick={onClose}
+                            className="px-6 py-3 rounded-xl hover:bg-white/5 text-slate-400 hover:text-white font-bold text-sm transition-all"
+                        >
+                            Avbryt
+                        </button>
+                        <button
+                            onClick={handleSubmit}
+                            className="px-8 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black rounded-xl transition-all shadow-lg shadow-emerald-500/25 text-sm tracking-wide"
+                        >
+                            {editingGoal ? '💾 Spara' : '✨ Skapa Mål'}
+                        </button>
+                    </div>
                 </div>
-            </div>
-        </div >
+            )}
+        </div>
     );
 }
+

@@ -535,7 +535,9 @@ export function DashboardPage() {
         trainingPeriods,
         performanceGoals,
         settings.dailyCalorieGoal,
-        2500
+        2500,
+        settings.calorieMode || 'tdee',
+        burned
     );
 
     // 2. Macros
