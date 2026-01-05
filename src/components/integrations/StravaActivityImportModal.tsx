@@ -1,22 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
 
-interface ImportedActivity {
-    externalId: string;
-    platform: 'strava' | 'garmin';
-    date: string;
+interface StravaActivity {
+    id: number;
+    name: string;
     type: string;
-    durationMinutes: number;
-    intensity: string;
-    caloriesBurned: number;
-    distance?: number;
-    notes: string;
-    heartRateAvg?: number;
-    heartRateMax?: number;
-    elevationGain?: number;
-    prCount?: number;
-    kudosCount?: number;
+    start_date: string;
+    elapsed_time: number;
+    distance: number;
+}
+
+interface SyncDiffReport {
+    newActivities: StravaActivity[];
+    changedActivities: { strava: StravaActivity; changes: string[] }[];
+    matchedCount: number;
+    totalStrava: number;
 }
 
 interface StravaActivityImportModalProps {
@@ -25,278 +24,328 @@ interface StravaActivityImportModalProps {
 }
 
 const EXERCISE_ICONS: Record<string, string> = {
-    running: '🏃',
-    cycling: '🚴',
-    swimming: '🏊',
-    strength: '🏋️',
-    walking: '🚶',
-    yoga: '🧘',
-    other: '⚡',
+    Run: '🏃', TrailRun: '🏃',
+    Ride: '🚴', VirtualRide: '🚴',
+    Swim: '🏊',
+    WeightTraining: '🏋️', Workout: '🏋️',
+    Walk: '🚶', Hike: '🥾',
+    Yoga: '🧘',
 };
+
+type ScanRange = '7days' | '30days' | 'year' | 'all';
 
 export function StravaActivityImportModal({ isOpen, onClose }: StravaActivityImportModalProps) {
     const { token } = useAuth();
-    const { addExercise, exerciseEntries } = useData();
-    const [activities, setActivities] = useState<ImportedActivity[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selected, setSelected] = useState<Set<string>>(new Set());
-    const [importing, setImporting] = useState(false);
-    const [importedCount, setImportedCount] = useState(0);
+    const { refreshData } = useData();
 
-    // Fetch activities on open
-    useEffect(() => {
-        if (isOpen) {
-            fetchActivities();
-        }
-    }, [isOpen]);
+    // State
+    const [step, setStep] = useState<'setup' | 'scanning' | 'review' | 'importing' | 'success'>('setup');
+    const [scanRange, setScanRange] = useState<ScanRange>('30days');
+    const [report, setReport] = useState<SyncDiffReport | null>(null);
+    const [activeTab, setActiveTab] = useState<'new' | 'changed'>('new');
 
-    const fetchActivities = async () => {
-        setLoading(true);
+    // Selection
+    const [selectedNew, setSelectedNew] = useState<Set<number>>(new Set());
+    const [selectedChanged, setSelectedChanged] = useState<Set<number>>(new Set());
+    const [importStats, setImportStats] = useState<{ created: number; updated: number }>({ created: 0, updated: 0 });
+
+    const [elapsedTime, setElapsedTime] = useState(0);
+
+    const handleScan = async () => {
+        setStep('scanning');
+        setElapsedTime(0);
+        const timer = setInterval(() => setElapsedTime(t => t + 1), 1000);
+
         try {
-            // Get activities from last 30 days
-            const thirtyDaysAgo = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
-            const res = await fetch(`/api/strava/activities?after=${thirtyDaysAgo}`, {
-                headers: { 'Authorization': `Bearer ${token}` }
+            let fromDate: string | undefined;
+            if (scanRange === '7days') {
+                fromDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            } else if (scanRange === '30days') {
+                fromDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+            } else if (scanRange === 'year') {
+                fromDate = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+            }
+            // 'all' sends undefined -> backend scans everything
+
+            const res = await fetch('/api/strava/scan', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ fromDate })
             });
             const data = await res.json();
 
-            if (data.activities) {
-                // Filter out already imported activities
-                const existingExternalIds = new Set(
-                    exerciseEntries
-                        .filter((e: any) => e.externalId)
-                        .map((e: any) => e.externalId)
-                );
+            if (data.error) throw new Error(data.error);
 
-                const newActivities = data.activities.filter(
-                    (a: ImportedActivity) => !existingExternalIds.has(a.externalId)
-                );
+            setReport(data);
 
-                setActivities(newActivities);
-                // Select all by default
-                setSelected(new Set(newActivities.map((a: ImportedActivity) => a.externalId)));
+            // Auto-select "New", but not "Changed" (safety)
+            setSelectedNew(new Set(data.newActivities.map((a: any) => a.id)));
+            setSelectedChanged(new Set()); // User must explicitly opt-in for changes
+
+            setStep('review');
+            if (data.newActivities.length === 0 && data.changedActivities.length > 0) {
+                setActiveTab('changed');
             }
+
         } catch (err) {
-            console.error('Failed to fetch activities:', err);
+            console.error(err);
+            alert('Scan failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+            setStep('setup');
         } finally {
-            setLoading(false);
+            clearInterval(timer);
         }
-    };
-
-    const toggleSelect = (externalId: string) => {
-        const newSelected = new Set(selected);
-        if (newSelected.has(externalId)) {
-            newSelected.delete(externalId);
-        } else {
-            newSelected.add(externalId);
-        }
-        setSelected(newSelected);
-    };
-
-    const selectAll = () => {
-        setSelected(new Set(activities.map(a => a.externalId)));
-    };
-
-    const selectNone = () => {
-        setSelected(new Set());
     };
 
     const handleImport = async () => {
-        setImporting(true);
-        let count = 0;
+        if (!report) return;
+        setStep('importing');
 
-        for (const activity of activities) {
-            if (selected.has(activity.externalId)) {
-                try {
-                    addExercise({
-                        date: activity.date,
-                        type: activity.type as any,
-                        durationMinutes: activity.durationMinutes,
-                        intensity: activity.intensity as any,
-                        caloriesBurned: activity.caloriesBurned,
-                        distance: activity.distance,
-                        notes: activity.notes,
-                        externalId: activity.externalId,
-                        platform: activity.platform,
-                        heartRateAvg: activity.heartRateAvg,
-                        heartRateMax: activity.heartRateMax,
-                        elevationGain: activity.elevationGain,
-                    });
-                    count++;
-                } catch (err) {
-                    console.error('Failed to import activity:', activity.externalId, err);
-                }
+        try {
+            const newToImport = report.newActivities.filter(a => selectedNew.has(a.id));
+            const changedToImport = report.changedActivities.filter(a => selectedChanged.has(a.strava.id)).map(x => x.strava);
+
+            // Batch 1: New
+            if (newToImport.length > 0) {
+                await fetch('/api/strava/import', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activities: newToImport, forceUpdate: false })
+                });
             }
+
+            // Batch 2: Changed (Force Update)
+            if (changedToImport.length > 0) {
+                await fetch('/api/strava/import', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ activities: changedToImport, forceUpdate: true })
+                });
+            }
+
+            setImportStats({ created: newToImport.length, updated: changedToImport.length });
+            await refreshData();
+            setStep('success');
+
+            setTimeout(() => {
+                onClose();
+                // Reset state after close
+                setStep('setup');
+            }, 2500);
+
+        } catch (err) {
+            console.error(err);
+            alert('Import failed');
+            setStep('review');
         }
+    };
 
-        setImportedCount(count);
-        setImporting(false);
+    const toggleNew = (id: number) => {
+        const next = new Set(selectedNew);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectedNew(next);
+    };
 
-        // Show success and close after delay
-        setTimeout(() => {
-            onClose();
-            setImportedCount(0);
-        }, 2000);
+    const toggleChanged = (id: number) => {
+        const next = new Set(selectedChanged);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setSelectedChanged(next);
     };
 
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay backdrop-blur-md bg-slate-950/80" onClick={onClose}>
+        <div className="modal-overlay backdrop-blur-md bg-slate-950/80 fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
             <div
-                className="modal-content max-w-2xl w-full bg-slate-900 border border-white/10 shadow-2xl rounded-3xl overflow-hidden max-h-[80vh] flex flex-col"
+                className="bg-slate-900 border border-white/10 shadow-2xl rounded-3xl overflow-hidden w-full max-w-3xl flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}
             >
+
                 {/* Header */}
-                <div className="bg-gradient-to-br from-orange-500/20 to-slate-900 p-6 border-b border-white/5 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-[#FC4C02] flex items-center justify-center">
-                            <svg viewBox="0 0 24 24" className="w-6 h-6 text-white" fill="currentColor">
-                                <path d="M15.387 17.944l-2.089-4.116h-3.065L15.387 24l5.15-10.172h-3.066m-7.008-5.599l2.836 5.598h4.172L10.463 0l-7 13.828h4.169" />
-                            </svg>
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-black text-white">Importera Aktiviteter</h2>
-                            <p className="text-xs text-slate-400">Senaste 30 dagarna från Strava</p>
-                        </div>
+                <div className="p-6 border-b border-white/5 bg-slate-950 flex justify-between items-center">
+                    <div>
+                        <h2 className="text-xl font-black text-white flex items-center gap-2">
+                            <span className="text-[#FC4C02]">Strava</span> Sync 2.0
+                        </h2>
+                        <p className="text-slate-400 text-xs">Total History Control</p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all"
-                    >
-                        ✕
-                    </button>
-                </div>
-
-                {/* Content */}
-                <div className="flex-1 overflow-auto p-4">
-                    {loading ? (
-                        <div className="flex flex-col items-center justify-center py-12 gap-4">
-                            <div className="w-12 h-12 border-4 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
-                            <p className="text-slate-400 text-sm">Hämtar aktiviteter...</p>
-                        </div>
-                    ) : importedCount > 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 gap-4">
-                            <div className="w-16 h-16 rounded-full bg-emerald-500/20 flex items-center justify-center text-4xl">
-                                ✅
-                            </div>
-                            <p className="text-white font-bold">{importedCount} aktiviteter importerade!</p>
-                        </div>
-                    ) : activities.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
-                            <div className="text-4xl">🎉</div>
-                            <p className="text-slate-400">Inga nya aktiviteter att importera!</p>
-                            <p className="text-xs text-slate-500">Alla dina Strava-aktiviteter är redan synkade.</p>
-                        </div>
-                    ) : (
-                        <>
-                            {/* Selection Controls */}
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="text-xs text-slate-400">
-                                    {selected.size} av {activities.length} valda
-                                </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={selectAll}
-                                        className="text-xs text-emerald-400 hover:text-emerald-300 font-bold"
-                                    >
-                                        Välj alla
-                                    </button>
-                                    <span className="text-slate-600">|</span>
-                                    <button
-                                        onClick={selectNone}
-                                        className="text-xs text-slate-400 hover:text-slate-300 font-bold"
-                                    >
-                                        Avmarkera
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Activity List */}
-                            <div className="space-y-2">
-                                {activities.map(activity => (
-                                    <div
-                                        key={activity.externalId}
-                                        onClick={() => toggleSelect(activity.externalId)}
-                                        className={`p-3 rounded-xl border cursor-pointer transition-all ${selected.has(activity.externalId)
-                                                ? 'bg-orange-500/10 border-orange-500/30'
-                                                : 'bg-slate-950/50 border-white/5 hover:bg-slate-800/50'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-4">
-                                            {/* Checkbox */}
-                                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${selected.has(activity.externalId)
-                                                    ? 'bg-orange-500 border-orange-500 text-white'
-                                                    : 'border-slate-600'
-                                                }`}>
-                                                {selected.has(activity.externalId) && '✓'}
-                                            </div>
-
-                                            {/* Icon */}
-                                            <div className="text-2xl">
-                                                {EXERCISE_ICONS[activity.type] || '⚡'}
-                                            </div>
-
-                                            {/* Info */}
-                                            <div className="flex-1">
-                                                <div className="font-bold text-white text-sm">{activity.notes}</div>
-                                                <div className="text-xs text-slate-400 flex items-center gap-2 flex-wrap">
-                                                    <span>{new Date(activity.date).toLocaleDateString('sv-SE')}</span>
-                                                    <span>•</span>
-                                                    <span>{activity.durationMinutes} min</span>
-                                                    {activity.distance && (
-                                                        <>
-                                                            <span>•</span>
-                                                            <span>{activity.distance} km</span>
-                                                        </>
-                                                    )}
-                                                    {activity.heartRateAvg && (
-                                                        <>
-                                                            <span>•</span>
-                                                            <span>❤️ {activity.heartRateAvg} bpm</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Stats */}
-                                            <div className="text-right">
-                                                <div className="text-sm font-bold text-emerald-400">-{activity.caloriesBurned} kcal</div>
-                                                {activity.prCount && activity.prCount > 0 && (
-                                                    <div className="text-xs text-amber-400">🏆 {activity.prCount} PR</div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </>
+                    {step !== 'importing' && step !== 'scanning' && (
+                        <button onClick={onClose} className="text-slate-400 hover:text-white">✕</button>
                     )}
                 </div>
 
-                {/* Footer */}
-                {activities.length > 0 && !importing && importedCount === 0 && (
-                    <div className="p-4 border-t border-white/5 flex gap-3">
-                        <button
-                            onClick={onClose}
-                            className="flex-1 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 font-bold text-xs uppercase tracking-wider transition-all"
-                        >
-                            Avbryt
-                        </button>
+                {/* Body */}
+                <div className="flex-1 overflow-auto p-6">
+
+                    {step === 'setup' && (
+                        <div className="space-y-6">
+                            <div className="text-center space-y-2">
+                                <div className="text-4xl mb-2">📡</div>
+                                <h3 className="text-lg font-bold text-white">Redo att scanna?</h3>
+                                <p className="text-slate-400 max-w-md mx-auto">
+                                    Vi hämtar din historik från Strava och jämför med din databas. Inget sparas förrän du godkänner.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                <button
+                                    onClick={() => setScanRange('7days')}
+                                    className={`p-4 rounded-xl border-2 text-left transition-all ${scanRange === '7days' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                >
+                                    <div className="font-bold text-white">7 Dagar</div>
+                                    <div className="text-xs text-slate-500 mt-1">För veckochecken.</div>
+                                </button>
+                                <button
+                                    onClick={() => setScanRange('30days')}
+                                    className={`p-4 rounded-xl border-2 text-left transition-all ${scanRange === '30days' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                >
+                                    <div className="font-bold text-white">30 Dagar</div>
+                                    <div className="text-xs text-slate-500 mt-1">Månadens pass.</div>
+                                </button>
+                                <button
+                                    onClick={() => setScanRange('year')}
+                                    className={`p-4 rounded-xl border-2 text-left transition-all ${scanRange === 'year' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                >
+                                    <div className="font-bold text-white">12 Månader</div>
+                                    <div className="text-xs text-slate-500 mt-1">Årsstatistik.</div>
+                                </button>
+                                <button
+                                    onClick={() => setScanRange('all')}
+                                    className={`p-4 rounded-xl border-2 text-left transition-all ${scanRange === 'all' ? 'border-[#FC4C02] bg-[#FC4C02]/10' : 'border-white/5 hover:border-white/10'}`}
+                                >
+                                    <div className="font-bold text-white">Allt</div>
+                                    <div className="text-xs text-slate-500 mt-1">Totalhistorik.</div>
+                                </button>
+                            </div>
+
+                            <div className="flex justify-center pt-4">
+                                <button
+                                    onClick={handleScan}
+                                    className="px-8 py-3 bg-[#FC4C02] hover:bg-[#E34402] text-white font-black uppercase tracking-wider rounded-full shadow-lg shadow-orange-500/20 transition-all transform hover:scale-105"
+                                >
+                                    Starta Scan
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 'scanning' && (
+                        <div className="flex flex-col items-center justify-center h-64 space-y-6">
+                            <div className="relative w-20 h-20">
+                                <div className="absolute inset-0 border-4 border-white/10 rounded-full"></div>
+                                <div className="absolute inset-0 border-4 border-[#FC4C02] border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                            <div className="text-center">
+                                <h3 className="text-lg font-bold text-white animate-pulse">Analyserar Strava...</h3>
+                                <p className="text-slate-400 text-sm mt-2">Hämtar aktiviteter och jämför data.</p>
+                                <p className="text-slate-500 font-mono text-xs mt-4">{elapsedTime}s</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 'review' && report && (
+                        <div className="flex flex-col h-full">
+                            <div className="flex items-center justify-between mb-6 bg-slate-950/50 p-4 rounded-xl border border-white/5">
+                                <div className="flex gap-4 text-sm">
+                                    <div><span className="text-slate-400">Totalt på Strava:</span> <span className="text-white font-bold">{report.totalStrava}</span></div>
+                                    <div><span className="text-slate-400">Matchade (OK):</span> <span className="text-emerald-400 font-bold">{report.matchedCount}</span></div>
+                                </div>
+                            </div>
+
+                            {/* Tabs */}
+                            <div className="flex border-b border-white/10 mb-4">
+                                <button
+                                    onClick={() => setActiveTab('new')}
+                                    className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'new' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                                >
+                                    Nya ({report.newActivities.length})
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('changed')}
+                                    className={`px-6 py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'changed' ? 'border-amber-500 text-amber-400' : 'border-transparent text-slate-400 hover:text-white'}`}
+                                >
+                                    Ändrade ({report.changedActivities.length})
+                                </button>
+                            </div>
+
+                            {/* List */}
+                            <div className="flex-1 overflow-auto min-h-[300px]">
+                                {activeTab === 'new' ? (
+                                    <div className="space-y-2">
+                                        {report.newActivities.length === 0 && <div className="text-slate-500 text-center py-10">Inga nya aktiviteter hittades.</div>}
+                                        {report.newActivities.map(a => (
+                                            <div key={a.id} onClick={() => toggleNew(a.id)} className={`flex items-center gap-4 p-3 rounded-lg border cursor-pointer ${selectedNew.has(a.id) ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-950/30 border-white/5 hover:bg-slate-800'}`}>
+                                                <div className={`w-5 h-5 rounded flex items-center justify-center border ${selectedNew.has(a.id) ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-600'}`}>✓</div>
+                                                <div className="text-2xl">{EXERCISE_ICONS[a.type] || '⚡'}</div>
+                                                <div className="flex-1">
+                                                    <div className="font-bold text-white text-sm">{a.name}</div>
+                                                    <div className="text-xs text-slate-400">{new Date(a.start_date).toLocaleDateString()} • {a.distance ? (a.distance / 1000).toFixed(2) : 0} km • {a.elapsed_time ? (a.elapsed_time / 60).toFixed(0) : 0} min</div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {report.changedActivities.length === 0 && <div className="text-slate-500 text-center py-10">Inga ändringar hittades.</div>}
+                                        {report.changedActivities.map(({ strava: s, changes }) => (
+                                            <div key={s.id} onClick={() => toggleChanged(s.id)} className={`flex items-start gap-4 p-3 rounded-lg border cursor-pointer ${selectedChanged.has(s.id) ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-950/30 border-white/5 hover:bg-slate-800'}`}>
+                                                <div className={`w-5 h-5 mt-1 rounded flex items-center justify-center border ${selectedChanged.has(s.id) ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-600'}`}>✓</div>
+                                                <div className="text-2xl">{EXERCISE_ICONS[s.type] || '⚡'}</div>
+                                                <div className="flex-1">
+                                                    <div className="font-bold text-white text-sm">{s.name}</div>
+                                                    <div className="text-xs text-slate-400 mb-2">{new Date(s.start_date).toLocaleDateString()}</div>
+                                                    <div className="text-xs bg-black/30 p-2 rounded text-amber-300 font-mono">
+                                                        {changes.map((c, i) => <div key={i}>• {c}</div>)}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {step === 'importing' && (
+                        <div className="flex flex-col items-center justify-center h-64">
+                            <div className="w-16 h-16 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mb-4"></div>
+                            <h3 className="text-xl font-bold text-white">Synkar...</h3>
+                            <p className="text-slate-400">Uppdaterar din databas.</p>
+                        </div>
+                    )}
+
+                    {step === 'success' && (
+                        <div className="flex flex-col items-center justify-center h-64 text-center">
+                            <div className="text-6xl mb-4">✅</div>
+                            <h3 className="text-2xl font-bold text-white mb-2">Klart!</h3>
+                            <p className="text-slate-400">
+                                {importStats.created} nya importerade.<br />
+                                {importStats.updated} uppdaterade/korrigerade.
+                            </p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Footer Actions */}
+                {step === 'review' && (
+                    <div className="p-4 bg-slate-950 border-t border-white/5 flex gap-4">
+                        <button onClick={() => setStep('setup')} className="px-6 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700">Backa</button>
+                        <div className="flex-1"></div>
+                        <div className="flex flex-col items-end justify-center mr-4 text-xs text-slate-400">
+                            <span>{selectedNew.size} nya</span>
+                            <span>{selectedChanged.size} uppdateringar</span>
+                        </div>
                         <button
                             onClick={handleImport}
-                            disabled={selected.size === 0}
-                            className="flex-[2] py-3 rounded-xl bg-[#FC4C02] hover:bg-[#E34402] text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-orange-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={selectedNew.size === 0 && selectedChanged.size === 0}
+                            className="px-8 py-3 bg-emerald-500 hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black uppercase tracking-wider rounded-xl shadow-lg shadow-emerald-500/20 transition-all"
                         >
-                            Importera {selected.size} Aktiviteter
+                            Synka Valda ({selectedNew.size + selectedChanged.size})
                         </button>
-                    </div>
-                )}
-
-                {importing && (
-                    <div className="p-4 border-t border-white/5 flex items-center justify-center gap-3">
-                        <div className="w-5 h-5 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin"></div>
-                        <span className="text-orange-400 font-bold text-sm">Importerar...</span>
                     </div>
                 )}
             </div>
