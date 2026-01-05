@@ -7,7 +7,7 @@ import {
     LineChart, Line, CartesianGrid
 } from 'recharts';
 import { Search, Trophy, TrendingUp, Users, Target, Zap, ArrowRight, ChevronDown, ChevronRight, Scale, Sparkles, LayoutPanelLeft, Calendar, Timer, Dumbbell, User as UserIcon, HelpCircle } from 'lucide-react';
-import { calculateWilks, calculateIPFPoints, estimate1RM } from '../utils/strengthCalculators.ts';
+import { calculateWilks, calculateIPFPoints, calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import './MatchupPage.css';
 
 const MAIN_EXERCISES = [

@@ -6,7 +6,8 @@ import { RadarProfile } from '../components/charts/RadarProfile.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useData } from '../context/DataContext.tsx';
 import { useNavigate, useParams, Link } from 'react-router-dom';
-import { calculate1RM, PersonalBest } from '../models/strengthTypes.ts';
+import { PersonalBest } from '../models/strengthTypes.ts';
+import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { PBHoverCard } from '../components/charts/PBHoverCard.tsx';
 
 export function CommunityStatsPage() {
@@ -258,7 +259,7 @@ export function CommunityStatsPage() {
                             value = set.weight;
                         } else {
                             // 1eRM = estimated 1RM using Epley formula
-                            value = calculate1RM(set.weight, set.reps);
+                            value = calculateEstimated1RM(set.weight, set.reps);
                         }
 
                         if (relativeFilter === 'weight') {

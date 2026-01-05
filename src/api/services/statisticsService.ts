@@ -3,7 +3,8 @@ import { strengthRepo } from '../repositories/strengthRepository.ts';
 import { activityRepo } from '../repositories/activityRepository.ts';
 import { kv } from '../kv.ts';
 import { getAllUsers } from '../db/user.ts';
-import { StrengthWorkout, StrengthExercise, calculate1RM } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, StrengthExercise } from '../../models/strengthTypes.ts';
+import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
 import { UniversalActivity } from '../../models/types.ts';
 
 // Cache key
@@ -246,7 +247,7 @@ export function calculateGlobalStats(
             let sessionMax1RM = 0;
             we.sets.forEach(s => {
                 if (s.weight > 0 && s.reps > 0) {
-                    const e1rm = calculate1RM(s.weight, s.reps);
+                    const e1rm = calculateEstimated1RM(s.weight, s.reps);
                     if (e1rm > sessionMax1RM) sessionMax1RM = e1rm;
                 }
             });

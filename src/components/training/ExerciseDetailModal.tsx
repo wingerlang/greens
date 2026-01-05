@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { StrengthWorkout, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, PersonalBest, StrengthStats, normalizeExerciseName, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 
 interface ExerciseDetailModalProps {
@@ -105,7 +106,7 @@ export function ExerciseDetailModal({
                     if (isDistanceBasedExercise(exerciseName)) return 0;
                     const isBW = s.isBodyweight || s.weight === 0;
                     const calcWeight = isBW ? (s.extraWeight || 0) : s.weight;
-                    return calculate1RM(calcWeight, s.reps);
+                    return calculateEstimated1RM(calcWeight, s.reps);
                 });
                 const best1RMValue = Math.max(...est1RMs);
 
@@ -1041,7 +1042,7 @@ export function ExerciseDetailModal({
                                                                     const mappedSets = sortedPrs.map((s: any) => {
                                                                         const isBW = s.isBodyweight || s.weight === 0;
                                                                         const calcWeight = isBW ? (s.extraWeight || 0) : s.weight;
-                                                                        const est1RM = calculate1RM(calcWeight, s.reps);
+                                                                        const est1RM = calculateEstimated1RM(calcWeight, s.reps);
                                                                         return { ...s, est1RM };
                                                                     });
                                                                     const maxEst1RM = Math.max(...mappedSets.map(s => s.est1RM));
@@ -1095,7 +1096,7 @@ export function ExerciseDetailModal({
                                                                                     1eRM: {(() => {
                                                                                         const isBW = prs[0].isBodyweight || prs[0].weight === 0;
                                                                                         const calcWeight = isBW ? (prs[0].extraWeight || 0) : (prs[0].weight || 0);
-                                                                                        return calculate1RM(calcWeight, prs[0].reps || 0);
+                                                                                        return calculateEstimated1RM(calcWeight, prs[0].reps || 0);
                                                                                     })()}kg
                                                                                 </p>
                                                                                 {((prs[0].percentIncrease !== undefined && prs[0].percentIncrease > 0) || prs[0].daysSinceLast !== undefined) && (

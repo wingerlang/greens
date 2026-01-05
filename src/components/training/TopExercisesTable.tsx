@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { StrengthWorkout, PersonalBest, calculate1RM, isBodyweightExercise, isTimeBasedExercise, getTimePBValue, isHyroxExercise, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, PersonalBest, isBodyweightExercise, isTimeBasedExercise, getTimePBValue, isHyroxExercise, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
 
 interface TopExercisesTableProps {
     workouts: StrengthWorkout[];
@@ -118,7 +119,7 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         : set.weight;
 
                     if (calcWeight > 0 && set.reps > 0) {
-                        const est1RM = calculate1RM(calcWeight, set.reps);
+                        const est1RM = calculateEstimated1RM(calcWeight, set.reps);
                         if (est1RM > stats[key].estimated1RM) {
                             stats[key].estimated1RM = est1RM;
                         }
