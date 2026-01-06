@@ -641,7 +641,7 @@ export function DashboardPage() {
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-0.5 px-0.5">
                     <div className="text-[9px] font-bold uppercase text-slate-400">Dagens Totalt</div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        <span className="font-bold text-slate-900 dark:text-white">{totalDuration} min</span>
+                        <span className="font-bold text-slate-900 dark:text-white">{Math.round(totalDuration)} min</span>
                         <span className="opacity-20">|</span>
                         <span>{totalCalories} kcal</span>
                         {totalDistance > 0 && (
@@ -664,7 +664,7 @@ export function DashboardPage() {
 
                     // Formatting helper for advanced metrics
                     const metricParts = [];
-                    metricParts.push(`${act.durationMinutes} min`);
+                    metricParts.push(`${Math.round(act.durationMinutes)} min`);
 
                     if (act.distance) {
                         if (act.type === 'running') {
@@ -1606,8 +1606,9 @@ export function DashboardPage() {
                                     });
                                 });
 
-                                const totalHours = Math.floor(totalMinutes / 60);
-                                const remainingMins = totalMinutes % 60;
+                                const totalMinsRounded = Math.round(totalMinutes);
+                                const totalHours = Math.floor(totalMinsRounded / 60);
+                                const remainingMins = totalMinsRounded % 60;
                                 const completedWorkouts = cardioCount + strengthCount;
 
                                 return (

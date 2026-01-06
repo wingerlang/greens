@@ -51,7 +51,12 @@ export const DailySummaryCard: React.FC<DailySummaryProps> = ({
         },
         {
             label: 'Träning',
-            value: `${trainingMinutes}m`,
+            value: (() => {
+                const totalMins = Math.round(trainingMinutes);
+                const h = Math.floor(totalMins / 60);
+                const m = totalMins % 60;
+                return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+            })(),
             sub: '',
             icon: Dumbbell,
             isGood: isTrainingGood,
