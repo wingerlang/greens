@@ -11,7 +11,7 @@ import {
     UNIT_LABELS,
 } from '../models/types.ts';
 import { normalizeText } from '../utils/formatters.ts';
-import { parseNutritionText, extractFromJSONLD, cleanProductName, extractBrand, extractPackagingWeight } from '../utils/nutritionParser.ts';
+import { parseNutritionText, extractFromJSONLD, cleanProductName, extractBrand, extractPackagingWeight } from '../utils/nutrition/index.ts';
 import './DatabasePage.css';
 
 const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
