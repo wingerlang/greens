@@ -30,8 +30,14 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
         return days;
     }, [mealEntries, recipes, foodItems, calculateDailyNutrition]);
 
-    const calorieAvegare = Math.round(last7Days.reduce((acc: number, d: any) => acc + d.calories, 0) / 7);
-    const proteinAverage = Math.round(last7Days.reduce((acc: number, d: any) => acc + d.protein, 0) / 7 * 10) / 10;
+    // Filter out incomplete days for averages
+    const completeDays = last7Days.filter((d: any) => !settings.incompleteDays?.[d.date]);
+
+    // Safety check to avoid division by zero
+    const divisor = completeDays.length || 1;
+
+    const calorieAvegare = Math.round(completeDays.reduce((acc: number, d: any) => acc + d.calories, 0) / divisor);
+    const proteinAverage = Math.round(completeDays.reduce((acc: number, d: any) => acc + d.protein, 0) / divisor * 10) / 10;
 
     const calorieGoal = settings.dailyCalorieGoal || 2000;
     const proteinGoal = settings.dailyProteinGoal || 150;
@@ -67,7 +73,7 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                 <div className="trend-card">
                     <div className="flex justify-between items-end mb-2">
                         <div>
-                            <span className="text-xs text-slate-500 block">Kaloritrend (7 dgr)</span>
+                            <span className="text-xs text-slate-500 block">Kaloritrend ({completeDays.length} dgr)</span>
                             <span className="text-lg font-bold text-emerald-400">{calorieAvegare} <span className="text-xs font-normal text-slate-500">kcal snitt</span></span>
                         </div>
                         <span className="text-[10px] text-slate-500">Mål: {calorieGoal}</span>
@@ -85,14 +91,16 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                             const h = Math.min(actualH, chartHeight);
                             const x = i * (barWidth + gap);
                             const isToday = i === 6;
+                            const isIncomplete = settings.incompleteDays?.[day.date];
 
                             return (
                                 <g
                                     key={day.date}
                                     className="cursor-pointer group/bar transition-all duration-300"
                                     onClick={() => onDateSelect?.(day.date)}
+                                    style={{ opacity: isIncomplete ? 0.3 : 1 }}
                                 >
-                                    <title>{`${day.date}: ${day.calories} kcal`}</title>
+                                    <title>{`${day.date}: ${day.calories} kcal ${isIncomplete ? '(Inkomplett)' : ''}`}</title>
                                     <rect
                                         x={x} y={chartHeight - h}
                                         width={barWidth} height={h}
@@ -107,6 +115,15 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                                             className="text-[10px] fill-white font-bold pointer-events-none"
                                         >
                                             !
+                                        </text>
+                                    )}
+                                    {isIncomplete && (
+                                        <text
+                                            x={x + barWidth / 2} y={chartHeight - h - 15}
+                                            textAnchor="middle"
+                                            className="text-[8px] fill-amber-500 font-bold"
+                                        >
+                                            ⚠️
                                         </text>
                                     )}
                                     <text
@@ -135,7 +152,7 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                 <div className="trend-card">
                     <div className="flex justify-between items-end mb-2">
                         <div>
-                            <span className="text-xs text-slate-500 block">Proteintrend (7 dgr)</span>
+                            <span className="text-xs text-slate-500 block">Proteintrend ({completeDays.length} dgr)</span>
                             <span className="text-lg font-bold text-violet-400">{proteinAverage}g <span className="text-xs font-normal text-slate-500">snitt</span></span>
                         </div>
                         <span className="text-[10px] text-slate-500">Mål: {proteinGoal}g</span>
@@ -153,12 +170,14 @@ export function NutritionInsights({ onDateSelect }: NutritionInsightsProps) {
                             const h = Math.min(actualH, chartHeight);
                             const x = i * (barWidth + gap);
                             const isToday = i === 6;
+                            const isIncomplete = settings.incompleteDays?.[day.date];
 
                             return (
                                 <g
                                     key={day.date}
                                     className="cursor-pointer group/bar transition-all duration-300"
                                     onClick={() => onDateSelect?.(day.date)}
+                                    style={{ opacity: isIncomplete ? 0.3 : 1 }}
                                 >
                                     <title>{`${day.date}: ${day.protein}g protein`}</title>
                                     <rect

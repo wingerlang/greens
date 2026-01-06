@@ -27,10 +27,11 @@ const MEASUREMENT_TYPES: { id: BodyMeasurementType; label: string; unit: string 
 ];
 
 export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleProps) {
-    const { getAuthToken } = useData();
+    const { getAuthToken, weightEntries } = useData();
     const [activeTab, setActiveTab] = useState<'weight' | 'measurements'>('weight');
     const [history, setHistory] = useState<BodyMeasurementEntry[]>([]);
-    const [weightHistory, setWeightHistory] = useState<WeightEntry[]>([]);
+    // Initialize weightHistory from context (single source of truth)
+    const [weightHistory, setWeightHistory] = useState<WeightEntry[]>(weightEntries);
     const [loading, setLoading] = useState(true);
 
     // Form State
@@ -39,6 +40,11 @@ export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleP
     const [newValue, setNewValue] = useState('');
     const [newDate, setNewDate] = useState(new Date().toISOString().split('T')[0]);
 
+    // Sync weightHistory with context changes
+    useEffect(() => {
+        setWeightHistory(weightEntries);
+    }, [weightEntries]);
+
     useEffect(() => {
         loadData();
     }, []);
@@ -46,22 +52,19 @@ export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleP
     const loadData = async () => {
         setLoading(true);
         const token = getAuthToken();
-        if (!token) return;
+        if (!token) {
+            setLoading(false);
+            return;
+        }
 
         try {
-            // Load Measurements
+            // Load Measurements from API
             const mRes = await fetch('/api/measurements', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const mData = await mRes.json();
             if (mData.history) setHistory(mData.history);
-
-            // Load Weight
-            const wRes = await fetch('/api/user/weight', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const wData = await wRes.json();
-            if (wData.history) setWeightHistory(wData.history);
+            // Weight is now managed by DataContext, no separate API call needed
         } catch (error) {
             console.error("Failed to load measurements:", error);
         } finally {

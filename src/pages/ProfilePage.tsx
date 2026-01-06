@@ -23,6 +23,7 @@ import {
     DangerZoneSection,
 } from '../components/profile/sections/index.ts';
 import { MeasurementsModule } from '../components/profile/sections/MeasurementsModule.tsx';
+import { ProfileFeedSection } from '../components/profile/sections/ProfileFeedSection.tsx';
 import { ProfilePreviewMode } from '../components/profile/ProfilePreviewMode.tsx';
 
 import './ProfilePage.css';
@@ -115,8 +116,23 @@ export function ProfilePage() {
     };
 
     // Profile update helpers
+    const [saveStatus, setSaveStatus] = useState<{ field: string; status: 'saving' | 'success' | 'error' } | null>(null);
+
     const saveField = async (field: string, value: any) => {
-        await profileService.updateProfile({ [field]: value });
+        setSaveStatus({ field, status: 'saving' });
+        try {
+            const result = await profileService.updateProfile({ [field]: value });
+            if (result) {
+                setSaveStatus({ field, status: 'success' });
+                setTimeout(() => setSaveStatus(null), 2000);
+            } else {
+                setSaveStatus({ field, status: 'error' });
+                console.error(`Failed to save field ${field}`);
+            }
+        } catch (error) {
+            setSaveStatus({ field, status: 'error' });
+            console.error(`Error saving field ${field}:`, error);
+        }
     };
 
     const updateProfile = <K extends keyof ProfileData>(field: K, value: ProfileData[K]) => {
@@ -255,6 +271,18 @@ export function ProfilePage() {
             {/* Hidden file input for avatar */}
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
 
+            {/* Save Status Toast */}
+            {saveStatus && (
+                <div className={`fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg font-bold text-sm shadow-lg animate-in fade-in slide-in-from-bottom-4 ${saveStatus.status === 'saving' ? 'bg-slate-800 text-slate-300' :
+                    saveStatus.status === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
+                        'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                    }`}>
+                    {saveStatus.status === 'saving' && '⏳ Sparar...'}
+                    {saveStatus.status === 'success' && '✓ Sparat!'}
+                    {saveStatus.status === 'error' && '✕ Kunde inte spara'}
+                </div>
+            )}
+
             {/* Profile Header */}
             <div className="relative">
                 <div className="h-32 bg-gradient-to-r from-emerald-600 to-teal-500" />
@@ -337,8 +365,8 @@ export function ProfilePage() {
                             key={tab.id}
                             onClick={() => handleTabChange(tab.id)}
                             className={`px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === tab.id
-                                    ? 'border-emerald-500 text-white'
-                                    : 'border-transparent text-slate-500 hover:text-slate-300'
+                                ? 'border-emerald-500 text-white'
+                                : 'border-transparent text-slate-500 hover:text-slate-300'
                                 }`}
                         >
                             <span className="text-lg">{tab.icon}</span>
@@ -415,6 +443,9 @@ export function ProfilePage() {
                                 ) : null}
                             </div>
                         </section>
+
+                        {/* Activity Feed */}
+                        <ProfileFeedSection userId={currentUser?.id} compact={true} />
                     </div>
                 )}
 
@@ -432,8 +463,8 @@ export function ProfilePage() {
                             </div>
                         )}
 
-                         {/* Basic Bio-metrics */}
-                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                        {/* Basic Bio-metrics */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-6">Grundläggande Biometri</h3>
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div className="space-y-4 p-4 bg-white/5 rounded-xl">
@@ -587,6 +618,62 @@ export function ProfilePage() {
                                     onChange={(v: string) => updateSettings({ dailyTrainingGoal: Number(v) } as any)}
                                 />
                             </div>
+
+                            {/* Nocco 'o Clock Toggle */}
+                            <div className="mt-4 pt-4 border-t border-white/5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-white font-bold text-sm">Nocco 'o Clock</div>
+                                        <div className="text-slate-400 text-xs">Aktivera timer och snabbval vid 08:00</div>
+                                    </div>
+                                    <button
+                                        onClick={() => updateSettings({ noccoOClockEnabled: !settings.noccoOClockEnabled })}
+                                        className={`w-12 h-6 rounded-full transition-colors relative ${settings.noccoOClockEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+                                    >
+                                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${settings.noccoOClockEnabled ? 'left-7' : 'left-1'}`} />
+                                    </button>
+                                </div>
+
+                                {/* Test Preview Button */}
+                                {settings.noccoOClockEnabled && (
+                                    <button
+                                        onClick={() => {
+                                            // Show a preview modal
+                                            const testModal = document.createElement('div');
+                                            testModal.id = 'nocco-test-preview';
+                                            testModal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/80 animate-in fade-in';
+                                            testModal.innerHTML = `
+                                                <div class="flex flex-col items-center gap-6 p-10">
+                                                    <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-500 italic tracking-tighter text-center" style="background-clip: text; -webkit-background-clip: text;">
+                                                        IT'S NOCCO 'O CLOCK
+                                                    </h1>
+                                                    <div class="flex gap-4">
+                                                        <button class="px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl shadow-2xl">
+                                                            <span class="text-xl font-bold text-white uppercase tracking-wider">🥤 Tagit en Nocco</span>
+                                                        </button>
+                                                        <button class="px-8 py-4 bg-gradient-to-r from-amber-700 to-orange-800 rounded-2xl shadow-2xl">
+                                                            <span class="text-xl font-bold text-white uppercase tracking-wider">☕ Kaffe istället</span>
+                                                        </button>
+                                                    </div>
+                                                    <button id="nocco-test-close" class="px-6 py-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full font-bold text-sm border border-slate-700/50">
+                                                        Avbryt / Ignorera
+                                                    </button>
+                                                    <p class="text-blue-200/50 font-mono text-sm">(Detta är en förhandsvisning)</p>
+                                                </div>
+                                            `;
+                                            document.body.appendChild(testModal);
+                                            testModal.addEventListener('click', (e) => {
+                                                if (e.target === testModal || (e.target as HTMLElement).id === 'nocco-test-close') {
+                                                    testModal.remove();
+                                                }
+                                            });
+                                        }}
+                                        className="w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold transition-colors border border-blue-500/20"
+                                    >
+                                        👀 Förhandsgranska Nocco 'o Clock
+                                    </button>
+                                )}
+                            </div>
                         </section>
                     </div>
                 )}
@@ -656,10 +743,10 @@ export function ProfilePage() {
                                                                 key={key}
                                                                 onClick={() => toggleCategoryOverride(userId, key)}
                                                                 className={`flex flex-col items-center p-2 rounded-lg transition-all ${isAllowed
-                                                                        ? 'bg-emerald-500/20 border border-emerald-500/30'
-                                                                        : isDenied
-                                                                            ? 'bg-rose-500/20 border border-rose-500/30'
-                                                                            : 'bg-white/5 border border-white/10 hover:bg-white/10 opacity-50 hover:opacity-100'
+                                                                    ? 'bg-emerald-500/20 border border-emerald-500/30'
+                                                                    : isDenied
+                                                                        ? 'bg-rose-500/20 border border-rose-500/30'
+                                                                        : 'bg-white/5 border border-white/10 hover:bg-white/10 opacity-50 hover:opacity-100'
                                                                     }`}
                                                                 title={`${label}: ${isAllowed ? 'Tillåten' : isDenied ? 'Nekad' : 'Standard'}`}
                                                             >
@@ -725,7 +812,7 @@ export function ProfilePage() {
                         {/* Account Info */}
                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-4">Inloggning & Konto</h3>
-                             <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
                                 <div>
                                     <div className="font-bold text-white">{profile.name}</div>
                                     <div className="text-sm text-slate-400">{profile.email}</div>
@@ -737,9 +824,9 @@ export function ProfilePage() {
                         </section>
 
                         {/* Appearance */}
-                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-4">Utseende</h3>
-                             <div className="space-y-4">
+                            <div className="space-y-4">
                                 <div>
                                     <label className="text-xs text-slate-500 uppercase font-bold mb-2 block">Tema</label>
                                     <div className="flex gap-2">
@@ -784,7 +871,7 @@ export function ProfilePage() {
                         {/* Data Export & Danger */}
                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-4">Datahantering</h3>
-                             <div className="p-4 bg-white/5 rounded-xl mb-4 flex items-center justify-between">
+                            <div className="p-4 bg-white/5 rounded-xl mb-4 flex items-center justify-between">
                                 <div>
                                     <h4 className="font-bold text-white text-sm">Exportera Data</h4>
                                     <p className="text-xs text-slate-400">Ladda ner all din data som JSON.</p>

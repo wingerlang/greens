@@ -5,3 +5,27 @@
 * Tydliggör huruvida "kalorimål" behövs nu när vi har ett viktmål. Viktmål kan vara en "kalorimål" i sig, och vi kan sätta vikten på "stabil" - det är inget "viktnedgångsmål".
 
 Introducera koncpetet "Inkomplett" för att markera att en dag inte blev färdigt ifylld. Antingen för att kunna hitta inkompletta dagar, men annars för att "bortse" ifrån kaloriräkningens snitt. Det ska vara tydligt vilka dagar som är inkompletta och kompletta. Det ska vara enkelt att spara och persistera.
+
+När vi hovrar över en dags aktivitet på dashboardens "SENASTE 7 DAGARNA" - lägg till en  ~1px blur på bakgrunden för att fokusera på det vi hovrar på.
+
+NOcco o clock - lägg till en "avbryt" knapp.
+Kaffe ska stänga modalen. Kaffe och/eller nocco ska uppdatera koffeinet på dashboarden.
+
+Lägg till "koffein" på något lämpligt sätt i matdatabasen. Kaffe och nocco ska ha koffein tillagt.
+
+
+Profil:
+"Lägg till plats" - det tycks INTE persisteras. Det MÅSTE persisteras ovillkorligt. Lös root cause. När vi sparar datan ska vi få success eller fail.
+
+Vår "feed" ska synas här, vilket ska speglas i "visa som" också.
+
+/profile/biometrics - 
+grafen över vikt är helt tom även om jag ser datan
+Mätningarna tycks inte laddas in, varken "senaste mätningar" eller på Mått-fliken.
+
+På inställningar "Nocco 'o Clock" - lägg till en knapp för att "testa" den så man kan se hur den ska se ut.
+
+På /profile/biometrics
+- Målvikt verkar saknas (den ska hämtas från nuvarande träningsperiodsmål)
+"TILL MÅLVIKT
+80.0 kg kvar" - då min vikt är 80kg antar jag att den beräknar "nu vs undefined" och får fram nu, det är helt tokigt och borde åtgärdas.

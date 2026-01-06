@@ -75,6 +75,7 @@ interface DataContextType {
     setCurrentUser: (user: User | null) => void;
     updateCurrentUser: (updates: Partial<User>) => void;
     addUser: (user: User) => void;
+    toggleIncompleteDay: (date: string) => void;
 
     // Pantry CRUD
     togglePantryItem: (item: string) => void;
@@ -591,6 +592,20 @@ export function DataProvider({ children }: DataProviderProps) {
 
         setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
     }, [currentUser]);
+
+    const toggleIncompleteDay = useCallback((date: string) => {
+        setUserSettings(prev => {
+            const current = prev.incompleteDays?.[date] ?? false;
+            const updated = {
+                ...prev,
+                incompleteDays: {
+                    ...prev.incompleteDays,
+                    [date]: !current
+                }
+            };
+            return updated;
+        });
+    }, []);
 
 
     // ============================================
@@ -1692,6 +1707,7 @@ export function DataProvider({ children }: DataProviderProps) {
         setCurrentUser,
         updateCurrentUser,
         addUser,
+        toggleIncompleteDay,
         dailyVitals,
         updateVitals,
         getVitalsForDate,

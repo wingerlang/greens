@@ -23,7 +23,10 @@ export function BodyMeasurementsSection({ targetWeight, height }: BodyMeasuremen
 
     if (loading) return <div className="text-slate-500 text-center py-4">Laddar mätdata...</div>;
 
-    const toGoal = latestWeight ? latestWeight.weight - targetWeight : null;
+    // Only calculate toGoal if targetWeight is a valid positive number
+    const toGoal = (latestWeight && targetWeight && targetWeight > 0)
+        ? latestWeight.weight - targetWeight
+        : null;
 
     return (
         <div className="space-y-4">

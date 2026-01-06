@@ -1121,6 +1121,42 @@ export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
         createdAt: now,
         updatedAt: now,
     },
+    {
+        id: 'food-kaffe',
+        name: 'Kaffe',
+        description: 'Svart, bryggkaffe',
+        calories: 2,
+        protein: 0,
+        carbs: 0.3,
+        fat: 0,
+        unit: 'cup',
+        category: 'beverages',
+        storageType: 'pantry',
+        pricePerUnit: 1,
+        extendedDetails: {
+            caffeine: 80
+        },
+        createdAt: now,
+        updatedAt: now,
+    },
+    {
+        id: 'food-nocco',
+        name: 'Nocco',
+        description: 'BCAA Energy Drink',
+        calories: 15,
+        protein: 3,
+        carbs: 0,
+        fat: 0,
+        unit: 'pcs',
+        category: 'beverages',
+        storageType: 'fresh',
+        pricePerUnit: 25,
+        extendedDetails: {
+            caffeine: 180
+        },
+        createdAt: now,
+        updatedAt: now,
+    },
 ];
 
 // ============================================

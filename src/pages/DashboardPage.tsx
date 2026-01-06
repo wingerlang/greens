@@ -329,7 +329,7 @@ const DayHoverCard = ({
     const formattedDate = new Date(date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
 
     return (
-        <div className="absolute z-[100] bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="absolute z-[100] bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
             {/* Header */}
             <div className="p-3 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center">
                 <div className="flex flex-col">
@@ -696,7 +696,7 @@ export function DashboardPage() {
                                 e.stopPropagation();
                                 setSelectedActivity(act);
                             }}
-                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md scale-[1.02]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
+                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md -translate-y-[1px]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
                             <div className={`${density === 'compact' ? 'text-sm p-1' : 'text-lg p-1.5'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50`}>
                                 {typeDef?.icon || '💪'}

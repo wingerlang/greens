@@ -81,6 +81,8 @@ export interface UserSettings {
     // Calorie Mode: 'tdee' = TDEE-based, 'fixed' = fixed base + exercise calories
     calorieMode?: 'tdee' | 'fixed';
     fixedCalorieBase?: number; // Base calories when calorieMode === 'fixed'
+    incompleteDays?: Record<string, boolean>; // Map of date (YYYY-MM-DD) -> isIncomplete
+    noccoOClockEnabled?: boolean;
 }
 
 /** User roles for permissions */
@@ -188,7 +190,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     expandedSections: {
         'recent-workouts': true,
         'top-exercises': true
-    }
+    },
+    noccoOClockEnabled: true
 };
 
 // ============================================
@@ -260,6 +263,7 @@ export interface ExtendedFoodDetails {
 
     // Extra Vitamins
     vitaminD?: number;           // µg
+    caffeine?: number;           // mg
     // Add others if present in DB
 }
 

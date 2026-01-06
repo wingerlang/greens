@@ -209,7 +209,7 @@ export const ActiveGoalsCard: React.FC = () => {
     return (
         <div
             onClick={() => navigate('/goals')}
-            className="col-span-12 md:col-span-12 lg:col-span-6 w-full bg-slate-900 border border-slate-800 shadow-sm p-5 rounded-[2rem] cursor-pointer group hover:scale-[1.005] transition-transform relative overflow-hidden"
+            className="col-span-12 md:col-span-12 lg:col-span-6 w-full bg-slate-900 border border-slate-800 shadow-sm p-5 rounded-[2rem] cursor-pointer group hover:-translate-y-1 hover:border-slate-700 hover:shadow-md transition-all relative overflow-hidden"
         >
             {/* Header */}
             <div className="flex items-center justify-between mb-3 relative z-10 px-1">

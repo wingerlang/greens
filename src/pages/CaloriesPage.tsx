@@ -42,6 +42,8 @@ export function CaloriesPage() {
         getVitalsForDate,
         trainingPeriods,
         performanceGoals,
+        toggleIncompleteDay,
+        userSettings
     } = useData();
 
     const { settings } = useSettings();
@@ -449,6 +451,19 @@ export function CaloriesPage() {
                     </div>
                 </div>
             )}
+
+            {/* Incomplete Day Toggle */}
+            <div className="flex justify-center mb-4">
+                <button
+                    onClick={() => toggleIncompleteDay(selectedDate)}
+                    className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-all flex items-center gap-2 ${userSettings.incompleteDays?.[selectedDate]
+                        ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                        : 'bg-transparent border-slate-700 text-slate-500 hover:border-slate-500'
+                        }`}
+                >
+                    {userSettings.incompleteDays?.[selectedDate] ? '⚠️ Dagen markerad som inkomplett' : 'Markera dag som inkomplett'}
+                </button>
+            </div>
 
             <>
                 {/* Combined Summary Card + Smart Meal Clustering (Macro Distribution) side by side */}

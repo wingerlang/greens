@@ -595,26 +595,22 @@ export function GoalsPage() {
                                             {/* Goal Info */}
                                             <div className="goal-info">
                                                 <h3 className="goal-name">{goal.name}</h3>
-                                                <div className="goal-meta">
-                                                    <span className="goal-progress-text">
+                                                <div className="goal-meta flex-col gap-1 mb-3">
+                                                    <span className="text-2xl font-black text-white tracking-tight">
                                                         {formatProgress(
                                                             progress.current,
-                                                            progress.target,
-                                                            goal.targets[0]?.unit
+                                                            progress.target
                                                         )}
+                                                        <span className="text-sm font-bold text-slate-500 ml-1">
+                                                            {goal.targets[0]?.unit || (goal.type === 'frequency' ? 'pass' : '')}
+                                                        </span>
                                                     </span>
-                                                    <span className="goal-period">
-                                                        {goal.period === 'daily' ? '/dag' :
-                                                            goal.period === 'weekly' ? '/vecka' :
-                                                                goal.period === 'monthly' ? '/månad' : 'totalt'}
+                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                                                        {goal.type === 'frequency'
+                                                            ? (goal.period === 'weekly' ? 'i veckan' : 'totalt')
+                                                            : (goal.period === 'weekly' ? 'per vecka' : 'kvar att göra')
+                                                        }
                                                     </span>
-                                                </div>
-                                                <div className="text-[9px] text-slate-500 font-mono">
-                                                    {goal.period === 'weekly' && progress.periodStart && progress.periodEnd
-                                                        ? `${progress.periodStart} - ${progress.periodEnd}`
-                                                        : goal.startDate && goal.endDate
-                                                            ? `${goal.startDate} - ${goal.endDate}`
-                                                            : goal.startDate || ''}
                                                 </div>
 
                                                 {/* Progress bar with percentage */}
@@ -643,6 +639,15 @@ export function GoalsPage() {
                                                     )}
                                                 </div>
                                             </div>
+
+                                            {/* Absolute X button for quick delete */}
+                                            <button
+                                                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors z-10"
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteGoal(goal.id); }}
+                                                title="Ta bort mål"
+                                            >
+                                                ✕
+                                            </button>
 
                                             {/* Actions */}
                                             <div className="goal-actions">
