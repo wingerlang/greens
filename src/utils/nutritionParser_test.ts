@@ -1,4 +1,4 @@
-import { parseNutritionText, extractFromJSONLD, cleanProductName, extractPackagingWeight, extractBrand } from './nutritionParser.ts';
+import { parseNutritionText, extractFromJSONLD, cleanProductName, extractPackagingWeight, extractBrand } from './nutrition/index.ts';
 
 const testCases = [
     {
