@@ -114,7 +114,7 @@ export function ProfilePage() {
             g.startDate <= today &&
             (!g.endDate || g.endDate >= today)
         );
-        return activeWeightGoal?.targetWeight || profile.targetWeight || 0;
+        return Number(activeWeightGoal?.targetWeight || profile.targetWeight || 0);
     }, [performanceGoals, profile.targetWeight]);
 
     const loadProfile = async () => {
@@ -153,11 +153,21 @@ export function ProfilePage() {
     const updateProfile = <K extends keyof ProfileData>(field: K, value: ProfileData[K]) => {
         setProfile(prev => ({ ...prev, [field]: value }));
         saveField(field as string, value);
+
+        // Sync with DataContext for fields that belong to User
+        if (['name', 'bio', 'location', 'handle', 'avatarUrl', 'website'].includes(field as string)) {
+            updateCurrentUser({ [field]: value as any });
+        }
     };
 
     const commitField = <K extends keyof ProfileData>(field: K) => {
         setEditingField(null);
         saveField(field as string, profile[field]);
+
+        // Sync with DataContext for fields that belong to User
+        if (['name', 'bio', 'location', 'handle', 'avatarUrl', 'website'].includes(field as string)) {
+            updateCurrentUser({ [field]: profile[field] as any });
+        }
     };
 
     const updatePrivacy = async (key: string, value: any) => {
@@ -653,39 +663,70 @@ export function ProfilePage() {
                                 {settings.noccoOClockEnabled && (
                                     <button
                                         onClick={() => {
+                                            const showFeedback = (text: string, color: string) => {
+                                                const fb = document.createElement('div');
+                                                fb.className = `fixed top-10 left-1/2 -translate-x-1/2 z-[110] px-6 py-3 rounded-full bg-${color}-500 text-white font-bold shadow-xl animate-in slide-in-from-top-4`;
+                                                fb.innerText = text;
+                                                document.body.appendChild(fb);
+                                                setTimeout(() => {
+                                                    fb.classList.add('animate-out', 'fade-out', 'slide-out-to-top-4');
+                                                    setTimeout(() => fb.remove(), 400);
+                                                }, 2000);
+                                            };
+
                                             // Show a preview modal
                                             const testModal = document.createElement('div');
                                             testModal.id = 'nocco-test-preview';
-                                            testModal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-black/80 animate-in fade-in';
+                                            testModal.className = 'fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-md animate-in fade-in duration-500';
                                             testModal.innerHTML = `
-                                                <div class="flex flex-col items-center gap-6 p-10">
-                                                    <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-500 italic tracking-tighter text-center" style="background-clip: text; -webkit-background-clip: text;">
+                                                <div class="flex flex-col items-center gap-8 p-12 max-w-2xl w-full text-center">
+                                                    <div class="animate-bounce mb-2">
+                                                        <span class="text-6xl">⚡</span>
+                                                    </div>
+                                                    <h1 class="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-indigo-400 italic tracking-tighter leading-tight" style="background-clip: text; -webkit-background-clip: text; filter: drop-shadow(0 0 20px rgba(34, 211, 238, 0.3));">
                                                         IT'S NOCCO 'O CLOCK
                                                     </h1>
-                                                    <div class="flex gap-4">
-                                                        <button class="px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-2xl shadow-2xl">
-                                                            <span class="text-xl font-bold text-white uppercase tracking-wider">🥤 Tagit en Nocco</span>
+                                                    <p class="text-blue-100/60 text-lg font-medium max-w-md">Din biologiska klocka tickar. Dags att ladda depåerna för dagens utmaningar!</p>
+                                                    <div class="flex flex-wrap justify-center gap-6 mt-4">
+                                                        <button id="test-nocco-btn" class="group relative px-10 py-5 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-3xl shadow-[0_20px_40px_-10px_rgba(37,99,235,0.5)] hover:scale-105 active:scale-95 transition-all">
+                                                            <div class="absolute inset-0 bg-white/10 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                            <span class="text-2xl font-black text-white uppercase tracking-widest flex items-center gap-3">🥤 Nocco</span>
                                                         </button>
-                                                        <button class="px-8 py-4 bg-gradient-to-r from-amber-700 to-orange-800 rounded-2xl shadow-2xl">
-                                                            <span class="text-xl font-bold text-white uppercase tracking-wider">☕ Kaffe istället</span>
+                                                        <button id="test-coffee-btn" class="group relative px-10 py-5 bg-gradient-to-br from-amber-700 to-orange-900 rounded-3xl shadow-[0_20px_40px_-10px_rgba(120,53,15,0.5)] hover:scale-105 active:scale-95 transition-all">
+                                                            <div class="absolute inset-0 bg-white/10 rounded-3xl opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                                            <span class="text-2xl font-black text-white uppercase tracking-widest flex items-center gap-3">☕ Kaffe</span>
                                                         </button>
                                                     </div>
-                                                    <button id="nocco-test-close" class="px-6 py-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full font-bold text-sm border border-slate-700/50">
-                                                        Avbryt / Ignorera
+                                                    <button id="nocco-test-close" class="mt-8 px-8 py-3 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-full font-bold text-sm border border-white/10 transition-all">
+                                                        Kanske senare...
                                                     </button>
-                                                    <p class="text-blue-200/50 font-mono text-sm">(Detta är en förhandsvisning)</p>
+                                                    <p class="text-white/20 font-mono text-[10px] uppercase tracking-[0.2em] mt-8">(Test-läge / Simulering)</p>
                                                 </div>
                                             `;
                                             document.body.appendChild(testModal);
+
+                                            const closeModal = () => {
+                                                testModal.classList.add('animate-out', 'fade-out', 'duration-500');
+                                                setTimeout(() => testModal.remove(), 500);
+                                            };
+
+                                            testModal.querySelector('#test-nocco-btn')?.addEventListener('click', () => {
+                                                showFeedback('+180mg Koffein loggat! 🚀', 'blue');
+                                                closeModal();
+                                            });
+                                            testModal.querySelector('#test-coffee-btn')?.addEventListener('click', () => {
+                                                showFeedback('+80mg Koffein loggat! ☕', 'amber');
+                                                closeModal();
+                                            });
+                                            testModal.querySelector('#nocco-test-close')?.addEventListener('click', closeModal);
                                             testModal.addEventListener('click', (e) => {
-                                                if (e.target === testModal || (e.target as HTMLElement).id === 'nocco-test-close') {
-                                                    testModal.remove();
-                                                }
+                                                if (e.target === testModal) closeModal();
                                             });
                                         }}
-                                        className="w-full py-2 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 rounded-lg text-xs font-bold transition-colors border border-blue-500/20"
+                                        className="w-full py-3 bg-gradient-to-r from-blue-500/10 to-indigo-500/10 hover:from-blue-500/20 hover:to-indigo-500/20 text-blue-400 rounded-xl text-xs font-black uppercase tracking-widest transition-all border border-blue-500/20 flex items-center justify-center gap-2 group"
                                     >
-                                        👀 Förhandsgranska Nocco 'o Clock
+                                        <span className="group-hover:scale-125 transition-transform">👀</span>
+                                        Förhandsgranska Nocco 'o Clock
                                     </button>
                                 )}
                             </div>

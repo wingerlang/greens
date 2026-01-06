@@ -83,19 +83,27 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-baseline">
+                <div className="flex flex-col">
                     <h4 className="font-bold text-white text-sm truncate pr-2">{goal.name}</h4>
-                    <span className="text-[10px] font-mono text-white/50 shrink-0">
-                        {progressText} / {targetText}
-                    </span>
+                    <div className="text-[11px] text-white/70 mt-0.5">
+                        {goal.type === 'frequency' && (
+                            <span>Mål: {targetText} (just nu: <span className={percentage >= 100 ? 'text-emerald-400 font-bold' : 'text-white font-bold'}>{progressText}</span>)</span>
+                        )}
+                        {goal.type === 'weight' && (
+                            <span>{goal.targetWeight! < (progress?.current || 0) ? 'Gå ner till' : 'Gå upp till'} <span className="text-white font-bold">{goal.targetWeight} kg</span> (nu: {progress?.current.toFixed(1)})</span>
+                        )}
+                        {(goal.type !== 'frequency' && goal.type !== 'weight') && (
+                            <span>{progressText} / {targetText}</span>
+                        )}
+                    </div>
                 </div>
-                <div className="flex justify-between items-center mt-0.5">
-                    <span className="text-[10px] text-white/40 uppercase tracking-wide truncate">
+                <div className="flex justify-between items-center mt-1">
+                    <span className="text-[9px] text-white/30 uppercase tracking-widest">
                         {goal.period === 'once' ? 'Slutmål' : goal.period}
                     </span>
                     {percentage >= 100 && (
-                        <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                            Klart <span className="text-xs">✓</span>
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center gap-1">
+                            UPPNÅTT!
                         </span>
                     )}
                 </div>
@@ -107,8 +115,18 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
                     <button
                         onClick={(e) => { e.stopPropagation(); onEdit(goal); }}
                         className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded"
+                        title="Redigera"
                     >
                         ✏️
+                    </button>
+                )}
+                {onDelete && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onDelete(goal.id); }}
+                        className="p-1.5 text-white/40 hover:text-rose-400 hover:bg-rose-500/10 rounded"
+                        title="Ta bort"
+                    >
+                        ✕
                     </button>
                 )}
             </div>

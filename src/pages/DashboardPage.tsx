@@ -32,6 +32,7 @@ import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
 import { StravaActivityImportModal } from '../components/integrations/StravaActivityImportModal.tsx';
 import { RefreshCw } from 'lucide-react';
+import { CaffeineCard } from '../components/dashboard';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -428,7 +429,9 @@ export function DashboardPage() {
         unifiedActivities,
         weightEntries,
         trainingPeriods,
-        performanceGoals
+        performanceGoals,
+        toggleIncompleteDay,
+        dailyVitals
     } = useData();
 
     const [selectedDate, setSelectedDate] = useState(getISODate());
@@ -854,6 +857,21 @@ export function DashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
+                        {/* Incomplete Day Toggle */}
+                        <button
+                            onClick={() => toggleIncompleteDay(selectedDate)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${vitals.incomplete
+                                ? 'bg-orange-500/10 border-orange-500/30 text-orange-500'
+                                : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'
+                                }`}
+                            title={vitals.incomplete ? "Markera som fullständig" : "Markera som ofullständig"}
+                        >
+                            <AlertCircle size={16} className={vitals.incomplete ? 'animate-pulse' : ''} />
+                            <span className="text-xs font-black uppercase tracking-wider">
+                                {vitals.incomplete ? 'Ofullständig dag' : 'Markera ofullständig'}
+                            </span>
+                        </button>
+
                         {/* Strava Sync Button */}
                         <button
                             onClick={() => setIsStravaModalOpen(true)}
@@ -1310,93 +1328,21 @@ export function DashboardPage() {
 
                         if (card.id === 'caffeine') {
                             const caffeineLimit = settings.dailyCaffeineLimit || 400;
-                            const caff = vitals.caffeine || 0;
-                            const isCaffHigh = caff >= caffeineLimit;
-                            const isCaffWarning = !isCaffHigh && caff >= caffeineLimit * 0.7;
-
                             return (
                                 <Wrapper key="caffeine" className="md:col-span-6 lg:col-span-3">
-                                    <div
-                                        onClick={() => handleCardClick('caffeine', vitals.caffeine || 0)}
-                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm flex flex-col justify-between hover:scale-[1.02] transition-all cursor-pointer overflow-hidden relative h-full ${isCaffHigh ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30' : isCaffWarning ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}
-                                    >
-                                        <Coffee className="absolute -bottom-4 -right-4 w-24 h-24 text-amber-500/5 dark:text-amber-400/10 pointer-events-none transform rotate-6 transition-all group-hover:scale-110" />
-                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'} relative z-10`}>
-                                            <div className={`p-1.5 rounded-full ${isCaffHigh ? 'bg-rose-100 text-rose-600' : isCaffWarning ? 'bg-amber-100 text-amber-600' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600'}`}>
-                                                <Coffee className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
-                                            </div>
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Koffein</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            {editing === 'caffeine' ? (
-                                                <div className="flex flex-col gap-2 pt-1" onClick={e => e.stopPropagation()}>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <input
-                                                            autoFocus
-                                                            type="number"
-                                                            value={tempValue}
-                                                            onChange={(e) => setTempValue(e.target.value)}
-                                                            onBlur={() => handleSave('caffeine')}
-                                                            onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
-                                                            className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-lg font-bold text-slate-900 dark:text-white p-1 w-16 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                        />
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">Mg</span>
-                                                    </div>
-                                                    <div className="flex gap-1">
-                                                        <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-                                                            <button
-                                                                onMouseDown={e => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    const newVal = Math.max(0, (vitals.caffeine || 0) - 80);
-                                                                    setVitals(p => ({ ...p, caffeine: newVal }));
-                                                                    setTempValue(newVal.toString());
-                                                                    updateVitals(today, { caffeine: newVal });
-                                                                }} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold hover:bg-white dark:hover:bg-slate-700 rounded">-</button>
-                                                            <span className="text-[10px] mx-0.5">☕</span>
-                                                            <button
-                                                                onMouseDown={e => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    const newVal = (vitals.caffeine || 0) + 80;
-                                                                    setVitals(p => ({ ...p, caffeine: newVal }));
-                                                                    setTempValue(newVal.toString());
-                                                                    updateVitals(today, { caffeine: newVal });
-                                                                }} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold hover:bg-white dark:hover:bg-slate-700 rounded">+</button>
-                                                        </div>
-                                                        <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-                                                            <button
-                                                                onMouseDown={e => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    const newVal = Math.max(0, (vitals.caffeine || 0) - 180);
-                                                                    setVitals(p => ({ ...p, caffeine: newVal }));
-                                                                    setTempValue(newVal.toString());
-                                                                    updateVitals(selectedDate, { caffeine: newVal });
-                                                                }} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold hover:bg-white dark:hover:bg-slate-700 rounded">-</button>
-                                                            <span className="text-[10px] mx-0.5">🥤</span>
-                                                            <button
-                                                                onMouseDown={e => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    const newVal = (vitals.caffeine || 0) + 180;
-                                                                    setVitals(p => ({ ...p, caffeine: newVal }));
-                                                                    setTempValue(newVal.toString());
-                                                                    updateVitals(selectedDate, { caffeine: newVal });
-                                                                }} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold hover:bg-white dark:hover:bg-slate-700 rounded">+</button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${isCaffHigh ? 'text-rose-600' : isCaffWarning ? 'text-amber-600' : 'text-slate-900 dark:text-white'}`}>{vitals.caffeine || 0}</span>
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">Mg</span>
-                                                    </div>
-                                                    <div className={`mt-2 flex gap-1 ${density === 'compact' || density === 'slim' ? 'opacity-0 h-0 hidden' : 'opacity-100'}`}>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleCaffeineAdd(80, 'coffee'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">+☕</button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleCaffeineAdd(180, 'nocco'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors">+🥤</button>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <CaffeineCard
+                                        density={density}
+                                        caffeineLimit={caffeineLimit}
+                                        currentCaffeine={vitals.caffeine || 0}
+                                        isEditing={editing === 'caffeine'}
+                                        tempValue={tempValue}
+                                        onCardClick={() => handleCardClick('caffeine', vitals.caffeine || 0)}
+                                        onValueChange={setTempValue}
+                                        onSave={() => handleSave('caffeine')}
+                                        onCancel={() => setEditing(null)}
+                                        onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
+                                        onQuickAdd={handleCaffeineAdd}
+                                    />
                                 </Wrapper>
                             );
                         }
@@ -1625,11 +1571,12 @@ export function DashboardPage() {
                                                 const isToday = date === new Date().toISOString().split('T')[0];
                                                 const dayActivities = unifiedActivities.filter(a => a.date === date);
                                                 const hasTraining = dayActivities.length > 0;
+                                                const isIncomplete = dailyVitals[date]?.incomplete;
 
                                                 return (
                                                     <div
                                                         key={date}
-                                                        className={`flex-1 flex flex-col items-center cursor-pointer relative ${isToday ? 'z-10' : ''}`}
+                                                        className={`flex-1 flex flex-col items-center cursor-pointer relative ${isToday ? 'z-10' : ''} transition-all duration-300 ${hoveredDay && hoveredDay !== date ? 'blur-[1px] opacity-40 scale-[0.98]' : 'blur-0 opacity-100 scale-100'}`}
                                                         onMouseEnter={() => setHoveredDay(date)}
                                                         onMouseLeave={() => setHoveredDay(null)}
                                                     >
@@ -1642,9 +1589,14 @@ export function DashboardPage() {
                                                             />
                                                         )}
                                                         {/* Day Label */}
-                                                        <span className={`text-[10px] font-bold mb-2 ${isToday ? 'text-white' : 'text-slate-500'}`}>
-                                                            {dayLabels[dayOfWeek]}
-                                                        </span>
+                                                        <div className="flex items-center gap-1 mb-2">
+                                                            <span className={`text-[10px] font-bold ${isToday ? 'text-white' : 'text-slate-500'}`}>
+                                                                {dayLabels[dayOfWeek]}
+                                                            </span>
+                                                            {isIncomplete && (
+                                                                <div className="w-1 h-1 rounded-full bg-orange-500 shadow-[0_0_4px_rgba(249,115,22,0.6)] animate-pulse" title="Ej fullständigt loggad dag" />
+                                                            )}
+                                                        </div>
 
                                                         {/* Activity Bar or Dot */}
                                                         {isToday ? (

@@ -117,9 +117,12 @@ export function aggregateHealthData(
  * Calculates summary stats from snapshots
  */
 export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
-    const count = snapshots.length || 1;
+    // Filter out incomplete days for averages - we don't want them to skew "average intake"
+    const completeSnapshots = snapshots.filter(s => !s.vitals.incomplete && !s.isUntracked);
+    const completeCount = completeSnapshots.length || 1;
+    const totalCount = snapshots.length || 1;
 
-    const totals = snapshots.reduce((acc, s) => ({
+    const totals = completeSnapshots.reduce((acc, s) => ({
         sleep: acc.sleep + s.vitals.sleep,
         water: acc.water + s.vitals.water,
         caffeine: acc.caffeine + (s.vitals.caffeine || 0),
@@ -127,41 +130,41 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
         calories: acc.calories + s.nutrition.calories
     }), { sleep: 0, water: 0, caffeine: 0, protein: 0, calories: 0 });
 
-    // Weight trend
-    const weights = snapshots.filter(s => s.weight !== undefined).map(s => s.weight!);
-    const weightTrend = weights.length > 1 ? weights[weights.length - 1] - weights[0] : 0;
+    // Weight trend should probably use all snapshots that HAVE weight, even if incomplete nutrition
+    const weightSnapshots = snapshots.filter(s => s.weight !== undefined);
+    const weightTrend = weightSnapshots.length > 1 ? weightSnapshots[weightSnapshots.length - 1].weight! - weightSnapshots[0].weight! : 0;
 
-    // Average nutrient coverage
+    // Average nutrient coverage (use complete snapshots)
     const vitaminCoverage: Record<string, number> = {};
     Object.keys(RDA).forEach(key => {
-        const total = snapshots.reduce((sum, s) => sum + ((s.nutrition as any)[key] || 0), 0);
-        vitaminCoverage[key] = Math.round((total / (snapshots.length * (RDA as any)[key])) * 100);
+        const total = completeSnapshots.reduce((sum, s) => sum + ((s.nutrition as any)[key] || 0), 0);
+        vitaminCoverage[key] = Math.round((total / (completeCount * (RDA as any)[key])) * 100);
     });
 
-    // Protein Quality Score (0-100)
-    const completeDays = snapshots.filter(s => {
+    // Protein Quality Score (0-100) (use complete snapshots)
+    const qualityDays = completeSnapshots.filter(s => {
         const cats = s.nutrition.proteinCategories || [];
         return cats.includes('soy_quinoa') || (cats.includes('legume') && cats.includes('grain'));
     }).length;
-    const proteinQualityScore = Math.round((completeDays / count) * 100);
+    const proteinQualityScore = Math.round((qualityDays / completeCount) * 100);
 
-    // Logging Consistency
-    const activeDays = snapshots.filter(s => s.hasLogs).length;
-    const untrackedDays = snapshots.filter(s => s.isUntracked).length;
-    const loggingConsistency = Math.round((activeDays / count) * 100);
+    // Logging Consistency (accounts for all days)
+    const activeDays = snapshots.filter(s => s.hasLogs && !s.vitals.incomplete).length;
+    const untrackedDays = snapshots.filter(s => s.isUntracked || s.vitals.incomplete).length;
+    const loggingConsistency = Math.round((activeDays / totalCount) * 100);
 
-    // Sleep & Water Consistency (Non-zero days)
+    // Sleep & Water Consistency (Non-zero days, but also not explicitly marked incomplete if we want accuracy)
     const sleepDays = snapshots.filter(s => s.vitals.sleep > 0).length || 1;
     const waterDays = snapshots.filter(s => s.vitals.water > 0).length || 1;
 
-    const avgSleep = totals.sleep / sleepDays;
-    const avgWater = totals.water / waterDays;
+    const avgSleep = totals.sleep / (completeSnapshots.filter(s => s.vitals.sleep > 0).length || 1);
+    const avgWater = totals.water / (completeSnapshots.filter(s => s.vitals.water > 0).length || 1);
 
     // Consistency percentages for UI
-    const sleepConsistency = Math.round((snapshots.filter(s => s.vitals.sleep > 0).length / count) * 100);
-    const waterConsistency = Math.round((snapshots.filter(s => s.vitals.water > 0).length / count) * 100);
+    const sleepConsistency = Math.round((snapshots.filter(s => s.vitals.sleep > 0).length / totalCount) * 100);
+    const waterConsistency = Math.round((snapshots.filter(s => s.vitals.water > 0).length / totalCount) * 100);
 
-    // Exercise Breakdown
+    // Exercise Breakdown (Exercise is usually complete even if nutrition isn't)
     const exerciseBreakdown = snapshots.reduce((acc, s) => {
         acc.intervals += s.exerciseDeatils.intervals;
         acc.longRuns += s.exerciseDeatils.longRuns;
@@ -176,11 +179,11 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
     return {
         avgSleep,
         avgWater,
-        avgCaffeine: totals.caffeine / count,
+        avgCaffeine: totals.caffeine / completeCount,
         weightTrend,
         totalCalories: totals.calories,
-        avgCalories: totals.calories / count,
-        avgProtein: totals.protein / count,
+        avgCalories: totals.calories / completeCount,
+        avgProtein: totals.protein / completeCount,
         proteinQualityScore,
         vitaminCoverage,
         loggingConsistency,

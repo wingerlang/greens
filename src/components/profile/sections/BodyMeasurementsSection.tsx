@@ -64,11 +64,18 @@ export function BodyMeasurementsSection({ targetWeight, height }: BodyMeasuremen
                                 </div>
                             </div>
                         )}
-                        {toGoal !== null && (
+                        {toGoal !== null ? (
                             <div className="text-center">
                                 <div className="text-slate-500 text-xs uppercase">Till Målvikt</div>
                                 <div className={`text-lg font-bold ${toGoal <= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
                                     {toGoal <= 0 ? '🎯 Uppnått!' : `${toGoal.toFixed(1)} kg kvar`}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="text-center opacity-40">
+                                <div className="text-slate-500 text-xs uppercase">Mål Saknas</div>
+                                <div className="text-lg font-bold text-slate-400">
+                                    --
                                 </div>
                             </div>
                         )}

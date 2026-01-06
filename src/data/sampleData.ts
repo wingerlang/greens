@@ -1106,6 +1106,42 @@ export const SAMPLE_FOOD_ITEMS: FoodItem[] = [
         updatedAt: now,
     },
     {
+        id: 'food-kaffe',
+        name: 'Kaffe',
+        description: 'Svart kaffe, bryggkaffe',
+        calories: 2,
+        protein: 0.1,
+        carbs: 0.1,
+        fat: 0.1,
+        unit: 'ml',
+        category: 'beverages',
+        storageType: 'pantry',
+        pricePerUnit: 0.1,
+        extendedDetails: {
+            caffeine: 40, // mg per 100ml
+        },
+        createdAt: now,
+        updatedAt: now,
+    },
+    {
+        id: 'food-nocco',
+        name: 'Nocco',
+        description: 'Energidryck BCAA',
+        calories: 1,
+        protein: 0.9,
+        carbs: 0,
+        fat: 0,
+        unit: 'ml',
+        category: 'beverages',
+        storageType: 'fresh',
+        pricePerUnit: 0.1,
+        extendedDetails: {
+            caffeine: 55, // mg per 100ml (180mg per 330ml)
+        },
+        createdAt: now,
+        updatedAt: now,
+    },
+    {
         id: 'food-mango',
         name: 'Mango',
         description: 'fryst tärnad eller färsk',

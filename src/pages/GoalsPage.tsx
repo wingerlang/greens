@@ -555,6 +555,7 @@ export function GoalsPage() {
                                             goal={goal}
                                             onClick={() => setSearchParams({ goal: goal.id })}
                                             onEdit={handleEditGoal}
+                                            onDelete={handleDeleteGoal}
                                         />
                                     ))}
                                 </div>
@@ -567,7 +568,7 @@ export function GoalsPage() {
                                 {periodGoals.length > 0 && (
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 ml-1">Övriga Mål</h3>
                                 )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                     {looseGoals.map(({ goal, progress }) => (
                                         <div
                                             key={goal.id}
@@ -595,6 +596,9 @@ export function GoalsPage() {
                                             {/* Goal Info */}
                                             <div className="goal-info">
                                                 <h3 className="goal-name">{goal.name}</h3>
+                                                {goal.description && (
+                                                    <p className="text-[10px] text-slate-500 mb-2 line-clamp-2">{goal.description}</p>
+                                                )}
                                                 <div className="goal-meta flex-col gap-1 mb-3">
                                                     <span className="text-2xl font-black text-white tracking-tight">
                                                         {formatProgress(

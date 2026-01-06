@@ -2,17 +2,22 @@ import React, { useState, useMemo, useRef } from 'react';
 import { useData } from '../../context/DataContext.tsx';
 import { useSettings } from '../../context/SettingsContext.tsx';
 import { DaySnapshot, HealthStats } from '../../utils/healthAggregator.ts';
-import { WeightEntry, DailyVitals } from '../../models/types.ts';
+import { WeightEntry, DailyVitals, BodyMeasurementType, BodyMeasurementEntry } from '../../models/types.ts';
 
 interface MetricFocusViewProps {
-    type: 'sleep' | 'weight';
+    type: 'sleep' | 'weight' | BodyMeasurementType;
     snapshots: DaySnapshot[];
     stats: HealthStats;
     days: number;
 }
 
 export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusViewProps) {
-    const { weightEntries, updateWeightEntry, deleteWeightEntry, updateVitals, addWeightEntry } = useData();
+    const {
+        weightEntries, bodyMeasurements,
+        updateWeightEntry, deleteWeightEntry,
+        updateVitals, addWeightEntry,
+        addBodyMeasurement, deleteBodyMeasurement, updateBodyMeasurement
+    } = useData();
     const { settings } = useSettings();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState<string>('');
@@ -20,9 +25,31 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
+    const isWeight = type === 'weight';
+    const isSleep = type === 'sleep';
+    const isMeasurement = !isWeight && !isSleep;
+
+    const measurementInfo = useMemo(() => {
+        if (!isMeasurement) return null;
+        const types: Record<string, { label: string, unit: string, color: string }> = {
+            waist: { label: 'Midja', unit: 'cm', color: '#10b981' },
+            hips: { label: 'Höft', unit: 'cm', color: '#34d399' },
+            chest: { label: 'Bröst', unit: 'cm', color: '#60a5fa' },
+            neck: { label: 'Nacke', unit: 'cm', color: '#94a3b8' },
+            shoulders: { label: 'Axlar', unit: 'cm', color: '#38bdf8' },
+            arm_left: { label: 'Vänster Arm', unit: 'cm', color: '#818cf8' },
+            arm_right: { label: 'Höger Arm', unit: 'cm', color: '#818cf8' },
+            thigh_left: { label: 'Vänster Lår', unit: 'cm', color: '#fbbf24' },
+            thigh_right: { label: 'Höger Lår', unit: 'cm', color: '#fbbf24' },
+            calf_left: { label: 'Vänster Vad', unit: 'cm', color: '#f87171' },
+            calf_right: { label: 'Höger Vad', unit: 'cm', color: '#f87171' }
+        };
+        return types[type] || { label: type, unit: 'cm', color: '#10b981' };
+    }, [type, isMeasurement]);
+
     // Prepare table data with grouping
     const groupedTableData = useMemo(() => {
-        if (type === 'weight') {
+        if (isWeight) {
             const raw = weightEntries
                 .filter(w => snapshots.some(s => s.date === w.date));
 
@@ -47,8 +74,8 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                     averageWaist: isNaN(avgWaist) ? null : avgWaist,
                     items: g.items.map(i => ({ id: i.id, date: i.date, value: i.weight, waist: i.waist, unit: 'kg' }))
                 };
-            });
-        } else {
+            }).sort((a, b) => b.date.localeCompare(a.date));
+        } else if (isSleep) {
             // Sleep is 1 entry per day (DailyVitals)
             return snapshots
                 .filter(s => s.vitals.sleep > 0)
@@ -60,8 +87,45 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                     items: [{ id: s.date, date: s.date, value: s.vitals.sleep || 0, waist: undefined, unit: 'h' }]
                 }))
                 .reverse();
+        } else {
+            // Body Measurements
+            const extractedFromWeight: BodyMeasurementEntry[] = [];
+            weightEntries.forEach(entry => {
+                const val = (entry as any)[type];
+                if (val) {
+                    extractedFromWeight.push({
+                        id: `${entry.id}-${type}`,
+                        date: entry.date,
+                        type: type as BodyMeasurementType,
+                        value: val,
+                        createdAt: entry.createdAt
+                    });
+                }
+            });
+
+            const combined = [...bodyMeasurements.filter(m => m.type === type), ...extractedFromWeight];
+            const sorted = combined.sort((a, b) => b.date.localeCompare(a.date));
+
+            // Group by date
+            const groups: { date: string, items: BodyMeasurementEntry[] }[] = [];
+            sorted.forEach(entry => {
+                const existing = groups.find(g => g.date === entry.date);
+                if (existing) existing.items.push(entry);
+                else groups.push({ date: entry.date, items: [entry] });
+            });
+
+            return groups.map(g => {
+                const avg = g.items.reduce((sum, item) => sum + item.value, 0) / g.items.length;
+                return {
+                    date: g.date,
+                    count: g.items.length,
+                    average: avg,
+                    averageWaist: null,
+                    items: g.items.map(i => ({ id: i.id, date: i.date, value: i.value, unit: measurementInfo?.unit || 'cm' }))
+                };
+            });
         }
-    }, [type, weightEntries, snapshots]);
+    }, [type, isWeight, isSleep, weightEntries, bodyMeasurements, snapshots, measurementInfo]);
 
     const handleEdit = (item: { id: string, date: string, value: number }) => {
         setEditingId(item.id);
@@ -89,17 +153,32 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
 
         if (editingId.startsWith('NEW_')) {
             // Create new entry
-            if (type === 'weight') {
+            if (isWeight) {
                 await addWeightEntry(val, editDate);
-            } else {
+            } else if (isSleep) {
                 updateVitals(editDate, { sleep: val });
+            } else {
+                addBodyMeasurement({
+                    date: editDate,
+                    type: type as BodyMeasurementType,
+                    value: val
+                });
             }
         } else {
             // Update existing
-            if (type === 'weight') {
+            if (isWeight) {
                 updateWeightEntry(editingId, val, editDate);
-            } else {
+            } else if (isSleep) {
                 updateVitals(editDate, { sleep: val });
+            } else {
+                // If ID contains hyphen, it's extracted from weight. We should update the weight entry instead?
+                // For now, let's assume we update the bodyMeasurement if it has a clean ID.
+                if (editingId.includes('-')) {
+                    const [weightId] = editingId.split('-');
+                    updateWeightEntry(weightId, undefined as any, undefined as any, { [type]: val } as any);
+                } else {
+                    updateBodyMeasurement(editingId, { value: val, date: editDate });
+                }
             }
         }
         setEditingId(null);
@@ -107,10 +186,17 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
 
     const handleDelete = (id: string, date: string) => {
         if (!window.confirm('Vill du verkligen ta bort denna loggning?')) return;
-        if (type === 'weight') {
+        if (isWeight) {
             deleteWeightEntry(id);
-        } else {
+        } else if (isSleep) {
             updateVitals(date, { sleep: 0 });
+        } else {
+            if (id.includes('-')) {
+                const [weightId] = id.split('-');
+                updateWeightEntry(weightId, undefined as any, undefined as any, { [type]: undefined } as any);
+            } else {
+                deleteBodyMeasurement(id);
+            }
         }
     };
 
@@ -123,16 +209,23 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
         });
     };
 
-    const isWeight = type === 'weight';
-    const themeColor = isWeight ? '#f43f5e' : '#0ea5e9';
+    const themeColor = isWeight ? '#f43f5e' : (isSleep ? '#0ea5e9' : (measurementInfo?.color || '#10b981'));
 
     // Advanced Graph Calculations
     const graphMeta = useMemo(() => {
-        const validPoints = snapshots.map((s, i) => ({
-            val: isWeight ? s.weight : s.vitals.sleep,
-            date: s.date,
-            i
-        })).filter(p => p.val !== undefined && p.val > 0) as { val: number, date: string, i: number }[];
+        const validPoints = snapshots.map((s, i) => {
+            let val = 0;
+            if (isWeight) val = s.weight || 0;
+            else if (isSleep) val = s.vitals.sleep || 0;
+            else {
+                // For measurements, we might need more granular data than snapshots if we want to show multiple per day.
+                // But for the graph, showing the average per day from snapshots (if available) or calculation is fine.
+                // Actually, let's calculate the average for this specific type on this day.
+                const dayEntries = groupedTableData.find(g => g.date === s.date);
+                val = dayEntries?.average || 0;
+            }
+            return { val, date: s.date, i };
+        }).filter(p => p.val !== undefined && p.val > 0) as { val: number, date: string, i: number }[];
 
         if (validPoints.length === 0) return { min: 0, max: 10, range: 10, points: [], trendPoints: [] };
 
@@ -517,7 +610,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                         <thead>
                             <tr className="text-[10px] uppercase font-black text-slate-500 border-b border-white/5">
                                 <th className="py-3 px-4">Datum</th>
-                                <th className="py-3 px-4">Vikt</th>
+                                <th className="py-3 px-4">{isWeight ? 'Vikt' : (isSleep ? 'Sömn' : measurementInfo?.label || 'Värde')}</th>
                                 {isWeight && <th className="py-3 px-4">Midja</th>}
                                 <th className="py-3 px-4 text-right">Åtgärder</th>
                             </tr>
@@ -579,7 +672,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                                                 {group.count > 1 ? (
                                                     group.averageWaist ? <span className="text-slate-400 font-bold">{group.averageWaist.toFixed(1)} cm</span> : '--'
                                                 ) : (
-                                                    group.items[0].waist ? <span className="font-black">{group.items[0].waist} cm</span> : '--'
+                                                    (group.items[0] as any).waist ? <span className="font-black">{(group.items[0] as any).waist} cm</span> : '--'
                                                 )}
                                             </td>
                                         )}
@@ -625,7 +718,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                                                 </td>
                                                 {isWeight && (
                                                     <td className="py-2 px-4 text-xs">
-                                                        {item.waist ? `${item.waist} cm` : '--'}
+                                                        {(item as any).waist ? `${(item as any).waist} cm` : '--'}
                                                     </td>
                                                 )}
                                                 <td className="py-2 px-4 text-right">

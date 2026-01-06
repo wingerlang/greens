@@ -142,10 +142,7 @@ export function HealthPage() {
             case '3m': return 90;
             case '6m': return 180;
             case '9m': return 270;
-            case 'year': {
-                const diff = now.getTime() - startOf2026.getTime();
-                return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
-            }
+            case 'year': return 365;
             case '2025': {
                 const diff = now.getTime() - startOf2025.getTime();
                 return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
@@ -176,7 +173,6 @@ export function HealthPage() {
         }
         if (timeframe === '2024') return weightEntries.filter(e => e.date.startsWith('2024'));
         if (timeframe === '2025') return weightEntries.filter(e => e.date.startsWith('2025'));
-        if (timeframe === 'year') return weightEntries.filter(e => e.date.startsWith('2026'));
 
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - days);
@@ -195,7 +191,6 @@ export function HealthPage() {
         }
         if (timeframe === '2024') return snapshots.filter(s => s.date.startsWith('2024'));
         if (timeframe === '2025') return snapshots.filter(s => s.date.startsWith('2025'));
-        if (timeframe === 'year') return snapshots.filter(s => s.date.startsWith('2026'));
         return snapshots;
     }, [snapshots, timeframe, selectedPeriod]);
 

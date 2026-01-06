@@ -358,6 +358,7 @@ export interface DailyVitals {
     sleep: number;       // Hours
     caffeine?: number;   // Grams or counts (Coffee/Te/Nocco)
     alcohol?: number;    // Units
+    incomplete?: boolean; // If true, this day is marked as unfinished (e.g. forgot to log food)
     updatedAt: string;
 }
 

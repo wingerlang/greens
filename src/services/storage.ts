@@ -33,6 +33,8 @@ export interface StorageService {
     deleteMealEntry(id: string, date: string): Promise<void>;
     updateWeightEntry(entry: any): Promise<void>;
     deleteWeightEntry(id: string, date: string): Promise<void>;
+    saveBodyMeasurement(entry: any): Promise<void>;
+    deleteBodyMeasurement(id: string): Promise<void>;
     // Clear specific data from local cache
     clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
 }
@@ -62,7 +64,8 @@ const getDefaultData = (): AppData => ({
     // Phase 8: Data Persistence & Integration
     sleepSessions: [],
     intakeLogs: [],
-    universalActivities: []
+    universalActivities: [],
+    bodyMeasurements: []
 });
 
 // Helper to get token (if any)
@@ -565,6 +568,48 @@ export class LocalStorageService implements StorageService {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch (e) {
             console.error('[Storage] Failed to clear local cache:', e);
+        }
+    }
+
+    async saveBodyMeasurement(entry: any): Promise<void> {
+        const data = await this.load();
+        if (!data.bodyMeasurements) data.bodyMeasurements = [];
+        const idx = data.bodyMeasurements.findIndex((m: any) => m.id === entry.id);
+        if (idx >= 0) {
+            data.bodyMeasurements[idx] = entry;
+        } else {
+            data.bodyMeasurements.push(entry);
+        }
+        await this.save(data);
+
+        // API sync
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            fetch('/api/measurements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(entry)
+            }).catch(e => console.error('[Storage] Body measurement sync failed:', e));
+        }
+    }
+
+    async deleteBodyMeasurement(id: string): Promise<void> {
+        const data = await this.load();
+        data.bodyMeasurements = data.bodyMeasurements?.filter((m: any) => m.id !== id) || [];
+        await this.save(data);
+
+        // API sync
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            fetch(`/api/measurements/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            }).catch(e => console.error('[Storage] Body measurement delete failed:', e));
         }
     }
 }

@@ -102,6 +102,18 @@ export const BodyMeasurementsModule: React.FC = () => {
         return entries[entries.length - 1].value;
     };
 
+    // Auto-populate inputs with latest values on mount or when pinnedTypes change
+    React.useEffect(() => {
+        const initialValues: Record<string, string> = { ...inputValues };
+        pinnedTypes.forEach(type => {
+            if (!initialValues[type]) {
+                const latest = getLatestValue(type);
+                if (latest !== undefined) initialValues[type] = latest.toString();
+            }
+        });
+        setInputValues(initialValues);
+    }, [pinnedTypes, history]);
+
     const handleSave = () => {
         let count = 0;
         Object.entries(inputValues).forEach(([type, val]) => {

@@ -8,10 +8,10 @@ interface BodyViewProps {
     snapshots: DaySnapshot[];
     stats: HealthStats;
     days: number;
-    initialTab?: 'weight' | 'sleep' | 'measurements';
+    initialTab?: 'weight' | 'sleep' | 'measurements' | string;
 }
 export function BodyView({ snapshots, stats, days, initialTab = 'weight' }: BodyViewProps) {
-    const [subTab, setSubTab] = useState<'weight' | 'sleep' | 'measurements'>(initialTab);
+    const [subTab, setSubTab] = useState<string>(initialTab);
 
     useEffect(() => {
         if (initialTab) setSubTab(initialTab);
@@ -59,6 +59,9 @@ export function BodyView({ snapshots, stats, days, initialTab = 'weight' }: Body
                     <MetricFocusView type="sleep" snapshots={snapshots} stats={stats} days={days} />
                 )}
                 {subTab === 'measurements' && <BodyMeasurementsModule />}
+                {subTab !== 'weight' && subTab !== 'sleep' && subTab !== 'measurements' && (
+                    <MetricFocusView type={subTab as any} snapshots={snapshots} stats={stats} days={days} />
+                )}
             </div>
         </div>
     );

@@ -594,16 +594,16 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [currentUser]);
 
     const toggleIncompleteDay = useCallback((date: string) => {
-        setUserSettings(prev => {
-            const current = prev.incompleteDays?.[date] ?? false;
-            const updated = {
+        setDailyVitals(prev => {
+            const currentVitals = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
+            return {
                 ...prev,
-                incompleteDays: {
-                    ...prev.incompleteDays,
-                    [date]: !current
+                [date]: {
+                    ...currentVitals,
+                    incomplete: !currentVitals.incomplete,
+                    updatedAt: new Date().toISOString()
                 }
             };
-            return updated;
         });
     }, []);
 
@@ -1081,14 +1081,14 @@ export function DataProvider({ children }: DataProviderProps) {
         });
     }, []);
 
-    const updateWeightEntry = useCallback((id: string, weight: number, date: string, waist?: number, chest?: number, hips?: number, thigh?: number) => {
+    const updateWeightEntry = useCallback((id: string, weight?: number, date?: string, updates?: Partial<WeightEntry>) => {
         setWeightEntries(prev => {
-            const next = prev.map(w => w.id === id ? { ...w, weight, date, waist, chest, hips, thigh } : w);
+            const next = prev.map(w => w.id === id ? { ...w, ...(weight !== undefined ? { weight } : {}), ...(date ? { date } : {}), ...updates } : w);
 
             // Sync via Granular API
             const updated = next.find(w => w.id === id);
             if (updated) {
-                skipAutoSave.current = true;
+                // We don't skip auto-save here because we want the biometric fields to be captured in the monolithic blob
                 storageService.updateWeightEntry(updated).catch(e => console.error("Failed to update weight", e));
             }
 
@@ -1568,6 +1568,9 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString()
         };
         setBodyMeasurements(prev => [...prev, newEntry]);
+
+        // Persist
+        storageService.saveBodyMeasurement?.(newEntry).catch(e => console.error("Failed to sync measurement:", e));
     }, []);
 
     const updateBodyMeasurement = useCallback((id: string, updates: Partial<BodyMeasurementEntry>) => {
@@ -1576,6 +1579,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
     const deleteBodyMeasurement = useCallback((id: string) => {
         setBodyMeasurements(prev => prev.filter(e => e.id !== id));
+        storageService.deleteBodyMeasurement?.(id).catch(e => console.error("Failed to delete measurement:", e));
     }, []);
 
     // ============================================
