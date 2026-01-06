@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
 
@@ -21,6 +21,7 @@ interface SyncDiffReport {
 interface StravaActivityImportModalProps {
     isOpen: boolean;
     onClose: () => void;
+    initialRange?: ScanRange;
 }
 
 const EXERCISE_ICONS: Record<string, string> = {
@@ -34,13 +35,13 @@ const EXERCISE_ICONS: Record<string, string> = {
 
 type ScanRange = '7days' | '30days' | 'year' | 'all';
 
-export function StravaActivityImportModal({ isOpen, onClose }: StravaActivityImportModalProps) {
+export function StravaActivityImportModal({ isOpen, onClose, initialRange }: StravaActivityImportModalProps) {
     const { token } = useAuth();
     const { refreshData } = useData();
 
     // State
     const [step, setStep] = useState<'setup' | 'scanning' | 'review' | 'importing' | 'success'>('setup');
-    const [scanRange, setScanRange] = useState<ScanRange>('30days');
+    const [scanRange, setScanRange] = useState<ScanRange>(initialRange || '30days');
     const [report, setReport] = useState<SyncDiffReport | null>(null);
     const [activeTab, setActiveTab] = useState<'new' | 'changed'>('new');
 
@@ -50,6 +51,17 @@ export function StravaActivityImportModal({ isOpen, onClose }: StravaActivityImp
     const [importStats, setImportStats] = useState<{ created: number; updated: number }>({ created: 0, updated: 0 });
 
     const [elapsedTime, setElapsedTime] = useState(0);
+
+    // Reset state when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setStep('setup');
+            setScanRange(initialRange || '30days');
+            setReport(null);
+            setSelectedNew(new Set());
+            setSelectedChanged(new Set());
+        }
+    }, [isOpen, initialRange]);
 
     const handleScan = async () => {
         setStep('scanning');

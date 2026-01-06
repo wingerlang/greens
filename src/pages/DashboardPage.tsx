@@ -30,6 +30,8 @@ import { ActivityDetailModal } from '../components/activities/ActivityDetailModa
 import { GoalsOverviewWidget } from '../components/goals/GoalsOverviewWidget.tsx';
 import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
+import { StravaActivityImportModal } from '../components/integrations/StravaActivityImportModal.tsx';
+import { RefreshCw } from 'lucide-react';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -445,6 +447,7 @@ export function DashboardPage() {
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [weightRange, setWeightRange] = useState<'14d' | '30d' | '3m' | '1y' | 'all'>('1y');
     const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+    const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
 
     const changeDate = (days: number) => {
         const d = new Date(selectedDate);
@@ -849,19 +852,31 @@ export function DashboardPage() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                        {(['compact', 'slim', 'cozy'] as const).map((m) => (
-                            <button
-                                key={m}
-                                onClick={() => setDensityMode(m)}
-                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${density === m
-                                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-                                    }`}
-                            >
-                                {m === 'compact' ? 'Tiny' : m === 'slim' ? 'Slim' : 'Cozy'}
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-3">
+                        {/* Strava Sync Button */}
+                        <button
+                            onClick={() => setIsStravaModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#FC4C02]/10 hover:bg-[#FC4C02]/20 text-[#FC4C02] rounded-xl border border-[#FC4C02]/20 transition-all group"
+                            title="Synka med Strava (7 dagar)"
+                        >
+                            <RefreshCw size={16} className="group-hover:rotate-180 transition-transform duration-500" />
+                            <span className="text-xs font-black uppercase tracking-wider">Synka Strava</span>
+                        </button>
+
+                        <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                            {(['compact', 'slim', 'cozy'] as const).map((m) => (
+                                <button
+                                    key={m}
+                                    onClick={() => setDensityMode(m)}
+                                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${density === m
+                                        ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                                        }`}
+                                >
+                                    {m === 'compact' ? 'Tiny' : m === 'slim' ? 'Slim' : 'Cozy'}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </header>
 
@@ -1913,6 +1928,12 @@ export function DashboardPage() {
                     </div>
                 </div>
             )}
+
+            <StravaActivityImportModal
+                isOpen={isStravaModalOpen}
+                onClose={() => setIsStravaModalOpen(false)}
+                initialRange="7days"
+            />
         </div>
     );
 }
