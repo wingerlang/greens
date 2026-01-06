@@ -7,6 +7,7 @@ import { useScrollLock } from '../../hooks/useScrollLock.ts';
 import { calculateCalorieTarget, calculateVolumeStats } from '../../utils/smartGoalCalculations.ts';
 import { NutritionWizard } from '../nutrition/NutritionWizard.tsx';
 import { getActiveCalories } from '../../utils/calorieTarget.ts';
+import { Sparkles, Flame, Target, Scale, Info } from 'lucide-react';
 
 const EXERCISE_TYPES: { type: ExerciseType | undefined; icon: string; label: string }[] = [
     { type: undefined, icon: '🎯', label: 'All träning' },
@@ -210,7 +211,26 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             // Weight specific reset
             if (editingGoal.type === 'weight' || editingGoal.type === 'measurement') {
                 setTargetWeight(editingGoal.targetWeight?.toString() || '');
-                setWeightDirection(editingGoal.targetWeightRate && editingGoal.targetWeightRate > 0 ? 'up' : 'down');
+                setWeeklyRate(editingGoal.targetWeightRate?.toString() || '0.5');
+                const startW = editingGoal.milestoneProgress || (latestWeight?.weight || 75);
+                setCurrentWeight(startW.toString());
+
+                // Fixed direction calculation
+                let direction: WeightDirection = 'stable';
+                if (editingGoal.targetWeight) {
+                    if (editingGoal.targetWeight < startW - 0.1) direction = 'down';
+                    else if (editingGoal.targetWeight > startW + 0.1) direction = 'up';
+                }
+                setWeightDirection(direction);
+
+                if (editingGoal.nutritionMacros) {
+                    setCalculatedMacros({
+                        calories: editingGoal.nutritionMacros.calories || 0,
+                        protein: editingGoal.nutritionMacros.protein || 0,
+                        carbs: editingGoal.nutritionMacros.carbs || 0,
+                        fat: editingGoal.nutritionMacros.fat || 0
+                    });
+                }
             }
         } else if (isOpen) {
             setName('');
@@ -421,11 +441,75 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
 
     const isBodyGoal = type === 'weight' || type === 'measurement';
 
+    const renderMacroBreakdown = () => {
+        if (!calculatedMacros) return null;
+
+        const totalMacros = calculatedMacros.protein + calculatedMacros.carbs + calculatedMacros.fat;
+        const getPct = (val: number) => totalMacros > 0 ? Math.round((val / totalMacros) * 100) : 0;
+
+        return (
+            <div className="mt-4 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-emerald-400" />
+                        <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Kostberäkning</span>
+                    </div>
+                    <div className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold border border-emerald-500/20">
+                        LÄNKAD TILL HÄLSOGUIDEN
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-4 mb-4">
+                    <div className="flex-1">
+                        <div className="text-2xl font-black text-white">{calculatedMacros.calories}</div>
+                        <div className="text-[10px] text-slate-500 uppercase font-bold">kcal / dag</div>
+                    </div>
+                    <div className="flex gap-2">
+                        <div className="text-center px-2 py-1 bg-slate-900 border border-white/5 rounded-lg">
+                            <div className="text-xs font-bold text-white">{calculatedMacros.protein}g</div>
+                            <div className="text-[8px] text-slate-500 uppercase">Prot</div>
+                        </div>
+                        <div className="text-center px-2 py-1 bg-slate-900 border border-white/5 rounded-lg">
+                            <div className="text-xs font-bold text-white">{calculatedMacros.carbs}g</div>
+                            <div className="text-[8px] text-slate-500 uppercase">Kolh</div>
+                        </div>
+                        <div className="text-center px-2 py-1 bg-slate-900 border border-white/5 rounded-lg">
+                            <div className="text-xs font-bold text-white">{calculatedMacros.fat}g</div>
+                            <div className="text-[8px] text-slate-500 uppercase">Fett</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="h-2 w-full bg-slate-950 rounded-full flex overflow-hidden">
+                    <div className="h-full bg-blue-500 transition-all" style={{ width: `${getPct(calculatedMacros.protein)}%` }} />
+                    <div className="h-full bg-emerald-500 transition-all" style={{ width: `${getPct(calculatedMacros.carbs)}%` }} />
+                    <div className="h-full bg-amber-500 transition-all" style={{ width: `${getPct(calculatedMacros.fat)}%` }} />
+                </div>
+                <div className="flex justify-between mt-1.5 text-[8px] font-bold text-slate-500 uppercase tracking-tighter">
+                    <span>{getPct(calculatedMacros.protein)}% Protein</span>
+                    <span>{getPct(calculatedMacros.carbs)}% Kolh</span>
+                    <span>{getPct(calculatedMacros.fat)}% Fett</span>
+                </div>
+            </div>
+        );
+    };
+
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 backdrop-blur-md animate-in fade-in" onClick={onClose}>
             {showNutritionWizard ? (
                 <div className="w-full max-w-xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
                     <NutritionWizard
+                        initialWeight={parseFloat(currentWeight) || (latestWeight?.weight || undefined)}
+                        initialTargetWeight={parseFloat(targetWeight)}
+                        initialWeeks={(() => {
+                            const startW = parseFloat(currentWeight) || (latestWeight?.weight || 75);
+                            const targetW = parseFloat(targetWeight);
+                            const rate = parseFloat(weeklyRate);
+                            if (startW && targetW && rate > 0) {
+                                return Math.round(Math.abs(startW - targetW) / rate);
+                            }
+                            return 12;
+                        })()}
                         onSave={(profile) => {
                             if (profile.hasWeightGoal && profile.targetWeight) {
                                 setTargetWeight(profile.targetWeight.toString());
@@ -857,12 +941,17 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
 
                                             {/* Estimated time */}
                                             {currentWeight && targetWeight && (
-                                                <div className="text-xs text-slate-500 text-center pt-2 border-t border-white/5">
-                                                    {(() => {
-                                                        const diff = Math.abs(parseFloat(targetWeight) - parseFloat(currentWeight));
-                                                        const weeks = Math.ceil(diff / parseFloat(weeklyRate));
-                                                        return `≈ ${weeks} veckor för att nå målet`;
-                                                    })()}
+                                                <div className="text-xs text-slate-500 text-center pt-2 border-t border-white/5 flex flex-col gap-2">
+                                                    <div>
+                                                        {(() => {
+                                                            const diff = Math.abs(parseFloat(targetWeight) - parseFloat(currentWeight));
+                                                            const rate = parseFloat(weeklyRate);
+                                                            if (!rate || rate <= 0) return 'Stabil vikt';
+                                                            const weeks = Math.ceil(diff / rate);
+                                                            return `≈ ${weeks} veckor för att nå målet`;
+                                                        })()}
+                                                    </div>
+                                                    {renderMacroBreakdown()}
                                                 </div>
                                             )}
                                         </div>
@@ -1010,7 +1099,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                     </div>
 
                                     {/* Smart Calorie Estimate */}
-                                    {calorieSmartData && targetUnit === 'kcal' && (
+                                    {calorieSmartData && targetUnit === 'kcal' && !calculatedMacros && (
                                         <div className="p-3 bg-emerald-500/5 rounded-xl border border-emerald-500/10">
                                             <div className="flex justify-between items-center mb-2">
                                                 <span className="text-[10px] font-bold text-emerald-400 uppercase">✨ Smart Estimat</span>
@@ -1026,6 +1115,8 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                             </div>
                                         </div>
                                     )}
+
+                                    {renderMacroBreakdown()}
                                 </div>
                             )}
 
@@ -1075,6 +1166,43 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                 </div>
                             )}
                         </div>
+
+                        {/* Macro Summary (if linked to Nutrition Wizard) */}
+                        {(calculatedMacros || (isBodyGoal && targetWeight)) && (
+                            <div className="p-4 bg-slate-900/50 border border-emerald-500/20 rounded-2xl animate-in zoom-in-95 duration-500">
+                                <div className="flex justify-between items-center mb-3">
+                                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                                        <Sparkles size={12} />
+                                        Hälsoguide-förslag
+                                    </span>
+                                    {calculatedMacros && (
+                                        <span className="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">
+                                            {calculatedMacros.calories} kcal
+                                        </span>
+                                    )}
+                                </div>
+                                {calculatedMacros ? (
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="p-2 bg-slate-950 rounded-lg border border-white/5 flex flex-col items-center">
+                                            <span className="text-[8px] uppercase text-slate-500 font-bold">Protein</span>
+                                            <span className="text-sm font-black text-emerald-400">{calculatedMacros.protein}g</span>
+                                        </div>
+                                        <div className="p-2 bg-slate-950 rounded-lg border border-white/5 flex flex-col items-center">
+                                            <span className="text-[8px] uppercase text-slate-500 font-bold">Kolh.</span>
+                                            <span className="text-sm font-black text-blue-400">{calculatedMacros.carbs}g</span>
+                                        </div>
+                                        <div className="p-2 bg-slate-950 rounded-lg border border-white/5 flex flex-col items-center">
+                                            <span className="text-[8px] uppercase text-slate-500 font-bold">Fett</span>
+                                            <span className="text-sm font-black text-rose-400">{calculatedMacros.fat}g</span>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-[10px] text-slate-500 italic px-1">
+                                        Använd Hälsoguiden för att räkna ut exakta behov för att nå ditt mål.
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Period & Duration */}
                         <div className="space-y-3">

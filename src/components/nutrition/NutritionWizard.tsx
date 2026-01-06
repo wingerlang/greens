@@ -23,9 +23,11 @@ interface NutritionWizardProps {
     onSave: (profile: NutritionProfile) => void;
     onCancel?: () => void;
     initialWeight?: number;
+    initialTargetWeight?: number;
+    initialWeeks?: number;
 }
 
-export function NutritionWizard({ onSave, onCancel, initialWeight }: NutritionWizardProps) {
+export function NutritionWizard({ onSave, onCancel, initialWeight, initialTargetWeight, initialWeeks }: NutritionWizardProps) {
     const { weightEntries } = useData();
     const { settings } = useSettings();
 
@@ -60,8 +62,8 @@ export function NutritionWizard({ onSave, onCancel, initialWeight }: NutritionWi
 
     // Step 2: Weight Goal (optional)
     const [hasWeightGoal, setHasWeightGoal] = useState(true);
-    const [targetWeight, setTargetWeight] = useState(latestWeightValue || 70);
-    const [weeks, setWeeks] = useState(12);
+    const [targetWeight, setTargetWeight] = useState(initialTargetWeight || latestWeightValue || 70);
+    const [weeks, setWeeks] = useState(initialWeeks || 12);
 
     // Step 3: Calorie Configuration
     const [calorieOverride, setCalorieOverride] = useState<number | null>(null);
