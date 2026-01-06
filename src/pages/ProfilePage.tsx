@@ -1,7 +1,7 @@
 // ProfilePage - Main orchestrator component
 // All logic has been extracted into reusable hooks and components
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { type MealType, MEAL_TYPE_LABELS, type UserPrivacy } from '../models/types.ts';
@@ -48,7 +48,8 @@ export function ProfilePage() {
         updateCurrentUser,
         weightEntries,
         getLatestWeight,
-        trainingPeriods // To check for active plans
+        trainingPeriods, // To check for active plans
+        performanceGoals // To get targetWeight from active weight goals
     } = useData();
     const navigate = useNavigate();
 
@@ -101,6 +102,20 @@ export function ProfilePage() {
             setProfile(prev => ({ ...prev, weight: latest }));
         }
     }, [weightEntries, getLatestWeight]);
+
+    // Derive target weight from active weight goals
+    const activeTargetWeight = useMemo(() => {
+        const today = new Date().toISOString().split('T')[0];
+        // Find active weight goals (status === 'active' and has targetWeight)
+        const activeWeightGoal = performanceGoals.find(g =>
+            g.status === 'active' &&
+            g.targetWeight &&
+            g.targetWeight > 0 &&
+            g.startDate <= today &&
+            (!g.endDate || g.endDate >= today)
+        );
+        return activeWeightGoal?.targetWeight || profile.targetWeight || 0;
+    }, [performanceGoals, profile.targetWeight]);
 
     const loadProfile = async () => {
         setIsLoading(true);
@@ -454,7 +469,7 @@ export function ProfilePage() {
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         {/* Only show MeasurementsModule if weight is visible (not hidden by privacy) */}
                         {displayProfile.weight !== undefined ? (
-                            <MeasurementsModule targetWeight={profile.targetWeight || 0} height={settings.height} />
+                            <MeasurementsModule targetWeight={activeTargetWeight} height={settings.height} />
                         ) : (
                             <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-12 text-center">
                                 <div className="text-4xl mb-4">🔒</div>

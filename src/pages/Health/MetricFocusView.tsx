@@ -585,12 +585,12 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                                         )}
                                         <td className="py-3 px-4 text-right">
                                             {group.count === 1 && (
-                                                // Single item actions
-                                                <div className="flex justify-end gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(group.items[0]); }} className="text-sky-400 hover:text-sky-300">
+                                                // Single item actions - always visible
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(group.items[0]); }} className="text-sky-400 hover:text-sky-300 p-1 rounded hover:bg-sky-500/10 transition-colors" title="Redigera">
                                                         <EditIcon />
                                                     </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(group.items[0].id, group.items[0].date); }} className="text-rose-500 hover:text-rose-400">
+                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(group.items[0].id, group.items[0].date); }} className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 transition-colors" title="Ta bort">
                                                         <DeleteIcon />
                                                     </button>
                                                 </div>
@@ -636,10 +636,10 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                                                         </div>
                                                     ) : (
                                                         <div className="flex justify-end gap-2">
-                                                            <button onClick={() => handleEdit(item)} className="text-sky-400 hover:text-sky-300 scale-75">
+                                                            <button onClick={() => handleEdit(item)} className="text-sky-400 hover:text-sky-300 p-1 rounded hover:bg-sky-500/10 transition-colors" title="Redigera">
                                                                 <EditIcon />
                                                             </button>
-                                                            <button onClick={() => handleDelete(item.id, item.date)} className="text-rose-500 hover:text-rose-400 scale-75">
+                                                            <button onClick={() => handleDelete(item.id, item.date)} className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 transition-colors" title="Ta bort">
                                                                 <DeleteIcon />
                                                             </button>
                                                         </div>
