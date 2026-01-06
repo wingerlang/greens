@@ -427,8 +427,25 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                 <div className="w-full max-w-xl bg-slate-900 border border-white/10 rounded-3xl shadow-2xl overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
                     <NutritionWizard
                         onSave={(profile) => {
-                            setTargetWeight(profile.fixedCalorieBase?.toString() || ''); // Use as reference if needed
+                            if (profile.hasWeightGoal && profile.targetWeight) {
+                                setTargetWeight(profile.targetWeight.toString());
+                                if (profile.weeks) {
+                                    // Calculate granular weekly rate based on wizard result
+                                    const startW = parseFloat(currentWeight) || (latestWeight?.weight || 75);
+                                    const diff = Math.abs(startW - profile.targetWeight);
+                                    const rate = (diff / profile.weeks).toFixed(2);
+                                    setWeeklyRate(rate);
+                                    setDurationPreset('custom');
+                                    // Calculate end date based on weeks
+                                    const end = new Date();
+                                    end.setDate(end.getDate() + (profile.weeks * 7));
+                                    setCustomEndDate(end.toISOString().split('T')[0]);
+                                }
+                                setType('weight');
+                            }
+
                             setTargetValue(profile.calories.toString());
+                            setTargetUnit('kcal');
                             setCalculatedMacros({
                                 calories: profile.calories,
                                 protein: profile.protein,
@@ -447,11 +464,8 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                 });
                             }
                             setShowNutritionWizard(false);
-                            if (type === 'weight') {
-                                // Keep weight as type, but we have macros now
-                            } else {
+                            if (type !== 'weight' && !profile.hasWeightGoal) {
                                 setType('nutrition');
-                                setTargetUnit('kcal');
                             }
                         }}
                         onCancel={() => setShowNutritionWizard(false)}
@@ -815,16 +829,18 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                                     </div>
                                                     <div className="space-y-1.5">
                                                         <label className="text-[9px] uppercase font-bold text-slate-500">kg/vecka</label>
-                                                        <select
-                                                            value={weeklyRate}
-                                                            onChange={e => setWeeklyRate(e.target.value)}
-                                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold"
-                                                        >
-                                                            <option value="0.25">±0.25</option>
-                                                            <option value="0.5">±0.5</option>
-                                                            <option value="0.75">±0.75</option>
-                                                            <option value="1">±1.0</option>
-                                                        </select>
+                                                        <div className="relative">
+                                                            <input
+                                                                type="number"
+                                                                step="0.01"
+                                                                min="0"
+                                                                max="2"
+                                                                value={weeklyRate}
+                                                                onChange={e => setWeeklyRate(e.target.value)}
+                                                                className="w-full bg-slate-900 border border-white/10 rounded-lg p-2.5 text-white text-center font-bold pr-8"
+                                                            />
+                                                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] text-slate-500 font-bold uppercase">±</span>
+                                                        </div>
                                                     </div>
                                                 </div>
 

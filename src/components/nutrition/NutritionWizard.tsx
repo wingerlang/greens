@@ -13,6 +13,10 @@ interface NutritionProfile {
     fat: number;
     calorieMode: 'tdee' | 'fixed';
     fixedCalorieBase?: number;
+    targetWeight?: number;
+    weeks?: number;
+    dailyDeficit?: number;
+    hasWeightGoal: boolean;
 }
 
 interface NutritionWizardProps {
@@ -135,7 +139,11 @@ export function NutritionWizard({ onSave, onCancel, initialWeight }: NutritionWi
             carbs: macros.carbs,
             fat: macros.fat,
             calorieMode: calorieMode,
-            fixedCalorieBase: calorieMode === 'fixed' ? targetCalories : undefined
+            fixedCalorieBase: calorieMode === 'fixed' ? targetCalories : undefined,
+            targetWeight: hasWeightGoal ? targetWeight : undefined,
+            weeks: hasWeightGoal ? weeks : undefined,
+            dailyDeficit: deficitResult?.dailyDeficit,
+            hasWeightGoal
         };
 
         onSave(profile);
