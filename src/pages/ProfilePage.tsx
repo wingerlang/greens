@@ -2,7 +2,7 @@
 // All logic has been extracted into reusable hooks and components
 
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { type MealType, MEAL_TYPE_LABELS, type UserPrivacy } from '../models/types.ts';
 import { useData } from '../context/DataContext.tsx';
@@ -18,11 +18,12 @@ import {
 } from '../components/profile/atoms/index.ts';
 
 import {
-    BodyMeasurementsSection,
     PrivacySettingsSection,
     SessionsSection,
     DangerZoneSection,
 } from '../components/profile/sections/index.ts';
+import { MeasurementsModule } from '../components/profile/sections/MeasurementsModule.tsx';
+import { ProfilePreviewMode } from '../components/profile/ProfilePreviewMode.tsx';
 
 import './ProfilePage.css';
 
@@ -32,7 +33,7 @@ type TabType = 'profile' | 'physical' | 'goals' | 'privacy' | 'account';
 
 const TAB_CONFIG: { id: TabType; label: string; icon: string }[] = [
     { id: 'profile', label: 'Profil', icon: '👤' },
-    { id: 'physical', label: 'Fysisk', icon: '🧬' },
+    { id: 'biometrics', label: 'Biometri', icon: '🧬' },
     { id: 'goals', label: 'Mål', icon: '🎯' },
     { id: 'privacy', label: 'Integritet', icon: '🛡️' },
     { id: 'account', label: 'Konto', icon: '⚙️' },
@@ -65,18 +66,32 @@ export function ProfilePage() {
     };
     const [profile, setProfile] = useState<ProfileData>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<TabType>('profile');
+    const { tab } = useParams();
+    const [activeTab, setActiveTab] = useState<TabType>((tab as TabType) || 'profile');
     const [editingField, setEditingField] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Individual Sharing State
     const [showAddOverride, setShowAddOverride] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState<string>('');
+    const [isPreviewMode, setIsPreviewMode] = useState(false);
 
     // Load profile on mount
     useEffect(() => {
         loadProfile();
     }, []);
+
+    // Sync activeTab with URL params
+    useEffect(() => {
+        if (tab && tab !== activeTab && TAB_CONFIG.some(t => t.id === tab)) {
+            setActiveTab(tab as TabType);
+        }
+    }, [tab]);
+
+    const handleTabChange = (newTab: TabType) => {
+        setActiveTab(newTab);
+        navigate(`/profile/${newTab}`);
+    };
 
     // Sync weight from DataContext (for immediate updates from Command Palette/Modal)
     useEffect(() => {
@@ -235,7 +250,7 @@ export function ProfilePage() {
         body: { label: 'Kropp', icon: '⚖️' },
     };
 
-    return (
+    const content = (displayProfile: ProfileData) => (
         <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 pb-24">
             {/* Hidden file input for avatar */}
             <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" className="hidden" />
@@ -243,6 +258,17 @@ export function ProfilePage() {
             {/* Profile Header */}
             <div className="relative">
                 <div className="h-32 bg-gradient-to-r from-emerald-600 to-teal-500" />
+
+                {/* View As Button (Only if not already in preview) */}
+                {!isPreviewMode && (
+                    <button
+                        onClick={() => setIsPreviewMode(true)}
+                        className="absolute top-4 right-4 bg-black/30 backdrop-blur-md text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-black/50 transition-all flex items-center gap-2 border border-white/10"
+                    >
+                        👁️ Visa som...
+                    </button>
+                )}
+
                 <div className="px-6 pb-6">
                     <div className="relative -mt-16 flex flex-col md:flex-row md:items-end gap-4">
                         {/* Avatar */}
@@ -262,32 +288,42 @@ export function ProfilePage() {
 
                         {/* Name & Handle */}
                         <div className="flex-1 pt-2">
-                            <InlineEdit
-                                value={profile.name || ''}
-                                isEditing={editingField === 'name'}
-                                onEdit={() => setEditingField('name')}
-                                onBlur={() => commitField('name')}
-                                onChange={v => setProfile(p => ({ ...p, name: v }))}
-                                className="text-3xl font-black text-white block"
-                                placeholder="Ditt namn"
-                            />
-                            <div className="flex items-center gap-1 text-slate-400">
-                                <span>@</span>
-                                <InlineEdit
-                                    value={profile.handle || ''}
-                                    isEditing={editingField === 'handle'}
-                                    onEdit={() => setEditingField('handle')}
-                                    onBlur={() => commitField('handle')}
-                                    onChange={v => setProfile(p => ({ ...p, handle: v }))}
-                                    className="text-slate-400"
-                                    placeholder="handle"
-                                />
-                            </div>
+                            {/* Read Only if Preview Mode */}
+                            {isPreviewMode ? (
+                                <>
+                                    <div className="text-3xl font-black text-white block">{displayProfile.name}</div>
+                                    <div className="text-slate-400">@{displayProfile.handle}</div>
+                                </>
+                            ) : (
+                                <>
+                                    <InlineEdit
+                                        value={displayProfile.name || ''}
+                                        isEditing={editingField === 'name'}
+                                        onEdit={() => setEditingField('name')}
+                                        onBlur={() => commitField('name')}
+                                        onChange={v => setProfile(p => ({ ...p, name: v }))}
+                                        className="text-3xl font-black text-white block"
+                                        placeholder="Ditt namn"
+                                    />
+                                    <div className="flex items-center gap-1 text-slate-400">
+                                        <span>@</span>
+                                        <InlineEdit
+                                            value={displayProfile.handle || ''}
+                                            isEditing={editingField === 'handle'}
+                                            onEdit={() => setEditingField('handle')}
+                                            onBlur={() => commitField('handle')}
+                                            onChange={v => setProfile(p => ({ ...p, handle: v }))}
+                                            className="text-slate-400"
+                                            placeholder="handle"
+                                        />
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Stats - Reduced to just Streak as requested to remove "Stats" */}
                         <div className="flex gap-4 bg-slate-900/50 rounded-xl px-4 py-2">
-                            <StatBadge value={profile.streak || 0} label="🔥 Streak" />
+                            <StatBadge value={displayProfile.streak || 0} label="🔥 Streak" />
                         </div>
                     </div>
                 </div>
@@ -299,7 +335,7 @@ export function ProfilePage() {
                     {TAB_CONFIG.map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => handleTabChange(tab.id)}
                             className={`px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === tab.id
                                     ? 'border-emerald-500 text-white'
                                     : 'border-transparent text-slate-500 hover:text-slate-300'
@@ -320,90 +356,85 @@ export function ProfilePage() {
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-4">Om mig</h3>
-                            <InlineTextArea
-                                value={profile.bio || ''}
-                                isEditing={editingField === 'bio'}
-                                onEdit={() => setEditingField('bio')}
-                                onBlur={() => commitField('bio')}
-                                onChange={v => setProfile(p => ({ ...p, bio: v }))}
-                                placeholder="Berätta lite om dig själv..."
-                            />
+
+                            {/* Logic to hide/blur if restricted? Handled by passing partial object? */}
+                            {displayProfile.bio !== undefined ? (
+                                isPreviewMode ? (
+                                    <p className="text-slate-300 whitespace-pre-wrap">{displayProfile.bio || 'Ingen biografi.'}</p>
+                                ) : (
+                                    <InlineTextArea
+                                        value={displayProfile.bio || ''}
+                                        isEditing={editingField === 'bio'}
+                                        onEdit={() => setEditingField('bio')}
+                                        onBlur={() => commitField('bio')}
+                                        onChange={v => setProfile(p => ({ ...p, bio: v }))}
+                                        placeholder="Berätta lite om dig själv..."
+                                    />
+                                )
+                            ) : (
+                                <div className="text-slate-600 italic">Dold (Privat)</div>
+                            )}
 
                             <div className="mt-6 space-y-4">
-                                <InfoBadge
-                                    icon="📍"
-                                    value={profile.location || ''}
-                                    placeholder="Lägg till plats"
-                                    field="location"
-                                    editingField={editingField}
-                                    onEdit={setEditingField}
-                                    onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))}
-                                    onBlur={() => commitField('location')}
-                                />
-                                <InfoBadge
-                                    icon="🌐"
-                                    value={profile.website || ''}
-                                    placeholder="Lägg till webbsida"
-                                    field="website"
-                                    editingField={editingField}
-                                    onEdit={setEditingField}
-                                    onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))}
-                                    onBlur={() => commitField('website')}
-                                />
+                                {displayProfile.location !== undefined ? (
+                                    isPreviewMode ? (
+                                        <div className="flex items-center gap-2 text-slate-300">
+                                            <span>📍</span> {displayProfile.location || '-'}
+                                        </div>
+                                    ) : (
+                                        <InfoBadge
+                                            icon="📍"
+                                            value={displayProfile.location || ''}
+                                            placeholder="Lägg till plats"
+                                            field="location"
+                                            editingField={editingField}
+                                            onEdit={setEditingField}
+                                            onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))}
+                                            onBlur={() => commitField('location')}
+                                        />
+                                    )
+                                ) : null}
+
+                                {displayProfile.website !== undefined ? (
+                                    isPreviewMode ? (
+                                        <div className="flex items-center gap-2 text-emerald-400">
+                                            <span>🌐</span> {displayProfile.website || '-'}
+                                        </div>
+                                    ) : (
+                                        <InfoBadge
+                                            icon="🌐"
+                                            value={displayProfile.website || ''}
+                                            placeholder="Lägg till webbsida"
+                                            field="website"
+                                            editingField={editingField}
+                                            onEdit={setEditingField}
+                                            onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))}
+                                            onBlur={() => commitField('website')}
+                                        />
+                                    )
+                                ) : null}
                             </div>
                         </section>
                     </div>
                 )}
 
                 {/* === FYSISK TAB === */}
-                {activeTab === 'physical' && (
+                {activeTab === 'biometrics' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        {/* Weight (Read Only / Log New) */}
-                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
-                            <div className="flex items-start justify-between mb-6">
-                                <div>
-                                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                        ⚖️ Vikt
-                                    </h3>
-                                    <p className="text-sm text-slate-400 mt-1">Styrs av dina invägningar.</p>
-                                </div>
-                                <button
-                                    onClick={() => navigate('/tools/weight')} // Navigate to tools/weight or similar
-                                    className="px-4 py-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg text-sm font-bold transition-colors"
-                                >
-                                    Logga ny vikt
-                                </button>
+                        {/* Only show MeasurementsModule if weight is visible (not hidden by privacy) */}
+                        {displayProfile.weight !== undefined ? (
+                            <MeasurementsModule targetWeight={profile.targetWeight || 0} height={settings.height} />
+                        ) : (
+                            <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-12 text-center">
+                                <div className="text-4xl mb-4">🔒</div>
+                                <h3 className="text-xl font-bold text-white mb-2">Privat Innehåll</h3>
+                                <p className="text-slate-400">Denna sektion är dold för besökaren.</p>
                             </div>
+                        )}
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="p-4 bg-white/5 rounded-xl">
-                                    <div className="text-sm text-slate-500 mb-1">Nuvarande</div>
-                                    <div className="text-3xl font-black text-white">{profile.weight || '--'} <span className="text-base font-normal text-slate-500">kg</span></div>
-                                </div>
-                                <div className="p-4 bg-white/5 rounded-xl">
-                                    <div className="text-sm text-slate-500 mb-1">Målvikt</div>
-                                    <div className="flex items-center gap-2">
-                                        <InlineEdit
-                                            value={profile.targetWeight?.toString() || ''}
-                                            isEditing={editingField === 'targetWeight'}
-                                            onEdit={() => setEditingField('targetWeight')}
-                                            onBlur={() => commitField('targetWeight')}
-                                            onChange={v => setProfile(p => ({ ...p, targetWeight: parseFloat(v) }))}
-                                            className="text-3xl font-black text-white"
-                                            placeholder="--"
-                                        />
-                                        <span className="text-base text-slate-500">kg</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
-
-                        {/* Stats & Measures */}
-                        <BodyMeasurementsSection targetWeight={profile.targetWeight || 0} height={settings.height} />
-
-                        {/* Basic Bio-metrics */}
-                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
-                            <h3 className="text-lg font-bold text-white mb-6">Biometri</h3>
+                         {/* Basic Bio-metrics */}
+                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-6">Grundläggande Biometri</h3>
                             <div className="grid md:grid-cols-2 gap-4">
                                 <div className="space-y-4 p-4 bg-white/5 rounded-xl">
                                     <div className="space-y-3">
@@ -770,4 +801,19 @@ export function ProfilePage() {
             </div>
         </div>
     );
+
+    if (isPreviewMode) {
+        return (
+            <ProfilePreviewMode
+                profile={profile as any}
+                currentUserId={currentUser?.id || ''}
+                users={users}
+                onExit={() => setIsPreviewMode(false)}
+            >
+                {(filteredProfile) => content(filteredProfile as ProfileData)}
+            </ProfilePreviewMode>
+        );
+    }
+
+    return content(profile);
 }

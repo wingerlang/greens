@@ -114,6 +114,7 @@ export function App() {
                                                 <Route path="calories" element={<CaloriesPage />} />
                                                 <Route path="training/period/:id?" element={<TrainingPeriodPage />} />
                                                 <Route path="training" element={<TrainingPage />} />
+                                                <Route path="profile/:tab?" element={<ProfilePage />} />
                                                 <Route path="profile" element={<ProfilePage />} />
                                                 <Route path="health" element={<HealthPage />} />
                                                 <Route path="health/:metric" element={<HealthPage />} />

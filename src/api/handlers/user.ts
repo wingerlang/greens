@@ -239,6 +239,8 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
                 if (updates.handle !== undefined) { user.handle = updates.handle; userChanged = true; }
                 if (updates.avatarUrl !== undefined) { user.avatarUrl = updates.avatarUrl; userChanged = true; }
                 if (updates.bio !== undefined) { user.bio = updates.bio; userChanged = true; }
+                if (updates.location !== undefined) { user.location = updates.location; userChanged = true; }
+                if (updates.website !== undefined) { user.website = updates.website; userChanged = true; }
 
                 if (userChanged) {
                     await saveUser(user);
