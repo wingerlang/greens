@@ -164,6 +164,7 @@ const DoubleCircularProgress = ({
                         Protein
                     </span>
                 </div>
+                {subLabel && <div className="mt-2">{subLabel}</div>}
             </div>
         </div>
     );
@@ -1060,18 +1061,18 @@ export function DashboardPage() {
                                                 <div className="col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                                                     <div className={`flex justify-between items-baseline mb-1`}>
                                                         <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Netto</span>
-                                                        <span className={`text-[9px] font-bold ${(consumed - burned) > target ? 'text-rose-500' : (consumed - burned) < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
-                                                            {(consumed - burned) <= target ? '✓ Under mål' : '⚠ Över mål'}
+                                                        <span className={`text-[9px] font-bold ${(consumed - burned) > baseTarget ? 'text-rose-500' : (consumed - burned) < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                                                            {(consumed - burned) <= baseTarget ? '✓ Under mål' : '⚠ Över mål'}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-baseline gap-1">
-                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${(consumed - burned) > target ? 'text-rose-500' : 'text-indigo-500'}`}>
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${(consumed - burned) > baseTarget ? 'text-rose-500' : 'text-indigo-500'}`}>
                                                             {Math.round(consumed - burned)}
                                                         </span>
-                                                        <span className="text-[9px] text-slate-400 font-bold">/ {target} kcal</span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">/ {baseTarget} kcal</span>
                                                     </div>
                                                     <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
-                                                        <div className={`h-full rounded-full ${(consumed - burned) > target ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(Math.max(0, ((consumed - burned) / target) * 100), 100)}%` }}></div>
+                                                        <div className={`h-full rounded-full ${(consumed - burned) > baseTarget ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(Math.max(0, ((consumed - burned) / baseTarget) * 100), 100)}%` }}></div>
                                                     </div>
                                                 </div>
                                             </div>
