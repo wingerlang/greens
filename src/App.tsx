@@ -27,7 +27,6 @@ import { CoachPage } from './pages/CoachPage.tsx';
 import { PublicProfilePage } from './pages/PublicProfilePage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
 import { GarminPage } from './pages/GarminPage.tsx';
-import { SettingsPage } from './pages/SettingsPage.tsx';
 import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
 import { ActivitiesPage } from './pages/ActivitiesPage.tsx';
 import { StrengthPage } from './pages/StrengthPage.tsx';
@@ -136,9 +135,9 @@ export function App() {
                                                 <Route path="community" element={<UsersPage />} />
                                                 <Route path="u/:handle" element={<PublicProfilePage />} />
                                                 <Route path="garmin" element={<GarminPage />} />
-                                                <Route path="settings" element={<SettingsPage />} />
+                                                <Route path="settings" element={<Navigate to="/profile" replace />} />
                                                 <Route path="sync" element={<IntegrationsPage />} />
-                                                <Route path="installningar" element={<SettingsPage />} />
+                                                <Route path="installningar" element={<Navigate to="/profile" replace />} />
                                                 <Route path="activities" element={<ActivitiesPage />} />
                                                 <Route path="logg" element={<ActivitiesPage />} />
                                                 <Route path="strength" element={<StrengthPage />} />

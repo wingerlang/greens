@@ -10,6 +10,7 @@ export interface Session {
     userAgent?: string;
     ip?: string;
     isCurrent?: boolean;
+    expires?: number; // timestamp
 }
 
 export interface UseSessionsResult {
@@ -33,7 +34,21 @@ export function useSessions(): UseSessionsResult {
         setError(null);
         try {
             const data = await profileService.getSessions();
-            setSessions(data || []);
+
+            // Client-side Filtering: Only show sessions active in the last 30 days or not expired
+            const now = Date.now();
+            const validSessions = (data || []).filter((s: Session) => {
+                // If we have an expiration timestamp, use it
+                if (s.expires && s.expires < now) return false;
+
+                // If no expiration, check lastActive or createdAt (fallback 30 days)
+                const lastActivity = s.lastActive ? new Date(s.lastActive).getTime() : new Date(s.createdAt).getTime();
+                const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+
+                return (now - lastActivity) < thirtyDays;
+            });
+
+            setSessions(validSessions);
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Failed to load sessions');
         } finally {

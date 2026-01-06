@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSettings } from '../context/SettingsContext.tsx';
-import { type MealType, MEAL_TYPE_LABELS } from '../models/types.ts';
+import { type MealType, MEAL_TYPE_LABELS, type UserPrivacy } from '../models/types.ts';
 import { useData } from '../context/DataContext.tsx';
 import { profileService, type ProfileData } from '../services/profileService.ts';
 
@@ -13,32 +13,41 @@ import {
     InlineEdit,
     InlineTextArea,
     StatBadge,
-    CollapsibleSection,
     InfoBadge,
-    QuickAction,
     DataField
 } from '../components/profile/atoms/index.ts';
 
 import {
     BodyMeasurementsSection,
-    PRManagerSection,
-    HRZonesSection,
-    ActivityStatsSection,
     PrivacySettingsSection,
     SessionsSection,
-    WeightHistorySection,
     DangerZoneSection,
-    NotificationSettingsSection
 } from '../components/profile/sections/index.ts';
-import { FeedEventCard } from '../components/feed/FeedEventCard.tsx';
-import { FeedEvent } from '../models/feedTypes.ts';
 
 import './ProfilePage.css';
 
 const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+type TabType = 'profile' | 'physical' | 'goals' | 'privacy' | 'account';
+
+const TAB_CONFIG: { id: TabType; label: string; icon: string }[] = [
+    { id: 'profile', label: 'Profil', icon: '👤' },
+    { id: 'physical', label: 'Fysisk', icon: '🧬' },
+    { id: 'goals', label: 'Mål', icon: '🎯' },
+    { id: 'privacy', label: 'Integritet', icon: '🛡️' },
+    { id: 'account', label: 'Konto', icon: '⚙️' },
+];
+
 export function ProfilePage() {
     const { settings, updateSettings, toggleMealVisibility, theme, toggleTheme } = useSettings();
+    const {
+        users,
+        currentUser,
+        updateCurrentUser,
+        weightEntries,
+        getLatestWeight,
+        trainingPeriods // To check for active plans
+    } = useData();
     const navigate = useNavigate();
 
     // Profile state
@@ -50,23 +59,24 @@ export function ProfilePage() {
             isPublic: true, allowFollowers: true, sharing: {
                 training: 'FRIENDS', nutrition: 'FRIENDS', health: 'PRIVATE', social: 'FRIENDS', body: 'PRIVATE'
             },
-            whitelistedUsers: [], showWeight: false, showHeight: false, showBirthYear: false, showDetailedTraining: true
+            whitelistedUsers: [], showWeight: false, showHeight: false, showBirthYear: false, showDetailedTraining: true,
+            categoryOverrides: {}
         }
     };
     const [profile, setProfile] = useState<ProfileData>(DEFAULT_PROFILE);
     const [isLoading, setIsLoading] = useState(true);
-    const [feedEvents, setFeedEvents] = useState<FeedEvent[]>([]);
-    const [feedLoading, setFeedLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'overview' | 'activity'>('overview');
+    const [activeTab, setActiveTab] = useState<TabType>('profile');
     const [editingField, setEditingField] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Individual Sharing State
+    const [showAddOverride, setShowAddOverride] = useState(false);
+    const [selectedUserId, setSelectedUserId] = useState<string>('');
 
     // Load profile on mount
     useEffect(() => {
         loadProfile();
     }, []);
-
-    const { weightEntries, getLatestWeight } = useData();
 
     // Sync weight from DataContext (for immediate updates from Command Palette/Modal)
     useEffect(() => {
@@ -103,30 +113,6 @@ export function ProfilePage() {
         setEditingField(null);
         saveField(field as string, profile[field]);
     };
-
-    const fetchFeed = async () => {
-        setFeedLoading(true);
-        try {
-            const token = localStorage.getItem('auth_token');
-            const res = await fetch(`http://localhost:8000/api/feed/me?limit=10`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                setFeedEvents(data.events || []);
-            }
-        } catch (e) {
-            console.error("Failed to fetch personal feed:", e);
-        } finally {
-            setFeedLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        if (!isLoading) {
-            fetchFeed();
-        }
-    }, [isLoading]);
 
     const updatePrivacy = async (key: string, value: any) => {
         setProfile(prev => {
@@ -171,9 +157,83 @@ export function ProfilePage() {
         return now.getFullYear() - birth.getFullYear();
     };
 
+    // Check for active training period
+    const activePeriod = React.useMemo(() => {
+        const now = new Date().toISOString().split('T')[0];
+        return trainingPeriods.find(p => p.startDate <= now && p.endDate >= now);
+    }, [trainingPeriods]);
+
     if (isLoading) {
         return <div className="min-h-screen flex items-center justify-center text-slate-400">Laddar profil...</div>;
     }
+
+    // Individual Sharing Helpers
+    const categoryOverrides = profile.privacy?.categoryOverrides || {};
+    const availableUsers = users.filter(u => u.id !== currentUser?.id && !categoryOverrides[u.id]);
+
+    const toggleCategoryOverride = async (userId: string, category: string) => {
+        const currentOverrides = { ...categoryOverrides };
+        const userOverrides = currentOverrides[userId] || {};
+        const currentValue = userOverrides[category as keyof typeof userOverrides];
+
+        // Cycle: undefined -> true -> false -> undefined
+        let newValue: boolean | undefined;
+        if (currentValue === undefined) newValue = true;
+        else if (currentValue === true) newValue = false;
+        else newValue = undefined;
+
+        if (newValue === undefined) {
+            delete (userOverrides as any)[category];
+        } else {
+            (userOverrides as any)[category] = newValue;
+        }
+
+        // Clean up empty override objects
+        if (Object.keys(userOverrides).length === 0) {
+            delete currentOverrides[userId];
+        } else {
+            currentOverrides[userId] = userOverrides;
+        }
+
+        setProfile(prev => ({
+            ...prev,
+            privacy: { ...prev.privacy, categoryOverrides: currentOverrides }
+        }));
+        await profileService.updatePrivacy({ categoryOverrides: currentOverrides });
+    };
+
+    const addUserOverride = async () => {
+        if (!selectedUserId) return;
+        const newOverrides = {
+            ...categoryOverrides,
+            [selectedUserId]: {}
+        };
+        setProfile(prev => ({
+            ...prev,
+            privacy: { ...prev.privacy, categoryOverrides: newOverrides }
+        }));
+        await profileService.updatePrivacy({ categoryOverrides: newOverrides });
+        setSelectedUserId('');
+        setShowAddOverride(false);
+    };
+
+    const removeUserOverride = async (userId: string) => {
+        const newOverrides = { ...categoryOverrides };
+        delete newOverrides[userId];
+        setProfile(prev => ({
+            ...prev,
+            privacy: { ...prev.privacy, categoryOverrides: newOverrides }
+        }));
+        await profileService.updatePrivacy({ categoryOverrides: newOverrides });
+    };
+
+    const CATEGORY_ICONS: Record<string, { label: string; icon: string }> = {
+        training: { label: 'Träning', icon: '🏋️' },
+        nutrition: { label: 'Kost', icon: '🥗' },
+        health: { label: 'Hälsa', icon: '💤' },
+        social: { label: 'Social', icon: '👥' },
+        body: { label: 'Kropp', icon: '⚖️' },
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 pb-24">
@@ -225,169 +285,488 @@ export function ProfilePage() {
                             </div>
                         </div>
 
-                        {/* Stats */}
+                        {/* Stats - Reduced to just Streak as requested to remove "Stats" */}
                         <div className="flex gap-4 bg-slate-900/50 rounded-xl px-4 py-2">
                             <StatBadge value={profile.streak || 0} label="🔥 Streak" />
-                            <StatBadge value={0} label="Följare" />
-                            <StatBadge value={0} label="Följer" />
                         </div>
                     </div>
-
-                    {/* Bio */}
-                    <div className="mt-4">
-                        <InlineTextArea
-                            value={profile.bio || ''}
-                            isEditing={editingField === 'bio'}
-                            onEdit={() => setEditingField('bio')}
-                            onBlur={() => commitField('bio')}
-                            onChange={v => setProfile(p => ({ ...p, bio: v }))}
-                            placeholder="Berätta lite om dig själv..."
-                        />
-                    </div>
-
-                    {/* Info Badges */}
-                    <div className="flex flex-wrap gap-2 mt-4">
-                        <InfoBadge icon="📍" value={profile.location || ''} placeholder="Plats" field="location" editingField={editingField} onEdit={setEditingField} onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))} onBlur={() => commitField('location')} />
-                        <InfoBadge icon="🌐" value={profile.website || ''} placeholder="Webbsida" field="website" editingField={editingField} onEdit={setEditingField} onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))} onBlur={() => commitField('website')} />
-                        <InfoBadge icon="🎂" value={profile.birthdate ? `${calculateAge(profile.birthdate)} år` : ''} placeholder="Ålder" field="birthdate" editingField={editingField} onEdit={setEditingField} onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))} />
-                    </div>
                 </div>
             </div>
 
-            {/* Quick Actions */}
-            <div className="px-6 mb-6">
-                <div className="grid grid-cols-4 gap-3">
-                    <QuickAction icon="📊" label="Statistik" href="#activity-stats" />
-                    <QuickAction icon="⚖️" label="Vikthistorik" href="#weight-history" />
-                    <QuickAction icon="🏆" label="Rekord" href="#prs" />
-                    <QuickAction icon="⚙️" label="Inställningar" href="#appearance" />
+            {/* Tabs */}
+            <div className="px-6 mb-6 overflow-x-auto">
+                <div className="flex gap-1 border-b border-white/10 min-w-max">
+                    {TAB_CONFIG.map(tab => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-6 py-4 text-sm font-bold border-b-2 transition-all flex items-center gap-2 ${activeTab === tab.id
+                                    ? 'border-emerald-500 text-white'
+                                    : 'border-transparent text-slate-500 hover:text-slate-300'
+                                }`}
+                        >
+                            <span className="text-lg">{tab.icon}</span>
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* Sections */}
-            <div className="px-6 space-y-4">
-                <CollapsibleSection id="body" title="Kropp & Mått" icon="📏">
-                    <BodyMeasurementsSection targetWeight={profile.targetWeight || 0} height={settings.height} />
-                </CollapsibleSection>
+            {/* Content Area */}
+            <div className="px-6 space-y-8 max-w-4xl mx-auto">
 
-                <CollapsibleSection id="goals" title="Dagliga Mål" icon="🎯">
-                    <div className="grid md:grid-cols-4 gap-3">
-                        <DataField label="Kalorier" value={settings.dailyCalorieGoal?.toString() || ''} type="number" suffix="kcal" onChange={(v: string) => updateSettings({ dailyCalorieGoal: Number(v) })} />
-                        <DataField label="Protein" value={settings.dailyProteinGoal?.toString() || ''} type="number" suffix="g" onChange={(v: string) => updateSettings({ dailyProteinGoal: Number(v) })} />
-                        <DataField label="Kolhydrater" value={settings.dailyCarbsGoal?.toString() || ''} type="number" suffix="g" onChange={(v: string) => updateSettings({ dailyCarbsGoal: Number(v) })} />
-                        <DataField label="Fett" value={settings.dailyFatGoal?.toString() || ''} type="number" suffix="g" onChange={(v: string) => updateSettings({ dailyFatGoal: Number(v) })} />
-                        <DataField label="Sömn" value={settings.dailySleepGoal?.toString() || ''} type="number" suffix="h" onChange={(v: string) => updateSettings({ dailySleepGoal: Number(v) })} />
-                        <DataField label="Vatten" value={(settings as any).dailyWaterGoal?.toString() || '8'} type="number" suffix="glas" onChange={(v: string) => updateSettings({ dailyWaterGoal: Number(v) } as any)} />
-                        <DataField label="Steg" value={(settings as any).dailyStepGoal?.toString() || '10000'} type="number" suffix="" onChange={(v: string) => updateSettings({ dailyStepGoal: Number(v) } as any)} />
-                        <DataField label="Koffein Max" value={(settings as any).dailyCaffeineMax?.toString() || '400'} type="number" suffix="mg" onChange={(v: string) => updateSettings({ dailyCaffeineMax: Number(v) } as any)} />
+                {/* === PROFIL TAB === */}
+                {activeTab === 'profile' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-4">Om mig</h3>
+                            <InlineTextArea
+                                value={profile.bio || ''}
+                                isEditing={editingField === 'bio'}
+                                onEdit={() => setEditingField('bio')}
+                                onBlur={() => commitField('bio')}
+                                onChange={v => setProfile(p => ({ ...p, bio: v }))}
+                                placeholder="Berätta lite om dig själv..."
+                            />
+
+                            <div className="mt-6 space-y-4">
+                                <InfoBadge
+                                    icon="📍"
+                                    value={profile.location || ''}
+                                    placeholder="Lägg till plats"
+                                    field="location"
+                                    editingField={editingField}
+                                    onEdit={setEditingField}
+                                    onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))}
+                                    onBlur={() => commitField('location')}
+                                />
+                                <InfoBadge
+                                    icon="🌐"
+                                    value={profile.website || ''}
+                                    placeholder="Lägg till webbsida"
+                                    field="website"
+                                    editingField={editingField}
+                                    onEdit={setEditingField}
+                                    onChange={(f: any, v: any) => setProfile(p => ({ ...p, [f]: v }))}
+                                    onBlur={() => commitField('website')}
+                                />
+                            </div>
+                        </section>
                     </div>
-                </CollapsibleSection>
+                )}
 
-                <CollapsibleSection id="running" title="Löpning & Cykel" icon="🏃">
-                    <div className="grid md:grid-cols-4 gap-3">
-                        <DataField label="Max Puls" value={profile.maxHr?.toString() || '0'} type="number" suffix="bpm" onChange={(v: string) => updateProfile('maxHr', Number(v))} />
-                        <DataField label="Vila Puls" value={profile.restingHr?.toString() || '0'} type="number" suffix="bpm" onChange={(v: string) => updateProfile('restingHr', Number(v))} />
-                        <DataField label="Laktattröskel" value={profile.lthr?.toString() || '0'} type="number" suffix="bpm" onChange={(v: string) => updateProfile('lthr', Number(v))} />
-                        <DataField label="VDOT" value={profile.vdot?.toString() || '0'} type="number" onChange={(v: string) => updateProfile('vdot', Number(v))} />
-                        <DataField label="FTP (Cykel)" value={profile.ftp?.toString() || '0'} type="number" suffix="W" onChange={(v: string) => updateProfile('ftp', Number(v))} />
-                    </div>
-                </CollapsibleSection>
-
-                <CollapsibleSection id="prs" title="Personal Records" icon="🏆">
-                    <PRManagerSection />
-                </CollapsibleSection>
-
-                <CollapsibleSection id="weight-history" title="Vikthistorik" icon="⚖️" defaultOpen={false}>
-                    <WeightHistorySection currentWeight={profile.weight || 0} targetWeight={profile.targetWeight || 0} />
-                </CollapsibleSection>
-
-                <CollapsibleSection id="hr-zones" title="Pulszoner" icon="💓" defaultOpen={false}>
-                    <HRZonesSection onUpdateProfile={updateProfile} />
-                </CollapsibleSection>
-
-                <CollapsibleSection id="activity-stats" title="Aktivitetsstatistik" icon="📊" defaultOpen={false}>
-                    <ActivityStatsSection />
-                </CollapsibleSection>
-
-                <CollapsibleSection id="privacy" title="Integritet & Delning" icon="🔒">
-                    <PrivacySettingsSection
-                        privacy={profile.privacy as any}
-                        onToggle={updatePrivacy}
-                        onUpdateSharing={updateSharing}
-                    />
-                </CollapsibleSection>
-
-                <CollapsibleSection id="activity-stream" title="Mitt Flöde (Senaste)" icon="⛲">
-                    <div className="space-y-4">
-                        {feedLoading ? (
-                            <div className="py-8 text-center text-slate-500">Laddar händelser...</div>
-                        ) : feedEvents.length > 0 ? (
-                            <div className="grid gap-4">
-                                {feedEvents.map(event => (
-                                    <FeedEventCard key={event.id} event={event} />
-                                ))}
+                {/* === FYSISK TAB === */}
+                {activeTab === 'physical' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        {/* Weight (Read Only / Log New) */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <div className="flex items-start justify-between mb-6">
+                                <div>
+                                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                        ⚖️ Vikt
+                                    </h3>
+                                    <p className="text-sm text-slate-400 mt-1">Styrs av dina invägningar.</p>
+                                </div>
                                 <button
-                                    onClick={() => navigate('/feed')}
-                                    className="w-full py-3 rounded-xl bg-slate-800/50 text-slate-400 text-sm font-bold hover:bg-slate-800"
+                                    onClick={() => navigate('/tools/weight')} // Navigate to tools/weight or similar
+                                    className="px-4 py-2 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg text-sm font-bold transition-colors"
                                 >
-                                    Visa allt i The Stream
+                                    Logga ny vikt
                                 </button>
                             </div>
-                        ) : (
-                            <div className="py-12 text-center bg-slate-800/30 rounded-2xl border border-dashed border-slate-700">
-                                <p className="text-slate-500 text-sm">Inga händelser ännu.</p>
-                                <p className="text-slate-600 text-[10px] mt-1 italic">Logga träning eller mat för att se dem här.</p>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="p-4 bg-white/5 rounded-xl">
+                                    <div className="text-sm text-slate-500 mb-1">Nuvarande</div>
+                                    <div className="text-3xl font-black text-white">{profile.weight || '--'} <span className="text-base font-normal text-slate-500">kg</span></div>
+                                </div>
+                                <div className="p-4 bg-white/5 rounded-xl">
+                                    <div className="text-sm text-slate-500 mb-1">Målvikt</div>
+                                    <div className="flex items-center gap-2">
+                                        <InlineEdit
+                                            value={profile.targetWeight?.toString() || ''}
+                                            isEditing={editingField === 'targetWeight'}
+                                            onEdit={() => setEditingField('targetWeight')}
+                                            onBlur={() => commitField('targetWeight')}
+                                            onChange={v => setProfile(p => ({ ...p, targetWeight: parseFloat(v) }))}
+                                            className="text-3xl font-black text-white"
+                                            placeholder="--"
+                                        />
+                                        <span className="text-base text-slate-500">kg</span>
+                                    </div>
+                                </div>
                             </div>
-                        )}
+                        </section>
+
+                        {/* Stats & Measures */}
+                        <BodyMeasurementsSection targetWeight={profile.targetWeight || 0} height={settings.height} />
+
+                        {/* Basic Bio-metrics */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-6">Biometri</h3>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <div className="space-y-4 p-4 bg-white/5 rounded-xl">
+                                    <div className="space-y-3">
+                                        <label className="flex items-center justify-between">
+                                            <span className="text-slate-200 text-sm">Längd (cm)</span>
+                                            <input
+                                                type="number"
+                                                className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                                value={settings.height || ''}
+                                                onChange={e => updateSettings({ height: parseInt(e.target.value) || undefined })}
+                                                placeholder="--"
+                                            />
+                                        </label>
+                                        <label className="flex items-center justify-between">
+                                            <div className="flex flex-col">
+                                                <span className="text-slate-200 text-sm">Födelseår</span>
+                                                {settings.birthYear && (
+                                                    <span className="text-[10px] text-slate-500 font-bold uppercase">
+                                                        {new Date().getFullYear() - settings.birthYear} år gammal
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <input
+                                                type="number"
+                                                className="bg-white/10 border-none rounded-lg p-1 w-20 text-right text-white text-sm"
+                                                value={settings.birthYear || ''}
+                                                onChange={e => updateSettings({ birthYear: parseInt(e.target.value) || undefined })}
+                                                placeholder="YYYY"
+                                                min="1900"
+                                                max={new Date().getFullYear()}
+                                            />
+                                        </label>
+                                        <label className="flex items-center justify-between">
+                                            <span className="text-slate-200 text-sm">Kön</span>
+                                            <select
+                                                className="bg-slate-800 border-none rounded-lg p-1 text-white text-sm focus:ring-1 focus:ring-sky-500 outline-none"
+                                                value={settings.gender || ''}
+                                                onChange={e => updateSettings({ gender: (e.target.value as any) || undefined })}
+                                            >
+                                                <option value="">Välj...</option>
+                                                <option value="male">Man</option>
+                                                <option value="female">Kvinna</option>
+                                                <option value="other">Annat</option>
+                                            </select>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
                     </div>
-                </CollapsibleSection>
+                )}
 
-                <CollapsibleSection id="notifications" title="Notifikationer" icon="🔔" defaultOpen={false}>
-                    <NotificationSettingsSection />
-                </CollapsibleSection>
+                {/* === MÅL TAB === */}
+                {activeTab === 'goals' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
 
-                <CollapsibleSection id="sessions" title="Aktiva Sessioner" icon="📱" defaultOpen={false}>
-                    <SessionsSection />
-                </CollapsibleSection>
+                        {/* Nutrition Goals - Overshadowed by Period? */}
+                        <section className={`bg-slate-900/50 border border-white/5 rounded-2xl p-6 relative overflow-hidden ${activePeriod ? 'border-amber-500/30' : ''}`}>
+                            {activePeriod && (
+                                <div className="absolute top-0 right-0 bg-amber-500/10 border-l border-b border-amber-500/20 px-3 py-1 text-xs text-amber-500 font-bold rounded-bl-xl">
+                                    🔒 Styrs av {activePeriod.name}
+                                </div>
+                            )}
 
-                <CollapsibleSection id="appearance" title="Utseende" icon="🎨">
-                    <div className="space-y-4">
-                        <div>
-                            <label className="text-xs text-slate-500 uppercase font-bold mb-2 block">Tema</label>
-                            <div className="flex gap-2">
-                                <button
-                                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${theme === 'light' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
-                                    onClick={() => theme !== 'light' && toggleTheme()}
-                                >☀️ Ljust</button>
-                                <button
-                                    className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${theme === 'dark' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
-                                    onClick={() => theme !== 'dark' && toggleTheme()}
-                                >🌙 Mörkt</button>
+                            <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                                <span>🥗</span> Kostmål
+                            </h3>
+
+                            <div className="grid md:grid-cols-4 gap-3">
+                                <DataField
+                                    label="Kalorier"
+                                    value={activePeriod?.nutritionGoal?.calories.toString() || settings.dailyCalorieGoal?.toString() || ''}
+                                    type="number"
+                                    suffix="kcal"
+                                    readOnly={!!activePeriod}
+                                    onChange={(v: string) => updateSettings({ dailyCalorieGoal: Number(v) })}
+                                />
+                                <DataField
+                                    label="Protein"
+                                    value={activePeriod?.nutritionGoal?.protein?.toString() || settings.dailyProteinGoal?.toString() || ''}
+                                    type="number"
+                                    suffix="g"
+                                    readOnly={!!activePeriod}
+                                    onChange={(v: string) => updateSettings({ dailyProteinGoal: Number(v) })}
+                                />
+                                <DataField
+                                    label="Kolhydrater"
+                                    value={activePeriod?.nutritionGoal?.carbs?.toString() || settings.dailyCarbsGoal?.toString() || ''}
+                                    type="number"
+                                    suffix="g"
+                                    readOnly={!!activePeriod}
+                                    onChange={(v: string) => updateSettings({ dailyCarbsGoal: Number(v) })}
+                                />
+                                <DataField
+                                    label="Fett"
+                                    value={activePeriod?.nutritionGoal?.fat?.toString() || settings.dailyFatGoal?.toString() || ''}
+                                    type="number"
+                                    suffix="g"
+                                    readOnly={!!activePeriod}
+                                    onChange={(v: string) => updateSettings({ dailyFatGoal: Number(v) })}
+                                />
                             </div>
-                        </div>
-                        <div>
-                            <label className="text-xs text-slate-500 uppercase font-bold mb-2 block">Synliga Måltider</label>
-                            <div className="flex flex-wrap gap-2">
-                                {ALL_MEALS.map(meal => (
-                                    <button key={meal} onClick={() => toggleMealVisibility(meal)}
-                                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${settings.visibleMeals.includes(meal) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500'}`}>
-                                        {MEAL_TYPE_LABELS[meal]}
+
+                            {activePeriod && (
+                                <p className="text-xs text-amber-500/70 mt-4 italic">
+                                    Dessa mål hanteras automatiskt av din aktiva träningsperiod. Ändra i perioden för att uppdatera.
+                                </p>
+                            )}
+                        </section>
+
+                        {/* Lifestyle / Habits */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                                <span>💤</span> Livsstil & Vanor
+                            </h3>
+                            <div className="grid md:grid-cols-3 gap-3">
+                                <DataField
+                                    label="Sömn"
+                                    value={settings.dailySleepGoal?.toString() || ''}
+                                    type="number"
+                                    suffix="h"
+                                    onChange={(v: string) => updateSettings({ dailySleepGoal: Number(v) })}
+                                />
+                                <DataField
+                                    label="Vatten"
+                                    value={(settings as any).dailyWaterGoal?.toString() || '8'}
+                                    type="number"
+                                    suffix="glas"
+                                    onChange={(v: string) => updateSettings({ dailyWaterGoal: Number(v) } as any)}
+                                />
+                                <DataField
+                                    label="Steg"
+                                    value={(settings as any).dailyStepGoal?.toString() || '10000'}
+                                    type="number"
+                                    suffix=""
+                                    onChange={(v: string) => updateSettings({ dailyStepGoal: Number(v) } as any)}
+                                />
+                                <DataField
+                                    label="Koffein Max"
+                                    value={(settings as any).dailyCaffeineMax?.toString() || '400'}
+                                    type="number"
+                                    suffix="mg"
+                                    onChange={(v: string) => updateSettings({ dailyCaffeineMax: Number(v) } as any)}
+                                />
+                                <DataField
+                                    label="Träning (min/dag)"
+                                    value={settings.dailyTrainingGoal?.toString() || '60'}
+                                    type="number"
+                                    suffix="min"
+                                    onChange={(v: string) => updateSettings({ dailyTrainingGoal: Number(v) } as any)}
+                                />
+                            </div>
+                        </section>
+                    </div>
+                )}
+
+                {/* === INTEGRITET TAB === */}
+                {activeTab === 'privacy' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <PrivacySettingsSection
+                                privacy={profile.privacy as any}
+                                onToggle={updatePrivacy}
+                                onUpdateSharing={updateSharing}
+                            />
+                        </section>
+
+                        {/* Custom Individual Overrides - MOVED HERE FROM SETTINGS */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                <span>🔐</span> Individuella Delningar
+                            </h2>
+                            <p className="text-sm text-slate-400 mb-6">
+                                Ge specifika personer tillgång till kategorier som annars är privata.
+                                <span className="text-emerald-400 ml-2"> ✓ = Tillåt</span>,
+                                <span className="text-rose-400 ml-2"> ✗ = Neka</span>,
+                                <span className="text-slate-500 ml-2"> ○ = Följ standard</span>
+                            </p>
+
+                            <div className="space-y-4">
+                                {Object.entries(categoryOverrides).length === 0 ? (
+                                    <div className="text-center py-8 text-slate-500 bg-white/5 rounded-xl border border-dashed border-white/10">
+                                        <div className="text-2xl mb-2">🔒</div>
+                                        <p>Inga individuella delningar inställda.</p>
+                                    </div>
+                                ) : (
+                                    Object.entries(categoryOverrides).map(([userId, overrides]) => {
+                                        const targetUser = users.find(u => u.id === userId);
+                                        if (!targetUser) return null;
+
+                                        return (
+                                            <div key={userId} className="p-4 bg-white/5 rounded-xl border border-white/5">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold">
+                                                            {targetUser.name.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-white text-sm">{targetUser.name}</div>
+                                                            <div className="text-xs text-slate-500">@{targetUser.handle || targetUser.username}</div>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => removeUserOverride(userId)}
+                                                        className="px-3 py-1 text-xs text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+                                                    >
+                                                        Ta bort
+                                                    </button>
+                                                </div>
+
+                                                <div className="grid grid-cols-5 gap-2">
+                                                    {Object.entries(CATEGORY_ICONS).map(([key, { label, icon }]) => {
+                                                        const value = (overrides as any)[key];
+                                                        const isAllowed = value === true;
+                                                        const isDenied = value === false;
+
+                                                        return (
+                                                            <button
+                                                                key={key}
+                                                                onClick={() => toggleCategoryOverride(userId, key)}
+                                                                className={`flex flex-col items-center p-2 rounded-lg transition-all ${isAllowed
+                                                                        ? 'bg-emerald-500/20 border border-emerald-500/30'
+                                                                        : isDenied
+                                                                            ? 'bg-rose-500/20 border border-rose-500/30'
+                                                                            : 'bg-white/5 border border-white/10 hover:bg-white/10 opacity-50 hover:opacity-100'
+                                                                    }`}
+                                                                title={`${label}: ${isAllowed ? 'Tillåten' : isDenied ? 'Nekad' : 'Standard'}`}
+                                                            >
+                                                                <span className="text-lg mb-1">{icon}</span>
+                                                                <span className={`text-[10px] font-medium uppercase ${isAllowed ? 'text-emerald-400' : isDenied ? 'text-rose-400' : 'text-slate-500'
+                                                                    }`}>
+                                                                    {isAllowed ? 'Tillåten' : isDenied ? 'Nekad' : 'Auto'}
+                                                                </span>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                )}
+
+                                {/* Add new override UI */}
+                                {showAddOverride ? (
+                                    <div className="p-4 bg-sky-500/10 border border-sky-500/20 rounded-xl space-y-3 animate-in fade-in slide-in-from-top-2">
+                                        <div className="flex items-center gap-2">
+                                            <select
+                                                value={selectedUserId}
+                                                onChange={e => setSelectedUserId(e.target.value)}
+                                                className="flex-1 bg-slate-800 border-none rounded-lg p-2 text-white text-sm focus:ring-1 focus:ring-sky-500 outline-none"
+                                            >
+                                                <option value="">Välj person...</option>
+                                                {availableUsers.map(u => (
+                                                    <option key={u.id} value={u.id}>{u.name} (@{u.handle || u.username})</option>
+                                                ))}
+                                            </select>
+                                            <button
+                                                onClick={addUserOverride}
+                                                disabled={!selectedUserId}
+                                                className="px-4 py-2 bg-sky-500 hover:bg-sky-600 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-lg text-sm font-bold transition-colors"
+                                            >
+                                                Lägg till
+                                            </button>
+                                            <button
+                                                onClick={() => { setShowAddOverride(false); setSelectedUserId(''); }}
+                                                className="px-3 py-2 text-slate-400 hover:text-white transition-colors"
+                                            >
+                                                ✕
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={() => setShowAddOverride(true)}
+                                        className="w-full p-4 border border-dashed border-white/10 rounded-xl text-slate-400 hover:text-white hover:border-white/30 transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <span>+</span> Lägg till person
                                     </button>
-                                ))}
+                                )}
                             </div>
-                        </div>
-                        <DataField label="Första dag i veckan" value={profile.weekStartsOn === 0 ? 'sunday' : 'monday'} type="select" options={[
-                            { value: 'monday', label: 'Måndag' },
-                            { value: 'sunday', label: 'Söndag' },
-                        ]} onChange={(v: any) => updateProfile('weekStartsOn', v === 'sunday' ? 0 : 1)} />
-                        <DataField label="Enheter" value={profile.preferredUnits || 'metric'} type="select" options={[
-                            { value: 'metric', label: '📐 Metriskt (kg, km)' },
-                            { value: 'imperial', label: '📐 Imperial (lbs, mi)' },
-                        ]} onChange={(v: any) => updateProfile('preferredUnits', v)} />
+                        </section>
                     </div>
-                </CollapsibleSection>
+                )}
 
-                <DangerZoneSection />
+                {/* === KONTO TAB === */}
+                {activeTab === 'account' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        {/* Account Info */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-4">Inloggning & Konto</h3>
+                             <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl">
+                                <div>
+                                    <div className="font-bold text-white">{profile.name}</div>
+                                    <div className="text-sm text-slate-400">{profile.email}</div>
+                                </div>
+                                <div className="px-3 py-1 bg-sky-500/10 text-sky-400 rounded-lg text-xs font-bold border border-sky-500/20">
+                                    Aktiv
+                                </div>
+                            </div>
+                        </section>
+
+                        {/* Appearance */}
+                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-4">Utseende</h3>
+                             <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs text-slate-500 uppercase font-bold mb-2 block">Tema</label>
+                                    <div className="flex gap-2">
+                                        <button
+                                            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${theme === 'light' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                            onClick={() => theme !== 'light' && toggleTheme()}
+                                        >☀️ Ljust</button>
+                                        <button
+                                            className={`flex-1 py-3 rounded-xl font-bold text-sm transition-all ${theme === 'dark' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+                                            onClick={() => theme !== 'dark' && toggleTheme()}
+                                        >🌙 Mörkt</button>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs text-slate-500 uppercase font-bold mb-2 block">Synliga Måltider</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {ALL_MEALS.map(meal => (
+                                            <button key={meal} onClick={() => toggleMealVisibility(meal)}
+                                                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${settings.visibleMeals.includes(meal) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500'}`}>
+                                                {MEAL_TYPE_LABELS[meal]}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <DataField label="Första dag i veckan" value={profile.weekStartsOn === 0 ? 'sunday' : 'monday'} type="select" options={[
+                                    { value: 'monday', label: 'Måndag' },
+                                    { value: 'sunday', label: 'Söndag' },
+                                ]} onChange={(v: any) => updateProfile('weekStartsOn', v === 'sunday' ? 0 : 1)} />
+                                <DataField label="Enheter" value={profile.preferredUnits || 'metric'} type="select" options={[
+                                    { value: 'metric', label: '📐 Metriskt (kg, km)' },
+                                    { value: 'imperial', label: '📐 Imperial (lbs, mi)' },
+                                ]} onChange={(v: any) => updateProfile('preferredUnits', v)} />
+                            </div>
+                        </section>
+
+                        {/* Sessions */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-4">Aktiva Sessioner</h3>
+                            <SessionsSection />
+                        </section>
+
+                        {/* Data Export & Danger */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-4">Datahantering</h3>
+                             <div className="p-4 bg-white/5 rounded-xl mb-4 flex items-center justify-between">
+                                <div>
+                                    <h4 className="font-bold text-white text-sm">Exportera Data</h4>
+                                    <p className="text-xs text-slate-400">Ladda ner all din data som JSON.</p>
+                                </div>
+                                <button className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-bold transition-colors">
+                                    Exportera
+                                </button>
+                            </div>
+                            <DangerZoneSection />
+                        </section>
+                    </div>
+                )}
+
             </div>
         </div>
     );
