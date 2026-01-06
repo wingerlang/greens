@@ -18,6 +18,12 @@ export function ToolsPage() {
                     desc: "Wilks & IPF poäng för att jämföra din styrka.",
                     path: "/tools/standards",
                     color: "from-indigo-500 to-violet-500"
+                },
+                {
+                    name: "Tyngdlyftning (Olympic)",
+                    desc: "Sinclair-poäng och teknisk analys för Ryck & Stöt.",
+                    path: "/tools/olympic",
+                    color: "from-rose-500 to-pink-500"
                 }
             ]
         },
@@ -60,6 +66,12 @@ export function ToolsPage() {
                     desc: "Räkna ut kalorier för Cykling (Watt) och Löpning.",
                     path: "/tools/power",
                     color: "from-blue-500 to-indigo-500"
+                },
+                {
+                    name: "Hyrox Predictor",
+                    desc: "Simulera lopp, analysera splits och skapa strategi.",
+                    path: "/tools/hyrox",
+                    color: "from-amber-500 to-orange-500"
                 }
             ]
         },

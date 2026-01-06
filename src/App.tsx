@@ -49,6 +49,8 @@ import { ToolsMacroPage } from './pages/tools/ToolsMacroPage.tsx';
 import { ToolsCooperPage } from './pages/tools/ToolsCooperPage.tsx';
 import { ToolsHeartRatePage } from './pages/tools/ToolsHeartRatePage.tsx';
 import { ToolsStrengthStandardsPage } from './pages/tools/ToolsStrengthStandardsPage.tsx';
+import { ToolsOlympicPage } from './pages/tools/ToolsOlympicPage.tsx';
+import { ToolsHyroxPage } from './pages/tools/ToolsHyroxPage.tsx';
 import DebugBar from './components/debug/DebugBar.tsx';
 import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
 import { PlannerPage } from './components/planner/PlannerPage.tsx';
@@ -179,6 +181,8 @@ export function App() {
                                                 <Route path="tools/cooper" element={<ToolsCooperPage />} />
                                                 <Route path="tools/hr" element={<ToolsHeartRatePage />} />
                                                 <Route path="tools/standards" element={<ToolsStrengthStandardsPage />} />
+                                                <Route path="tools/olympic" element={<ToolsOlympicPage />} />
+                                                <Route path="tools/hyrox" element={<ToolsHyroxPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

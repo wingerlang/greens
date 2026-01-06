@@ -34,7 +34,6 @@ import { TrainingOverview } from '../components/training/TrainingOverview.tsx';
 import { HealthScoreCard } from '../components/dashboard/HealthScoreCard.tsx';
 import { KonditionView } from './Health/KonditionView.tsx';
 import { RaceList } from '../components/training/RaceList.tsx';
-import { HyroxDashboard } from '../components/hyrox/HyroxDashboard.tsx';
 
 export function TrainingPage() {
     const {
@@ -84,7 +83,7 @@ export function TrainingPage() {
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
 
     // Tab state for main view switcher
-    const [currentTab, setCurrentTab] = useState<'overview' | 'styrka' | 'kondition' | 'races' | 'hyrox'>('overview');
+    const [currentTab, setCurrentTab] = useState<'overview' | 'styrka' | 'kondition' | 'races'>('overview');
 
     const handleEditCycle = (cycle: TrainingCycle) => {
         setSelectedCycle(cycle);
@@ -482,15 +481,6 @@ export function TrainingPage() {
                         }`}
                 >
                     🏆 Tävlingar
-                </button>
-                <button
-                    onClick={() => setCurrentTab('hyrox')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'hyrox'
-                        ? 'bg-slate-100 text-slate-900 shadow-lg'
-                        : 'text-slate-500 hover:text-slate-300'
-                        }`}
-                >
-                    🏴 Hyrox
                 </button>
             </div>
 
@@ -1052,14 +1042,6 @@ export function TrainingPage() {
                             filterStartDate={filterStartDate}
                             filterEndDate={filterEndDate}
                         />
-                    </div>
-                )
-            }
-
-            {
-                currentTab === 'hyrox' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <HyroxDashboard />
                     </div>
                 )
             }
