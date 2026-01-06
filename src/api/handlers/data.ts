@@ -102,6 +102,11 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
     }
 
     // Measurements
+    if (url.pathname === "/api/measurements" && method === "GET") {
+        const history = await measurementRepo.getMeasurementHistory(userId);
+        return new Response(JSON.stringify({ history }), { headers });
+    }
+
     if (url.pathname === "/api/measurements" && method === "POST") {
         const entry = await req.json();
         await measurementRepo.saveMeasurement(userId, entry);

@@ -105,6 +105,7 @@ export interface User {
     handle?: string; // Unique @handle
     bio?: string;
     location?: string;
+    website?: string;
     avatarUrl?: string; // Explicit field for social
     followersCount?: number;
     followingCount?: number;
