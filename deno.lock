@@ -23,7 +23,9 @@
     "npm:tesseract.js@*": "7.0.0",
     "npm:vite@*": "7.2.7_picomatch@4.0.3",
     "npm:vite@^5.4.0": "5.4.21",
-    "npm:vite@^6.0.1": "6.4.1_picomatch@4.0.3"
+    "npm:vite@^6.0.1": "6.4.1_picomatch@4.0.3",
+    "npm:zod@*": "3.25.76",
+    "npm:zod@^3.23.8": "3.25.76"
   },
   "jsr": {
     "@std/assert@1.0.16": {
@@ -1783,6 +1785,9 @@
     },
     "zlibjs@0.3.1": {
       "integrity": "sha512-+J9RrgTKOmlxFSDHo0pI1xM6BLVUv+o0ZT9ANtCxGkjIVCCUdx9alUF8Gm+dGLKbkkkidWIHFDZHDMpfITt4+w=="
+    },
+    "zod@3.25.76": {
+      "integrity": "sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ=="
     }
   },
   "remote": {
@@ -1913,7 +1918,8 @@
       "npm:react-dom@^18.3.1",
       "npm:react-router-dom@^7.0.2",
       "npm:react@^18.3.1",
-      "npm:recharts@^2.10.0"
+      "npm:recharts@^2.10.0",
+      "npm:zod@^3.23.8"
     ]
   }
 }

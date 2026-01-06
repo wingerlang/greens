@@ -1,4 +1,4 @@
-import { z } from "npm:zod";
+import { z } from "zod";
 import { ExtractBrandSchema } from "../schemas.ts";
 
 /**
@@ -29,7 +29,7 @@ export const extractBrand = (text: string, knownBrands: string[] = []): string |
             // Clean up common noise words
             let candidate = match[1].trim();
             if (candidate && !['sweden', 'sverige', 'ab'].includes(candidate.toLowerCase())) {
-                 return candidate.replace(/\b(ab|as|oy)\b/gi, '').trim(); // Remove corporate suffix
+                return candidate.replace(/\b(ab|as|oy)\b/gi, '').trim(); // Remove corporate suffix
             }
         }
     }

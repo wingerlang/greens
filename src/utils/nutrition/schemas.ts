@@ -1,4 +1,4 @@
-import { z } from "npm:zod";
+import { z } from "zod";
 
 /**
  * Schema for the result of a nutrition parsing operation.
