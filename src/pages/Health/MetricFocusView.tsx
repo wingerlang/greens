@@ -244,12 +244,12 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                 </div>
 
                 <div className="p-8 relative">
-                    <div className="h-64 h-80-md w-full relative border-l border-b border-white/10 ml-6 mb-6">
-                        {/* Y-Axis Labels */}
-                        <div className="absolute -left-8 top-0 h-full flex flex-col justify-between text-[10px] text-slate-500 font-bold py-2">
-                            <span>{graphMeta.max}</span>
-                            <span>{Math.round(graphMeta.min + graphMeta.range / 2)}</span>
-                            <span>{graphMeta.min}</span>
+                    <div className="h-64 h-80-md w-full relative flex gap-6">
+                        {/* Y-Axis Labels - Using absolute positioning for precision */}
+                        <div className="absolute -left-10 top-0 bottom-0 w-8 flex flex-col items-end text-[10px] text-slate-500 font-bold pointer-events-none">
+                            <span className="absolute top-0 transform -translate-y-1/2">{graphMeta.max}</span>
+                            <span className="absolute top-1/2 transform -translate-y-1/2">{Math.round(graphMeta.min + graphMeta.range / 2)}</span>
+                            <span className="absolute bottom-0 transform translate-y-1/2">{graphMeta.min}</span>
                         </div>
 
                         {/* Interactive Graph Area */}
@@ -258,10 +258,10 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                             preserveAspectRatio="none"
                             onMouseLeave={() => setHoverIndex(null)}
                         >
-                            {/* Grid Lines */}
-                            <line x1="0" y1="25%" x2="100%" y2="25%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4 4" />
+                            {/* Grid Lines aligned with labels */}
+                            <line x1="0" y1="0%" x2="100%" y2="0%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
                             <line x1="0" y1="50%" x2="100%" y2="50%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4 4" />
-                            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4 4" />
+                            <line x1="0" y1="100%" x2="100%" y2="100%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
 
                             {/* Goal Line Sömn (8h) */}
                             {!isWeight && (

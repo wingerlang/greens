@@ -119,28 +119,27 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                 </div>
             </section>
 
-            <div className="flex flex-col md:flex-row gap-6">
+            <div className="flex flex-col md:flex-row items-start gap-6">
                 {/* Left Column: Energy Balance Chart */}
-                <div className="flex-1 space-y-6">
-                    <div className="health-card glass min-h-[100px] max-h-[140px] flex flex-col">
-                        <div className="card-header pb-1">
+                <div className="flex-1 w-full space-y-6">
+                    <div className="health-card glass min-h-[220px] max-h-[320px] flex flex-col overflow-hidden">
+                        <div className="card-header border-b border-white/5 pb-4 mb-4">
                             <div className="flex justify-between items-center">
-                                <h2 className="text-xs font-bold text-slate-200">Vikt & Trend</h2>
-                                <span className="text-xs">⚖️</span>
+                                <h2 className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-500">Vikt & Trend</h2>
+                                <span className="text-lg opacity-40">⚖️</span>
                             </div>
                         </div>
 
-                        <div className="flex-1">
+                        <div className="w-full" style={{ height: '180px' }}>
                             {weightEntries && weightEntries.length > 0 ? (
                                 <WeightTrendChart
                                     entries={weightEntries}
                                     currentWeight={weightEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.weight || 0}
                                 />
                             ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center p-8 opacity-50 h-full">
-                                    <span className="text-4xl mb-4">⚖️</span>
-                                    <p className="text-sm text-center">Logga din vikt för att se trenden.</p>
-                                    <p className="text-xs text-slate-500 mt-2">Använd omniboxen: "82.5kg"</p>
+                                <div className="h-full flex flex-col items-center justify-center opacity-40">
+                                    <span className="text-3xl mb-3">⚖️</span>
+                                    <p className="text-xs text-center font-bold">Logga vikt för trendanalys</p>
                                 </div>
                             )}
                         </div>
