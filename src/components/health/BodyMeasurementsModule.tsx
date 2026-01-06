@@ -22,7 +22,7 @@ const MEASUREMENT_TYPES: Record<BodyMeasurementType, { label: string; unit: stri
 const DEFAULT_PINNED: BodyMeasurementType[] = ['waist', 'hips', 'chest', 'arm_right', 'thigh_right'];
 
 export const BodyMeasurementsModule: React.FC = () => {
-    const { bodyMeasurements, addBodyMeasurement, deleteBodyMeasurement } = useData();
+    const { bodyMeasurements, weightEntries, addBodyMeasurement, deleteBodyMeasurement } = useData();
     const [date, setDate] = useState(getISODate());
 
     // Quick Log State
@@ -30,11 +30,58 @@ export const BodyMeasurementsModule: React.FC = () => {
     const [inputValues, setInputValues] = useState<Record<string, string>>({});
     const [focusedType, setFocusedType] = useState<BodyMeasurementType | null>(null);
 
-    // Filter available History
+    // Filter available History - Combine from both bodyMeasurements and weightEntries
     const history = useMemo(() => {
-        // Use a non-mutating sort for history
-        return [...bodyMeasurements].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [bodyMeasurements]);
+        const extractedFromWeight: BodyMeasurementEntry[] = [];
+        weightEntries.forEach(entry => {
+            if (entry.waist) {
+                extractedFromWeight.push({
+                    id: `${entry.id}-waist`,
+                    date: entry.date,
+                    type: 'waist',
+                    value: entry.waist,
+                    createdAt: entry.createdAt
+                });
+            }
+            if (entry.chest) {
+                extractedFromWeight.push({
+                    id: `${entry.id}-chest`,
+                    date: entry.date,
+                    type: 'chest',
+                    value: entry.chest,
+                    createdAt: entry.createdAt
+                });
+            }
+            if (entry.hips) {
+                extractedFromWeight.push({
+                    id: `${entry.id}-hips`,
+                    date: entry.date,
+                    type: 'hips',
+                    value: entry.hips,
+                    createdAt: entry.createdAt
+                });
+            }
+            if (entry.thigh) {
+                extractedFromWeight.push({
+                    id: `${entry.id}-thigh_right`,
+                    date: entry.date,
+                    type: 'thigh_right',
+                    value: entry.thigh,
+                    createdAt: entry.createdAt
+                });
+                extractedFromWeight.push({
+                    id: `${entry.id}-thigh_left`,
+                    date: entry.date,
+                    type: 'thigh_left',
+                    value: entry.thigh,
+                    createdAt: entry.createdAt
+                });
+            }
+        });
+
+        const combined = [...bodyMeasurements, ...extractedFromWeight];
+        return combined.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [bodyMeasurements, weightEntries]);
 
     // Graph Data Transformation
     const chartData = useMemo(() => {
@@ -45,16 +92,14 @@ export const BodyMeasurementsModule: React.FC = () => {
             const current = dateMap.get(d);
             current[entry.type] = entry.value;
         });
-        // Sort chart data as well
         return Array.from(dateMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [history]);
 
     const getLatestValue = (type: BodyMeasurementType) => {
-        const entries = bodyMeasurements.filter(m => m.type === type);
+        const entries = history.filter(m => m.type === type);
         if (entries.length === 0) return undefined;
-        // Sort to get the latest
-        const sorted = [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        return sorted[0].value;
+        // History is already sorted asc by date, so last is latest
+        return entries[entries.length - 1].value;
     };
 
     const handleSave = () => {

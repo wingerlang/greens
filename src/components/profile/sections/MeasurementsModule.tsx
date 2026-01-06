@@ -27,7 +27,7 @@ const MEASUREMENT_TYPES: { id: BodyMeasurementType; label: string; unit: string 
 ];
 
 export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleProps) {
-    const { weightEntries } = useData();
+    const { weightEntries, bodyMeasurements, addBodyMeasurement } = useData();
     const [activeTab, setActiveTab] = useState<'weight' | 'measurements'>('weight');
     const [history, setHistory] = useState<BodyMeasurementEntry[]>([]);
     // Initialize weightHistory from context (single source of truth)
@@ -46,12 +46,13 @@ export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleP
     }, [weightEntries]);
 
     // Extract body measurements from weightEntries (waist, chest, hips, thigh are embedded)
+    // AND combine with dedicated bodyMeasurements from context
     useEffect(() => {
-        const extractedMeasurements: BodyMeasurementEntry[] = [];
+        const extractedFromWeight: BodyMeasurementEntry[] = [];
 
         weightEntries.forEach(entry => {
             if (entry.waist) {
-                extractedMeasurements.push({
+                extractedFromWeight.push({
                     id: `${entry.id}-waist`,
                     date: entry.date,
                     type: 'waist',
@@ -60,7 +61,7 @@ export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleP
                 });
             }
             if (entry.chest) {
-                extractedMeasurements.push({
+                extractedFromWeight.push({
                     id: `${entry.id}-chest`,
                     date: entry.date,
                     type: 'chest',
@@ -69,7 +70,7 @@ export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleP
                 });
             }
             if (entry.hips) {
-                extractedMeasurements.push({
+                extractedFromWeight.push({
                     id: `${entry.id}-hips`,
                     date: entry.date,
                     type: 'hips',
@@ -79,14 +80,14 @@ export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleP
             }
             if (entry.thigh) {
                 // Create entries for both thighs from single value
-                extractedMeasurements.push({
+                extractedFromWeight.push({
                     id: `${entry.id}-thigh_right`,
                     date: entry.date,
                     type: 'thigh_right',
                     value: entry.thigh,
                     createdAt: entry.createdAt
                 });
-                extractedMeasurements.push({
+                extractedFromWeight.push({
                     id: `${entry.id}-thigh_left`,
                     date: entry.date,
                     type: 'thigh_left',
@@ -96,26 +97,29 @@ export function MeasurementsModule({ targetWeight, height }: MeasurementsModuleP
             }
         });
 
+        // Combine with bodyMeasurements from context
+        const combined = [...extractedFromWeight, ...bodyMeasurements];
+
         // Sort by date descending
-        extractedMeasurements.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setHistory(extractedMeasurements);
+        combined.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setHistory(combined);
         setLoading(false);
-    }, [weightEntries]);
+    }, [weightEntries, bodyMeasurements]);
 
     const handleAdd = async () => {
         if (!newValue || !newDate) return;
 
-        const entry: BodyMeasurementEntry = {
-            id: crypto.randomUUID(),
+        const val = parseFloat(newValue);
+        if (isNaN(val)) return;
+
+        // Persist to DataContext
+        addBodyMeasurement({
             date: newDate,
             type: newType,
-            value: parseFloat(newValue),
-            createdAt: new Date().toISOString()
-        };
+            value: val
+        });
 
-        // Add to local state (measurements are extracted from weightEntries, 
-        // but user additions are stored locally until a proper API/persistence is added)
-        setHistory(prev => [entry, ...prev].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+        // UI Feedback
         setIsAdding(false);
         setNewValue('');
     };

@@ -127,9 +127,9 @@ interface DataContextType {
 
     // Weight CRUD
     weightEntries: WeightEntry[];
-    addWeightEntry: (weight: number, date?: string, waist?: number) => WeightEntry;
+    addWeightEntry: (weight: number, date?: string, waist?: number, chest?: number, hips?: number, thigh?: number) => WeightEntry;
     bulkAddWeightEntries: (entries: Partial<WeightEntry>[]) => void;
-    updateWeightEntry: (id: string, weight: number, date: string, waist?: number) => void;
+    updateWeightEntry: (id: string, weight: number, date: string, waist?: number, chest?: number, hips?: number, thigh?: number) => void;
     deleteWeightEntry: (id: string) => void;
     getLatestWeight: () => number;
     getLatestWaist: () => number | undefined;
@@ -997,12 +997,15 @@ export function DataProvider({ children }: DataProviderProps) {
         return exerciseEntries.filter(e => e.date === date);
     }, [exerciseEntries]);
 
-    const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number): WeightEntry => {
+    const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number, chest?: number, hips?: number, thigh?: number): WeightEntry => {
         const newEntry: WeightEntry = {
             id: generateId(),
             weight,
             date,
             waist,
+            chest,
+            hips,
+            thigh,
             createdAt: new Date().toISOString(),
         };
 
@@ -1078,9 +1081,9 @@ export function DataProvider({ children }: DataProviderProps) {
         });
     }, []);
 
-    const updateWeightEntry = useCallback((id: string, weight: number, date: string, waist?: number) => {
+    const updateWeightEntry = useCallback((id: string, weight: number, date: string, waist?: number, chest?: number, hips?: number, thigh?: number) => {
         setWeightEntries(prev => {
-            const next = prev.map(w => w.id === id ? { ...w, weight, date, waist } : w);
+            const next = prev.map(w => w.id === id ? { ...w, weight, date, waist, chest, hips, thigh } : w);
 
             // Sync via Granular API
             const updated = next.find(w => w.id === id);
