@@ -10,6 +10,7 @@ import { TrainingBreaks } from '../components/training/TrainingBreaks.tsx';
 import { TopExercisesTable } from '../components/training/TopExercisesTable.tsx';
 import { ExerciseDetailModal } from '../components/training/ExerciseDetailModal.tsx';
 import { WorkoutDetailModal } from '../components/training/WorkoutDetailModal.tsx';
+import { useScrollLock } from '../hooks/useScrollLock.ts';
 import { Tabs } from '../components/common/Tabs.tsx';
 import { CollapsibleSection } from '../components/common/CollapsibleSection.tsx';
 import { TrainingTimeStats } from '../components/training/TrainingTimeStats.tsx';
@@ -180,14 +181,7 @@ export function StrengthPage() {
     }, [workouts, startDate, endDate]);
 
     // Prevent background scroll when Research Center is open
-    useEffect(() => {
-        if (isResearchCenterOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = '';
-        }
-        return () => { document.body.style.overflow = ''; };
-    }, [isResearchCenterOpen]);
+    useScrollLock(isResearchCenterOpen);
 
     // Derive Personal Bests from workout history (ensures bodyweight-aware logic is applied to existing data)
     const derivedPersonalBests = React.useMemo(() => {

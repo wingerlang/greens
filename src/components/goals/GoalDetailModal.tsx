@@ -3,6 +3,7 @@
  */
 
 import React, { useMemo, useEffect } from 'react';
+import { useScrollLock } from '../../hooks/useScrollLock';
 import { useData } from '../../context/DataContext';
 import { useGoalProgress } from '../../hooks/useGoalProgress';
 import { GoalProgressRing } from './GoalProgressRing';
@@ -51,13 +52,7 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
     };
 
     // Lock body scroll when modal is open
-    useEffect(() => {
-        const originalStyle = window.getComputedStyle(document.body).overflow;
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = originalStyle;
-        };
-    }, []);
+    useScrollLock(true);
 
     // Close on ESC key
     useEffect(() => {
