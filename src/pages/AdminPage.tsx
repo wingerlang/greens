@@ -10,6 +10,7 @@ import { SystemDBModule } from '../components/admin/SystemDBModule.tsx';
 import { DatabasePage } from './DatabasePage.tsx';
 import { ApiPage } from './ApiPage.tsx';
 import { DocumentationPage } from '../components/DocumentationPage.tsx';
+import { BackupModule } from '../components/admin/backup/BackupModule.tsx';
 
 export const AdminPage: React.FC = () => {
     const { foodItems, recipes, updateFoodItem } = useData();
@@ -124,6 +125,12 @@ export const AdminPage: React.FC = () => {
                     className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'generator' ? 'text-rose-400 border-b-2 border-rose-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
                     🔧 Verktyg
+                </button>
+                <button
+                    onClick={() => setActiveTab('backup')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'backup' ? 'text-cyan-400 border-b-2 border-cyan-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    💾 Backup
                 </button>
             </div>
 
@@ -288,6 +295,12 @@ export const AdminPage: React.FC = () => {
             {activeTab === 'generator' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <SystemGeneratorModule />
+                </div>
+            )}
+
+            {activeTab === 'backup' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <BackupModule />
                 </div>
             )}
 
