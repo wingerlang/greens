@@ -17,7 +17,7 @@ import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
 import { NutritionInsights } from '../components/calories/NutritionInsights.tsx';
 import { MacroDistribution } from '../components/calories/MacroDistribution.tsx';
-import { normalizeText } from '../utils/formatters.ts';
+import { normalizeText, formatActivityDuration } from '../utils/formatters.ts';
 import { DatePicker } from '../components/shared/DatePicker.tsx';
 import { CalorieRing } from '../components/shared/CalorieRing.tsx';
 import { MacroBars } from '../components/shared/MacroBars.tsx';
@@ -615,7 +615,7 @@ export function CaloriesPage() {
                                                                     ex.type === 'yoga' ? 'Yoga' : 'Annat'}
                                             </div>
                                             <div className="text-[10px] text-slate-500">
-                                                {ex.durationMinutes} min • {ex.intensity}
+                                                {formatActivityDuration(ex.durationMinutes)} • {ex.intensity}
                                                 {(ex as any).source === 'strava' && <span className="ml-2 text-[#FC4C02] font-bold">ST</span>}
                                                 {(ex as any).source === 'manual' && <span className="ml-2 text-emerald-500 font-bold">M</span>}
                                             </div>

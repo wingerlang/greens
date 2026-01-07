@@ -9,6 +9,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { PersonalBest } from '../models/strengthTypes.ts';
 import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { PBHoverCard } from '../components/charts/PBHoverCard.tsx';
+import { formatActivityDuration } from '../utils/formatters.ts';
 
 export function CommunityStatsPage() {
     const navigate = useNavigate();
@@ -511,7 +512,7 @@ export function CommunityStatsPage() {
                                             <div className="text-emerald-400 font-mono">
                                                 {act.distance ? `${act.distance.toFixed(1)} km` : `${act.tonnage || 0} kg`}
                                             </div>
-                                            <div className="text-gray-500 text-xs">{act.durationMinutes} min</div>
+                                            <div className="text-gray-500 text-xs">{formatActivityDuration(act.durationMinutes)}</div>
                                         </div>
                                     </div>
                                 ))}

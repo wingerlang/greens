@@ -5,6 +5,7 @@ import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate, DailyVitals } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { analyzeSleep } from '../utils/vitalsUtils.ts';
+import { formatActivityDuration } from '../utils/formatters.ts';
 import { getActiveCalories, getActiveCalorieTarget } from '../utils/calorieTarget.ts';
 import { EXERCISE_TYPES } from '../components/training/ExerciseModal.tsx';
 import { MeasurementEntryModal } from '../components/dashboard/MeasurementEntryModal.tsx';
@@ -451,7 +452,7 @@ const DayHoverCard = ({
                                         <div className="text-sm">{typeDef?.icon || '💪'}</div>
                                         <div className="flex-1 min-w-0">
                                             <div className="text-[11px] font-bold text-slate-200 truncate group-hover:text-white">{typeDef?.label || act.type}</div>
-                                            <div className="text-[9px] text-slate-500">{act.durationMinutes} min {act.distance ? `• ${act.distance} km` : ''}</div>
+                                            <div className="text-[9px] text-slate-500">{formatActivityDuration(act.durationMinutes)} {act.distance ? `• ${act.distance} km` : ''}</div>
                                         </div>
                                         <ChevronRight size={10} className="text-slate-600 group-hover:text-white" />
                                     </div>
@@ -515,6 +516,7 @@ export function DashboardPage() {
         plannedActivities,
         unifiedActivities,
         weightEntries,
+        bodyMeasurements,
         trainingPeriods,
         performanceGoals,
         toggleIncompleteDay,
@@ -565,11 +567,29 @@ export function DashboardPage() {
 
     const rangeStartISO = getRangeStartDate(weightRange);
 
-    // Filter and sort for sparkline
+    // Build map of bodyMeasurements by date for merging
+    const measurementsByDate: Record<string, { waist?: number, chest?: number }> = {};
+    (bodyMeasurements || []).forEach((m: { date: string; type: string; value: number }) => {
+        if (!measurementsByDate[m.date]) {
+            measurementsByDate[m.date] = {};
+        }
+        if (m.type === 'waist') {
+            measurementsByDate[m.date].waist = m.value;
+        } else if (m.type === 'chest') {
+            measurementsByDate[m.date].chest = m.value;
+        }
+    });
+
+    // Filter and sort for sparkline, merging bodyMeasurements
     const weightTrendEntries = [...weightEntries]
         .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
         .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
-        .sort((a, b) => a.date.localeCompare(b.date));
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(entry => ({
+            ...entry,
+            waist: entry.waist || measurementsByDate[entry.date]?.waist,
+            chest: entry.chest || measurementsByDate[entry.date]?.chest,
+        }));
 
     const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
     const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
@@ -580,7 +600,12 @@ export function DashboardPage() {
     const latest3Weights = [...weightEntries]
         .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
         .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 3);
+        .slice(0, 3)
+        .map(entry => ({
+            ...entry,
+            waist: entry.waist || measurementsByDate[entry.date]?.waist,
+            chest: entry.chest || measurementsByDate[entry.date]?.chest,
+        }));
 
     const currentUserHeight = settings.height || 0;
     const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;

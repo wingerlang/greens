@@ -16,6 +16,7 @@ import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import {
     parseCycleString
 } from '../utils/nlpParser.ts';
+import { formatActivityDuration } from '../utils/formatters.ts';
 import { CycleYearChart } from '../components/training/CycleYearChart.tsx';
 import { EXERCISE_TYPES, INTENSITIES } from '../components/training/ExerciseModal.tsx';
 import { CycleDetailModal } from '../components/training/CycleDetailModal.tsx';
@@ -675,7 +676,7 @@ export function TrainingPage() {
                                                             {INTENSITIES.find(i => i.value === ex.intensity)?.label}
                                                         </span>
                                                     </div>
-                                                    <div className="text-xs text-slate-500">{ex.durationMinutes} min • {ex.notes || 'Inga anteckningar'}</div>
+                                                    <div className="text-xs text-slate-500">{formatActivityDuration(ex.durationMinutes)} • {ex.notes || 'Inga anteckningar'}</div>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-4">

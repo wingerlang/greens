@@ -17,11 +17,31 @@ import type { UniversalActivity } from '../models/types.ts';
 function formatYearRange(years: number[]) {
     if (years.length === 0) return '';
     if (years.length === 1) return years[0].toString();
+
     const sorted = [...years].sort((a, b) => a - b);
-    // Check if consecutive
-    const isConsecutive = sorted.every((y, i) => i === 0 || y === sorted[i - 1] + 1);
-    if (isConsecutive) return `${sorted[0]} - ${sorted[sorted.length - 1]}`;
-    return sorted.join(', ');
+
+    // Group consecutive years into ranges
+    const ranges: { start: number; end: number }[] = [];
+    let currentRange = { start: sorted[0], end: sorted[0] };
+
+    for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i] === currentRange.end + 1) {
+            // Consecutive year, extend current range
+            currentRange.end = sorted[i];
+        } else {
+            // Gap found, save current range and start new one
+            ranges.push(currentRange);
+            currentRange = { start: sorted[i], end: sorted[i] };
+        }
+    }
+    ranges.push(currentRange); // Don't forget the last range
+
+    // Format each range
+    return ranges.map(r =>
+        r.start === r.end
+            ? r.start.toString()
+            : `${r.start}-${r.end}`
+    ).join(', ');
 }
 
 export function YearInReviewPage() {

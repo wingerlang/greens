@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StrengthSession, StrengthExercise, StrengthMuscleGroup, generateId } from '../../models/types.ts';
+import { formatActivityDuration } from '../../utils/formatters.ts';
 import { useData } from '../../context/DataContext.tsx';
 
 interface StrengthSessionCardProps {
@@ -174,8 +175,8 @@ export function StrengthSessionCard({ session, date, onSave, compact = false }: 
                                     key={group}
                                     onClick={() => toggleMuscleGroup(group)}
                                     className={`px-3 py-1.5 rounded-lg text-[9px] font-bold transition-all ${currentSession.muscleGroups?.includes(group)
-                                            ? MUSCLE_GROUP_LABELS[group].color + ' ring-2 ring-white/20'
-                                            : 'bg-slate-800 text-slate-500 hover:text-white'
+                                        ? MUSCLE_GROUP_LABELS[group].color + ' ring-2 ring-white/20'
+                                        : 'bg-slate-800 text-slate-500 hover:text-white'
                                         }`}
                                 >
                                     {MUSCLE_GROUP_LABELS[group].emoji} {MUSCLE_GROUP_LABELS[group].label}
@@ -259,7 +260,7 @@ export function StrengthSessionCard({ session, date, onSave, compact = false }: 
                         ))}
                     </div>
                     <div className="flex gap-4 text-sm">
-                        <div><span className="text-slate-500">Tid:</span> <span className="font-bold text-white">{session.durationMinutes} min</span></div>
+                        <div><span className="text-slate-500">Tid:</span> <span className="font-bold text-white">{formatActivityDuration(session.durationMinutes)}</span></div>
                         <div><span className="text-slate-500">Kcal:</span> <span className="font-bold text-violet-400">{session.estimatedCalories}</span></div>
                     </div>
                     {session.exercises.length > 0 && (

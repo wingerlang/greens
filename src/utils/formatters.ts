@@ -142,12 +142,31 @@ export function formatVolumeTons(volumeKg: number): string {
 
 /**
  * Format duration in minutes to "1h 30min" or "45min"
+ * Rounds to nearest integer if decimals present.
  */
 export function formatDuration(minutes: number): string {
-    if (minutes < 60) return `${minutes}min`;
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
+    const roundedMinutes = Math.round(minutes);
+    if (roundedMinutes < 60) return `${roundedMinutes}min`;
+    const hours = Math.floor(roundedMinutes / 60);
+    const mins = roundedMinutes % 60;
     return mins > 0 ? `${hours}h ${mins}min` : `${hours}h`;
+}
+
+/**
+ * Format activity duration as a simple rounded minute string: "45 min"
+ * Use this for activity cards and tooltips to avoid showing decimals like "30.633333"
+ */
+export function formatActivityDuration(minutes: number | undefined | null): string {
+    if (minutes === undefined || minutes === null || isNaN(minutes)) return '0 min';
+    return `${Math.round(minutes)} min`;
+}
+
+/**
+ * Format activity duration as a compact string without space: "45min"
+ */
+export function formatActivityDurationCompact(minutes: number | undefined | null): string {
+    if (minutes === undefined || minutes === null || isNaN(minutes)) return '0min';
+    return `${Math.round(minutes)}min`;
 }
 
 // ============================================
