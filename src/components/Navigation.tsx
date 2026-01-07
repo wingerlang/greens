@@ -270,7 +270,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         <div className="relative group">
                             <button className={`${linkClasses({ isActive: isAdminRoute })} flex items-center gap-1`}>
                                 <span>🛠️</span>
-                                <span className="hidden xl:inline">System</span>
+                                <span className="hidden xl:inline">Admin</span>
                                 <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
                             </button>
 
@@ -288,7 +288,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                         <span className="w-5 text-center">⚡</span>
                                         <span>API</span>
                                     </NavLink>
-                                    <NavLink to="/admin?tab=docs" className={linkClasses}>
+                                    <NavLink to="/regler" className={linkClasses}>
                                         <span className="w-5 text-center">📚</span>
                                         <span>Regler</span>
                                     </NavLink>
@@ -297,7 +297,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                         <span className="w-5 text-center">👥</span>
                                         <span>Användare</span>
                                     </NavLink>
-                                    <NavLink to="/admin?tab=roadmap" className={linkClasses}>
+                                    <NavLink to="/roadmap" className={linkClasses}>
                                         <span className="w-5 text-center">🚀</span>
                                         <span>Roadmap</span>
                                     </NavLink>
@@ -493,7 +493,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         </div>
 
                         <div className="space-y-1">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">System & Verktyg</div>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Admin</div>
                             <NavLink to="/admin?tab=audit" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
                                 <span className="w-5 text-center">⚙️</span>
                                 <span>Dashboard</span>

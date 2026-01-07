@@ -55,6 +55,8 @@ import DebugBar from './components/debug/DebugBar.tsx';
 import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
 import { ToolsReplayPage } from './pages/tools/ToolsReplayPage.tsx';
 import { PlannerPage } from './components/planner/PlannerPage.tsx';
+import { RoadmapPage } from './pages/RoadmapPage.tsx';
+import { DocsPage } from './pages/DocsPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -136,6 +138,8 @@ export function App() {
                                                 } />
                                                 <Route path="api" element={<ApiPage />} />
                                                 <Route path="docs" element={<DocumentationPage />} />
+                                                <Route path="regler" element={<DocsPage />} />
+                                                <Route path="roadmap" element={<RoadmapPage />} />
                                                 <Route path="community" element={<UsersPage />} />
                                                 <Route path="u/:handle" element={<PublicProfilePage />} />
                                                 <Route path="garmin" element={<GarminPage />} />

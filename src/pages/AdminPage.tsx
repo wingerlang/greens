@@ -85,40 +85,10 @@ export const AdminPage: React.FC = () => {
                     🔍 Audit
                 </button>
                 <button
-                    onClick={() => setActiveTab('database')}
-                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'database' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    📦 Matdatabas
-                </button>
-                <button
-                    onClick={() => setActiveTab('systemdb')}
-                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'systemdb' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    💾 System DB
-                </button>
-                <button
-                    onClick={() => setActiveTab('users')}
-                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'users' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    👥 Användare
-                </button>
-                <button
                     onClick={() => setActiveTab('api')}
                     className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'api' ? 'text-sky-400 border-b-2 border-sky-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
                     ⚡ API
-                </button>
-                <button
-                    onClick={() => setActiveTab('docs')}
-                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'docs' ? 'text-orange-400 border-b-2 border-orange-400' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    📚 Regler
-                </button>
-                <button
-                    onClick={() => setActiveTab('roadmap')}
-                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'roadmap' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    🚀 Roadmap
                 </button>
                 <button
                     onClick={() => setActiveTab('generator')}
