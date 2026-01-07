@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { backupService } from '../../../services/backupService.ts';
 import { SnapshotList } from './SnapshotList.tsx';
+import { TimelineGraph } from './TimelineGraph.tsx';
 import type { BackupSnapshot, BackupSettings, BackupTrigger } from '../../../models/backup.ts';
 
 export function BackupModule() {
@@ -11,6 +12,7 @@ export function BackupModule() {
     const [showSettings, setShowSettings] = useState(false);
     const [restoreModal, setRestoreModal] = useState<BackupSnapshot | null>(null);
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+    const [viewMode, setViewMode] = useState<'list' | 'timeline'>('timeline');
 
     const loadSnapshots = useCallback(() => {
         const currentTrack = backupService.getCurrentTrackId();
@@ -86,8 +88,8 @@ export function BackupModule() {
             {/* Notification */}
             {notification && (
                 <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-2xl border backdrop-blur-xl transition-all duration-300 ${notification.type === 'success'
-                        ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
-                        : 'bg-red-500/20 border-red-500/30 text-red-400'
+                    ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                    : 'bg-red-500/20 border-red-500/30 text-red-400'
                     }`}>
                     <div className="flex items-center gap-2">
                         <span>{notification.type === 'success' ? '✓' : '✕'}</span>
@@ -231,10 +233,29 @@ export function BackupModule() {
                 </div>
             )}
 
-            {/* Snapshot List */}
+            {/* View Mode Toggle + Content */}
             <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6">
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-bold text-white">Alla Snapshots</h3>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setViewMode('timeline')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'timeline'
+                                    ? 'bg-indigo-500 text-white'
+                                    : 'bg-white/5 text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            📊 Tidslinje
+                        </button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'list'
+                                    ? 'bg-indigo-500 text-white'
+                                    : 'bg-white/5 text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            📋 Lista
+                        </button>
+                    </div>
                     <button
                         onClick={loadSnapshots}
                         className="text-xs text-slate-500 hover:text-white transition-colors"
@@ -243,14 +264,22 @@ export function BackupModule() {
                     </button>
                 </div>
 
-                <SnapshotList
-                    snapshots={snapshots}
-                    onRefresh={loadSnapshots}
-                    onRestore={handleRestore}
-                    onDelete={handleDelete}
-                    onSelect={setSelectedSnapshot}
-                    selectedId={selectedSnapshot?.id}
-                />
+                {viewMode === 'timeline' ? (
+                    <TimelineGraph
+                        snapshots={snapshots}
+                        onSelectSnapshot={setSelectedSnapshot}
+                        selectedId={selectedSnapshot?.id}
+                    />
+                ) : (
+                    <SnapshotList
+                        snapshots={snapshots}
+                        onRefresh={loadSnapshots}
+                        onRestore={handleRestore}
+                        onDelete={handleDelete}
+                        onSelect={setSelectedSnapshot}
+                        selectedId={selectedSnapshot?.id}
+                    />
+                )}
             </div>
 
             {/* Restore Modal */}
