@@ -25,7 +25,7 @@ export class KvInspectorService {
      * or index 0 for some (like ['users', userId]).
      */
     async getUserStorageUsage(): Promise<{ users: UserStorageUsage[], orphans: OrphanedData[] }> {
-        const users = await getAllUsers();
+        const { users } = await getAllUsers();
         const userMap = new Map(users.map(u => [u.id, u]));
         const usageMap = new Map<string, UserStorageUsage>();
 
@@ -90,31 +90,35 @@ export class KvInspectorService {
      * Lists keys under a specific prefix.
      * Acts like a directory listing.
      */
-    async listKeys(prefix: unknown[]): Promise<{ subPrefixes: string[], keys: { key: unknown[], size: number }[] }> {
-        const iter = kv.list({ prefix });
-        const subPrefixes = new Set<string>();
+    async listKeys(prefix: unknown[]): Promise<{ subPrefixes: { name: string, count: number, size: number }[], keys: { key: unknown[], size: number }[] }> {
+        const iter = kv.list({ prefix }, { limit: 1000 });
+        const subPrefixMap = new Map<string, { name: string, count: number, size: number }>();
         const keys: { key: unknown[], size: number }[] = [];
 
         for await (const entry of iter) {
             const remainingKey = entry.key.slice(prefix.length);
 
-            if (remainingKey.length === 0) {
-                // Exact match (shouldn't happen with prefix list, but safe to ignore)
-                continue;
-            }
+            if (remainingKey.length === 0) continue;
+
+            const valueSize = safeStringify(entry.value).length;
+            const keySize = safeStringify(entry.key).length;
+            const entrySize = valueSize + keySize;
 
             if (remainingKey.length === 1) {
                 // Leaf node (File)
-                const valueSize = safeStringify(entry.value).length;
-                keys.push({ key: entry.key, size: valueSize });
+                keys.push({ key: entry.key, size: entrySize });
             } else {
                 // Folder
-                subPrefixes.add(String(remainingKey[0]));
+                const folderName = String(remainingKey[0]);
+                const existing = subPrefixMap.get(folderName) || { name: folderName, count: 0, size: 0 };
+                existing.count++;
+                existing.size += entrySize;
+                subPrefixMap.set(folderName, existing);
             }
         }
 
         return {
-            subPrefixes: Array.from(subPrefixes).sort(),
+            subPrefixes: Array.from(subPrefixMap.values()).sort((a, b) => a.name.localeCompare(b.name)),
             keys: keys.sort((a, b) => String(a.key).localeCompare(String(b.key)))
         };
     }
