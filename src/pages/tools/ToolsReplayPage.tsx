@@ -23,7 +23,8 @@ import {
     Scale,
     RotateCcw
 } from 'lucide-react';
-import { ExerciseEntry, WeightEntry, EXERCISE_TYPES } from '../../models/types.ts';
+import { ExerciseEntry, WeightEntry } from '../../models/types.ts';
+import { EXERCISE_TYPES } from '../../components/training/ExerciseModal.tsx';
 
 // --- Types ---
 
@@ -308,11 +309,10 @@ export function ToolsReplayPage() {
                                 if (currentDate >= endDate) setCurrentDate(startDate);
                                 setIsPlaying(!isPlaying);
                             }}
-                            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${
-                                isPlaying
+                            className={`w-14 h-14 rounded-full flex items-center justify-center transition-all shadow-lg ${isPlaying
                                 ? 'bg-amber-500/20 text-amber-500 hover:bg-amber-500/30'
                                 : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 hover:scale-105'
-                            }`}
+                                }`}
                         >
                             {isPlaying ? <Pause fill="currentColor" /> : <Play fill="currentColor" className="ml-1" />}
                         </button>
@@ -338,9 +338,8 @@ export function ToolsReplayPage() {
                                     <button
                                         key={s}
                                         onClick={() => setPlaybackSpeed(s)}
-                                        className={`px-2 py-1 rounded-md text-[9px] font-bold transition-all ${
-                                            playbackSpeed === s ? 'bg-white text-black' : 'text-slate-400 hover:text-white'
-                                        }`}
+                                        className={`px-2 py-1 rounded-md text-[9px] font-bold transition-all ${playbackSpeed === s ? 'bg-white text-black' : 'text-slate-400 hover:text-white'
+                                            }`}
                                     >
                                         {i === 0 ? '1x' : i === 1 ? '2x' : '🚀'}
                                     </button>
@@ -395,16 +394,15 @@ export function ToolsReplayPage() {
                             {/* We reverse to show newest at bottom/top depending on preference.
                                 Let's show newest at TOP. so flex-col. */}
 
-                             {/* Actually, let's show timeline style: Newest on top. */}
-                             {[...historicalData].reverse().slice(0, 20).map((day) => (
-                                 day.events.map((event) => (
-                                     <div
+                            {/* Actually, let's show timeline style: Newest on top. */}
+                            {[...historicalData].reverse().slice(0, 20).map((day) => (
+                                day.events.map((event) => (
+                                    <div
                                         key={event.id}
-                                        className={`relative p-3 rounded-2xl border flex items-center gap-3 animate-in slide-in-from-left-4 fade-in duration-300 ${
-                                            event.isGold
+                                        className={`relative p-3 rounded-2xl border flex items-center gap-3 animate-in slide-in-from-left-4 fade-in duration-300 ${event.isGold
                                             ? 'bg-amber-500/10 border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
                                             : 'bg-slate-800/50 border-white/5'
-                                        }`}
+                                            }`}
                                     >
                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-slate-950 shadow-lg ${event.color}`}>
                                             {event.icon}
@@ -424,8 +422,8 @@ export function ToolsReplayPage() {
                                             </div>
                                         </div>
                                     </div>
-                                 ))
-                             ))}
+                                ))
+                            ))}
                         </div>
                         {/* Fade effect at bottom */}
                         <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-slate-900 to-transparent pointer-events-none"></div>
@@ -448,28 +446,28 @@ export function ToolsReplayPage() {
                             <AreaChart data={historicalData}>
                                 <defs>
                                     <linearGradient id="colorWeight" x1="0" y1="0" x2="0" y2="1">
-                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                     </linearGradient>
                                 </defs>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                                 <XAxis
                                     dataKey="date"
                                     stroke="#64748b"
-                                    tick={{fontSize: 10}}
+                                    tick={{ fontSize: 10 }}
                                     tickFormatter={(val) => val.slice(5)} // MM-DD
                                     interval="preserveStartEnd"
                                 />
                                 <YAxis
                                     domain={['auto', 'auto']}
                                     stroke="#64748b"
-                                    tick={{fontSize: 10}}
+                                    tick={{ fontSize: 10 }}
                                     width={30}
                                 />
                                 <Tooltip
-                                    contentStyle={{backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px'}}
-                                    itemStyle={{color: '#fff', fontSize: '12px'}}
-                                    labelStyle={{color: '#94a3b8', fontSize: '10px', marginBottom: '4px'}}
+                                    contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
+                                    itemStyle={{ color: '#fff', fontSize: '12px' }}
+                                    labelStyle={{ color: '#94a3b8', fontSize: '10px', marginBottom: '4px' }}
                                 />
                                 <Area
                                     type="monotone"
@@ -487,23 +485,24 @@ export function ToolsReplayPage() {
                                     we only show dots for the last 5 events or so to avoid clutter, OR just rely on the feed.
                                     Alternatively, ReferenceDots for PBs/Races.
                                 */}
-                                {historicalData.flatMap(d => d.events.filter(e => e.isGold)).map((e, i) => (
-                                    <ReferenceDot
-                                        key={e.id}
-                                        x={e.date}
-                                        y={(p: any) => {
-                                            // Find weight for this date to position dot on the line
-                                            const snap = timelineData.find(td => td.date === e.date);
-                                            // If no weight that day, find closest previous
-                                            return snap?.weight || 0;
-                                        }}
-                                        r={6}
-                                        fill="#fbbf24"
-                                        stroke="#fff"
-                                        strokeWidth={2}
-                                        ifOverflow="extendDomain"
-                                    />
-                                ))}
+                                {historicalData.flatMap(d => d.events.filter(e => e.isGold)).map((e, i) => {
+                                    // Find weight for this date to position dot on the line
+                                    const snap = timelineData.find(td => td.date === e.date);
+                                    const yValue = snap?.weight || 0;
+
+                                    return (
+                                        <ReferenceDot
+                                            key={e.id}
+                                            x={e.date}
+                                            y={yValue}
+                                            r={6}
+                                            fill="#fbbf24"
+                                            stroke="#fff"
+                                            strokeWidth={2}
+                                            ifOverflow="extendDomain"
+                                        />
+                                    );
+                                })}
 
                                 {/* The Playhead */}
                                 <ReferenceLine x={currentDate} stroke="#fbbf24" strokeDasharray="3 3" label={{ position: 'top', value: 'PLAYHEAD', fill: '#fbbf24', fontSize: 10 }} />

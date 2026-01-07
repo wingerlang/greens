@@ -454,10 +454,33 @@ export function DashboardPage() {
     const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
 
     const changeDate = (days: number) => {
-        const d = new Date(selectedDate);
-        d.setDate(d.getDate() + days);
-        setSelectedDate(d.toISOString().split('T')[0]);
+        setSelectedDate(prev => {
+            const d = new Date(prev);
+            d.setDate(d.getDate() + days);
+            return d.toISOString().split('T')[0];
+        });
     };
+
+    // Keyboard navigation (Ctrl + Arrows)
+    useEffect(() => {
+        const handleNavKeyDown = (e: KeyboardEvent) => {
+            // Only trigger if no input/textarea is focused
+            if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+            if (e.ctrlKey) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    changeDate(-1);
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    changeDate(1);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleNavKeyDown);
+        return () => window.removeEventListener('keydown', handleNavKeyDown);
+    }, []);
 
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

@@ -92,6 +92,18 @@ export function ToolsPage() {
                     color: "from-pink-500 to-fuchsia-500"
                 }
             ]
+        },
+        {
+            title: "Data & Visualisering",
+            icon: "📊",
+            tools: [
+                {
+                    name: "Replay Mode",
+                    desc: "Återupplev dina framsteg med en animerad tidslinje.",
+                    path: "/tools/replay",
+                    color: "from-amber-500 to-orange-500"
+                }
+            ]
         }
     ];
 

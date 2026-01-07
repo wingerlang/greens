@@ -53,6 +53,7 @@ import { ToolsOlympicPage } from './pages/tools/ToolsOlympicPage.tsx';
 import { ToolsHyroxPage } from './pages/tools/ToolsHyroxPage.tsx';
 import DebugBar from './components/debug/DebugBar.tsx';
 import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
+import { ToolsReplayPage } from './pages/tools/ToolsReplayPage.tsx';
 import { PlannerPage } from './components/planner/PlannerPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -183,6 +184,7 @@ export function App() {
                                                 <Route path="tools/standards" element={<ToolsStrengthStandardsPage />} />
                                                 <Route path="tools/olympic" element={<ToolsOlympicPage />} />
                                                 <Route path="tools/hyrox" element={<ToolsHyroxPage />} />
+                                                <Route path="tools/replay" element={<ToolsReplayPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>
