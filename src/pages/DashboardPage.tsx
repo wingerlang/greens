@@ -43,14 +43,16 @@ const DoubleCircularProgress = ({
     innerValue,
     innerMax,
     label,
-    subLabel
+    subLabel,
+    displayValue
 }: {
     value: number,
     max: number,
     innerValue: number,
     innerMax: number,
     label: string,
-    subLabel: React.ReactNode
+    subLabel?: React.ReactNode,
+    displayValue?: number | string
 }) => {
     const isProteinMet = innerValue >= innerMax;
     const isOver = value > max;
@@ -151,21 +153,9 @@ const DoubleCircularProgress = ({
             </svg>
             <div className="absolute flex flex-col items-center justify-center text-center">
                 <div className={`${sizes.text} font-bold leading-none ${isOver ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
-                    {Math.round(value)}
+                    {displayValue !== undefined ? displayValue : Math.round(value)}
                 </div>
                 <div className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-wider">{label}</div>
-                <div className="mt-2 flex flex-col items-center gap-0.5">
-                    <div className="flex items-center gap-1.5 text-xs font-bold bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
-                        <div className={`w-2 h-2 rounded-full ${isProteinMet ? 'bg-emerald-500' : 'bg-orange-400'}`} />
-                        <span className="text-slate-700 dark:text-slate-300">
-                            {Math.round(innerValue)}/{innerMax}g
-                        </span>
-                    </div>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
-                        Protein
-                    </span>
-                </div>
-                {subLabel && <div className="mt-2">{subLabel}</div>}
             </div>
         </div>
     );
@@ -452,6 +442,7 @@ export function DashboardPage() {
     const [weightRange, setWeightRange] = useState<'14d' | '30d' | '3m' | '1y' | 'all'>('1y');
     const [hoveredDay, setHoveredDay] = useState<string | null>(null);
     const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
+    const [showDetails, setShowDetails] = useState(false);
     const [isHoveringChart, setIsHoveringChart] = useState(false);
 
     const changeDate = (days: number) => {
@@ -587,18 +578,55 @@ export function DashboardPage() {
     ).calories;
 
     // Scaling factor for macros (only in fixed mode when training increases the goal)
-    const scalingFactor = (settings.calorieMode === 'fixed' && baseTarget > 0)
-        ? (target / baseTarget)
-        : 1;
+    const extraCalories = Math.max(0, target - baseTarget);
+
+    // Base Macros
+    const baseProtein = settings.dailyProteinGoal || 160;
+    const baseCarbs = settings.dailyCarbsGoal || 250;
+    const baseFat = settings.dailyFatGoal || 80;
+
+    let finalProtein = baseProtein;
+    let finalCarbs = baseCarbs;
+    let finalFat = baseFat;
+
+    if (extraCalories > 0) {
+        // Standard training fuel split: 10% Protein, 20% Fat, 70% Carbs
+        // (Unless overridden by specific logic, but implementing this as requested)
+        const addedProteinCalories = extraCalories * 0.10;
+        const addedFatCalories = extraCalories * 0.20;
+        const addedCarbsCalories = extraCalories * 0.70;
+
+        let addedProtein = addedProteinCalories / 4;
+        const addedFat = addedFatCalories / 9;
+        let addedCarbs = addedCarbsCalories / 4;
+
+        // Apply Protein Cap (2.5g / kg)
+        const userWeight = latestWeightVal || 75; // Default to 75 if unknown
+        const maxProtein = userWeight * 2.5;
+
+        if ((baseProtein + addedProtein) > maxProtein) {
+             // Cap protein
+             const allowedAddedProtein = Math.max(0, maxProtein - baseProtein);
+             const surplusProteinCalories = (addedProtein - allowedAddedProtein) * 4;
+
+             addedProtein = allowedAddedProtein;
+             // Redistribute surplus calories to Carbs
+             addedCarbs += surplusProteinCalories / 4;
+        }
+
+        finalProtein += addedProtein;
+        finalFat += addedFat;
+        finalCarbs += addedCarbs;
+    }
 
     // 2. Macros (Scaled proportionally if training calories are added)
-    const proteinTarget = Math.round((settings.dailyProteinGoal || 160) * scalingFactor);
+    const proteinTarget = Math.round(finalProtein);
     const proteinCurrent = dailyNutrition.protein;
 
-    const carbsTarget = Math.round((settings.dailyCarbsGoal || 250) * scalingFactor);
+    const carbsTarget = Math.round(finalCarbs);
     const carbsCurrent = dailyNutrition.carbs;
 
-    const fatTarget = Math.round((settings.dailyFatGoal || 80) * scalingFactor);
+    const fatTarget = Math.round(finalFat);
     const fatCurrent = dailyNutrition.fat;
 
     // 3. Weight & Measurement Logic
@@ -969,23 +997,16 @@ export function DashboardPage() {
                         if (card.id === 'intake') {
                             return (
                                 <Wrapper key="intake" className="md:col-span-12 lg:col-span-6 h-full flex">
-                                    <div className={`flex-1 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full`}>
+                                    <div className={`flex-1 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full relative`}>
                                         <DoubleCircularProgress
                                             value={consumed}
                                             max={target}
                                             innerValue={proteinCurrent}
                                             innerMax={proteinTarget}
-                                            label="Kcal"
-                                            subLabel={
-                                                <div className="flex flex-col items-center">
-                                                    <span className={`font-black ${consumed - burned <= baseTarget ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                        {Math.round(consumed - burned)}
-                                                    </span>
-                                                    <span className="text-[7px] opacity-50 uppercase font-bold tracking-tighter">Netto kcal</span>
-                                                </div>
-                                            }
+                                            displayValue={Math.round(target - consumed)}
+                                            label="Kvar"
                                         />
-                                        <div className="flex-1 ml-4 min-w-0">
+                                        <div className="flex-1 ml-4 min-w-0 pb-6">
                                             <div className={`font-black text-slate-900 dark:text-white uppercase tracking-tighter ${density === 'compact' ? 'text-[10px] mb-2' : 'text-sm mb-4'}`}>Dagens Intag</div>
                                             <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                                                 {/* Protein */}
@@ -1082,45 +1103,57 @@ export function DashboardPage() {
                                                     </div>
                                                 </div>
 
-                                                {/* Training/Burned Calories */}
-                                                <div
-                                                    onMouseEnter={() => setIsHoveringTraining(true)}
-                                                    onMouseLeave={() => setIsHoveringTraining(false)}
-                                                    className={`transition-all rounded-lg p-1 -m-1 ${isHoveringTraining ? 'bg-emerald-500/10 ring-1 ring-emerald-500/20' : ''}`}
-                                                >
-                                                    <div className={`flex justify-between items-baseline mb-1`}>
-                                                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Träning</span>
+                                                {/* Training/Burned Calories - Hidden unless active or expanded */}
+                                                {(showDetails || burned > 0) && (
+                                                    <div
+                                                        onMouseEnter={() => setIsHoveringTraining(true)}
+                                                        onMouseLeave={() => setIsHoveringTraining(false)}
+                                                        className={`transition-all rounded-lg p-1 -m-1 ${isHoveringTraining ? 'bg-emerald-500/10 ring-1 ring-emerald-500/20' : ''}`}
+                                                    >
+                                                        <div className={`flex justify-between items-baseline mb-1`}>
+                                                            <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Träning</span>
+                                                        </div>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-emerald-500`}>
+                                                                -{Math.round(burned)}
+                                                            </span>
+                                                            <span className="text-[9px] text-slate-400 font-bold">kcal</span>
+                                                        </div>
+                                                        <div className="h-1 bg-emerald-100 dark:bg-emerald-900/30 rounded-full overflow-hidden mt-1">
+                                                            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${burned > 0 ? Math.min((burned / 500) * 100, 100) : 0}%` }}></div>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-emerald-500`}>
-                                                            -{Math.round(burned)}
-                                                        </span>
-                                                        <span className="text-[9px] text-slate-400 font-bold">kcal</span>
-                                                    </div>
-                                                    <div className="h-1 bg-emerald-100 dark:bg-emerald-900/30 rounded-full overflow-hidden mt-1">
-                                                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${burned > 0 ? Math.min((burned / 500) * 100, 100) : 0}%` }}></div>
-                                                    </div>
-                                                </div>
+                                                )}
 
-                                                {/* Net Calories */}
-                                                <div className="col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                                                    <div className={`flex justify-between items-baseline mb-1`}>
-                                                        <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Netto</span>
-                                                        <span className={`text-[9px] font-bold ${(consumed - burned) > baseTarget ? 'text-rose-500' : (consumed - burned) < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
-                                                            {(consumed - burned) <= baseTarget ? '✓ Under mål' : '⚠ Över mål'}
-                                                        </span>
+                                                {/* Net Calories - Hidden unless expanded */}
+                                                {showDetails && (
+                                                    <div className="col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800 animate-in fade-in slide-in-from-top-2">
+                                                        <div className={`flex justify-between items-baseline mb-1`}>
+                                                            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Netto</span>
+                                                            <span className={`text-[9px] font-bold ${(consumed - burned) > baseTarget ? 'text-rose-500' : (consumed - burned) < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                                                                {(consumed - burned) <= baseTarget ? '✓ Under mål' : '⚠ Över mål'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${(consumed - burned) > baseTarget ? 'text-rose-500' : 'text-indigo-500'}`}>
+                                                                {Math.round(consumed - burned)}
+                                                            </span>
+                                                            <span className="text-[9px] text-slate-400 font-bold">/ {baseTarget} kcal</span>
+                                                        </div>
+                                                        <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                                                            <div className={`h-full rounded-full ${(consumed - burned) > baseTarget ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(Math.max(0, ((consumed - burned) / baseTarget) * 100), 100)}%` }}></div>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${(consumed - burned) > baseTarget ? 'text-rose-500' : 'text-indigo-500'}`}>
-                                                            {Math.round(consumed - burned)}
-                                                        </span>
-                                                        <span className="text-[9px] text-slate-400 font-bold">/ {baseTarget} kcal</span>
-                                                    </div>
-                                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
-                                                        <div className={`h-full rounded-full ${(consumed - burned) > baseTarget ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(Math.max(0, ((consumed - burned) / baseTarget) * 100), 100)}%` }}></div>
-                                                    </div>
-                                                </div>
+                                                )}
                                             </div>
+
+                                            {/* Expand Toggle */}
+                                            <button
+                                                onClick={(e) => { e.stopPropagation(); setShowDetails(!showDetails); }}
+                                                className="absolute bottom-2 right-4 p-1 text-slate-300 hover:text-slate-600 dark:hover:text-slate-100 transition-colors"
+                                            >
+                                                {showDetails ? <X size={14} /> : <div className="text-[9px] font-bold uppercase tracking-widest flex items-center gap-1">Mer <ChevronRight size={10} className="rotate-90" /></div>}
+                                            </button>
                                         </div>
                                     </div>
                                 </Wrapper>
