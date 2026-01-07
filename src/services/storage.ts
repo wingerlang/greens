@@ -6,6 +6,7 @@
 
 import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
+import { notificationService } from './notificationService.ts';
 
 // ============================================
 // Storage Interface
@@ -131,9 +132,14 @@ export class LocalStorageService implements StorageService {
                     } else {
                         console.log('[Storage] Cloud data empty or invalid');
                     }
+                } else {
+                    // Critical: Notify on load failure if server is reachable but errors
+                    notificationService.notify('error', 'Kunde inte ladda data från servern (API Error)');
                 }
             } catch (e) {
                 console.warn('[Storage] API load failed', e);
+                // Critical: Notify on network failure
+                notificationService.notify('error', 'Kunde inte ladda data från servern (Nätverksfel)');
             }
         }
 
@@ -200,19 +206,31 @@ export class LocalStorageService implements StorageService {
 
             const token = getToken();
             if (token && ENABLE_CLOUD_SYNC) {
-                // Fire and forget (don't await to avoid UI lag, but catch errors)
-                fetch('http://localhost:8000/api/data', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(data)
-                }).catch(e => console.error('[Storage] Failed to sync to API:', e));
+                // Critical: Strict wait for "Save Profile"
+                try {
+                    const res = await fetch('http://localhost:8000/api/data', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (res.ok) {
+                        notificationService.notify('success', 'Data sparad till servern');
+                    } else {
+                        notificationService.notify('error', 'Kunde inte spara data till servern');
+                    }
+                } catch (e) {
+                    console.error('[Storage] Failed to sync to API:', e);
+                    notificationService.notify('error', 'Nätverksfel vid sparning');
+                }
             }
 
         } catch (e) {
             console.error('Failed to save to storage:', e);
+            notificationService.notify('error', 'Kunde inte spara lokalt');
         }
     }
 
@@ -256,11 +274,16 @@ export class LocalStorageService implements StorageService {
                     body: JSON.stringify(entry)
                 });
 
-                if (!res.ok) throw new Error('API sync failed');
+                if (res.ok) {
+                    notificationService.notify('success', 'Vikt sparad');
+                } else {
+                    throw new Error('API sync failed');
+                }
 
                 console.log('[Storage] Weight synced via Granular API');
             } catch (e) {
-                console.error('[Storage] Fallback to full sync due to error:', e);
+                console.error('[Storage] Weight sync error:', e);
+                notificationService.notify('error', 'Kunde inte spara vikt till servern');
             }
         }
     }
@@ -277,10 +300,14 @@ export class LocalStorageService implements StorageService {
                     },
                     body: JSON.stringify(meal)
                 });
-                if (!res.ok) throw new Error('API sync failed');
-                console.log('[Storage] Meal synced via Granular API');
+                if (res.ok) {
+                    notificationService.notify('success', 'Måltid sparad');
+                } else {
+                    throw new Error('API sync failed');
+                }
             } catch (e) {
-                console.error('[Storage] Fallback to full sync:', e);
+                console.error('[Storage] Meal sync error:', e);
+                notificationService.notify('error', 'Kunde inte spara måltid');
             }
         }
     }
@@ -297,9 +324,14 @@ export class LocalStorageService implements StorageService {
                     },
                     body: JSON.stringify(meal)
                 });
-                if (!res.ok) throw new Error('API sync failed');
+                if (res.ok) {
+                    notificationService.notify('success', 'Måltid uppdaterad');
+                } else {
+                    throw new Error('API sync failed');
+                }
             } catch (e) {
-                console.error('[Storage] Meal update failed:', e);
+                console.error('[Storage] Meal update error:', e);
+                notificationService.notify('error', 'Kunde inte uppdatera måltid');
             }
         }
     }
@@ -312,9 +344,14 @@ export class LocalStorageService implements StorageService {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!res.ok) throw new Error('API sync failed');
+                if (res.ok) {
+                    notificationService.notify('success', 'Måltid borttagen');
+                } else {
+                    throw new Error('API sync failed');
+                }
             } catch (e) {
-                console.error('[Storage] Meal delete failed:', e);
+                console.error('[Storage] Meal delete error:', e);
+                notificationService.notify('error', 'Kunde inte ta bort måltid');
             }
         }
     }
@@ -331,9 +368,14 @@ export class LocalStorageService implements StorageService {
                     },
                     body: JSON.stringify(entry)
                 });
-                if (!res.ok) throw new Error('API sync failed');
+                if (res.ok) {
+                    notificationService.notify('success', 'Vikt uppdaterad');
+                } else {
+                    throw new Error('API sync failed');
+                }
             } catch (e) {
-                console.error('[Storage] Weight update failed:', e);
+                console.error('[Storage] Weight update error:', e);
+                notificationService.notify('error', 'Kunde inte uppdatera vikt');
             }
         }
     }
@@ -346,9 +388,14 @@ export class LocalStorageService implements StorageService {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!res.ok) throw new Error('API sync failed');
+                if (res.ok) {
+                    notificationService.notify('success', 'Vikt borttagen');
+                } else {
+                    throw new Error('API sync failed');
+                }
             } catch (e) {
-                console.error('[Storage] Weight delete failed:', e);
+                console.error('[Storage] Weight delete error:', e);
+                notificationService.notify('error', 'Kunde inte ta bort vikt');
             }
         }
     }
@@ -580,36 +627,60 @@ export class LocalStorageService implements StorageService {
         } else {
             data.bodyMeasurements.push(entry);
         }
-        await this.save(data);
+        // Save local immediately for optimistic UI
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
-        // API sync
+        // API sync (Strict)
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
-            fetch('/api/measurements', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify(entry)
-            }).catch(e => console.error('[Storage] Body measurement sync failed:', e));
+            try {
+                const res = await fetch('/api/measurements', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(entry)
+                });
+
+                if (res.ok) {
+                    notificationService.notify('success', 'Mått sparat');
+                } else {
+                    notificationService.notify('error', 'Kunde inte spara mått till servern');
+                }
+            } catch (e) {
+                console.error('[Storage] Body measurement sync failed:', e);
+                notificationService.notify('error', 'Nätverksfel vid sparande av mått');
+            }
         }
     }
 
     async deleteBodyMeasurement(id: string): Promise<void> {
         const data = await this.load();
         data.bodyMeasurements = data.bodyMeasurements?.filter((m: any) => m.id !== id) || [];
-        await this.save(data);
+        // Save local immediately
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 
-        // API sync
+        // API sync (Strict)
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
-            fetch(`/api/measurements/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Authorization': `Bearer ${token}`
+            try {
+                const res = await fetch(`/api/measurements/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (res.ok) {
+                    notificationService.notify('success', 'Mått borttaget');
+                } else {
+                    notificationService.notify('error', 'Kunde inte ta bort mått från servern');
                 }
-            }).catch(e => console.error('[Storage] Body measurement delete failed:', e));
+            } catch (e) {
+                console.error('[Storage] Body measurement delete failed:', e);
+                notificationService.notify('error', 'Nätverksfel vid borttagning av mått');
+            }
         }
     }
 }
