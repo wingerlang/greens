@@ -2,7 +2,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { backupService } from '../../../services/backupService.ts';
 import { SnapshotList } from './SnapshotList.tsx';
 import { TimelineGraph } from './TimelineGraph.tsx';
-import type { BackupSnapshot, BackupSettings, BackupTrigger } from '../../../models/backup.ts';
+import { DiffViewer } from './DiffViewer.tsx';
+import { RestoreWizard } from './RestoreWizard.tsx';
+import type { BackupSnapshot, BackupSettings, BackupEntityCounts } from '../../../models/backup.ts';
 
 export function BackupModule() {
     const [snapshots, setSnapshots] = useState<BackupSnapshot[]>([]);
@@ -12,7 +14,7 @@ export function BackupModule() {
     const [showSettings, setShowSettings] = useState(false);
     const [restoreModal, setRestoreModal] = useState<BackupSnapshot | null>(null);
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [viewMode, setViewMode] = useState<'list' | 'timeline'>('timeline');
+    const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'diff'>('timeline');
 
     const loadSnapshots = useCallback(() => {
         const currentTrack = backupService.getCurrentTrackId();
@@ -240,8 +242,8 @@ export function BackupModule() {
                         <button
                             onClick={() => setViewMode('timeline')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'timeline'
-                                    ? 'bg-indigo-500 text-white'
-                                    : 'bg-white/5 text-slate-400 hover:text-white'
+                                ? 'bg-indigo-500 text-white'
+                                : 'bg-white/5 text-slate-400 hover:text-white'
                                 }`}
                         >
                             📊 Tidslinje
@@ -249,11 +251,20 @@ export function BackupModule() {
                         <button
                             onClick={() => setViewMode('list')}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'list'
-                                    ? 'bg-indigo-500 text-white'
-                                    : 'bg-white/5 text-slate-400 hover:text-white'
+                                ? 'bg-indigo-500 text-white'
+                                : 'bg-white/5 text-slate-400 hover:text-white'
                                 }`}
                         >
                             📋 Lista
+                        </button>
+                        <button
+                            onClick={() => setViewMode('diff')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'diff'
+                                ? 'bg-indigo-500 text-white'
+                                : 'bg-white/5 text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            🔍 Jämför
                         </button>
                     </div>
                     <button
@@ -264,13 +275,14 @@ export function BackupModule() {
                     </button>
                 </div>
 
-                {viewMode === 'timeline' ? (
+                {viewMode === 'timeline' && (
                     <TimelineGraph
                         snapshots={snapshots}
                         onSelectSnapshot={setSelectedSnapshot}
                         selectedId={selectedSnapshot?.id}
                     />
-                ) : (
+                )}
+                {viewMode === 'list' && (
                     <SnapshotList
                         snapshots={snapshots}
                         onRefresh={loadSnapshots}
@@ -280,58 +292,19 @@ export function BackupModule() {
                         selectedId={selectedSnapshot?.id}
                     />
                 )}
+                {viewMode === 'diff' && (
+                    <DiffViewer
+                        snapshots={snapshots}
+                    />
+                )}
             </div>
 
-            {/* Restore Modal */}
             {restoreModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                    <div className="w-full max-w-md rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
-                        <h3 className="text-lg font-bold text-white mb-2">Återställ Backup</h3>
-                        <p className="text-sm text-slate-400 mb-6">
-                            Vill du återställa data från {new Date(restoreModal.timestamp).toLocaleDateString('sv-SE')}?
-                        </p>
-
-                        <div className="space-y-3 mb-6">
-                            <button
-                                onClick={() => confirmRestore('FULL')}
-                                className="w-full flex items-center justify-between p-4 rounded-xl border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 transition-colors text-left"
-                            >
-                                <div>
-                                    <div className="text-sm font-bold text-white">Full Återställning</div>
-                                    <div className="text-xs text-slate-400">Ersätt all data med backup</div>
-                                </div>
-                                <span className="text-indigo-400">→</span>
-                            </button>
-
-                            <button
-                                onClick={() => {
-                                    // TODO: Show category picker for selective restore
-                                    confirmRestore('SELECTIVE', ['meals', 'exercises']);
-                                }}
-                                className="w-full flex items-center justify-between p-4 rounded-xl border border-white/10 bg-white/[0.02] hover:bg-white/5 transition-colors text-left"
-                            >
-                                <div>
-                                    <div className="text-sm font-bold text-white">Selektiv Återställning</div>
-                                    <div className="text-xs text-slate-400">Välj kategorier att återställa</div>
-                                </div>
-                                <span className="text-slate-400">→</span>
-                            </button>
-                        </div>
-
-                        <div className="flex justify-end gap-3">
-                            <button
-                                onClick={() => setRestoreModal(null)}
-                                className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors"
-                            >
-                                Avbryt
-                            </button>
-                        </div>
-
-                        <p className="text-[10px] text-slate-500 mt-4">
-                            ⓘ En säkerhetskopia skapas automatiskt innan återställning
-                        </p>
-                    </div>
-                </div>
+                <RestoreWizard
+                    snapshot={restoreModal}
+                    onConfirm={confirmRestore}
+                    onCancel={() => setRestoreModal(null)}
+                />
             )}
         </div>
     );
