@@ -549,7 +549,44 @@ export function DashboardPage() {
 
     // --- Derived Data ---
 
-    // 1. Calories & Nutrition
+    // 1. Weight & Measurement Logic
+    const getRangeDays = (range: typeof weightRange) => {
+        switch (range) {
+            case '14d': return 14;
+            case '30d': return 30;
+            case '3m': return 90;
+            case '1y': return 365;
+            default: return 9999;
+        }
+    };
+
+    const rangeStartISO = getRangeStartDate(weightRange);
+
+    // Filter and sort for sparkline
+    const weightTrendEntries = [...weightEntries]
+        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
+        .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+    const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
+    const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
+    const weightDiffRange = latestWeightInRange - earliestWeightInRange;
+
+    // Data for sparkline (values only)
+    const weightTrend = weightTrendEntries.map(e => e.weight);
+
+    const latest3Weights = [...weightEntries]
+        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 3);
+
+    const currentUserHeight = settings.height || 0;
+    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
+    const bmi = (latestWeightVal && currentUserHeight)
+        ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
+        : null;
+
+    // 2. Calories & Nutrition
     const dailyNutrition = calculateDailyNutrition(selectedDate);
     const consumed = dailyNutrition.calories;
     const burned = health.dailyCaloriesBurned || 0;
@@ -605,13 +642,13 @@ export function DashboardPage() {
         const maxProtein = userWeight * 2.5;
 
         if ((baseProtein + addedProtein) > maxProtein) {
-             // Cap protein
-             const allowedAddedProtein = Math.max(0, maxProtein - baseProtein);
-             const surplusProteinCalories = (addedProtein - allowedAddedProtein) * 4;
+            // Cap protein
+            const allowedAddedProtein = Math.max(0, maxProtein - baseProtein);
+            const surplusProteinCalories = (addedProtein - allowedAddedProtein) * 4;
 
-             addedProtein = allowedAddedProtein;
-             // Redistribute surplus calories to Carbs
-             addedCarbs += surplusProteinCalories / 4;
+            addedProtein = allowedAddedProtein;
+            // Redistribute surplus calories to Carbs
+            addedCarbs += surplusProteinCalories / 4;
         }
 
         finalProtein += addedProtein;
@@ -619,7 +656,7 @@ export function DashboardPage() {
         finalCarbs += addedCarbs;
     }
 
-    // 2. Macros (Scaled proportionally if training calories are added)
+    // 3. Macros (Scaled proportionally if training calories are added)
     const proteinTarget = Math.round(finalProtein);
     const proteinCurrent = dailyNutrition.protein;
 
@@ -629,45 +666,9 @@ export function DashboardPage() {
     const fatTarget = Math.round(finalFat);
     const fatCurrent = dailyNutrition.fat;
 
-    // 3. Weight & Measurement Logic
-    const getRangeDays = (range: typeof weightRange) => {
-        switch (range) {
-            case '14d': return 14;
-            case '30d': return 30;
-            case '3m': return 90;
-            case '1y': return 365;
-            default: return 9999;
-        }
-    };
-
-    const rangeStartISO = getRangeStartDate(weightRange);
-
-    // Filter and sort for sparkline
-    const weightTrendEntries = [...weightEntries]
-        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
-        .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
-        .sort((a, b) => a.date.localeCompare(b.date));
-
-    const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
-    const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
-    const weightDiffRange = latestWeightInRange - earliestWeightInRange;
-
-    // Data for sparkline (values only)
-    const weightTrend = weightTrendEntries.map(e => e.weight);
-
-    const latest3Weights = [...weightEntries]
-        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 3);
-
-    const currentUserHeight = settings.height || 0;
-    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
-    const bmi = (latestWeightVal && currentUserHeight)
-        ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
-        : null;
-
     const proteinRatio = latestWeightVal > 0 ? (proteinCurrent / latestWeightVal) : 0;
     const targetProteinRatio = latestWeightVal > 0 ? (proteinTarget / latestWeightVal) : 0;
+
 
     const getBMICategory = (val: number) => {
         if (val < 18.5) return { label: 'Undervikt', color: 'text-amber-400', bg: 'bg-amber-400/10' };
