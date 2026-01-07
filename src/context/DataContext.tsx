@@ -76,6 +76,7 @@ interface DataContextType {
     updateCurrentUser: (updates: Partial<User>) => void;
     addUser: (user: User) => void;
     toggleIncompleteDay: (date: string) => void;
+    toggleCompleteDay: (date: string) => void;
 
     // Pantry CRUD
     togglePantryItem: (item: string) => void;
@@ -601,6 +602,22 @@ export function DataProvider({ children }: DataProviderProps) {
                 [date]: {
                     ...currentVitals,
                     incomplete: !currentVitals.incomplete,
+                    updatedAt: new Date().toISOString()
+                }
+            };
+        });
+    }, []);
+
+    const toggleCompleteDay = useCallback((date: string) => {
+        setDailyVitals(prev => {
+            const currentVitals = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
+            return {
+                ...prev,
+                [date]: {
+                    ...currentVitals,
+                    completed: !currentVitals.completed,
+                    // If we mark as complete, we probably want to ensure it's not marked as incomplete
+                    incomplete: !currentVitals.completed ? false : currentVitals.incomplete,
                     updatedAt: new Date().toISOString()
                 }
             };
@@ -1756,6 +1773,7 @@ export function DataProvider({ children }: DataProviderProps) {
         updateCurrentUser,
         addUser,
         toggleIncompleteDay,
+        toggleCompleteDay,
         dailyVitals,
         updateVitals,
         getVitalsForDate,

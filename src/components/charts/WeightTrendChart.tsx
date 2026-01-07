@@ -104,11 +104,6 @@ function calculateZigZagTrends(rawWeights: number[], rawDates: string[], maxSegm
             trend = 'gain';
         }
 
-        // Map back to global indices 
-        // Note: This naive mapping assumes dates are unique in sortedEntries, which they are after pre-processing.
-        // But entries passed to component might have duplicates. 
-        // For chart visualization, we should map to the INDICES of the sorted unique array we created.
-
         finalSegments.push({
             startIndex: startIdx,
             endIndex: endIdx,
@@ -141,31 +136,25 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
         return calculateZigZagTrends(sortedUniqueEntries.map(e => e.weight), sortedUniqueEntries.map(e => e.date));
     }, [sortedUniqueEntries]);
 
+    // Check if we have measurement data
+    const hasMeasurements = useMemo(() => {
+        return sortedUniqueEntries.some(e => e.waist || e.chest);
+    }, [sortedUniqueEntries]);
+
     // 2. Prepare Chart Data
-    // We need to create data fields like "lossWeight", "gainWeight", "stableWeight".
-    // Critical: Overlapping points must exist in BOTH series.
     const chartData = useMemo(() => {
         return sortedUniqueEntries.map((e, idx) => {
             const point: any = {
                 ...e,
                 displayDate: e.date.slice(5),
-                // Always have base weight for tooltip/dots
-                weight: e.weight
+                weight: e.weight,
+                waist: e.waist || null,
+                chest: e.chest || null,
             };
 
             // Populate trend-specific fields
             trendSegments.forEach(seg => {
-                // If this point is part of the segment (inclusive)
                 if (idx >= seg.startIndex && idx <= seg.endIndex) {
-                    // It can belong to multiple segments if it's a turning point (idx == endIndex of A and startIndex of B)
-                    // We append the trend name to allow Recharts to pick it up.
-                    // We can use a unique key for each segment type to avoid overwriting if a point is both loss and gain?
-                    // Actually, Recharts needs distinct keys for distinct Lines. 
-                    // To handle the "rainbow" effect perfectly, we might need to render Many Lines (one per segment)
-                    // OR we can group them. 
-                    // Let's try grouping: 'loss', 'gain', 'stable'.
-                    // If a point is a turning point from Loss -> Gain, it should have values for BOTH 'lossWeight' and 'gainWeight'.
-
                     if (seg.trend === 'loss') point.lossWeight = e.weight;
                     if (seg.trend === 'gain') point.gainWeight = e.weight;
                     if (seg.trend === 'stable') point.stableWeight = e.weight;
@@ -189,6 +178,15 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
     const maxW = Math.ceil(Math.max(...weights) + 1);
     const weightChange = currentWeight - weights[0];
 
+    // Calculate CM axis range
+    const cmValues = sortedUniqueEntries.flatMap(e => [e.waist, e.chest].filter(v => v != null)) as number[];
+    const minCm = cmValues.length > 0 ? Math.floor(Math.min(...cmValues) - 5) : 70;
+    const maxCm = cmValues.length > 0 ? Math.ceil(Math.max(...cmValues) + 5) : 120;
+
+    // Get latest measurements for header
+    const latestWaist = sortedUniqueEntries.filter(e => e.waist).slice(-1)[0]?.waist;
+    const latestChest = sortedUniqueEntries.filter(e => e.chest).slice(-1)[0]?.chest;
+
     return (
         <div className="flex flex-col h-full w-full">
             {/* Header */}
@@ -196,6 +194,16 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                 <div>
                     <div className="text-2xl font-black text-white">
                         {currentWeight.toFixed(1)} <span className="text-xs text-slate-500 font-bold">kg</span>
+                        {latestWaist && (
+                            <span className="ml-3 text-lg text-emerald-400">
+                                {latestWaist} <span className="text-xs text-slate-500 font-bold">cm (midja)</span>
+                            </span>
+                        )}
+                        {latestChest && (
+                            <span className="ml-3 text-lg text-indigo-400">
+                                {latestChest} <span className="text-xs text-slate-500 font-bold">cm (bröst)</span>
+                            </span>
+                        )}
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${weightChange > 0 ? 'bg-rose-500/10 text-rose-400' : weightChange < 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
@@ -207,7 +215,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                     </div>
                 </div>
 
-                <div className="flex gap-3 text-[8px] uppercase font-bold text-slate-500">
+                <div className="flex gap-3 text-[8px] uppercase font-bold text-slate-500 flex-wrap justify-end">
                     <span className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-emerald-500" /> Ner
                     </span>
@@ -217,6 +225,16 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                     <span className="flex items-center gap-1">
                         <span className="w-2 h-2 rounded-full bg-blue-500" /> Stabil
                     </span>
+                    {hasMeasurements && (
+                        <>
+                            <span className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-400" /> Midja
+                            </span>
+                            <span className="flex items-center gap-1">
+                                <span className="w-2 h-2 rounded-full bg-indigo-400" /> Bröst
+                            </span>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -225,7 +243,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                 <ResponsiveContainer width="100%" height="100%">
                     <LineChart
                         data={chartData}
-                        margin={{ top: 5, right: 15, left: 5, bottom: 5 }}
+                        margin={{ top: 5, right: hasMeasurements ? 50 : 15, left: 5, bottom: 5 }}
                     >
                         <CartesianGrid
                             strokeDasharray="3 3"
@@ -242,14 +260,30 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                             minTickGap={20}
                         />
 
+                        {/* Left Y-Axis: Weight (kg) */}
                         <YAxis
+                            yAxisId="weight"
                             domain={[minW, maxW]}
                             axisLine={false}
                             tickLine={false}
                             tick={{ fill: '#64748b', fontSize: 10 }}
-                            width={30}
-                            tickFormatter={(v) => `${v}`}
+                            width={35}
+                            tickFormatter={(v) => `${v} kg`}
                         />
+
+                        {/* Right Y-Axis: Measurements (cm) */}
+                        {hasMeasurements && (
+                            <YAxis
+                                yAxisId="cm"
+                                orientation="right"
+                                domain={[minCm, maxCm]}
+                                axisLine={false}
+                                tickLine={false}
+                                tick={{ fill: '#64748b', fontSize: 10 }}
+                                width={40}
+                                tickFormatter={(v) => `${v} cm`}
+                            />
+                        )}
 
                         <Tooltip
                             content={({ active, payload }) => {
@@ -260,7 +294,17 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                                             <div className="text-lg font-bold text-white">
                                                 {data.weight.toFixed(1)} kg
                                             </div>
-                                            <div className="text-[10px] text-slate-400">
+                                            {data.waist && (
+                                                <div className="text-sm font-bold text-emerald-400">
+                                                    {data.waist} cm <span className="text-xs text-slate-500">(midja)</span>
+                                                </div>
+                                            )}
+                                            {data.chest && (
+                                                <div className="text-sm font-bold text-indigo-400">
+                                                    {data.chest} cm <span className="text-xs text-slate-500">(bröst)</span>
+                                                </div>
+                                            )}
+                                            <div className="text-[10px] text-slate-400 mt-1">
                                                 {data.date}
                                             </div>
                                         </div>
@@ -270,12 +314,9 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                             }}
                         />
 
-                        {/* We render 3 overlapping lines. 
-                            Since 'connectNulls' is false by default, the line will break where data is missing.
-                            This is perfect because we only populate 'lossWeight' in loss segments.
-                            Because turning points have values in BOTH series, they will visually connect! 
-                        */}
+                        {/* Weight Trend Lines (Left Axis) */}
                         <Line
+                            yAxisId="weight"
                             type="monotone"
                             dataKey="lossWeight"
                             stroke={TREND_COLORS.loss}
@@ -285,6 +326,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                             isAnimationActive={false}
                         />
                         <Line
+                            yAxisId="weight"
                             type="monotone"
                             dataKey="gainWeight"
                             stroke={TREND_COLORS.gain}
@@ -294,6 +336,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                             isAnimationActive={false}
                         />
                         <Line
+                            yAxisId="weight"
                             type="monotone"
                             dataKey="stableWeight"
                             stroke={TREND_COLORS.stable}
@@ -303,8 +346,39 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                             isAnimationActive={false}
                         />
 
+                        {/* Measurement Lines (Right Axis) */}
+                        {hasMeasurements && (
+                            <>
+                                <Line
+                                    yAxisId="cm"
+                                    type="monotone"
+                                    dataKey="waist"
+                                    stroke="#34d399"
+                                    strokeWidth={2}
+                                    strokeDasharray="4 2"
+                                    dot={{ r: 3, fill: '#34d399' }}
+                                    activeDot={{ r: 5, fill: '#34d399' }}
+                                    isAnimationActive={false}
+                                    connectNulls={true}
+                                />
+                                <Line
+                                    yAxisId="cm"
+                                    type="monotone"
+                                    dataKey="chest"
+                                    stroke="#818cf8"
+                                    strokeWidth={2}
+                                    strokeDasharray="4 2"
+                                    dot={{ r: 3, fill: '#818cf8' }}
+                                    activeDot={{ r: 5, fill: '#818cf8' }}
+                                    isAnimationActive={false}
+                                    connectNulls={true}
+                                />
+                            </>
+                        )}
+
                         {/* Invisible dot layer for click interactions everywhere */}
                         <Line
+                            yAxisId="weight"
                             type="monotone"
                             dataKey="weight"
                             stroke="none"
@@ -323,3 +397,4 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
         </div>
     );
 }
+

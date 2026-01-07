@@ -16,6 +16,31 @@ interface HealthOverviewProps {
 
 export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, weightEntries }: HealthOverviewProps) {
     const { settings } = useSettings();
+    const { bodyMeasurements } = useData();
+
+    // Merge bodyMeasurements into weightEntries for the chart
+    const enrichedWeightEntries = useMemo(() => {
+        // Create a map of date -> measurements
+        const measurementsByDate: Record<string, { waist?: number, chest?: number }> = {};
+
+        bodyMeasurements.forEach(m => {
+            if (!measurementsByDate[m.date]) {
+                measurementsByDate[m.date] = {};
+            }
+            if (m.type === 'waist') {
+                measurementsByDate[m.date].waist = m.value;
+            } else if (m.type === 'chest') {
+                measurementsByDate[m.date].chest = m.value;
+            }
+        });
+
+        // Merge into weight entries
+        return weightEntries.map(entry => ({
+            ...entry,
+            waist: entry.waist || measurementsByDate[entry.date]?.waist,
+            chest: entry.chest || measurementsByDate[entry.date]?.chest,
+        }));
+    }, [weightEntries, bodyMeasurements]);
 
     const isGoalAchieved = (type: 'sleep' | 'water' | 'calories' | 'tonnage') => {
         if (type === 'sleep') return stats.avgSleep >= (settings.dailySleepGoal || 7);
@@ -122,7 +147,7 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
             <div className="flex flex-col md:flex-row items-start gap-6">
                 {/* Left Column: Energy Balance Chart */}
                 <div className="flex-1 w-full space-y-6">
-                    <div className="health-card glass min-h-[220px] max-h-[320px] flex flex-col overflow-hidden">
+                    <div className="health-card glass flex flex-col overflow-hidden">
                         <div className="card-header border-b border-white/5 pb-4 mb-4">
                             <div className="flex justify-between items-center">
                                 <h2 className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-500">Vikt & Trend</h2>
@@ -130,11 +155,11 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                             </div>
                         </div>
 
-                        <div className="w-full" style={{ height: '180px' }}>
-                            {weightEntries && weightEntries.length > 0 ? (
+                        <div className="w-full aspect-square max-w-md mx-auto" style={{ minHeight: '320px' }}>
+                            {enrichedWeightEntries && enrichedWeightEntries.length > 0 ? (
                                 <WeightTrendChart
-                                    entries={weightEntries}
-                                    currentWeight={weightEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.weight || 0}
+                                    entries={enrichedWeightEntries}
+                                    currentWeight={enrichedWeightEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.weight || 0}
                                 />
                             ) : (
                                 <div className="h-full flex flex-col items-center justify-center opacity-40">

@@ -337,7 +337,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                 </div>
 
                 <div className="p-8 relative">
-                    <div className="h-64 h-80-md w-full relative flex gap-6">
+                    <div className="h-[400px] md:h-[600px] w-full relative flex gap-6">
                         {/* Y-Axis Labels - Using absolute positioning for precision */}
                         <div className="absolute -left-10 top-0 bottom-0 w-8 flex flex-col items-end text-[10px] text-slate-500 font-bold pointer-events-none">
                             <span className="absolute top-0 transform -translate-y-1/2">{graphMeta.max}</span>

@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { analyzeSleep } from '../utils/vitalsUtils.ts';
 import { getActiveCalories, getActiveCalorieTarget } from '../utils/calorieTarget.ts';
 import { EXERCISE_TYPES } from '../components/training/ExerciseModal.tsx';
+import { MeasurementEntryModal } from '../components/dashboard/MeasurementEntryModal.tsx';
 import {
     Dumbbell,
     Moon,
@@ -14,6 +15,7 @@ import {
     Coffee,
     Flame,
     Check,
+    CheckCircle,
     ChevronRight,
     X,
     AlertCircle,
@@ -197,12 +199,10 @@ const getRangeStartDate = (range: '14d' | '30d' | '3m' | '1y' | 'all') => {
 const WeightSparkline = ({
     data,
     dates,
-    color = 'text-blue-500',
     onPointClick
 }: {
-    data: number[],
+    data: { weight: number, waist?: number, chest?: number }[],
     dates: string[],
-    color?: string,
     onPointClick?: (index: number) => void
 }) => {
     const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -210,34 +210,74 @@ const WeightSparkline = ({
 
     if (data.length < 2) return <div className="h-[40px] w-full flex items-center justify-center text-[8px] text-slate-300 uppercase font-bold tracking-widest bg-slate-50/50 dark:bg-slate-800/20 rounded-xl">Trend saknas</div>;
 
-    // Calculate range with tighter padding for "scaled up" effect
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const padding = (max - min) * 0.05 || 0.2;
-    const adjMin = min - padding;
-    const adjMax = max + padding;
-    const range = adjMax - adjMin || 1;
+    // Collect values for dual scales
+    const weightValues: number[] = [];
+    const cmValues: number[] = [];
 
-    const width = 100;
-    const heightFixed = 60;
-
-    const points = data.map((v, i) => {
-        const x = (i / (data.length - 1)) * width;
-        const y = heightFixed - ((v - adjMin) / range) * heightFixed;
-        return { x, y, value: v, index: i };
+    data.forEach(d => {
+        if (d.weight) weightValues.push(d.weight);
+        if (d.waist) cmValues.push(d.waist);
+        if (d.chest) cmValues.push(d.chest);
     });
 
-    const polylinePoints = points.map(p => `${p.x},${p.y}`).join(' ');
+    if (weightValues.length === 0) return null;
 
-    // Grid lines (3 horizontal lines)
-    const gridLines = [adjMin, adjMin + range / 2, adjMax].map(val => {
-        const y = heightFixed - ((val - adjMin) / range) * heightFixed;
-        return { y, label: val.toFixed(1) };
+    // Weight Scale (Left Axis)
+    const wMin = Math.min(...weightValues);
+    const wMax = Math.max(...weightValues);
+    const wPadding = (wMax - wMin) * 0.15 || 1;
+    const wAdjMin = wMin - wPadding;
+    const wAdjMax = wMax + wPadding;
+    const wRange = wAdjMax - wAdjMin || 1;
+
+    // CM Scale (Right Axis)
+    const cmMin = cmValues.length > 0 ? Math.min(...cmValues) : 0;
+    const cmMax = cmValues.length > 0 ? Math.max(...cmValues) : 100;
+    const cmPadding = (cmMax - cmMin) * 0.15 || 5;
+    const cmAdjMin = cmMin - cmPadding;
+    const cmAdjMax = cmMax + cmPadding;
+    const cmRange = cmAdjMax - cmAdjMin || 1;
+
+    const width = 100;
+    const heightFixed = 90;
+
+    // Generate points helpers
+    const getX = (i: number) => (i / (data.length - 1)) * width;
+
+    // Y for Weight
+    const getYWeight = (val: number) => heightFixed - ((val - wAdjMin) / wRange) * heightFixed;
+
+    // Y for CM
+    const getYCm = (val: number) => heightFixed - ((val - cmAdjMin) / cmRange) * heightFixed;
+
+    const weightPoints = data.map((d, i) => {
+        if (!d.weight) return null;
+        return { x: getX(i), y: getYWeight(d.weight), value: d.weight, index: i };
+    }).filter(p => p !== null) as { x: number, y: number, value: number, index: number }[];
+
+    const waistPoints = data.map((d, i) => {
+        if (!d.waist) return null;
+        return { x: getX(i), y: getYCm(d.waist), value: d.waist, index: i };
+    }).filter(p => p !== null) as { x: number, y: number, value: number, index: number }[];
+
+    const chestPoints = data.map((d, i) => {
+        if (!d.chest) return null;
+        return { x: getX(i), y: getYCm(d.chest), value: d.chest, index: i };
+    }).filter(p => p !== null) as { x: number, y: number, value: number, index: number }[];
+
+    const getPolyline = (pts: { x: number, y: number }[]) => pts.map(p => `${p.x},${p.y}`).join(' ');
+
+    // Grid lines (Weight based - Left Side)
+    const gridLines = [wAdjMin, wAdjMin + wRange / 2, wAdjMax].map((val, i) => {
+        const relativeY = (val - wAdjMin) / wRange;
+        const cmVal = cmAdjMin + (relativeY * cmRange);
+        const y = heightFixed - relativeY * heightFixed;
+        return { y, wLabel: val.toFixed(1), cmLabel: cmValues.length > 0 ? cmVal.toFixed(0) : '' };
     });
 
     return (
         <div
-            className="w-full h-[80px] px-1 group/sparkline relative"
+            className="w-full h-full px-1 group/sparkline relative"
             onMouseMove={(e) => {
                 const rect = e.currentTarget.getBoundingClientRect();
                 setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
@@ -247,60 +287,117 @@ const WeightSparkline = ({
             <svg
                 viewBox={`0 0 ${width} ${heightFixed}`}
                 preserveAspectRatio="none"
-                className={`w-full h-full overflow-visible ${color}`}
+                className={`w-full h-full overflow-visible`}
             >
                 {/* Horizontal Grid Lines */}
                 {gridLines.map((line, i) => (
-                    <g key={i} className="opacity-10">
-                        <line x1="0" y1={line.y} x2={width} y2={line.y} stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" />
-                        <text x="-2" y={line.y} fontSize="4" className="fill-slate-400 font-bold text-right" style={{ dominantBaseline: 'middle', textAnchor: 'end' }}>{line.label}</text>
+                    <g key={i} className="opacity-20">
+                        <line x1="0" y1={line.y} x2={width} y2={line.y} stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" className="text-slate-500" />
+                        <text x="-2" y={line.y} fontSize="3" className="fill-slate-400 font-bold text-right opacity-80" style={{ dominantBaseline: 'middle', textAnchor: 'end' }}>{line.wLabel}</text>
+                        {line.cmLabel && <text x={width + 2} y={line.y} fontSize="3" className="fill-slate-400 font-bold text-left opacity-80" style={{ dominantBaseline: 'middle', textAnchor: 'start' }}>{line.cmLabel}</text>}
                     </g>
                 ))}
 
-                {/* The Path */}
+                {/* Right Axis Title (if CM exists) */}
+                {cmValues.length > 0 && (
+                    <text x={width + 2} y={-5} fontSize="3" className="fill-slate-400 font-black uppercase tracking-widest" style={{ textAnchor: 'start' }}>CM</text>
+                )}
+                <text x="-2" y={-5} fontSize="3" className="fill-slate-400 font-black uppercase tracking-widest" style={{ textAnchor: 'end' }}>KG</text>
+
+                {/* Chest Line (Indigo) */}
                 <polyline
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2.5"
-                    points={polylinePoints}
+                    strokeWidth="1"
+                    points={getPolyline(chestPoints)}
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    className="drop-shadow-sm transition-all duration-500"
+                    className="text-indigo-500 drop-shadow-sm transition-all duration-500 opacity-60"
                 />
 
-                {/* Interactive Data Points */}
-                {points.map((p, i) => (
-                    <g
-                        key={i}
-                        className="cursor-pointer"
-                        onClick={() => onPointClick?.(i)}
-                        onMouseEnter={() => setHoveredIdx(i)}
-                    >
-                        {/* Transparent hit area */}
-                        <circle cx={p.x} cy={p.y} r="6" fill="transparent" />
-                        {/* The actual dot */}
-                        <circle
-                            cx={p.x}
-                            cy={p.y}
-                            r={hoveredIdx === i ? "2.5" : "1.5"}
-                            className={`fill-white stroke-current stroke-[2] transition-all ${hoveredIdx === i ? 'opacity-100' : 'opacity-0 group-hover/sparkline:opacity-100'}`}
-                        />
-                    </g>
-                ))}
+                {/* Waist Line (Emerald) */}
+                <polyline
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                    points={getPolyline(waistPoints)}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-emerald-500 drop-shadow-sm transition-all duration-500 opacity-80"
+                />
+
+                {/* Weight Line (Primary - Rose/Normal) */}
+                <polyline
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    points={getPolyline(weightPoints)}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-slate-900 dark:text-white drop-shadow-sm transition-all duration-500"
+                />
+
+                {/* Interactive Data Points (Only for hover detection on all indices) */}
+                {data.map((_, i) => {
+                    const x = (i / (data.length - 1)) * width;
+                    // Find y from weight, or first available metric
+                    const primaryY = weightPoints.find(p => p.index === i)?.y ?? waistPoints.find(p => p.index === i)?.y ?? chestPoints.find(p => p.index === i)?.y ?? heightFixed / 2;
+
+                    return (
+                        <g
+                            key={i}
+                            className="cursor-pointer"
+                            onClick={() => onPointClick?.(i)}
+                            onMouseEnter={() => setHoveredIdx(i)}
+                        >
+                            {/* Tall hit area strip */}
+                            <rect x={x - (width / (data.length * 2))} y="0" width={width / (data.length)} height={heightFixed} fill="transparent" />
+
+                            {/* Dots for each metric at this index */}
+                            {weightPoints.find(p => p.index === i) && (
+                                <circle cx={weightPoints.find(p => p.index === i)!.x} cy={weightPoints.find(p => p.index === i)!.y} r={hoveredIdx === i ? "3" : "0"} className="fill-slate-900 dark:fill-white transition-all duration-200" />
+                            )}
+                            {waistPoints.find(p => p.index === i) && (
+                                <circle cx={waistPoints.find(p => p.index === i)!.x} cy={waistPoints.find(p => p.index === i)!.y} r={hoveredIdx === i ? "2.5" : "0"} className="fill-emerald-500 transition-all duration-200" />
+                            )}
+                            {chestPoints.find(p => p.index === i) && (
+                                <circle cx={chestPoints.find(p => p.index === i)!.x} cy={chestPoints.find(p => p.index === i)!.y} r={hoveredIdx === i ? "2.5" : "0"} className="fill-indigo-500 transition-all duration-200" />
+                            )}
+                        </g>
+                    );
+                })}
             </svg>
 
             {/* Hover Tooltip/Card */}
             {hoveredIdx !== null && (
                 <div
-                    className="absolute z-50 pointer-events-none bg-slate-900/90 dark:bg-white/90 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 dark:border-black/5 shadow-2xl flex flex-col gap-0.5 min-w-[80px]"
+                    className="absolute z-50 pointer-events-none bg-slate-900/95 dark:bg-white/95 backdrop-blur-md px-3 py-2.5 rounded-xl border border-white/10 dark:border-black/5 shadow-2xl flex flex-col gap-1 min-w-[100px]"
                     style={{
                         left: `${(hoveredIdx / (data.length - 1)) * 100}%`,
                         top: '0',
-                        transform: `translate(${hoveredIdx > data.length / 2 ? '-100%' : '20%'}, -100%)`
+                        transform: `translate(${hoveredIdx > data.length / 2 ? '-100%' : '20%'}, -10%)`
                     }}
                 >
-                    <div className="text-[10px] font-black text-white/50 dark:text-black/50 uppercase tracking-widest">{dates[hoveredIdx]}</div>
-                    <div className="text-sm font-black text-white dark:text-slate-900">{data[hoveredIdx].toFixed(1)} <span className="text-[10px] text-white/60 dark:text-slate-500">kg</span></div>
+                    <div className="text-[10px] font-black text-white/50 dark:text-black/50 uppercase tracking-widest border-b border-white/10 dark:border-black/5 pb-1 mb-1">{dates[hoveredIdx]}</div>
+
+                    {data[hoveredIdx].weight !== undefined && (
+                        <div className="flex items-center justify-between gap-3 text-white dark:text-slate-900">
+                            <span className="text-[10px] uppercase font-bold text-slate-400">Vikt</span>
+                            <span className="text-sm font-black">{data[hoveredIdx].weight.toFixed(1)} <span className="text-[9px] opacity-50">kg</span></span>
+                        </div>
+                    )}
+                    {data[hoveredIdx].waist !== undefined && (
+                        <div className="flex items-center justify-between gap-3 text-emerald-400 dark:text-emerald-600">
+                            <span className="text-[10px] uppercase font-bold opacity-70">Midja</span>
+                            <span className="text-sm font-black">{data[hoveredIdx].waist} <span className="text-[9px] opacity-50">cm</span></span>
+                        </div>
+                    )}
+                    {data[hoveredIdx].chest !== undefined && (
+                        <div className="flex items-center justify-between gap-3 text-indigo-400 dark:text-indigo-600">
+                            <span className="text-[10px] uppercase font-bold opacity-70">Bröst</span>
+                            <span className="text-sm font-black">{data[hoveredIdx].chest} <span className="text-[9px] opacity-50">cm</span></span>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -421,6 +518,7 @@ export function DashboardPage() {
         trainingPeriods,
         performanceGoals,
         toggleIncompleteDay,
+        toggleCompleteDay,
         dailyVitals
     } = useData();
 
@@ -433,6 +531,7 @@ export function DashboardPage() {
     const [editing, setEditing] = useState<string | null>(null);
     const [tempValue, setTempValue] = useState<string>("");
     const [tempWaist, setTempWaist] = useState<string>("");
+    const [tempChest, setTempChest] = useState<string>("");
     const [selectedActivity, setSelectedActivity] = useState<any>(null);
     const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
     const [bulkInput, setBulkInput] = useState("");
@@ -452,6 +551,42 @@ export function DashboardPage() {
             return d.toISOString().split('T')[0];
         });
     };
+
+    // --- Derived Data: Weight & Measurement Logic (Moved up to avoid TDZ) ---
+    const getRangeDays = (range: typeof weightRange) => {
+        switch (range) {
+            case '14d': return 14;
+            case '30d': return 30;
+            case '3m': return 90;
+            case '1y': return 365;
+            default: return 9999;
+        }
+    };
+
+    const rangeStartISO = getRangeStartDate(weightRange);
+
+    // Filter and sort for sparkline
+    const weightTrendEntries = [...weightEntries]
+        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
+        .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+    const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
+    const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
+    const weightDiffRange = latestWeightInRange - earliestWeightInRange;
+
+
+
+    const latest3Weights = [...weightEntries]
+        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 3);
+
+    const currentUserHeight = settings.height || 0;
+    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
+    const bmi = (latestWeightVal && currentUserHeight)
+        ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
+        : null;
 
     // Keyboard navigation (Ctrl + Arrows)
     useEffect(() => {
@@ -502,6 +637,29 @@ export function DashboardPage() {
         return () => window.removeEventListener('keydown', handleEsc);
     }, []);
 
+    // Click outside to close edit mode
+    useEffect(() => {
+        if (!editing) return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            // Check if click is inside the editing card (by data attribute or class)
+            if (!target.closest('[data-editing-card]')) {
+                setEditing(null);
+            }
+        };
+
+        // Add slight delay to avoid immediate close on the click that opens edit mode
+        const timeoutId = setTimeout(() => {
+            document.addEventListener('click', handleClickOutside);
+        }, 100);
+
+        return () => {
+            clearTimeout(timeoutId);
+            document.removeEventListener('click', handleClickOutside);
+        };
+    }, [editing]);
+
     // Handlers
     const handleCardClick = (type: string, currentValue: number) => {
         setEditing(type);
@@ -549,42 +707,7 @@ export function DashboardPage() {
 
     // --- Derived Data ---
 
-    // 1. Weight & Measurement Logic
-    const getRangeDays = (range: typeof weightRange) => {
-        switch (range) {
-            case '14d': return 14;
-            case '30d': return 30;
-            case '3m': return 90;
-            case '1y': return 365;
-            default: return 9999;
-        }
-    };
 
-    const rangeStartISO = getRangeStartDate(weightRange);
-
-    // Filter and sort for sparkline
-    const weightTrendEntries = [...weightEntries]
-        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
-        .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
-        .sort((a, b) => a.date.localeCompare(b.date));
-
-    const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
-    const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
-    const weightDiffRange = latestWeightInRange - earliestWeightInRange;
-
-    // Data for sparkline (values only)
-    const weightTrend = weightTrendEntries.map(e => e.weight);
-
-    const latest3Weights = [...weightEntries]
-        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 3);
-
-    const currentUserHeight = settings.height || 0;
-    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
-    const bmi = (latestWeightVal && currentUserHeight)
-        ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
-        : null;
 
     // 2. Calories & Nutrition
     const dailyNutrition = calculateDailyNutrition(selectedDate);
@@ -913,20 +1036,37 @@ export function DashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {/* Incomplete Day Toggle */}
+                        {/* Complete Day Toggle */}
                         <button
-                            onClick={() => toggleIncompleteDay(selectedDate)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${vitals.incomplete
-                                ? 'bg-orange-500/10 border-orange-500/30 text-orange-500'
+                            onClick={() => toggleCompleteDay(selectedDate)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${vitals.completed
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
                                 : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'
                                 }`}
-                            title={vitals.incomplete ? "Markera som fullständig" : "Markera som ofullständig"}
+                            title={vitals.completed ? "Markera som ej avslutad" : "Markera som avslutad"}
                         >
-                            <AlertCircle size={16} className={vitals.incomplete ? 'animate-pulse' : ''} />
+                            <CheckCircle size={16} className={vitals.completed ? 'animate-[pulse_1s_ease-in-out_1]' : ''} />
                             <span className="text-xs font-black uppercase tracking-wider">
-                                {vitals.incomplete ? 'Ofullständig dag' : 'Markera ofullständig'}
+                                {vitals.completed ? 'Avslutad dag' : 'Avsluta dag'}
                             </span>
                         </button>
+
+                        {/* Incomplete Day Toggle */}
+                        {!vitals.completed && (
+                            <button
+                                onClick={() => toggleIncompleteDay(selectedDate)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${vitals.incomplete
+                                    ? 'bg-orange-500/10 border-orange-500/30 text-orange-500'
+                                    : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'
+                                    }`}
+                                title={vitals.incomplete ? "Markera som fullständig" : "Markera som ofullständig"}
+                            >
+                                <AlertCircle size={16} className={vitals.incomplete ? 'animate-pulse' : ''} />
+                                <span className="text-xs font-black uppercase tracking-wider">
+                                    {vitals.incomplete ? 'Ofullständig dag' : 'Markera ofullständig'}
+                                </span>
+                            </button>
+                        )}
 
                         {/* Strava Sync Button */}
                         <button
@@ -1184,6 +1324,7 @@ export function DashboardPage() {
                             return (
                                 <Wrapper key="sleep" className="md:col-span-6 lg:col-span-3">
                                     <div
+                                        data-editing-card={editing === 'sleep' ? true : undefined}
                                         onClick={() => handleCardClick('sleep', vitals.sleep || 0)}
                                         className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-between hover:scale-[1.01] transition-transform cursor-pointer group relative overflow-hidden h-full ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
                                             ? 'bg-rose-50 dark:bg-rose-900/10'
@@ -1242,7 +1383,6 @@ export function DashboardPage() {
                                                                 debouncedSave('sleep', num);
                                                             }
                                                         }}
-                                                        onBlur={() => setEditing(null)}
                                                         className={`w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer ${sleepClasses.accent} transition-all`}
                                                     />
                                                 </div>
@@ -1462,6 +1602,7 @@ export function DashboardPage() {
                                     <div className="cursor-pointer group/stat flex flex-col justify-center" onClick={() => {
                                         setTempValue((latest3Weights[0]?.weight || "").toString());
                                         setTempWaist((latest3Weights[0]?.waist || "").toString());
+                                        setTempChest((latest3Weights[0]?.chest || "").toString());
                                         setIsWeightModalOpen(true);
                                     }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Vikt</div>
@@ -1472,6 +1613,7 @@ export function DashboardPage() {
                                     <div className="cursor-pointer group/stat border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center" onClick={() => {
                                         setTempValue((latest3Weights[0]?.weight || "").toString());
                                         setTempWaist((latest3Weights[0]?.waist || "").toString());
+                                        setTempChest((latest3Weights[0]?.chest || "").toString());
                                         setIsWeightModalOpen(true);
                                     }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Midja</div>
@@ -1482,10 +1624,15 @@ export function DashboardPage() {
                                     </div>
 
                                     {/* Chest (Bröst) */}
-                                    <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center hidden md:flex">
+                                    <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center hidden md:flex cursor-pointer" onClick={() => {
+                                        setTempValue((latest3Weights[0]?.weight || "").toString());
+                                        setTempWaist((latest3Weights[0]?.waist || "").toString());
+                                        setTempChest((latest3Weights[0]?.chest || "").toString());
+                                        setIsWeightModalOpen(true);
+                                    }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Bröst</div>
                                         <div className="text-xl font-black text-slate-900 dark:text-white">
-                                            {useData().bodyMeasurements.filter(m => m.type === 'chest').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.value || '--'}
+                                            {useData().bodyMeasurements.filter(m => m.type === 'chest').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.value || latest3Weights[0]?.chest || '--'}
                                             <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
                                         </div>
                                     </div>
@@ -1507,18 +1654,18 @@ export function DashboardPage() {
                                 </div>
 
                                 {/* Sparkline Visual */}
-                                <div className="flex-1 min-h-[120px] bg-slate-50 dark:bg-white/[0.02] rounded-3xl p-4 border border-slate-100 dark:border-white/5 relative">
-                                    <div className="absolute top-4 left-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Trendkurva</div>
-                                    <div className="h-20 mt-4">
+                                <div className="bg-slate-50 dark:bg-white/[0.02] rounded-3xl p-4 border border-slate-100 dark:border-white/5 relative max-w-xl mx-auto">
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Trendkurva</div>
+                                    <div className="h-64 aspect-[4/3]">
                                         <WeightSparkline
-                                            data={weightTrend}
+                                            data={weightTrendEntries}
                                             dates={weightTrendEntries.map(e => e.date)}
-                                            color={weightDiffRange <= 0 ? 'text-emerald-500' : 'text-rose-500'}
                                             onPointClick={(idx) => {
                                                 const entry = weightTrendEntries[idx];
                                                 if (entry) {
                                                     setTempValue(entry.weight.toString());
                                                     setTempWaist((entry.waist || "").toString());
+                                                    setTempChest((entry.chest || "").toString());
                                                     setIsWeightModalOpen(true);
                                                 }
                                             }}
@@ -1538,18 +1685,25 @@ export function DashboardPage() {
                                             <div key={w.id} className="px-3 py-2 bg-white dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-white/5 flex items-center justify-between group/item hover:border-blue-500/30 transition-all cursor-pointer" onClick={() => {
                                                 setTempValue(w.weight.toString());
                                                 setTempWaist((w.waist || "").toString());
+                                                setTempChest((w.chest || "").toString());
                                                 setIsWeightModalOpen(true);
                                             }}>
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase min-w-[60px]">{getRelativeDateLabel(w.date)}</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{w.weight}</span>
-                                                        <span className="text-[9px] font-bold text-slate-400">kg</span>
+                                                    <div className="flex items-center flex-wrap gap-x-2">
+                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{w.weight.toFixed(1)} <span className="text-[10px] text-slate-400">kg</span></span>
+
                                                         {w.waist && (
                                                             <>
-                                                                <span className="mx-1.5 opacity-20">|</span>
-                                                                <span className="text-sm font-black text-slate-900 dark:text-white">{w.waist}</span>
-                                                                <span className="text-[9px] font-bold text-slate-400">cm</span>
+                                                                <span className="text-slate-200 dark:text-slate-700">|</span>
+                                                                <span className="text-sm font-bold text-emerald-500">{w.waist} <span className="text-[10px] font-normal opacity-70">cm (midja)</span></span>
+                                                            </>
+                                                        )}
+
+                                                        {w.chest && (
+                                                            <>
+                                                                <span className="text-slate-200 dark:text-slate-700">|</span>
+                                                                <span className="text-sm font-bold text-indigo-500">{w.chest} <span className="text-[10px] font-normal opacity-70">cm (bröst)</span></span>
                                                             </>
                                                         )}
                                                     </div>
@@ -1935,154 +2089,14 @@ export function DashboardPage() {
             }
 
             {/* Weight & Measurements Modal */}
-            {
-                isWeightModalOpen && (
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsWeightModalOpen(false)}>
-                        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-                            <div className="p-8">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">Vägning & mätning</h2>
-                                        <p className="text-xs font-medium text-slate-500">Logga {getRelativeDateLabel(selectedDate === today ? today : selectedDate).toLowerCase()} form</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setShowBulkImport(!showBulkImport)}
-                                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                                            title="Bulk-import"
-                                        >
-                                            <Zap size={20} className={showBulkImport ? 'text-blue-500' : ''} />
-                                        </button>
-                                        <button
-                                            onClick={() => setIsWeightModalOpen(false)}
-                                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                                        >
-                                            <X size={20} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {showBulkImport ? (
-                                    <div className="space-y-4">
-                                        <textarea
-                                            value={bulkInput}
-                                            onChange={(e) => setBulkInput(e.target.value)}
-                                            placeholder="Klistra in data (Datum Vikt Midja)..."
-                                            className="w-full h-32 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 text-sm outline-none focus:ring-2 ring-blue-500/20"
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                const entries = bulkInput.split('\n')
-                                                    .map(line => line.trim())
-                                                    .filter(line => line.length > 0)
-                                                    .map(line => {
-                                                        // Split on tab, comma, or multiple spaces
-                                                        const parts = line.split(/[\t, ]+/);
-                                                        // Expect: Date Weight [Waist]
-                                                        if (parts.length >= 2) {
-                                                            const date = parts[0];
-                                                            const weight = parseFloat(parts[1].replace(',', '.'));
-                                                            const waist = parts.length > 2 ? parseFloat(parts[2].replace(',', '.')) : undefined;
-
-                                                            if (!isNaN(weight)) {
-                                                                return { date, weight, waist };
-                                                            }
-                                                        }
-                                                        return null;
-                                                    })
-                                                    .filter((e): e is { date: string, weight: number, waist: number | undefined } => e !== null);
-
-                                                if (entries.length > 0) {
-                                                    bulkAddWeightEntries(entries as any);
-                                                    setBulkInput("");
-                                                    setShowBulkImport(false);
-                                                }
-                                            }}
-                                            className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-lg transition-all"
-                                        >
-                                            Importera Data
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <form
-                                        onSubmit={(e) => {
-                                            e.preventDefault();
-                                            const w = parseFloat(tempValue);
-                                            const waist = tempWaist ? parseFloat(tempWaist) : undefined;
-                                            if (!isNaN(w)) {
-                                                addWeightEntry(w, selectedDate, waist);
-                                                setIsWeightModalOpen(false);
-                                            }
-                                        }}
-                                        className="space-y-6"
-                                    >
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Vikt (kg)</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    autoFocus
-                                                    value={tempValue}
-                                                    onChange={(e) => setTempValue(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-3xl font-black text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500/20"
-                                                    placeholder="0.0"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Midja (cm)</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={tempWaist}
-                                                    onChange={(e) => setTempWaist(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-3xl font-black text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500/20"
-                                                    placeholder="-"
-                                                />
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                        >
-                                            Spara
-                                        </button>
-                                    </form>
-                                )}
-
-                                <div className="mt-8">
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 ml-1">Historik (Senaste 5)</h3>
-                                    <div className="space-y-2">
-                                        {weightEntries.slice().reverse().slice(0, 5).map(entry => (
-                                            <div key={entry.date} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl group transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">{entry.date}</span>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{entry.weight.toFixed(1)} <span className="text-[10px] text-slate-400">kg</span></span>
-                                                        {entry.waist && <span className="text-sm font-black text-slate-400 italic">{entry.waist} <span className="font-normal not-italic">cm</span></span>}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => {
-                                                            setTempValue(entry.weight.toString());
-                                                            setTempWaist((entry.waist || "").toString());
-                                                            setIsWeightModalOpen(true);
-                                                        }}
-                                                        className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg text-blue-500 transition-colors"
-                                                    >
-                                                        <Settings size={14} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+            <MeasurementEntryModal
+                isOpen={isWeightModalOpen}
+                onClose={() => setIsWeightModalOpen(false)}
+                selectedDate={selectedDate}
+                initialWeight={tempValue}
+                initialWaist={tempWaist}
+                initialChest={tempChest}
+            />
 
             <StravaActivityImportModal
                 isOpen={isStravaModalOpen}
