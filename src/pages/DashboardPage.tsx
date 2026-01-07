@@ -452,6 +452,7 @@ export function DashboardPage() {
     const [weightRange, setWeightRange] = useState<'14d' | '30d' | '3m' | '1y' | 'all'>('1y');
     const [hoveredDay, setHoveredDay] = useState<string | null>(null);
     const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
+    const [isHoveringChart, setIsHoveringChart] = useState(false);
 
     const changeDate = (days: number) => {
         setSelectedDate(prev => {
@@ -844,7 +845,10 @@ export function DashboardPage() {
     });
 
     return (
-        <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-12 font-sans text-slate-900 dark:text-white animate-in fade-in duration-500 transition-colors">
+        <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-12 font-sans text-slate-900 dark:text-white animate-in fade-in duration-500 transition-colors relative">
+            {isHoveringChart && (
+                <div className="fixed inset-0 bg-white/60 dark:bg-slate-950/60 backdrop-blur-sm z-[50] transition-all duration-500 pointer-events-none" />
+            )}
             <div className="max-w-5xl mx-auto">
                 <header className={`${density === 'compact' ? 'mb-4' : 'mb-10'} flex flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
                     <div className="flex flex-col gap-1">
@@ -1528,13 +1532,38 @@ export function DashboardPage() {
                     </div>
 
                     {/* 7-Day Performance Summary - Horizontal Timeline */}
-                    <div className="col-span-12 md:col-span-12">
-                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800`}>
+                    <div
+                        className="col-span-12 md:col-span-12 relative z-[60]"
+                        onMouseEnter={() => setIsHoveringChart(true)}
+                        onMouseLeave={() => setIsHoveringChart(false)}
+                    >
+                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800 transition-all duration-300 ${isHoveringChart ? 'scale-[1.01] shadow-2xl shadow-indigo-500/10 border-indigo-500/20' : ''}`}>
                             {/* Header */}
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-2">
                                     <div className="w-1 h-4 bg-indigo-500 rounded-full"></div>
                                     <h3 className="text-xs font-black uppercase tracking-widest text-white">Senaste 7 Dagarna</h3>
+
+                                    {/* Date Context Highlight */}
+                                    {(() => {
+                                        const now = new Date();
+                                        const sel = new Date(selectedDate);
+                                        const diffTime = sel.getTime() - now.getTime();
+                                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                                        let label = '';
+                                        if (selectedDate === now.toISOString().split('T')[0]) label = 'IDAG';
+                                        else if (diffDays === 0) label = 'IDAG'; // Fallback
+                                        else if (diffDays === 1) label = 'IMORGON';
+                                        else if (diffDays === -1) label = 'IGÅR';
+                                        else label = selectedDate;
+
+                                        return label ? (
+                                            <span className="ml-2 px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-400 text-[9px] font-bold uppercase tracking-wider border border-indigo-500/20">
+                                                {label}
+                                            </span>
+                                        ) : null;
+                                    })()}
                                 </div>
                                 <div className="flex gap-4">
                                     <div className="flex items-center gap-1.5">
@@ -1550,8 +1579,9 @@ export function DashboardPage() {
 
                             {/* Horizontal Timeline */}
                             {(() => {
+                                // Rolling window ending on SELECTED DATE
                                 const days = Array.from({ length: 7 }, (_, i) => {
-                                    const d = new Date();
+                                    const d = new Date(selectedDate);
                                     d.setDate(d.getDate() - (6 - i));
                                     return d.toISOString().split('T')[0];
                                 });
@@ -1584,98 +1614,113 @@ export function DashboardPage() {
                                 return (
                                     <>
                                         {/* Timeline Row */}
-                                        <div className="flex items-end justify-between mb-8 relative">
+                                        <div className="flex items-end justify-between mb-8 relative h-32 px-2">
                                             {/* Baseline */}
-                                            <div className="absolute bottom-3 left-0 right-0 h-px bg-slate-700"></div>
+                                            <div className="absolute bottom-0 left-0 right-0 h-px bg-slate-700"></div>
 
                                             {days.map((date, i) => {
                                                 const d = new Date(date);
                                                 const dayOfWeek = d.getDay();
+                                                // Check against SELECTED DATE for visual marker
+                                                const isSelected = date === selectedDate;
                                                 const isToday = date === new Date().toISOString().split('T')[0];
+
                                                 const dayActivities = unifiedActivities.filter(a => a.date === date);
                                                 const hasTraining = dayActivities.length > 0;
                                                 const isIncomplete = dailyVitals[date]?.incomplete;
 
+                                                // Calculate bar height based on duration (max 100px)
+                                                const totalDuration = dayActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+                                                const barHeight = Math.min(Math.max(totalDuration, 4), 100); // Min 4px visibility
+
                                                 return (
                                                     <div
                                                         key={date}
-                                                        className={`flex-1 flex flex-col items-center cursor-pointer relative ${isToday ? 'z-10' : ''} transition-all duration-300 ${hoveredDay && hoveredDay !== date ? 'blur-[1px] opacity-40 scale-[0.98]' : 'blur-0 opacity-100 scale-100'}`}
+                                                        className={`flex-1 flex flex-col items-center justify-end h-full cursor-pointer relative z-10 group transition-all duration-300 ${hoveredDay && hoveredDay !== date ? 'blur-[1px] opacity-40 scale-[0.98]' : 'blur-0 opacity-100 scale-100'}`}
                                                         onMouseEnter={() => setHoveredDay(date)}
                                                         onMouseLeave={() => setHoveredDay(null)}
+                                                        onClick={() => setSelectedDate(date)}
                                                     >
                                                         {hoveredDay === date && (
-                                                            <DayHoverCard
-                                                                date={date}
-                                                                activities={dayActivities}
-                                                                nutrition={calculateDailyNutrition(date)}
-                                                                onActivityClick={(act) => setSelectedActivity(act)}
-                                                            />
-                                                        )}
-                                                        {/* Day Label */}
-                                                        <div className="flex items-center gap-1 mb-2">
-                                                            <span className={`text-[10px] font-bold ${isToday ? 'text-white' : 'text-slate-500'}`}>
-                                                                {dayLabels[dayOfWeek]}
-                                                            </span>
-                                                            {isIncomplete && (
-                                                                <div className="w-1 h-1 rounded-full bg-orange-500 shadow-[0_0_4px_rgba(249,115,22,0.6)] animate-pulse" title="Ej fullständigt loggad dag" />
-                                                            )}
-                                                        </div>
-
-                                                        {/* Activity Bar or Dot */}
-                                                        {isToday ? (
-                                                            <div className="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-1">
-                                                                <div className="w-2 h-2 rounded-full bg-slate-500"></div>
+                                                            <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-[100]">
+                                                                <DayHoverCard
+                                                                    date={date}
+                                                                    activities={dayActivities}
+                                                                    nutrition={calculateDailyNutrition(date)}
+                                                                    onActivityClick={(act) => setSelectedActivity(act)}
+                                                                />
                                                             </div>
-                                                        ) : hasTraining ? (
+                                                        )}
+
+                                                        {/* Activity Bar */}
+                                                        {hasTraining ? (
                                                             <div
-                                                                className="w-1.5 rounded-full bg-emerald-500 mb-1"
-                                                                style={{ height: `${Math.min(dayActivities.reduce((sum, a) => sum + (a.durationMinutes || 30), 0) / 2, 40)}px` }}
+                                                                className={`w-2 md:w-3 rounded-full mb-2 transition-all duration-300 ${dayActivities.some(a => a.type === 'strength')
+                                                                    ? 'bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.4)]'
+                                                                    : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.4)]'
+                                                                    } ${hoveredDay === date ? 'scale-110' : ''}`}
+                                                                style={{ height: `${barHeight}%` }}
                                                             ></div>
                                                         ) : (
-                                                            <div className="w-2 h-2 rounded-full bg-slate-700 mb-1"></div>
+                                                            <div className="mb-2"></div>
                                                         )}
 
-                                                        {/* Baseline Dot */}
-                                                        <div className={`w-1.5 h-1.5 rounded-full ${hasTraining ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
+                                                        {/* Day Label & Marker */}
+                                                        <div className="flex flex-col items-center gap-1 mb-2">
+                                                            {isIncomplete && (
+                                                                <div className="w-1 h-1 rounded-full bg-orange-500 shadow-[0_0_4px_rgba(249,115,22,0.6)] animate-pulse absolute -top-2" title="Ej fullständigt loggad dag" />
+                                                            )}
+
+                                                            <div className={`relative px-2 py-1 rounded-lg transition-colors ${isSelected ? 'bg-slate-800 border border-slate-700' : 'hover:bg-slate-800/50'}`}>
+                                                                <span className={`text-[10px] font-bold ${isSelected ? 'text-white' : isToday ? 'text-indigo-400' : 'text-slate-500'}`}>
+                                                                    {dayLabels[dayOfWeek]}
+                                                                </span>
+                                                                {isSelected && (
+                                                                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-indigo-500"></div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* No "Plupp" - clean baseline */}
                                                     </div>
                                                 );
                                             })}
                                         </div>
 
-                                        {/* Stats Row */}
-                                        <div className="grid grid-cols-4 gap-4">
+                                        {/* Stats Row - Classic Layout (Reverted) */}
+                                        <div className="flex items-center justify-between px-2 mt-4">
                                             {/* Total Tid */}
                                             <div className="space-y-1">
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Tid</div>
-                                                <div className="text-2xl font-black text-white">{totalHours}h {remainingMins}m</div>
+                                                <div className="text-2xl md:text-3xl font-black text-white">{totalHours}h {remainingMins}m</div>
                                                 <div className="text-[10px] text-slate-500">{completedWorkouts} Slutförda pass</div>
                                             </div>
 
                                             {/* Volym */}
-                                            <div className="space-y-1 border-l border-slate-800 pl-4">
+                                            <div className="space-y-1 border-l border-slate-800 pl-8">
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Volym</div>
-                                                <div className="text-2xl font-black text-emerald-400">{totalTonnage.toFixed(1)} Ton</div>
+                                                <div className="text-2xl md:text-3xl font-black text-emerald-400">{totalTonnage.toFixed(1)} <span className="text-sm text-slate-500">Ton</span></div>
                                                 <div className="text-[10px] text-slate-500">Styrketräning</div>
                                             </div>
 
                                             {/* Distans */}
-                                            <div className="space-y-1 border-l border-slate-800 pl-4">
+                                            <div className="space-y-1 border-l border-slate-800 pl-8">
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Distans</div>
-                                                <div className="text-2xl font-black text-indigo-400">{totalDistance.toFixed(1)} Km</div>
+                                                <div className="text-2xl md:text-3xl font-black text-indigo-400">{totalDistance.toFixed(1)} <span className="text-sm text-slate-500">Km</span></div>
                                                 <div className="text-[10px] text-slate-500">Löpning / Gång</div>
                                             </div>
 
                                             {/* Typ */}
-                                            <div className="space-y-2 border-l border-slate-800 pl-4">
+                                            <div className="space-y-2 border-l border-slate-800 pl-8 hidden md:block">
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Typ</div>
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
-                                                    <span className="text-xs text-slate-300">Kondition {cardioCount > 0 ? Math.round((cardioCount / (cardioCount + strengthCount)) * 100) : 0}%</span>
+                                                    <span className="text-xs text-slate-300">Kondition {completedWorkouts > 0 ? Math.round((cardioCount / completedWorkouts) * 100) : 0}%</span>
                                                     <span className="text-[10px] text-slate-500">({cardioCount} pass)</span>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                                                    <span className="text-xs text-slate-300">Styrka {strengthCount > 0 ? Math.round((strengthCount / (cardioCount + strengthCount)) * 100) : 0}%</span>
+                                                    <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                                    <span className="text-xs text-slate-300">Styrka {completedWorkouts > 0 ? Math.round((strengthCount / completedWorkouts) * 100) : 0}%</span>
                                                     <span className="text-[10px] text-slate-500">({strengthCount} pass)</span>
                                                 </div>
                                             </div>
@@ -1684,6 +1729,85 @@ export function DashboardPage() {
                                 );
                             })()}
                         </div>
+                    </div>
+
+                    {/* Week Summary Module */}
+                    <div className="col-span-12 md:col-span-12 mt-4">
+                        {(() => {
+                            // Determine "Current Week" based on selectedDate
+                            const d = new Date(selectedDate);
+                            const day = d.getDay();
+                            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+                            const monday = new Date(d.setDate(diff)).toISOString().split('T')[0];
+                            const sunday = new Date(d.setDate(diff + 6)).toISOString().split('T')[0];
+
+                            // Simple ISO week number
+                            const targetDate = new Date(monday);
+                            const jan4 = new Date(targetDate.getFullYear(), 0, 4);
+                            const weekNum = 1 + Math.round((((targetDate.getTime() - jan4.getTime()) / 86400000) - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+
+                            // Aggregate data for this calendar week
+                            const weekActivities = unifiedActivities.filter(a => a.date >= monday && a.date <= sunday);
+                            const weekVolume = weekActivities.reduce((sum, a) => sum + (a.tonnage || 0), 0) / 1000;
+                            const weekDistance = weekActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
+                            const weekDuration = weekActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+                            const weekWorkouts = weekActivities.length;
+
+                            // Calculate daily averages for context
+                            const daysPassed = Math.min(new Date().getDay() || 7, 7); // Rough estimate for current week progress if current week
+                            // Or just simple aggregates
+
+                            // Calculate context label
+                            const currentWeekNum = (() => {
+                                const d = new Date();
+                                const day = d.getDay();
+                                const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                const mon = new Date(d.setDate(diff));
+                                const jan4 = new Date(mon.getFullYear(), 0, 4);
+                                return 1 + Math.round((((mon.getTime() - jan4.getTime()) / 86400000) - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+                            })();
+
+                            let weekContext = '';
+                            if (weekNum === currentWeekNum) weekContext = 'DENNA VECKA';
+                            else if (weekNum === currentWeekNum + 1) weekContext = 'NÄSTA VECKA';
+                            else if (weekNum === currentWeekNum - 1) weekContext = 'FÖRRA VECKAN';
+
+                            return (
+                                <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900/50 rounded-2xl border border-slate-800/50 hover:bg-slate-900 transition-colors group`}>
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <Calendar size={16} className="text-slate-500 group-hover:text-white transition-colors" />
+                                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Vecka {weekNum} Summary</h3>
+                                            {weekContext && (
+                                                <span className="ml-2 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[9px] font-bold uppercase tracking-wider border border-emerald-500/10">
+                                                    {weekContext}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{monday} — {sunday}</div>
+                                    </div>
+
+                                    <div className="grid grid-cols-4 gap-4">
+                                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
+                                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Pass</div>
+                                            <div className="text-xl font-black text-white">{weekWorkouts}</div>
+                                        </div>
+                                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
+                                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Volym</div>
+                                            <div className="text-xl font-black text-indigo-400">{Math.round(weekVolume)} <span className="text-xs text-slate-600">t</span></div>
+                                        </div>
+                                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
+                                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Distans</div>
+                                            <div className="text-xl font-black text-emerald-400">{Math.round(weekDistance)} <span className="text-xs text-slate-600">km</span></div>
+                                        </div>
+                                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
+                                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Tid</div>
+                                            <div className="text-xl font-black text-white">{Math.floor(weekDuration / 60)}h {Math.round(weekDuration % 60)}m</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
                     </div>
 
                     <div className={`md:col-span-12 ${density === 'compact' ? 'p-3 rounded-2xl' : 'p-6 rounded-[2rem]'} bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-center`}>
@@ -1747,171 +1871,175 @@ export function DashboardPage() {
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
+                </div >
+            </div >
 
             {/* Activity Modal */}
-            {selectedActivity && (
-                <ActivityDetailModal
-                    activity={selectedActivity}
-                    onClose={() => setSelectedActivity(null)}
-                />
-            )}
+            {
+                selectedActivity && (
+                    <ActivityDetailModal
+                        activity={selectedActivity}
+                        onClose={() => setSelectedActivity(null)}
+                    />
+                )
+            }
 
             {/* Weight & Measurements Modal */}
-            {isWeightModalOpen && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsWeightModalOpen(false)}>
-                    <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-                        <div className="p-8">
-                            <div className="flex justify-between items-center mb-6">
-                                <div>
-                                    <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">Vägning & mätning</h2>
-                                    <p className="text-xs font-medium text-slate-500">Logga {getRelativeDateLabel(selectedDate === today ? today : selectedDate).toLowerCase()} form</p>
+            {
+                isWeightModalOpen && (
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsWeightModalOpen(false)}>
+                        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                            <div className="p-8">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div>
+                                        <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">Vägning & mätning</h2>
+                                        <p className="text-xs font-medium text-slate-500">Logga {getRelativeDateLabel(selectedDate === today ? today : selectedDate).toLowerCase()} form</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => setShowBulkImport(!showBulkImport)}
+                                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                                            title="Bulk-import"
+                                        >
+                                            <Zap size={20} className={showBulkImport ? 'text-blue-500' : ''} />
+                                        </button>
+                                        <button
+                                            onClick={() => setIsWeightModalOpen(false)}
+                                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                                        >
+                                            <X size={20} />
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        onClick={() => setShowBulkImport(!showBulkImport)}
-                                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                                        title="Bulk-import"
-                                    >
-                                        <Zap size={20} className={showBulkImport ? 'text-blue-500' : ''} />
-                                    </button>
-                                    <button
-                                        onClick={() => setIsWeightModalOpen(false)}
-                                        className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                                    >
-                                        <X size={20} />
-                                    </button>
-                                </div>
-                            </div>
 
-                            {showBulkImport ? (
-                                <div className="space-y-4">
-                                    <textarea
-                                        value={bulkInput}
-                                        onChange={(e) => setBulkInput(e.target.value)}
-                                        placeholder="Klistra in data (Datum Vikt Midja)..."
-                                        className="w-full h-32 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 text-sm outline-none focus:ring-2 ring-blue-500/20"
-                                    />
-                                    <button
-                                        onClick={() => {
-                                            const entries = bulkInput.split('\n')
-                                                .map(line => line.trim())
-                                                .filter(line => line.length > 0)
-                                                .map(line => {
-                                                    // Split on tab, comma, or multiple spaces
-                                                    const parts = line.split(/[\t, ]+/);
-                                                    // Expect: Date Weight [Waist]
-                                                    if (parts.length >= 2) {
-                                                        const date = parts[0];
-                                                        const weight = parseFloat(parts[1].replace(',', '.'));
-                                                        const waist = parts.length > 2 ? parseFloat(parts[2].replace(',', '.')) : undefined;
+                                {showBulkImport ? (
+                                    <div className="space-y-4">
+                                        <textarea
+                                            value={bulkInput}
+                                            onChange={(e) => setBulkInput(e.target.value)}
+                                            placeholder="Klistra in data (Datum Vikt Midja)..."
+                                            className="w-full h-32 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 text-sm outline-none focus:ring-2 ring-blue-500/20"
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                const entries = bulkInput.split('\n')
+                                                    .map(line => line.trim())
+                                                    .filter(line => line.length > 0)
+                                                    .map(line => {
+                                                        // Split on tab, comma, or multiple spaces
+                                                        const parts = line.split(/[\t, ]+/);
+                                                        // Expect: Date Weight [Waist]
+                                                        if (parts.length >= 2) {
+                                                            const date = parts[0];
+                                                            const weight = parseFloat(parts[1].replace(',', '.'));
+                                                            const waist = parts.length > 2 ? parseFloat(parts[2].replace(',', '.')) : undefined;
 
-                                                        if (!isNaN(weight)) {
-                                                            return { date, weight, waist };
+                                                            if (!isNaN(weight)) {
+                                                                return { date, weight, waist };
+                                                            }
                                                         }
-                                                    }
-                                                    return null;
-                                                })
-                                                .filter((e): e is { date: string, weight: number, waist: number | undefined } => e !== null);
+                                                        return null;
+                                                    })
+                                                    .filter((e): e is { date: string, weight: number, waist: number | undefined } => e !== null);
 
-                                            if (entries.length > 0) {
-                                                bulkAddWeightEntries(entries as any);
-                                                setBulkInput("");
-                                                setShowBulkImport(false);
+                                                if (entries.length > 0) {
+                                                    bulkAddWeightEntries(entries as any);
+                                                    setBulkInput("");
+                                                    setShowBulkImport(false);
+                                                }
+                                            }}
+                                            className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-lg transition-all"
+                                        >
+                                            Importera Data
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <form
+                                        onSubmit={(e) => {
+                                            e.preventDefault();
+                                            const w = parseFloat(tempValue);
+                                            const waist = tempWaist ? parseFloat(tempWaist) : undefined;
+                                            if (!isNaN(w)) {
+                                                addWeightEntry(w, selectedDate, waist);
+                                                setIsWeightModalOpen(false);
                                             }
                                         }}
-                                        className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-lg transition-all"
+                                        className="space-y-6"
                                     >
-                                        Importera Data
-                                    </button>
-                                </div>
-                            ) : (
-                                <form
-                                    onSubmit={(e) => {
-                                        e.preventDefault();
-                                        const w = parseFloat(tempValue);
-                                        const waist = tempWaist ? parseFloat(tempWaist) : undefined;
-                                        if (!isNaN(w)) {
-                                            addWeightEntry(w, selectedDate, waist);
-                                            setIsWeightModalOpen(false);
-                                        }
-                                    }}
-                                    className="space-y-6"
-                                >
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Vikt (kg)</label>
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                autoFocus
-                                                value={tempValue}
-                                                onChange={(e) => setTempValue(e.target.value)}
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-3xl font-black text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500/20"
-                                                placeholder="0.0"
-                                            />
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Vikt (kg)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    autoFocus
+                                                    value={tempValue}
+                                                    onChange={(e) => setTempValue(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-3xl font-black text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500/20"
+                                                    placeholder="0.0"
+                                                />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Midja (cm)</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={tempWaist}
+                                                    onChange={(e) => setTempWaist(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-3xl font-black text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500/20"
+                                                    placeholder="-"
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="space-y-2">
-                                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Midja (cm)</label>
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                value={tempWaist}
-                                                onChange={(e) => setTempWaist(e.target.value)}
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-3xl font-black text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500/20"
-                                                placeholder="-"
-                                            />
-                                        </div>
-                                    </div>
-                                    <button
-                                        type="submit"
-                                        className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                    >
-                                        Spara
-                                    </button>
-                                </form>
-                            )}
+                                        <button
+                                            type="submit"
+                                            className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
+                                        >
+                                            Spara
+                                        </button>
+                                    </form>
+                                )}
 
-                            <div className="mt-8">
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 ml-1">Historik (Senaste 5)</h3>
-                                <div className="space-y-2">
-                                    {weightEntries.slice().reverse().slice(0, 5).map(entry => (
-                                        <div key={entry.date} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl group transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">{entry.date}</span>
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-sm font-black text-slate-900 dark:text-white">{entry.weight.toFixed(1)} <span className="text-[10px] text-slate-400">kg</span></span>
-                                                    {entry.waist && <span className="text-sm font-black text-slate-400 italic">{entry.waist} <span className="font-normal not-italic">cm</span></span>}
+                                <div className="mt-8">
+                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 ml-1">Historik (Senaste 5)</h3>
+                                    <div className="space-y-2">
+                                        {weightEntries.slice().reverse().slice(0, 5).map(entry => (
+                                            <div key={entry.date} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl group transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">{entry.date}</span>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{entry.weight.toFixed(1)} <span className="text-[10px] text-slate-400">kg</span></span>
+                                                        {entry.waist && <span className="text-sm font-black text-slate-400 italic">{entry.waist} <span className="font-normal not-italic">cm</span></span>}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <button
+                                                        onClick={() => {
+                                                            setTempValue(entry.weight.toString());
+                                                            setTempWaist((entry.waist || "").toString());
+                                                            setIsWeightModalOpen(true);
+                                                        }}
+                                                        className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg text-blue-500 transition-colors"
+                                                    >
+                                                        <Settings size={14} />
+                                                    </button>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => {
-                                                        setTempValue(entry.weight.toString());
-                                                        setTempWaist((entry.waist || "").toString());
-                                                        setIsWeightModalOpen(true);
-                                                    }}
-                                                    className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg text-blue-500 transition-colors"
-                                                >
-                                                    <Settings size={14} />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             <StravaActivityImportModal
                 isOpen={isStravaModalOpen}
                 onClose={() => setIsStravaModalOpen(false)}
                 initialRange="7days"
             />
-        </div>
+        </div >
     );
 }
 
