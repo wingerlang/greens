@@ -4,6 +4,7 @@ import { SnapshotList } from './SnapshotList.tsx';
 import { TimelineGraph } from './TimelineGraph.tsx';
 import { DiffViewer } from './DiffViewer.tsx';
 import { RestoreWizard } from './RestoreWizard.tsx';
+import { TrackManager } from './TrackManager.tsx';
 import type { BackupSnapshot, BackupSettings, BackupEntityCounts } from '../../../models/backup.ts';
 
 export function BackupModule() {
@@ -14,7 +15,7 @@ export function BackupModule() {
     const [showSettings, setShowSettings] = useState(false);
     const [restoreModal, setRestoreModal] = useState<BackupSnapshot | null>(null);
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-    const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'diff'>('timeline');
+    const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'diff' | 'tracks'>('timeline');
 
     const loadSnapshots = useCallback(() => {
         const currentTrack = backupService.getCurrentTrackId();
@@ -266,6 +267,15 @@ export function BackupModule() {
                         >
                             🔍 Jämför
                         </button>
+                        <button
+                            onClick={() => setViewMode('tracks')}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'tracks'
+                                ? 'bg-indigo-500 text-white'
+                                : 'bg-white/5 text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            🌳 Spår
+                        </button>
                     </div>
                     <button
                         onClick={loadSnapshots}
@@ -295,6 +305,11 @@ export function BackupModule() {
                 {viewMode === 'diff' && (
                     <DiffViewer
                         snapshots={snapshots}
+                    />
+                )}
+                {viewMode === 'tracks' && (
+                    <TrackManager
+                        onTrackChange={loadSnapshots}
                     />
                 )}
             </div>
