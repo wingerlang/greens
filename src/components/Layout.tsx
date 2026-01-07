@@ -6,6 +6,7 @@ import { NoccoOClock } from './NoccoOClock.tsx';
 import { ExerciseType } from '../models/types.ts';
 import { NutritionBreakdownModal } from './calories/NutritionBreakdownModal.tsx';
 import { useData } from '../context/DataContext.tsx';
+import { GlobalNotification } from './common/GlobalNotification.tsx';
 
 interface LayoutProps {
     children: ReactNode;
@@ -58,6 +59,7 @@ export function Layout({ children }: LayoutProps) {
 
     return (
         <div className="min-h-screen flex flex-col relative">
+            <GlobalNotification />
             <NoccoOClock />
             {/* New Omnibox Component - handles its own overlay */}
             <Omnibox
