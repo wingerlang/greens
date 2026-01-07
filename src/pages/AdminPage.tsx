@@ -102,6 +102,12 @@ export const AdminPage: React.FC = () => {
                 >
                     💾 Backup
                 </button>
+                <button
+                    onClick={() => setActiveTab('systemdb')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'systemdb' ? 'text-purple-400 border-b-2 border-purple-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    🧬 System DB
+                </button>
             </div>
 
             {activeTab === 'health' && (
@@ -256,11 +262,7 @@ export const AdminPage: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'roadmap' && (
-                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                    <RoadmapModule />
-                </div>
-            )}
+
 
             {activeTab === 'generator' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
