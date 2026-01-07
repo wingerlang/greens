@@ -75,6 +75,7 @@ interface DataContextType {
     setCurrentUser: (user: User | null) => void;
     updateCurrentUser: (updates: Partial<User>) => void;
     addUser: (user: User) => void;
+    toggleIncompleteDay: (date: string) => void;
 
     // Pantry CRUD
     togglePantryItem: (item: string) => void;
@@ -126,9 +127,9 @@ interface DataContextType {
 
     // Weight CRUD
     weightEntries: WeightEntry[];
-    addWeightEntry: (weight: number, date?: string, waist?: number) => WeightEntry;
+    addWeightEntry: (weight: number, date?: string, waist?: number, chest?: number, hips?: number, thigh?: number) => WeightEntry;
     bulkAddWeightEntries: (entries: Partial<WeightEntry>[]) => void;
-    updateWeightEntry: (id: string, weight: number, date: string, waist?: number) => void;
+    updateWeightEntry: (id: string, weight: number, date: string, waist?: number, chest?: number, hips?: number, thigh?: number) => void;
     deleteWeightEntry: (id: string) => void;
     getLatestWeight: () => number;
     getLatestWaist: () => number | undefined;
@@ -172,6 +173,7 @@ interface DataContextType {
     generateCoachPlan: (stravaHistory: StravaActivity[], configOverride?: CoachConfig) => void;
     deletePlannedActivity: (id: string) => void;
     updatePlannedActivity: (id: string, updates: Partial<PlannedActivity>) => void;
+    savePlannedActivities: (activities: PlannedActivity[]) => void;
     completePlannedActivity: (activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => void;
     addCoachGoal: (goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => void;
     activateCoachGoal: (goalId: string) => void;
@@ -591,6 +593,20 @@ export function DataProvider({ children }: DataProviderProps) {
         setUsers(prev => prev.map(u => u.id === currentUser.id ? updatedUser : u));
     }, [currentUser]);
 
+    const toggleIncompleteDay = useCallback((date: string) => {
+        setDailyVitals(prev => {
+            const currentVitals = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
+            return {
+                ...prev,
+                [date]: {
+                    ...currentVitals,
+                    incomplete: !currentVitals.incomplete,
+                    updatedAt: new Date().toISOString()
+                }
+            };
+        });
+    }, []);
+
 
     // ============================================
     // FoodItem CRUD
@@ -604,22 +620,47 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: now,
             updatedAt: now,
         };
+        // Optimistic update
         setFoodItems((prev: FoodItem[]) => [...prev, newItem]);
+
+        // Sync to API and update local state with server response (e.g. permanent Image URL)
+        skipAutoSave.current = true;
+        storageService.createFoodItem(newItem).then((serverItem) => {
+            if (serverItem) {
+                setFoodItems(prev => prev.map(i => i.id === newItem.id ? serverItem : i));
+            }
+        }).catch(e => console.error("Failed to sync food:", e));
+
         return newItem;
     }, []);
 
     const updateFoodItem = useCallback((id: string, data: Partial<FoodItemFormData>): void => {
-        setFoodItems((prev: FoodItem[]) =>
-            prev.map((item: FoodItem) =>
+        setFoodItems((prev: FoodItem[]) => {
+            const next = prev.map((item: FoodItem) =>
                 item.id === id
                     ? { ...item, ...data, updatedAt: new Date().toISOString() }
                     : item
-            )
-        );
+            );
+
+            // Sync updated item
+            const updatedItem = next.find(i => i.id === id);
+            if (updatedItem) {
+                skipAutoSave.current = true;
+                storageService.updateFoodItem(updatedItem).then((serverItem) => {
+                    if (serverItem) {
+                        setFoodItems(current => current.map(i => i.id === id ? serverItem : i));
+                    }
+                }).catch(e => console.error("Failed to sync food:", e));
+            }
+
+            return next;
+        });
     }, []);
 
     const deleteFoodItem = useCallback((id: string): void => {
         setFoodItems((prev: FoodItem[]) => prev.filter((item: FoodItem) => item.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteFoodItem(id).catch(e => console.error("Failed to delete food:", e));
     }, []);
 
     const getFoodItem = useCallback((id: string): FoodItem | undefined => {
@@ -863,15 +904,30 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [foodItems, recipes, calculateRecipeNutrition, emitFeedEvent]);
 
     const updateMealEntry = useCallback((id: string, data: Partial<MealEntryFormData>): void => {
-        setMealEntries((prev: MealEntry[]) =>
-            prev.map((entry: MealEntry) =>
+        setMealEntries((prev: MealEntry[]) => {
+            const next = prev.map((entry: MealEntry) =>
                 entry.id === id ? { ...entry, ...data } : entry
-            )
-        );
+            );
+
+            // Sync via Granular API
+            const updated = next.find(e => e.id === id);
+            if (updated) {
+                skipAutoSave.current = true;
+                storageService.updateMealEntry(updated).catch(e => console.error("Failed to update meal", e));
+            }
+            return next;
+        });
     }, []);
 
     const deleteMealEntry = useCallback((id: string): void => {
-        setMealEntries((prev: MealEntry[]) => prev.filter((entry: MealEntry) => entry.id !== id));
+        setMealEntries((prev: MealEntry[]) => {
+            const entry = prev.find(e => e.id === id);
+            if (entry) {
+                skipAutoSave.current = true;
+                storageService.deleteMealEntry(id, entry.date).catch(e => console.error("Failed to delete meal", e));
+            }
+            return prev.filter((entry: MealEntry) => entry.id !== id);
+        });
     }, []);
 
     // ============================================
@@ -941,12 +997,15 @@ export function DataProvider({ children }: DataProviderProps) {
         return exerciseEntries.filter(e => e.date === date);
     }, [exerciseEntries]);
 
-    const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number): WeightEntry => {
+    const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number, chest?: number, hips?: number, thigh?: number): WeightEntry => {
         const newEntry: WeightEntry = {
             id: generateId(),
             weight,
             date,
             waist,
+            chest,
+            hips,
+            thigh,
             createdAt: new Date().toISOString(),
         };
 
@@ -984,11 +1043,12 @@ export function DataProvider({ children }: DataProviderProps) {
             return sorted;
         });
 
-        // Use new optimized API call (fire and forget)
-        // CRITICAL: Skip the next global auto-save to prevent overwriting or sending full payload
-        skipAutoSave.current = true;
+        // Sync via API but DO NOT skip auto-save.
+        // We want the subsequent auto-save loop to persist the new state to the monolithic blob
+        // as a safety net, even if the granular API call fails or if reload happens before cache is consistent.
+        // skipAutoSave.current = true; // REMOVED to ensure persistence
 
-        storageService.addWeightEntry(weight, date).catch(err => {
+        storageService.addWeightEntry(newEntry).catch(err => {
             console.error("Failed to sync weight:", err);
         });
 
@@ -1021,16 +1081,31 @@ export function DataProvider({ children }: DataProviderProps) {
         });
     }, []);
 
-    const updateWeightEntry = useCallback((id: string, weight: number, date: string, waist?: number) => {
+    const updateWeightEntry = useCallback((id: string, weight?: number, date?: string, updates?: Partial<WeightEntry>) => {
         setWeightEntries(prev => {
-            const next = prev.map(w => w.id === id ? { ...w, weight, date, waist } : w);
+            const next = prev.map(w => w.id === id ? { ...w, ...(weight !== undefined ? { weight } : {}), ...(date ? { date } : {}), ...updates } : w);
+
+            // Sync via Granular API
+            const updated = next.find(w => w.id === id);
+            if (updated) {
+                // We don't skip auto-save here because we want the biometric fields to be captured in the monolithic blob
+                storageService.updateWeightEntry(updated).catch(e => console.error("Failed to update weight", e));
+            }
+
             // Re-sort in case date changed
             return next.sort((a, b) => b.date.localeCompare(a.date));
         });
     }, []);
 
     const deleteWeightEntry = useCallback((id: string) => {
-        setWeightEntries(prev => prev.filter(w => w.id !== id));
+        setWeightEntries(prev => {
+            const entry = prev.find(w => w.id === id);
+            if (entry) {
+                skipAutoSave.current = true;
+                storageService.deleteWeightEntry(id, entry.date).catch(e => console.error("Failed to delete weight", e));
+            }
+            return prev.filter(w => w.id !== id);
+        });
     }, []);
 
     const getLatestWeight = useCallback((): number => {
@@ -1493,6 +1568,9 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString()
         };
         setBodyMeasurements(prev => [...prev, newEntry]);
+
+        // Persist
+        storageService.saveBodyMeasurement?.(newEntry).catch(e => console.error("Failed to sync measurement:", e));
     }, []);
 
     const updateBodyMeasurement = useCallback((id: string, updates: Partial<BodyMeasurementEntry>) => {
@@ -1501,6 +1579,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
     const deleteBodyMeasurement = useCallback((id: string) => {
         setBodyMeasurements(prev => prev.filter(e => e.id !== id));
+        storageService.deleteBodyMeasurement?.(id).catch(e => console.error("Failed to delete measurement:", e));
     }, []);
 
     // ============================================
@@ -1513,7 +1592,19 @@ export function DataProvider({ children }: DataProviderProps) {
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null);
 
-        const normalizedServer = serverEntries.map(e => ({ ...e, source: 'strava' }));
+        const normalizedServer = serverEntries.map(e => {
+            const u = universalActivities.find(item => item.id === e.id);
+            return {
+                ...e,
+                source: 'strava' as const,
+                avgHeartRate: u?.performance?.avgHeartRate,
+                maxHeartRate: u?.performance?.maxHeartRate,
+                _mergeData: {
+                    strava: e,
+                    universalActivity: u
+                }
+            };
+        });
         const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' }));
 
         // Convert strength workouts to ExerciseEntry format
@@ -1623,6 +1714,7 @@ export function DataProvider({ children }: DataProviderProps) {
         setCurrentUser,
         updateCurrentUser,
         addUser,
+        toggleIncompleteDay,
         dailyVitals,
         updateVitals,
         getVitalsForDate,
@@ -1780,6 +1872,22 @@ export function DataProvider({ children }: DataProviderProps) {
         }, []),
         updatePlannedActivity: useCallback((id, updates) => {
             setPlannedActivities(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+        }, []),
+        savePlannedActivities: useCallback((newActivities: PlannedActivity[]) => {
+            setPlannedActivities(prev => {
+                // Merge strategy: Filter out old activities on target dates if we wanted to replace
+                // But safer is to just Append and let user delete duplicates if they exist,
+                // OR filter out "PLANNED" status items on dates we are writing to.
+
+                // For now, simpler: Just Append.
+                // deduplicate by ID just in case
+                const ids = new Set(newActivities.map(a => a.id));
+                const filtered = prev.filter(a => !ids.has(a.id));
+
+                // Also, if we are overwriting a "draft" that was previously saved (not likely with new IDs)
+
+                return [...filtered, ...newActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+            });
         }, []),
         completePlannedActivity: useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
             setPlannedActivities(prev => prev.map(a => {

@@ -15,7 +15,6 @@ import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
 import { UniversalActivity } from '../models/types.ts';
 import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate } from '../models/types.ts';
-// import { useUniversalActivities } from '../hooks/useUniversalActivities.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import {
     parseOmniboxInput,
@@ -35,7 +34,6 @@ import { TrainingOverview } from '../components/training/TrainingOverview.tsx';
 import { HealthScoreCard } from '../components/dashboard/HealthScoreCard.tsx';
 import { KonditionView } from './Health/KonditionView.tsx';
 import { RaceList } from '../components/training/RaceList.tsx';
-import { HyroxDashboard } from '../components/hyrox/HyroxDashboard.tsx';
 
 export function TrainingPage() {
     const {
@@ -63,9 +61,6 @@ export function TrainingPage() {
 
     const navigate = useNavigate();
 
-    // Fetch Universal Activities from Server - REMOVED (Handled by DataContext now)
-    // const { activities: universalActivities } = useUniversalActivities(365);
-
     // Merge Data - combine server and local entries
     const exerciseEntries = useMemo(() => {
         const serverEntries = (universalActivities || [])
@@ -88,7 +83,7 @@ export function TrainingPage() {
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
 
     // Tab state for main view switcher
-    const [currentTab, setCurrentTab] = useState<'overview' | 'styrka' | 'kondition' | 'races' | 'hyrox'>('overview');
+    const [currentTab, setCurrentTab] = useState<'overview' | 'styrka' | 'kondition' | 'races'>('overview');
 
     const handleEditCycle = (cycle: TrainingCycle) => {
         setSelectedCycle(cycle);
@@ -486,15 +481,6 @@ export function TrainingPage() {
                         }`}
                 >
                     🏆 Tävlingar
-                </button>
-                <button
-                    onClick={() => setCurrentTab('hyrox')}
-                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'hyrox'
-                        ? 'bg-slate-100 text-slate-900 shadow-lg'
-                        : 'text-slate-500 hover:text-slate-300'
-                        }`}
-                >
-                    🏴 Hyrox
                 </button>
             </div>
 
@@ -1056,14 +1042,6 @@ export function TrainingPage() {
                             filterStartDate={filterStartDate}
                             filterEndDate={filterEndDate}
                         />
-                    </div>
-                )
-            }
-
-            {
-                currentTab === 'hyrox' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                        <HyroxDashboard />
                     </div>
                 )
             }

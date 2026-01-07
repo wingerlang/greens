@@ -217,12 +217,10 @@ export interface StrengthLogImportResult {
 // Utility Functions
 // ============================================
 
-/** Calculate estimated 1RM using Epley formula */
-export function calculate1RM(weight: number, reps: number): number {
-    if (reps === 1) return weight;
-    if (reps <= 0 || weight <= 0) return 0;
-    return Math.round(weight * (1 + reps / 30));
-}
+import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
+
+// Re-export for easier refactoring, but prefer importing from utils directly
+export { calculateEstimated1RM };
 
 /** Normalize exercise name for matching */
 export function normalizeExerciseName(name: string): string {
@@ -359,7 +357,7 @@ export function calculate1RMForBodyweight(
     reps: number
 ): { actual1RM: number; estimated1RM: number } {
     const totalWeight = bodyweight + extraWeight;
-    const estimated1RM = calculate1RM(totalWeight, reps);
+    const estimated1RM = calculateEstimated1RM(totalWeight, reps);
 
     // For bodyweight, actual 1RM is just the max weight achieved (BW + extra)
     // We don't estimate because bodyweight exercises have different mechanics

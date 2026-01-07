@@ -1,6 +1,7 @@
 import React, { useMemo, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, calculate1RM, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
 import { UniversalActivity } from '../../models/types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { SimilarWorkouts } from './SimilarWorkouts.tsx';
@@ -281,7 +282,7 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                                                 const setStats = exercise.sets.map(set => {
                                                     const isBW = set.isBodyweight || set.weight === 0;
                                                     const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
-                                                    const est1RM = calculate1RM(calcWeight, set.reps);
+                                                    const est1RM = calculateEstimated1RM(calcWeight, set.reps);
                                                     return { ...set, est1RM, isBW, calcWeight };
                                                 });
 

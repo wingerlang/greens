@@ -5,6 +5,7 @@ import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate, DailyVitals } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { analyzeSleep } from '../utils/vitalsUtils.ts';
+import { getActiveCalories, getActiveCalorieTarget } from '../utils/calorieTarget.ts';
 import { EXERCISE_TYPES } from '../components/training/ExerciseModal.tsx';
 import {
     Dumbbell,
@@ -22,12 +23,16 @@ import {
     Calendar,
     Target,
     Settings,
-    ChevronLeft
+    ChevronLeft,
+    Info
 } from 'lucide-react';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { GoalsOverviewWidget } from '../components/goals/GoalsOverviewWidget.tsx';
 import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
+import { StravaActivityImportModal } from '../components/integrations/StravaActivityImportModal.tsx';
+import { RefreshCw } from 'lucide-react';
+import { CaffeineCard } from '../components/dashboard';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -160,6 +165,7 @@ const DoubleCircularProgress = ({
                         Protein
                     </span>
                 </div>
+                {subLabel && <div className="mt-2">{subLabel}</div>}
             </div>
         </div>
     );
@@ -311,11 +317,96 @@ const WeightSparkline = ({
     );
 };
 
-// No longer using generic InfoCard, but keeping the concept in the main render if needed?
-// Actually I replaced usages of InfoCard with inline code in the previous version (Step 1722),
-// but defined it anyway. I will remove it if unused, or keep it if I use it.
-// Looking at previous code, I didn't actually use InfoCard in the return statement!
-// I mainly used the inline divs. So I will omit InfoCard to clean up.
+const DayHoverCard = ({
+    date,
+    activities,
+    nutrition,
+    onActivityClick
+}: {
+    date: string,
+    activities: any[],
+    nutrition: any,
+    onActivityClick: (act: any) => void
+}) => {
+    const navigate = useNavigate();
+    const dayName = new Date(date).toLocaleDateString('sv-SE', { weekday: 'long' });
+    const formattedDate = new Date(date).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' });
+
+    return (
+        <div className="absolute z-[100] bottom-full left-1/2 -translate-x-1/2 mb-4 w-64 bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            {/* Header */}
+            <div className="p-3 bg-slate-800/50 border-b border-slate-700/50 flex justify-between items-center">
+                <div className="flex flex-col">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">{dayName}</span>
+                    <span className="text-xs font-bold text-white">{formattedDate}</span>
+                </div>
+                <div className="text-right">
+                    <div className="text-[10px] font-black text-slate-500 uppercase">Energi</div>
+                    <div className="text-xs font-black text-emerald-400">{Math.round(nutrition.calories)} kcal</div>
+                </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-3 space-y-3">
+                {/* Activities */}
+                {activities.length > 0 ? (
+                    <div className="space-y-1.5">
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest px-1">Träning</div>
+                        <div className="space-y-1">
+                            {activities.map(act => {
+                                const typeDef = EXERCISE_TYPES.find(t => t.type === act.type);
+                                return (
+                                    <div
+                                        key={act.id}
+                                        onClick={(e) => { e.stopPropagation(); onActivityClick(act); }}
+                                        className="flex items-center gap-2 p-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-700 transition-colors cursor-pointer group"
+                                    >
+                                        <div className="text-sm">{typeDef?.icon || '💪'}</div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-[11px] font-bold text-slate-200 truncate group-hover:text-white">{typeDef?.label || act.type}</div>
+                                            <div className="text-[9px] text-slate-500">{act.durationMinutes} min {act.distance ? `• ${act.distance} km` : ''}</div>
+                                        </div>
+                                        <ChevronRight size={10} className="text-slate-600 group-hover:text-white" />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="text-center py-2">
+                        <span className="text-[10px] text-slate-600 italic">Ingen träning loggad</span>
+                    </div>
+                )}
+
+                {/* Nutrition Summary (Mini) */}
+                <div className="grid grid-cols-3 gap-1 pt-2 border-t border-slate-700/50">
+                    <div className="text-center">
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Prot</div>
+                        <div className="text-[10px] font-black text-rose-400">🌱 {Math.round(nutrition.protein)}g</div>
+                    </div>
+                    <div className="text-center border-l border-slate-700/50">
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Kolh</div>
+                        <div className="text-[10px] font-black text-blue-400">{Math.round(nutrition.carbs)}g</div>
+                    </div>
+                    <div className="text-center border-l border-slate-700/50">
+                        <div className="text-[8px] font-bold text-slate-500 uppercase tracking-tighter">Fett</div>
+                        <div className="text-[10px] font-black text-amber-400">{Math.round(nutrition.fat)}g</div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Footer Link */}
+            <div
+                onClick={() => navigate(`/calories?date=${date}`)}
+                className="bg-slate-800/80 p-2 text-center border-t border-slate-700/50 hover:bg-indigo-600 transition-colors cursor-pointer group/footer"
+            >
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover/footer:text-white flex items-center justify-center gap-1">
+                    Se Detaljer <ChevronRight size={10} />
+                </div>
+            </div>
+        </div>
+    );
+};
 
 export function DashboardPage() {
     const navigate = useNavigate();
@@ -336,7 +427,11 @@ export function DashboardPage() {
         getLatestWaist,
         plannedActivities,
         unifiedActivities,
-        weightEntries
+        weightEntries,
+        trainingPeriods,
+        performanceGoals,
+        toggleIncompleteDay,
+        dailyVitals
     } = useData();
 
     const [selectedDate, setSelectedDate] = useState(getISODate());
@@ -351,14 +446,41 @@ export function DashboardPage() {
     const [selectedActivity, setSelectedActivity] = useState<any>(null);
     const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
     const [bulkInput, setBulkInput] = useState("");
+    const [showActivityModal, setShowActivityModal] = useState(false);
+    const [isHoveringTraining, setIsHoveringTraining] = useState(false);
     const [showBulkImport, setShowBulkImport] = useState(false);
     const [weightRange, setWeightRange] = useState<'14d' | '30d' | '3m' | '1y' | 'all'>('1y');
+    const [hoveredDay, setHoveredDay] = useState<string | null>(null);
+    const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
 
     const changeDate = (days: number) => {
-        const d = new Date(selectedDate);
-        d.setDate(d.getDate() + days);
-        setSelectedDate(d.toISOString().split('T')[0]);
+        setSelectedDate(prev => {
+            const d = new Date(prev);
+            d.setDate(d.getDate() + days);
+            return d.toISOString().split('T')[0];
+        });
     };
+
+    // Keyboard navigation (Ctrl + Arrows)
+    useEffect(() => {
+        const handleNavKeyDown = (e: KeyboardEvent) => {
+            // Only trigger if no input/textarea is focused
+            if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+            if (e.ctrlKey) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    changeDate(-1);
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    changeDate(1);
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleNavKeyDown);
+        return () => window.removeEventListener('keydown', handleNavKeyDown);
+    }, []);
 
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -439,16 +561,43 @@ export function DashboardPage() {
     const dailyNutrition = calculateDailyNutrition(selectedDate);
     const consumed = dailyNutrition.calories;
     const burned = health.dailyCaloriesBurned || 0;
-    const target = settings.dailyCalorieGoal || 2500;
 
-    // 2. Macros
-    const proteinTarget = settings.dailyProteinGoal || 160;
+    // Determine target using centralized function
+    const targetResult = getActiveCalorieTarget(
+        selectedDate,
+        trainingPeriods,
+        performanceGoals,
+        settings.dailyCalorieGoal,
+        2500,
+        settings.calorieMode || 'tdee',
+        burned
+    );
+    const target = targetResult.calories;
+
+    // Base target (without exercise calories) for scaling and Netto comparison
+    const baseTarget = getActiveCalorieTarget(
+        selectedDate,
+        trainingPeriods,
+        performanceGoals,
+        settings.dailyCalorieGoal,
+        2500,
+        settings.calorieMode || 'tdee',
+        0
+    ).calories;
+
+    // Scaling factor for macros (only in fixed mode when training increases the goal)
+    const scalingFactor = (settings.calorieMode === 'fixed' && baseTarget > 0)
+        ? (target / baseTarget)
+        : 1;
+
+    // 2. Macros (Scaled proportionally if training calories are added)
+    const proteinTarget = Math.round((settings.dailyProteinGoal || 160) * scalingFactor);
     const proteinCurrent = dailyNutrition.protein;
 
-    const carbsTarget = settings.dailyCarbsGoal || 250; // Default estimate
+    const carbsTarget = Math.round((settings.dailyCarbsGoal || 250) * scalingFactor);
     const carbsCurrent = dailyNutrition.carbs;
 
-    const fatTarget = settings.dailyFatGoal || 80; // Default estimate
+    const fatTarget = Math.round((settings.dailyFatGoal || 80) * scalingFactor);
     const fatCurrent = dailyNutrition.fat;
 
     // 3. Weight & Measurement Logic
@@ -483,10 +632,13 @@ export function DashboardPage() {
         .slice(0, 3);
 
     const currentUserHeight = settings.height || 0;
-    const latestWeightVal = latest3Weights[0]?.weight;
+    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
     const bmi = (latestWeightVal && currentUserHeight)
         ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
         : null;
+
+    const proteinRatio = latestWeightVal > 0 ? (proteinCurrent / latestWeightVal) : 0;
+    const targetProteinRatio = latestWeightVal > 0 ? (proteinTarget / latestWeightVal) : 0;
 
     const getBMICategory = (val: number) => {
         if (val < 18.5) return { label: 'Undervikt', color: 'text-amber-400', bg: 'bg-amber-400/10' };
@@ -516,7 +668,7 @@ export function DashboardPage() {
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-0.5 px-0.5">
                     <div className="text-[9px] font-bold uppercase text-slate-400">Dagens Totalt</div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        <span className="font-bold text-slate-900 dark:text-white">{totalDuration} min</span>
+                        <span className="font-bold text-slate-900 dark:text-white">{Math.round(totalDuration)} min</span>
                         <span className="opacity-20">|</span>
                         <span>{totalCalories} kcal</span>
                         {totalDistance > 0 && (
@@ -539,7 +691,7 @@ export function DashboardPage() {
 
                     // Formatting helper for advanced metrics
                     const metricParts = [];
-                    metricParts.push(`${act.durationMinutes} min`);
+                    metricParts.push(`${Math.round(act.durationMinutes)} min`);
 
                     if (act.distance) {
                         if (act.type === 'running') {
@@ -574,7 +726,7 @@ export function DashboardPage() {
                                 e.stopPropagation();
                                 setSelectedActivity(act);
                             }}
-                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
+                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md -translate-y-[1px]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
                             <div className={`${density === 'compact' ? 'text-sm p-1' : 'text-lg p-1.5'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50`}>
                                 {typeDef?.icon || '💪'}
@@ -611,7 +763,7 @@ export function DashboardPage() {
     } else if (todaysPlan) {
         // Show Planned
         let icon = '📅';
-        let label = todaysPlan.type as string; // defaults to existing type string if match fails
+        let label = todaysPlan.type as string;
 
         if (todaysPlan.type === 'RUN') {
             const runDef = EXERCISE_TYPES.find(t => t.type === 'running');
@@ -688,7 +840,7 @@ export function DashboardPage() {
         { id: 'caffeine', isDone: isCaffeineDone, component: null },
     ].sort((a, b) => {
         if (a.isDone === b.isDone) return 0;
-        return a.isDone ? 1 : -1; // Done Items at Bottom
+        return a.isDone ? 1 : -1;
     });
 
     return (
@@ -727,19 +879,46 @@ export function DashboardPage() {
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
-                        {(['compact', 'slim', 'cozy'] as const).map((m) => (
-                            <button
-                                key={m}
-                                onClick={() => setDensityMode(m)}
-                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${density === m
-                                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                                    : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
-                                    }`}
-                            >
-                                {m === 'compact' ? 'Tiny' : m === 'slim' ? 'Slim' : 'Cozy'}
-                            </button>
-                        ))}
+                    <div className="flex items-center gap-3">
+                        {/* Incomplete Day Toggle */}
+                        <button
+                            onClick={() => toggleIncompleteDay(selectedDate)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${vitals.incomplete
+                                ? 'bg-orange-500/10 border-orange-500/30 text-orange-500'
+                                : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'
+                                }`}
+                            title={vitals.incomplete ? "Markera som fullständig" : "Markera som ofullständig"}
+                        >
+                            <AlertCircle size={16} className={vitals.incomplete ? 'animate-pulse' : ''} />
+                            <span className="text-xs font-black uppercase tracking-wider">
+                                {vitals.incomplete ? 'Ofullständig dag' : 'Markera ofullständig'}
+                            </span>
+                        </button>
+
+                        {/* Strava Sync Button */}
+                        <button
+                            onClick={() => setIsStravaModalOpen(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-[#FC4C02]/10 hover:bg-[#FC4C02]/20 text-[#FC4C02] rounded-xl border border-[#FC4C02]/20 transition-all group"
+                            title="Synka med Strava (7 dagar)"
+                        >
+                            <RefreshCw size={16} className="group-hover:rotate-180 transition-transform duration-500" />
+                            <span className="text-xs font-black uppercase tracking-wider">Synka Strava</span>
+                        </button>
+
+                        <div className="flex items-center gap-1 p-1 bg-slate-100 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800">
+                            {(['compact', 'slim', 'cozy'] as const).map((m) => (
+                                <button
+                                    key={m}
+                                    onClick={() => setDensityMode(m)}
+                                    className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all ${density === m
+                                        ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
+                                        : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                                        }`}
+                                >
+                                    {m === 'compact' ? 'Tiny' : m === 'slim' ? 'Slim' : 'Cozy'}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </header>
 
@@ -793,15 +972,52 @@ export function DashboardPage() {
                                             innerValue={proteinCurrent}
                                             innerMax={proteinTarget}
                                             label="Kcal"
-                                            subLabel={<span>{Math.round(consumed - target)} kcal</span>}
+                                            subLabel={
+                                                <div className="flex flex-col items-center">
+                                                    <span className={`font-black ${consumed - burned <= baseTarget ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                        {Math.round(consumed - burned)}
+                                                    </span>
+                                                    <span className="text-[7px] opacity-50 uppercase font-bold tracking-tighter">Netto kcal</span>
+                                                </div>
+                                            }
                                         />
-                                        <div className="flex-1 ml-4 overflow-hidden">
+                                        <div className="flex-1 ml-4 min-w-0">
                                             <div className={`font-black text-slate-900 dark:text-white uppercase tracking-tighter ${density === 'compact' ? 'text-[10px] mb-2' : 'text-sm mb-4'}`}>Dagens Intag</div>
                                             <div className="grid grid-cols-2 gap-x-4 gap-y-4">
                                                 {/* Protein */}
                                                 <div>
                                                     <div className={`flex justify-between items-baseline mb-1`}>
-                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Protein</span>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Protein</span>
+                                                            {latestWeightVal > 0 && (
+                                                                <div className="group relative">
+                                                                    <Info size={10} className="text-slate-300 hover:text-emerald-500 cursor-help transition-colors" />
+                                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-slate-900 text-[10px] text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all group-hover:translate-y-[-4px] pointer-events-none shadow-2xl border border-white/10 z-[100] leading-tight text-center">
+                                                                        <div className="flex justify-between items-center mb-2 px-1">
+                                                                            <div className="flex flex-col items-center">
+                                                                                <span className="text-[8px] uppercase opacity-50 font-bold">Nuvarande</span>
+                                                                                <span className={`text-sm font-black ${proteinRatio >= targetProteinRatio ? 'text-emerald-400' : 'text-white'}`}>{proteinRatio.toFixed(1)}</span>
+                                                                            </div>
+                                                                            <div className="h-4 w-[1px] bg-white/10" />
+                                                                            <div className="flex flex-col items-center">
+                                                                                <span className="text-[8px] uppercase opacity-50 font-bold">Mål</span>
+                                                                                <span className="text-sm font-black text-blue-400">{targetProteinRatio.toFixed(1)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <p className="text-[9px] mb-1 opacity-70">Gram protein per kg kroppsvikt</p>
+                                                                        {settings.trainingGoal === 'deff' && proteinRatio < 2.0 ? (
+                                                                            <p className="p-1.5 bg-amber-500/10 rounded-lg text-amber-400/90 italic border border-amber-500/20">Vid deff bör du ligga på drygt 2.0g/kg för att behålla muskelmassa.</p>
+                                                                        ) : proteinRatio >= targetProteinRatio ? (
+                                                                            <p className="p-1.5 bg-emerald-500/10 rounded-lg text-emerald-400/90 font-bold border border-emerald-500/20">Snyggt! Du når ditt proteinmål.</p>
+                                                                        ) : (
+                                                                            <p className="opacity-70">Baserat på din senaste vikt ({latestWeightVal}kg).</p>
+                                                                        )}
+                                                                        {/* Arrow */}
+                                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-900" />
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <div className="flex items-baseline gap-1">
                                                         <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-slate-900 dark:text-white`}>
@@ -859,6 +1075,45 @@ export function DashboardPage() {
                                                     </div>
                                                     <div className="h-1 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
                                                         <div className={`h-full rounded-full ${consumed > target ? 'bg-rose-500' : 'bg-slate-900 dark:bg-white'}`} style={{ width: `${Math.min((consumed / target) * 100, 100)}%` }}></div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Training/Burned Calories */}
+                                                <div
+                                                    onMouseEnter={() => setIsHoveringTraining(true)}
+                                                    onMouseLeave={() => setIsHoveringTraining(false)}
+                                                    className={`transition-all rounded-lg p-1 -m-1 ${isHoveringTraining ? 'bg-emerald-500/10 ring-1 ring-emerald-500/20' : ''}`}
+                                                >
+                                                    <div className={`flex justify-between items-baseline mb-1`}>
+                                                        <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Träning</span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-emerald-500`}>
+                                                            -{Math.round(burned)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">kcal</span>
+                                                    </div>
+                                                    <div className="h-1 bg-emerald-100 dark:bg-emerald-900/30 rounded-full overflow-hidden mt-1">
+                                                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${burned > 0 ? Math.min((burned / 500) * 100, 100) : 0}%` }}></div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Net Calories */}
+                                                <div className="col-span-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                                    <div className={`flex justify-between items-baseline mb-1`}>
+                                                        <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Netto</span>
+                                                        <span className={`text-[9px] font-bold ${(consumed - burned) > baseTarget ? 'text-rose-500' : (consumed - burned) < 0 ? 'text-emerald-500' : 'text-slate-400'}`}>
+                                                            {(consumed - burned) <= baseTarget ? '✓ Under mål' : '⚠ Över mål'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${(consumed - burned) > baseTarget ? 'text-rose-500' : 'text-indigo-500'}`}>
+                                                            {Math.round(consumed - burned)}
+                                                        </span>
+                                                        <span className="text-[9px] text-slate-400 font-bold">/ {baseTarget} kcal</span>
+                                                    </div>
+                                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden mt-1">
+                                                        <div className={`h-full rounded-full ${(consumed - burned) > baseTarget ? 'bg-rose-500' : 'bg-indigo-500'}`} style={{ width: `${Math.min(Math.max(0, ((consumed - burned) / baseTarget) * 100), 100)}%` }}></div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -1096,93 +1351,21 @@ export function DashboardPage() {
 
                         if (card.id === 'caffeine') {
                             const caffeineLimit = settings.dailyCaffeineLimit || 400;
-                            const caff = vitals.caffeine || 0;
-                            const isCaffHigh = caff >= caffeineLimit;
-                            const isCaffWarning = !isCaffHigh && caff >= caffeineLimit * 0.7;
-
                             return (
                                 <Wrapper key="caffeine" className="md:col-span-6 lg:col-span-3">
-                                    <div
-                                        onClick={() => handleCardClick('caffeine', vitals.caffeine || 0)}
-                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm flex flex-col justify-between hover:scale-[1.02] transition-all cursor-pointer overflow-hidden relative h-full ${isCaffHigh ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30' : isCaffWarning ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}
-                                    >
-                                        <Coffee className="absolute -bottom-4 -right-4 w-24 h-24 text-amber-500/5 dark:text-amber-400/10 pointer-events-none transform rotate-6 transition-all group-hover:scale-110" />
-                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'} relative z-10`}>
-                                            <div className={`p-1.5 rounded-full ${isCaffHigh ? 'bg-rose-100 text-rose-600' : isCaffWarning ? 'bg-amber-100 text-amber-600' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600'}`}>
-                                                <Coffee className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
-                                            </div>
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Koffein</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            {editing === 'caffeine' ? (
-                                                <div className="flex flex-col gap-2 pt-1" onClick={e => e.stopPropagation()}>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <input
-                                                            autoFocus
-                                                            type="number"
-                                                            value={tempValue}
-                                                            onChange={(e) => setTempValue(e.target.value)}
-                                                            onBlur={() => handleSave('caffeine')}
-                                                            onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
-                                                            className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-lg font-bold text-slate-900 dark:text-white p-1 w-16 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                        />
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">Mg</span>
-                                                    </div>
-                                                    <div className="flex gap-1">
-                                                        <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-                                                            <button
-                                                                onMouseDown={e => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    const newVal = Math.max(0, (vitals.caffeine || 0) - 80);
-                                                                    setVitals(p => ({ ...p, caffeine: newVal }));
-                                                                    setTempValue(newVal.toString());
-                                                                    updateVitals(today, { caffeine: newVal });
-                                                                }} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold hover:bg-white dark:hover:bg-slate-700 rounded">-</button>
-                                                            <span className="text-[10px] mx-0.5">☕</span>
-                                                            <button
-                                                                onMouseDown={e => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    const newVal = (vitals.caffeine || 0) + 80;
-                                                                    setVitals(p => ({ ...p, caffeine: newVal }));
-                                                                    setTempValue(newVal.toString());
-                                                                    updateVitals(today, { caffeine: newVal });
-                                                                }} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold hover:bg-white dark:hover:bg-slate-700 rounded">+</button>
-                                                        </div>
-                                                        <div className="flex items-center gap-0.5 bg-slate-100 dark:bg-slate-800 rounded-md p-0.5">
-                                                            <button
-                                                                onMouseDown={e => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    const newVal = Math.max(0, (vitals.caffeine || 0) - 180);
-                                                                    setVitals(p => ({ ...p, caffeine: newVal }));
-                                                                    setTempValue(newVal.toString());
-                                                                    updateVitals(selectedDate, { caffeine: newVal });
-                                                                }} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold hover:bg-white dark:hover:bg-slate-700 rounded">-</button>
-                                                            <span className="text-[10px] mx-0.5">🥤</span>
-                                                            <button
-                                                                onMouseDown={e => e.preventDefault()}
-                                                                onClick={() => {
-                                                                    const newVal = (vitals.caffeine || 0) + 180;
-                                                                    setVitals(p => ({ ...p, caffeine: newVal }));
-                                                                    setTempValue(newVal.toString());
-                                                                    updateVitals(selectedDate, { caffeine: newVal });
-                                                                }} className="w-5 h-5 flex items-center justify-center text-[10px] font-bold hover:bg-white dark:hover:bg-slate-700 rounded">+</button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${isCaffHigh ? 'text-rose-600' : isCaffWarning ? 'text-amber-600' : 'text-slate-900 dark:text-white'}`}>{vitals.caffeine || 0}</span>
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">Mg</span>
-                                                    </div>
-                                                    <div className={`mt-2 flex gap-1 ${density === 'compact' || density === 'slim' ? 'opacity-0 h-0 hidden' : 'opacity-100'}`}>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleCaffeineAdd(80, 'coffee'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">+☕</button>
-                                                        <button onClick={(e) => { e.stopPropagation(); handleCaffeineAdd(180, 'nocco'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors">+🥤</button>
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <CaffeineCard
+                                        density={density}
+                                        caffeineLimit={caffeineLimit}
+                                        currentCaffeine={vitals.caffeine || 0}
+                                        isEditing={editing === 'caffeine'}
+                                        tempValue={tempValue}
+                                        onCardClick={() => handleCardClick('caffeine', vitals.caffeine || 0)}
+                                        onValueChange={setTempValue}
+                                        onSave={() => handleSave('caffeine')}
+                                        onCancel={() => setEditing(null)}
+                                        onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
+                                        onQuickAdd={handleCaffeineAdd}
+                                    />
                                 </Wrapper>
                             );
                         }
@@ -1344,89 +1527,162 @@ export function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* 7-Day Performance Summary */}
+                    {/* 7-Day Performance Summary - Horizontal Timeline */}
                     <div className="col-span-12 md:col-span-12">
-                        <div className={`w-full ${density === 'compact' ? 'p-3' : 'p-6'} bg-white dark:bg-slate-900 rounded-[2rem] border border-slate-100 dark:border-slate-800 shadow-sm`}>
-                            <div className="flex items-center justify-between mb-4 px-2">
-                                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Senaste 7 Dagarna</h3>
-                                <div className="flex gap-2">
-                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-slate-900 dark:bg-white"></div><span className="text-[9px] text-slate-400">Kcal</span></div>
-                                    <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div><span className="text-[9px] text-slate-400">Träning</span></div>
+                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800`}>
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-2">
+                                    <div className="w-1 h-4 bg-indigo-500 rounded-full"></div>
+                                    <h3 className="text-xs font-black uppercase tracking-widest text-white">Senaste 7 Dagarna</h3>
+                                </div>
+                                <div className="flex gap-4">
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                                        <span className="text-[10px] text-slate-400 uppercase font-bold">Träning</span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full bg-slate-600"></div>
+                                        <span className="text-[10px] text-slate-400 uppercase font-bold">Idag</span>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="flex flex-col gap-3">
-                                {Array.from({ length: 7 }, (_, i) => {
+                            {/* Horizontal Timeline */}
+                            {(() => {
+                                const days = Array.from({ length: 7 }, (_, i) => {
                                     const d = new Date();
                                     d.setDate(d.getDate() - (6 - i));
                                     return d.toISOString().split('T')[0];
-                                }).reverse().map((date) => {
-                                    const nutrition = calculateDailyNutrition(date);
-                                    const cal = nutrition.calories || 0;
-                                    const targetCal = settings.dailyCalorieGoal || 2500;
-                                    const training = unifiedActivities.filter(a => a.date === date);
-                                    const dayVitals = getVitalsForDate(date);
+                                });
 
-                                    const dayLabel = new Date(date).toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'short' });
-                                    const isToday = date === new Date().toISOString().split('T')[0];
+                                const dayLabels = ['SÖN', 'MÅN', 'TIS', 'ONS', 'TORS', 'FRE', 'LÖR'];
 
-                                    // Status Logic
-                                    const isCalGood = cal > 0 && Math.abs(cal - targetCal) < 300;
-                                    const isTrained = training.length > 0;
-                                    const isSleepGood = (dayVitals.sleep || 0) >= 7;
+                                // Calculate totals
+                                let totalMinutes = 0;
+                                let totalTonnage = 0;
+                                let totalDistance = 0;
+                                let cardioCount = 0;
+                                let strengthCount = 0;
 
-                                    return (
-                                        <div key={date} className={`flex items-center justify-between p-3 rounded-2xl border transition-all ${isToday ? 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700' : 'bg-transparent border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}>
+                                days.forEach(date => {
+                                    const dayActivities = unifiedActivities.filter(a => a.date === date);
+                                    dayActivities.forEach(a => {
+                                        totalMinutes += a.durationMinutes || 0;
+                                        totalTonnage += (a.tonnage || 0) / 1000;
+                                        totalDistance += a.distance || 0;
+                                        if (a.type === 'strength') strengthCount++;
+                                        else cardioCount++;
+                                    });
+                                });
 
-                                            {/* Date Section */}
-                                            <div className="w-32 flex flex-col justify-center">
-                                                <div className={`text-xs font-bold capitalize ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500'}`}>
-                                                    {dayLabel}
-                                                </div>
-                                                {isToday && <div className="text-[9px] font-black uppercase text-slate-300 tracking-wider">Idag</div>}
-                                            </div>
+                                const totalMinsRounded = Math.round(totalMinutes);
+                                const totalHours = Math.floor(totalMinsRounded / 60);
+                                const remainingMins = totalMinsRounded % 60;
+                                const completedWorkouts = cardioCount + strengthCount;
 
-                                            {/* Training Summary or Resting State */}
-                                            <div className="flex-1 flex flex-wrap gap-2 justify-start px-4">
-                                                {isTrained ? (
-                                                    training.map((t, idx) => (
-                                                        <div key={idx} className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 text-emerald-600 rounded-lg text-[10px] font-bold uppercase tracking-wider">
-                                                            <Dumbbell size={10} weight="fill" />
-                                                            <span>{t.title || (t.type === 'strength' ? 'Styrka' : 'Pass')}</span>
+                                return (
+                                    <>
+                                        {/* Timeline Row */}
+                                        <div className="flex items-end justify-between mb-8 relative">
+                                            {/* Baseline */}
+                                            <div className="absolute bottom-3 left-0 right-0 h-px bg-slate-700"></div>
+
+                                            {days.map((date, i) => {
+                                                const d = new Date(date);
+                                                const dayOfWeek = d.getDay();
+                                                const isToday = date === new Date().toISOString().split('T')[0];
+                                                const dayActivities = unifiedActivities.filter(a => a.date === date);
+                                                const hasTraining = dayActivities.length > 0;
+                                                const isIncomplete = dailyVitals[date]?.incomplete;
+
+                                                return (
+                                                    <div
+                                                        key={date}
+                                                        className={`flex-1 flex flex-col items-center cursor-pointer relative ${isToday ? 'z-10' : ''} transition-all duration-300 ${hoveredDay && hoveredDay !== date ? 'blur-[1px] opacity-40 scale-[0.98]' : 'blur-0 opacity-100 scale-100'}`}
+                                                        onMouseEnter={() => setHoveredDay(date)}
+                                                        onMouseLeave={() => setHoveredDay(null)}
+                                                    >
+                                                        {hoveredDay === date && (
+                                                            <DayHoverCard
+                                                                date={date}
+                                                                activities={dayActivities}
+                                                                nutrition={calculateDailyNutrition(date)}
+                                                                onActivityClick={(act) => setSelectedActivity(act)}
+                                                            />
+                                                        )}
+                                                        {/* Day Label */}
+                                                        <div className="flex items-center gap-1 mb-2">
+                                                            <span className={`text-[10px] font-bold ${isToday ? 'text-white' : 'text-slate-500'}`}>
+                                                                {dayLabels[dayOfWeek]}
+                                                            </span>
+                                                            {isIncomplete && (
+                                                                <div className="w-1 h-1 rounded-full bg-orange-500 shadow-[0_0_4px_rgba(249,115,22,0.6)] animate-pulse" title="Ej fullständigt loggad dag" />
+                                                            )}
                                                         </div>
-                                                    ))
-                                                ) : (
-                                                    <span className="text-[10px] font-medium text-slate-300 dark:text-slate-700 italic">Vilodag</span>
-                                                )}
+
+                                                        {/* Activity Bar or Dot */}
+                                                        {isToday ? (
+                                                            <div className="w-16 h-16 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center mb-1">
+                                                                <div className="w-2 h-2 rounded-full bg-slate-500"></div>
+                                                            </div>
+                                                        ) : hasTraining ? (
+                                                            <div
+                                                                className="w-1.5 rounded-full bg-emerald-500 mb-1"
+                                                                style={{ height: `${Math.min(dayActivities.reduce((sum, a) => sum + (a.durationMinutes || 30), 0) / 2, 40)}px` }}
+                                                            ></div>
+                                                        ) : (
+                                                            <div className="w-2 h-2 rounded-full bg-slate-700 mb-1"></div>
+                                                        )}
+
+                                                        {/* Baseline Dot */}
+                                                        <div className={`w-1.5 h-1.5 rounded-full ${hasTraining ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* Stats Row */}
+                                        <div className="grid grid-cols-4 gap-4">
+                                            {/* Total Tid */}
+                                            <div className="space-y-1">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Tid</div>
+                                                <div className="text-2xl font-black text-white">{totalHours}h {remainingMins}m</div>
+                                                <div className="text-[10px] text-slate-500">{completedWorkouts} Slutförda pass</div>
                                             </div>
 
-                                            {/* Stats (Cal/Sleep) */}
-                                            <div className="flex items-center gap-4">
-                                                {/* Sleep */}
-                                                <div className="flex items-center gap-1.5" title={`${dayVitals.sleep || 0} timmar sömn`}>
-                                                    <Moon size={12} weight={isSleepGood ? "fill" : "regular"} className={isSleepGood ? "text-indigo-400" : "text-slate-300 dark:text-slate-700"} />
-                                                    <span className={`text-[10px] font-bold ${isSleepGood ? 'text-slate-700 dark:text-slate-300' : 'text-slate-300 dark:text-slate-600'}`}>{dayVitals.sleep || '-'}h</span>
-                                                </div>
+                                            {/* Volym */}
+                                            <div className="space-y-1 border-l border-slate-800 pl-4">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Volym</div>
+                                                <div className="text-2xl font-black text-emerald-400">{totalTonnage.toFixed(1)} Ton</div>
+                                                <div className="text-[10px] text-slate-500">Styrketräning</div>
+                                            </div>
 
-                                                {/* Calories */}
-                                                <div className="flex flex-col items-end w-20">
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-xs font-black text-slate-900 dark:text-white">{cal}</span>
-                                                        <span className="text-[8px] font-bold text-slate-400">kcal</span>
-                                                    </div>
-                                                    {/* Mini Progress Bar */}
-                                                    <div className="w-full h-1 bg-slate-100 dark:bg-slate-800 rounded-full mt-0.5 overflow-hidden">
-                                                        <div
-                                                            className={`h-full rounded-full ${cal > targetCal + 300 ? 'bg-rose-400' : isCalGood ? 'bg-emerald-500' : 'bg-slate-300 dark:bg-slate-600'}`}
-                                                            style={{ width: `${Math.min((cal / targetCal) * 100, 100)}%` }}
-                                                        />
-                                                    </div>
+                                            {/* Distans */}
+                                            <div className="space-y-1 border-l border-slate-800 pl-4">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Distans</div>
+                                                <div className="text-2xl font-black text-indigo-400">{totalDistance.toFixed(1)} Km</div>
+                                                <div className="text-[10px] text-slate-500">Löpning / Gång</div>
+                                            </div>
+
+                                            {/* Typ */}
+                                            <div className="space-y-2 border-l border-slate-800 pl-4">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Typ</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                                                    <span className="text-xs text-slate-300">Kondition {cardioCount > 0 ? Math.round((cardioCount / (cardioCount + strengthCount)) * 100) : 0}%</span>
+                                                    <span className="text-[10px] text-slate-500">({cardioCount} pass)</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                                                    <span className="text-xs text-slate-300">Styrka {strengthCount > 0 ? Math.round((strengthCount / (cardioCount + strengthCount)) * 100) : 0}%</span>
+                                                    <span className="text-[10px] text-slate-500">({strengthCount} pass)</span>
                                                 </div>
                                             </div>
                                         </div>
-                                    );
-                                })}
-                            </div>
+                                    </>
+                                );
+                            })()}
                         </div>
                     </div>
 
@@ -1557,10 +1813,10 @@ export function DashboardPage() {
                                                     }
                                                     return null;
                                                 })
-                                                .filter((e): e is { date: string, weight: number, waist?: number } => e !== null);
+                                                .filter((e): e is { date: string, weight: number, waist: number | undefined } => e !== null);
 
                                             if (entries.length > 0) {
-                                                bulkAddWeightEntries(entries);
+                                                bulkAddWeightEntries(entries as any);
                                                 setBulkInput("");
                                                 setShowBulkImport(false);
                                             }
@@ -1649,6 +1905,12 @@ export function DashboardPage() {
                     </div>
                 </div>
             )}
+
+            <StravaActivityImportModal
+                isOpen={isStravaModalOpen}
+                onClose={() => setIsStravaModalOpen(false)}
+                initialRange="7days"
+            />
         </div>
     );
 }

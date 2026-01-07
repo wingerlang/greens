@@ -1,8 +1,8 @@
-
 import { useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { getISODate } from '../models/types.ts';
+import { getActiveCalories } from '../utils/calorieTarget.ts';
 
 export interface HealthState {
     bmr: number;
@@ -26,7 +26,8 @@ export function useHealth(date: string = getISODate()) {
     const {
         calculateBMR,
         trainingCycles,
-        exerciseEntries,
+        performanceGoals, // Add this
+        unifiedActivities,
         calculateDailyNutrition,
         weightEntries,
         getLatestWeight
@@ -54,14 +55,14 @@ export function useHealth(date: string = getISODate()) {
     const currentGoal = activeCycle ? activeCycle.goal : settings.trainingGoal || 'neutral';
     const goalAdjustment = currentGoal === 'deff' ? -500 : currentGoal === 'bulk' ? 500 : 0;
 
-    // 4. Exercise & Burned
+    // 4. Exercise & Burned - Using ALL activity sources (Strava, manual, strength)
     const dailyExercises = useMemo(() =>
-        exerciseEntries.filter(e => e.date === date),
-        [exerciseEntries, date]
+        unifiedActivities.filter(e => e.date === date),
+        [unifiedActivities, date]
     );
 
     const dailyCaloriesBurned = useMemo(() =>
-        dailyExercises.reduce((sum, e) => sum + e.caloriesBurned, 0),
+        dailyExercises.reduce((sum, e) => sum + (e.caloriesBurned || 0), 0),
         [dailyExercises]
     );
 
@@ -70,10 +71,16 @@ export function useHealth(date: string = getISODate()) {
     const dailyCaloriesConsumed = nutrition.calories;
 
     // 6. TDEE & Targets
-    // TDEE = BMR + Exercise + Goal
-    // Wait, typically TDEE = BMR * ActivityMultiplier + Exercise.
-    // Simplifying to: Target = BMR + Exercise + GoalAdjustment
-    const targetCalories = Math.round(bmr + dailyCaloriesBurned + goalAdjustment);
+    // Use the centralized source of truth for target calories
+    const targetCalories = getActiveCalories(
+        date,
+        trainingCycles,
+        performanceGoals,
+        settings.dailyCalorieGoal,
+        2000,
+        settings.calorieMode || 'tdee',
+        dailyCaloriesBurned
+    );
 
     const netCalories = dailyCaloriesConsumed - dailyCaloriesBurned;
     const remainingCalories = targetCalories - dailyCaloriesConsumed;

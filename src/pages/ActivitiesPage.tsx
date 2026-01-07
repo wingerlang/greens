@@ -596,7 +596,7 @@ export function ActivitiesPage() {
                                         </button>
                                     </td>
                                     <td className="px-3 py-2 font-mono text-white text-xs whitespace-nowrap">
-                                        {activity.date.split('T')[0].slice(5)}
+                                        {activity.date.split('T')[0]}
                                     </td>
                                     <td className="px-3 py-2">
                                         <div className="flex flex-col gap-0.5">
@@ -616,8 +616,8 @@ export function ActivitiesPage() {
                                             {/* Score badge inline */}
                                             <span
                                                 className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-                                                        score >= 60 ? 'bg-indigo-500/20 text-indigo-400' :
-                                                            'bg-slate-500/20 text-slate-400'
+                                                    score >= 60 ? 'bg-indigo-500/20 text-indigo-400' :
+                                                        'bg-slate-500/20 text-slate-400'
                                                     }`}
                                                 title={`Poäng: ${score}`}
                                             >

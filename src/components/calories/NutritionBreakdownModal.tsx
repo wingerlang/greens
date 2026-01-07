@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { type MealItem, type Recipe, type FoodItem } from '../../models/types.ts';
 import { parseIngredients, matchToFoodItem } from '../../utils/ingredientParser.ts';
 
@@ -17,6 +17,16 @@ export function NutritionBreakdownModal({
     foodItems,
     getFoodItem,
 }: NutritionBreakdownModalProps) {
+    // ESC key handler
+    useEffect(() => {
+        if (!item) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [item, onClose]);
+
     if (!item) return null;
 
     // Get recipe or food item details

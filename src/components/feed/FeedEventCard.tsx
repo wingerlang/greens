@@ -90,8 +90,9 @@ export function FeedEventCard({
         if (days < 7) return `${days}d`;
 
         return new Date(timestamp).toLocaleDateString('sv-SE', {
-            day: 'numeric',
-            month: 'short'
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
         });
     };
 

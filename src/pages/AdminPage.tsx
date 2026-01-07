@@ -5,6 +5,8 @@ import { type FoodItem, CATEGORY_LABELS, UNIT_LABELS } from '../models/types.ts'
 import { UsersModule } from '../components/admin/UsersModule.tsx';
 import { RoadmapModule } from '../components/admin/RoadmapModule.tsx';
 import { SystemGeneratorModule } from '../components/admin/SystemGeneratorModule.tsx';
+import { HealthModule } from '../components/admin/HealthModule.tsx';
+import { SystemDBModule } from '../components/admin/SystemDBModule.tsx';
 import { DatabasePage } from './DatabasePage.tsx';
 import { ApiPage } from './ApiPage.tsx';
 import { DocumentationPage } from '../components/DocumentationPage.tsx';
@@ -16,7 +18,7 @@ export const AdminPage: React.FC = () => {
     const [search, setSearch] = useState('');
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
 
-    const activeTab = searchParams.get('tab') || 'audit';
+    const activeTab = searchParams.get('tab') || 'health';
     const setActiveTab = (tab: string) => setSearchParams({ tab });
 
     const handleExport = () => {
@@ -35,13 +37,6 @@ export const AdminPage: React.FC = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
     };
-
-    const stats = useMemo(() => ({
-        totalFoods: foodItems.length,
-        totalRecipes: recipes.length,
-        incompleteFoods: foodItems.filter(f => f.calories === 0 || !f.category || f.category === 'other').length,
-        missingMicros: foodItems.filter(f => !f.iron && !f.zinc && !f.vitaminB12).length
-    }), [foodItems, recipes]);
 
     const filteredItems = useMemo(() => {
         return foodItems.filter(f => {
@@ -74,19 +69,17 @@ export const AdminPage: React.FC = () => {
                 </div>
             </header>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard label="Totala Råvaror" value={stats.totalFoods} icon="🍎" />
-                <StatCard label="Totala Recept" value={stats.totalRecipes} icon="📖" />
-                <StatCard label="Ofullständiga" value={stats.incompleteFoods} icon="🔴" color="text-red-400" />
-                <StatCard label="Saknar Mikros" value={stats.missingMicros} icon="🟡" color="text-amber-400" />
-            </div>
-
             {/* Tab Navigation */}
             <div className="flex border-b border-slate-800 gap-6 overflow-x-auto no-scrollbar">
                 <button
+                    onClick={() => setActiveTab('health')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'health' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    🩺 Health
+                </button>
+                <button
                     onClick={() => setActiveTab('audit')}
-                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'audit' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'audit' ? 'text-blue-400 border-b-2 border-blue-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
                     🔍 Audit
                 </button>
@@ -94,7 +87,13 @@ export const AdminPage: React.FC = () => {
                     onClick={() => setActiveTab('database')}
                     className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'database' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
-                    📦 Databas
+                    📦 Matdatabas
+                </button>
+                <button
+                    onClick={() => setActiveTab('systemdb')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'systemdb' ? 'text-teal-400 border-b-2 border-teal-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    💾 System DB
                 </button>
                 <button
                     onClick={() => setActiveTab('users')}
@@ -127,6 +126,12 @@ export const AdminPage: React.FC = () => {
                     🔧 Verktyg
                 </button>
             </div>
+
+            {activeTab === 'health' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <HealthModule />
+                </div>
+            )}
 
             {activeTab === 'audit' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -247,6 +252,12 @@ export const AdminPage: React.FC = () => {
             {activeTab === 'database' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <DatabasePage headless={true} />
+                </div>
+            )}
+
+            {activeTab === 'systemdb' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <SystemDBModule />
                 </div>
             )}
 
@@ -395,12 +406,3 @@ const AdminEditModal: React.FC<{
     );
 };
 
-const StatCard: React.FC<{ label: string, value: number, icon: string, color?: string }> = ({ label, value, icon, color = "text-white" }) => (
-    <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex items-center justify-between">
-        <div>
-            <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{label}</div>
-            <div className={`text-3xl font-black ${color}`}>{value}</div>
-        </div>
-        <div className="text-3xl opacity-50">{icon}</div>
-    </div>
-);

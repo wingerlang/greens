@@ -91,8 +91,14 @@ export function getPaceZones(vdot: number) {
  * Formats decimal pace (min/km) to "MM:SS" string
  */
 export function formatPace(decimalPace: number): string {
-    const mins = Math.floor(decimalPace);
-    const secs = Math.round((decimalPace - mins) * 60);
+    if (!decimalPace || !isFinite(decimalPace)) return '—';
+    let mins = Math.floor(decimalPace);
+    let secs = Math.round((decimalPace - mins) * 60);
+    // Handle edge case where rounding gives 60 seconds
+    if (secs >= 60) {
+        mins += 1;
+        secs = 0;
+    }
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
@@ -151,4 +157,116 @@ export function getAllHrZones(maxHr: number, restingHr: number) {
         z4: { min: calculateHrZone(maxHr, restingHr, 0.80), max: calculateHrZone(maxHr, restingHr, 0.90) },
         z5: { min: calculateHrZone(maxHr, restingHr, 0.90), max: calculateHrZone(maxHr, restingHr, 1.00) },
     };
+}
+
+// --- New Tool Functions ---
+
+export function convertPaceToTime(distanceKm: number, paceSecondsPerKm: number): number {
+    return distanceKm * paceSecondsPerKm;
+}
+
+export function convertTimeToPace(distanceKm: number, totalSeconds: number): number {
+    if (distanceKm <= 0) return 0;
+    return totalSeconds / distanceKm;
+}
+
+export function calculateDistance(totalSeconds: number, paceSecondsPerKm: number): number {
+    if (paceSecondsPerKm <= 0) return 0;
+    return totalSeconds / paceSecondsPerKm;
+}
+
+export interface CardioInput {
+    weightKg?: number;
+    speedKph?: number; // for running
+    powerWatts?: number; // for cycling
+}
+
+export function estimateCardioCalories(type: 'running' | 'cycling', durationSeconds: number, input: CardioInput): number {
+    const durationHours = durationSeconds / 3600;
+
+    if (type === 'running') {
+        // Rule of thumb: 1 kcal per kg per km
+        // Distance = Speed * Time
+        if (!input.weightKg || !input.speedKph) return 0;
+        const distanceKm = input.speedKph * durationHours;
+        return Math.round(input.weightKg * distanceKm);
+    }
+
+    if (type === 'cycling') {
+        // Power (Watts) -> Joules -> Kcal
+        // 1 Watt = 1 Joule/second
+        // Total Joules = Watts * seconds
+        if (!input.powerWatts) return 0;
+        const totalJoules = input.powerWatts * durationSeconds;
+        const kCalOutput = totalJoules / 4184; // 1 kcal = 4184 J
+
+        // Human efficiency on bike is approx 20-25%. We use 24%.
+        // Gross Energy = Work / Efficiency
+        const grossKcal = kCalOutput / 0.24;
+        return Math.round(grossKcal);
+    }
+
+    return 0;
+}
+
+export function calculateRiegelTime(currentSeconds: number, currentDistKm: number, targetDistKm: number): number {
+    if (currentDistKm <= 0 || targetDistKm <= 0) return 0;
+    // T2 = T1 * (D2 / D1)^1.06
+    return Math.round(currentSeconds * Math.pow((targetDistKm / currentDistKm), 1.06));
+}
+
+export function calculateCooperVO2(distanceMeters: number): number {
+    // (Distance - 504.9) / 44.73
+    const vo2 = (distanceMeters - 504.9) / 44.73;
+    return Math.max(0, Math.round(vo2 * 10) / 10);
+}
+
+export function getCooperGrade(distanceMeters: number, age: number, gender: 'male' | 'female'): string {
+    // Simplified grading logic
+    // Using widely available standard tables roughly
+
+    // Male
+    if (gender === 'male') {
+        if (age < 30) {
+            if (distanceMeters > 2800) return 'Excellent';
+            if (distanceMeters > 2400) return 'Good';
+            if (distanceMeters > 2200) return 'Average';
+            if (distanceMeters > 1600) return 'Bad';
+            return 'Very Bad';
+        } else if (age < 50) {
+            if (distanceMeters > 2700) return 'Excellent';
+            if (distanceMeters > 2300) return 'Good';
+            if (distanceMeters > 2100) return 'Average';
+            if (distanceMeters > 1500) return 'Bad';
+            return 'Very Bad';
+        } else {
+            if (distanceMeters > 2500) return 'Excellent';
+            if (distanceMeters > 2100) return 'Good';
+            if (distanceMeters > 1900) return 'Average';
+            if (distanceMeters > 1300) return 'Bad';
+            return 'Very Bad';
+        }
+    }
+    // Female
+    else {
+        if (age < 30) {
+            if (distanceMeters > 2700) return 'Excellent';
+            if (distanceMeters > 2200) return 'Good';
+            if (distanceMeters > 1800) return 'Average';
+            if (distanceMeters > 1500) return 'Bad';
+            return 'Very Bad';
+        } else if (age < 50) {
+            if (distanceMeters > 2500) return 'Excellent';
+            if (distanceMeters > 2000) return 'Good';
+            if (distanceMeters > 1700) return 'Average';
+            if (distanceMeters > 1400) return 'Bad';
+            return 'Very Bad';
+        } else {
+            if (distanceMeters > 2300) return 'Excellent';
+            if (distanceMeters > 1900) return 'Good';
+            if (distanceMeters > 1500) return 'Average';
+            if (distanceMeters > 1100) return 'Bad';
+            return 'Very Bad';
+        }
+    }
 }

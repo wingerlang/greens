@@ -12,7 +12,7 @@ const GoalCardWrapper: React.FC<{ goal: PerformanceGoal; onEdit: (g: Performance
     return (
         <GoalCard
             goal={goal}
-            progress={progress?.percentage || 0}
+            progress={progress ? { current: progress.current || 0, target: progress.target || 0, percentage: (!isNaN(progress.percentage) ? progress.percentage : 0) } : { current: 0, target: 0, percentage: 0 }}
             onEdit={() => onEdit(goal)}
             onDelete={() => onDelete(goal.id)}
         />
@@ -92,8 +92,8 @@ export const TrainingPeriodPage: React.FC = () => {
                             <div className="text-sm text-white/50">avklarat av tidsramen</div>
                         </div>
                         <div className="text-right">
-                             <div className="text-2xl font-bold text-white">{periodGoals.length}</div>
-                             <div className="text-xs text-white/50 uppercase tracking-wider">Aktiva Mål</div>
+                            <div className="text-2xl font-bold text-white">{periodGoals.length}</div>
+                            <div className="text-xs text-white/50 uppercase tracking-wider">Aktiva Mål</div>
                         </div>
                     </div>
 
@@ -126,7 +126,7 @@ export const TrainingPeriodPage: React.FC = () => {
                                     goal={goal}
                                     onEdit={(g) => navigate(`/mal?goal=${g.id}`)} // Redirect to Goals page for full edit context
                                     onDelete={(id) => {
-                                        if(confirm('Ta bort detta mål?')) deleteGoal(id);
+                                        if (confirm('Ta bort detta mål?')) deleteGoal(id);
                                     }}
                                 />
                             ))

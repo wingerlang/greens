@@ -15,11 +15,17 @@ export const CaffeineCard = ({
     onCardClick,
     onValueChange,
     onSave,
+    onCancel,
     onKeyDown,
     onQuickAdd
 }: CaffeineCardProps) => {
     const isCaffHigh = currentCaffeine >= caffeineLimit;
     const isCaffWarning = !isCaffHigh && currentCaffeine >= caffeineLimit * 0.7;
+
+    const handleQuickAdd = (amount: number, type: 'coffee' | 'nocco') => {
+        onQuickAdd(amount, type);
+        onSave(); // Close editing mode
+    };
 
     return (
         <div
@@ -35,21 +41,37 @@ export const CaffeineCard = ({
             <div className="flex-1">
                 {isEditing ? (
                     <div className="flex flex-col gap-2 pt-1" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-baseline gap-1">
-                            <input
-                                autoFocus
-                                type="number"
-                                value={tempValue}
-                                onChange={(e) => onValueChange(e.target.value)}
-                                onBlur={onSave}
-                                onKeyDown={onKeyDown}
-                                className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-lg font-bold text-slate-900 dark:text-white p-1 w-16 focus:ring-2 focus:ring-indigo-500 outline-none"
-                            />
-                            <span className="text-[9px] font-bold text-slate-400 uppercase">Mg</span>
+                        <div className="flex items-center justify-between gap-1">
+                            <div className="flex items-baseline gap-1">
+                                <input
+                                    autoFocus
+                                    type="number"
+                                    value={tempValue}
+                                    onChange={(e) => onValueChange(e.target.value)}
+                                    // Removed onBlur={onSave} to avoid double-firing with cancel button
+                                    onKeyDown={onKeyDown}
+                                    className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-lg font-bold text-slate-900 dark:text-white p-1 w-16 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                />
+                                <span className="text-[9px] font-bold text-slate-400 uppercase">Mg</span>
+                            </div>
+                            <div className="flex gap-1">
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onSave(); }}
+                                    className="p-1 px-2 bg-emerald-500 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-600 transition-colors"
+                                >
+                                    Spara
+                                </button>
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onCancel?.(); }}
+                                    className="p-1 px-2 bg-slate-100 dark:bg-slate-800 text-slate-500 rounded-lg text-[10px] font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                >
+                                    Avbryt
+                                </button>
+                            </div>
                         </div>
                         <div className="flex gap-1">
-                            <button onClick={(e) => { e.stopPropagation(); onQuickAdd(80, 'coffee'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">+☕</button>
-                            <button onClick={(e) => { e.stopPropagation(); onQuickAdd(180, 'nocco'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors">+🥤</button>
+                            <button onClick={(e) => { e.stopPropagation(); handleQuickAdd(80, 'coffee'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">+☕</button>
+                            <button onClick={(e) => { e.stopPropagation(); handleQuickAdd(180, 'nocco'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors">+🥤</button>
                         </div>
                     </div>
                 ) : (
@@ -59,8 +81,8 @@ export const CaffeineCard = ({
                             <span className="text-[9px] font-bold text-slate-400 uppercase">Mg</span>
                         </div>
                         <div className={`mt-2 flex gap-1 ${density === 'compact' || density === 'slim' ? 'opacity-0 h-0 hidden' : 'opacity-100'}`}>
-                            <button onClick={(e) => { e.stopPropagation(); onQuickAdd(80, 'coffee'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">+☕</button>
-                            <button onClick={(e) => { e.stopPropagation(); onQuickAdd(180, 'nocco'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors">+🥤</button>
+                            <button onClick={(e) => { e.stopPropagation(); handleQuickAdd(80, 'coffee'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">+☕</button>
+                            <button onClick={(e) => { e.stopPropagation(); handleQuickAdd(180, 'nocco'); }} className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-bold hover:bg-cyan-100 dark:hover:bg-cyan-900/30 transition-colors">+🥤</button>
                         </div>
                     </>
                 )}

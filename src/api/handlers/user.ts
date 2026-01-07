@@ -1,5 +1,5 @@
 import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } from "../db/session.ts";
-import { getUserById, resetUserData, getAllUsers, saveUser, sanitizeUser } from "../db/user.ts"; // Note: resetUserData to be moved or imported
+import { getUserById, getAllUsers, saveUser, sanitizeUser } from "../db/user.ts";
 import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { kv } from "../kv.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
@@ -49,7 +49,6 @@ async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weig
             data.vitals = data.vitals.map((v: any) => ({ ...v, caffeine: undefined }));
         }
     } else if (type === 'food') {
-        // 'food' is essentially same as 'meals' - the actual food log entries
         data.mealEntries = [];
     }
 
@@ -96,8 +95,8 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             // Self-Healing Fallback: If index fails, scan users (slow path)
             if (!id) {
                 console.log(`⚠️ Index miss for ${handle}, attempting slow scan repair...`);
-                const allUsers = await getAllUsers();
-                const match = allUsers.find(u =>
+                const allUsersResult = await getAllUsers();
+                const match = allUsersResult.users.find(u =>
                     (u.handle && u.handle.toLowerCase() === handle.toLowerCase()) ||
                     u.username.toLowerCase() === handle.toLowerCase()
                 );
@@ -117,8 +116,6 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
 
             // 3. Return Sanitized User
-            // Note: We return basic info. Privacy checks (is locked?) are handled by frontend or we can enforce here.
-            // For now, returning public info is safe.
             return new Response(JSON.stringify({ ...sanitizeUser(user) }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
@@ -242,6 +239,8 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
                 if (updates.handle !== undefined) { user.handle = updates.handle; userChanged = true; }
                 if (updates.avatarUrl !== undefined) { user.avatarUrl = updates.avatarUrl; userChanged = true; }
                 if (updates.bio !== undefined) { user.bio = updates.bio; userChanged = true; }
+                if (updates.location !== undefined) { user.location = updates.location; userChanged = true; }
+                if (updates.website !== undefined) { user.website = updates.website; userChanged = true; }
 
                 if (userChanged) {
                     await saveUser(user);
@@ -257,9 +256,9 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     // Community Users List (GET)
     if (url.pathname === "/api/users" && method === "GET") {
         try {
-            const allUsers = await getAllUsers();
+            const allUsersResult = await getAllUsers();
             // Sanitize and return relevant fields for community view
-            const communityUsers = allUsers.map(u => ({
+            const communityUsers = allUsersResult.users.map(u => ({
                 id: u.id,
                 username: u.username,
                 name: u.name,
@@ -345,6 +344,18 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
                     const runDist = perf.distanceKm || 0;
                     const runDuration = perf.durationMinutes * 60; // seconds
 
+                    // Sanity Check 1: Speed limit (World Record 5k is ~24km/h)
+                    // If speed > 25km/h, it's likely cycling or error
+                    const speedKmh = runDist / (run.performance!.durationMinutes / 60);
+                    if (speedKmh > 25) continue;
+
+                    // Sanity Check 2: Minimum activity duration (e.g. < 2 mins for 5k is impossible)
+                    // 5k world record ~12 mins. Let's say < 10 mins for 5km is impossible.
+                    // This creates a robust filter against short segments being mapped to long distances
+                    if (dist.km >= 5 && run.performance!.durationMinutes < 10) continue;
+                    if (dist.km >= 10 && run.performance!.durationMinutes < 25) continue;
+                    if (dist.km >= 21 && run.performance!.durationMinutes < 55) continue;
+
                     // Logic: best activity within 5% of distance or longer
                     if (runDist >= dist.km * 0.95) {
                         // Project pace to standard distance
@@ -372,6 +383,9 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
                     // Persistence: Auto-save if better than existing
                     const existingKey = ['prs', targetUserId, dist.id];
                     const existingRes = await kv.get<any>(existingKey);
+
+                    // Only auto-save if significantly better? Or just logic as before.
+                    // Logic was: if (!existing || better) -> save.
                     if (!existingRes.value || existingRes.value.time > pr.time) {
                         await kv.set(existingKey, pr);
                     }

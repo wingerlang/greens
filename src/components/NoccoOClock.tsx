@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { getISODate, generateId } from '../models/types.ts';
+import { X } from 'lucide-react';
 
 /**
  * Nocco 'o Clock Component
@@ -11,9 +12,10 @@ import { getISODate, generateId } from '../models/types.ts';
  * - Action: Register a Nocco energy drink.
  */
 export function NoccoOClock() {
-    const { addMealEntry, addFoodItem, foodItems, mealEntries } = useData();
+    const { addMealEntry, addFoodItem, foodItems, mealEntries, updateVitals, userSettings, dailyVitals } = useData();
     const [now, setNow] = useState(new Date());
     const [hasRegisteredToday, setHasRegisteredToday] = useState(false);
+    const [isDismissed, setIsDismissed] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
 
     // Update time every second
@@ -30,7 +32,7 @@ export function NoccoOClock() {
             m.items.some(i => {
                 if (i.type === 'foodItem') {
                     const item = foodItems.find(f => f.id === i.referenceId);
-                    return item?.name.toLowerCase().includes('nocco');
+                    return item?.name.toLowerCase().includes('nocco') && (item?.name.toLowerCase().includes('nocco') || item?.name.toLowerCase().includes('kaffe'));
                 }
                 return false;
             })
@@ -41,19 +43,20 @@ export function NoccoOClock() {
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
-    // Debugging/Dev: Uncomment to test at specific times
-    // const currentHour = 12;
-    // const currentMinute = 57;
-
     const isCountdownPhase = currentHour === 7 && currentMinute >= 45;
     const isActionPhase = currentHour === 8 && currentMinute < 5;
 
-    // Don't show anything if outside windows or already registered (optional: could allow multiple)
-    if ((!isCountdownPhase && !isActionPhase) || hasRegisteredToday) {
+    // Feature toggle check
+    if (userSettings.noccoOClockEnabled === false) return null;
+
+    // Don't show anything if outside windows or already registered
+    if ((!isCountdownPhase && !isActionPhase) || hasRegisteredToday || isDismissed) {
         return null;
     }
 
     const handleRegisterNocco = () => {
+        const today = getISODate(now);
+
         // Find or create Nocco food item
         let noccoItem = foodItems.find(f => f.name.toLowerCase() === 'nocco');
         let noccoId = noccoItem?.id;
@@ -66,7 +69,10 @@ export function NoccoOClock() {
                 carbs: 0,
                 fat: 0,
                 unit: 'pcs',
-                category: 'beverages'
+                category: 'beverages',
+                extendedDetails: {
+                    caffeine: 180
+                }
             });
             noccoId = newItem.id;
         }
@@ -74,7 +80,7 @@ export function NoccoOClock() {
         if (noccoId) {
             // Add to snack
             addMealEntry({
-                date: getISODate(now),
+                date: today,
                 mealType: 'snack',
                 items: [{
                     type: 'foodItem',
@@ -83,12 +89,18 @@ export function NoccoOClock() {
                 }]
             });
 
-            // Optimistic update
+            // Update Vitals (Caffeine)
+            const currentCaff = dailyVitals[today]?.caffeine || 0;
+            updateVitals(today, { caffeine: currentCaff + 180 });
+
+            // Dismiss
             setHasRegisteredToday(true);
         }
     };
 
     const handleRegisterCoffee = () => {
+        const today = getISODate(now);
+
         // Find or create Coffee food item
         let coffeeItem = foodItems.find(f => f.name.toLowerCase() === 'kaffe' || f.name.toLowerCase() === 'coffee');
         let coffeeId = coffeeItem?.id;
@@ -101,14 +113,17 @@ export function NoccoOClock() {
                 carbs: 0.3,
                 fat: 0,
                 unit: 'cup',
-                category: 'beverages'
+                category: 'beverages',
+                extendedDetails: {
+                    caffeine: 80
+                }
             });
             coffeeId = newItem.id;
         }
 
         if (coffeeId) {
             addMealEntry({
-                date: getISODate(now),
+                date: today,
                 mealType: 'breakfast', // Usually morning
                 items: [{
                     type: 'foodItem',
@@ -116,13 +131,22 @@ export function NoccoOClock() {
                     servings: 1
                 }]
             });
+
+            // Update Vitals (Caffeine)
+            const currentCaff = dailyVitals[today]?.caffeine || 0;
+            updateVitals(today, { caffeine: currentCaff + 80 });
+
             setHasRegisteredToday(true);
         }
     };
 
+    const handleDismiss = (e?: React.MouseEvent) => {
+        e?.stopPropagation();
+        setIsDismissed(true);
+    };
+
     if (isCountdownPhase) {
         // Calculate time until 08:00
-        // Target: Today 08:00:00
         const target = new Date(now);
         target.setHours(8, 0, 0, 0);
         const diffMs = target.getTime() - now.getTime();
@@ -131,8 +155,14 @@ export function NoccoOClock() {
         const secs = diffSecs % 60;
 
         return (
-            <div className="fixed bottom-6 right-6 z-50 animate-pulse bg-slate-900/80 border border-blue-500/30 text-blue-400 px-4 py-2 rounded-full font-mono text-xl shadow-[0_0_15px_rgba(59,130,246,0.2)] backdrop-blur-md">
-                T-minus {mins}:{secs.toString().padStart(2, '0')} 🕒
+            <div className="fixed bottom-6 right-6 z-50 animate-pulse bg-slate-900/80 border border-blue-500/30 text-blue-400 px-4 py-2 rounded-full font-mono text-xl shadow-[0_0_15px_rgba(59,130,246,0.2)] backdrop-blur-md flex items-center gap-3">
+                <span>T-minus {mins}:{secs.toString().padStart(2, '0')} 🕒</span>
+                <button
+                    onClick={handleDismiss}
+                    className="p-1 hover:bg-white/10 rounded-full transition-colors text-slate-400 hover:text-white"
+                >
+                    <X size={14} />
+                </button>
             </div>
         );
     }
@@ -141,11 +171,15 @@ export function NoccoOClock() {
         return (
             <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-50">
                 <div
-                    className="pointer-events-auto flex flex-col items-center gap-6 animate-in fade-in slide-in-from-left duration-1000 fill-mode-forwards"
+                    className="pointer-events-auto flex flex-col items-center gap-6 animate-in fade-in slide-in-from-left duration-1000 fill-mode-forwards relative p-10"
                     onMouseEnter={() => setIsHovered(true)}
                     onMouseLeave={() => setIsHovered(false)}
                 >
-                    <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-500 drop-shadow-[0_0_25px_rgba(56,189,248,0.5)] italic tracking-tighter">
+                    {/* Backdrop Blur specifically behind the content if desired, or relying on overlay? 
+                        User wants "Cancel" button. 
+                    */}
+
+                    <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-300 to-blue-500 drop-shadow-[0_0_25px_rgba(56,189,248,0.5)] italic tracking-tighter text-center">
                         IT'S NOCCO 'O CLOCK
                     </h1>
 
@@ -170,6 +204,13 @@ export function NoccoOClock() {
                             </span>
                         </button>
                     </div>
+
+                    <button
+                        onClick={handleDismiss}
+                        className="px-6 py-2 bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-white rounded-full font-bold text-sm transition-all backdrop-blur-sm border border-slate-700/50"
+                    >
+                        Avbryt / Ignorera
+                    </button>
 
                     <p className="text-blue-200/50 font-mono text-sm">(Gäller fram till 08:05)</p>
                 </div>

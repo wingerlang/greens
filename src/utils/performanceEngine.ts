@@ -16,9 +16,10 @@ export interface AdaptiveGoals {
  */
 export function calculateAdaptiveGoals(
     settings: UserSettings,
-    exercises: ExerciseEntry[]
+    exercises: ExerciseEntry[],
+    calorieTargetOverride?: number
 ): AdaptiveGoals {
-    const baseCalories = settings.dailyCalorieGoal || 2000;
+    const baseCalories = calorieTargetOverride || settings.dailyCalorieGoal || 2000;
     const baseProtein = settings.dailyProteinGoal || 150;
     const baseCarbs = settings.dailyCarbsGoal || 50; // Often low for keto/deff
     const baseFat = settings.dailyFatGoal || 30;

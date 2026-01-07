@@ -1,10 +1,11 @@
-import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType } from '../models/types.ts';
+import { type ExerciseType, type ExerciseIntensity, type MealType, type ExerciseSubType, type BodyMeasurementType } from '../models/types.ts';
 
 export type OmniboxIntent =
     | { type: 'exercise'; data: { exerciseType: ExerciseType; duration: number; intensity: ExerciseIntensity; notes?: string; subType?: ExerciseSubType; tonnage?: number; distance?: number; heartRateAvg?: number; heartRateMax?: number }; date?: string }
     | { type: 'food'; data: { query: string; quantity?: number; unit?: string; mealType?: MealType }; date?: string }
     | { type: 'weight'; data: { weight: number }; date?: string }
     | { type: 'vitals'; data: { vitalType: 'sleep' | 'water' | 'coffee' | 'nocco' | 'energy' | 'steps'; amount: number; caffeine?: number }; date?: string }
+    | { type: 'measurement'; data: { measurementType?: BodyMeasurementType; value?: number }; date?: string }
     | { type: 'navigate'; data: { path: string }; date?: string }
     | { type: 'search'; data: { query: string }; date?: string };
 
@@ -60,8 +61,17 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
         let path = '/';
         const target = lower.replace(/gå till|navigera/g, '').trim().toLowerCase();
 
-        if (target.includes('trän') || target.includes('gym')) path = '/training';
-        else if (target.includes('hälsa')) path = '/health';
+        if (target.includes('trän') || target.includes('gym')) {
+            if (target.includes('hälsa')) path = '/health/training';
+            else path = '/training';
+        }
+        else if (target.includes('vikt') || target.includes('weight')) path = '/health/body';
+        else if (target.includes('sömn') || target.includes('sleep')) path = '/health/body';
+        else if (target.includes('mått') || target.includes('body') || target.includes('measurements')) path = '/health/body';
+        else if (target.includes('hälsa')) {
+            if (target.includes('mat')) path = '/health/food';
+            else path = '/health';
+        }
         else if (target.includes('recept')) path = '/recipes';
         else if (target.includes('mat') || target.includes('plan')) path = '/planera';
         else if (target.includes('kalori')) path = '/calories';
@@ -87,6 +97,10 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
             return { type: 'weight', data: { weight }, date };
         }
     }
+
+    // 4.5 Measurement Check
+    const measurementIntent = parseMeasurements(lower);
+    if (measurementIntent) return { ...measurementIntent, date };
 
     // 5. Food/Meal Check
     const foodIntents = parseFood(lower);
@@ -537,6 +551,7 @@ function parseFood(input: string): OmniboxIntent | null {
         /([\d.,]+)\s*(l|liter)\b/i,
         /([\d.,]+)\s*(st|stycken?|pcs)\b/i,
         /([\d.,]+)\s*(port|portion(?:er)?)\b/i,
+        /([\d.,]+)(port)\b/i,  // Shorthand: "2port" without space
         /([\d.,]+)\s*(dl|deciliter)\b/i,
         /([\d.,]+)\s*(msk|matsked(?:ar)?)\b/i,
         /([\d.,]+)\s*(tsk|tesked(?:ar)?)\b/i,
@@ -616,4 +631,87 @@ function parseFood(input: string): OmniboxIntent | null {
         type: 'food',
         data: { query, quantity, unit, mealType }
     };
+}
+
+function parseMeasurements(input: string): OmniboxIntent | null {
+    // 1. Extract date first
+    const { date, remaining } = parseDate(input);
+    const lower = remaining.toLowerCase().trim();
+
+    // Mapping of Swedish keywords to BodyMeasurementType
+    const measurementMap: Record<string, BodyMeasurementType> = {
+        'midja': 'waist',
+        'waist': 'waist',
+        'höft': 'hips',
+        'hips': 'hips',
+        'stuss': 'hips',
+        'bröst': 'chest',
+        'chest': 'chest',
+        'lår vänster': 'thigh_left',
+        'vänster lår': 'thigh_left',
+        'thigh left': 'thigh_left',
+        'lår höger': 'thigh_right',
+        'höger lår': 'thigh_right',
+        'thigh right': 'thigh_right',
+        'lår': 'thigh_left',
+        'överarm vänster': 'arm_left',
+        'vänster arm': 'arm_left',
+        'arm vänster': 'arm_left',
+        'arm left': 'arm_left',
+        'överarm höger': 'arm_right',
+        'höger arm': 'arm_right',
+        'arm höger': 'arm_right',
+        'arm right': 'arm_right',
+        'arm': 'arm_left',
+        'vad vänster': 'calf_left',
+        'vänster vad': 'calf_left',
+        'calf left': 'calf_left',
+        'vad höger': 'calf_right',
+        'höger vad': 'calf_right',
+        'calf right': 'calf_right',
+        'vad': 'calf_left',
+        'nacke': 'neck',
+        'neck': 'neck',
+        'hals': 'neck',
+        'axlar': 'shoulders',
+        'shoulders': 'shoulders',
+        'underarm vänster': 'forearm_left',
+        'forearm left': 'forearm_left',
+        'underarm höger': 'forearm_right',
+        'forearm right': 'forearm_right',
+    };
+
+    // 2. Check for standalone triggers
+    if (lower === 'mått' || lower === 'measurements' || lower === 'body') {
+        return { type: 'measurement', data: {}, date };
+    }
+
+    // 3. Try to match specific measurement (+ optional value)
+    for (const [kw, type] of Object.entries(measurementMap)) {
+        // Pattern for keyword + optional number
+        const pattern1 = new RegExp(`(?:mått\\s+)?${kw}(?:\\s*[:\\s]*(\\d+(?:[.,]\\d+)?))?\\s*(?:cm)?`, 'i');
+        // Pattern for number + keyword
+        const pattern2 = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(?:cm)?\\s*${kw}`, 'i');
+
+        const match1 = lower.match(pattern1);
+        const match2 = lower.match(pattern2);
+
+        if (match1) {
+            const valueStr = match1[1];
+            if (valueStr) {
+                const value = parseFloat(valueStr.replace(',', '.'));
+                return { type: 'measurement', data: { measurementType: type, value }, date };
+            } else if (lower.includes('mått') || lower.startsWith(kw)) {
+                // Return type even without value if "mått" prefix is used or keyword is at start
+                return { type: 'measurement', data: { measurementType: type }, date };
+            }
+        }
+
+        if (match2) {
+            const value = parseFloat(match2[1].replace(',', '.'));
+            return { type: 'measurement', data: { measurementType: type, value }, date };
+        }
+    }
+
+    return null;
 }

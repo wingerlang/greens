@@ -54,14 +54,114 @@ export function calculateIPFPoints(weightKg: number, totalKg: number, gender: 'm
 }
 
 /**
- * Estimated 1RM using Epley formula (more reliable for high reps than Brzycki)
+ * Generic function to calculate estimated 1RM using the "Average of All Formulas" strategy.
+ * This is the SINGLE SOURCE OF TRUTH for all 1RM estimates in the application.
+ * Returns the average rounded to 1 decimal place.
  */
-export function estimate1RM(weight: number, reps: number): number {
-    if (reps === 1) return weight;
-    if (reps <= 0) return 0;
-    // Epley formula: 1RM = weight * (1 + reps / 30)
-    // Capping reps at 12 to avoid unrealistic numbers from endurance sets
-    const effectiveReps = Math.min(reps, 12);
-    return weight * (1 + effectiveReps / 30);
+export function calculateEstimated1RM(weight: number, reps: number): number {
+    return calculateAverage1RM(weight, reps).average;
 }
 
+export function calculateAverage1RM(weight: number, reps: number) {
+    if (weight <= 0 || reps <= 0) return {
+        average: 0,
+        epley: 0,
+        brzycki: 0,
+        lander: 0,
+        lombardi: 0,
+        mayhew: 0,
+        oconner: 0,
+        wathan: 0
+    };
+
+    if (reps === 1) return {
+        average: weight,
+        epley: weight,
+        brzycki: weight,
+        lander: weight,
+        lombardi: weight,
+        mayhew: weight,
+        oconner: weight,
+        wathan: weight
+    };
+
+    // Formulas
+    // We calculate all, but will only include valid ones in the average
+
+    const epley = weight * (1 + reps / 30);
+    const oconner = weight * (1 + 0.025 * reps);
+    const lombardi = weight * Math.pow(reps, 0.10);
+
+    // Unstable/Breaking formulas - only calculate if safe
+    const brzycki = reps < 37 ? weight * (36 / (37 - reps)) : null;
+    const lander = reps < 38 ? (100 * weight) / (101.3 - 2.67123 * reps) : null;
+
+    // Exponential formulas - can be overly conservative for very high reps
+    const mayhew = (100 * weight) / (52.2 + (41.9 * Math.exp(-0.055 * reps)));
+    const wathan = (100 * weight) / (48.8 + (53.8 * Math.exp(-0.075 * reps)));
+
+    let validEstimates: number[] = [];
+
+    // Selection logic based on rep range
+    if (reps <= 15) {
+        // For standard ranges, use all standard formulas
+        validEstimates = [epley, mayhew, oconner, wathan, lombardi];
+        if (brzycki !== null) validEstimates.push(brzycki);
+        if (lander !== null) validEstimates.push(lander);
+    } else {
+        // For high reps (>15), reliability drops significantly.
+        // We rely on Epley and O'Conner which are linear and don't crash.
+        // We exclude exponential decay models that might bottom out too early.
+        validEstimates = [epley, oconner];
+    }
+
+    const sum = validEstimates.reduce((a, b) => a + b, 0);
+    const average = sum / validEstimates.length;
+
+    return {
+        average: Math.round(average * 10) / 10,
+        epley: Math.round(epley * 10) / 10,
+        brzycki: brzycki !== null ? Math.round(brzycki * 10) / 10 : 0,
+        lander: lander !== null ? Math.round(lander * 10) / 10 : 0,
+        lombardi: Math.round(lombardi * 10) / 10,
+        mayhew: Math.round(mayhew * 10) / 10,
+        oconner: Math.round(oconner * 10) / 10,
+        wathan: Math.round(wathan * 10) / 10
+    };
+}
+
+export interface Plate {
+    weight: number;
+    count: number;
+    color?: string; // e.g., 'red', 'blue'
+}
+
+export function calculatePlateLoading(
+    targetWeight: number,
+    barWeight: number = 20,
+    availablePlates: number[] = [25, 20, 15, 10, 5, 2.5, 1.25]
+): { plates: Plate[]; remainder: number } {
+    if (targetWeight <= barWeight) return { plates: [], remainder: 0 };
+
+    let neededPerSide = (targetWeight - barWeight) / 2;
+    const loadedPlates: Plate[] = [];
+
+    // Sort available plates descending
+    const sortedPlates = [...availablePlates].sort((a, b) => b - a);
+
+    for (const plate of sortedPlates) {
+        if (neededPerSide >= plate) {
+            const count = Math.floor(neededPerSide / plate);
+            if (count > 0) {
+                loadedPlates.push({ weight: plate, count: count });
+                neededPerSide -= count * plate;
+                neededPerSide = Math.round(neededPerSide * 1000) / 1000; // Fix float precision
+            }
+        }
+    }
+
+    return {
+        plates: loadedPlates,
+        remainder: neededPerSide * 2 // Total remaining weight
+    };
+}

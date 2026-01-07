@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
@@ -24,11 +24,11 @@ export function HealthPage() {
     const { metric } = useParams<{ metric?: string }>();
     const navigate = useNavigate();
     const { token } = useAuth();
-    const { dailyVitals, weightEntries, mealEntries, exerciseEntries: manualExerciseEntries, calculateDailyNutrition } = useData();
+    const { dailyVitals, weightEntries, mealEntries, exerciseEntries: manualExerciseEntries, calculateDailyNutrition, trainingPeriods } = useData();
     const { settings } = useSettings();
 
     // Fetch Universal Activities (Strava/Garmin)
-    const { activities: fetchedUniversalActivities, loading: loadingActivities } = useUniversalActivities(365);
+    const { activities: fetchedUniversalActivities } = useUniversalActivities(365);
 
     // Fetch Strength Workouts
     const [strengthWorkouts, setStrengthWorkouts] = useState<StrengthWorkout[]>([]);
@@ -116,11 +116,25 @@ export function HealthPage() {
     }, [metric]);
 
     const [timeframe, setTimeframe] = useState<TimeFrame>('year');
+    const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
+
+    const selectedPeriod = useMemo(() => {
+        if (timeframe !== 'all' || !selectedPeriodId) return null;
+        return trainingPeriods.find(p => p.id === selectedPeriodId);
+    }, [timeframe, selectedPeriodId, trainingPeriods]);
 
     const days = useMemo(() => {
         const now = new Date();
+        const startOf2026 = new Date('2026-01-01');
         const startOf2025 = new Date('2025-01-01');
         const startOf2024 = new Date('2024-01-01');
+
+        if (selectedPeriod) {
+            const start = new Date(selectedPeriod.startDate);
+            const end = selectedPeriod.endDate ? new Date(selectedPeriod.endDate) : now;
+            const diff = end.getTime() - start.getTime();
+            return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+        }
 
         switch (timeframe) {
             case '7d': return 7;
@@ -140,7 +154,7 @@ export function HealthPage() {
             case 'all': return 3650;
             default: return 30;
         }
-    }, [timeframe]);
+    }, [timeframe, selectedPeriod]);
 
     // FILTERED ENTRIES
     const filteredExerciseEntries = useMemo(() => {
@@ -154,6 +168,9 @@ export function HealthPage() {
     }, [unifiedExerciseEntries, days, timeframe]);
 
     const filteredWeightEntries = useMemo(() => {
+        if (selectedPeriod) {
+            return weightEntries.filter(e => e.date >= selectedPeriod.startDate && (!selectedPeriod.endDate || e.date <= selectedPeriod.endDate));
+        }
         if (timeframe === '2024') return weightEntries.filter(e => e.date.startsWith('2024'));
         if (timeframe === '2025') return weightEntries.filter(e => e.date.startsWith('2025'));
 
@@ -161,7 +178,7 @@ export function HealthPage() {
         cutoff.setDate(cutoff.getDate() - days);
         const cutoffStr = cutoff.toISOString().split('T')[0];
         return weightEntries.filter(e => e.date >= cutoffStr);
-    }, [weightEntries, days, timeframe]);
+    }, [weightEntries, days, timeframe, selectedPeriod]);
 
     const snapshots = useMemo(() => {
         return aggregateHealthData(days, dailyVitals, weightEntries, mealEntries, unifiedExerciseEntries, calculateDailyNutrition);
@@ -169,28 +186,15 @@ export function HealthPage() {
 
     // STRICT YEAR FILTERING FOR SNAPSHOTS
     const finalSnapshots = useMemo(() => {
-        if (timeframe === '2024') {
-            return snapshots.filter(s => s.date.startsWith('2024'));
+        if (selectedPeriod) {
+            return snapshots.filter(s => s.date >= selectedPeriod.startDate && (!selectedPeriod.endDate || s.date <= selectedPeriod.endDate));
         }
-        if (timeframe === '2025') {
-            return snapshots.filter(s => s.date.startsWith('2025'));
-        }
+        if (timeframe === '2024') return snapshots.filter(s => s.date.startsWith('2024'));
+        if (timeframe === '2025') return snapshots.filter(s => s.date.startsWith('2025'));
         return snapshots;
-    }, [snapshots, timeframe]);
+    }, [snapshots, timeframe, selectedPeriod]);
 
     const stats = useMemo(() => calculateHealthStats(finalSnapshots), [finalSnapshots]);
-
-    const goalTheme = useMemo(() => {
-        if (settings.trainingGoal === 'bulk') return { primary: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', text: 'text-amber-400', label: 'Bulk-fokus' };
-        if (settings.trainingGoal === 'deff') return { primary: '#0ea5e9', bg: 'rgba(14, 165, 233, 0.1)', text: 'text-sky-400', label: 'Deff-fokus' };
-        return { primary: '#10b981', bg: 'rgba(16, 185, 129, 0.1)', text: 'text-emerald-400', label: 'Balans-fokus' };
-    }, [settings.trainingGoal]);
-
-    const healthScore = useMemo(() => {
-        const baseScore = (stats.proteinQualityScore + Math.min(100, (stats.avgSleep / 8) * 100) + Math.min(100, (stats.avgWater / (settings.dailyWaterGoal || 8)) * 100)) / 3;
-        const consistencyPenalty = (100 - stats.loggingConsistency) * 0.2;
-        return Math.max(0, Math.min(100, Math.round(baseScore - consistencyPenalty)));
-    }, [stats, settings]);
 
     const handleTabChange = (tab: string) => {
         const isSwedishPath = window.location.pathname.includes('/hälsa') || window.location.pathname.includes('/halsa');
@@ -211,37 +215,51 @@ export function HealthPage() {
 
     return (
         <div className="health-page animate-in fade-in duration-500">
-            <header className="health-header">
-                <div className="header-content">
-                    <div>
-                        <span className={`header-badge ${goalTheme.text}`} style={{ backgroundColor: goalTheme.bg }}>{goalTheme.label}</span>
-                        <h1 className="mt-2">Din Hälsa</h1>
-                    </div>
-
-                    {/* Global Time Filter */}
-                    <div className="flex bg-slate-900/50 p-1 rounded-xl border border-white/5 backdrop-blur-sm overflow-x-auto">
-                        {(['7d', '30d', '3m', '6m', '2025', '2024', 'all'] as TimeFrame[]).map((tf) => (
-                            <button
-                                key={tf}
-                                onClick={() => setTimeframe(tf)}
-                                className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all whitespace-nowrap ${timeframe === tf
-                                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
-                                    }`}
-                            >
-                                {tf === '7d' ? '7D' : tf === '30d' ? '30D' : tf === 'year' ? '1ÅR' : tf.toUpperCase()}
-                            </button>
-                        ))}
-                    </div>
+            {/* Ultra-Compact Sticky Header */}
+            <header className="sticky top-0 z-50 bg-[#0a0f18]/95 backdrop-blur-md border-b border-white/5 py-2 px-4 flex flex-wrap items-center gap-3">
+                {/* Date Filters */}
+                <div className="flex bg-slate-900/50 p-0.5 rounded-lg border border-white/5 overflow-x-auto">
+                    {(['7d', '30d', '3m', '6m', 'year', '2025', 'all'] as TimeFrame[]).map((tf) => (
+                        <button
+                            key={tf}
+                            onClick={() => { setTimeframe(tf); setSelectedPeriodId(null); }}
+                            className={`px-2 py-1 text-[10px] font-bold rounded transition-all whitespace-nowrap ${timeframe === tf && !selectedPeriodId
+                                ? 'bg-emerald-500 text-white'
+                                : 'text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            {tf === '7d' ? '7D' : tf === '30d' ? '30D' : tf === 'year' ? 'I ÅR' : tf.toUpperCase()}
+                        </button>
+                    ))}
                 </div>
 
-                {/* SIMPLIFIED NAVIGATION */}
-                <div className="tab-nav mt-6">
-                    <button className={`tab-link ${activeView === 'overview' ? 'active' : ''}`} onClick={() => handleTabChange('overview')}>Översikt</button>
-                    <button className={`tab-link ${activeView === 'food' ? 'active' : ''}`} onClick={() => handleTabChange('food')}>🥗 Mat</button>
-                    <button className={`tab-link ${activeView === 'training' ? 'active' : ''}`} onClick={() => handleTabChange('training')}>⚡ Träning</button>
-                    <button className={`tab-link ${activeView === 'recovery' ? 'active' : ''}`} onClick={() => handleTabChange('recovery')}>🩹 Recovery</button>
-                    <button className={`tab-link ${activeView === 'body' ? 'active' : ''}`} onClick={() => handleTabChange('body')}>🧬 Kropp</button>
+                {/* Training Periods Dropdown */}
+                {trainingPeriods.length > 0 && (
+                    <select
+                        value={selectedPeriodId || ''}
+                        onChange={(e) => {
+                            setSelectedPeriodId(e.target.value || null);
+                            if (e.target.value) setTimeframe('all');
+                        }}
+                        className="bg-slate-900/80 border border-white/10 rounded px-2 py-1 text-[10px] font-bold text-slate-300 outline-none"
+                    >
+                        <option value="">Välj träningsperiod...</option>
+                        {trainingPeriods.map(p => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.startDate})</option>
+                        ))}
+                    </select>
+                )}
+
+                {/* Divider */}
+                <div className="h-4 w-px bg-white/10 hidden md:block" />
+
+                {/* Tab Navigation */}
+                <div className="flex gap-1 overflow-x-auto">
+                    <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'overview' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('overview')}>Översikt</button>
+                    <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'food' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('food')}>🥗 Mat</button>
+                    <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'training' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('training')}>⚡ Träning</button>
+                    <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'recovery' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('recovery')}>🩹 Recovery</button>
+                    <button className={`px-3 py-1 text-[11px] font-bold uppercase tracking-wide rounded transition-all ${activeView === 'body' ? 'bg-white/10 text-white' : 'text-slate-400 hover:text-white'}`} onClick={() => handleTabChange('body')}>🧬 Kropp</button>
                 </div>
             </header>
 

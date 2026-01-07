@@ -27,7 +27,6 @@ import { CoachPage } from './pages/CoachPage.tsx';
 import { PublicProfilePage } from './pages/PublicProfilePage.tsx';
 import { UsersPage } from './pages/UsersPage.tsx';
 import { GarminPage } from './pages/GarminPage.tsx';
-import { SettingsPage } from './pages/SettingsPage.tsx';
 import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
 import { ActivitiesPage } from './pages/ActivitiesPage.tsx';
 import { StrengthPage } from './pages/StrengthPage.tsx';
@@ -39,6 +38,23 @@ import { LifeStreamPage } from './pages/LifeStreamPage.tsx';
 import { YearInReviewPage } from './pages/YearInReviewPage.tsx';
 import { GoalsPage } from './pages/GoalsPage.tsx';
 import { ActivityStandalonePage } from './pages/ActivityStandalonePage.tsx';
+import { CommunityStatsPage } from './pages/CommunityStatsPage.tsx';
+import { ToolsPage } from './pages/ToolsPage.tsx';
+import { ToolsOneRepMaxPage } from './pages/tools/ToolsOneRepMaxPage.tsx';
+import { ToolsRacePredictorPage } from './pages/tools/ToolsRacePredictorPage.tsx';
+import { ToolsPaceConverterPage } from './pages/tools/ToolsPaceConverterPage.tsx';
+import { ToolsHealthPage } from './pages/tools/ToolsHealthPage.tsx';
+import { ToolsPowerPage } from './pages/tools/ToolsPowerPage.tsx';
+import { ToolsMacroPage } from './pages/tools/ToolsMacroPage.tsx';
+import { ToolsCooperPage } from './pages/tools/ToolsCooperPage.tsx';
+import { ToolsHeartRatePage } from './pages/tools/ToolsHeartRatePage.tsx';
+import { ToolsStrengthStandardsPage } from './pages/tools/ToolsStrengthStandardsPage.tsx';
+import { ToolsOlympicPage } from './pages/tools/ToolsOlympicPage.tsx';
+import { ToolsHyroxPage } from './pages/tools/ToolsHyroxPage.tsx';
+import DebugBar from './components/debug/DebugBar.tsx';
+import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
+import { ToolsReplayPage } from './pages/tools/ToolsReplayPage.tsx';
+import { PlannerPage } from './components/planner/PlannerPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -76,6 +92,7 @@ export function App() {
                 <SettingsProvider>
                     <CookingModeProvider>
                         <BrowserRouter>
+                            <DebugBar />
                             <Routes>
                                 {/* Public Routes */}
                                 <Route path="/login" element={<LoginPage />} />
@@ -92,6 +109,7 @@ export function App() {
                                                 <Route path="vecka" element={<WeeklyPage />} />
                                                 <Route path="vecka/recept/:recipeId/*" element={<WeeklyPage />} />
                                                 <Route path="planera" element={<PlanningPage />} />
+                                                <Route path="planner" element={<PlannerPage />} />
                                                 <Route path="pantry" element={<PantryPage />} />
                                                 <Route path="recipes" element={<RecipesPage />} />
                                                 <Route path="database" element={<DatabasePage />} />
@@ -99,6 +117,7 @@ export function App() {
                                                 <Route path="calories" element={<CaloriesPage />} />
                                                 <Route path="training/period/:id?" element={<TrainingPeriodPage />} />
                                                 <Route path="training" element={<TrainingPage />} />
+                                                <Route path="profile/:tab?" element={<ProfilePage />} />
                                                 <Route path="profile" element={<ProfilePage />} />
                                                 <Route path="health" element={<HealthPage />} />
                                                 <Route path="health/:metric" element={<HealthPage />} />
@@ -120,9 +139,9 @@ export function App() {
                                                 <Route path="community" element={<UsersPage />} />
                                                 <Route path="u/:handle" element={<PublicProfilePage />} />
                                                 <Route path="garmin" element={<GarminPage />} />
-                                                <Route path="settings" element={<SettingsPage />} />
+                                                <Route path="settings" element={<Navigate to="/profile" replace />} />
                                                 <Route path="sync" element={<IntegrationsPage />} />
-                                                <Route path="installningar" element={<SettingsPage />} />
+                                                <Route path="installningar" element={<Navigate to="/profile" replace />} />
                                                 <Route path="activities" element={<ActivitiesPage />} />
                                                 <Route path="logg" element={<ActivitiesPage />} />
                                                 <Route path="strength" element={<StrengthPage />} />
@@ -145,6 +164,27 @@ export function App() {
                                                 <Route path="goals" element={<GoalsPage />} />
                                                 <Route path="mal" element={<GoalsPage />} />
                                                 <Route path="activity/:id" element={<ActivityStandalonePage />} />
+                                                <Route path="statistics/:tab?" element={<CommunityStatsPage />} />
+                                                <Route path="statistik/:tab?" element={<CommunityStatsPage />} />
+
+                                                <Route path="tools" element={<ToolsPage />} />
+                                                <Route path="verktyg" element={<ToolsPage />} />
+                                                <Route path="tools/1rm" element={<ToolsOneRepMaxPage />} />
+                                                <Route path="tools/1rm/:exerciseName" element={<ToolsOneRepMaxPage />} />
+                                                <Route path="rm/:exerciseName?" element={<ToolsOneRepMaxPage />} />
+                                                <Route path="tools/race" element={<ToolsRacePredictorPage />} />
+                                                <Route path="tools/race-planner" element={<ToolsRacePlannerPage />} />
+                                                <Route path="tools/race-predictor" element={<ToolsRacePredictorPage />} />
+                                                <Route path="tools/pace" element={<ToolsPaceConverterPage />} />
+                                                <Route path="tools/health" element={<ToolsHealthPage />} />
+                                                <Route path="tools/power" element={<ToolsPowerPage />} />
+                                                <Route path="tools/macros" element={<ToolsMacroPage />} />
+                                                <Route path="tools/cooper" element={<ToolsCooperPage />} />
+                                                <Route path="tools/hr" element={<ToolsHeartRatePage />} />
+                                                <Route path="tools/standards" element={<ToolsStrengthStandardsPage />} />
+                                                <Route path="tools/olympic" element={<ToolsOlympicPage />} />
+                                                <Route path="tools/hyrox" element={<ToolsHyroxPage />} />
+                                                <Route path="tools/replay" element={<ToolsReplayPage />} />
                                             </Routes>
                                         </Layout>
                                     </RequireAuth>

@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { StrengthWorkout, PersonalBest, calculate1RM, normalizeExerciseName } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, PersonalBest, normalizeExerciseName } from '../../models/strengthTypes.ts';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
     ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area

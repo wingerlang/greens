@@ -47,7 +47,7 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
     return (
         <div className="flex flex-col gap-6 animate-in fade-in duration-500">
             {/* Quick Stats Row - Compact Version */}
-            <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div className={`glass border-l-4 p-3 rounded-lg flex flex-col justify-center relative overflow-hidden ${isGoalAchieved('sleep') ? 'border-sky-500' : 'border-slate-700'}`}>
                     <div className="absolute -right-2 -bottom-2 text-6xl opacity-5 pointer-events-none">
                         😴
@@ -55,7 +55,7 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-0.5 relative z-10">Sömn / natt</div>
                     <div className="flex items-baseline gap-1 relative z-10">
                         <span className="text-xl font-black text-white">{stats.avgSleep.toFixed(1)}</span>
-                        <span className="text-xs text-slate-500">h <span className="text-[9px] opacity-70">({stats.sleepConsistency}%)</span></span>
+                        <span className="text-xs text-slate-500">h</span>
                     </div>
                 </div>
                 <div className={`glass border-l-4 p-3 rounded-lg flex flex-col justify-center relative overflow-hidden ${isGoalAchieved('water') ? 'border-emerald-500' : 'border-slate-700'}`}>
@@ -65,7 +65,7 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-0.5 relative z-10">Vatten / dag</div>
                     <div className="flex items-baseline gap-1 relative z-10">
                         <span className="text-xl font-black text-white">{stats.avgWater.toFixed(1)}</span>
-                        <span className="text-xs text-slate-500">L <span className="text-[9px] opacity-70">({stats.waterConsistency}%)</span></span>
+                        <span className="text-xs text-slate-500">L</span>
                     </div>
                 </div>
 
@@ -82,7 +82,7 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                     </div>
                 </div>
 
-                {/* New: Caffeine Card */}
+                {/* Caffeine Card */}
                 <div className="glass border-l-4 border-amber-500/50 p-3 rounded-lg flex flex-col justify-center relative overflow-hidden">
                     <div className="absolute -right-2 -bottom-2 text-6xl opacity-5 pointer-events-none">
                         ☕
@@ -90,11 +90,11 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-0.5 relative z-10">Koffein / dag</div>
                     <div className="flex items-baseline gap-1 relative z-10">
                         <span className="text-xl font-black text-amber-400">{Math.round(stats.avgCaffeine)}</span>
-                        <span className="text-xs text-slate-500">mg <span className="text-[9px] opacity-70">({Math.round((snapshots.filter(s => (s.caffeine || 0) > 0).length / (snapshots.length || 1)) * 100)}%)</span></span>
+                        <span className="text-xs text-slate-500">mg</span>
                     </div>
                 </div>
 
-                {/* New: Calories Card */}
+                {/* Calories Card */}
                 <div className={`glass border-l-4 p-3 rounded-lg flex flex-col justify-center relative overflow-hidden ${isGoalAchieved('calories') ? 'border-rose-500' : 'border-slate-700'}`}>
                     <div className="absolute -right-2 -bottom-2 text-6xl opacity-5 pointer-events-none">
                         🔥
@@ -102,50 +102,44 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-0.5 relative z-10">Kalorier / dag</div>
                     <div className="flex items-baseline gap-1 relative z-10">
                         <span className="text-xl font-black text-rose-400">{Math.round(stats.avgCalories)}</span>
-                        <span className="text-xs text-slate-500">kcal <span className="text-[9px] opacity-70">({Math.round((snapshots.filter(s => (s.nutrition?.calories || 0) > 0).length / (snapshots.length || 1)) * 100)}%)</span></span>
+                        <span className="text-xs text-slate-500">kcal</span>
                     </div>
                 </div>
 
-                {/* New: Protein Card */}
+                {/* Protein Card */}
                 <div className="glass border-l-4 border-emerald-500/50 p-3 rounded-lg flex flex-col justify-center relative overflow-hidden">
                     <div className="absolute -right-2 -bottom-2 text-6xl opacity-5 pointer-events-none">
-                        🥩
+                        🌱
                     </div>
                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-0.5 relative z-10">Protein / dag</div>
                     <div className="flex items-baseline gap-1 relative z-10">
                         <span className="text-xl font-black text-emerald-400">{Math.round(stats.avgProtein)}</span>
-                        <span className="text-xs text-slate-500">g <span className="text-[9px] opacity-70">({Math.round((snapshots.filter(s => (s.nutrition?.protein || 0) > 0).length / (snapshots.length || 1)) * 100)}%)</span></span>
+                        <span className="text-xs text-slate-500">g</span>
                     </div>
                 </div>
             </section>
 
-            <div className="flex flex-col md:flex-row gap-6">
+            <div className="flex flex-col md:flex-row items-start gap-6">
                 {/* Left Column: Energy Balance Chart */}
-                <div className="flex-1 space-y-6">
-                    <div className="health-card glass min-h-[300px] flex flex-col">
-                        <div className="card-header border-b border-white/5 pb-3">
+                <div className="flex-1 w-full space-y-6">
+                    <div className="health-card glass min-h-[220px] max-h-[320px] flex flex-col overflow-hidden">
+                        <div className="card-header border-b border-white/5 pb-4 mb-4">
                             <div className="flex justify-between items-center">
-                                <div>
-                                    <h2 className="text-sm font-bold text-slate-200">Vikt & Trend</h2>
-                                    <p className="text-[10px] text-slate-500">Överblick över din viktutveckling</p>
-                                </div>
-                                <div className="p-1.5 bg-slate-800 rounded-lg">
-                                    <span className="text-xs">⚖️</span>
-                                </div>
+                                <h2 className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-500">Vikt & Trend</h2>
+                                <span className="text-lg opacity-40">⚖️</span>
                             </div>
                         </div>
 
-                        <div className="flex-1 p-2">
+                        <div className="w-full" style={{ height: '180px' }}>
                             {weightEntries && weightEntries.length > 0 ? (
                                 <WeightTrendChart
                                     entries={weightEntries}
                                     currentWeight={weightEntries.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.weight || 0}
                                 />
                             ) : (
-                                <div className="flex-1 flex flex-col items-center justify-center p-8 opacity-50 h-full">
-                                    <span className="text-4xl mb-4">⚖️</span>
-                                    <p className="text-sm text-center">Logga din vikt för att se trenden.</p>
-                                    <p className="text-xs text-slate-500 mt-2">Använd omniboxen: "82.5kg"</p>
+                                <div className="h-full flex flex-col items-center justify-center opacity-40">
+                                    <span className="text-3xl mb-3">⚖️</span>
+                                    <p className="text-xs text-center font-bold">Logga vikt för trendanalys</p>
                                 </div>
                             )}
                         </div>

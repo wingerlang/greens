@@ -1,6 +1,8 @@
 import { getAllUsers, sanitizeUser, getUserById, saveUser } from "../db/user.ts";
 import { getAllSessions } from "../db/session.ts";
 import { authenticate, hasRole } from "../middleware.ts";
+import { getErrorLogs, getMetrics } from "../utils/logger.ts";
+import { kv } from "../kv.ts";
 
 export async function handleAdminRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const ctx = await authenticate(req);
@@ -8,8 +10,73 @@ export async function handleAdminRoutes(req: Request, url: URL, headers: Headers
         return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), { status: 403, headers });
     }
 
+    if (url.pathname === "/api/admin/health") {
+        const memory = Deno.memoryUsage();
+        const sessions = await getAllSessions();
+        const activeSessions = sessions.filter(s => {
+            const lastSeen = s.lastSeen ? new Date(s.lastSeen).getTime() : new Date(s.start).getTime();
+            return Date.now() - lastSeen < 5 * 60 * 1000;
+        }).length;
+
+        // Count keys (approx)
+        let keyCount = 0;
+        for await (const _entry of kv.list({ prefix: [] })) {
+            keyCount++;
+        }
+
+        const system = {
+            denoVersion: Deno.version,
+            memory: {
+                rss: Math.round(memory.rss / 1024 / 1024) + " MB",
+                heapTotal: Math.round(memory.heapTotal / 1024 / 1024) + " MB",
+                heapUsed: Math.round(memory.heapUsed / 1024 / 1024) + " MB",
+            },
+            pid: Deno.pid,
+            uptime: Math.round(performance.now() / 1000) + " s",
+            kvStatus: "connected",
+            dbSize: keyCount,
+            activeSessions,
+            totalSessions: sessions.length
+        };
+        return new Response(JSON.stringify(system), { headers });
+    }
+
+    if (url.pathname === "/api/admin/logs") {
+        const logs = await getErrorLogs(100);
+        return new Response(JSON.stringify({ logs }), { headers });
+    }
+
+    if (url.pathname === "/api/admin/metrics") {
+        const responseTimes = await getMetrics("response_time", 500);
+        const reqCounts = await getMetrics("request_count", 500);
+
+        // Simple aggregation
+        const avgResponseTime = responseTimes.length > 0
+            ? responseTimes.reduce((acc, curr) => acc + curr.value, 0) / responseTimes.length
+            : 0;
+
+        return new Response(JSON.stringify({
+            metrics: {
+                avgResponseTime,
+                totalRequestsLogged: reqCounts.length,
+                recentResponseTimes: responseTimes.slice(0, 50)
+            }
+        }), { headers });
+    }
+
+    if (url.pathname === "/api/admin/database") {
+        // Count keys (approx)
+        let keyCount = 0;
+        for await (const _entry of kv.list({ prefix: [] })) {
+            keyCount++;
+        }
+        return new Response(JSON.stringify({ keyCount }), { headers });
+    }
+
     if (url.pathname === "/api/admin/users") {
-        const users = await getAllUsers();
+        // Implement pagination via query params?
+        // For now, let's just fetch the first 100 which is the default of the updated getAllUsers
+        const { users } = await getAllUsers(100);
         const sessions = await getAllSessions();
         const now = Date.now();
         const onlineUserIds = new Set(sessions

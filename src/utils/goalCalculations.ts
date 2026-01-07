@@ -98,22 +98,20 @@ export function getGoalPeriodDates(goal: PerformanceGoal, referenceDate: Date = 
 }
 
 /**
- * Get days remaining in the current period.
+ * Get days remaining until the goal's end date.
+ * For recurring goals (daily/weekly) WITH an endDate, shows days until end.
+ * For goals WITHOUT an endDate, returns undefined (they run indefinitely).
  */
 export function getDaysRemaining(goal: PerformanceGoal): number | undefined {
-    if (goal.period === 'once' || goal.type === 'weight') {
-        if (!goal.endDate) return undefined;
-        const end = new Date(goal.endDate);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return Math.max(0, Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
-    }
+    // If no endDate, the goal runs indefinitely
+    if (!goal.endDate) return undefined;
 
-    const { end } = getGoalPeriodDates(goal);
-    const endDate = new Date(end);
+    const end = new Date(goal.endDate);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    return Math.max(0, Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
+    end.setHours(0, 0, 0, 0);
+
+    return Math.max(0, Math.ceil((end.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
 }
 
 // ============================================
@@ -670,7 +668,7 @@ export function calculateGoalProgress(
             current = 0;
     }
 
-    const percentage = targetValue > 0 ? Math.min(100, (current / targetValue) * 100) : 0;
+    const percentage = (targetValue > 0 && !isNaN(targetValue) && !isNaN(current)) ? Math.min(100, (current / targetValue) * 100) : 0;
     const isComplete = percentage >= 100;
     const daysRemaining = getDaysRemaining(goal);
 

@@ -2,9 +2,11 @@ import { hashPassword } from "../utils/crypto.ts";
 import { createUser, getUser, getUserById, sanitizeUser } from "../db/user.ts";
 import { createSession, getSession } from "../db/session.ts";
 import { logLoginAttempt, getUserLoginStats } from "../db/stats.ts";
+import { checkRateLimit } from "../utils/rateLimit.ts";
 
 export async function handleAuthRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const method = req.method;
+    const ip = (req.headers.get("x-forwarded-for") || "unknown").split(",")[0];
 
     if (url.pathname === "/api/auth/register" && method === "POST") {
         try {
@@ -17,15 +19,20 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             const sessionId = await createSession(user.id);
             return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { status: 201, headers });
         } catch (e) {
-            return new Response(JSON.stringify({ error: e.message }), { status: 400, headers });
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 400, headers });
         }
     }
 
     if (url.pathname === "/api/auth/login" && method === "POST") {
+        // Rate limit: 5 attempts per 1 minute
+        const isAllowed = await checkRateLimit(ip, 5, 60 * 1000);
+        if (!isAllowed) {
+            return new Response(JSON.stringify({ error: "Too many login attempts. Please try again later." }), { status: 429, headers });
+        }
+
         try {
             const body = await req.json();
             const user = await getUser(body.username);
-            const ip = (req.headers.get("x-forwarded-for") || "unknown").split(",")[0];
             const ua = req.headers.get("user-agent") || "unknown";
 
             if (!user) return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401, headers });
@@ -40,7 +47,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             const sessionId = await createSession(user.id);
             return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { headers });
         } catch (e) {
-            return new Response(JSON.stringify({ error: e.message }), { status: 400, headers });
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 400, headers });
         }
     }
 

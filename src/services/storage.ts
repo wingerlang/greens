@@ -4,7 +4,7 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod } from '../models/types.ts';
+import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 
 // ============================================
@@ -18,13 +18,23 @@ export interface StorageService {
     getWeeklyPlan(weekStartDate: string): Promise<WeeklyPlan | undefined>;
     saveWeeklyPlan(plan: WeeklyPlan): Promise<void>;
     deleteWeeklyPlan(id: string): Promise<void>;
-    addWeightEntry(weight: number, date: string): Promise<void>;
+    addWeightEntry(entry: WeightEntry): Promise<void>;
     addMealEntry(meal: any): Promise<void>;
     saveGoal(goal: PerformanceGoal): Promise<void>;
     deleteGoal(id: string): Promise<void>;
     savePeriod(period: TrainingPeriod): Promise<void>;
     deletePeriod(id: string): Promise<void>;
     createFeedEvent(event: any): Promise<any>;
+    createFoodItem(food: any): Promise<any>;
+    updateFoodItem(food: any): Promise<any>;
+    deleteFoodItem(id: string): Promise<void>;
+    // Granular updates
+    updateMealEntry(meal: any): Promise<void>;
+    deleteMealEntry(id: string, date: string): Promise<void>;
+    updateWeightEntry(entry: any): Promise<void>;
+    deleteWeightEntry(id: string, date: string): Promise<void>;
+    saveBodyMeasurement(entry: any): Promise<void>;
+    deleteBodyMeasurement(id: string): Promise<void>;
     // Clear specific data from local cache
     clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
 }
@@ -54,7 +64,8 @@ const getDefaultData = (): AppData => ({
     // Phase 8: Data Persistence & Integration
     sleepSessions: [],
     intakeLogs: [],
-    universalActivities: []
+    universalActivities: [],
+    bodyMeasurements: []
 });
 
 // Helper to get token (if any)
@@ -111,18 +122,22 @@ export class LocalStorageService implements StorageService {
                         }
 
                         data = cloudData;
-                        // Update local mirror
+                        // Update local mirror (optional, maybe skip if we want "never cached")
+                        // But writing to cache is okay, reading from it is the issue.
                         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+                        // RETURN IMMEDIATELY - Do not fallback/merge with local
+                        return data;
                     } else {
-                        console.log('[Storage] Cloud data empty or invalid, fallback to local');
+                        console.log('[Storage] Cloud data empty or invalid');
                     }
                 }
             } catch (e) {
-                console.warn('[Storage] API load failed, falling back to local', e);
+                console.warn('[Storage] API load failed', e);
             }
         }
 
-        // 2. Fallback to LocalStorage
+        // 2. Fallback to LocalStorage (only if API failed or no token)
         if (!data) {
             try {
                 const stored = localStorage.getItem(STORAGE_KEY);
@@ -227,18 +242,18 @@ export class LocalStorageService implements StorageService {
         await this.save(data);
     }
 
-    async addWeightEntry(weight: number, date: string): Promise<void> {
+    async addWeightEntry(entry: WeightEntry): Promise<void> {
         // 1. API Optimization: Send ONLY weight entry
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('http://localhost:8000/api/weight', {
+                const res = await fetch('/api/weight', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ weight, date })
+                    body: JSON.stringify(entry)
                 });
 
                 if (!res.ok) throw new Error('API sync failed');
@@ -254,7 +269,7 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('http://localhost:8000/api/meals', {
+                const res = await fetch('/api/meals', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -270,11 +285,79 @@ export class LocalStorageService implements StorageService {
         }
     }
 
+    async updateMealEntry(meal: any): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/meals/${meal.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(meal)
+                });
+                if (!res.ok) throw new Error('API sync failed');
+            } catch (e) {
+                console.error('[Storage] Meal update failed:', e);
+            }
+        }
+    }
+
+    async deleteMealEntry(id: string, date: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/meals/${id}?date=${date}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('API sync failed');
+            } catch (e) {
+                console.error('[Storage] Meal delete failed:', e);
+            }
+        }
+    }
+
+    async updateWeightEntry(entry: any): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/weight/${entry.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(entry)
+                });
+                if (!res.ok) throw new Error('API sync failed');
+            } catch (e) {
+                console.error('[Storage] Weight update failed:', e);
+            }
+        }
+    }
+
+    async deleteWeightEntry(id: string, date: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/weight/${id}?date=${date}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('API sync failed');
+            } catch (e) {
+                console.error('[Storage] Weight delete failed:', e);
+            }
+        }
+    }
+
     async saveGoal(goal: PerformanceGoal): Promise<void> {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('http://localhost:8000/api/goals', {
+                const res = await fetch('/api/goals', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -293,7 +376,7 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`http://localhost:8000/api/goals?id=${id}`, {
+                await fetch(`/api/goals?id=${id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -307,7 +390,7 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('http://localhost:8000/api/periods', {
+                const res = await fetch('/api/periods', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -326,7 +409,7 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                await fetch(`http://localhost:8000/api/periods?id=${id}`, {
+                await fetch(`/api/periods?id=${id}`, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
@@ -340,7 +423,7 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('http://localhost:8000/api/feed/events', {
+                const res = await fetch('/api/feed/events', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -357,6 +440,72 @@ export class LocalStorageService implements StorageService {
             }
         }
         return null;
+    }
+
+    async createFoodItem(food: any): Promise<any> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('/api/foods', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(food)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.item; // Return updated item (e.g. with permanent image URL)
+                } else {
+                    throw new Error('API create failed');
+                }
+            } catch (e) {
+                console.error('[Storage] Food create failed:', e);
+            }
+        }
+        return food; // Fallback to local
+    }
+
+    async updateFoodItem(food: any): Promise<any> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/foods/${food.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(food)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    return data.item; // Return updated item
+                } else {
+                    throw new Error('API update failed');
+                }
+            } catch (e) {
+                console.error('[Storage] Food update failed:', e);
+            }
+        }
+        return food; // Fallback
+    }
+
+    async deleteFoodItem(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`/api/foods/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) {
+                console.error('[Storage] Food delete failed:', e);
+            }
+        }
     }
 
     /**
@@ -419,6 +568,48 @@ export class LocalStorageService implements StorageService {
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch (e) {
             console.error('[Storage] Failed to clear local cache:', e);
+        }
+    }
+
+    async saveBodyMeasurement(entry: any): Promise<void> {
+        const data = await this.load();
+        if (!data.bodyMeasurements) data.bodyMeasurements = [];
+        const idx = data.bodyMeasurements.findIndex((m: any) => m.id === entry.id);
+        if (idx >= 0) {
+            data.bodyMeasurements[idx] = entry;
+        } else {
+            data.bodyMeasurements.push(entry);
+        }
+        await this.save(data);
+
+        // API sync
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            fetch('/api/measurements', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(entry)
+            }).catch(e => console.error('[Storage] Body measurement sync failed:', e));
+        }
+    }
+
+    async deleteBodyMeasurement(id: string): Promise<void> {
+        const data = await this.load();
+        data.bodyMeasurements = data.bodyMeasurements?.filter((m: any) => m.id !== id) || [];
+        await this.save(data);
+
+        // API sync
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            fetch(`/api/measurements/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            }).catch(e => console.error('[Storage] Body measurement delete failed:', e));
         }
     }
 }

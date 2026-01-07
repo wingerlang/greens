@@ -25,8 +25,8 @@ export function GoalCard({ goal, progress, onEdit, onDelete }: GoalCardProps) {
 
     return (
         <div className={`relative p-4 rounded-2xl border transition-all ${isComplete
-                ? 'bg-emerald-500/10 border-emerald-500/30'
-                : 'bg-slate-900/50 border-white/5 hover:border-white/10'
+            ? 'bg-emerald-500/10 border-emerald-500/30'
+            : 'bg-slate-900/50 border-white/5 hover:border-white/10'
             }`}>
             {/* Status Indicator */}
             {isComplete && (
@@ -62,7 +62,7 @@ export function GoalCard({ goal, progress, onEdit, onDelete }: GoalCardProps) {
                         <div
                             className={`h-full rounded-full transition-all ${isComplete ? 'bg-emerald-500' : 'bg-gradient-to-r from-sky-500 to-emerald-500'
                                 }`}
-                            style={{ width: `${Math.min(100, progress.percentage)}%` }}
+                            style={{ width: `${(progress.percentage && !isNaN(progress.percentage)) ? Math.min(100, progress.percentage) : 0}%` }}
                         />
                     </div>
 
@@ -72,7 +72,7 @@ export function GoalCard({ goal, progress, onEdit, onDelete }: GoalCardProps) {
                             {progress.current} / {progress.target}
                         </span>
                         <span className={`text-[10px] font-bold ${isComplete ? 'text-emerald-400' : 'text-slate-400'}`}>
-                            {Math.round(progress.percentage)}%
+                            {(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%
                         </span>
                     </div>
                 </div>

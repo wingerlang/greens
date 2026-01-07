@@ -11,7 +11,8 @@
  */
 
 import type { StrengthWorkout, StrengthWorkoutExercise, StrengthSet } from '../models/strengthTypes.ts';
-import { calculate1RM, normalizeExerciseName, isBodyweightExercise, isTimeBasedExercise, isWeightedDistanceExercise, isHyroxExercise, isDistanceBasedExercise } from '../models/strengthTypes.ts';
+import { normalizeExerciseName, isBodyweightExercise, isTimeBasedExercise, isWeightedDistanceExercise, isHyroxExercise, isDistanceBasedExercise } from '../models/strengthTypes.ts';
+import { calculateEstimated1RM } from './strengthCalculators.ts';
 
 // ============================================
 // Configuration
@@ -232,7 +233,7 @@ export function getProgressionSuggestion(
     const isDistance = isDistanceBasedExercise(exerciseName);
 
     // Calculate current 1RM
-    const current1RM = isDistance ? 0 : calculate1RM(weight, reps);
+    const current1RM = isDistance ? 0 : calculateEstimated1RM(weight, reps);
 
     // Adjust increment based on exercise type
     const baseIncrement = Math.max(
@@ -310,7 +311,7 @@ export function getProgressionSuggestion(
         tips.push('🏃 Cardio - fokusera på att öka distansen eller tempot');
     }
 
-    const projected1RM = calculate1RM(suggestedWeight, suggestedReps);
+    const projected1RM = calculateEstimated1RM(suggestedWeight, suggestedReps);
 
     const primaryMessage = isDistance
         ? `${formatRelativeDate(lastSession.workout.date)}: ${lastDistance}m. Sikte på ${suggestedDistance}m (+2.5%)`
@@ -372,7 +373,7 @@ export function getExerciseHistoryWithRM(
                     date: workout.date,
                     weight: topSet.weight,
                     reps: topSet.reps,
-                    estimated1RM: calculate1RM(topSet.weight, topSet.reps),
+                    estimated1RM: calculateEstimated1RM(topSet.weight, topSet.reps),
                     volume: calculateVolume(exercise),
                     distance: topSet.distance || 0
                 });

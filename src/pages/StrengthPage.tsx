@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { StrengthWorkout, StrengthWorkoutExercise, StrengthLogImportResult, PersonalBest, StrengthStats, calculate1RM, normalizeExerciseName } from '../models/strengthTypes.ts';
+import { StrengthWorkout, StrengthWorkoutExercise, StrengthLogImportResult, PersonalBest, StrengthStats, normalizeExerciseName } from '../models/strengthTypes.ts';
+import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 import { PRResearchCenter } from '../components/training/PRResearchCenter.tsx';
 import { WeeklyVolumeChart } from '../components/training/WeeklyVolumeChart.tsx';
@@ -9,6 +10,7 @@ import { TrainingBreaks } from '../components/training/TrainingBreaks.tsx';
 import { TopExercisesTable } from '../components/training/TopExercisesTable.tsx';
 import { ExerciseDetailModal } from '../components/training/ExerciseDetailModal.tsx';
 import { WorkoutDetailModal } from '../components/training/WorkoutDetailModal.tsx';
+import { useScrollLock } from '../hooks/useScrollLock.ts';
 import { Tabs } from '../components/common/Tabs.tsx';
 import { CollapsibleSection } from '../components/common/CollapsibleSection.tsx';
 import { TrainingTimeStats } from '../components/training/TrainingTimeStats.tsx';
@@ -179,14 +181,7 @@ export function StrengthPage() {
     }, [workouts, startDate, endDate]);
 
     // Prevent background scroll when Research Center is open
-    useEffect(() => {
-        if (isResearchCenterOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = '';
-        }
-        return () => { document.body.style.overflow = ''; };
-    }, [isResearchCenterOpen]);
+    useScrollLock(isResearchCenterOpen);
 
     // Derive Personal Bests from workout history (ensures bodyweight-aware logic is applied to existing data)
     const derivedPersonalBests = React.useMemo(() => {
@@ -207,7 +202,7 @@ export function StrengthPage() {
                     const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
                     if (calcWeight <= 0 && !isBW) return;
 
-                    const est1RM = calculate1RM(calcWeight, set.reps);
+                    const est1RM = calculateEstimated1RM(calcWeight, set.reps);
                     const existingE1RMBest = currentE1RMBests.get(exName) || 0;
                     const existingWeightBest = currentWeightBests.get(exName) || 0;
 
@@ -293,7 +288,7 @@ export function StrengthPage() {
                     const isBW = s.isBodyweight || s.weight === 0;
                     const weight = isBW ? (s.extraWeight || 0) : s.weight;
                     if (weight <= 0 && !isBW) return max;
-                    return Math.max(max, calculate1RM(weight, s.reps));
+                    return Math.max(max, calculateEstimated1RM(weight, s.reps));
                 }, 0);
 
                 if (sessionMax > (bestsByYear[year][exName] || 0)) {
@@ -311,7 +306,7 @@ export function StrengthPage() {
                     const isBW = s.isBodyweight || s.weight === 0;
                     const weight = isBW ? (s.extraWeight || 0) : s.weight;
                     if (weight <= 0 && !isBW) return max;
-                    return Math.max(max, calculate1RM(weight, s.reps));
+                    return Math.max(max, calculateEstimated1RM(weight, s.reps));
                 }, 0);
 
                 return sessionMax > 0 && sessionMax >= (bestsByYear[year][exName] || 0);

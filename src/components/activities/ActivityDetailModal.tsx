@@ -154,6 +154,11 @@ export function ActivityDetailModal({
     const splits = perf?.splits || [];
     const hasSplits = splits.length > 0;
 
+    // Analysis visibility criteria
+    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
+    const hasWorkoutStructure = parsedWorkout.segments.length > 0;
+    const isWorthyOfAnalysis = hasSplits || hasHeartRate || hasWorkoutStructure || isMergedActivity;
+
     // Unmerge handler
     const handleUnmerge = async () => {
         if (!universalActivity?.id || !token) return;
@@ -497,12 +502,14 @@ export function ActivityDetailModal({
                                     <span>⚡</span> Sammanslagen ({originalActivities.length})
                                 </button>
                             )}
-                            <button
-                                onClick={() => setActiveTab('analysis')}
-                                className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'analysis' ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                            >
-                                <span>🧩</span> Analys
-                            </button>
+                            {isWorthyOfAnalysis && (
+                                <button
+                                    onClick={() => setActiveTab('analysis')}
+                                    className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'analysis' ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                                >
+                                    <span>🧩</span> Analys
+                                </button>
+                            )}
                         </div>
 
                         {/* Source Badge + View Toggle for Merged */}
@@ -765,10 +772,10 @@ export function ActivityDetailModal({
                                 )}
 
                                 {/* Heart Rate Zone Visualization (for cardio with HR data) */}
-                                {perf?.avgHeartRate && activity.type?.toLowerCase() !== 'strength' && (
+                                {(perf?.avgHeartRate || activity.avgHeartRate) && activity.type?.toLowerCase() !== 'strength' && (
                                     <HeartRateZones
-                                        avgHeartRate={Math.round(perf.avgHeartRate)}
-                                        maxHeartRate={perf.maxHeartRate ? Math.round(perf.maxHeartRate) : undefined}
+                                        avgHeartRate={Math.round(perf?.avgHeartRate || activity.avgHeartRate || 0)}
+                                        maxHeartRate={(perf?.maxHeartRate || activity.maxHeartRate) ? Math.round(perf?.maxHeartRate || activity.maxHeartRate || 0) : undefined}
                                         duration={activity.durationMinutes ? activity.durationMinutes * 60 : undefined}
                                     />
                                 )}
@@ -994,18 +1001,50 @@ export function ActivityDetailModal({
                                             seconds: s.movingTime,
                                             pace: (s.movingTime / 60).toFixed(2)
                                         }))}>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" />
-                                            <XAxis dataKey="km" stroke="#64748b" fontSize={10} />
-                                            <YAxis hide domain={['dataMin - 10', 'dataMax + 10']} />
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                            <XAxis dataKey="km" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                            <YAxis hide domain={['dataMin - 30', 'dataMax + 30']} />
                                             <Tooltip
-                                                contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px' }}
-                                                labelStyle={{ color: '#94a3b8' }}
-                                                formatter={(val: number) => [`${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, '0')}`, 'Tempo']}
+                                                contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                                labelStyle={{ color: '#94a3b8', fontWeight: 'bold', marginBottom: '4px' }}
+                                                formatter={(val: number) => [`${Math.floor(val / 60)}:${(val % 60).toString().padStart(2, '0')} /km`, 'Tempo']}
                                             />
-                                            <Bar dataKey="seconds" fill="#6366f1" radius={[4, 4, 0, 0]} minPointSize={2} />
+                                            <Bar dataKey="seconds" fill="#6366f1" radius={[6, 6, 0, 0]} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
+
+                                {/* Heart Rate Intensity Graph (Split-based) */}
+                                {splits.some((s: any) => s.averageHeartrate) && (
+                                    <div className="space-y-3">
+                                        <h3 className="text-sm font-bold text-rose-400 uppercase">❤️ Pulsutveckling</h3>
+                                        <div className="h-48 bg-slate-800/30 rounded-xl p-2">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <LineChart data={splits.map((s: any, i: number) => ({
+                                                    km: `Km ${i + 1}`,
+                                                    hr: s.averageHeartrate
+                                                }))}>
+                                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                                                    <XAxis dataKey="km" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+                                                    <YAxis domain={['dataMin - 10', 'dataMax + 10']} hide />
+                                                    <Tooltip
+                                                        contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px' }}
+                                                        labelStyle={{ color: '#94a3b8', fontWeight: 'bold' }}
+                                                        formatter={(val: number) => [`${Math.round(val)} bpm`, 'Puls']}
+                                                    />
+                                                    <Line
+                                                        type="monotone"
+                                                        dataKey="hr"
+                                                        stroke="#f43f5e"
+                                                        strokeWidth={3}
+                                                        dot={{ r: 4, fill: '#f43f5e', strokeWidth: 0 }}
+                                                        activeDot={{ r: 6, strokeWidth: 0 }}
+                                                    />
+                                                </LineChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Split Table */}
                                 <div className="bg-slate-800/50 rounded-xl overflow-hidden">

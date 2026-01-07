@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { X, Info, ArrowRightLeft } from 'lucide-react';
 import {
     type MealEntry,
     type MealType,
     type MealItem,
     MEAL_TYPE_LABELS
 } from '../../models/types.ts';
+import { ConfirmModal } from '../shared/ConfirmModal.tsx';
+import { NutritionLabel } from '../shared/NutritionLabel.tsx';
 
 interface MealTimelineProps {
     viewMode: 'normal' | 'compact';
@@ -12,12 +15,14 @@ interface MealTimelineProps {
     entriesByMeal: Record<MealType, MealEntry[]>;
     getItemName: (item: MealItem) => string;
     getItemCalories: (item: MealItem) => number;
+    getItemNutrition?: (item: MealItem) => { calories: number; protein: number; carbs: number; fat?: number };
+    getItemBrand?: (item: MealItem) => string | undefined;
     updateMealEntry: (id: string, data: Partial<MealEntry>) => void;
     handleDeleteEntry: (id: string) => void;
     setIsFormOpen: (open: boolean) => void;
     setMealType: (type: MealType) => void;
     setBreakdownItem: (item: MealItem | null) => void;
-    // Bulk selection
+    onReplaceItem?: (item: MealItem, entryId: string) => void;
     selectedIds: Set<string>;
     onToggleSelect: (id: string) => void;
     onSelectAll: () => void;
@@ -30,236 +35,304 @@ export function MealTimeline({
     entriesByMeal,
     getItemName,
     getItemCalories,
+    getItemNutrition,
+    getItemBrand,
     updateMealEntry,
     handleDeleteEntry,
     setIsFormOpen,
     setMealType,
     setBreakdownItem,
+    onReplaceItem,
     selectedIds,
     onToggleSelect,
     onSelectAll,
     onDeleteSelected,
 }: MealTimelineProps) {
-    if (viewMode === 'compact') {
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; entryId: string | null }>({ isOpen: false, entryId: null });
+
+    const handleDelete = (id: string) => {
+        setDeleteConfirm({ isOpen: true, entryId: id });
+    };
+
+    const confirmDelete = () => {
+        if (deleteConfirm.entryId) {
+            handleDeleteEntry(deleteConfirm.entryId);
+            setDeleteConfirm({ isOpen: false, entryId: null });
+        }
+    };
+
+    const renderEntryRow = (entry: MealEntry, isCompact: boolean) => {
+        const totalNutrition = entry.items.reduce((acc, item) => {
+            const n = getItemNutrition?.(item) || { calories: getItemCalories(item), protein: 0, carbs: 0, fat: 0 };
+            return {
+                calories: acc.calories + n.calories,
+                protein: acc.protein + n.protein,
+                carbs: acc.carbs + n.carbs,
+                fat: acc.fat + (n.fat || 0)
+            };
+        }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+        const firstItem = entry.items[0];
+
         return (
-            <div className="flex flex-col gap-1.5 bg-slate-800/30 rounded-xl p-3 border border-slate-700/50">
-                {dailyEntries.length === 0 ? (
-                    <div className="text-center text-slate-500 py-4">
-                        <span>Inga måltider loggade</span>
+            <div
+                key={entry.id}
+                className={`group relative flex items-center justify-between p-3 bg-slate-900/40 border border-white/5 rounded-2xl hover:border-white/10 transition-all gap-4 ${isCompact ? '' : 'mb-2'} cursor-move`}
+                draggable
+                onDragStart={(e) => {
+                    e.dataTransfer.setData('entryId', entry.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    (e.currentTarget as HTMLElement).style.opacity = '0.5';
+                }}
+                onDragEnd={(e) => {
+                    (e.currentTarget as HTMLElement).style.opacity = '1';
+                }}
+            >
+                {/* Left: Name + Brand + Time */}
+                <div className="flex items-center gap-3 min-w-0" style={{ flex: '0 0 32%' }}>
+                    {isCompact && (
+                        <input
+                            type="checkbox"
+                            checked={selectedIds.has(entry.id)}
+                            onChange={() => onToggleSelect(entry.id)}
+                            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50 shrink-0"
+                        />
+                    )}
+                    {isCompact && (
+                        <div className="flex flex-col items-center w-10 shrink-0">
+                            <span className="text-[10px] uppercase text-slate-500 font-black">
+                                {MEAL_TYPE_LABELS[entry.mealType].substring(0, 3)}
+                            </span>
+                            <span className="text-[9px] text-slate-600 font-mono">
+                                {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        </div>
+                    )}
+                    <div className="flex flex-col min-w-0">
+                        <span className="text-sm font-bold text-slate-200 truncate">
+                            {entry.items.map((item) => getItemName(item)).join(', ')}
+                        </span>
+                        {firstItem && getItemBrand?.(firstItem) && (
+                            <span className="text-[10px] text-slate-500 font-medium tracking-tight">
+                                {getItemBrand(firstItem)}
+                            </span>
+                        )}
+                        {!isCompact && (
+                            <span className="text-[10px] text-slate-600 font-medium md:hidden">
+                                {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {/* Center: Protein, Carbs, Fat - Centered in whole row */}
+                <div className="hidden sm:flex flex-1 justify-center items-center gap-6 text-[10px] font-black uppercase tracking-tight whitespace-nowrap overflow-hidden px-4">
+                    <span className="text-rose-400" title="Protein">🌱 {Math.round(totalNutrition.protein)}g</span>
+                    <span className="text-indigo-400" title="Kolhydrater">🍞 {Math.round(totalNutrition.carbs)}g</span>
+                    <span className="text-orange-400" title="Fett">🥑 {Math.round(totalNutrition.fat)}g</span>
+                </div>
+
+                {/* Right: Controls, Kcal, Info, X */}
+                <div className="flex items-center gap-3 shrink-0" style={{ flex: '0 0 35%', justifyContent: 'flex-end' }}>
+                    <div className="flex items-center gap-2 scale-90 origin-right">
+                        {entry.items.map((item, idx) => (
+                            <PortionControls
+                                key={idx}
+                                item={item}
+                                onUpdate={(newServings) => {
+                                    updateMealEntry(entry.id, {
+                                        items: entry.items.map((it, i) =>
+                                            i === idx ? { ...it, servings: newServings } : it
+                                        )
+                                    });
+                                }}
+                                isCompact
+                            />
+                        ))}
+                    </div>
+
+                    {/* Calories - Green as requested */}
+                    <span className="text-sm font-black text-emerald-500 min-w-[55px] text-right">
+                        {Math.round(totalNutrition.calories)} <span className="text-[10px] uppercase opacity-70">kcal</span>
+                    </span>
+
+                    {/* Action buttons (Info, Ersätt, Delete) */}
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
                         <button
-                            className="ml-3 text-emerald-400 hover:text-emerald-300"
-                            onClick={() => setIsFormOpen(true)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setBreakdownItem(firstItem);
+                            }}
+                            title="Mer info"
                         >
-                            + Lägg till
+                            <Info size={14} />
+                        </button>
+                        {onReplaceItem && firstItem && (
+                            <button
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onReplaceItem(firstItem, entry.id);
+                                }}
+                                title="Ersätt"
+                            >
+                                <ArrowRightLeft size={14} />
+                            </button>
+                        )}
+                        <button
+                            className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10"
+                            onClick={() => handleDelete(entry.id)}
+                            title="Ta bort"
+                        >
+                            <X size={18} strokeWidth={2.5} />
                         </button>
                     </div>
-                ) : (
-                    <>
-                        {/* Bulk actions bar */}
-                        <div className="flex items-center justify-between px-2 py-1.5 mb-1 border-b border-slate-700/50">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={selectedIds.size === dailyEntries.length && dailyEntries.length > 0}
-                                    onChange={onSelectAll}
-                                    className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50"
-                                />
-                                <span className="text-xs text-slate-400">
-                                    {selectedIds.size > 0 ? `${selectedIds.size} markerade` : 'Markera alla'}
-                                </span>
-                            </label>
-                            {selectedIds.size > 0 && (
-                                <button
-                                    onClick={onDeleteSelected}
-                                    className="text-xs px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors font-bold"
-                                >
-                                    🗑️ Ta bort ({selectedIds.size})
-                                </button>
-                            )}
-                        </div>
-
-                        {dailyEntries.map((entry: MealEntry) => (
-                            <div
-                                key={entry.id}
-                                draggable
-                                onDragStart={(e) => {
-                                    e.dataTransfer.setData('entryId', entry.id);
-                                    e.dataTransfer.effectAllowed = 'move';
-                                    (e.currentTarget as HTMLElement).classList.add('opacity-50');
-                                }}
-                                onDragEnd={(e) => {
-                                    (e.currentTarget as HTMLElement).classList.remove('opacity-50');
-                                }}
-                                className={`group flex items-center justify-between py-2 px-3 rounded-lg transition-all cursor-move ${selectedIds.has(entry.id)
-                                    ? 'bg-emerald-500/10 border border-emerald-500/30'
-                                    : 'bg-slate-800/50 hover:bg-slate-800'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedIds.has(entry.id)}
-                                        onChange={() => onToggleSelect(entry.id)}
-                                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50 shrink-0"
-                                    />
-                                    <span className="text-[10px] uppercase text-slate-500 w-16 shrink-0">
-                                        {MEAL_TYPE_LABELS[entry.mealType]}
-                                    </span>
-                                    <span className="text-sm text-slate-200 truncate">
-                                        {entry.items.map((item: MealItem) => getItemName(item)).join(', ')}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {entry.items.map((item: MealItem, idx: number) => (
-                                        <PortionControls
-                                            key={idx}
-                                            item={item}
-                                            onUpdate={(newServings) => {
-                                                updateMealEntry(entry.id, {
-                                                    items: entry.items.map((it, i) =>
-                                                        i === idx ? { ...it, servings: newServings } : it
-                                                    )
-                                                });
-                                            }}
-                                            isCompact
-                                        />
-                                    ))}
-                                    {entry.items.length > 0 && (
-                                        <button
-                                            className="text-sm font-medium text-emerald-400 ml-2 hover:text-emerald-300 hover:underline cursor-pointer transition-colors"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setBreakdownItem(entry.items[0]);
-                                            }}
-                                        >
-                                            {entry.items.reduce((sum, item) => sum + getItemCalories(item), 0)} kcal
-                                        </button>
-                                    )}
-                                    <button
-                                        className="text-slate-500 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        onClick={() => handleDeleteEntry(entry.id)}
-                                    >
-                                        ×
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                        <TimelineActions setIsFormOpen={setIsFormOpen} />
-                    </>
-                )}
+                </div>
             </div>
         );
-    }
+    };
 
-    return (
-        <div className="meals-timeline">
-            {(Object.entries(entriesByMeal) as [MealType, MealEntry[]][]).map(([mealTypeKey, entries]) => (
-                <div
-                    key={mealTypeKey}
-                    className="meal-section transition-colors duration-200"
-                    onDragOver={(e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        (e.currentTarget as HTMLElement).classList.add('bg-emerald-500/5');
-                        (e.currentTarget as HTMLElement).classList.add('border-emerald-500/30');
-                    }}
-                    onDragLeave={(e) => {
-                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/5');
-                        (e.currentTarget as HTMLElement).classList.remove('border-emerald-500/30');
-                    }}
-                    onDrop={(e) => {
-                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/5');
-                        (e.currentTarget as HTMLElement).classList.remove('border-emerald-500/30');
-                        const entryId = e.dataTransfer.getData('entryId');
-                        if (entryId) {
-                            updateMealEntry(entryId, { mealType: mealTypeKey });
-                        }
-                    }}
-                >
-                    <h3 className="meal-title">
-                        <span className="meal-icon">
-                            {mealTypeKey === 'breakfast' && '🌅'}
-                            {mealTypeKey === 'lunch' && '☀️'}
-                            {mealTypeKey === 'dinner' && '🌙'}
-                            {mealTypeKey === 'snack' && '🍎'}
-                            {mealTypeKey === 'beverage' && '🥤'}
-                        </span>
-                        {MEAL_TYPE_LABELS[mealTypeKey]}
-                    </h3>
-                    {entries.length === 0 ? (
-                        <div className="meal-empty">
-                            <span>Inga måltider</span>
+    if (viewMode === 'compact') {
+        return (
+            <>
+                <div className="flex flex-col gap-1.5 bg-slate-800/20 rounded-2xl p-3 border border-slate-700/30">
+                    {dailyEntries.length === 0 ? (
+                        <div className="text-center text-slate-500 py-12">
+                            <span className="block mb-2 text-lg">🍽️</span>
+                            <span className="text-sm font-medium">Inga måltider loggade idag</span>
                             <button
-                                className="btn btn-ghost"
-                                onClick={() => {
-                                    setMealType(mealTypeKey);
-                                    setIsFormOpen(true);
-                                }}
+                                className="block mx-auto mt-4 py-2 px-6 text-xs font-black uppercase tracking-widest bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition-all"
+                                onClick={() => setIsFormOpen(true)}
                             >
-                                + Lägg till
+                                + Logga Första
                             </button>
                         </div>
                     ) : (
-                        <div className="meal-entries">
-                            {entries.map((entry: MealEntry) => (
-                                <div
-                                    key={entry.id}
-                                    className="meal-entry cursor-move transition-all active:scale-[0.98]"
-                                    draggable
-                                    onDragStart={(e) => {
-                                        e.dataTransfer.setData('entryId', entry.id);
-                                        e.dataTransfer.effectAllowed = 'move';
-                                        // Visual feedback for element being dragged
-                                        setTimeout(() => (e.target as HTMLElement).classList.add('opacity-40'), 0);
-                                    }}
-                                    onDragEnd={(e) => {
-                                        (e.target as HTMLElement).classList.remove('opacity-40');
-                                    }}
-                                >
-                                    {entry.items.map((item: MealItem, idx: number) => (
-                                        <div key={idx} className="entry-item">
-                                            <div className="entry-info">
-                                                <span className="entry-name">{getItemName(item)}</span>
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <PortionControls
-                                                    item={item}
-                                                    onUpdate={(newServings) => {
-                                                        updateMealEntry(entry.id, {
-                                                            items: entry.items.map((it, i) =>
-                                                                i === idx ? { ...it, servings: newServings } : it
-                                                            )
-                                                        });
-                                                    }}
-                                                />
-                                                <button
-                                                    className="entry-calories ml-2 hover:text-emerald-300 hover:underline cursor-pointer"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setBreakdownItem(item);
-                                                    }}
-                                                >
-                                                    {getItemCalories(item)} kcal
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ))}
+                        <>
+                            {/* Bulk actions bar */}
+                            <div className="flex items-center justify-between px-3 py-2 mb-2 border-b border-slate-700/50">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.size === dailyEntries.length && dailyEntries.length > 0}
+                                        onChange={onSelectAll}
+                                        className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500 focus:ring-emerald-500/50"
+                                    />
+                                    <span className="text-xs text-slate-400 font-bold uppercase tracking-widest">
+                                        {selectedIds.size > 0 ? `${selectedIds.size} markerade` : 'Markera alla'}
+                                    </span>
+                                </label>
+                                {selectedIds.size > 0 && (
                                     <button
-                                        className="btn-delete"
-                                        onClick={() => handleDeleteEntry(entry.id)}
+                                        onClick={onDeleteSelected}
+                                        className="text-xs px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors font-bold"
                                     >
-                                        ×
+                                        Ta bort ({selectedIds.size})
                                     </button>
-                                </div>
-                            ))}
-                        </div>
+                                )}
+                            </div>
+
+                            {dailyEntries.map(entry => renderEntryRow(entry, true))}
+                            <TimelineActions setIsFormOpen={setIsFormOpen} />
+                        </>
                     )}
                 </div>
+                <ConfirmModal
+                    isOpen={deleteConfirm.isOpen}
+                    onClose={() => setDeleteConfirm({ isOpen: false, entryId: null })}
+                    onConfirm={confirmDelete}
+                    title="Ta bort måltid"
+                    message="Dessa poster kommer att raderas permanent."
+                    confirmText="Ta bort"
+                    variant="danger"
+                />
+            </>
+        );
+    }
+
+    // Normal view (Detailed Sections)
+    return (
+        <div className="meals-timeline flex flex-col gap-8">
+            {(Object.entries(entriesByMeal) as [MealType, MealEntry[]][]).map(([mealTypeKey, entries]) => (
+                <div
+                    key={mealTypeKey}
+                    className="meal-section"
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        (e.currentTarget as HTMLElement).classList.add('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
+                    }}
+                    onDragLeave={(e) => {
+                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
+                    }}
+                    onDrop={(e) => {
+                        (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
+                        const entryId = e.dataTransfer.getData('entryId');
+                        if (entryId) updateMealEntry(entryId, { mealType: mealTypeKey });
+                    }}
+                >
+                    <div className="flex items-center justify-between mb-4 px-2">
+                        <div className="flex items-center gap-4">
+                            <h3 className="flex items-center gap-2 text-sm font-black uppercase tracking-widest text-slate-400">
+                                <span className="text-lg">
+                                    {mealTypeKey === 'breakfast' && '🌅'}
+                                    {mealTypeKey === 'lunch' && '☀️'}
+                                    {mealTypeKey === 'dinner' && '🌙'}
+                                    {mealTypeKey === 'snack' && '🍎'}
+                                    {mealTypeKey === 'beverage' && '🥤'}
+                                </span>
+                                {MEAL_TYPE_LABELS[mealTypeKey]}
+                            </h3>
+                            {entries.length > 0 && (
+                                <div className="flex items-center gap-3 animate-in fade-in slide-in-from-left duration-500">
+                                    <div className="h-4 w-[1px] bg-slate-800" />
+                                    <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-tighter">
+                                        <span className="text-emerald-500">
+                                            {Math.round(entries.reduce((sum, e) => sum + e.items.reduce((acc, it) => acc + getItemCalories(it), 0), 0))} kcal
+                                        </span>
+                                        <span className="text-rose-400">
+                                            🌱 {Math.round(entries.reduce((sum, e) => sum + e.items.reduce((acc, it) => acc + (getItemNutrition?.(it).protein || 0), 0), 0))}g
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        {entries.length === 0 && (
+                            <button
+                                className="text-[10px] font-black uppercase text-emerald-500 hover:text-emerald-400"
+                                onClick={() => { setMealType(mealTypeKey); setIsFormOpen(true); }}
+                            >
+                                + Lägg till
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        {entries.length === 0 ? (
+                            <div className="p-8 border border-dashed border-slate-700/50 rounded-2xl text-center text-slate-600 text-xs italic">
+                                Sektionen är tom
+                            </div>
+                        ) : (
+                            entries.map(entry => renderEntryRow(entry, false))
+                        )}
+                    </div>
+                </div>
             ))}
+
+            <ConfirmModal
+                isOpen={deleteConfirm.isOpen}
+                onClose={() => setDeleteConfirm({ isOpen: false, entryId: null })}
+                onConfirm={confirmDelete}
+                title="Ta bort måltid"
+                message="Är du säker på att du vill ta bort denna måltid?"
+                confirmText="Ta bort"
+                variant="danger"
+            />
         </div>
     );
 }
 
+// Sub-components
 function PortionControls({
     item,
     onUpdate,
@@ -269,31 +342,60 @@ function PortionControls({
     onUpdate: (val: number) => void,
     isCompact?: boolean
 }) {
+    const [isEditing, setIsEditing] = useState(false);
+    const [inputValue, setInputValue] = useState('');
+
     const step = item.type === 'recipe' ? 0.25 : 25;
-    const gramsPerPortion = item.type === 'recipe' ? 300 : 1;
-    const currentGrams = Math.round(item.servings * gramsPerPortion);
+
+    const handleInputSubmit = () => {
+        const val = parseFloat(inputValue);
+        if (!isNaN(val) && val > 0) {
+            onUpdate(val);
+        }
+        setIsEditing(false);
+    };
+
+    if (isEditing) {
+        return (
+            <input
+                type="number"
+                autoFocus
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onBlur={handleInputSubmit}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleInputSubmit();
+                    if (e.key === 'Escape') setIsEditing(false);
+                }}
+                className={`${isCompact ? 'w-12 text-xs' : 'w-16 text-sm'} px-1 py-0.5 bg-slate-700 border border-slate-600 rounded text-center text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/50 outline-none`}
+                placeholder={String(item.servings)}
+            />
+        );
+    }
 
     return (
         <div className={`flex items-center ${isCompact ? 'gap-1' : 'gap-2'}`}>
             <button
-                className={`${isCompact ? 'w-5 h-5 text-xs' : 'w-6 h-6 text-sm'} flex items-center justify-center rounded bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200`}
-                onClick={() => onUpdate(Math.max(step, item.servings - step))}
+                className={`${isCompact ? 'w-5 h-5 text-sm' : 'w-6 h-6 text-sm'} flex items-center justify-center rounded bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors cursor-pointer`}
+                onClick={(e) => { e.stopPropagation(); onUpdate(Math.max(step, item.servings - step)); }}
             >
                 −
             </button>
-            <div className={`flex flex-col items-center ${isCompact ? 'min-w-[50px]' : 'min-w-[60px]'}`}>
-                <span className={`${isCompact ? 'text-xs' : 'text-sm'} text-slate-200 font-medium`}>
-                    {item.type === 'recipe' ? `${item.servings} port` : `${item.servings}g`}
-                </span>
-                {item.type === 'recipe' && (
-                    <span className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} text-slate-500`}>
-                        ≈{currentGrams}g
-                    </span>
-                )}
-            </div>
             <button
-                className={`${isCompact ? 'w-5 h-5 text-xs' : 'w-6 h-6 text-sm'} flex items-center justify-center rounded bg-slate-700 text-slate-400 hover:bg-slate-600 hover:text-slate-200`}
-                onClick={() => onUpdate(item.servings + step)}
+                className={`flex flex-col items-center justify-center ${isCompact ? 'min-w-[50px]' : 'min-w-[60px]'} hover:bg-slate-700/30 rounded px-1 transition-colors cursor-text`}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setInputValue(String(item.servings));
+                    setIsEditing(true);
+                }}
+            >
+                <span className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-slate-200 font-bold`}>
+                    {item.type === 'recipe' ? `${item.servings} p` : `${item.servings}g`}
+                </span>
+            </button>
+            <button
+                className={`${isCompact ? 'w-5 h-5 text-sm' : 'w-6 h-6 text-sm'} flex items-center justify-center rounded bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors cursor-pointer`}
+                onClick={(e) => { e.stopPropagation(); onUpdate(item.servings + step); }}
             >
                 +
             </button>
@@ -303,19 +405,12 @@ function PortionControls({
 
 function TimelineActions({ setIsFormOpen }: { setIsFormOpen: (open: boolean) => void }) {
     return (
-        <div className="flex items-center justify-center gap-3 mt-2">
+        <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-slate-700/30">
             <button
-                className="flex items-center justify-center gap-2 py-2 px-4 text-sm bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg transition-all"
+                className="py-2.5 px-8 text-xs font-black uppercase tracking-[2px] bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-xl transition-all hover:scale-105"
                 onClick={() => setIsFormOpen(true)}
             >
-                + Lägg till måltid
-            </button>
-            <button
-                className="flex items-center justify-center gap-2 py-2 px-4 text-sm bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border border-violet-500/20 rounded-lg transition-all"
-                onClick={() => alert('Synka mellanmål till veckoplanering - kommer snart!')}
-                title="Spara dagens mellanmål till veckovyn"
-            >
-                📅 Spara mellanmål
+                + Logga Punkt
             </button>
         </div>
     );

@@ -34,6 +34,7 @@ export interface CaffeineCardProps {
     onCardClick: () => void;
     onValueChange: (value: string) => void;
     onSave: () => void;
+    onCancel?: () => void;
     onKeyDown: (e: React.KeyboardEvent) => void;
     onQuickAdd: (amount: number, type: 'coffee' | 'nocco') => void;
 }

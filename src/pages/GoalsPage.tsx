@@ -3,7 +3,7 @@
  * Route: /goals
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import {
@@ -17,7 +17,7 @@ import { GoalProgressRing, MiniProgressRing } from '../components/goals/GoalProg
 import { GoalCelebration } from '../components/goals/GoalCelebration';
 import { GoalDetailModal } from '../components/goals/GoalDetailModal';
 import { GoalModal } from '../components/training/GoalModal';
-import { PeriodWizard } from '../components/training/period/PeriodWizard'; // New Wizard
+import { PeriodWizard } from '../components/training/period/PeriodWizard';
 import { CompactGoalCard } from '../components/goals/CompactGoalCard';
 import { useNavigate } from 'react-router-dom';
 import type { PerformanceGoal, GoalCategory, PerformanceGoalType, GoalPeriod } from '../models/types';
@@ -93,7 +93,7 @@ const GOAL_TEMPLATES: GoalTemplate[] = [
     },
     {
         name: '150g Protein',
-        icon: '🥩',
+        icon: '🌱',
         type: 'nutrition',
         period: 'daily',
         category: 'nutrition',
@@ -153,7 +153,7 @@ export function GoalsPage() {
     // State
     const [selectedCategory, setSelectedCategory] = useState<GoalCategory | 'all'>('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isPeriodWizardOpen, setIsPeriodWizardOpen] = useState(false); // New State
+    const [isPeriodWizardOpen, setIsPeriodWizardOpen] = useState(false);
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
     const [celebratingGoal, setCelebratingGoal] = useState<PerformanceGoal | null>(null);
     const [showCompleted, setShowCompleted] = useState(false);
@@ -172,7 +172,7 @@ export function GoalsPage() {
     // Active Training Period
     const activePeriod = useMemo(() => {
         const today = new Date().toISOString().split('T')[0];
-        return trainingPeriods.find(p => p.startDate <= today && p.endDate >= today) || trainingPeriods[0]; // fallback
+        return trainingPeriods.find(p => p.startDate <= today && p.endDate >= today) || trainingPeriods[0];
     }, [trainingPeriods]);
 
     // Hooks
@@ -490,12 +490,12 @@ export function GoalsPage() {
                         <button className="add-goal-btn" onClick={handleNewGoal}>
                             + Nytt Mål
                         </button>
-                            <button
-                                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 text-sm transition-colors"
-                                onClick={() => setIsPeriodWizardOpen(true)}
-                            >
-                                🚀 Starta Period
-                            </button>
+                        <button
+                            className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 text-sm transition-colors"
+                            onClick={() => setIsPeriodWizardOpen(true)}
+                        >
+                            🚀 Starta Period
+                        </button>
                     </div>
                 </div>
 
@@ -555,6 +555,7 @@ export function GoalsPage() {
                                             goal={goal}
                                             onClick={() => setSearchParams({ goal: goal.id })}
                                             onEdit={handleEditGoal}
+                                            onDelete={handleDeleteGoal}
                                         />
                                     ))}
                                 </div>
@@ -567,7 +568,7 @@ export function GoalsPage() {
                                 {periodGoals.length > 0 && (
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 ml-1">Övriga Mål</h3>
                                 )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                                     {looseGoals.map(({ goal, progress }) => (
                                         <div
                                             key={goal.id}
@@ -580,37 +581,40 @@ export function GoalsPage() {
                                                 {CATEGORY_CONFIG[goal.category || 'training'].icon}
                                             </div>
 
-                                            {/* Progress Ring */}
+                                            {/* Progress Ring - Smaller */}
                                             <div className="goal-ring">
                                                 <GoalProgressRing
                                                     percentage={progress.percentage}
-                                                    size={90}
-                                                    strokeWidth={7}
+                                                    size={60}
+                                                    strokeWidth={5}
                                                     color={CATEGORY_CONFIG[goal.category || 'training'].color}
                                                 >
-                                                    <span className="text-xl">{GOAL_TYPE_ICONS[goal.type] || '🎯'}</span>
+                                                    <span className="text-sm">{GOAL_TYPE_ICONS[goal.type] || '🎯'}</span>
                                                 </GoalProgressRing>
                                             </div>
 
                                             {/* Goal Info */}
                                             <div className="goal-info">
                                                 <h3 className="goal-name">{goal.name}</h3>
-                                                <div className="goal-meta">
-                                                    <span className="goal-progress-text">
+                                                {goal.description && (
+                                                    <p className="text-[10px] text-slate-500 mb-2 line-clamp-2">{goal.description}</p>
+                                                )}
+                                                <div className="goal-meta flex-col gap-1 mb-3">
+                                                    <span className="text-2xl font-black text-white tracking-tight">
                                                         {formatProgress(
                                                             progress.current,
-                                                            progress.target,
-                                                            goal.targets[0]?.unit
+                                                            progress.target
                                                         )}
+                                                        <span className="text-sm font-bold text-slate-500 ml-1">
+                                                            {goal.targets[0]?.unit || (goal.type === 'frequency' ? 'pass' : '')}
+                                                        </span>
                                                     </span>
-                                                    <span className="goal-period">
-                                                        {goal.period === 'daily' ? '/dag' :
-                                                            goal.period === 'weekly' ? '/vecka' :
-                                                                goal.period === 'monthly' ? '/månad' : 'totalt'}
+                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
+                                                        {goal.type === 'frequency'
+                                                            ? (goal.period === 'weekly' ? 'i veckan' : 'totalt')
+                                                            : (goal.period === 'weekly' ? 'per vecka' : 'kvar att göra')
+                                                        }
                                                     </span>
-                                                </div>
-                                                <div className="text-[10px] text-slate-500 font-mono mt-1">
-                                                    {goal.startDate} {goal.endDate ? ` - ${goal.endDate}` : ' -> Tills vidare'}
                                                 </div>
 
                                                 {/* Progress bar with percentage */}
@@ -618,10 +622,10 @@ export function GoalsPage() {
                                                     <div className="goal-progress-bar">
                                                         <div
                                                             className="goal-progress-fill"
-                                                            style={{ width: `${Math.min(100, progress.percentage)}%` }}
+                                                            style={{ width: `${(progress.percentage && !isNaN(progress.percentage)) ? Math.min(100, progress.percentage) : 0}%` }}
                                                         />
                                                     </div>
-                                                    <span className="goal-percentage">{Math.round(progress.percentage)}%</span>
+                                                    <span className="goal-percentage">{(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%</span>
                                                 </div>
 
                                                 {/* Status badges */}
@@ -635,14 +639,19 @@ export function GoalsPage() {
                                                     {progress.daysRemaining !== undefined && progress.daysRemaining <= 3 && !progress.isComplete && (
                                                         <span className="badge badge-urgent">
                                                             ⏰ {progress.daysRemaining}d kvar
-                                                            {goal.period === 'weekly' ? ' av v.' : ''}
                                                         </span>
-                                                    )}
-                                                    {progress.trend === 'up' && !progress.isComplete && (
-                                                        <span className="badge badge-trending">📈 Trending</span>
                                                     )}
                                                 </div>
                                             </div>
+
+                                            {/* Absolute X button for quick delete */}
+                                            <button
+                                                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors z-10"
+                                                onClick={(e) => { e.stopPropagation(); handleDeleteGoal(goal.id); }}
+                                                title="Ta bort mål"
+                                            >
+                                                ✕
+                                            </button>
 
                                             {/* Actions */}
                                             <div className="goal-actions">

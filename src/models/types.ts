@@ -78,6 +78,11 @@ export interface UserSettings {
     dailyAlcoholLimitWeekend?: number;
     densityMode?: 'compact' | 'slim' | 'cozy';
     expandedSections?: Record<string, boolean>; // Persisted UI state
+    // Calorie Mode: 'tdee' = TDEE-based, 'fixed' = fixed base + exercise calories
+    calorieMode?: 'tdee' | 'fixed';
+    fixedCalorieBase?: number; // Base calories when calorieMode === 'fixed'
+    incompleteDays?: Record<string, boolean>; // Map of date (YYYY-MM-DD) -> isIncomplete
+    noccoOClockEnabled?: boolean;
 }
 
 /** User roles for permissions */
@@ -102,6 +107,7 @@ export interface User {
     handle?: string; // Unique @handle
     bio?: string;
     location?: string;
+    website?: string;
     avatarUrl?: string; // Explicit field for social
     followersCount?: number;
     followingCount?: number;
@@ -184,7 +190,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     expandedSections: {
         'recent-workouts': true,
         'top-exercises': true
-    }
+    },
+    noccoOClockEnabled: true
 };
 
 // ============================================
@@ -207,12 +214,14 @@ export interface FoodItem {
     unit: Unit;
     category: FoodCategory;
     brand?: string;
+    imageUrl?: string; // URL to product image (uploads/food-images/...)
     storageType?: FoodStorageType;
     // Extended properties
     pricePerUnit?: number;      // Price in SEK per unit
     co2PerUnit?: number;        // CO2 emission in kg per unit
     containsGluten?: boolean;   // Whether the item contains gluten
     isCooked?: boolean;         // Whether this is the cooked version (affects kcal)
+    packageWeight?: number;     // Total weight of a full package (e.g. 275g)
     defaultPortionGrams?: number; // Default portion size in grams (e.g., banana = 120g)
     gramsPerDl?: number;        // Weight in grams for 1 dl
     yieldFactor?: number;       // Cooked weight / Raw weight (e.g. 2.5 for rice)
@@ -233,6 +242,7 @@ export interface FoodItem {
     complementaryCategories?: FoodCategory[]; // Categories that complete the protein
     proteinCategory?: ProteinCategory;        // For amino acid balancing
     seasons?: Season[];                       // Best seasons for this item
+    ingredients?: string;                     // List of ingredients
     createdAt: string;
     updatedAt: string;
 }
@@ -253,6 +263,7 @@ export interface ExtendedFoodDetails {
 
     // Extra Vitamins
     vitaminD?: number;           // µg
+    caffeine?: number;           // mg
     // Add others if present in DB
 }
 
@@ -347,6 +358,7 @@ export interface DailyVitals {
     sleep: number;       // Hours
     caffeine?: number;   // Grams or counts (Coffee/Te/Nocco)
     alcohol?: number;    // Units
+    incomplete?: boolean; // If true, this day is marked as unfinished (e.g. forgot to log food)
     updatedAt: string;
 }
 
@@ -458,6 +470,12 @@ export interface TrainingPeriod {
     startDate: string;
     endDate: string;
     focusType: PeriodFocus;
+    nutritionGoal?: {
+        calories: number;
+        protein?: number;
+        carbs?: number;
+        fat?: number;
+    };
     createdAt: string;
     updatedAt: string;
 }
@@ -490,6 +508,10 @@ export interface ExerciseEntry {
     subType?: ExerciseSubType;
     title?: string; // e.g. "Morning Run" or "Strava Activity Title"
     tonnage?: number;   // total kg lifted
+    // Cycling / Performance
+    averageWatts?: number;
+    maxWatts?: number;
+    averageSpeed?: number; // km/h
     distance?: number;  // km
     createdAt: string;
     source?: string;
@@ -953,6 +975,11 @@ export interface ActivityPerformanceSection {
     maxHeartRate?: number;
     elevationGain?: number;
 
+    // Cycling / Advanced
+    averageWatts?: number;
+    maxWatts?: number;
+    averageSpeed?: number; // km/h
+
     // Advanced Data (Streams)
     paceCurve?: number[]; // Pace at different distances? Or stream ref?
     hrCurve?: number[];
@@ -1071,7 +1098,7 @@ export interface PlannedActivity {
     goalId?: string; // Link to a specific CoachGoal
     date: string; // ISO Date (YYYY-MM-DD)
     type: 'RUN';
-    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION';
+    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH';
     title: string;
     description: string;
     structure: {
@@ -1083,7 +1110,7 @@ export interface PlannedActivity {
     targetHrZone: number;
     estimatedDistance: number;
     // Progress Tracking
-    status: 'PLANNED' | 'COMPLETED' | 'SKIPPED';
+    status: 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'DRAFT';
     feedback?: 'EASY' | 'PERFECT' | 'HARD' | 'TOO_HARD' | 'INJURY';
     completedDate?: string;
     actualDistance?: number;

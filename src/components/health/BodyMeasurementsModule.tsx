@@ -22,7 +22,7 @@ const MEASUREMENT_TYPES: Record<BodyMeasurementType, { label: string; unit: stri
 const DEFAULT_PINNED: BodyMeasurementType[] = ['waist', 'hips', 'chest', 'arm_right', 'thigh_right'];
 
 export const BodyMeasurementsModule: React.FC = () => {
-    const { bodyMeasurements, addBodyMeasurement, deleteBodyMeasurement } = useData();
+    const { bodyMeasurements, weightEntries, addBodyMeasurement, deleteBodyMeasurement } = useData();
     const [date, setDate] = useState(getISODate());
 
     // Quick Log State
@@ -30,10 +30,58 @@ export const BodyMeasurementsModule: React.FC = () => {
     const [inputValues, setInputValues] = useState<Record<string, string>>({});
     const [focusedType, setFocusedType] = useState<BodyMeasurementType | null>(null);
 
-    // Filter available History
+    // Filter available History - Combine from both bodyMeasurements and weightEntries
     const history = useMemo(() => {
-        return bodyMeasurements.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [bodyMeasurements]);
+        const extractedFromWeight: BodyMeasurementEntry[] = [];
+        weightEntries.forEach(entry => {
+            if (entry.waist) {
+                extractedFromWeight.push({
+                    id: `${entry.id}-waist`,
+                    date: entry.date,
+                    type: 'waist',
+                    value: entry.waist,
+                    createdAt: entry.createdAt
+                });
+            }
+            if (entry.chest) {
+                extractedFromWeight.push({
+                    id: `${entry.id}-chest`,
+                    date: entry.date,
+                    type: 'chest',
+                    value: entry.chest,
+                    createdAt: entry.createdAt
+                });
+            }
+            if (entry.hips) {
+                extractedFromWeight.push({
+                    id: `${entry.id}-hips`,
+                    date: entry.date,
+                    type: 'hips',
+                    value: entry.hips,
+                    createdAt: entry.createdAt
+                });
+            }
+            if (entry.thigh) {
+                extractedFromWeight.push({
+                    id: `${entry.id}-thigh_right`,
+                    date: entry.date,
+                    type: 'thigh_right',
+                    value: entry.thigh,
+                    createdAt: entry.createdAt
+                });
+                extractedFromWeight.push({
+                    id: `${entry.id}-thigh_left`,
+                    date: entry.date,
+                    type: 'thigh_left',
+                    value: entry.thigh,
+                    createdAt: entry.createdAt
+                });
+            }
+        });
+
+        const combined = [...bodyMeasurements, ...extractedFromWeight];
+        return combined.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }, [bodyMeasurements, weightEntries]);
 
     // Graph Data Transformation
     const chartData = useMemo(() => {
@@ -48,9 +96,23 @@ export const BodyMeasurementsModule: React.FC = () => {
     }, [history]);
 
     const getLatestValue = (type: BodyMeasurementType) => {
-        const sorted = bodyMeasurements.filter(m => m.type === type).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        return sorted.length > 0 ? sorted[0].value : undefined;
+        const entries = history.filter(m => m.type === type);
+        if (entries.length === 0) return undefined;
+        // History is already sorted asc by date, so last is latest
+        return entries[entries.length - 1].value;
     };
+
+    // Auto-populate inputs with latest values on mount or when pinnedTypes change
+    React.useEffect(() => {
+        const initialValues: Record<string, string> = { ...inputValues };
+        pinnedTypes.forEach(type => {
+            if (!initialValues[type]) {
+                const latest = getLatestValue(type);
+                if (latest !== undefined) initialValues[type] = latest.toString();
+            }
+        });
+        setInputValues(initialValues);
+    }, [pinnedTypes, history]);
 
     const handleSave = () => {
         let count = 0;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -11,6 +11,7 @@ import {
     UNIT_LABELS,
 } from '../models/types.ts';
 import { normalizeText } from '../utils/formatters.ts';
+import { parseNutritionText, extractFromJSONLD, cleanProductName, extractBrand, extractPackagingWeight } from '../utils/nutrition/index.ts';
 import './DatabasePage.css';
 
 const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
@@ -22,6 +23,8 @@ const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
 const EMPTY_FORM: FoodItemFormData = {
     name: '',
     brand: '',
+    imageUrl: '',
+    packageWeight: 0,
     defaultPortionGrams: 0,
     description: '',
     calories: 0,
@@ -44,20 +47,26 @@ const EMPTY_FORM: FoodItemFormData = {
     complementaryCategories: [],
     proteinCategory: undefined,
     seasons: [],
+    ingredients: '',
 };
 
 type ViewMode = 'grid' | 'list';
 
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
-    const { foodItems, mealEntries, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
+    const { foodItems, recipes, mealEntries, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
     const [searchParams, setSearchParams] = useSearchParams();
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [detailItem, setDetailItem] = useState<FoodItem | null>(null);
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
     const [formData, setFormData] = useState<FoodItemFormData>(EMPTY_FORM);
+    const [isParsing, setIsParsing] = useState(false);
+    const [parseError, setParseError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
     const [selectedCategory, setSelectedCategory] = useState<FoodCategory | 'all'>('all');
     const [viewMode, setViewMode] = useState<ViewMode>('list');
+
+    // Drag and drop state
+    const [isDragging, setIsDragging] = useState(false);
 
     // Update URL param when detailItem changes
     useEffect(() => {
@@ -83,20 +92,6 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         }
     }, [searchParams]);
 
-    const lastLoggedMap = useMemo(() => {
-        const map: Record<string, string> = {};
-        mealEntries.forEach(entry => {
-            entry.items.forEach((item) => {
-                if (item.type === 'foodItem') {
-                    const current = map[item.referenceId];
-                    if (!current || entry.date > current) {
-                        map[item.referenceId] = entry.date;
-                    }
-                }
-            });
-        });
-        return map;
-    }, [mealEntries]);
 
     const filteredItems = useMemo(() => {
         // normalizeText imported from utils/formatters.ts
@@ -159,12 +154,21 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
+    const stats = useMemo(() => ({
+        totalFoods: foodItems.length,
+        totalRecipes: recipes.length,
+        incompleteFoods: foodItems.filter(f => f.calories === 0 || !f.category || f.category === 'other').length,
+        missingMicros: foodItems.filter(f => !f.iron && !f.zinc && !f.vitaminB12).length
+    }), [foodItems, recipes]);
+
     const handleOpenForm = (item?: FoodItem) => {
         if (item) {
             setEditingItem(item);
             setFormData({
                 name: item.name,
                 brand: item.brand || '',
+                imageUrl: item.imageUrl || '',
+                packageWeight: item.packageWeight || 0,
                 defaultPortionGrams: item.defaultPortionGrams || 0,
                 description: item.description || '',
                 calories: item.calories,
@@ -187,6 +191,8 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 complementaryCategories: item.complementaryCategories || [],
                 proteinCategory: item.proteinCategory,
                 seasons: item.seasons || [],
+                ingredients: item.ingredients || '',
+
             });
         } else {
             setEditingItem(null);
@@ -211,6 +217,161 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         handleCloseForm();
     };
 
+    // --- SMART PARSING LOGIC ---
+
+    const applyParsedData = (parsed: any) => {
+        // Calculate known brands for smart fuzzy matching
+        const knownBrands = Array.from(new Set(foodItems.map(f => f.brand).filter(Boolean))) as string[];
+
+        // Enhance parsed data with our heuristics
+        const brand = parsed.brand || extractBrand(parsed.text || '', knownBrands);
+        const packageWeight = parsed.packageWeight || extractPackagingWeight(parsed.text || '');
+
+        setFormData(prev => ({
+            ...prev,
+            name: parsed.name || prev.name,
+            brand: brand || prev.brand,
+            packageWeight: packageWeight || prev.packageWeight,
+            calories: parsed.calories !== undefined ? parsed.calories : prev.calories,
+            protein: parsed.protein !== undefined ? parsed.protein : prev.protein,
+            carbs: parsed.carbs !== undefined ? parsed.carbs : prev.carbs,
+            fat: parsed.fat !== undefined ? parsed.fat : prev.fat,
+            fiber: parsed.fiber !== undefined ? parsed.fiber : prev.fiber,
+            ingredients: parsed.ingredients || prev.ingredients,
+            defaultPortionGrams: parsed.defaultPortionGrams !== undefined ? parsed.defaultPortionGrams : prev.defaultPortionGrams,
+        }));
+    };
+
+    const handleTextPaste = async (text: string) => {
+        if (!text) return;
+        setParseError(null);
+
+        // URL Detection
+        const urlMatch = text.match(/(https?:\/\/[^\s]+)/i);
+        if (urlMatch) {
+            const url = urlMatch[1];
+            setIsParsing(true);
+            try {
+                const token = localStorage.getItem('auth_token');
+                const res = await fetch('/api/parse-url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({ url })
+                });
+
+                if (!res.ok) throw new Error('Kunde inte hämta sidan. Kontrollera URL:en.');
+
+                const data = await res.json();
+
+                // 1. JSON-LD
+                let results = extractFromJSONLD(data.jsonLds || []);
+                // 2. Text fallback
+                const textResults = parseNutritionText(data.text);
+
+                // Combine
+                const finalResults = {
+                    ...results,
+                    // If JSON-LD missed something, try text
+                    calories: results.calories ?? textResults.calories,
+                    protein: results.protein ?? textResults.protein,
+                    carbs: results.carbs ?? textResults.carbs,
+                    fat: results.fat ?? textResults.fat,
+                    fiber: results.fiber ?? textResults.fiber,
+                    name: cleanProductName(data.title, data.h1) || results.name || textResults.name,
+                    text: data.text // Pass full text for further brand extraction
+                };
+
+                applyParsedData(finalResults);
+
+            } catch (err) {
+                setParseError(err instanceof Error ? err.message : 'Ett fel uppstod vid hämtning.');
+            } finally {
+                setIsParsing(false);
+            }
+            return;
+        }
+
+        // Standard Text Parsing
+        const parsed = parseNutritionText(text);
+        applyParsedData({ ...parsed, text });
+    };
+
+    const handleImageUpload = async (file: File) => {
+        setIsParsing(true);
+        setParseError(null);
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const token = localStorage.getItem('auth_token');
+            const uploadRes = await fetch('/api/upload-temp', {
+                method: 'POST',
+                headers: {
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: formData
+            });
+
+            if (!uploadRes.ok) throw new Error('Uppladdning misslyckades');
+            const { tempUrl } = await uploadRes.json();
+
+            // Set the image preview immediately
+            setFormData(prev => ({ ...prev, imageUrl: tempUrl }));
+
+            // Trigger OCR
+            const parseRes = await fetch('/api/parse-image', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': token ? `Bearer ${token}` : ''
+                },
+                body: JSON.stringify({ tempUrl })
+            });
+
+            if (!parseRes.ok) throw new Error('OCR-analys misslyckades');
+            const { text, parsed } = await parseRes.json();
+
+            // Apply results
+            applyParsedData({ ...parsed, text });
+
+        } catch (err) {
+            setParseError(err instanceof Error ? err.message : 'Kunde inte läsa bilden.');
+        } finally {
+            setIsParsing(false);
+        }
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        // Check for file in clipboard
+        if (e.clipboardData.files && e.clipboardData.files.length > 0) {
+            const file = e.clipboardData.files[0];
+            if (file.type.startsWith('image/')) {
+                e.preventDefault();
+                handleImageUpload(file);
+                return;
+            }
+        }
+        // Otherwise standard text paste handled by onChange of textarea
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            if (file.type.startsWith('image/')) {
+                handleImageUpload(file);
+            }
+        }
+    };
+
+    // --- End Smart Logic ---
+
+
     const handleDelete = (id: string) => {
         if (confirm('Är du säker på att du vill ta bort denna råvara?')) {
             deleteFoodItem(id);
@@ -222,12 +383,20 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         updateFoodItem(item.id, { [field]: value });
     };
 
-    // Helper to determine CO2 class for styling
     const getCO2Class = (co2: number) => {
         if (co2 >= 5) return 'co2-high';
         if (co2 >= 2) return 'co2-medium';
         if (co2 > 0) return 'co2-low';
         return 'co2-none';
+    };
+
+    // Helper to get image source (handles temp vs permanent)
+    const getImgSrc = (url: string) => {
+        if (!url) return '';
+        // If it's a relative path from our uploads, prepend / (though <img src="uploads/..."> works if base is right)
+        // Usually safer to be absolute relative to root
+        if (url.startsWith('uploads/')) return `/${url}`;
+        return url;
     };
 
     return (
@@ -261,6 +430,13 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                     </div>
                 </header>
             )}
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <StatCard label="Totala Råvaror" value={stats.totalFoods} icon="🍎" />
+                <StatCard label="Totala Recept" value={stats.totalRecipes} icon="📖" />
+                <StatCard label="Ofullständiga" value={stats.incompleteFoods} icon="🔴" color="text-red-400" />
+                <StatCard label="Saknar Mikros" value={stats.missingMicros} icon="🟡" color="text-amber-400" />
+            </div>
 
             <div className="filters">
                 <input
@@ -325,6 +501,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                     <table className="food-table">
                         <thead>
                             <tr>
+                                <th className="th-img w-12">Bild</th>
                                 <th className="th-name">Råvara</th>
                                 <th className="th-type">Typ</th>
                                 <th className="th-cooked">Tillagad</th>
@@ -336,20 +513,29 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 <th className="th-num">Kolh.</th>
                                 <th className="th-gluten">Gluten</th>
                                 <th className="th-co2">Klimat</th>
-                                {headless && (
-                                    <>
-                                        <th className="th-date">Skapad</th>
-                                        <th className="th-date">Senast loggad</th>
-                                    </>
-                                )}
                                 <th className="th-actions"></th>
                             </tr>
                         </thead>
                         <tbody>
                             {filteredItems.map((item: FoodItem) => (
                                 <tr key={item.id}>
+                                    <td className="td-img">
+                                        {item.imageUrl && (
+                                            <div className="w-10 h-10 rounded-md overflow-hidden bg-slate-800">
+                                                <img
+                                                    src={getImgSrc(item.imageUrl)}
+                                                    alt={item.name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="td-name">
-                                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                        <div
+                                            style={{ display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
+                                            onClick={() => handleOpenForm(item)}
+                                            className="hover:text-emerald-400 transition-colors"
+                                        >
                                             <span>
                                                 <strong>{item.name}</strong>
                                                 {item.brand && <span style={{ color: 'var(--text-secondary)', fontSize: '0.85em', marginLeft: '0.4rem' }}>{item.brand}</span>}
@@ -418,13 +604,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                         >
                                             📋
                                         </button>
-                                        <button
-                                            className="btn btn-ghost btn-sm"
-                                            onClick={() => handleOpenForm(item)}
-                                            title="Redigera"
-                                        >
-                                            ✏️
-                                        </button>
+
                                         <button
                                             className="btn btn-ghost btn-sm btn-danger"
                                             onClick={() => handleDelete(item.id)}
@@ -444,6 +624,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 <div className="food-grid">
                     {filteredItems.map((item: FoodItem) => (
                         <div key={item.id} className="food-card">
+                            {item.imageUrl && (
+                                <div className="h-32 w-full overflow-hidden bg-slate-800 border-b border-slate-700/50">
+                                    <img
+                                        src={getImgSrc(item.imageUrl)}
+                                        alt={item.name}
+                                        className="w-full h-full object-cover opacity-80 hover:opacity-100 transition-opacity"
+                                    />
+                                </div>
+                            )}
                             <div className="food-card-header">
                                 <div>
                                     <h3 style={{ margin: 0, display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '4px' }}>
@@ -527,110 +716,222 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
+
+                            {/* Smart Parser - Now with Image Support */}
+                            <div
+                                className={`bg-emerald-500/5 rounded-2xl p-4 border relative overflow-hidden transition-all ${isDragging ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-emerald-500/10'}`}
+                                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                onDragLeave={() => setIsDragging(false)}
+                                onDrop={handleDrop}
+                            >
+                                <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-500/70 mb-2 flex items-center gap-2">
+                                    <span>✨</span> Smart Närings-tolkare
+                                    {isParsing && (
+                                        <div className="flex items-center gap-1.5 ml-auto">
+                                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                                            <span className="text-[9px] normal-case font-medium text-emerald-500/80">Analyserar...</span>
+                                        </div>
+                                    )}
+                                </label>
+
+                                <div className="flex gap-4">
+                                    <div className="flex-1 relative">
+                                        <textarea
+                                            className={`w-full bg-slate-900/50 border ${parseError ? 'border-red-500/30' : 'border-slate-700/50'} rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 min-h-[80px] resize-none transition-all`}
+                                            placeholder="Klistra in näringstabell, URL eller BILD..."
+                                            disabled={isParsing}
+                                            onChange={(e) => handleTextPaste(e.target.value)}
+                                            onPaste={handlePaste}
+                                        />
+
+                                        {/* Image Upload Button (Hidden input + Label) */}
+                                        <div className="absolute right-2 bottom-2">
+                                            <input
+                                                type="file"
+                                                id="img-upload"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
+                                            />
+                                            <label
+                                                htmlFor="img-upload"
+                                                className="cursor-pointer p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg flex items-center justify-center transition-colors"
+                                                title="Ladda upp bild"
+                                            >
+                                                📷
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Image Preview */}
+                                    {formData.imageUrl && (
+                                        <div className="w-24 h-24 shrink-0 bg-slate-900 rounded-xl border border-slate-700/50 overflow-hidden relative group">
+                                            <img
+                                                src={getImgSrc(formData.imageUrl)}
+                                                alt="Preview"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <button
+                                                type="button"
+                                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity"
+                                                onClick={() => setFormData(p => ({ ...p, imageUrl: '' }))}
+                                            >
+                                                Ta bort
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {parseError && (
+                                    <p className="text-[9px] text-red-400 mt-2 flex items-center gap-1">
+                                        <span>⚠️</span> {parseError}
+                                    </p>
+                                )}
+                                <p className="text-[9px] text-slate-500 mt-2 italic">
+                                    Stödjer text, URL och bilder (OCR). Klistra in bild direkt (Ctrl+V) eller dra & släpp!
+                                </p>
+
+                                {isDragging && (
+                                    <div className="absolute inset-0 bg-emerald-500/20 backdrop-blur-sm flex items-center justify-center border-2 border-emerald-500 border-dashed rounded-2xl pointer-events-none">
+                                        <span className="text-emerald-300 font-bold animate-bounce">Släpp bilden här!</span>
+                                    </div>
+                                )}
+                            </div>
+
                             {/* Primary: Name & Category */}
                             <div className="space-y-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                        Namn *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        autoFocus
+                                        value={formData.name}
+                                        onChange={(e) => {
+                                            const name = e.target.value;
+                                            setFormData({ ...formData, name });
+
+                                            // Auto-suggest category based on name
+                                            const nameLower = name.toLowerCase();
+                                            if (nameLower.includes('pulver')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'supplements' as FoodCategory }));
+                                            } else if (nameLower.includes('bön') || nameLower.includes('lins') || nameLower.includes('kikärt')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'legumes' as FoodCategory }));
+                                            } else if (nameLower.includes('ris') || nameLower.includes('pasta') || nameLower.includes('bröd') || nameLower.includes('havre')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'grains' as FoodCategory }));
+                                            } else if (nameLower.includes('mjölk') || nameLower.includes('ost') || nameLower.includes('yoghurt')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'dairy-alt' as FoodCategory }));
+                                            } else if (nameLower.includes('tofu') || nameLower.includes('tempeh') || nameLower.includes('seitan')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'protein' as FoodCategory }));
+                                            } else if (nameLower.includes('äpple') || nameLower.includes('banan') || nameLower.includes('apelsin') || nameLower.includes('bär')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'fruits' as FoodCategory }));
+                                            } else if (nameLower.includes('spenat') || nameLower.includes('broccoli') || nameLower.includes('morot') || nameLower.includes('tomat')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'vegetables' as FoodCategory }));
+                                            } else if (nameLower.includes('mandel') || nameLower.includes('nöt') || nameLower.includes('cashew') || nameLower.includes('frö') || nameLower.includes('chia')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'nuts-seeds' as FoodCategory }));
+                                            } else if (nameLower.includes('olja') || nameLower.includes('smör')) {
+                                                setFormData(prev => ({ ...prev, name, category: 'fats' as FoodCategory }));
+                                            }
+                                        }}
+                                        placeholder="t.ex. Kikärtor, Havregryn..."
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                                        required
+                                    />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Namn *
+                                            Märke (frivilligt)
                                         </label>
                                         <input
                                             type="text"
-                                            autoFocus
-                                            value={formData.name}
-                                            onChange={(e) => {
-                                                const name = e.target.value;
-                                                setFormData({ ...formData, name });
-
-                                                // Auto-suggest category based on name
-                                                const nameLower = name.toLowerCase();
-                                                if (nameLower.includes('pulver')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'supplements' as FoodCategory }));
-                                                } else if (nameLower.includes('bön') || nameLower.includes('lins') || nameLower.includes('kikärt')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'legumes' as FoodCategory }));
-                                                } else if (nameLower.includes('ris') || nameLower.includes('pasta') || nameLower.includes('bröd') || nameLower.includes('havre')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'grains' as FoodCategory }));
-                                                } else if (nameLower.includes('mjölk') || nameLower.includes('ost') || nameLower.includes('yoghurt')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'dairy-alt' as FoodCategory }));
-                                                } else if (nameLower.includes('tofu') || nameLower.includes('tempeh') || nameLower.includes('seitan')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'protein' as FoodCategory }));
-                                                } else if (nameLower.includes('äpple') || nameLower.includes('banan') || nameLower.includes('apelsin') || nameLower.includes('bär')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'fruits' as FoodCategory }));
-                                                } else if (nameLower.includes('spenat') || nameLower.includes('broccoli') || nameLower.includes('morot') || nameLower.includes('tomat')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'vegetables' as FoodCategory }));
-                                                } else if (nameLower.includes('mandel') || nameLower.includes('nöt') || nameLower.includes('cashew') || nameLower.includes('frö') || nameLower.includes('chia')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'nuts-seeds' as FoodCategory }));
-                                                } else if (nameLower.includes('olja') || nameLower.includes('smör')) {
-                                                    setFormData(prev => ({ ...prev, name, category: 'fats' as FoodCategory }));
-                                                }
-                                            }}
-                                            placeholder="t.ex. Kikärtor, Havregryn..."
+                                            value={formData.brand || ''}
+                                            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                                            placeholder="t.ex. Zeta, Garant..."
                                             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                                            required
                                         />
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                                Märke (frivilligt)
-                                            </label>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                            Förp. Vikt (friv.)
+                                        </label>
+                                        <div className="relative">
                                             <input
-                                                type="text"
-                                                value={formData.brand || ''}
-                                                onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                                                placeholder="t.ex. Zeta, Garant, Core..."
-                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                                                type="number"
+                                                min="0"
+                                                value={formData.packageWeight || ''}
+                                                onChange={(e) => setFormData({ ...formData, packageWeight: Number(e.target.value) })}
+                                                placeholder="t.ex. 275"
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
                                             />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">G</span>
                                         </div>
-                                        <div>
-                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                                Standardportion (frivilligt)
-                                            </label>
-                                            <div className="relative">
-                                                <input
-                                                    type="number"
-                                                    min="0"
-                                                    value={formData.defaultPortionGrams || ''}
-                                                    onChange={(e) => setFormData({ ...formData, defaultPortionGrams: Number(e.target.value) })}
-                                                    placeholder="t.ex. 35"
-                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
-                                                />
-                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-500">g/ml</span>
-                                            </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                            Portion (friv.)
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={formData.defaultPortionGrams || ''}
+                                                onChange={(e) => setFormData({ ...formData, defaultPortionGrams: Number(e.target.value) })}
+                                                placeholder="t.ex. 35"
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
+                                            />
+                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">G</span>
                                         </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Kategori
-                                        </label>
-                                        <select
-                                            value={formData.category}
-                                            onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        >
-                                            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                                                <option key={key} value={key}>{label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Enhet
-                                        </label>
-                                        <select
-                                            value={formData.unit}
-                                            onChange={(e) => setFormData({ ...formData, unit: e.target.value as Unit })}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        >
-                                            {Object.entries(UNIT_LABELS).map(([key, label]) => (
-                                                <option key={key} value={key}>{label}</option>
-                                            ))}
-                                        </select>
-                                    </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                        Kategori
+                                    </label>
+                                    <select
+                                        value={formData.category}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                    >
+                                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
                                 </div>
+                                <div>
+                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                        Enhet
+                                    </label>
+                                    <select
+                                        value={formData.unit}
+                                        onChange={(e) => setFormData({ ...formData, unit: e.target.value as Unit })}
+                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                    >
+                                        {Object.entries(UNIT_LABELS).map(([key, label]) => (
+                                            <option key={key} value={key}>{label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Ingredient List */}
+                            <div>
+                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                    Ingredienslista (frivilligt)
+                                </label>
+                                <textarea
+                                    value={formData.ingredients || ''}
+                                    onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
+                                    placeholder="t.ex. Kikärtor, vatten, salt..."
+                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 min-h-[100px] resize-y"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1 italic">
+                                    Tips: Klistra in innehållsförteckningen här.
+                                </p>
                             </div>
 
                             {/* Primary: Macros */}
@@ -834,7 +1135,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                     {/* Protein Quality - Custom Checkboxes */}
                                     <div>
                                         <h4 className="text-xs font-bold text-amber-400 mb-3 flex items-center gap-2">
-                                            <span>🥩</span> Proteinkvalitet
+                                            <span>🌱</span> Proteinkvalitet
                                         </h4>
 
                                         {/* Custom Checkbox */}
@@ -952,6 +1253,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             <h2>{detailItem.name}</h2>
                             <button className="btn-close" onClick={() => setDetailItem(null)}>×</button>
                         </div>
+                        {detailItem.imageUrl && (
+                            <div className="w-full h-48 bg-slate-900 overflow-hidden relative">
+                                <img
+                                    src={getImgSrc(detailItem.imageUrl)}
+                                    alt={detailItem.name}
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        )}
                         <div className="detail-grid">
                             <div className="detail-section">
                                 <h3 className="detail-title text-emerald-400">📊 Näringsvärde (100g)</h3>
@@ -1005,6 +1315,15 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 </div>
                             </div>
 
+                            {detailItem.ingredients && (
+                                <div className="detail-section full-width">
+                                    <h3 className="detail-title text-amber-200">🥗 Ingredienser</h3>
+                                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
+                                        {detailItem.ingredients}
+                                    </div>
+                                </div>
+                            )}
+
                             <div className="detail-section full-width">
                                 <h3 className="detail-title text-amber-400">📜 Logghistorik</h3>
                                 <div className="history-list">
@@ -1041,3 +1360,13 @@ function getCO2Class(value: number): string {
     if (value <= 1.0) return 'co2-medium';
     return 'co2-high';
 }
+
+const StatCard: React.FC<{ label: string, value: number, icon: string, color?: string }> = ({ label, value, icon, color = "text-white" }) => (
+    <div className="bg-slate-900 border border-slate-800 p-4 md:p-6 rounded-2xl flex items-center justify-between shadow-lg">
+        <div>
+            <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">{label}</div>
+            <div className={`text-2xl md:text-3xl font-black ${color}`}>{value}</div>
+        </div>
+        <div className="text-2xl md:text-3xl opacity-50">{icon}</div>
+    </div>
+);

@@ -3,11 +3,13 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { parseOmniboxInput } from '../utils/nlpParser.ts';
+import { performSmartSearch } from '../utils/searchUtils.ts';
 import {
     ExerciseType,
     ExerciseIntensity,
     FoodItem,
     MealType,
+    BodyMeasurementType,
 } from '../models/types.ts';
 import {
     Search,
@@ -19,25 +21,29 @@ import {
     Flame,
     ArrowRight,
     MapPin,
-    Heart
+    Heart,
+    Info
 } from 'lucide-react';
+import { NutritionLabel } from './shared/NutritionLabel.tsx';
 
 interface OmniboxProps {
     isOpen: boolean;
     onClose: () => void;
     onOpenTraining?: (defaults: { type?: ExerciseType; input?: string }) => void;
+    onOpenNutrition?: (item: { type: 'recipe' | 'foodItem'; referenceId: string; servings: number }) => void;
 }
+
 
 // Navigation routes for slash commands
 const NAVIGATION_ROUTES = [
-    { path: '/calories', label: 'Kalorier', aliases: ['kalorier', 'kcal', 'cal', 'calories'], icon: '🔥' },
+    { path: '/calories', label: 'Kalorier', aliases: ['kalorier', 'kcal', 'cal', 'calories'], icon: '◎' },
     { path: '/recipes', label: 'Recept', aliases: ['recept', 'recipes', 'recipe'], icon: '📖' },
     { path: '/planera', label: 'Veckoplanering', aliases: ['planera', 'plan', 'vecka', 'weekly'], icon: '📅' },
     { path: '/training', label: 'Träning', aliases: ['träning', 'training', 'gym', 'workout'], icon: '💪' },
-    { path: '/health', label: 'Hälsa', aliases: ['hälsa', 'health', 'halsa'], icon: '❤️' },
     { path: '/pantry', label: 'Skafferi', aliases: ['skafferi', 'pantry', 'förråd'], icon: '🗄️' },
     { path: '/database', label: 'Databas', aliases: ['databas', 'database', 'db', 'livsmedel'], icon: '📊' },
     { path: '/', label: 'Dashboard', aliases: ['hem', 'home', 'start', 'dashboard'], icon: '🏠' },
+    { path: '/health', label: 'Hälsa / Mått', aliases: ['hälsa', 'health', 'halsa', 'mått', 'mät', 'body', 'measurements', 'vikt', 'weight', 'sömn', 'sleep', 'träning'], icon: '📏' },
 ];
 
 // Exercise types
@@ -68,6 +74,22 @@ const VITALS_INFO: Record<string, { icon: any; label: string; unit: string; bg: 
     steps: { icon: Search, label: 'Steg', unit: 'steg', bg: 'bg-green-500/20', text: 'text-green-400' },
 };
 
+const MEASUREMENT_INFO: Record<BodyMeasurementType, { label: string; icon: string }> = {
+    waist: { label: 'Midja', icon: '📏' },
+    hips: { label: 'Höft', icon: '🍑' },
+    chest: { label: 'Bröst', icon: '👕' },
+    arm_left: { label: 'V. Överarm', icon: '💪' },
+    arm_right: { label: 'H. Överarm', icon: '💪' },
+    thigh_left: { label: 'V. Lår', icon: '🦵' },
+    thigh_right: { label: 'H. Lår', icon: '🦵' },
+    calf_left: { label: 'V. Vad', icon: '🦵' },
+    calf_right: { label: 'H. Vad', icon: '🦵' },
+    neck: { label: 'Nacke', icon: '🧣' },
+    shoulders: { label: 'Axlar', icon: '👔' },
+    forearm_left: { label: 'V. Underarm', icon: '💪' },
+    forearm_right: { label: 'H. Underarm', icon: '💪' },
+};
+
 // Category emoji mapping
 const getCategoryEmoji = (category?: string): string => {
     switch (category) {
@@ -89,7 +111,7 @@ const getCategoryEmoji = (category?: string): string => {
     }
 };
 
-export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
+export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: OmniboxProps) {
     const navigate = useNavigate();
     const [input, setInput] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
@@ -103,7 +125,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         mealEntries,
         addExercise,
         calculateExerciseCalories,
-        users
+        users,
+        addBodyMeasurement
     } = useData();
 
 
@@ -118,10 +141,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     const [isManual, setIsManual] = useState(false);
 
     // Locked food state - when a food is matched with high confidence
+    // Locked food state - when a food is matched with high confidence
+    const [lastLoggedItem, setLastLoggedItem] = useState<{ name: string; brand?: string; id: string; calories: number; quantity: number } | null>(null);
     const [lockedFood, setLockedFood] = useState<(FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } }) | null>(null);
     const [draftFoodQuantity, setDraftFoodQuantity] = useState<number | null>(null);
     const [draftFoodMealType, setDraftFoodMealType] = useState<MealType | null>(null);
     const [draftFoodDate, setDraftFoodDate] = useState<string | null>(null);
+
+    // Measurement drafts
+    const [draftMeasurementType, setDraftMeasurementType] = useState<BodyMeasurementType | null>(null);
+    const [draftMeasurementValue, setDraftMeasurementValue] = useState<number | null>(null);
+    const [draftMeasurementDate, setDraftMeasurementDate] = useState<string | null>(null);
 
     // Sync draft from intent
     useEffect(() => {
@@ -133,11 +163,22 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         if (!isManual && intent.type === 'vitals') {
             setDraftVitalAmount(intent.data.amount || null);
         }
-        // Sync food drafts from intent
+        // Sync food drafts from intent - only sync quantity if explicitly parsed (not default 100g)
         if (intent.type === 'food' && lockedFood) {
-            if (intent.data.quantity) setDraftFoodQuantity(intent.data.quantity);
-            if (intent.data.mealType) setDraftFoodMealType(intent.data.mealType);
+            const foodData = intent.data;
+            const hasExplicitQuantity = !!(foodData.quantity &&
+                (foodData.quantity !== 100 || (foodData.unit && foodData.unit !== 'g')));
+            if (hasExplicitQuantity && typeof foodData.quantity === 'number') {
+                setDraftFoodQuantity(foodData.quantity);
+            }
+            if (foodData.mealType) setDraftFoodMealType(foodData.mealType);
             if (intent.date) setDraftFoodDate(intent.date);
+        }
+
+        if (!isManual && intent.type === 'measurement') {
+            if (intent.data.measurementType) setDraftMeasurementType(intent.data.measurementType);
+            setDraftMeasurementValue(intent.data.value ?? null);
+            setDraftMeasurementDate(intent.date || null);
         }
     }, [intent, isManual, lockedFood]);
 
@@ -153,6 +194,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             setDraftFoodQuantity(null);
             setDraftFoodMealType(null);
             setDraftFoodDate(null);
+            setDraftMeasurementType(null);
+            setDraftMeasurementValue(null);
+            setDraftMeasurementDate(null);
         }
     }, [input]);
 
@@ -239,20 +283,19 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
         // Use parsed query from intent (cleaner) or fall back to raw input
         const searchQuery = intent.type === 'food' && intent.data.query
-            ? intent.data.query.toLowerCase()
-            : input.toLowerCase();
+            ? intent.data.query
+            : input;
 
-        return foodItems
-            .filter(item =>
-                item.name.toLowerCase().includes(searchQuery) ||
-                item.category?.toLowerCase().includes(searchQuery)
-            )
-            .slice(0, 6)
-            .map(item => ({
-                ...item,
-                type: 'food' as const,
-                usageStats: foodUsageStats[item.id] || null
-            }));
+        return performSmartSearch(searchQuery, foodItems, {
+            textFn: (item) => `${item.name} ${item.brand || ''}`,
+            categoryFn: (item) => item.category,
+            usageCountFn: (item) => foodUsageStats[item.id]?.count || 0,
+            limit: 6
+        }).map(item => ({
+            ...item,
+            type: 'food' as const,
+            usageStats: foodUsageStats[item.id] || null
+        }));
     }, [input, foodItems, foodUsageStats, isSlashMode, intent, lockedFood]);
 
     // User search results
@@ -272,33 +315,34 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     }, [input, users, isSlashMode, intent]);
 
 
-
-    // Auto-lock: When there's exactly one exact match, auto-lock it
+    // Auto-lock: Only when there's exactly ONE matching result
+    // Don't auto-lock if there are multiple items that could match (e.g., "bulgur" and "bulgur kokt")
     useEffect(() => {
         if (lockedFood) return; // Already locked
         if (foodResults.length === 0) return;
 
-        // Check for exact name match
         const searchQuery = intent.type === 'food' && intent.data.query
             ? intent.data.query.toLowerCase().trim()
             : input.toLowerCase().trim();
 
-        const exactMatch = foodResults.find(
-            item => item.name.toLowerCase() === searchQuery
-        );
-
-        if (exactMatch) {
+        // Only auto-lock if there's EXACTLY one result
+        if (foodResults.length === 1) {
+            const item = foodResults[0];
             setLockedFood({
-                ...exactMatch,
-                usageStats: foodUsageStats[exactMatch.id] || undefined
+                ...item,
+                usageStats: foodUsageStats[item.id] || undefined
             });
-            // Set initial drafts
-            const stats = foodUsageStats[exactMatch.id];
+            const stats = foodUsageStats[item.id];
             const foodData = intent.type === 'food' ? intent.data : null;
-            setDraftFoodQuantity(foodData?.quantity || stats?.avgGrams || 100);
+            const initialQty = foodData?.quantity || stats?.avgGrams || 100;
+            setDraftFoodQuantity(initialQty);
             setDraftFoodMealType(foodData?.mealType || null);
             setDraftFoodDate(intent.date || null);
+            return;
         }
+
+        // If exact match exists but there are other items starting with the query, DON'T auto-lock
+        // User should choose explicitly
     }, [foodResults, lockedFood, intent, input, foodUsageStats]);
 
     // Combined selectable items for keyboard nav
@@ -378,10 +422,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             }]
         });
 
+        setLastLoggedItem({
+            name: item.name,
+            brand: item.brand,
+            id: item.id,
+            calories: Math.round(item.calories * quantity / 100),
+            quantity
+        });
         setShowFeedback(true);
         setInput('');
         setLockedFood(null);
-        setTimeout(() => onClose(), 800);
+        // Removed onClose() to allow multiple logging as requested
     };
 
     // Lock a food item for detailed editing
@@ -391,7 +442,23 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             usageStats: item.usageStats || undefined
         });
         const stats = foodUsageStats[item.id];
-        setDraftFoodQuantity(intent.type === 'food' && intent.data.quantity ? intent.data.quantity : (stats?.avgGrams || 100));
+        // Determine initial quantity
+        let initialQty = 100;
+
+        if (intent.type === 'food' && intent.data.quantity) {
+            // If user explicitly typed "X port", we multiply by default portion size
+            if (intent.data.unit === 'portion') {
+                const portionSize = item.defaultPortionGrams || 100;
+                initialQty = intent.data.quantity * portionSize;
+            } else {
+                initialQty = intent.data.quantity;
+            }
+        } else {
+            // Fallback: Default portion -> Average logged amount -> 100g
+            initialQty = item.defaultPortionGrams || stats?.avgGrams || 100;
+        }
+
+        setDraftFoodQuantity(initialQty);
         setDraftFoodMealType(intent.type === 'food' && intent.data.mealType ? intent.data.mealType : null);
         setDraftFoodDate(intent.date || null);
     };
@@ -428,7 +495,6 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
         setShowFeedback(true);
         setInput('');
-        setTimeout(() => onClose(), 800);
     };
 
     const handleVitalsAction = () => {
@@ -449,7 +515,25 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
         updateVitals(date, updates);
         setShowFeedback(true);
         setInput('');
-        setTimeout(() => onClose(), 800);
+    };
+
+    const handleMeasurementAction = () => {
+        if (intent.type !== 'measurement') return;
+
+        const type = draftMeasurementType || intent.data.measurementType;
+        const value = draftMeasurementValue || intent.data.value;
+        const date = draftMeasurementDate || intent.date || new Date().toISOString().split('T')[0];
+
+        if (!type || !value) return;
+
+        addBodyMeasurement({
+            type,
+            value,
+            date
+        });
+
+        setShowFeedback(true);
+        setInput('');
     };
 
     const handleExecute = () => {
@@ -495,11 +579,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
             addWeightEntry(intent.data.weight, date);
             setShowFeedback(true);
             setInput('');
-            setTimeout(() => onClose(), 800);
         } else if (intent.type === 'exercise') {
             handleExerciseAction();
         } else if (intent.type === 'vitals') {
             handleVitalsAction();
+        } else if (intent.type === 'measurement') {
+            handleMeasurementAction();
         } else if (intent.type === 'food' && intent.data.query) {
             navigate(`/calories?search=${encodeURIComponent(intent.data.query)}`);
             onClose();
@@ -527,7 +612,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
     return (
         <div className="fixed inset-0 z-[200] flex items-start justify-center pt-[20vh] bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200" onClick={onClose}>
             <div className="w-full max-w-2xl bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300" onClick={e => e.stopPropagation()}>
-                <div className="p-4 flex items-center gap-4 border-b border-white/5">
+                <div className="p-4 flex items-center gap-4 border-b border-white/5 relative">
                     <span className="text-xl">{isSlashMode ? '🧭' : '✨'}</span>
                     <input
                         ref={inputRef}
@@ -538,14 +623,54 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleExecute()}
                     />
-                    {showFeedback && (
-                        <div className="absolute right-16 px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full animate-in fade-in zoom-in duration-300">
-                            ✨ Sparat!
+                    {showFeedback && lastLoggedItem && (
+                        <div className="absolute top-full left-0 right-0 z-50 p-4 bg-slate-800 border-b border-white/5 shadow-xl animate-in slide-in-from-top-2 duration-300 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center text-xl">✅</div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold text-white text-sm">{lastLoggedItem.name}</span>
+                                        {lastLoggedItem.brand && (
+                                            <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
+                                                {lastLoggedItem.brand}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-emerald-400 font-bold">
+                                        {lastLoggedItem.calories} kcal <span className="text-slate-500 font-normal">({Math.round(lastLoggedItem.quantity)}g) loggat</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    if (onOpenNutrition && lastLoggedItem) {
+                                        onOpenNutrition({
+                                            type: 'foodItem', // Assuming food item for now as logging recipes isn't fully integrated here yet
+                                            referenceId: lastLoggedItem.id,
+                                            servings: lastLoggedItem.quantity
+                                        });
+                                        onClose();
+                                    } else {
+                                        navigate(`/calories?date=${new Date().toISOString().split('T')[0]}&breakdown=${lastLoggedItem.id}`);
+                                        onClose();
+                                    }
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-xs font-bold text-white transition-colors"
+                            >
+                                <Info size={14} />
+                                <span>Mer info</span>
+                                <ArrowRight size={14} className="opacity-50" />
+                            </button>
                         </div>
                     )}
-                    <kbd className="hidden md:inline-flex h-6 items-center gap-1 rounded border border-white/10 bg-white/5 px-2 font-mono text-[10px] font-medium text-slate-400">
-                        ESC
-                    </kbd>
+                    {showFeedback && !lastLoggedItem && (
+                        <div className="absolute right-16 px-3 py-1 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded-full animate-in fade-in zoom-in duration-300">
+                            Loggat!
+                        </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                        <kbd className="hidden sm:inline-flex items-center gap-1 px-2 py-1 text-[10px] font-medium text-slate-500 bg-white/5 rounded border border-white/10">esc</kbd>
+                    </div>
                 </div>
 
                 {/* Preview / Results Area */}
@@ -602,7 +727,33 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                     {getCategoryEmoji(lockedFood.category)}
                                 </div>
                                 <div className="flex-1">
-                                    <h3 className="text-xl font-bold text-white">{lockedFood.name}</h3>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-xl font-bold text-white">{lockedFood.name}</h3>
+                                        {lockedFood.brand && (
+                                            <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
+                                                {lockedFood.brand}
+                                            </span>
+                                        )}
+                                        <button
+                                            className="p-1 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 ml-1"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (onOpenNutrition) {
+                                                    onOpenNutrition({
+                                                        type: 'foodItem',
+                                                        referenceId: lockedFood.id,
+                                                        servings: draftFoodQuantity || 100 // Use draft quantity if set
+                                                    });
+                                                } else {
+                                                    navigate(`/calories?date=${new Date().toISOString().split('T')[0]}&breakdown=${lockedFood.id}`);
+                                                }
+                                                onClose();
+                                            }}
+                                            title="Mer info"
+                                        >
+                                            <Info size={16} />
+                                        </button>
+                                    </div>
                                     <div className="text-xs text-slate-400 flex items-center gap-2 mt-1">
                                         <span className="uppercase">{lockedFood.category || 'Livsmedel'}</span>
                                         {lockedFood.usageStats && (
@@ -668,17 +819,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
 
                             {/* Calculated Nutrients Preview */}
                             <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
-                                <div className="flex items-center gap-4 text-sm">
-                                    <span className="text-slate-400">
-                                        🔥 <span className="font-bold text-white">{Math.round(lockedFood.calories * (draftFoodQuantity || 100) / 100)}</span> kcal
-                                    </span>
-                                    <span className="text-slate-400">
-                                        🥩 <span className="font-bold text-white">{Math.round(lockedFood.protein * (draftFoodQuantity || 100) / 100)}</span>g prot
-                                    </span>
-                                    <span className="text-slate-400">
-                                        🍞 <span className="font-bold text-white">{Math.round((lockedFood.carbs || 0) * (draftFoodQuantity || 100) / 100)}</span>g kolh
-                                    </span>
-                                </div>
+                                <NutritionLabel
+                                    calories={lockedFood.calories * (draftFoodQuantity || 100) / 100}
+                                    protein={lockedFood.protein * (draftFoodQuantity || 100) / 100}
+                                    carbs={(lockedFood.carbs || 0) * (draftFoodQuantity || 100) / 100}
+                                    variant="compact"
+                                    size="md"
+                                />
                                 <div className="text-xs text-slate-500">
                                     för {draftFoodQuantity || 100}g
                                 </div>
@@ -800,6 +947,70 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                 onClick={handleExerciseAction}
                             >
                                 <span>Logga Träning</span>
+                                <ArrowRight size={16} />
+                            </button>
+                        </div>
+                    )}
+
+                    {/* MEASUREMENT MODULE */}
+                    {!isSlashMode && !lockedFood && intent.type === 'measurement' && (
+                        <div className="p-4 space-y-4">
+                            <div className="px-3 py-2 bg-fuchsia-500/10 border-l-4 border-fuchsia-500 rounded-r-lg flex items-center gap-2">
+                                <Search size={16} className="text-fuchsia-500" />
+                                <span className="text-xs font-bold uppercase tracking-wider text-fuchsia-400">Kroppsmått</span>
+                                {isManual && <span className="ml-auto text-[10px] uppercase font-bold text-slate-400 bg-white/10 px-2 py-0.5 rounded-full">Manuellt ändrad</span>}
+                            </div>
+
+                            {/* Measurement Type Selector */}
+                            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-none">
+                                {Object.entries(MEASUREMENT_INFO).map(([type, info]) => (
+                                    <button
+                                        key={type}
+                                        onClick={() => { setDraftMeasurementType(type as BodyMeasurementType); setIsManual(true); }}
+                                        className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all min-w-[80px] ${(draftMeasurementType || intent.data.measurementType) === type
+                                            ? 'border-fuchsia-500 bg-fuchsia-500/20'
+                                            : 'border-transparent hover:bg-white/5'
+                                            }`}
+                                    >
+                                        <span className="text-2xl">{info.icon}</span>
+                                        <span className="text-[10px] font-bold text-slate-400 text-center">{info.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Value Input */}
+                            <div className="bg-slate-800/50 rounded-xl p-6 relative overflow-hidden">
+                                <div className="absolute top-0 right-0 p-4 opacity-10 pointer-events-none">
+                                    <span className="text-6xl">📏</span>
+                                </div>
+                                <div className="flex justify-between items-start mb-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400">Mått (cm)</label>
+                                    <span className="text-[10px] font-bold uppercase text-fuchsia-400">
+                                        📅 {draftMeasurementDate || intent.date || 'Idag'}
+                                    </span>
+                                </div>
+                                <div className="flex items-baseline gap-2">
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        value={draftMeasurementValue || intent.data.value || ''}
+                                        onChange={(e) => { setDraftMeasurementValue(parseFloat(e.target.value)); setIsManual(true); }}
+                                        className="w-full text-5xl font-black bg-transparent border-b-2 border-slate-600 focus:border-fuchsia-500 outline-none text-white"
+                                        placeholder="0.0"
+                                    />
+                                    <span className="text-2xl font-bold text-slate-500">cm</span>
+                                </div>
+                            </div>
+
+                            <button
+                                className={`w-full py-3 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all ${(draftMeasurementType || intent.data.measurementType) && (draftMeasurementValue || intent.data.value)
+                                    ? 'bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-fuchsia-500/20'
+                                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                    }`}
+                                onClick={handleMeasurementAction}
+                                disabled={!((draftMeasurementType || intent.data.measurementType) && (draftMeasurementValue || intent.data.value))}
+                            >
+                                <span>Spara mått</span>
                                 <ArrowRight size={16} />
                             </button>
                         </div>
@@ -941,15 +1152,28 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                                 {getCategoryEmoji(item.category)}
                                             </div>
                                             <div>
-                                                <div className="font-medium">{item.name}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="font-medium">{item.name}</div>
+                                                    {item.brand && (
+                                                        <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
+                                                            {item.brand}
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="text-[10px] text-slate-500 flex items-center gap-2">
                                                     <span className="uppercase tracking-wide">{item.category || 'Övrigt'}</span>
+                                                    {item.brand && (
+                                                        <>
+                                                            <span className="text-slate-600">•</span>
+                                                            <span className="text-slate-400">{item.brand}</span>
+                                                        </>
+                                                    )}
+                                                    <span className="text-slate-600">•</span>
+                                                    <span className="text-slate-400">{Math.round(item.protein)}g protein</span>
                                                     {item.usageStats && (
                                                         <>
                                                             <span className="text-slate-600">•</span>
-                                                            <span className="text-emerald-500/70">{item.usageStats.count}x loggad</span>
-                                                            <span className="text-slate-600">•</span>
-                                                            <span>snitt {Math.round(item.usageStats.avgGrams)}g</span>
+                                                            <span className="text-emerald-500/70">{item.usageStats.count}x</span>
                                                         </>
                                                     )}
                                                 </div>
@@ -988,7 +1212,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                                     {recentFoods.map((item, idx) => (
                                         <div
                                             key={item.id}
-                                            onClick={() => logFoodItem(item, item.usageStats.avgGrams)}
+                                            onClick={() => lockFood(item)}
                                             className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
                                                 ? 'bg-emerald-500/20 text-emerald-400'
                                                 : 'hover:bg-white/5 text-white'
@@ -1031,7 +1255,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining }: OmniboxProps) {
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 }

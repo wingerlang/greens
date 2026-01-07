@@ -435,21 +435,24 @@
 /* Goals Grid */
 .goals-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 1.5rem;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1.25rem;
 }
 
 .goal-card {
     position: relative;
     display: flex;
     flex-direction: column;
-    padding: 1.75rem;
+    padding: 1rem;
     background: linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(15, 23, 42, 0.85) 100%);
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 1.75rem;
+    border-radius: 1rem;
     transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     cursor: pointer;
+    align-items: center;
+    /* Center content horizontally */
+    text-align: center;
 }
 
 .goal-card::before {

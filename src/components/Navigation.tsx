@@ -23,6 +23,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
     const isHealthRoute = ['/health', '/halsa', '/recovery', '/body'].some(path => location.pathname.startsWith(path));
     const isTrainingRoute = ['/training', '/traning', '/pass', '/logg', '/styrka', '/coach'].some(path => location.pathname.startsWith(path));
     const isCommunityRoute = ['/community', '/feed', '/matchup', '/tävling'].some(path => location.pathname.startsWith(path));
+    const isToolsRoute = ['/tools', '/verktyg'].some(path => location.pathname.startsWith(path));
 
     const linkClasses = ({ isActive }: { isActive: boolean }) =>
         `flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
@@ -219,6 +220,45 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                     <NavLink to="/tävling" className={linkClasses}>
                                         <span className="w-5 text-center">🏆</span>
                                         <span>Tävling</span>
+                                    </NavLink>
+                                    <div className="border-t border-white/5 my-1" />
+                                    <NavLink to="/statistik" className={linkClasses}>
+                                        <span className="w-5 text-center">📊</span>
+                                        <span>Statistik</span>
+                                    </NavLink>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Tools Dropdown */}
+                        <div className="relative group">
+                            <button className={groupClasses(isToolsRoute)}>
+                                <span>🛠️</span>
+                                <span className="hidden xl:inline">Verktyg</span>
+                                <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
+                            </button>
+                            <div className="absolute top-full left-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
+                                <div className="grid gap-1">
+                                    <NavLink to="/tools" className={linkClasses} end>
+                                        <span className="w-5 text-center">🧰</span>
+                                        <span>Översikt</span>
+                                    </NavLink>
+                                    <div className="border-t border-white/5 my-1" />
+                                    <NavLink to="/tools/1rm" className={linkClasses}>
+                                        <span className="w-5 text-center">💪</span>
+                                        <span>1RM & Last</span>
+                                    </NavLink>
+                                    <NavLink to="/tools/race" className={linkClasses}>
+                                        <span className="w-5 text-center">🏃</span>
+                                        <span>Race Predictor</span>
+                                    </NavLink>
+                                    <NavLink to="/tools/pace" className={linkClasses}>
+                                        <span className="w-5 text-center">⏱️</span>
+                                        <span>Pace Calc</span>
+                                    </NavLink>
+                                    <NavLink to="/tools/health" className={linkClasses}>
+                                        <span className="w-5 text-center">🩺</span>
+                                        <span>Hälsokalkylator</span>
                                     </NavLink>
                                 </div>
                             </div>
@@ -461,6 +501,13 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             <NavLink to="/admin?tab=database" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
                                 <span className="w-5 text-center">📦</span>
                                 <span>Databas</span>
+                            </NavLink>
+                            <NavLink to="/tools" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">🛠️</span>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-slate-100">Verktyg</span>
+                                    <span className="text-[10px] text-slate-500 font-medium">Kalkylatorer</span>
+                                </div>
                             </NavLink>
                         </div>
                     </div >

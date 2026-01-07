@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User, LoginStat } from '../api/db.ts';
+import type { User } from '../models/types.ts';
+import type { LoginStat } from '../api/db/stats.ts';
 
 interface AuthContextType {
     user: User | null;
@@ -23,12 +24,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Initial check
     useEffect(() => {
+        const controller = new AbortController();
+        const signal = controller.signal;
         let mounted = true;
         const token = localStorage.getItem('auth_token');
 
         if (token) {
             fetch('/api/auth/me', {
-                headers: { 'Authorization': `Bearer ${token}` }
+                headers: { 'Authorization': `Bearer ${token}` },
+                signal
             })
                 .then(res => {
                     if (res.ok) return res.json();
@@ -38,7 +42,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (mounted) setUser(data.user);
                 })
                 .catch((e) => {
-                    console.error('[AuthContext] Auth check failed:', e.message);
+                    if (e instanceof Error && e.name === 'AbortError') return;
+                    console.error('[AuthContext] Auth check failed:', e instanceof Error ? e.message : String(e));
                     if (mounted) {
                         localStorage.removeItem('auth_token');
                         setUser(null);
@@ -48,7 +53,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                     if (mounted) setLoading(false);
                 });
 
-            return () => { mounted = false; };
+            return () => {
+                mounted = false;
+                controller.abort();
+            };
         } else {
             setLoading(false);
         }

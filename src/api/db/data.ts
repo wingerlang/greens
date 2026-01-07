@@ -59,38 +59,10 @@ export async function getUserData(userId: string): Promise<AppData | null> {
 }
 
 export async function saveUserData(userId: string, data: AppData): Promise<void> {
-    // 1. Sync meals: Delete meals not in payload, add/update meals in payload
-    // Get current meals from repo
-    const currentMeals = await mealRepo.getMealsInRange(userId, "2000-01-01", "2099-12-31");
-    const currentMealIds = new Set(currentMeals.map(m => m.id));
-    const payloadMealIds = new Set((data.mealEntries || []).map(m => m.id));
-
-    // Delete meals that are in repo but NOT in payload (these were deleted by user)
-    for (const meal of currentMeals) {
-        if (!payloadMealIds.has(meal.id)) {
-            console.log(`[saveUserData] Deleting meal ${meal.id} (removed from payload)`);
-            await mealRepo.deleteMeal(userId, meal.date, meal.id);
-        }
-    }
-
-    // Add/update meals from payload
-    if (data.mealEntries && data.mealEntries.length > 0) {
-        for (const meal of data.mealEntries) {
-            await mealRepo.saveMeal(userId, meal);
-        }
-    }
-
-    // 2. Sync weights similarly
-    const currentWeights = await weightRepo.getWeightHistory(userId);
-    const currentWeightIds = new Set(currentWeights.map((w: any) => w.id));
-    const payloadWeightIds = new Set((data.weightEntries || []).map(w => w.id));
-
-    // Note: weightRepo might not have a deleteWeight method, but meals is the main issue
-    if (data.weightEntries && data.weightEntries.length > 0) {
-        for (const entry of data.weightEntries) {
-            await weightRepo.saveWeight(userId, entry);
-        }
-    }
+    // 1. GRANULAR DATA DECOUPLING
+    // We NO LONGER sync meals/weights here.
+    // The frontend must use granular APIs (POST/PUT/DELETE) for these entities.
+    // This prevents race conditions where an old monolithic payload wipes out new granular data.
 
     // 2. Save the rest as a profile blob (excluding large/granular items)
     // NOTE: performanceGoals are now excluded because they are handled via repo.
