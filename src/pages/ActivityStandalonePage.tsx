@@ -8,31 +8,34 @@ import { mapUniversalToLegacyEntry } from '../utils/mappers';
 export function ActivityStandalonePage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { universalActivities } = useData();
+    const { unifiedActivities } = useData();
 
-    // Find the universal activity
+    // Find the unified activity
     const activity = useMemo(() => {
-        return universalActivities.find(a => a.id === id);
-    }, [universalActivities, id]);
+        return (unifiedActivities as any[]).find(a => a.id === id);
+    }, [unifiedActivities, id]);
 
     // Map to legacy format for the modal
     const mappedActivity = useMemo(() => {
         if (!activity) return null;
+
+        // If it's already a legacy-style activity (manual/merged), return it
+        if (activity.source === 'manual' || activity.source === 'merged' || activity.source === 'strength') {
+            return activity;
+        }
+
         const legacy = mapUniversalToLegacyEntry(activity);
         if (!legacy) return null;
-        // Ensure source property exists (mocking it if mapper doesn't provide it sufficiently for the intersection type)
+        // Ensure source property exists
         return { ...legacy, source: activity.source || 'universal' };
     }, [activity]);
 
     // If activity not found (or data loading), show loading or redirect
     useEffect(() => {
-        // Only redirect if data is loaded (universalActivities has items) but item not found
-        // If universalActivities is empty, it might be initial load.
-        // But in real app, it might populate later.
-        if (universalActivities.length > 0 && !activity) {
+        if (unifiedActivities.length > 0 && !activity) {
             navigate('/activities');
         }
-    }, [universalActivities, activity, navigate]);
+    }, [unifiedActivities, activity, navigate]);
 
     if (!activity || !mappedActivity) {
         return (
