@@ -9,18 +9,30 @@ import type { BackupSnapshot, BackupSettings, BackupEntityCounts } from '../../.
 
 export function BackupModule() {
     const [snapshots, setSnapshots] = useState<BackupSnapshot[]>([]);
-    const [settings, setSettings] = useState<BackupSettings>(backupService.getSettings());
+    const [settings, setSettings] = useState<BackupSettings | null>(null);
     const [selectedSnapshot, setSelectedSnapshot] = useState<BackupSnapshot | null>(null);
     const [isCreating, setIsCreating] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
     const [restoreModal, setRestoreModal] = useState<BackupSnapshot | null>(null);
     const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
     const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'diff' | 'tracks'>('timeline');
+    const [stats, setStats] = useState<{ totalSnapshots: number; totalSize: number; newestSnapshot?: string; oldestSnapshot?: string } | null>(null);
 
-    const loadSnapshots = useCallback(() => {
+    const loadSnapshots = useCallback(async () => {
         const currentTrack = backupService.getCurrentTrackId();
-        setSnapshots(backupService.getSnapshots(currentTrack));
-    }, []);
+        const snaps = await backupService.getSnapshots(currentTrack);
+        setSnapshots(snaps);
+
+        // Also load stats
+        const storageStats = await backupService.getStorageStats();
+        setStats(storageStats);
+
+        // Load settings if not loaded
+        if (!settings) {
+            const s = await backupService.getSettings();
+            setSettings(s);
+        }
+    }, [settings]);
 
     useEffect(() => {
         loadSnapshots();
@@ -34,8 +46,8 @@ export function BackupModule() {
     const handleCreateBackup = async (label?: string) => {
         setIsCreating(true);
         try {
-            const snapshot = backupService.createSnapshot('MANUAL', label);
-            loadSnapshots();
+            const snapshot = await backupService.createSnapshot('MANUAL', label);
+            await loadSnapshots();
             showNotification('success', `Backup skapad: ${backupService.formatBytes(snapshot.size)}`);
         } catch (e) {
             showNotification('error', `Kunde inte skapa backup: ${e}`);
@@ -44,10 +56,10 @@ export function BackupModule() {
         }
     };
 
-    const handleDelete = (id: string) => {
-        const success = backupService.deleteSnapshot(id);
+    const handleDelete = async (id: string) => {
+        const success = await backupService.deleteSnapshot(id);
         if (success) {
-            loadSnapshots();
+            await loadSnapshots();
             if (selectedSnapshot?.id === id) setSelectedSnapshot(null);
             showNotification('success', 'Backup borttagen');
         } else {
@@ -55,17 +67,17 @@ export function BackupModule() {
         }
     };
 
-    const handleRestore = (snapshotId: string) => {
-        const snapshot = backupService.getSnapshot(snapshotId);
+    const handleRestore = async (snapshotId: string) => {
+        const snapshot = await backupService.getSnapshot(snapshotId);
         if (snapshot) {
             setRestoreModal(snapshot);
         }
     };
 
-    const confirmRestore = (mode: 'FULL' | 'SELECTIVE', categories?: (keyof typeof snapshots[0]['entityCounts'])[]) => {
+    const confirmRestore = async (mode: 'FULL' | 'SELECTIVE', categories?: (keyof typeof snapshots[0]['entityCounts'])[]) => {
         if (!restoreModal) return;
 
-        const result = backupService.restore({
+        const result = await backupService.restore({
             snapshotId: restoreModal.id,
             mode,
             categories,
@@ -74,7 +86,7 @@ export function BackupModule() {
 
         if (result.success) {
             showNotification('success', `Återställning lyckades! Du måste ladda om sidan.`);
-            loadSnapshots();
+            await loadSnapshots();
             // Trigger page reload after a short delay
             setTimeout(() => window.location.reload(), 1500);
         } else {
@@ -83,8 +95,6 @@ export function BackupModule() {
 
         setRestoreModal(null);
     };
-
-    const stats = backupService.getStorageStats();
 
     return (
         <div className="space-y-6">
@@ -146,16 +156,16 @@ export function BackupModule() {
             <div className="grid grid-cols-4 gap-4">
                 <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Totala Snapshots</div>
-                    <div className="text-2xl font-black text-white">{stats.totalSnapshots}</div>
+                    <div className="text-2xl font-black text-white">{stats?.totalSnapshots ?? 0}</div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Total Storlek</div>
-                    <div className="text-2xl font-black text-indigo-400">{backupService.formatBytes(stats.totalSize)}</div>
+                    <div className="text-2xl font-black text-indigo-400">{backupService.formatBytes(stats?.totalSize ?? 0)}</div>
                 </div>
                 <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Senaste Backup</div>
                     <div className="text-sm font-bold text-white">
-                        {stats.newestSnapshot
+                        {stats?.newestSnapshot
                             ? new Date(stats.newestSnapshot).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
                             : '-'
                         }
@@ -164,7 +174,7 @@ export function BackupModule() {
                 <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Äldsta Backup</div>
                     <div className="text-sm font-bold text-white">
-                        {stats.oldestSnapshot
+                        {stats?.oldestSnapshot
                             ? new Date(stats.oldestSnapshot).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric' })
                             : '-'
                         }
@@ -176,63 +186,67 @@ export function BackupModule() {
             {showSettings && (
                 <div className="rounded-xl border border-white/10 bg-white/[0.02] p-6">
                     <h3 className="text-sm font-bold text-white mb-4">Inställningar</h3>
-                    <div className="grid grid-cols-2 gap-6">
-                        <label className="flex items-center gap-3 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={settings.autoBackupEnabled}
-                                onChange={(e) => {
-                                    const updated = { ...settings, autoBackupEnabled: e.target.checked };
-                                    setSettings(updated);
-                                    backupService.saveSettings(updated);
-                                }}
-                                className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-indigo-500"
-                            />
-                            <span className="text-sm text-slate-300">Aktivera auto-backup</span>
-                        </label>
+                    {settings ? (
+                        <div className="grid grid-cols-2 gap-6">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={settings.autoBackupEnabled}
+                                    onChange={(e) => {
+                                        const updated = { ...settings, autoBackupEnabled: e.target.checked };
+                                        setSettings(updated);
+                                        backupService.saveSettings(updated);
+                                    }}
+                                    className="w-4 h-4 rounded bg-slate-800 border-slate-700 text-indigo-500 focus:ring-indigo-500"
+                                />
+                                <span className="text-sm text-slate-300">Aktivera auto-backup</span>
+                            </label>
 
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-slate-400">Max antal snapshots:</span>
-                            <input
-                                type="number"
-                                value={settings.maxSnapshots}
-                                onChange={(e) => {
-                                    const updated = { ...settings, maxSnapshots: parseInt(e.target.value) || 100 };
-                                    setSettings(updated);
-                                    backupService.saveSettings(updated);
-                                }}
-                                className="w-20 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-sm"
-                            />
-                        </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-slate-400">Max antal snapshots:</span>
+                                <input
+                                    type="number"
+                                    value={settings.maxSnapshots}
+                                    onChange={(e) => {
+                                        const updated = { ...settings, maxSnapshots: parseInt(e.target.value) || 100 };
+                                        setSettings(updated);
+                                        backupService.saveSettings(updated);
+                                    }}
+                                    className="w-20 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-sm"
+                                />
+                            </div>
 
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-slate-400">Auto-backup intervall (timmar):</span>
-                            <input
-                                type="number"
-                                value={settings.autoBackupIntervalHours}
-                                onChange={(e) => {
-                                    const updated = { ...settings, autoBackupIntervalHours: parseInt(e.target.value) || 24 };
-                                    setSettings(updated);
-                                    backupService.saveSettings(updated);
-                                }}
-                                className="w-20 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-sm"
-                            />
-                        </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-slate-400">Auto-backup intervall (timmar):</span>
+                                <input
+                                    type="number"
+                                    value={settings.autoBackupIntervalHours}
+                                    onChange={(e) => {
+                                        const updated = { ...settings, autoBackupIntervalHours: parseInt(e.target.value) || 24 };
+                                        setSettings(updated);
+                                        backupService.saveSettings(updated);
+                                    }}
+                                    className="w-20 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-sm"
+                                />
+                            </div>
 
-                        <div className="flex items-center gap-3">
-                            <span className="text-sm text-slate-400">Behåll i dagar:</span>
-                            <input
-                                type="number"
-                                value={settings.retentionDays}
-                                onChange={(e) => {
-                                    const updated = { ...settings, retentionDays: parseInt(e.target.value) || 90 };
-                                    setSettings(updated);
-                                    backupService.saveSettings(updated);
-                                }}
-                                className="w-20 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-sm"
-                            />
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-slate-400">Behåll i dagar:</span>
+                                <input
+                                    type="number"
+                                    value={settings.retentionDays}
+                                    onChange={(e) => {
+                                        const updated = { ...settings, retentionDays: parseInt(e.target.value) || 90 };
+                                        setSettings(updated);
+                                        backupService.saveSettings(updated);
+                                    }}
+                                    className="w-20 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-white text-sm"
+                                />
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="text-slate-500 text-sm">Laddar inställningar...</div>
+                    )}
                 </div>
             )}
 

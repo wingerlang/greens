@@ -12,33 +12,60 @@ import { backupService } from './backupService.ts';
 // ============================================
 
 const CATEGORY_DATA_KEYS: Record<keyof BackupEntityCounts, string> = {
+    // Core data
     meals: 'mealEntries',
-    exercises: 'exerciseEntries',
+    exercises: 'universalActivities',
+    manualExercises: 'exerciseEntries',
     weights: 'weightEntries',
     recipes: 'recipes',
     foodItems: 'foodItems',
     weeklyPlans: 'weeklyPlans',
+
+    // Goals & planning
     goals: 'performanceGoals',
     periods: 'trainingPeriods',
+    plannedActivities: 'plannedActivities',
+    trainingCycles: 'trainingCycles',
+    competitions: 'competitions',
+
+    // Sessions & logs
     strengthSessions: 'strengthSessions',
     sleepSessions: 'sleepSessions',
+    intakeLogs: 'intakeLogs',
+
+    // Health & recovery
     bodyMeasurements: 'bodyMeasurements',
     vitals: 'dailyVitals',
+    injuryLogs: 'injuryLogs',
+    recoveryMetrics: 'recoveryMetrics',
+
+    // Other
+    pantryItems: 'pantryItems',
+    users: 'users',
 };
 
 const CATEGORY_LABELS: Record<keyof BackupEntityCounts, string> = {
     meals: 'Måltider',
-    exercises: 'Aktiviteter',
+    exercises: 'Aktiviteter (Strava/Integr.)',
+    manualExercises: 'Manuella aktiviteter',
     weights: 'Vägningar',
     recipes: 'Recept',
     foodItems: 'Råvaror',
     weeklyPlans: 'Veckoplaneringar',
     goals: 'Mål',
     periods: 'Träningsperioder',
+    plannedActivities: 'Planerade aktiviteter',
+    trainingCycles: 'Träningscykler',
+    competitions: 'Tävlingar',
     strengthSessions: 'Styrkepass',
     sleepSessions: 'Sömnsessioner',
+    intakeLogs: 'Intag',
     bodyMeasurements: 'Kroppsmått',
     vitals: 'Dagliga värden',
+    injuryLogs: 'Skadelogg',
+    recoveryMetrics: 'Återhämtning',
+    pantryItems: 'Skafferiet',
+    users: 'Användare',
 };
 
 // ============================================
@@ -89,20 +116,20 @@ function compareFields(oldObj: Record<string, unknown>, newObj: Record<string, u
 // Main Diff Functions
 // ============================================
 
-export function compareSnapshots(fromId: string, toId: string): BackupDiff | null {
-    const fromSnapshot = backupService.getSnapshot(fromId);
-    const toSnapshot = backupService.getSnapshot(toId);
+export async function compareSnapshots(fromId: string, toId: string): Promise<BackupDiff | null> {
+    const fromSnapshot = await backupService.getSnapshot(fromId);
+    const toSnapshot = await backupService.getSnapshot(toId);
 
     if (!fromSnapshot || !toSnapshot) {
-        console.error('One or both snapshots not found');
+        console.error('[DiffEngine] One or both snapshots not found');
         return null;
     }
 
-    const fromData = backupService.getSnapshotData(fromId) as Record<string, unknown>;
-    const toData = backupService.getSnapshotData(toId) as Record<string, unknown>;
+    const fromData = await backupService.getSnapshotData(fromId) as Record<string, unknown>;
+    const toData = await backupService.getSnapshotData(toId) as Record<string, unknown>;
 
     if (!fromData || !toData) {
-        console.error('Snapshot data not found');
+        console.error('[DiffEngine] Snapshot data not found');
         return null;
     }
 

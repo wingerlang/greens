@@ -20,18 +20,36 @@ export interface BackupSnapshot {
 }
 
 export interface BackupEntityCounts {
+    // Core data
     meals: number;
-    exercises: number;
+    exercises: number;        // universalActivities (Strava etc)
+    manualExercises: number;  // exerciseEntries (legacy manual)
     weights: number;
     recipes: number;
     foodItems: number;
     weeklyPlans: number;
-    goals: number;
-    periods: number;
+
+    // Goals & planning
+    goals: number;            // performanceGoals
+    periods: number;          // trainingPeriods - not in AppData, remove or keep for future
+    plannedActivities: number;
+    trainingCycles: number;
+    competitions: number;
+
+    // Sessions & logs
     strengthSessions: number;
     sleepSessions: number;
+    intakeLogs: number;
+
+    // Health & recovery
     bodyMeasurements: number;
-    vitals: number;
+    vitals: number;           // dailyVitals
+    injuryLogs: number;
+    recoveryMetrics: number;
+
+    // Other
+    pantryItems: number;
+    users: number;
 }
 
 export type BackupTrigger =

@@ -1,6 +1,6 @@
 /**
  * Backup Service
- * Handles snapshot creation, storage, and restoration
+ * Handles snapshot creation, storage, and restoration via server API
  * @module services/backup
  */
 
@@ -12,7 +12,6 @@ import {
     BackupSettings,
     DEFAULT_BACKUP_SETTINGS,
     DEFAULT_TRACK,
-    BACKUP_STORAGE_KEYS,
     RestoreOptions,
     RestoreResult,
 } from '../models/backup.ts';
@@ -40,63 +39,82 @@ function generateChecksum(data: string): string {
     return Math.abs(hash).toString(16);
 }
 
+function getToken(): string | null {
+    return localStorage.getItem('auth_token');
+}
+
+async function apiRequest<T>(
+    path: string,
+    options: RequestInit = {}
+): Promise<T | null> {
+    const token = getToken();
+    if (!token) {
+        console.warn('[BackupService] No auth token');
+        return null;
+    }
+
+    try {
+        const res = await fetch(`http://localhost:8000${path}`, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                ...options.headers,
+            },
+        });
+
+        if (!res.ok) {
+            console.error(`[BackupService] API error: ${res.status}`);
+            return null;
+        }
+
+        return await res.json() as T;
+    } catch (e) {
+        console.error('[BackupService] Request failed:', e);
+        return null;
+    }
+}
+
 // ============================================
 // Backup Service Class
 // ============================================
 
 class BackupServiceImpl {
     private storageKey = 'greens-app-data';
+    private snapshotsCache: BackupSnapshot[] | null = null;
 
     // ========== Settings ==========
 
-    getSettings(): BackupSettings {
-        const stored = localStorage.getItem(BACKUP_STORAGE_KEYS.SETTINGS);
-        if (stored) {
-            try {
-                return { ...DEFAULT_BACKUP_SETTINGS, ...JSON.parse(stored) };
-            } catch {
-                return DEFAULT_BACKUP_SETTINGS;
-            }
-        }
-        return DEFAULT_BACKUP_SETTINGS;
+    async getSettings(): Promise<BackupSettings> {
+        const settings = await apiRequest<BackupSettings>('/api/backup/settings');
+        return settings || DEFAULT_BACKUP_SETTINGS;
     }
 
-    saveSettings(settings: Partial<BackupSettings>): void {
-        const current = this.getSettings();
+    async saveSettings(settings: Partial<BackupSettings>): Promise<void> {
+        const current = await this.getSettings();
         const updated = { ...current, ...settings };
-        localStorage.setItem(BACKUP_STORAGE_KEYS.SETTINGS, JSON.stringify(updated));
+        await apiRequest('/api/backup/settings', {
+            method: 'PUT',
+            body: JSON.stringify(updated),
+        });
     }
 
     // ========== Tracks ==========
 
-    getTracks(): BackupTrack[] {
-        const stored = localStorage.getItem(BACKUP_STORAGE_KEYS.TRACKS);
-        if (stored) {
-            try {
-                return JSON.parse(stored);
-            } catch {
-                return [DEFAULT_TRACK];
-            }
-        }
-        // Initialize with default track
-        this.saveTracks([DEFAULT_TRACK]);
-        return [DEFAULT_TRACK];
-    }
-
-    private saveTracks(tracks: BackupTrack[]): void {
-        localStorage.setItem(BACKUP_STORAGE_KEYS.TRACKS, JSON.stringify(tracks));
+    async getTracks(): Promise<BackupTrack[]> {
+        const tracks = await apiRequest<BackupTrack[]>('/api/backup/tracks');
+        return tracks || [DEFAULT_TRACK];
     }
 
     getCurrentTrackId(): string {
-        return localStorage.getItem(BACKUP_STORAGE_KEYS.CURRENT_TRACK) || 'main';
+        return localStorage.getItem('greens-backup-current-track') || 'main';
     }
 
     setCurrentTrack(trackId: string): void {
-        localStorage.setItem(BACKUP_STORAGE_KEYS.CURRENT_TRACK, trackId);
+        localStorage.setItem('greens-backup-current-track', trackId);
     }
 
-    createTrack(name: string, description?: string): BackupTrack {
-        const tracks = this.getTracks();
+    async createTrack(name: string, description?: string): Promise<BackupTrack> {
         const newTrack: BackupTrack = {
             id: `track_${Date.now()}`,
             name,
@@ -105,45 +123,42 @@ class BackupServiceImpl {
             isDefault: false,
             parentTrackId: this.getCurrentTrackId(),
         };
-        tracks.push(newTrack);
-        this.saveTracks(tracks);
+
+        await apiRequest('/api/backup/tracks', {
+            method: 'POST',
+            body: JSON.stringify(newTrack),
+        });
+
         return newTrack;
     }
 
     // ========== Snapshots ==========
 
-    getSnapshots(trackId?: string): BackupSnapshot[] {
-        const stored = localStorage.getItem(BACKUP_STORAGE_KEYS.SNAPSHOTS);
-        if (!stored) return [];
+    async getSnapshots(trackId?: string): Promise<BackupSnapshot[]> {
+        const snapshots = await apiRequest<BackupSnapshot[]>('/api/backup/snapshots');
+        this.snapshotsCache = snapshots || [];
 
-        try {
-            const allSnapshots: BackupSnapshot[] = JSON.parse(stored);
-            if (trackId) {
-                return allSnapshots.filter(s => s.trackId === trackId);
-            }
-            return allSnapshots;
-        } catch {
-            return [];
+        if (trackId) {
+            return this.snapshotsCache.filter(s => s.trackId === trackId);
         }
+        return this.snapshotsCache;
     }
 
-    getSnapshot(id: string): BackupSnapshot | undefined {
-        const snapshots = this.getSnapshots();
-        return snapshots.find(s => s.id === id);
-    }
-
-    private saveSnapshots(snapshots: BackupSnapshot[]): void {
-        localStorage.setItem(BACKUP_STORAGE_KEYS.SNAPSHOTS, JSON.stringify(snapshots));
+    async getSnapshot(id: string): Promise<BackupSnapshot | undefined> {
+        if (!this.snapshotsCache) {
+            await this.getSnapshots();
+        }
+        return this.snapshotsCache?.find(s => s.id === id);
     }
 
     /**
      * Create a new backup snapshot
      */
-    createSnapshot(
+    async createSnapshot(
         trigger: BackupTrigger,
         label?: string,
         description?: string
-    ): BackupSnapshot {
+    ): Promise<BackupSnapshot> {
         // Get current app data
         const rawData = localStorage.getItem(this.storageKey);
         if (!rawData) {
@@ -155,18 +170,36 @@ class BackupServiceImpl {
 
         // Count entities
         const entityCounts: BackupEntityCounts = {
+            // Core data
             meals: (appData.mealEntries || []).length,
-            exercises: (appData.exerciseEntries || []).length,
+            exercises: (appData.universalActivities || []).length,
+            manualExercises: (appData.exerciseEntries || []).length,
             weights: (appData.weightEntries || []).length,
             recipes: (appData.recipes || []).length,
             foodItems: (appData.foodItems || []).length,
             weeklyPlans: (appData.weeklyPlans || []).length,
+
+            // Goals & planning
             goals: (appData.performanceGoals || []).length,
-            periods: (appData.trainingPeriods || []).length,
+            periods: 0, // trainingPeriods not in current AppData
+            plannedActivities: (appData.plannedActivities || []).length,
+            trainingCycles: (appData.trainingCycles || []).length,
+            competitions: (appData.competitions || []).length,
+
+            // Sessions & logs
             strengthSessions: (appData.strengthSessions || []).length,
             sleepSessions: (appData.sleepSessions || []).length,
+            intakeLogs: (appData.intakeLogs || []).length,
+
+            // Health & recovery
             bodyMeasurements: (appData.bodyMeasurements || []).length,
             vitals: Object.keys(appData.dailyVitals || {}).length,
+            injuryLogs: (appData.injuryLogs || []).length,
+            recoveryMetrics: (appData.recoveryMetrics || []).length,
+
+            // Other
+            pantryItems: (appData.pantryItems || []).length,
+            users: (appData.users || []).length,
         };
 
         // Calculate size
@@ -187,27 +220,21 @@ class BackupServiceImpl {
             checksum: generateChecksum(rawData),
         };
 
-        // Store snapshot metadata
-        const snapshots = this.getSnapshots();
-        snapshots.unshift(snapshot); // Add at beginning (newest first)
+        // Send to server
+        const result = await apiRequest<{ success: boolean; snapshot: BackupSnapshot }>(
+            '/api/backup/snapshots',
+            {
+                method: 'POST',
+                body: JSON.stringify({ snapshot, data: appData }),
+            }
+        );
 
-        // Enforce max snapshots limit
-        const settings = this.getSettings();
-        const trackSnapshots = snapshots.filter(s => s.trackId === trackId);
-        if (trackSnapshots.length > settings.maxSnapshots) {
-            // Remove oldest snapshots beyond limit
-            const toRemove = trackSnapshots.slice(settings.maxSnapshots);
-            toRemove.forEach(s => this.deleteSnapshotData(s.id));
-            const filteredSnapshots = snapshots.filter(
-                s => !toRemove.some(r => r.id === s.id)
-            );
-            this.saveSnapshots(filteredSnapshots);
-        } else {
-            this.saveSnapshots(snapshots);
+        if (!result?.success) {
+            throw new Error('Failed to save backup to server');
         }
 
-        // Store actual data separately
-        this.saveSnapshotData(snapshot.id, appData);
+        // Invalidate cache
+        this.snapshotsCache = null;
 
         return snapshot;
     }
@@ -232,50 +259,33 @@ class BackupServiceImpl {
     }
 
     /**
-     * Store snapshot data in separate localStorage key
+     * Get snapshot data from server
      */
-    private saveSnapshotData(snapshotId: string, data: unknown): void {
-        localStorage.setItem(`greens-backup-data-${snapshotId}`, JSON.stringify(data));
+    async getSnapshotData(snapshotId: string): Promise<unknown | null> {
+        return await apiRequest(`/api/backup/snapshots/${snapshotId}`);
     }
 
     /**
-     * Get snapshot data
+     * Delete snapshot
      */
-    getSnapshotData(snapshotId: string): unknown | null {
-        const stored = localStorage.getItem(`greens-backup-data-${snapshotId}`);
-        if (!stored) return null;
-        try {
-            return JSON.parse(stored);
-        } catch {
-            return null;
+    async deleteSnapshot(snapshotId: string): Promise<boolean> {
+        const result = await apiRequest<{ success: boolean }>(
+            `/api/backup/snapshots/${snapshotId}`,
+            { method: 'DELETE' }
+        );
+
+        if (result?.success) {
+            this.snapshotsCache = null;
+            return true;
         }
-    }
-
-    /**
-     * Delete snapshot and its data
-     */
-    deleteSnapshot(snapshotId: string): boolean {
-        const snapshots = this.getSnapshots();
-        const filtered = snapshots.filter(s => s.id !== snapshotId);
-
-        if (filtered.length === snapshots.length) {
-            return false; // Not found
-        }
-
-        this.saveSnapshots(filtered);
-        this.deleteSnapshotData(snapshotId);
-        return true;
-    }
-
-    private deleteSnapshotData(snapshotId: string): void {
-        localStorage.removeItem(`greens-backup-data-${snapshotId}`);
+        return false;
     }
 
     /**
      * Restore from a snapshot
      */
-    restore(options: RestoreOptions): RestoreResult {
-        const snapshot = this.getSnapshot(options.snapshotId);
+    async restore(options: RestoreOptions): Promise<RestoreResult> {
+        const snapshot = await this.getSnapshot(options.snapshotId);
         if (!snapshot) {
             return {
                 success: false,
@@ -285,7 +295,7 @@ class BackupServiceImpl {
             };
         }
 
-        const snapshotData = this.getSnapshotData(options.snapshotId);
+        const snapshotData = await this.getSnapshotData(options.snapshotId);
         if (!snapshotData) {
             return {
                 success: false,
@@ -299,7 +309,7 @@ class BackupServiceImpl {
         let preRestoreSnapshotId: string | undefined;
         if (options.createBackupFirst !== false) {
             try {
-                const preBackup = this.createSnapshot('PRE_RESTORE', 'Före återställning');
+                const preBackup = await this.createSnapshot('PRE_RESTORE', 'Före återställning');
                 preRestoreSnapshotId = preBackup.id;
             } catch (e) {
                 console.error('Failed to create pre-restore backup:', e);
@@ -323,18 +333,36 @@ class BackupServiceImpl {
                 const restoredCounts: Partial<BackupEntityCounts> = {};
 
                 const categoryMapping: Record<keyof BackupEntityCounts, string> = {
+                    // Core data
                     meals: 'mealEntries',
-                    exercises: 'exerciseEntries',
+                    exercises: 'universalActivities',
+                    manualExercises: 'exerciseEntries',
                     weights: 'weightEntries',
                     recipes: 'recipes',
                     foodItems: 'foodItems',
                     weeklyPlans: 'weeklyPlans',
+
+                    // Goals & planning
                     goals: 'performanceGoals',
                     periods: 'trainingPeriods',
+                    plannedActivities: 'plannedActivities',
+                    trainingCycles: 'trainingCycles',
+                    competitions: 'competitions',
+
+                    // Sessions & logs
                     strengthSessions: 'strengthSessions',
                     sleepSessions: 'sleepSessions',
+                    intakeLogs: 'intakeLogs',
+
+                    // Health & recovery
                     bodyMeasurements: 'bodyMeasurements',
                     vitals: 'dailyVitals',
+                    injuryLogs: 'injuryLogs',
+                    recoveryMetrics: 'recoveryMetrics',
+
+                    // Other
+                    pantryItems: 'pantryItems',
+                    users: 'users',
                 };
 
                 for (const category of categories) {
@@ -368,14 +396,14 @@ class BackupServiceImpl {
 
     // ========== Statistics ==========
 
-    getStorageStats(): {
+    async getStorageStats(): Promise<{
         totalSnapshots: number;
         totalSize: number;
         oldestSnapshot?: string;
         newestSnapshot?: string;
         byTrack: Record<string, { count: number; size: number }>;
-    } {
-        const snapshots = this.getSnapshots();
+    }> {
+        const snapshots = await this.getSnapshots();
         const byTrack: Record<string, { count: number; size: number }> = {};
 
         for (const s of snapshots) {
@@ -408,6 +436,20 @@ class BackupServiceImpl {
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    /**
+     * Check if snapshot has data (always true for server-based storage)
+     */
+    hasData(_snapshotId: string): boolean {
+        return true; // Server validates this
+    }
+
+    /**
+     * Cleanup orphan snapshots (no-op for server storage)
+     */
+    cleanupOrphanSnapshots(): number {
+        return 0; // Server handles this
     }
 }
 
