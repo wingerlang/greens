@@ -129,7 +129,7 @@ interface DataContextType {
     weightEntries: WeightEntry[];
     addWeightEntry: (weight: number, date?: string, waist?: number, chest?: number, hips?: number, thigh?: number) => WeightEntry;
     bulkAddWeightEntries: (entries: Partial<WeightEntry>[]) => void;
-    updateWeightEntry: (id: string, weight: number, date: string, waist?: number, chest?: number, hips?: number, thigh?: number) => void;
+    updateWeightEntry: (id: string, weight?: number, date?: string, updates?: Partial<WeightEntry>) => void;
     deleteWeightEntry: (id: string) => void;
     getLatestWeight: () => number;
     getLatestWaist: () => number | undefined;
@@ -200,10 +200,10 @@ interface DataContextType {
     deleteBodyMeasurement: (id: string) => void;
 
     unifiedActivities: (ExerciseEntry & { source: string })[];
-    calculateStreak: () => number;
-    calculateTrainingStreak: () => number;
-    calculateWeeklyTrainingStreak: () => number;
-    calculateCalorieGoalStreak: () => number;
+    calculateStreak: (referenceDate?: string) => number;
+    calculateTrainingStreak: (referenceDate?: string, type?: 'strength' | 'running' | 'other') => number;
+    calculateWeeklyTrainingStreak: (referenceDate?: string) => number;
+    calculateCalorieGoalStreak: (referenceDate?: string) => number;
 
     // System
     refreshData: () => Promise<void>;
@@ -993,9 +993,7 @@ export function DataProvider({ children }: DataProviderProps) {
         setExerciseEntries(prev => prev.filter(e => e.id !== id));
     }, []);
 
-    const getExercisesForDate = useCallback((date: string): ExerciseEntry[] => {
-        return exerciseEntries.filter(e => e.date === date);
-    }, [exerciseEntries]);
+
 
     const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number, chest?: number, hips?: number, thigh?: number): WeightEntry => {
         const newEntry: WeightEntry = {
@@ -1115,6 +1113,108 @@ export function DataProvider({ children }: DataProviderProps) {
     const getLatestWaist = useCallback((): number | undefined => {
         return weightEntries.find(w => w.waist !== undefined)?.waist;
     }, [weightEntries]);
+
+    // ============================================
+    // Derived: Unified Activities (Manual + Strava + Strength)
+    // ============================================
+
+    const unifiedActivities = useMemo(() => {
+        const serverEntries = universalActivities
+            .filter(u => !u.mergedIntoId) // Filter out merged activities
+            .map(mapUniversalToLegacyEntry)
+            .filter((e): e is ExerciseEntry => e !== null);
+
+        const normalizedServer = serverEntries.map(e => {
+            const u = universalActivities.find(item => item.id === e.id);
+            return {
+                ...e,
+                source: 'strava' as const,
+                avgHeartRate: u?.performance?.avgHeartRate,
+                maxHeartRate: u?.performance?.maxHeartRate,
+                _mergeData: {
+                    strava: e,
+                    universalActivity: u
+                }
+            };
+        });
+        const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' }));
+
+        // Convert strength workouts to ExerciseEntry format
+        const strengthEntries = (strengthSessions as any[]).map(w => ({
+            id: w.id,
+            date: w.date,
+            type: 'strength' as const,
+            durationMinutes: w.duration || w.durationMinutes || 60,
+            intensity: 'moderate' as const,
+            caloriesBurned: 0,
+            distance: undefined,
+            tonnage: w.totalVolume || 0,
+            notes: w.name || w.title,
+            source: 'strength',
+            createdAt: w.createdAt || new Date().toISOString(),
+            subType: undefined,
+            externalId: undefined
+        }));
+
+        // Smart Merge: Combine StrengthLog with Strava data
+        const stravaWeightByDate = new Map<string, typeof normalizedServer[0]>();
+        normalizedServer.forEach(e => {
+            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
+                e.type?.toLowerCase().includes('styrka') ||
+                e.type?.toLowerCase().includes('strength');
+            if (isWeightTraining) {
+                stravaWeightByDate.set(e.date.split('T')[0], e);
+            }
+        });
+
+        const mergedStrengthEntries = strengthEntries.map(se => {
+            const dateKey = se.date.split('T')[0];
+            const stravaMatch = stravaWeightByDate.get(dateKey);
+
+            if (stravaMatch) {
+                const universalMatch = universalActivities.find(u => u.id === stravaMatch.id);
+                const perf = universalMatch?.performance;
+                const sw = (strengthSessions as any[]).find(s => s.id === se.id);
+                return {
+                    ...se,
+                    source: 'merged' as const,
+                    caloriesBurned: stravaMatch.caloriesBurned || se.caloriesBurned,
+                    durationMinutes: stravaMatch.durationMinutes || se.durationMinutes,
+                    avgHeartRate: perf?.avgHeartRate,
+                    maxHeartRate: perf?.maxHeartRate,
+                    subType: stravaMatch.subType,
+                    _mergeData: {
+                        strava: stravaMatch,
+                        strength: se,
+                        strengthWorkout: sw,
+                        universalActivity: universalMatch,
+                    }
+                };
+            }
+            return se;
+        });
+
+        const deduplicatedServer = normalizedServer.filter(e => {
+            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
+                e.type?.toLowerCase().includes('styrka') ||
+                e.type?.toLowerCase().includes('strength');
+            if (isWeightTraining) {
+                const dateKey = e.date.split('T')[0];
+                if (strengthEntries.some(se => se.date.split('T')[0] === dateKey)) {
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        const result = [...deduplicatedServer, ...normalizedLocal, ...mergedStrengthEntries];
+        return result.sort((a, b) => b.date.localeCompare(a.date));
+    }, [universalActivities, exerciseEntries, strengthSessions]);
+
+    const getExercisesForDate = useCallback((date: string): ExerciseEntry[] => {
+        // Use startsWith to match YYYY-MM-DD even if activity has time time YYYY-MM-DDTHH:mm:ss
+        return unifiedActivities.filter(e => e.date.startsWith(date));
+    }, [unifiedActivities]);
 
     // ============================================
     // Strength Session CRUD (Phase 12)
@@ -1387,9 +1487,14 @@ export function DataProvider({ children }: DataProviderProps) {
         };
     }, [dailyVitals]);
 
-    const calculateStreak = useCallback((): number => {
-        const today = getISODate();
-        const yesterday = getISODate(new Date(Date.now() - 86400000));
+    const calculateStreak = useCallback((referenceDate?: string): number => {
+        const anchor = referenceDate ? new Date(referenceDate) : new Date();
+        const anchorISO = getISODate(anchor);
+
+        // Yesterday relative to anchor
+        const prevDay = new Date(anchor);
+        prevDay.setDate(prevDay.getDate() - 1);
+        const prevDayISO = getISODate(prevDay);
 
         const isDayActive = (date: string) => {
             const meals = getMealEntriesForDate(date);
@@ -1401,17 +1506,19 @@ export function DataProvider({ children }: DataProviderProps) {
             return meals.length > 0 ||
                 exercises.length > 0 ||
                 weightEntry ||
-                (vitals && (vitals.water > 0 || (vitals.caffeine ?? 0) > 0 || (vitals.alcohol ?? 0) > 0));
+                (vitals && (vitals.water > 0 || (vitals.caffeine ?? 0) > 0 || (vitals.alcohol ?? 0) > 0 || (vitals.sleep ?? 0) > 0));
         };
 
         let streak = 0;
-        let checkDate = new Date();
+        let checkDate = new Date(anchor);
 
-        const todayActive = isDayActive(today);
-        const yesterdayActive = isDayActive(yesterday);
+        const anchorActive = isDayActive(anchorISO);
+        const prevActive = isDayActive(prevDayISO);
 
-        if (!todayActive && !yesterdayActive) return 0;
-        if (!todayActive) checkDate = new Date(Date.now() - 86400000);
+        if (!anchorActive && !prevActive) return 0;
+
+        // If anchor is not active, but prev is, we count from prev (streak maintained but not incremented for today yet)
+        if (!anchorActive) checkDate = prevDay;
 
         while (true) {
             const dateStr = getISODate(checkDate);
@@ -1426,17 +1533,33 @@ export function DataProvider({ children }: DataProviderProps) {
         return streak;
     }, [dailyVitals, getMealEntriesForDate, getExercisesForDate]);
 
-    const calculateTrainingStreak = useCallback((): number => {
-        const today = getISODate();
-        const yesterday = getISODate(new Date(Date.now() - 86400000));
+    const calculateTrainingStreak = useCallback((referenceDate?: string, type?: 'strength' | 'running' | 'other'): number => {
+        const anchor = referenceDate ? new Date(referenceDate) : new Date();
+        const anchorISO = getISODate(anchor);
 
-        const isTrainingDay = (date: string) => getExercisesForDate(date).length > 0;
+        const prevDay = new Date(anchor);
+        prevDay.setDate(prevDay.getDate() - 1);
+        const prevDayISO = getISODate(prevDay);
+
+        const isTrainingDay = (date: string) => {
+            const exercises = getExercisesForDate(date);
+            if (!type) {
+                // Any training
+                return exercises.length > 0;
+            } else if (type === 'strength') {
+                return exercises.some(e => e.type === 'strength');
+            } else if (type === 'running') {
+                // Cardio mode: running, cycling, walking, swimming
+                return exercises.some(e => ['running', 'cycling', 'walking', 'swimming'].includes(e.type));
+            }
+            return false;
+        };
 
         let streak = 0;
-        let checkDate = new Date();
+        let checkDate = new Date(anchor);
 
-        if (!isTrainingDay(today) && !isTrainingDay(yesterday)) return 0;
-        if (!isTrainingDay(today)) checkDate = new Date(Date.now() - 86400000);
+        if (!isTrainingDay(anchorISO) && !isTrainingDay(prevDayISO)) return 0;
+        if (!isTrainingDay(anchorISO)) checkDate = prevDay;
 
         while (true) {
             if (isTrainingDay(getISODate(checkDate))) {
@@ -1450,27 +1573,32 @@ export function DataProvider({ children }: DataProviderProps) {
         return streak;
     }, [getExercisesForDate]);
 
-    const calculateWeeklyTrainingStreak = useCallback((): number => {
+    const calculateWeeklyTrainingStreak = useCallback((referenceDate?: string): number => {
         // Count weeks where there was at least one training session
         let streak = 0;
-        let checkDate = new Date();
-        // Move to the beginning of current week (Monday)
+        let checkDate = referenceDate ? new Date(referenceDate) : new Date();
+
+        // Move to the beginning of current week (Monday) of the checkDate
         const day = checkDate.getDay();
         const diff = checkDate.getDate() - day + (day === 0 ? -6 : 1);
         checkDate.setDate(diff);
 
+        // Helper to check if a specific calendar week has any training
         const hasTrainingInWeek = (startDate: Date) => {
             for (let i = 0; i < 7; i++) {
                 const d = new Date(startDate);
                 d.setDate(startDate.getDate() + i);
                 if (getExercisesForDate(getISODate(d)).length > 0) return true;
-                // Don't check future days if the week is current
-                if (getISODate(d) === getISODate()) break;
+
+                // Note: We don't stop at "today" because we might be looking at past data, 
+                // so we just check the full week as it existed.
             }
             return false;
         };
 
         // If current week has no training yet, check last week.
+        // But only if we are treating "current week" as potential gap.
+        // If reference is today, and we haven't trained THIS week, we check last week.
         if (!hasTrainingInWeek(new Date(checkDate))) {
             const lastWeek = new Date(checkDate);
             lastWeek.setDate(lastWeek.getDate() - 7);
@@ -1490,9 +1618,13 @@ export function DataProvider({ children }: DataProviderProps) {
         return streak;
     }, [getExercisesForDate]);
 
-    const calculateCalorieGoalStreak = useCallback((): number => {
-        const today = getISODate();
-        const yesterday = getISODate(new Date(Date.now() - 86400000));
+    const calculateCalorieGoalStreak = useCallback((referenceDate?: string): number => {
+        const anchor = referenceDate ? new Date(referenceDate) : new Date();
+        const anchorISO = getISODate(anchor);
+
+        const prevDay = new Date(anchor);
+        prevDay.setDate(prevDay.getDate() - 1);
+        const prevDayISO = getISODate(prevDay);
 
         const isGoalMet = (date: string) => {
             const data = calculateDailyNutrition(date);
@@ -1501,10 +1633,10 @@ export function DataProvider({ children }: DataProviderProps) {
         };
 
         let streak = 0;
-        let checkDate = new Date();
+        let checkDate = new Date(anchor);
 
-        if (!isGoalMet(today) && !isGoalMet(yesterday)) return 0;
-        if (!isGoalMet(today)) checkDate = new Date(Date.now() - 86400000);
+        if (!isGoalMet(anchorISO) && !isGoalMet(prevDayISO)) return 0;
+        if (!isGoalMet(anchorISO)) checkDate = prevDay;
 
         while (true) {
             if (isGoalMet(getISODate(checkDate))) {
@@ -1586,98 +1718,7 @@ export function DataProvider({ children }: DataProviderProps) {
     // Derived: Unified Activities (Manual + Strava + Strength)
     // ============================================
 
-    const unifiedActivities = useMemo(() => {
-        const serverEntries = universalActivities
-            .filter(u => !u.mergedIntoId) // Filter out merged activities
-            .map(mapUniversalToLegacyEntry)
-            .filter((e): e is ExerciseEntry => e !== null);
 
-        const normalizedServer = serverEntries.map(e => {
-            const u = universalActivities.find(item => item.id === e.id);
-            return {
-                ...e,
-                source: 'strava' as const,
-                avgHeartRate: u?.performance?.avgHeartRate,
-                maxHeartRate: u?.performance?.maxHeartRate,
-                _mergeData: {
-                    strava: e,
-                    universalActivity: u
-                }
-            };
-        });
-        const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' }));
-
-        // Convert strength workouts to ExerciseEntry format
-        const strengthEntries = (strengthSessions as any[]).map(w => ({
-            id: w.id,
-            date: w.date,
-            type: 'strength' as const,
-            durationMinutes: w.duration || w.durationMinutes || 60,
-            intensity: 'moderate' as const,
-            caloriesBurned: 0,
-            distance: undefined,
-            tonnage: w.totalVolume || 0,
-            notes: w.name || w.title,
-            source: 'strength',
-            createdAt: w.createdAt || new Date().toISOString(),
-            subType: undefined,
-            externalId: undefined
-        }));
-
-        // Smart Merge: Combine StrengthLog with Strava data
-        const stravaWeightByDate = new Map<string, typeof normalizedServer[0]>();
-        normalizedServer.forEach(e => {
-            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
-                e.type?.toLowerCase().includes('styrka') ||
-                e.type?.toLowerCase().includes('strength');
-            if (isWeightTraining) {
-                stravaWeightByDate.set(e.date.split('T')[0], e);
-            }
-        });
-
-        const mergedStrengthEntries = strengthEntries.map(se => {
-            const dateKey = se.date.split('T')[0];
-            const stravaMatch = stravaWeightByDate.get(dateKey);
-
-            if (stravaMatch) {
-                const universalMatch = universalActivities.find(u => u.id === stravaMatch.id);
-                const perf = universalMatch?.performance;
-                const sw = (strengthSessions as any[]).find(s => s.id === se.id);
-                return {
-                    ...se,
-                    source: 'merged' as const,
-                    caloriesBurned: stravaMatch.caloriesBurned || se.caloriesBurned,
-                    durationMinutes: stravaMatch.durationMinutes || se.durationMinutes,
-                    avgHeartRate: perf?.avgHeartRate,
-                    maxHeartRate: perf?.maxHeartRate,
-                    subType: stravaMatch.subType,
-                    _mergeData: {
-                        strava: stravaMatch,
-                        strength: se,
-                        strengthWorkout: sw,
-                        universalActivity: universalMatch,
-                    }
-                };
-            }
-            return se;
-        });
-
-        const deduplicatedServer = normalizedServer.filter(e => {
-            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
-                e.type?.toLowerCase().includes('styrka') ||
-                e.type?.toLowerCase().includes('strength');
-            if (isWeightTraining) {
-                const dateKey = e.date.split('T')[0];
-                if (strengthEntries.some(se => se.date.split('T')[0] === dateKey)) {
-                    return false;
-                }
-            }
-            return true;
-        });
-
-        const result = [...deduplicatedServer, ...normalizedLocal, ...mergedStrengthEntries];
-        return result.sort((a, b) => b.date.localeCompare(a.date));
-    }, [universalActivities, exerciseEntries, strengthSessions]);
 
     const value: DataContextType = {
         foodItems,

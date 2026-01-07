@@ -794,11 +794,11 @@ export function DashboardPage() {
         );
     }
 
-    // 7. Streak
-    const streakDays = calculateStreak();
-    const trainingStreak = calculateTrainingStreak();
-    const weeklyStreak = calculateWeeklyTrainingStreak();
-    const calorieStreak = calculateCalorieGoalStreak();
+    // 7. Streak - Pass selectedDate to calculate relative to current view
+    const streakDays = calculateStreak(selectedDate);
+    const trainingStreak = calculateTrainingStreak(selectedDate);
+    const weeklyStreak = calculateWeeklyTrainingStreak(selectedDate);
+    const calorieStreak = calculateCalorieGoalStreak(selectedDate);
 
     // Sleep Color Logic
     const sleepInfo = analyzeSleep(vitals.sleep || 0);
@@ -1708,6 +1708,22 @@ export function DashboardPage() {
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Distans</div>
                                                 <div className="text-2xl md:text-3xl font-black text-indigo-400">{totalDistance.toFixed(1)} <span className="text-sm text-slate-500">Km</span></div>
                                                 <div className="text-[10px] text-slate-500">Löpning / Gång</div>
+                                            </div>
+
+                                            {/* NEW: Streak Split */}
+                                            <div className="space-y-1 border-l border-slate-800 pl-8">
+                                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Träningsstreak</div>
+                                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase w-14">Styrka</span>
+                                                        <span className="text-sm font-black text-white">{calculateTrainingStreak(selectedDate, 'strength')} dagar</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase w-14">Kondition</span>
+                                                        <span className="text-sm font-black text-white">{calculateTrainingStreak(selectedDate, 'running')} dagar</span>
+                                                    </div>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 mt-1">{calculateWeeklyTrainingStreak(selectedDate)} veckor i rad (totalt)</div>
                                             </div>
 
                                             {/* Typ */}
