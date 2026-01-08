@@ -506,6 +506,8 @@ export interface ExerciseEntry {
     intensity: ExerciseIntensity;
     caloriesBurned: number;
     notes?: string;
+    excludeFromStats?: boolean;
+    elapsedTimeSeconds?: number;
     subType?: ExerciseSubType;
     title?: string; // e.g. "Morning Run" or "Strava Activity Title"
     tonnage?: number;   // total kg lifted
@@ -525,6 +527,9 @@ export interface ExerciseEntry {
     elevationGain?: number;       // meters
     prCount?: number;
     kudosCount?: number;
+    achievementCount?: number;
+    maxSpeed?: number;
+    kilojoules?: number;
 
     // Hyrox Specifics (Phase 8)
     hyroxStats?: HyroxActivityStats;
@@ -570,6 +575,7 @@ export interface StravaActivity {
     pr_count: number;
     kudos_count: number;
     achievement_count: number;
+    excludeFromStats?: boolean;
 }
 
 // ============================================
@@ -968,8 +974,10 @@ export interface ActivityPerformanceSection {
     // Core Metrics
     activityType?: ExerciseType; // Captures actual performed type (e.g. walked instead of ran)
     durationMinutes: number;
+    elapsedTimeSeconds?: number;
     distanceKm?: number;
     calories: number;
+    excludeFromStats?: boolean;
 
     // Physiological
     avgHeartRate?: number;
@@ -980,10 +988,10 @@ export interface ActivityPerformanceSection {
     averageWatts?: number;
     maxWatts?: number;
     averageSpeed?: number; // km/h
-
-    // Advanced Data (Streams)
-    paceCurve?: number[]; // Pace at different distances? Or stream ref?
-    hrCurve?: number[];
+    maxSpeed?: number;     // km/h
+    kilojoules?: number;
+    kudosCount?: number;
+    achievementCount?: number;
 
     // Qualitative (RPE/Feel) - Moved to Analysis or here? 
     // Usually RPE is subjective 'performance' data.

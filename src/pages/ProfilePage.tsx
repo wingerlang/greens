@@ -34,7 +34,7 @@ type TabType = 'profile' | 'physical' | 'goals' | 'privacy' | 'account';
 
 const TAB_CONFIG: { id: TabType; label: string; icon: string }[] = [
     { id: 'profile', label: 'Profil', icon: '👤' },
-    { id: 'biometrics', label: 'Biometri', icon: '🧬' },
+    { id: 'physical', label: 'Biometri', icon: '🧬' },
     { id: 'goals', label: 'Mål', icon: '🎯' },
     { id: 'privacy', label: 'Integritet', icon: '🛡️' },
     { id: 'account', label: 'Konto', icon: '⚙️' },
@@ -298,13 +298,24 @@ export function ProfilePage() {
 
             {/* Save Status Toast */}
             {saveStatus && (
-                <div className={`fixed bottom-6 right-6 z-50 px-4 py-2 rounded-lg font-bold text-sm shadow-lg animate-in fade-in slide-in-from-bottom-4 ${saveStatus.status === 'saving' ? 'bg-slate-800 text-slate-300' :
-                    saveStatus.status === 'success' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' :
-                        'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                <div className={`fixed bottom-8 right-8 z-[100] px-5 py-3 rounded-2xl font-bold text-sm shadow-2xl flex items-center gap-3 border
+                    ${saveStatus.status === 'saving' ? 'bg-slate-800 text-slate-300 border-white/10 animate-toast-in' :
+                        saveStatus.status === 'success' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30 animate-toast-in' :
+                            'bg-rose-500/20 text-rose-400 border-rose-500/30 animate-pulse'
                     }`}>
-                    {saveStatus.status === 'saving' && '⏳ Sparar...'}
-                    {saveStatus.status === 'success' && '✓ Sparat!'}
-                    {saveStatus.status === 'error' && '✕ Kunde inte spara'}
+                    <span className="text-base">
+                        {saveStatus.status === 'saving' ? '⏳' :
+                            saveStatus.status === 'success' ? '✓' : '✕'}
+                    </span>
+                    <div>
+                        <div className="leading-none">
+                            {saveStatus.status === 'saving' ? 'Sparar...' :
+                                saveStatus.status === 'success' ? 'Sparat!' : 'Kunde inte spara'}
+                        </div>
+                        <div className="text-[10px] opacity-60 font-medium uppercase tracking-wider mt-1">
+                            {saveStatus.field.charAt(0).toUpperCase() + saveStatus.field.slice(1)}
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -475,7 +486,7 @@ export function ProfilePage() {
                 )}
 
                 {/* === FYSISK TAB === */}
-                {activeTab === 'biometrics' && (
+                {activeTab === 'physical' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         {/* Only show MeasurementsModule if weight is visible (not hidden by privacy) */}
                         {displayProfile.weight !== undefined ? (
@@ -565,7 +576,7 @@ export function ProfilePage() {
                                     value={activePeriod?.nutritionGoal?.calories.toString() || settings.dailyCalorieGoal?.toString() || ''}
                                     type="number"
                                     suffix="kcal"
-                                    readOnly={!!activePeriod}
+                                    readonly={!!activePeriod}
                                     onChange={(v: string) => updateSettings({ dailyCalorieGoal: Number(v) })}
                                 />
                                 <DataField
@@ -573,7 +584,7 @@ export function ProfilePage() {
                                     value={activePeriod?.nutritionGoal?.protein?.toString() || settings.dailyProteinGoal?.toString() || ''}
                                     type="number"
                                     suffix="g"
-                                    readOnly={!!activePeriod}
+                                    readonly={!!activePeriod}
                                     onChange={(v: string) => updateSettings({ dailyProteinGoal: Number(v) })}
                                 />
                                 <DataField
@@ -581,7 +592,7 @@ export function ProfilePage() {
                                     value={activePeriod?.nutritionGoal?.carbs?.toString() || settings.dailyCarbsGoal?.toString() || ''}
                                     type="number"
                                     suffix="g"
-                                    readOnly={!!activePeriod}
+                                    readonly={!!activePeriod}
                                     onChange={(v: string) => updateSettings({ dailyCarbsGoal: Number(v) })}
                                 />
                                 <DataField
@@ -589,7 +600,7 @@ export function ProfilePage() {
                                     value={activePeriod?.nutritionGoal?.fat?.toString() || settings.dailyFatGoal?.toString() || ''}
                                     type="number"
                                     suffix="g"
-                                    readOnly={!!activePeriod}
+                                    readonly={!!activePeriod}
                                     onChange={(v: string) => updateSettings({ dailyFatGoal: Number(v) })}
                                 />
                             </div>

@@ -58,10 +58,11 @@ export class ReconciliationService {
                 // Check for significant differences (e.g. Elapsed Time fix)
                 const changes: string[] = [];
 
-                // Compare Duration (Elapsed vs stored)
-                const stravaDurationMin = Math.round(s.elapsed_time / 60);
-                if (Math.abs(stravaDurationMin - (existing.performance?.durationMinutes || 0)) > 1) {
-                    changes.push(`Duration: ${existing.performance?.durationMinutes} -> ${stravaDurationMin} min`);
+                // Compare Duration (Moving vs stored)
+                const stravaDurationMin = (s.moving_time || s.elapsed_time) / 60;
+                const existingDuration = existing.performance?.durationMinutes || 0;
+                if (Math.abs(stravaDurationMin - existingDuration) > 0.1) {
+                    changes.push(`Duration: ${existingDuration.toFixed(1)} -> ${stravaDurationMin.toFixed(1)} min`);
                 }
 
                 if (changes.length > 0) {
@@ -252,7 +253,8 @@ export class ReconciliationService {
 
         const typeLabel = (activity.type).replace('Run', 'Löpning').replace('Ride', 'Cykling').replace('Walk', 'Promenad');
         const distanceKm = activity.distance ? (Math.round(activity.distance / 10) / 100) : 0;
-        const durationMin = Math.round(activity.elapsed_time / 60);
+        const durationMinFormatted = ((activity.moving_time || activity.elapsed_time) / 60).toFixed(1);
+        const durationMin = (activity.moving_time || activity.elapsed_time) / 60;
 
         const mapping: Record<string, string> = {
             'Run': 'running', 'TrailRun': 'running', 'VirtualRun': 'running',
@@ -272,7 +274,7 @@ export class ReconciliationService {
             userId,
             type: 'WORKOUT_CARDIO',
             title: activity.name || typeLabel,
-            summary: `${distanceKm ? `${distanceKm.toFixed(1)} km • ` : ''}${durationMin} min`,
+            summary: `${distanceKm ? `${distanceKm.toFixed(1)} km • ` : ''}${durationMinFormatted} min`,
             payload: {
                 type: 'WORKOUT_CARDIO',
                 // @ts-ignore: Payload structure may vary slightly between models

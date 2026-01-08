@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { StrengthWorkout, StrengthWorkoutExercise, StrengthLogImportResult, PersonalBest, StrengthStats, normalizeExerciseName } from '../models/strengthTypes.ts';
 import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -41,11 +41,21 @@ export function StrengthPage() {
     // Main tab navigation
     const [mainTab, setMainTab] = useState<'overview' | 'analysis' | 'research'>('overview');
 
-    // Check for exercise in URL
-    const exerciseNameMatch = window.location.pathname.match(/\/styrka\/(.+)/);
-    const exerciseSlug = exerciseNameMatch ? exerciseNameMatch[1] : null;
+    const { exerciseName: exerciseSlug } = useParams();
+    const [searchParams] = useSearchParams();
 
     const exerciseName = exerciseSlug ? decodeURIComponent(exerciseSlug) : null;
+    const sessionId = searchParams.get('sessionId');
+
+    // Handle session deep-linking
+    useEffect(() => {
+        if (sessionId && workouts.length > 0) {
+            const match = workouts.find(w => w.id === sessionId);
+            if (match) {
+                setSelectedWorkout(match);
+            }
+        }
+    }, [sessionId, workouts]);
 
     const selectedExercise = useMemo(() => {
         if (!exerciseName) return null;

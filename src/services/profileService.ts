@@ -47,6 +47,15 @@ export interface ProfileData {
         showHeight?: boolean;
         showBirthYear?: boolean;
         showDetailedTraining?: boolean;
+        categoryOverrides?: {
+            [userId: string]: {
+                training?: boolean;
+                nutrition?: boolean;
+                health?: boolean;
+                social?: boolean;
+                body?: boolean;
+            };
+        };
     };
 }
 
