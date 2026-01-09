@@ -152,13 +152,13 @@ const OverviewTab: React.FC = () => {
                     <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">Lagringsdistribution</h3>
                     <div className="h-[300px] w-full">
                         <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
+                            <PieChart margin={{ top: 20, right: 0, bottom: 40, left: 0 }}>
                                 <Pie
                                     data={chartData}
                                     cx="50%"
-                                    cy="50%"
+                                    cy="45%"
                                     innerRadius={60}
-                                    outerRadius={100}
+                                    outerRadius={90}
                                     paddingAngle={5}
                                     dataKey="value"
                                 >
@@ -168,9 +168,16 @@ const OverviewTab: React.FC = () => {
                                 </Pie>
                                 <Tooltip
                                     contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px', color: '#fff' }}
+                                    itemStyle={{ color: '#fff' }}
                                     formatter={(value: number) => [formatBytes(value), 'Size']}
                                 />
-                                <Legend layout="vertical" align="right" verticalAlign="middle" iconType="circle" />
+                                <Legend
+                                    layout="horizontal"
+                                    align="center"
+                                    verticalAlign="bottom"
+                                    iconType="circle"
+                                    wrapperStyle={{ paddingTop: '20px', fontSize: '10px' }}
+                                />
                             </PieChart>
                         </ResponsiveContainer>
                     </div>

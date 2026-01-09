@@ -60,7 +60,11 @@ export function SnapshotList({
     const getEntitySummary = (counts: BackupEntityCounts) => {
         const parts: string[] = [];
         if (counts.meals > 0) parts.push(`${counts.meals} målt.`);
-        if (counts.exercises > 0) parts.push(`${counts.exercises} akt.`);
+
+        // Combine activities for the short summary if there are many
+        const totalAkt = (counts.exercises || 0) + (counts.manualExercises || 0);
+        if (totalAkt > 0) parts.push(`${totalAkt} akt.`);
+
         if (counts.strengthSessions > 0) parts.push(`${counts.strengthSessions} pass`);
         if (counts.weights > 0) parts.push(`${counts.weights} väg.`);
         return parts.slice(0, 3).join(' • ') || 'Tom';
@@ -144,8 +148,8 @@ export function SnapshotList({
                                     <button
                                         onClick={(e) => handleDelete(snapshot.id, e)}
                                         className={`p-1.5 rounded-lg transition-colors ${confirmDeleteId === snapshot.id
-                                                ? 'bg-red-500 text-white'
-                                                : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                                            ? 'bg-red-500 text-white'
+                                            : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
                                             }`}
                                         title={confirmDeleteId === snapshot.id ? 'Klicka igen för att bekräfta' : 'Ta bort'}
                                     >

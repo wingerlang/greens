@@ -188,7 +188,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                         <span>Smart Coach</span>
                                     </NavLink>
                                     <div className="border-t border-white/5 my-1" />
-                                    <NavLink to="/year-in-review" className={linkClasses}>
+                                    <NavLink to="/review" className={linkClasses}>
                                         <span className="w-5 text-center">📅</span>
                                         <span>Årsöversikt</span>
                                     </NavLink>
@@ -270,36 +270,56 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         <div className="relative group">
                             <button className={`${linkClasses({ isActive: isAdminRoute })} flex items-center gap-1`}>
                                 <span>🛠️</span>
-                                <span className="hidden xl:inline">System</span>
+                                <span className="hidden xl:inline">Admin</span>
                                 <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
                             </button>
 
                             <div className="absolute top-full right-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
                                 <div className="grid gap-1">
-                                    <NavLink to="/admin?tab=audit" className={linkClasses}>
+                                    <NavLink
+                                        to="/admin?tab=health"
+                                        className={({ isActive }) => {
+                                            const searchParams = new URLSearchParams(location.search);
+                                            const active = isActive && searchParams.get('tab') === 'health';
+                                            return linkClasses({ isActive: active });
+                                        }}
+                                    >
                                         <span className="w-5 text-center">⚙️</span>
                                         <span>Dashboard</span>
                                     </NavLink>
-                                    <NavLink to="/admin?tab=database" className={linkClasses}>
+                                    <NavLink
+                                        to="/admin?tab=database"
+                                        className={({ isActive }) => {
+                                            const searchParams = new URLSearchParams(location.search);
+                                            const active = isActive && searchParams.get('tab') === 'database';
+                                            return linkClasses({ isActive: active });
+                                        }}
+                                    >
                                         <span className="w-5 text-center">📦</span>
                                         <span>Databas</span>
                                     </NavLink>
-                                    <NavLink to="/admin?tab=api" className={linkClasses}>
+                                    <NavLink
+                                        to="/admin?tab=api"
+                                        className={({ isActive }) => {
+                                            const searchParams = new URLSearchParams(location.search);
+                                            const active = isActive && searchParams.get('tab') === 'api';
+                                            return linkClasses({ isActive: active });
+                                        }}
+                                    >
                                         <span className="w-5 text-center">⚡</span>
                                         <span>API</span>
                                     </NavLink>
-                                    <NavLink to="/admin?tab=docs" className={linkClasses}>
-                                        <span className="w-5 text-center">📚</span>
-                                        <span>Regler</span>
-                                    </NavLink>
                                     <div className="border-t border-white/5 my-1" />
-                                    <NavLink to="/admin?tab=users" className={linkClasses}>
+                                    <NavLink
+                                        to="/admin?tab=users"
+                                        className={({ isActive }) => {
+                                            const searchParams = new URLSearchParams(location.search);
+                                            const active = isActive && searchParams.get('tab') === 'users';
+                                            return linkClasses({ isActive: active });
+                                        }}
+                                    >
                                         <span className="w-5 text-center">👥</span>
                                         <span>Användare</span>
-                                    </NavLink>
-                                    <NavLink to="/admin?tab=roadmap" className={linkClasses}>
-                                        <span className="w-5 text-center">🚀</span>
-                                        <span>Roadmap</span>
                                     </NavLink>
                                 </div>
                             </div>
@@ -493,8 +513,8 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         </div>
 
                         <div className="space-y-1">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">System & Verktyg</div>
-                            <NavLink to="/admin?tab=audit" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
+                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Admin</div>
+                            <NavLink to="/admin?tab=health" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
                                 <span className="w-5 text-center">⚙️</span>
                                 <span>Dashboard</span>
                             </NavLink>

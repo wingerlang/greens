@@ -76,6 +76,7 @@ interface DataContextType {
     updateCurrentUser: (updates: Partial<User>) => void;
     addUser: (user: User) => void;
     toggleIncompleteDay: (date: string) => void;
+    toggleCompleteDay: (date: string) => void;
 
     // Pantry CRUD
     togglePantryItem: (item: string) => void;
@@ -455,7 +456,12 @@ export function DataProvider({ children }: DataProviderProps) {
             setStrengthSessions(data.strengthSessions || []);
         }
         if (data.performanceGoals) {
-            setPerformanceGoals(data.performanceGoals || []);
+            // Migration: Assign orphan goals to stored user
+            const migrated = (data.performanceGoals || []).map((g: PerformanceGoal) => ({
+                ...g,
+                userId: g.userId || data.currentUserId || 'unknown'
+            }));
+            setPerformanceGoals(migrated);
         }
         if ((data as any).trainingPeriods) {
             setTrainingPeriods((data as any).trainingPeriods || []);
@@ -601,6 +607,22 @@ export function DataProvider({ children }: DataProviderProps) {
                 [date]: {
                     ...currentVitals,
                     incomplete: !currentVitals.incomplete,
+                    updatedAt: new Date().toISOString()
+                }
+            };
+        });
+    }, []);
+
+    const toggleCompleteDay = useCallback((date: string) => {
+        setDailyVitals(prev => {
+            const currentVitals = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
+            return {
+                ...prev,
+                [date]: {
+                    ...currentVitals,
+                    completed: !currentVitals.completed,
+                    // If we mark as complete, we probably want to ensure it's not marked as incomplete
+                    incomplete: !currentVitals.completed ? false : currentVitals.incomplete,
                     updatedAt: new Date().toISOString()
                 }
             };
@@ -1756,6 +1778,7 @@ export function DataProvider({ children }: DataProviderProps) {
         updateCurrentUser,
         addUser,
         toggleIncompleteDay,
+        toggleCompleteDay,
         dailyVitals,
         updateVitals,
         getVitalsForDate,
@@ -1818,11 +1841,17 @@ export function DataProvider({ children }: DataProviderProps) {
         }, [competitions]),
 
         // Performance Goals CRUD
-        performanceGoals,
+        performanceGoals: useMemo(() => performanceGoals.filter(g => {
+            // Show if belongs to user OR if strict privacy isn't enforced (legacy cleanup)
+            // But based on user request "Måluppfyllelse måste vara kopplat till personen...", strict is better.
+            // We'll migrate legacy data separately or accept they disappear for secondary users.
+            return g.userId === currentUser?.id;
+        }), [performanceGoals, currentUser]),
         addGoal: useCallback((data) => {
             const newGoal: PerformanceGoal = {
                 ...data,
                 id: generateId(),
+                userId: currentUser?.id || 'unknown',
                 createdAt: new Date().toISOString()
             };
             setPerformanceGoals(prev => [...prev, newGoal]);
@@ -1830,7 +1859,7 @@ export function DataProvider({ children }: DataProviderProps) {
             skipAutoSave.current = true;
             storageService.saveGoal(newGoal).catch(e => console.error("Failed to save goal", e));
             return newGoal;
-        }, []),
+        }, [currentUser]),
         updateGoal: useCallback((id, updates) => {
             setPerformanceGoals(prev => {
                 const next = prev.map(g => g.id === id ? { ...g, ...updates } : g);

@@ -15,6 +15,7 @@ import { ProfilePage } from './pages/ProfilePage.tsx';
 import { TrainingPeriodPage } from './pages/TrainingPeriodPage.tsx';
 import { TrainingPage } from './pages/TrainingPage.tsx';
 import { PlanningPage } from './pages/PlanningPage.tsx';
+import { TrainingPlanningPage } from './pages/TrainingPlanningPage.tsx';
 import { ApiPage } from './pages/ApiPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { DocumentationPage } from './components/DocumentationPage.tsx';
@@ -55,6 +56,8 @@ import DebugBar from './components/debug/DebugBar.tsx';
 import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
 import { ToolsReplayPage } from './pages/tools/ToolsReplayPage.tsx';
 import { PlannerPage } from './components/planner/PlannerPage.tsx';
+import { RoadmapPage } from './pages/RoadmapPage.tsx';
+import { DocsPage } from './pages/DocsPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -109,6 +112,8 @@ export function App() {
                                                 <Route path="vecka" element={<WeeklyPage />} />
                                                 <Route path="vecka/recept/:recipeId/*" element={<WeeklyPage />} />
                                                 <Route path="planera" element={<PlanningPage />} />
+                                                <Route path="planning/training" element={<TrainingPlanningPage />} />
+                                                <Route path="planera/traning" element={<TrainingPlanningPage />} />
                                                 <Route path="planner" element={<PlannerPage />} />
                                                 <Route path="pantry" element={<PantryPage />} />
                                                 <Route path="recipes" element={<RecipesPage />} />
@@ -136,6 +141,8 @@ export function App() {
                                                 } />
                                                 <Route path="api" element={<ApiPage />} />
                                                 <Route path="docs" element={<DocumentationPage />} />
+                                                <Route path="regler" element={<DocsPage />} />
+                                                <Route path="roadmap" element={<RoadmapPage />} />
                                                 <Route path="community" element={<UsersPage />} />
                                                 <Route path="u/:handle" element={<PublicProfilePage />} />
                                                 <Route path="garmin" element={<GarminPage />} />
@@ -159,8 +166,9 @@ export function App() {
                                                 <Route path="kamrat" element={<MatchupPage />} />
                                                 <Route path="feed" element={<LifeStreamPage />} />
                                                 <Route path="lifestream" element={<LifeStreamPage />} />
-                                                <Route path="year-in-review" element={<YearInReviewPage />} />
-                                                <Route path="ars-sammanfattning" element={<YearInReviewPage />} />
+                                                <Route path="review" element={<YearInReviewPage />} />
+                                                <Route path="year-in-review" element={<Navigate to="/review" replace />} />
+                                                <Route path="ars-sammanfattning" element={<Navigate to="/review" replace />} />
                                                 <Route path="goals" element={<GoalsPage />} />
                                                 <Route path="mal" element={<GoalsPage />} />
                                                 <Route path="activity/:id" element={<ActivityStandalonePage />} />

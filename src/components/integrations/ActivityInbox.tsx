@@ -55,8 +55,8 @@ export function ActivityInbox() {
                         <div className="flex items-center gap-4">
                             {/* Icon based on source */}
                             <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg shadow-lg ${activity.performance?.source?.source === 'strava'
-                                    ? 'bg-[#FC4C02] text-white'
-                                    : 'bg-emerald-500 text-slate-900'
+                                ? 'bg-[#FC4C02] text-white'
+                                : 'bg-emerald-500 text-slate-900'
                                 }`}>
                                 {activity.plan?.activityType === 'cycling' || activity.performance?.notes?.toLowerCase().includes('ride') ? '🚴' : '🏃'}
                             </div>
@@ -70,8 +70,8 @@ export function ActivityInbox() {
                                 </div>
                                 <div className="text-xs text-slate-400 flex gap-3 mt-0.5">
                                     <span>📅 {activity.date}</span>
-                                    <span>📏 {activity.performance?.distanceKm} km</span>
-                                    <span>⏱️ {activity.performance?.durationMinutes} min</span>
+                                    <span>📏 {activity.performance?.distanceKm?.toFixed(1)} km</span>
+                                    <span>⏱️ {activity.performance?.durationMinutes?.toFixed(1)} min</span>
                                 </div>
                             </div>
                         </div>

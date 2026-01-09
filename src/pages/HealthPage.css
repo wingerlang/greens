@@ -173,10 +173,10 @@
 
 .health-card {
     border-radius: 32px;
-    padding: 2rem;
+    padding: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 1rem;
 }
 
 .card-header h2 {

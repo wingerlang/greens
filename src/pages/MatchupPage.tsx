@@ -176,13 +176,10 @@ export function MatchupPage() {
         let bestSet: any = null;
         let bestSetReps = 999; // Track reps of best set - prefer lower reps
 
-        // Custom conservative 1RM estimation - caps at 8 reps for more reliable estimates
+        // Custom conservative 1RM estimation - prefers centralized calculator
         const conservative1RM = (weight: number, reps: number) => {
             if (reps === 0 || weight === 0) return 0;
-            if (reps === 1) return weight;
-            // Cap at 8 reps - high rep sets are unreliable for 1RM estimation
-            const effectiveReps = Math.min(reps, 8);
-            return weight * (1 + effectiveReps / 30);
+            return calculateEstimated1RM(weight, reps);
         };
 
         sessions.forEach(session => {
@@ -266,9 +263,7 @@ export function MatchupPage() {
 
         const conservative1RM = (weight: number, reps: number) => {
             if (reps === 0 || weight === 0) return 0;
-            if (reps === 1) return weight;
-            const effectiveReps = Math.min(reps, 8);
-            return weight * (1 + effectiveReps / 30);
+            return calculateEstimated1RM(weight, reps);
         };
 
         sessions.forEach(session => {
@@ -553,12 +548,10 @@ export function MatchupPage() {
         const fromDate = new Date(progressionFromDate);
         const toDate = new Date(progressionToDate);
 
-        // Conservative 1RM formula
+        // Centralized 1RM formula
         const conservative1RM = (weight: number, reps: number) => {
             if (reps === 0 || weight === 0) return 0;
-            if (reps === 1) return weight;
-            const effectiveReps = Math.min(reps, 8);
-            return weight * (1 + effectiveReps / 30);
+            return calculateEstimated1RM(weight, reps);
         };
 
         // Get best 1RM up to a certain date - EXACT name matching
@@ -948,27 +941,29 @@ export function MatchupPage() {
 
                         <div className="flex flex-wrap gap-2 w-full lg:w-auto">
                             {/* Scaling Toggles with explanations */}
-                            <div className="flex bg-slate-900 p-1 rounded-xl border border-white/5">
+                            <div className="flex bg-slate-900 p-1 rounded-xl border border-white/5 shadow-2xl shadow-black/20">
                                 <button
                                     onClick={() => setStatsMode('raw')}
-                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${statsMode === 'raw' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
+                                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-1.5 ${statsMode === 'raw' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
                                     title="Visar faktiska värden i kg, min, st"
                                 >
                                     Faktisk
                                 </button>
                                 <button
                                     onClick={() => setStatsMode('bw')}
-                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${statsMode === 'bw' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
+                                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-1.5 ${statsMode === 'bw' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
                                     title="Volym delat med kroppsvikt (kg/BW) – för rättvis jämförelse oavsett storlek"
                                 >
-                                    Relativ (BW)
+                                    <Scale size={12} className={statsMode === 'bw' ? 'text-emerald-400' : ''} />
+                                    Vikt-korrigerad
                                 </button>
                                 <button
                                     onClick={() => setStatsMode('points')}
-                                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${statsMode === 'points' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
+                                    className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-1.5 ${statsMode === 'points' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-500 hover:text-slate-400'}`}
                                     title="IPF GL-poäng – standardiserad poäng justerad för kön och kroppsvikt"
                                 >
-                                    Poäng (IPF)
+                                    <Users size={12} className={statsMode === 'points' ? 'text-indigo-400' : ''} />
+                                    Kön & Vikt (IPF)
                                 </button>
                             </div>
 
@@ -1345,7 +1340,7 @@ export function MatchupPage() {
                                             {/* 1RM Comparison */}
                                             <div className="space-y-2">
                                                 <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase">
-                                                    <Link to={`/strength/${encodeURIComponent(exName)}`} className="hover:text-emerald-400 transition-colors">
+                                                    <Link to={`/strength/${encodeURIComponent(exName)}?sessionId=${statsA.bestSet.sessionId}`} className="hover:text-emerald-400 transition-colors">
                                                         {statsA.max1RM} kg
                                                         {statsA.bestSet && (
                                                             <span className="block text-[8px] font-normal lowercase text-emerald-400/60">
@@ -1365,7 +1360,7 @@ export function MatchupPage() {
                                                         )}
                                                     </Link>
                                                     <span className="text-[9px]">{rmMode === 'actual' ? '1RM' : 'e1RM'}</span>
-                                                    <Link to={`/strength/${encodeURIComponent(exName)}`} className="hover:text-indigo-400 transition-colors text-right">
+                                                    <Link to={`/strength/${encodeURIComponent(exName)}?sessionId=${statsB.bestSet.sessionId}`} className="hover:text-indigo-400 transition-colors text-right">
                                                         {statsB.max1RM} kg
                                                         {statsB.bestSet && (
                                                             <span className="block text-[8px] font-normal lowercase text-indigo-400/60">

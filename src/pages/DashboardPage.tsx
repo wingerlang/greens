@@ -5,8 +5,10 @@ import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate, DailyVitals } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { analyzeSleep } from '../utils/vitalsUtils.ts';
+import { formatActivityDuration } from '../utils/formatters.ts';
 import { getActiveCalories, getActiveCalorieTarget } from '../utils/calorieTarget.ts';
 import { EXERCISE_TYPES } from '../components/training/ExerciseModal.tsx';
+import { MeasurementEntryModal } from '../components/dashboard/MeasurementEntryModal.tsx';
 import {
     Dumbbell,
     Moon,
@@ -14,6 +16,7 @@ import {
     Coffee,
     Flame,
     Check,
+    CheckCircle,
     ChevronRight,
     X,
     AlertCircle,
@@ -32,7 +35,7 @@ import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
 import { StravaActivityImportModal } from '../components/integrations/StravaActivityImportModal.tsx';
 import { RefreshCw } from 'lucide-react';
-import { CaffeineCard } from '../components/dashboard';
+import { CaffeineCard, WeightSparkline } from '../components/dashboard';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -194,119 +197,6 @@ const getRangeStartDate = (range: '14d' | '30d' | '3m' | '1y' | 'all') => {
     return d.toISOString().split('T')[0];
 };
 
-const WeightSparkline = ({
-    data,
-    dates,
-    color = 'text-blue-500',
-    onPointClick
-}: {
-    data: number[],
-    dates: string[],
-    color?: string,
-    onPointClick?: (index: number) => void
-}) => {
-    const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-    if (data.length < 2) return <div className="h-[40px] w-full flex items-center justify-center text-[8px] text-slate-300 uppercase font-bold tracking-widest bg-slate-50/50 dark:bg-slate-800/20 rounded-xl">Trend saknas</div>;
-
-    // Calculate range with tighter padding for "scaled up" effect
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const padding = (max - min) * 0.05 || 0.2;
-    const adjMin = min - padding;
-    const adjMax = max + padding;
-    const range = adjMax - adjMin || 1;
-
-    const width = 100;
-    const heightFixed = 60;
-
-    const points = data.map((v, i) => {
-        const x = (i / (data.length - 1)) * width;
-        const y = heightFixed - ((v - adjMin) / range) * heightFixed;
-        return { x, y, value: v, index: i };
-    });
-
-    const polylinePoints = points.map(p => `${p.x},${p.y}`).join(' ');
-
-    // Grid lines (3 horizontal lines)
-    const gridLines = [adjMin, adjMin + range / 2, adjMax].map(val => {
-        const y = heightFixed - ((val - adjMin) / range) * heightFixed;
-        return { y, label: val.toFixed(1) };
-    });
-
-    return (
-        <div
-            className="w-full h-[80px] px-1 group/sparkline relative"
-            onMouseMove={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-            }}
-            onMouseLeave={() => setHoveredIdx(null)}
-        >
-            <svg
-                viewBox={`0 0 ${width} ${heightFixed}`}
-                preserveAspectRatio="none"
-                className={`w-full h-full overflow-visible ${color}`}
-            >
-                {/* Horizontal Grid Lines */}
-                {gridLines.map((line, i) => (
-                    <g key={i} className="opacity-10">
-                        <line x1="0" y1={line.y} x2={width} y2={line.y} stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" />
-                        <text x="-2" y={line.y} fontSize="4" className="fill-slate-400 font-bold text-right" style={{ dominantBaseline: 'middle', textAnchor: 'end' }}>{line.label}</text>
-                    </g>
-                ))}
-
-                {/* The Path */}
-                <polyline
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    points={polylinePoints}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="drop-shadow-sm transition-all duration-500"
-                />
-
-                {/* Interactive Data Points */}
-                {points.map((p, i) => (
-                    <g
-                        key={i}
-                        className="cursor-pointer"
-                        onClick={() => onPointClick?.(i)}
-                        onMouseEnter={() => setHoveredIdx(i)}
-                    >
-                        {/* Transparent hit area */}
-                        <circle cx={p.x} cy={p.y} r="6" fill="transparent" />
-                        {/* The actual dot */}
-                        <circle
-                            cx={p.x}
-                            cy={p.y}
-                            r={hoveredIdx === i ? "2.5" : "1.5"}
-                            className={`fill-white stroke-current stroke-[2] transition-all ${hoveredIdx === i ? 'opacity-100' : 'opacity-0 group-hover/sparkline:opacity-100'}`}
-                        />
-                    </g>
-                ))}
-            </svg>
-
-            {/* Hover Tooltip/Card */}
-            {hoveredIdx !== null && (
-                <div
-                    className="absolute z-50 pointer-events-none bg-slate-900/90 dark:bg-white/90 backdrop-blur-md px-3 py-2 rounded-xl border border-white/10 dark:border-black/5 shadow-2xl flex flex-col gap-0.5 min-w-[80px]"
-                    style={{
-                        left: `${(hoveredIdx / (data.length - 1)) * 100}%`,
-                        top: '0',
-                        transform: `translate(${hoveredIdx > data.length / 2 ? '-100%' : '20%'}, -100%)`
-                    }}
-                >
-                    <div className="text-[10px] font-black text-white/50 dark:text-black/50 uppercase tracking-widest">{dates[hoveredIdx]}</div>
-                    <div className="text-sm font-black text-white dark:text-slate-900">{data[hoveredIdx].toFixed(1)} <span className="text-[10px] text-white/60 dark:text-slate-500">kg</span></div>
-                </div>
-            )}
-        </div>
-    );
-};
-
 const DayHoverCard = ({
     date,
     activities,
@@ -354,7 +244,7 @@ const DayHoverCard = ({
                                         <div className="text-sm">{typeDef?.icon || '💪'}</div>
                                         <div className="flex-1 min-w-0">
                                             <div className="text-[11px] font-bold text-slate-200 truncate group-hover:text-white">{typeDef?.label || act.type}</div>
-                                            <div className="text-[9px] text-slate-500">{act.durationMinutes} min {act.distance ? `• ${act.distance} km` : ''}</div>
+                                            <div className="text-[9px] text-slate-500">{formatActivityDuration(act.durationMinutes)} {act.distance ? `• ${act.distance} km` : ''}</div>
                                         </div>
                                         <ChevronRight size={10} className="text-slate-600 group-hover:text-white" />
                                     </div>
@@ -418,9 +308,11 @@ export function DashboardPage() {
         plannedActivities,
         unifiedActivities,
         weightEntries,
+        bodyMeasurements,
         trainingPeriods,
         performanceGoals,
         toggleIncompleteDay,
+        toggleCompleteDay,
         dailyVitals
     } = useData();
 
@@ -433,6 +325,7 @@ export function DashboardPage() {
     const [editing, setEditing] = useState<string | null>(null);
     const [tempValue, setTempValue] = useState<string>("");
     const [tempWaist, setTempWaist] = useState<string>("");
+    const [tempChest, setTempChest] = useState<string>("");
     const [selectedActivity, setSelectedActivity] = useState<any>(null);
     const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
     const [bulkInput, setBulkInput] = useState("");
@@ -452,6 +345,65 @@ export function DashboardPage() {
             return d.toISOString().split('T')[0];
         });
     };
+
+    // --- Derived Data: Weight & Measurement Logic (Moved up to avoid TDZ) ---
+    const getRangeDays = (range: typeof weightRange) => {
+        switch (range) {
+            case '14d': return 14;
+            case '30d': return 30;
+            case '3m': return 90;
+            case '1y': return 365;
+            default: return 9999;
+        }
+    };
+
+    const rangeStartISO = getRangeStartDate(weightRange);
+
+    // Build map of bodyMeasurements by date for merging
+    const measurementsByDate: Record<string, { waist?: number, chest?: number }> = {};
+    (bodyMeasurements || []).forEach((m: { date: string; type: string; value: number }) => {
+        if (!measurementsByDate[m.date]) {
+            measurementsByDate[m.date] = {};
+        }
+        if (m.type === 'waist') {
+            measurementsByDate[m.date].waist = m.value;
+        } else if (m.type === 'chest') {
+            measurementsByDate[m.date].chest = m.value;
+        }
+    });
+
+    // Filter and sort for sparkline, merging bodyMeasurements
+    const weightTrendEntries = [...weightEntries]
+        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
+        .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(entry => ({
+            ...entry,
+            waist: entry.waist || measurementsByDate[entry.date]?.waist,
+            chest: entry.chest || measurementsByDate[entry.date]?.chest,
+        }));
+
+    const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
+    const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
+    const weightDiffRange = latestWeightInRange - earliestWeightInRange;
+
+
+
+    const latest3Weights = [...weightEntries]
+        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 3)
+        .map(entry => ({
+            ...entry,
+            waist: entry.waist || measurementsByDate[entry.date]?.waist,
+            chest: entry.chest || measurementsByDate[entry.date]?.chest,
+        }));
+
+    const currentUserHeight = settings.height || 0;
+    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
+    const bmi = (latestWeightVal && currentUserHeight)
+        ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
+        : null;
 
     // Keyboard navigation (Ctrl + Arrows)
     useEffect(() => {
@@ -502,6 +454,29 @@ export function DashboardPage() {
         return () => window.removeEventListener('keydown', handleEsc);
     }, []);
 
+    // Click outside to close edit mode
+    useEffect(() => {
+        if (!editing) return;
+
+        const handleClickOutside = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            // Check if click is inside the editing card (by data attribute or class)
+            if (!target.closest('[data-editing-card]')) {
+                setEditing(null);
+            }
+        };
+
+        // Add slight delay to avoid immediate close on the click that opens edit mode
+        const timeoutId = setTimeout(() => {
+            document.addEventListener('click', handleClickOutside);
+        }, 100);
+
+        return () => {
+            clearTimeout(timeoutId);
+            document.removeEventListener('click', handleClickOutside);
+        };
+    }, [editing]);
+
     // Handlers
     const handleCardClick = (type: string, currentValue: number) => {
         setEditing(type);
@@ -549,7 +524,9 @@ export function DashboardPage() {
 
     // --- Derived Data ---
 
-    // 1. Calories & Nutrition
+
+
+    // 2. Calories & Nutrition
     const dailyNutrition = calculateDailyNutrition(selectedDate);
     const consumed = dailyNutrition.calories;
     const burned = health.dailyCaloriesBurned || 0;
@@ -605,13 +582,13 @@ export function DashboardPage() {
         const maxProtein = userWeight * 2.5;
 
         if ((baseProtein + addedProtein) > maxProtein) {
-             // Cap protein
-             const allowedAddedProtein = Math.max(0, maxProtein - baseProtein);
-             const surplusProteinCalories = (addedProtein - allowedAddedProtein) * 4;
+            // Cap protein
+            const allowedAddedProtein = Math.max(0, maxProtein - baseProtein);
+            const surplusProteinCalories = (addedProtein - allowedAddedProtein) * 4;
 
-             addedProtein = allowedAddedProtein;
-             // Redistribute surplus calories to Carbs
-             addedCarbs += surplusProteinCalories / 4;
+            addedProtein = allowedAddedProtein;
+            // Redistribute surplus calories to Carbs
+            addedCarbs += surplusProteinCalories / 4;
         }
 
         finalProtein += addedProtein;
@@ -619,7 +596,7 @@ export function DashboardPage() {
         finalCarbs += addedCarbs;
     }
 
-    // 2. Macros (Scaled proportionally if training calories are added)
+    // 3. Macros (Scaled proportionally if training calories are added)
     const proteinTarget = Math.round(finalProtein);
     const proteinCurrent = dailyNutrition.protein;
 
@@ -629,45 +606,9 @@ export function DashboardPage() {
     const fatTarget = Math.round(finalFat);
     const fatCurrent = dailyNutrition.fat;
 
-    // 3. Weight & Measurement Logic
-    const getRangeDays = (range: typeof weightRange) => {
-        switch (range) {
-            case '14d': return 14;
-            case '30d': return 30;
-            case '3m': return 90;
-            case '1y': return 365;
-            default: return 9999;
-        }
-    };
-
-    const rangeStartISO = getRangeStartDate(weightRange);
-
-    // Filter and sort for sparkline
-    const weightTrendEntries = [...weightEntries]
-        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
-        .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
-        .sort((a, b) => a.date.localeCompare(b.date));
-
-    const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
-    const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
-    const weightDiffRange = latestWeightInRange - earliestWeightInRange;
-
-    // Data for sparkline (values only)
-    const weightTrend = weightTrendEntries.map(e => e.weight);
-
-    const latest3Weights = [...weightEntries]
-        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 3);
-
-    const currentUserHeight = settings.height || 0;
-    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
-    const bmi = (latestWeightVal && currentUserHeight)
-        ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
-        : null;
-
     const proteinRatio = latestWeightVal > 0 ? (proteinCurrent / latestWeightVal) : 0;
     const targetProteinRatio = latestWeightVal > 0 ? (proteinTarget / latestWeightVal) : 0;
+
 
     const getBMICategory = (val: number) => {
         if (val < 18.5) return { label: 'Undervikt', color: 'text-amber-400', bg: 'bg-amber-400/10' };
@@ -912,20 +853,37 @@ export function DashboardPage() {
                     </div>
 
                     <div className="flex items-center gap-3">
-                        {/* Incomplete Day Toggle */}
+                        {/* Complete Day Toggle */}
                         <button
-                            onClick={() => toggleIncompleteDay(selectedDate)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${vitals.incomplete
-                                ? 'bg-orange-500/10 border-orange-500/30 text-orange-500'
+                            onClick={() => toggleCompleteDay(selectedDate)}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${vitals.completed
+                                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500'
                                 : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'
                                 }`}
-                            title={vitals.incomplete ? "Markera som fullständig" : "Markera som ofullständig"}
+                            title={vitals.completed ? "Markera som ej avslutad" : "Markera som avslutad"}
                         >
-                            <AlertCircle size={16} className={vitals.incomplete ? 'animate-pulse' : ''} />
+                            <CheckCircle size={16} className={vitals.completed ? 'animate-[pulse_1s_ease-in-out_1]' : ''} />
                             <span className="text-xs font-black uppercase tracking-wider">
-                                {vitals.incomplete ? 'Ofullständig dag' : 'Markera ofullständig'}
+                                {vitals.completed ? 'Avslutad dag' : 'Avsluta dag'}
                             </span>
                         </button>
+
+                        {/* Incomplete Day Toggle */}
+                        {!vitals.completed && (
+                            <button
+                                onClick={() => toggleIncompleteDay(selectedDate)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all ${vitals.incomplete
+                                    ? 'bg-orange-500/10 border-orange-500/30 text-orange-500'
+                                    : 'bg-slate-800/10 border-white/5 text-slate-500 hover:text-white hover:bg-slate-800'
+                                    }`}
+                                title={vitals.incomplete ? "Markera som fullständig" : "Markera som ofullständig"}
+                            >
+                                <AlertCircle size={16} className={vitals.incomplete ? 'animate-pulse' : ''} />
+                                <span className="text-xs font-black uppercase tracking-wider">
+                                    {vitals.incomplete ? 'Ofullständig dag' : 'Markera ofullständig'}
+                                </span>
+                            </button>
+                        )}
 
                         {/* Strava Sync Button */}
                         <button
@@ -967,7 +925,126 @@ export function DashboardPage() {
                             alcoholUnits={vitals.alcohol || 0}
                             density={density === 'compact' ? 'compact' : 'normal'}
                         />
-                        <ActiveGoalsCard />
+
+
+                        {/* Weekly Summary Row */}
+                        <div className="md:col-span-12 mt-2 mb-4">
+                            {(() => {
+                                // Determine "Current Week" based on selectedDate
+                                const d = new Date(selectedDate);
+                                const day = d.getDay();
+                                const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+                                const monday = new Date(d.setDate(diff)).toISOString().split('T')[0];
+                                const sunday = new Date(d.setDate(diff + 6)).toISOString().split('T')[0];
+
+                                // Simple ISO week number
+                                const targetDate = new Date(monday);
+                                const jan4 = new Date(targetDate.getFullYear(), 0, 4);
+                                const weekNum = 1 + Math.round((((targetDate.getTime() - jan4.getTime()) / 86400000) - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+
+                                // Aggregate data for this calendar week
+                                const weekActivities = unifiedActivities.filter(a => a.date >= monday && a.date <= sunday);
+                                const weekVolume = weekActivities.reduce((sum, a) => sum + (a.tonnage || 0), 0) / 1000;
+                                const weekDistance = weekActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
+                                // const weekDuration = weekActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+                                // const weekWorkouts = weekActivities.length;
+
+                                // Calculate context label
+                                const currentWeekNum = (() => {
+                                    const d = new Date();
+                                    const day = d.getDay();
+                                    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+                                    const mon = new Date(d.setDate(diff));
+                                    const jan4 = new Date(mon.getFullYear(), 0, 4);
+                                    return 1 + Math.round((((mon.getTime() - jan4.getTime()) / 86400000) - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+                                })();
+
+                                let mainTitle = `Vecka ${weekNum} Summary`;
+                                if (weekNum === currentWeekNum) {
+                                    mainTitle = 'NUVARANDE VECKA SUMMARY';
+                                }
+
+                                // Measurement Diffs
+                                const getDiff = (type: 'weight' | 'waist' | 'chest') => {
+                                    const records = type === 'weight'
+                                        ? weightEntries.map(w => ({ date: w.date, value: w.weight }))
+                                        : bodyMeasurements.filter(m => m.type === type).map(m => ({ date: m.date, value: m.value }));
+
+                                    records.sort((a, b) => a.date.localeCompare(b.date));
+                                    const inWeek = records.filter(r => r.date >= monday && r.date <= sunday);
+                                    if (inWeek.length === 0) return null;
+
+                                    const latestInWeek = inWeek[inWeek.length - 1];
+                                    const beforeWeek = records.filter(r => r.date < monday);
+
+                                    if (beforeWeek.length > 0) {
+                                        const baseline = beforeWeek[beforeWeek.length - 1];
+                                        return { diff: latestInWeek.value - baseline.value, current: latestInWeek.value };
+                                    } else if (inWeek.length > 1) {
+                                        const baseline = inWeek[0];
+                                        return { diff: latestInWeek.value - baseline.value, current: latestInWeek.value };
+                                    }
+                                    return { diff: 0, current: latestInWeek.value };
+                                };
+
+                                const wDiff = getDiff('weight');
+                                const waistDiff = getDiff('waist');
+                                const chestDiff = getDiff('chest');
+
+                                return (
+                                    <div className="flex flex-col items-center">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 opacity-70">
+                                            {mainTitle}
+                                        </div>
+                                        <div className="flex flex-wrap justify-center gap-4 w-full">
+                                            {/* Running Box */}
+                                            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-8 py-5 flex flex-col items-center justify-center shadow-sm min-w-[220px] hover:shadow-md transition-shadow">
+                                                <div className="text-xl mb-1">🏃‍♂️</div>
+                                                <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">Löpning</div>
+                                                <div className="text-lg font-bold text-emerald-500">
+                                                    {weekActivities.filter(a => a.type === 'running' || a.type === 'cycling' || a.type === 'walking').length} pass <span className="text-slate-300 mx-1">|</span> {Math.round(weekDistance)}km
+                                                </div>
+                                            </div>
+
+                                            {/* Strength Box */}
+                                            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-8 py-5 flex flex-col items-center justify-center shadow-sm min-w-[220px] hover:shadow-md transition-shadow">
+                                                <div className="text-xl mb-1">💪</div>
+                                                <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">Styrka</div>
+                                                <div className="text-lg font-bold text-indigo-500">
+                                                    {weekActivities.filter(a => a.type === 'strength').length} pass <span className="text-slate-300 mx-1">|</span> {weekVolume.toFixed(1)} ton
+                                                </div>
+                                            </div>
+
+                                            {/* Measurement Diffs Card */}
+                                            <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-8 py-5 flex flex-col items-center justify-center shadow-sm min-w-[220px] hover:shadow-md transition-shadow">
+                                                <div className="text-xl mb-1">⚖️</div>
+                                                <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2">Framsteg</div>
+                                                <div className="grid grid-cols-3 gap-4 w-full">
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-[8px] font-bold text-slate-400 uppercase">Vikt</span>
+                                                        <span className={`text-xs font-black ${wDiff && wDiff.diff !== 0 ? (wDiff.diff < 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-300'}`}>
+                                                            {wDiff ? (wDiff.diff > 0 ? `+${wDiff.diff.toFixed(1)}` : wDiff.diff.toFixed(1)) : '-'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-[8px] font-bold text-slate-400 uppercase">Midja</span>
+                                                        <span className={`text-xs font-black ${waistDiff && waistDiff.diff !== 0 ? (waistDiff.diff < 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-300'}`}>
+                                                            {waistDiff ? (waistDiff.diff > 0 ? `+${waistDiff.diff.toFixed(1)}` : waistDiff.diff.toFixed(1)) : '-'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex flex-col items-center">
+                                                        <span className="text-[8px] font-bold text-slate-400 uppercase">Bröst</span>
+                                                        <span className={`text-xs font-black ${chestDiff && chestDiff.diff !== 0 ? (chestDiff.diff < 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-300'}`}>
+                                                            {chestDiff ? (chestDiff.diff > 0 ? `+${chestDiff.diff.toFixed(1)}` : chestDiff.diff.toFixed(1)) : '-'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
                     </div>
 
                     {/* 7-Day Performance Summary */}
@@ -1165,12 +1242,15 @@ export function DashboardPage() {
                                 <Wrapper key="training" className="md:col-span-12 lg:col-span-6 h-full">
                                     <div
                                         onClick={() => navigate('/training')}
-                                        className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full`}
+                                        className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full relative overflow-hidden`}
                                     >
-                                        <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors shrink-0`}>
+                                        {/* Background Icon */}
+                                        <Dumbbell className="absolute -bottom-4 -right-4 w-24 h-24 text-emerald-500/5 dark:text-emerald-400/10 pointer-events-none transform -rotate-12 transition-all group-hover:scale-110" />
+
+                                        <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors shrink-0 z-10`}>
                                             <Dumbbell className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
                                         </div>
-                                        <div className="flex-1 min-w-0 text-left">
+                                        <div className="flex-1 min-w-0 text-left z-10">
                                             <div className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} text-slate-500 dark:text-slate-400 font-semibold mb-1`}>Dagens träning</div>
                                             <div className="w-full">{trainingContent}</div>
                                         </div>
@@ -1183,6 +1263,7 @@ export function DashboardPage() {
                             return (
                                 <Wrapper key="sleep" className="md:col-span-6 lg:col-span-3">
                                     <div
+                                        data-editing-card={editing === 'sleep' ? true : undefined}
                                         onClick={() => handleCardClick('sleep', vitals.sleep || 0)}
                                         className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-between hover:scale-[1.01] transition-transform cursor-pointer group relative overflow-hidden h-full ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
                                             ? 'bg-rose-50 dark:bg-rose-900/10'
@@ -1241,7 +1322,6 @@ export function DashboardPage() {
                                                                 debouncedSave('sleep', num);
                                                             }
                                                         }}
-                                                        onBlur={() => setEditing(null)}
                                                         className={`w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer ${sleepClasses.accent} transition-all`}
                                                     />
                                                 </div>
@@ -1461,6 +1541,7 @@ export function DashboardPage() {
                                     <div className="cursor-pointer group/stat flex flex-col justify-center" onClick={() => {
                                         setTempValue((latest3Weights[0]?.weight || "").toString());
                                         setTempWaist((latest3Weights[0]?.waist || "").toString());
+                                        setTempChest((latest3Weights[0]?.chest || "").toString());
                                         setIsWeightModalOpen(true);
                                     }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Vikt</div>
@@ -1471,6 +1552,7 @@ export function DashboardPage() {
                                     <div className="cursor-pointer group/stat border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center" onClick={() => {
                                         setTempValue((latest3Weights[0]?.weight || "").toString());
                                         setTempWaist((latest3Weights[0]?.waist || "").toString());
+                                        setTempChest((latest3Weights[0]?.chest || "").toString());
                                         setIsWeightModalOpen(true);
                                     }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Midja</div>
@@ -1481,10 +1563,15 @@ export function DashboardPage() {
                                     </div>
 
                                     {/* Chest (Bröst) */}
-                                    <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center hidden md:flex">
+                                    <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center hidden md:flex cursor-pointer" onClick={() => {
+                                        setTempValue((latest3Weights[0]?.weight || "").toString());
+                                        setTempWaist((latest3Weights[0]?.waist || "").toString());
+                                        setTempChest((latest3Weights[0]?.chest || "").toString());
+                                        setIsWeightModalOpen(true);
+                                    }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Bröst</div>
                                         <div className="text-xl font-black text-slate-900 dark:text-white">
-                                            {useData().bodyMeasurements.filter(m => m.type === 'chest').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.value || '--'}
+                                            {useData().bodyMeasurements.filter(m => m.type === 'chest').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.value || latest3Weights[0]?.chest || '--'}
                                             <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
                                         </div>
                                     </div>
@@ -1506,18 +1593,18 @@ export function DashboardPage() {
                                 </div>
 
                                 {/* Sparkline Visual */}
-                                <div className="flex-1 min-h-[120px] bg-slate-50 dark:bg-white/[0.02] rounded-3xl p-4 border border-slate-100 dark:border-white/5 relative">
-                                    <div className="absolute top-4 left-4 text-[9px] font-bold text-slate-400 uppercase tracking-widest">Trendkurva</div>
-                                    <div className="h-20 mt-4">
+                                <div className="bg-slate-50 dark:bg-white/[0.02] rounded-3xl p-4 border border-slate-100 dark:border-white/5 relative max-w-xl mx-auto">
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Trendkurva</div>
+                                    <div className="h-64 aspect-[4/3]">
                                         <WeightSparkline
-                                            data={weightTrend}
+                                            data={weightTrendEntries}
                                             dates={weightTrendEntries.map(e => e.date)}
-                                            color={weightDiffRange <= 0 ? 'text-emerald-500' : 'text-rose-500'}
                                             onPointClick={(idx) => {
                                                 const entry = weightTrendEntries[idx];
                                                 if (entry) {
                                                     setTempValue(entry.weight.toString());
                                                     setTempWaist((entry.waist || "").toString());
+                                                    setTempChest((entry.chest || "").toString());
                                                     setIsWeightModalOpen(true);
                                                 }
                                             }}
@@ -1537,18 +1624,25 @@ export function DashboardPage() {
                                             <div key={w.id} className="px-3 py-2 bg-white dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-white/5 flex items-center justify-between group/item hover:border-blue-500/30 transition-all cursor-pointer" onClick={() => {
                                                 setTempValue(w.weight.toString());
                                                 setTempWaist((w.waist || "").toString());
+                                                setTempChest((w.chest || "").toString());
                                                 setIsWeightModalOpen(true);
                                             }}>
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase min-w-[60px]">{getRelativeDateLabel(w.date)}</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{w.weight}</span>
-                                                        <span className="text-[9px] font-bold text-slate-400">kg</span>
+                                                    <div className="flex items-center flex-wrap gap-x-2">
+                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{w.weight.toFixed(1)} <span className="text-[10px] text-slate-400">kg</span></span>
+
                                                         {w.waist && (
                                                             <>
-                                                                <span className="mx-1.5 opacity-20">|</span>
-                                                                <span className="text-sm font-black text-slate-900 dark:text-white">{w.waist}</span>
-                                                                <span className="text-[9px] font-bold text-slate-400">cm</span>
+                                                                <span className="text-slate-200 dark:text-slate-700">|</span>
+                                                                <span className="text-sm font-bold text-emerald-500">{w.waist} <span className="text-[10px] font-normal opacity-70">cm (midja)</span></span>
+                                                            </>
+                                                        )}
+
+                                                        {w.chest && (
+                                                            <>
+                                                                <span className="text-slate-200 dark:text-slate-700">|</span>
+                                                                <span className="text-sm font-bold text-indigo-500">{w.chest} <span className="text-[10px] font-normal opacity-70">cm (bröst)</span></span>
                                                             </>
                                                         )}
                                                     </div>
@@ -1570,7 +1664,7 @@ export function DashboardPage() {
                         onMouseEnter={() => setIsHoveringChart(true)}
                         onMouseLeave={() => setIsHoveringChart(false)}
                     >
-                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800 transition-all duration-300 ${isHoveringChart ? 'scale-[1.01] shadow-2xl shadow-indigo-500/10 border-indigo-500/20' : ''}`}>
+                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800 transition-all duration-300`}>
                             {/* Header */}
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-2">
@@ -1780,84 +1874,9 @@ export function DashboardPage() {
                         </div>
                     </div>
 
-                    {/* Week Summary Module */}
-                    <div className="col-span-12 md:col-span-12 mt-4">
-                        {(() => {
-                            // Determine "Current Week" based on selectedDate
-                            const d = new Date(selectedDate);
-                            const day = d.getDay();
-                            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
-                            const monday = new Date(d.setDate(diff)).toISOString().split('T')[0];
-                            const sunday = new Date(d.setDate(diff + 6)).toISOString().split('T')[0];
 
-                            // Simple ISO week number
-                            const targetDate = new Date(monday);
-                            const jan4 = new Date(targetDate.getFullYear(), 0, 4);
-                            const weekNum = 1 + Math.round((((targetDate.getTime() - jan4.getTime()) / 86400000) - 3 + ((jan4.getDay() + 6) % 7)) / 7);
-
-                            // Aggregate data for this calendar week
-                            const weekActivities = unifiedActivities.filter(a => a.date >= monday && a.date <= sunday);
-                            const weekVolume = weekActivities.reduce((sum, a) => sum + (a.tonnage || 0), 0) / 1000;
-                            const weekDistance = weekActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
-                            const weekDuration = weekActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
-                            const weekWorkouts = weekActivities.length;
-
-                            // Calculate daily averages for context
-                            const daysPassed = Math.min(new Date().getDay() || 7, 7); // Rough estimate for current week progress if current week
-                            // Or just simple aggregates
-
-                            // Calculate context label
-                            const currentWeekNum = (() => {
-                                const d = new Date();
-                                const day = d.getDay();
-                                const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-                                const mon = new Date(d.setDate(diff));
-                                const jan4 = new Date(mon.getFullYear(), 0, 4);
-                                return 1 + Math.round((((mon.getTime() - jan4.getTime()) / 86400000) - 3 + ((jan4.getDay() + 6) % 7)) / 7);
-                            })();
-
-                            let weekContext = '';
-                            if (weekNum === currentWeekNum) weekContext = 'DENNA VECKA';
-                            else if (weekNum === currentWeekNum + 1) weekContext = 'NÄSTA VECKA';
-                            else if (weekNum === currentWeekNum - 1) weekContext = 'FÖRRA VECKAN';
-
-                            return (
-                                <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900/50 rounded-2xl border border-slate-800/50 hover:bg-slate-900 transition-colors group`}>
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="flex items-center gap-2">
-                                            <Calendar size={16} className="text-slate-500 group-hover:text-white transition-colors" />
-                                            <h3 className="text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-white transition-colors">Vecka {weekNum} Summary</h3>
-                                            {weekContext && (
-                                                <span className="ml-2 px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 text-[9px] font-bold uppercase tracking-wider border border-emerald-500/10">
-                                                    {weekContext}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="text-[10px] font-bold text-slate-600 uppercase tracking-widest">{monday} — {sunday}</div>
-                                    </div>
-
-                                    <div className="grid grid-cols-4 gap-4">
-                                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
-                                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Pass</div>
-                                            <div className="text-xl font-black text-white">{weekWorkouts}</div>
-                                        </div>
-                                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
-                                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Volym</div>
-                                            <div className="text-xl font-black text-indigo-400">{Math.round(weekVolume)} <span className="text-xs text-slate-600">t</span></div>
-                                        </div>
-                                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
-                                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Distans</div>
-                                            <div className="text-xl font-black text-emerald-400">{Math.round(weekDistance)} <span className="text-xs text-slate-600">km</span></div>
-                                        </div>
-                                        <div className="p-3 bg-slate-950/50 rounded-xl border border-white/5">
-                                            <div className="text-[9px] font-bold text-slate-500 uppercase mb-1">Tid</div>
-                                            <div className="text-xl font-black text-white">{Math.floor(weekDuration / 60)}h {Math.round(weekDuration % 60)}m</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })()}
-                    </div>
+                    {/* Moved Active Goals Card */}
+                    <ActiveGoalsCard />
 
                     <div className={`md:col-span-12 ${density === 'compact' ? 'p-3 rounded-2xl' : 'p-6 rounded-[2rem]'} bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-center`}>
                         <div className="flex flex-col md:flex-row gap-6">
@@ -1894,12 +1913,15 @@ export function DashboardPage() {
                             {/* Stats Grid */}
                             <div className="flex-[1.5] grid grid-cols-3 gap-4">
                                 {/* Training Daily */}
-                                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20">
+                                <div
+                                    className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-all"
+                                    onClick={() => navigate('/planning/training')}
+                                >
                                     <div className="flex items-center gap-2 mb-1">
-                                        <Dumbbell size={12} className="text-indigo-500" />
-                                        <span className="text-[8px] font-bold uppercase text-slate-400">Träningsstreak</span>
+                                        <Calendar size={12} className="text-indigo-500" />
+                                        <span className="text-[8px] font-bold uppercase text-slate-400">Planera Träning</span>
                                     </div>
-                                    <div className="text-xl font-black text-slate-900 dark:text-white">{trainingStreak} <span className="text-[10px] text-slate-400">dag</span></div>
+                                    <div className="text-xl font-black text-indigo-500 dark:text-indigo-400">+ Pass</div>
                                 </div>
                                 {/* Training Weekly */}
                                 <div className="p-3 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100/50 dark:border-emerald-900/20">
@@ -1934,154 +1956,14 @@ export function DashboardPage() {
             }
 
             {/* Weight & Measurements Modal */}
-            {
-                isWeightModalOpen && (
-                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setIsWeightModalOpen(false)}>
-                        <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
-                            <div className="p-8">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div>
-                                        <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">Vägning & mätning</h2>
-                                        <p className="text-xs font-medium text-slate-500">Logga {getRelativeDateLabel(selectedDate === today ? today : selectedDate).toLowerCase()} form</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => setShowBulkImport(!showBulkImport)}
-                                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                                            title="Bulk-import"
-                                        >
-                                            <Zap size={20} className={showBulkImport ? 'text-blue-500' : ''} />
-                                        </button>
-                                        <button
-                                            onClick={() => setIsWeightModalOpen(false)}
-                                            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-slate-600"
-                                        >
-                                            <X size={20} />
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {showBulkImport ? (
-                                    <div className="space-y-4">
-                                        <textarea
-                                            value={bulkInput}
-                                            onChange={(e) => setBulkInput(e.target.value)}
-                                            placeholder="Klistra in data (Datum Vikt Midja)..."
-                                            className="w-full h-32 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl p-4 text-sm outline-none focus:ring-2 ring-blue-500/20"
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                const entries = bulkInput.split('\n')
-                                                    .map(line => line.trim())
-                                                    .filter(line => line.length > 0)
-                                                    .map(line => {
-                                                        // Split on tab, comma, or multiple spaces
-                                                        const parts = line.split(/[\t, ]+/);
-                                                        // Expect: Date Weight [Waist]
-                                                        if (parts.length >= 2) {
-                                                            const date = parts[0];
-                                                            const weight = parseFloat(parts[1].replace(',', '.'));
-                                                            const waist = parts.length > 2 ? parseFloat(parts[2].replace(',', '.')) : undefined;
-
-                                                            if (!isNaN(weight)) {
-                                                                return { date, weight, waist };
-                                                            }
-                                                        }
-                                                        return null;
-                                                    })
-                                                    .filter((e): e is { date: string, weight: number, waist: number | undefined } => e !== null);
-
-                                                if (entries.length > 0) {
-                                                    bulkAddWeightEntries(entries as any);
-                                                    setBulkInput("");
-                                                    setShowBulkImport(false);
-                                                }
-                                            }}
-                                            className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black rounded-2xl shadow-lg transition-all"
-                                        >
-                                            Importera Data
-                                        </button>
-                                    </div>
-                                ) : (
-                                    <form
-                                        onSubmit={(e) => {
-                                            e.preventDefault();
-                                            const w = parseFloat(tempValue);
-                                            const waist = tempWaist ? parseFloat(tempWaist) : undefined;
-                                            if (!isNaN(w)) {
-                                                addWeightEntry(w, selectedDate, waist);
-                                                setIsWeightModalOpen(false);
-                                            }
-                                        }}
-                                        className="space-y-6"
-                                    >
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Vikt (kg)</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    autoFocus
-                                                    value={tempValue}
-                                                    onChange={(e) => setTempValue(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-3xl font-black text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500/20"
-                                                    placeholder="0.0"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Midja (cm)</label>
-                                                <input
-                                                    type="number"
-                                                    step="0.1"
-                                                    value={tempWaist}
-                                                    onChange={(e) => setTempWaist(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl p-5 text-3xl font-black text-slate-900 dark:text-white outline-none focus:ring-2 ring-blue-500/20"
-                                                    placeholder="-"
-                                                />
-                                            </div>
-                                        </div>
-                                        <button
-                                            type="submit"
-                                            className="w-full py-5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-black rounded-2xl shadow-xl hover:scale-[1.02] active:scale-[0.98] transition-all"
-                                        >
-                                            Spara
-                                        </button>
-                                    </form>
-                                )}
-
-                                <div className="mt-8">
-                                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-4 ml-1">Historik (Senaste 5)</h3>
-                                    <div className="space-y-2">
-                                        {weightEntries.slice().reverse().slice(0, 5).map(entry => (
-                                            <div key={entry.date} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl group transition-all hover:bg-slate-100 dark:hover:bg-slate-800">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] font-bold text-slate-400 uppercase leading-none mb-1">{entry.date}</span>
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{entry.weight.toFixed(1)} <span className="text-[10px] text-slate-400">kg</span></span>
-                                                        {entry.waist && <span className="text-sm font-black text-slate-400 italic">{entry.waist} <span className="font-normal not-italic">cm</span></span>}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => {
-                                                            setTempValue(entry.weight.toString());
-                                                            setTempWaist((entry.waist || "").toString());
-                                                            setIsWeightModalOpen(true);
-                                                        }}
-                                                        className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg text-blue-500 transition-colors"
-                                                    >
-                                                        <Settings size={14} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )
-            }
+            <MeasurementEntryModal
+                isOpen={isWeightModalOpen}
+                onClose={() => setIsWeightModalOpen(false)}
+                selectedDate={selectedDate}
+                initialWeight={tempValue}
+                initialWaist={tempWaist}
+                initialChest={tempChest}
+            />
 
             <StravaActivityImportModal
                 isOpen={isStravaModalOpen}

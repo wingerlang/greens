@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import {
@@ -17,7 +17,7 @@ import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
 import { NutritionInsights } from '../components/calories/NutritionInsights.tsx';
 import { MacroDistribution } from '../components/calories/MacroDistribution.tsx';
-import { normalizeText } from '../utils/formatters.ts';
+import { normalizeText, formatActivityDuration } from '../utils/formatters.ts';
 import { DatePicker } from '../components/shared/DatePicker.tsx';
 import { CalorieRing } from '../components/shared/CalorieRing.tsx';
 import { MacroBars } from '../components/shared/MacroBars.tsx';
@@ -43,7 +43,8 @@ export function CaloriesPage() {
         trainingPeriods,
         performanceGoals,
         toggleIncompleteDay,
-        userSettings
+        userSettings,
+        deleteExercise
     } = useData();
 
     const { settings } = useSettings();
@@ -61,8 +62,6 @@ export function CaloriesPage() {
     }, [selectedDate, searchParams, setSearchParams]);
 
     const [isFormOpen, setIsFormOpen] = useState(false);
-
-
 
     // Smart meal type default based on time of day
     const getDefaultMealType = (): MealType => {
@@ -140,7 +139,6 @@ export function CaloriesPage() {
     }, [dailyEntries]);
 
     const searchResults = useMemo(() => {
-        // normalizeText imported from utils/formatters.ts
         const query = normalizeText(searchQuery);
         if (!query) return [];
 
@@ -166,7 +164,6 @@ export function CaloriesPage() {
     const proposals = useMemo(() => {
         const counts: Record<string, { type: 'recipe' | 'foodItem'; id: string; count: number; lastUsed: number }> = {};
 
-        // Analyze last 30 days of entries (or all for simplicity)
         mealEntries.forEach(entry => {
             const time = new Date(entry.createdAt || entry.date).getTime();
             entry.items.forEach(item => {
@@ -181,8 +178,6 @@ export function CaloriesPage() {
 
         return Object.values(counts)
             .sort((a, b) => {
-                // Combine frequency and recency
-                // Score = count * factor + recency_bonus
                 const aRecency = a.lastUsed;
                 const bRecency = b.lastUsed;
                 if (a.count !== b.count) return b.count - a.count;
@@ -209,8 +204,6 @@ export function CaloriesPage() {
             } else if (portionMode === 'grams') {
                 servingsValue = quickAddServings;
             } else {
-                // Default 'portions' mode for food items
-                // Use defaultPortion if available, otherwise assume 100g serving
                 servingsValue = (defaultPortion || 100) * quickAddServings;
             }
         }
@@ -331,12 +324,6 @@ export function CaloriesPage() {
         return { calories: 0, protein: 0, carbs: 0, fat: 0 };
     };
 
-    const navigateDate = (days: number) => {
-        const date = new Date(selectedDate);
-        date.setDate(date.getDate() + days);
-        setSelectedDate(getISODate(date));
-    };
-
     const isToday = selectedDate === getISODate();
 
     const plannedMeals = useMemo(
@@ -373,7 +360,6 @@ export function CaloriesPage() {
     };
 
     const goals = useMemo(() => {
-        // Use centralized function to get calorie target (checks targets[0].value, nutritionMacros, period, settings)
         const periodTarget = getActiveCalories(
             selectedDate,
             trainingPeriods,
@@ -385,11 +371,8 @@ export function CaloriesPage() {
         return calculateAdaptiveGoals(settings as any, dailyExercises, periodTarget);
     }, [settings, dailyExercises, trainingPeriods, selectedDate, performanceGoals]);
 
-    const [showInsights, setShowInsights] = useState(false);
-
     return (
         <div className="calories-page">
-            {/* Date Picker at top */}
             <div className="my-6">
                 <DatePicker
                     selectedDate={selectedDate}
@@ -398,7 +381,6 @@ export function CaloriesPage() {
                 />
             </div>
 
-            {/* View mode toggle */}
             <div className="flex justify-center gap-2 mb-4">
                 <button
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'compact' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}
@@ -452,7 +434,6 @@ export function CaloriesPage() {
                 </div>
             )}
 
-            {/* Incomplete Day Toggle */}
             <div className="flex justify-center mb-4">
                 <button
                     onClick={() => toggleIncompleteDay(selectedDate)}
@@ -465,133 +446,122 @@ export function CaloriesPage() {
                 </button>
             </div>
 
-            <>
-                {/* Combined Summary Card + Smart Meal Clustering (Macro Distribution) side by side */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mx-4 my-6">
-                    {/* Summary Card (Ring + Bars) */}
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6 overflow-hidden">
-                        <div className="flex flex-col sm:flex-row items-center gap-8">
-                            <div className="shrink-0">
-                                <CalorieRing
-                                    calories={dailyNutrition.calories}
-                                    calorieGoal={goals.calories}
-                                    protein={dailyNutrition.protein}
-                                    proteinGoal={goals.protein}
-                                    size="lg"
-                                />
-                            </div>
-                            <div className="flex-1 w-full border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800 pt-6 sm:pt-0 sm:pl-8">
-                                <MacroBars
-                                    calories={dailyNutrition.calories}
-                                    calorieGoal={goals.calories}
-                                    protein={dailyNutrition.protein}
-                                    proteinGoal={goals.protein}
-                                    carbs={dailyNutrition.carbs}
-                                    carbsGoal={goals.carbs || 250}
-                                    fat={dailyNutrition.fat}
-                                    fatGoal={goals.fat || 80}
-                                    size="md"
-                                />
-                            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mx-4 my-6">
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6 overflow-hidden">
+                    <div className="flex flex-col sm:flex-row items-center gap-8">
+                        <div className="shrink-0">
+                            <CalorieRing
+                                calories={dailyNutrition.calories}
+                                calorieGoal={goals.calories}
+                                protein={dailyNutrition.protein}
+                                proteinGoal={goals.protein}
+                                size="lg"
+                            />
                         </div>
-                    </div>
-
-                    {/* Smart Meal Clustering (Macro Distribution) */}
-                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6">
-                        <MacroDistribution
-                            entries={dailyEntries}
-                            foodItems={foodItems}
-                            recipes={recipes}
-                        />
-                    </div>
-                </div>
-
-                {/* Vitals Summary */}
-                {/* Vitals Summary */}
-                <div className="mx-4 mt-6 p-4 bg-slate-900/50 border border-white/5 rounded-2xl grid grid-cols-3 gap-4">
-                    {/* Water */}
-                    <div
-                        className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                        onClick={() => handleCardClick('water', currentVitals.water || 0)}
-                    >
-                        <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Vatten</span>
-                        <div className="flex items-center gap-1.5 h-8">
-                            {editing === 'water' ? (
-                                <input
-                                    autoFocus
-                                    type="number"
-                                    value={tempValue}
-                                    onChange={(e) => setTempValue(e.target.value)}
-                                    onBlur={() => handleSave('water')}
-                                    onKeyDown={(e) => handleKeyDown(e, 'water')}
-                                    onClick={e => e.stopPropagation()}
-                                    className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                                />
-                            ) : (
-                                <>
-                                    <span className="text-xl">💧</span>
-                                    <span className="text-lg font-bold text-white">{currentVitals.water || 0}</span>
-                                </>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Caffeine */}
-                    <div
-                        className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                        onClick={() => handleCardClick('caffeine', currentVitals.caffeine || 0)}
-                    >
-                        <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Koffein</span>
-                        <div className="flex items-center gap-1.5 h-8">
-                            {editing === 'caffeine' ? (
-                                <input
-                                    autoFocus
-                                    type="number"
-                                    value={tempValue}
-                                    onChange={(e) => setTempValue(e.target.value)}
-                                    onBlur={() => handleSave('caffeine')}
-                                    onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
-                                    onClick={e => e.stopPropagation()}
-                                    className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                                />
-                            ) : (
-                                <>
-                                    <span className="text-xl">☕</span>
-                                    <span className="text-lg font-bold text-white">{currentVitals.caffeine || 0}<span className="text-[10px] text-slate-500 ml-0.5">mg</span></span>
-                                </>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Alcohol */}
-                    <div
-                        className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                        onClick={() => handleCardClick('alcohol', currentVitals.alcohol || 0)}
-                    >
-                        <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Alkohol</span>
-                        <div className="flex items-center gap-1.5 h-8">
-                            {editing === 'alcohol' ? (
-                                <input
-                                    autoFocus
-                                    type="number"
-                                    value={tempValue}
-                                    onChange={(e) => setTempValue(e.target.value)}
-                                    onBlur={() => handleSave('alcohol')}
-                                    onKeyDown={(e) => handleKeyDown(e, 'alcohol')}
-                                    onClick={e => e.stopPropagation()}
-                                    className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                                />
-                            ) : (
-                                <>
-                                    <span className="text-xl">🍷</span>
-                                    <span className="text-lg font-bold text-white">{currentVitals.alcohol || 0}<span className="text-[10px] text-slate-500 ml-0.5">e</span></span>
-                                </>
-                            )}
+                        <div className="flex-1 w-full border-t sm:border-t-0 sm:border-l border-slate-100 dark:border-slate-800 pt-6 sm:pt-0 sm:pl-8">
+                            <MacroBars
+                                calories={dailyNutrition.calories}
+                                calorieGoal={goals.calories}
+                                protein={dailyNutrition.protein}
+                                proteinGoal={goals.protein}
+                                carbs={dailyNutrition.carbs}
+                                carbsGoal={goals.carbs || 250}
+                                fat={dailyNutrition.fat}
+                                fatGoal={goals.fat || 80}
+                                size="md"
+                            />
                         </div>
                     </div>
                 </div>
-            </>
 
+                <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm p-6">
+                    <MacroDistribution
+                        entries={dailyEntries}
+                        foodItems={foodItems}
+                        recipes={recipes}
+                    />
+                </div>
+            </div>
+
+            <div className="mx-4 mt-6 p-4 bg-slate-900/50 border border-white/5 rounded-2xl grid grid-cols-3 gap-4">
+                <div
+                    className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                    onClick={() => handleCardClick('water', currentVitals.water || 0)}
+                >
+                    <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Vatten</span>
+                    <div className="flex items-center gap-1.5 h-8">
+                        {editing === 'water' ? (
+                            <input
+                                autoFocus
+                                type="number"
+                                value={tempValue}
+                                onChange={(e) => setTempValue(e.target.value)}
+                                onBlur={() => handleSave('water')}
+                                onKeyDown={(e) => handleKeyDown(e, 'water')}
+                                onClick={e => e.stopPropagation()}
+                                className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                            />
+                        ) : (
+                            <>
+                                <span className="text-xl">💧</span>
+                                <span className="text-lg font-bold text-white">{currentVitals.water || 0}</span>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <div
+                    className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                    onClick={() => handleCardClick('caffeine', currentVitals.caffeine || 0)}
+                >
+                    <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Koffein</span>
+                    <div className="flex items-center gap-1.5 h-8">
+                        {editing === 'caffeine' ? (
+                            <input
+                                autoFocus
+                                type="number"
+                                value={tempValue}
+                                onChange={(e) => setTempValue(e.target.value)}
+                                onBlur={() => handleSave('caffeine')}
+                                onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
+                                onClick={e => e.stopPropagation()}
+                                className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                            />
+                        ) : (
+                            <>
+                                <span className="text-xl">☕</span>
+                                <span className="text-lg font-bold text-white">{currentVitals.caffeine || 0}<span className="text-[10px] text-slate-500 ml-0.5">mg</span></span>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                <div
+                    className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
+                    onClick={() => handleCardClick('alcohol', currentVitals.alcohol || 0)}
+                >
+                    <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Alkohol</span>
+                    <div className="flex items-center gap-1.5 h-8">
+                        {editing === 'alcohol' ? (
+                            <input
+                                autoFocus
+                                type="number"
+                                value={tempValue}
+                                onChange={(e) => setTempValue(e.target.value)}
+                                onBlur={() => handleSave('alcohol')}
+                                onKeyDown={(e) => handleKeyDown(e, 'alcohol')}
+                                onClick={e => e.stopPropagation()}
+                                className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
+                            />
+                        ) : (
+                            <>
+                                <span className="text-xl">🍷</span>
+                                <span className="text-lg font-bold text-white">{currentVitals.alcohol || 0}<span className="text-[10px] text-slate-500 ml-0.5">e</span></span>
+                            </>
+                        )}
+                    </div>
+                </div>
+            </div>
 
             <MealTimeline
                 viewMode={viewMode}
@@ -607,7 +577,6 @@ export function CaloriesPage() {
                 setMealType={setMealType}
                 setBreakdownItem={setBreakdownItem}
                 onReplaceItem={(item, entryId) => {
-                    // Open quick add modal to replace the item
                     setMealType(dailyEntries.find(e => e.id === entryId)?.mealType || 'snack');
                     setIsFormOpen(true);
                 }}
@@ -622,15 +591,54 @@ export function CaloriesPage() {
                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-4 px-2">Träningspass</h3>
                     <div className="space-y-2">
                         {dailyExercises.map(ex => (
-                            <div key={ex.id} className="flex items-center justify-between p-4 bg-slate-900/50 border border-white/5 rounded-2xl">
-                                <div className="flex items-center gap-4">
-                                    <span className="text-xl">🏋️</span>
-                                    <div>
-                                        <div className="font-bold text-slate-200">{ex.type === 'running' ? 'Löpning' : ex.type === 'cycling' ? 'Cykling' : ex.type === 'strength' ? 'Styrka' : ex.type === 'walking' ? 'Promenad' : ex.type === 'swimming' ? 'Simning' : ex.type === 'yoga' ? 'Yoga' : 'Annat'}</div>
-                                        <div className="text-[10px] text-slate-500">{ex.durationMinutes} min • {ex.intensity}</div>
+                            <div key={ex.id} className="relative group">
+                                <Link
+                                    to={`/activity/${ex.id}`}
+                                    className="flex items-center justify-between p-4 bg-slate-900/50 border border-white/5 rounded-2xl hover:bg-slate-800/50 hover:border-emerald-500/30 transition-all cursor-pointer"
+                                >
+                                    <div className="flex items-center gap-4 text-left">
+                                        <span className="text-xl">
+                                            {ex.type === 'running' ? '🏃' :
+                                                ex.type === 'cycling' ? '🚴' :
+                                                    ex.type === 'strength' ? '🏋️' :
+                                                        ex.type === 'walking' ? '🚶' :
+                                                            ex.type === 'swimming' ? '🏊' :
+                                                                ex.type === 'yoga' ? '🧘' : '🏋️'}
+                                        </span>
+                                        <div>
+                                            <div className="font-bold text-slate-200">
+                                                {ex.type === 'running' ? 'Löpning' :
+                                                    ex.type === 'cycling' ? 'Cykling' :
+                                                        ex.type === 'strength' ? 'Styrka' :
+                                                            ex.type === 'walking' ? 'Promenad' :
+                                                                ex.type === 'swimming' ? 'Simning' :
+                                                                    ex.type === 'yoga' ? 'Yoga' : 'Annat'}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500">
+                                                {formatActivityDuration(ex.durationMinutes)} • {ex.intensity}
+                                                {(ex as any).source === 'strava' && <span className="ml-2 text-[#FC4C02] font-bold">ST</span>}
+                                                {(ex as any).source === 'manual' && <span className="ml-2 text-emerald-500 font-bold">M</span>}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <span className="text-rose-400 font-black">-{ex.caloriesBurned} kcal</span>
+                                    <span className="text-rose-400 font-black">-{ex.caloriesBurned} kcal</span>
+                                </Link>
+
+                                {((ex as any).source === 'manual' || (ex as any).source === 'strength') && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            if (confirm('Vill du ta bort denna aktivitet?')) {
+                                                deleteExercise(ex.id);
+                                            }
+                                        }}
+                                        className="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow-lg z-10"
+                                        title="Ta bort aktivitet"
+                                    >
+                                        ✕
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>
@@ -659,7 +667,6 @@ export function CaloriesPage() {
                 getFoodItem={getFoodItem}
             />
 
-            {/* Trends Section - always shown at bottom as requested */}
             <section className="mx-4 mt-12 mb-8">
                 <div className="flex items-center justify-between mb-6 px-2">
                     <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Utveckling & Trender</h3>
@@ -667,7 +674,6 @@ export function CaloriesPage() {
                 <NutritionInsights onDateSelect={setSelectedDate} />
             </section>
 
-            {/* Bottom actions sticky or floating footer could be here, but user asked for trends directly underst */}
             <div className="fixed bottom-6 right-6 flex flex-col gap-2">
                 <button
                     className="w-14 h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-95"

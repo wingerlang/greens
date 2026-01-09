@@ -6,9 +6,6 @@ import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import {
-    type ExerciseType,
-    type ExerciseIntensity,
-    type ExerciseSubType,
     WEEKDAY_LABELS
 } from '../models/types.ts';
 import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
@@ -17,12 +14,11 @@ import { useHealth } from '../hooks/useHealth.ts';
 import { getISODate } from '../models/types.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import {
-    parseOmniboxInput,
     parseCycleString
 } from '../utils/nlpParser.ts';
+import { formatActivityDuration } from '../utils/formatters.ts';
 import { CycleYearChart } from '../components/training/CycleYearChart.tsx';
-import { ExerciseModal, EXERCISE_TYPES, INTENSITIES } from '../components/training/ExerciseModal.tsx';
-import { WeightModal } from '../components/training/WeightModal.tsx';
+import { EXERCISE_TYPES, INTENSITIES } from '../components/training/ExerciseModal.tsx';
 import { CycleDetailModal } from '../components/training/CycleDetailModal.tsx';
 import { GoalCard } from '../components/training/GoalCard.tsx';
 import { GoalModal } from '../components/training/GoalModal.tsx';
@@ -237,8 +233,6 @@ export function TrainingPage() {
     const { settings, updateSettings } = useSettings();
 
     const [selectedDate, setSelectedDate] = useState(getISODate());
-    const [isExerciseModalOpen, setIsExerciseModalOpen] = useState(false);
-    const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
 
     // Chart State
     const [zoomLevel, setZoomLevel] = useState(6);
@@ -246,26 +240,6 @@ export function TrainingPage() {
         calories: true,
         volume: true,
         workouts: true
-    });
-
-    const [smartInput, setSmartInput] = useState('');
-    const [weightInput, setWeightInput] = useState(getLatestWeight?.()?.toString() || '');
-    const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
-
-    const [exerciseForm, setExerciseForm] = useState<{
-        type: ExerciseType;
-        duration: string;
-        intensity: ExerciseIntensity;
-        notes: string;
-        subType?: ExerciseSubType;
-        tonnage?: string;
-        distance?: string;
-    }>({
-        type: 'running',
-        duration: '30',
-        intensity: 'moderate',
-        notes: '',
-        subType: 'default'
     });
 
     const [cycleInput, setCycleInput] = useState('');
@@ -277,30 +251,6 @@ export function TrainingPage() {
         name: ''
     });
 
-    // ESC key support
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                setIsExerciseModalOpen(false);
-                setIsWeightModalOpen(false);
-            }
-        };
-        if (isExerciseModalOpen || isWeightModalOpen) {
-            window.addEventListener('keydown', handleKeyDown);
-        }
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isExerciseModalOpen, isWeightModalOpen]);
-
-    // Use centralized NLP parser
-    const intent = useMemo(() => parseOmniboxInput(smartInput), [smartInput]);
-
-    // Derived states for form (fallback to manual form if no smart intent)
-    const exerciseData = intent.type === 'exercise' ? intent.data : null;
-    const weightData = intent.type === 'weight' ? intent.data : null;
-
-    const effectiveExerciseType = exerciseData?.exerciseType || exerciseForm.type;
-    const effectiveDuration = exerciseData?.duration?.toString() || exerciseForm.duration;
-    const effectiveIntensity = exerciseData?.intensity || exerciseForm.intensity;
 
     const {
         bmr,
@@ -326,126 +276,8 @@ export function TrainingPage() {
         setSelectedActivity(fullActivity);
     };
 
-    const handleSmartAction = (e: React.FormEvent) => {
-        e.preventDefault();
-
-        if (intent.type === 'weight' && weightData) {
-            addWeightEntry(weightData.weight, selectedDate);
-            setSmartInput('');
-            setWeightInput('');
-            return;
-        }
-
-        // Priority 2: Exercise Logic (Smart or Manual)
-        const duration = parseInt(effectiveDuration) || 0;
-        const caloriesBurned = calculateExerciseCalories(effectiveExerciseType, duration, effectiveIntensity);
-
-        const exerciseDataToSave = {
-            date: selectedDate,
-            type: effectiveExerciseType,
-            durationMinutes: duration,
-            intensity: effectiveIntensity,
-            caloriesBurned,
-            notes: exerciseForm.notes || (exerciseData?.notes),
-            subType: exerciseForm.subType,
-            tonnage: exerciseForm.tonnage ? parseFloat(exerciseForm.tonnage) : undefined,
-            distance: exerciseForm.distance ? parseFloat(exerciseForm.distance) : undefined
-        };
-
-        if (editingExerciseId) {
-            // Updated via delete + add for now (preserves date)
-            deleteExercise(editingExerciseId);
-            addExercise(exerciseDataToSave);
-        } else {
-            addExercise(exerciseDataToSave);
-        }
-
-        setSmartInput('');
-        setExerciseForm({ ...exerciseForm, notes: '', tonnage: '', distance: '', subType: 'default' });
-        setEditingExerciseId(null);
-        setIsExerciseModalOpen(false);
-    };
-
-    const handleAddWeight = (e: React.FormEvent) => {
-        e.preventDefault();
-        const weight = parseFloat(weightInput);
-        if (!isNaN(weight)) {
-            addWeightEntry(weight, selectedDate);
-            setIsWeightModalOpen(false);
-        }
-    };
-
     return (
         <div className="training-page">
-            <header className="page-header flex-col md:flex-row gap-8 mb-8">
-                <div className="flex-1">
-                    <h1>Träning & Fysik</h1>
-                    <p className="page-subtitle">Optimera din förbränning och följ din trend</p>
-                </div>
-
-                {/* Permanent Smart Input Header */}
-                <div className="flex-1 max-w-xl w-full space-y-3">
-                    <div className="relative group">
-                        <div className="flex items-center gap-2 mb-2">
-                            <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Snabb-logga pass</span>
-                            <span className="text-[9px] text-slate-500 italic lowercase">t.ex. "45min löpning hög" eller "82kg"</span>
-                        </div>
-                        <input
-                            type="text"
-                            value={smartInput}
-                            onChange={(e) => setSmartInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && smartInput && handleSmartAction(e)}
-                            placeholder="Träning eller vikt..."
-                            className="w-full bg-slate-900/80 backdrop-blur-xl border border-white/5 rounded-2xl p-4 text-white focus:border-emerald-500/30 transition-all outline-none shadow-2xl"
-                        />
-                        {smartInput && (
-                            <button
-                                onClick={handleSmartAction}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 bg-emerald-500 text-slate-950 text-[10px] font-black px-4 py-2 rounded-xl hover:bg-emerald-400 transition-colors"
-                            >
-                                LOGGA
-                            </button>
-                        )}
-
-                        {/* Inline Preview */}
-                        {smartInput && (
-                            <div className="absolute top-full left-0 right-0 mt-2 p-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 flex items-center justify-between">
-                                {intent.type === 'weight' && weightData ? (
-                                    <>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-xl">⚖️</span>
-                                            <div>
-                                                <div className="text-[10px] font-black text-white">Ny vikt</div>
-                                                <div className="text-[9px] text-slate-500 font-bold">{weightData.weight} KG</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <button onClick={handleSmartAction} className="text-[10px] font-black text-emerald-400 uppercase">Spara</button>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-xl">{EXERCISE_TYPES.find(t => t.type === effectiveExerciseType)?.icon}</span>
-                                            <div>
-                                                <div className="text-[10px] font-black text-white">{EXERCISE_TYPES.find(t => t.type === effectiveExerciseType)?.label}</div>
-                                                <div className="text-[9px] text-slate-500">{effectiveDuration} min • {INTENSITIES.find(i => i.value === effectiveIntensity)?.label}</div>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <div className="text-[10px] font-black text-emerald-400">-{calculateExerciseCalories(effectiveExerciseType, parseInt(effectiveDuration) || 0, effectiveIntensity)} kcal</div>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </div>
-
-                    <button className="btn btn-secondary !rounded-2xl" onClick={() => setIsWeightModalOpen(true)}>
-                        ⚖️ Logga Vikt
-                    </button>
-                </div>
-            </header>
 
             {/* Tab Navigation */}
             <div className="flex p-1 bg-slate-900 border border-white/5 rounded-xl self-start mb-6 overflow-x-auto">
@@ -844,7 +676,7 @@ export function TrainingPage() {
                                                             {INTENSITIES.find(i => i.value === ex.intensity)?.label}
                                                         </span>
                                                     </div>
-                                                    <div className="text-xs text-slate-500">{ex.durationMinutes} min • {ex.notes || 'Inga anteckningar'}</div>
+                                                    <div className="text-xs text-slate-500">{formatActivityDuration(ex.durationMinutes)} • {ex.notes || 'Inga anteckningar'}</div>
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-4">
@@ -1061,42 +893,6 @@ export function TrainingPage() {
                 editingGoal={editingGoal}
             />
 
-            {/* Extracted Modals */}
-            <ExerciseModal
-                isOpen={isExerciseModalOpen}
-                onClose={() => {
-                    setIsExerciseModalOpen(false);
-                    setEditingExerciseId(null);
-                }}
-                onSave={handleSmartAction}
-                smartInput={smartInput}
-                setSmartInput={setSmartInput}
-                effectiveExerciseType={effectiveExerciseType}
-                effectiveDuration={effectiveDuration}
-                effectiveIntensity={effectiveIntensity}
-                exerciseForm={exerciseForm}
-                setExerciseForm={setExerciseForm}
-                calculateCalories={calculateExerciseCalories}
-                isEditing={!!editingExerciseId}
-                activityId={editingExerciseId}
-                onDelete={() => {
-                    if (editingExerciseId) {
-                        deleteExercise(editingExerciseId);
-                        setIsExerciseModalOpen(false);
-                        setEditingExerciseId(null);
-                    }
-                }}
-            />
-
-            <WeightModal
-                isOpen={isWeightModalOpen}
-                onClose={() => setIsWeightModalOpen(false)}
-                weightInput={weightInput}
-                setWeightInput={setWeightInput}
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                onSave={handleAddWeight}
-            />
             {/* Activity Detail / Edit Modal */}
             {selectedActivity && (
                 <ActivityDetailModal

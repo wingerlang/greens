@@ -131,6 +131,8 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             name: user?.name,
             handle: user?.handle,
             bio: user?.bio,
+            location: user?.location,
+            website: user?.website,
             avatarUrl: user?.avatarUrl,
             email: user?.email,
             createdAt: user?.createdAt,

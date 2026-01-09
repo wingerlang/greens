@@ -6,9 +6,12 @@ import {
 } from '../models/types.ts';
 
 // Environment variables (set these in your deployment)
-const STRAVA_CLIENT_ID = Deno.env.get('STRAVA_CLIENT_ID') || '';
-const STRAVA_CLIENT_SECRET = Deno.env.get('STRAVA_CLIENT_SECRET') || '';
-const STRAVA_REDIRECT_URI = Deno.env.get('STRAVA_REDIRECT_URI') || 'http://localhost:3000/api/strava/callback';
+// @ts-ignore: Deno is polyfilled
+const STRAVA_CLIENT_ID = globalThis.Deno ? Deno.env.get('STRAVA_CLIENT_ID') || '' : process.env.STRAVA_CLIENT_ID || '';
+// @ts-ignore: Deno is polyfilled
+const STRAVA_CLIENT_SECRET = globalThis.Deno ? Deno.env.get('STRAVA_CLIENT_SECRET') || '' : process.env.STRAVA_CLIENT_SECRET || '';
+// @ts-ignore: Deno is polyfilled
+const STRAVA_REDIRECT_URI = globalThis.Deno ? Deno.env.get('STRAVA_REDIRECT_URI') || 'http://localhost:3000/api/strava/callback' : process.env.STRAVA_REDIRECT_URI || 'http://localhost:3000/api/strava/callback';
 
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';
@@ -49,6 +52,7 @@ export interface StravaActivity {
     max_speed: number;         // m/s
     average_watts?: number;
     max_watts?: number;
+    kilojoules?: number;
     has_heartrate: boolean;
     pr_count: number;
     kudos_count: number;
@@ -63,6 +67,7 @@ export interface StravaActivity {
         average_heartrate?: number;
         pace_zone?: number;
     }>;
+    excludeFromStats?: boolean;
 }
 
 export interface StravaAthlete {
@@ -370,9 +375,9 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
         platform: 'strava' as const,
         date: activity.start_date_local.split('T')[0],
         type: mapStravaType(activity.type),
-        durationMinutes: activity.elapsed_time / 60, // Use elapsed time, preserve decimal precision
+        durationMinutes: (activity.moving_time || activity.elapsed_time) / 60, // Use moving time, preserve decimal precision
         intensity: estimateIntensity(activity),
-        caloriesBurned: activity.calories || Math.round(activity.elapsed_time / 60 * 8),
+        caloriesBurned: activity.calories || Math.round((activity.moving_time || activity.elapsed_time) / 60 * 8),
         distance: activity.distance ? Math.round(activity.distance / 10) / 100 : undefined, // Convert to km
         notes: activity.name,
         heartRateAvg: activity.average_heartrate,
@@ -380,6 +385,9 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
         elevationGain: activity.total_elevation_gain,
         prCount: activity.pr_count,
         kudosCount: activity.kudos_count,
+        achievementCount: activity.achievement_count,
+        maxSpeed: activity.max_speed ? activity.max_speed * 3.6 : undefined,
+        kilojoules: activity.kilojoules,
         subType: mapStravaSubType(activity.type, activity.workout_type),
     };
 }
@@ -415,8 +423,9 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
             importedAt: new Date().toISOString()
         },
         distanceKm: activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
-        durationMinutes: activity.elapsed_time / 60, // Use elapsed time, preserve decimal precision
-        calories: activity.calories || Math.round((activity.elapsed_time / 60) * 8), // Use elapsed time for fallback
+        durationMinutes: (activity.moving_time || activity.elapsed_time) / 60, // Use moving time, preserve decimal precision
+        elapsedTimeSeconds: activity.elapsed_time,
+        calories: activity.calories || Math.round(((activity.moving_time || activity.elapsed_time) / 60) * 8), // Use moving time for fallback
 
         avgHeartRate: activity.average_heartrate,
         maxHeartRate: activity.max_heartrate,
@@ -425,10 +434,16 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
         averageWatts: activity.average_watts,
         maxWatts: activity.max_watts,
         averageSpeed: activity.average_speed ? activity.average_speed * 3.6 : 0, // m/s to km/h
+        maxSpeed: activity.max_speed ? activity.max_speed * 3.6 : 0, // m/s to km/h
+        kilojoules: activity.kilojoules,
+        prCount: activity.pr_count,
+        kudosCount: activity.kudos_count,
+        achievementCount: activity.achievement_count,
 
         activityType: mapStravaType(activity.type),
         notes: activity.name,
         subType: mapStravaSubType(activity.type, activity.workout_type),
+        excludeFromStats: activity.excludeFromStats,
         splits: activity.splits_metric?.map(s => ({
             split: s.split,
             distance: s.distance,

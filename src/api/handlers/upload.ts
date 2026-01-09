@@ -1,4 +1,4 @@
-import { createWorker } from "npm:tesseract.js";
+import { createWorker } from "../utils/deps/tesseract.ts";
 import { parseNutritionText } from "../../utils/nutrition/index.ts";
 
 export async function handleUploadRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {

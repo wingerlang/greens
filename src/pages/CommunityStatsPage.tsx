@@ -9,6 +9,7 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { PersonalBest } from '../models/strengthTypes.ts';
 import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { PBHoverCard } from '../components/charts/PBHoverCard.tsx';
+import { formatActivityDuration } from '../utils/formatters.ts';
 
 export function CommunityStatsPage() {
     const navigate = useNavigate();
@@ -247,41 +248,43 @@ export function CommunityStatsPage() {
         let best: PersonalBest | null = null;
         let maxValue = 0;
 
-        filteredStrength.forEach(s => {
-            s.exercises.forEach(ex => {
-                if (ex.exerciseName.toLowerCase() === exerciseName.toLowerCase()) {
-                    ex.sets.forEach(set => {
-                        let value = 0;
-                        const isActual = set.reps <= 3; // Consider 1-3 reps as "actual" lifts
+        filteredStrength
+            .filter(s => !s.excludeFromStats)
+            .forEach(s => {
+                s.exercises.forEach(ex => {
+                    if (ex.exerciseName.toLowerCase() === exerciseName.toLowerCase()) {
+                        ex.sets.forEach(set => {
+                            let value = 0;
+                            const isActual = set.reps <= 3; // Consider 1-3 reps as "actual" lifts
 
-                        if (rmMode === '1rm') {
-                            // 1RM = highest weight lifted (regardless of reps - true strength measure)
-                            value = set.weight;
-                        } else {
-                            // 1eRM = estimated 1RM using Epley formula
-                            value = calculateEstimated1RM(set.weight, set.reps);
-                        }
+                            if (rmMode === '1rm') {
+                                // 1RM = highest weight lifted (regardless of reps - true strength measure)
+                                value = set.weight;
+                            } else {
+                                // 1eRM = estimated 1RM using Epley formula
+                                value = calculateEstimated1RM(set.weight, set.reps);
+                            }
 
-                        if (relativeFilter === 'weight') {
-                            value = value / userWeight;
-                        }
+                            if (relativeFilter === 'weight') {
+                                value = value / userWeight;
+                            }
 
-                        if (value > maxValue) {
-                            maxValue = value;
-                            best = {
-                                value,
-                                date: s.date,
-                                workoutId: s.id,
-                                workoutName: s.name || 'Styrkepass',
-                                reps: set.reps,
-                                weight: set.weight,
-                                isActual1RM: isActual
-                            };
-                        }
-                    });
-                }
+                            if (value > maxValue) {
+                                maxValue = value;
+                                best = {
+                                    value,
+                                    date: s.date,
+                                    workoutId: s.id,
+                                    workoutName: s.name || 'Styrkepass',
+                                    reps: set.reps,
+                                    weight: set.weight,
+                                    isActual1RM: isActual
+                                };
+                            }
+                        });
+                    }
+                });
             });
-        });
 
         return best;
     };
@@ -293,9 +296,11 @@ export function CommunityStatsPage() {
     };
 
     const getUserSessionsCount = (exerciseName: string) => {
-        return filteredStrength.filter(s =>
-            s.exercises.some(ex => ex.exerciseName.toLowerCase() === exerciseName.toLowerCase())
-        ).length;
+        return filteredStrength
+            .filter(s => !s.excludeFromStats)
+            .filter(s =>
+                s.exercises.some(ex => ex.exerciseName.toLowerCase() === exerciseName.toLowerCase())
+            ).length;
     };
 
     const getUserAvgSets = (exerciseName: string) => {
@@ -511,7 +516,7 @@ export function CommunityStatsPage() {
                                             <div className="text-emerald-400 font-mono">
                                                 {act.distance ? `${act.distance.toFixed(1)} km` : `${act.tonnage || 0} kg`}
                                             </div>
-                                            <div className="text-gray-500 text-xs">{act.durationMinutes} min</div>
+                                            <div className="text-gray-500 text-xs">{formatActivityDuration(act.durationMinutes)}</div>
                                         </div>
                                     </div>
                                 ))}

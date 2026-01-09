@@ -43,6 +43,10 @@ export function ActivitiesPage() {
     // Sort State
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
+    // Pagination State
+    const ITEMS_PER_PAGE = 100;
+    const [page, setPage] = useState(1);
+
     // URL sync and other logic remains...
 
     // 3. Deep Linking Logic
@@ -169,6 +173,11 @@ export function ActivitiesPage() {
 
         return result;
     }, [allActivities, sortConfig, searchQuery, sourceFilter, datePreset, minDist, maxDist, minTime, maxTime]);
+
+    // Reset pagination when filters change
+    useEffect(() => {
+        setPage(1);
+    }, [sortConfig, sourceFilter, datePreset, minDist, maxDist, minTime, maxTime, activeSmartFilters]);
 
 
     // Handlers
@@ -322,21 +331,17 @@ export function ActivitiesPage() {
                                     placeholder="Sök på aktivitet, eller prova '>10km', '<4:30/km'..."
                                     value={searchQuery}
                                     onChange={e => {
-                                        const val = e.target.value;
-                                        setSearchQuery(val);
+                                        setSearchQuery(e.target.value);
+                                        // Reset pagination on search
+                                        setPage(1);
 
-                                        const { filters, remainingText } = parseSmartQuery(val);
+                                        // Only show previews, don't auto-commit
+                                        const { filters } = parseSmartQuery(e.target.value);
                                         setPreviewFilters(filters);
-
-                                        // Auto-detect triggers for committing
-                                        const hasUnitSuffix = val.match(/(km|m|t|min|h)\s*$/i);
-                                        const hasSpaceTrigger = val.endsWith(' ');
-                                        const hasYearTrigger = val.match(/\d{4}\s+$/);
-
-                                        // Commit if:
-                                        // 1. Space entered
-                                        // 2. Clear unit suffix entered (and it's not just a prefix like 'k')
-                                        if (hasSpaceTrigger || (hasUnitSuffix && hasUnitSuffix[1]?.length > 0 && !val.endsWith(' '))) {
+                                    }}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            const { filters, remainingText } = parseSmartQuery(searchQuery);
                                             if (filters.length > 0) {
                                                 setActiveSmartFilters(prev => {
                                                     const existing = new Set(prev.map(f => f.originalQuery));
@@ -547,7 +552,7 @@ export function ActivitiesPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {processedActivities.map((activity, i) => {
+                        {processedActivities.slice(0, page * ITEMS_PER_PAGE).map((activity, i) => {
                             const isSelectedForMerge = selectedForMerge.has(activity.id);
                             const universalMatch = universalActivities.find(u => u.id === activity.id);
                             const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged';
@@ -677,6 +682,17 @@ export function ActivitiesPage() {
                         })}
                     </tbody>
                 </table>
+
+                {processedActivities.length > page * ITEMS_PER_PAGE && (
+                    <div className="p-4 border-t border-white/5 flex justify-center bg-slate-900/50">
+                        <button
+                            onClick={() => setPage(p => p + 1)}
+                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 px-6 rounded-xl transition-colors text-xs uppercase tracking-wider"
+                        >
+                            Visa fler aktiviteter ({processedActivities.length - page * ITEMS_PER_PAGE} kvar)
+                        </button>
+                    </div>
+                )}
 
                 {processedActivities.length === 0 && (
                     <div className="p-12 text-center flex flex-col items-center gap-4">

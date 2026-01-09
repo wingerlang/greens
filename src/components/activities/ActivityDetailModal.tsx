@@ -427,20 +427,48 @@ export function ActivityDetailModal({
                         {/* Header */}
                         <div className="flex items-start justify-between">
                             <div>
-                                <h2 className="text-2xl font-black text-white capitalize flex items-center gap-3">
-                                    {activity.type}
-                                    {/* Edit Button */}
-                                    {!isMerged && activity.source !== 'strava' && (
-                                        <button
-                                            onClick={() => setIsEditing(true)}
-                                            className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
-                                            title="Redigera aktivitet"
-                                        >
-                                            ✎
-                                        </button>
-                                    )}
-                                </h2>
-                                <p className="text-slate-400 font-mono">{activity.date}</p>
+                                <div className="flex items-center gap-3">
+                                    <h2 className="text-2xl font-black text-white capitalize flex items-center gap-3">
+                                        {activity.type}
+                                        {/* Edit Button */}
+                                        {!isMerged && activity.source !== 'strava' && (
+                                            <button
+                                                onClick={() => setIsEditing(true)}
+                                                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+                                                title="Redigera aktivitet"
+                                            >
+                                                ✎
+                                            </button>
+                                        )}
+                                    </h2>
+                                    {/* Prominent Strava Link in Header */}
+                                    {(() => {
+                                        let stravaLink = null;
+                                        if (activity.source === 'strava' && activity.externalId) {
+                                            stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
+                                        } else if (isMergedActivity) {
+                                            const stravaOriginals = originalActivities
+                                                .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
+                                                .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
+                                            if (stravaOriginals.length > 0) {
+                                                const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
+                                                stravaLink = `https://www.strava.com/activities/${extId}`;
+                                            }
+                                        }
+
+                                        return stravaLink ? (
+                                            <a
+                                                href={stravaLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="bg-[#FC4C02]/10 border border-[#FC4C02]/20 text-[#FC4C02] hover:bg-[#FC4C02] hover:text-white px-2.5 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-1.5 shadow-lg shadow-[#FC4C02]/5"
+                                            >
+                                                <span>🔗</span> Strava
+                                            </a>
+                                        ) : null;
+                                    })()}
+                                </div>
+                                <p className="text-slate-400 font-mono text-sm">{activity.date}</p>
                             </div>
                             <button onClick={onClose} className="text-slate-500 hover:text-white text-2xl">×</button>
                         </div>
@@ -834,6 +862,128 @@ export function ActivityDetailModal({
                                         </div>
                                     ) : null}
                                 </div>
+
+                                {/* Strava Data Card (for Strava-sourced activities) */}
+                                {(activity.source === 'strava' || isMergedActivity || isMerged) && (
+                                    <div className="bg-[#FC4C02]/5 border border-[#FC4C02]/20 rounded-2xl p-5 space-y-4 shadow-xl shadow-[#FC4C02]/5">
+                                        <div className="flex items-center justify-between">
+                                            <h4 className="font-black text-[#FC4C02] uppercase text-xs tracking-widest flex items-center gap-2">
+                                                <span>🔥</span> Strava-data
+                                            </h4>
+                                            {(() => {
+                                                // Link extraction logic (reused from header)
+                                                let stravaLink = null;
+                                                if (activity.source === 'strava' && activity.externalId) {
+                                                    stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
+                                                } else if (isMergedActivity) {
+                                                    const stravaOriginals = originalActivities
+                                                        .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
+                                                        .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
+                                                    if (stravaOriginals.length > 0) {
+                                                        const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
+                                                        stravaLink = `https://www.strava.com/activities/${extId}`;
+                                                    }
+                                                }
+
+                                                return stravaLink ? (
+                                                    <a
+                                                        href={stravaLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="text-[10px] font-bold text-white bg-[#FC4C02] px-3 py-1.5 rounded-lg hover:shadow-lg hover:shadow-[#FC4C02]/20 transition-all flex items-center gap-1.5 uppercase tracking-tighter"
+                                                    >
+                                                        Öppna i Strava ↗
+                                                    </a>
+                                                ) : null;
+                                            })()}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
+                                            {/* Moving vs Elapsed Time */}
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Tid (Rörelse / Total)</span>
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
+                                                    {perf?.elapsedTimeSeconds && (
+                                                        <span className="text-xs text-slate-500 font-bold">/ {formatDuration(perf.elapsedTimeSeconds)}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Energy */}
+                                            <div className="flex flex-col">
+                                                <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
+                                                <span className="text-xl font-black text-white">{activity.caloriesBurned || perf?.calories || '-'} <span className="text-[10px] uppercase text-slate-500">kcal</span></span>
+                                                {perf?.kilojoules && <span className="text-[9px] text-[#FC4C02] font-black">{perf.kilojoules} KJ</span>}
+                                            </div>
+
+                                            {/* Heart Rate */}
+                                            {(perf?.avgHeartRate || activity.avgHeartRate) && (
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Medelpuls</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-xl font-black text-white">{Math.round(perf?.avgHeartRate || activity.avgHeartRate || 0)}</span>
+                                                        <span className="text-[10px] uppercase text-slate-500">bpm</span>
+                                                        {perf?.maxHeartRate && <span className="text-[9px] text-red-500 font-black ml-1">MAX {Math.round(perf.maxHeartRate)}</span>}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Watts (Cycling only) */}
+                                            {perf?.averageWatts && (
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effekt</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-xl font-black text-white">{Math.round(perf.averageWatts)}</span>
+                                                        <span className="text-[10px] uppercase text-slate-500">w</span>
+                                                        {perf?.maxWatts && <span className="text-[9px] text-indigo-400 font-black ml-1">MAX {Math.round(perf.maxWatts)}</span>}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Achievements & Kudos */}
+                                            {(perf?.achievementCount !== undefined || perf?.prCount !== undefined || perf?.kudosCount !== undefined) && (
+                                                <div className="flex flex-col col-span-2">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Engagemang & Prestationer</span>
+                                                    <div className="flex items-center gap-4">
+                                                        {perf?.prCount !== undefined && (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-orange-400">⚡</span>
+                                                                <span className="text-lg font-black text-white">{perf.prCount}</span>
+                                                                <span className="text-[9px] text-slate-500 uppercase font-bold">PB</span>
+                                                            </div>
+                                                        )}
+                                                        {perf?.achievementCount !== undefined && (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-yellow-400">🏆</span>
+                                                                <span className="text-lg font-black text-white">{perf.achievementCount}</span>
+                                                                <span className="text-[9px] text-slate-500 uppercase font-bold">Awards</span>
+                                                            </div>
+                                                        )}
+                                                        {perf?.kudosCount !== undefined && (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="text-pink-400">❤️</span>
+                                                                <span className="text-lg font-black text-white">{perf.kudosCount}</span>
+                                                                <span className="text-[9px] text-slate-500 uppercase font-bold">Kudos</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Max Speed */}
+                                            {perf?.maxSpeed && (
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Maxfart</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-xl font-black text-white">{perf.maxSpeed.toFixed(1)}</span>
+                                                        <span className="text-[10px] uppercase text-slate-500">km/h</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Notes */}
                                 {(activity.notes || perf?.notes) && (

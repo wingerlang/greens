@@ -23,6 +23,7 @@ export interface HealthStats {
         strengthSessions: number;
         totalDistance: number;
         totalCardioDuration: number;
+        cardioSessions: number;
     };
 }
 
@@ -52,6 +53,7 @@ export interface DaySnapshot {
         isStrength: number; // 0 or 1
         distance: number;
         duration: number;
+        cardioSessions: number;
     };
 }
 
@@ -94,8 +96,9 @@ export function aggregateHealthData(
             tonnage: acc.tonnage + (e.tonnage || 0),
             isStrength: acc.isStrength + (e.type === 'strength' ? 1 : 0),
             distance: acc.distance + (e.distance || 0),
-            duration: acc.duration + (e.durationMinutes || 0)
-        }), { intervals: 0, longRuns: 0, races: 0, tonnage: 0, isStrength: 0, distance: 0, duration: 0 });
+            duration: acc.duration + (e.durationMinutes || 0),
+            cardioSessions: acc.cardioSessions + (e.type !== 'strength' ? 1 : 0)
+        }), { intervals: 0, longRuns: 0, races: 0, tonnage: 0, isStrength: 0, distance: 0, duration: 0, cardioSessions: 0 });
 
         snapshots.unshift({
             date: dateStr,
@@ -130,6 +133,18 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
         calories: acc.calories + s.nutrition.calories
     }), { sleep: 0, water: 0, caffeine: 0, protein: 0, calories: 0 });
 
+    // Metric-specific counts for more accurate averages
+    // We count a day if it has a value > 0 OR if it's explicitly incomplete but has some data (though usually 0 data means 0 average)
+    // Actually, user wants averages for *logged* days. So if I logged 0, does it count? 
+    // Usually "logged" means > 0 for things like Caffeine/Water. For Calories/Protein, 0 is unlikely if logged.
+    // We will use > 0 as the indicator for "logged day" for these metrics to avoid "empty" days dragging down the average.
+
+    const calorieDays = completeSnapshots.filter(s => s.nutrition.calories > 0).length || 1;
+    const proteinDays = completeSnapshots.filter(s => s.nutrition.protein > 0).length || 1;
+    const caffeineDays = completeSnapshots.filter(s => (s.vitals.caffeine || 0) > 0).length || 1;
+    const waterDays = completeSnapshots.filter(s => s.vitals.water > 0).length || 1;
+    const sleepDays = completeSnapshots.filter(s => s.vitals.sleep > 0).length || 1;
+
     // Weight trend should probably use all snapshots that HAVE weight, even if incomplete nutrition
     const weightSnapshots = snapshots.filter(s => s.weight !== undefined);
     const weightTrend = weightSnapshots.length > 1 ? weightSnapshots[weightSnapshots.length - 1].weight! - weightSnapshots[0].weight! : 0;
@@ -138,7 +153,8 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
     const vitaminCoverage: Record<string, number> = {};
     Object.keys(RDA).forEach(key => {
         const total = completeSnapshots.reduce((sum, s) => sum + ((s.nutrition as any)[key] || 0), 0);
-        vitaminCoverage[key] = Math.round((total / (completeCount * (RDA as any)[key])) * 100);
+        // coverage is also based on days where we actually have nutrition data (calorieDays)
+        vitaminCoverage[key] = Math.round((total / (calorieDays * (RDA as any)[key])) * 100);
     });
 
     // Protein Quality Score (0-100) (use complete snapshots)
@@ -146,23 +162,19 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
         const cats = s.nutrition.proteinCategories || [];
         return cats.includes('soy_quinoa') || (cats.includes('legume') && cats.includes('grain'));
     }).length;
-    const proteinQualityScore = Math.round((qualityDays / completeCount) * 100);
+    const proteinQualityScore = Math.round((qualityDays / proteinDays) * 100); // normalized against protein-logged days
 
     // Logging Consistency (accounts for all days)
     const activeDays = snapshots.filter(s => s.hasLogs && !s.vitals.incomplete).length;
     const untrackedDays = snapshots.filter(s => s.isUntracked || s.vitals.incomplete).length;
     const loggingConsistency = Math.round((activeDays / totalCount) * 100);
 
-    // Sleep & Water Consistency (Non-zero days, but also not explicitly marked incomplete if we want accuracy)
-    const sleepDays = snapshots.filter(s => s.vitals.sleep > 0).length || 1;
-    const waterDays = snapshots.filter(s => s.vitals.water > 0).length || 1;
-
-    const avgSleep = totals.sleep / (completeSnapshots.filter(s => s.vitals.sleep > 0).length || 1);
-    const avgWater = totals.water / (completeSnapshots.filter(s => s.vitals.water > 0).length || 1);
-
-    // Consistency percentages for UI
+    // Consistency for UI (keep as % of total period)
     const sleepConsistency = Math.round((snapshots.filter(s => s.vitals.sleep > 0).length / totalCount) * 100);
     const waterConsistency = Math.round((snapshots.filter(s => s.vitals.water > 0).length / totalCount) * 100);
+
+    const avgSleep = totals.sleep / sleepDays;
+    const avgWater = totals.water / waterDays;
 
     // Exercise Breakdown (Exercise is usually complete even if nutrition isn't)
     const exerciseBreakdown = snapshots.reduce((acc, s) => {
@@ -173,17 +185,18 @@ export function calculateHealthStats(snapshots: DaySnapshot[]): HealthStats {
         acc.strengthSessions += s.exerciseDeatils.isStrength;
         acc.totalDistance += s.exerciseDeatils.distance;
         acc.totalCardioDuration += s.exerciseDeatils.duration;
+        acc.cardioSessions += s.exerciseDeatils.cardioSessions;
         return acc;
-    }, { intervals: 0, longRuns: 0, races: 0, totalTonnage: 0, strengthSessions: 0, totalDistance: 0, totalCardioDuration: 0 });
+    }, { intervals: 0, longRuns: 0, races: 0, totalTonnage: 0, strengthSessions: 0, totalDistance: 0, totalCardioDuration: 0, cardioSessions: 0 });
 
     return {
         avgSleep,
         avgWater,
-        avgCaffeine: totals.caffeine / completeCount,
+        avgCaffeine: totals.caffeine / caffeineDays,
         weightTrend,
         totalCalories: totals.calories,
-        avgCalories: totals.calories / completeCount,
-        avgProtein: totals.protein / completeCount,
+        avgCalories: totals.calories / calorieDays,
+        avgProtein: totals.protein / proteinDays,
         proteinQualityScore,
         vitaminCoverage,
         loggingConsistency,

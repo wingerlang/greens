@@ -8,7 +8,9 @@ interface StravaActivity {
     type: string;
     start_date: string;
     elapsed_time: number;
+    moving_time: number;
     distance: number;
+    excludeFromStats?: boolean;
 }
 
 interface SyncDiffReport {
@@ -293,9 +295,30 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
                                             <div key={a.id} onClick={() => toggleNew(a.id)} className={`flex items-center gap-4 p-3 rounded-lg border cursor-pointer ${selectedNew.has(a.id) ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-950/30 border-white/5 hover:bg-slate-800'}`}>
                                                 <div className={`w-5 h-5 rounded flex items-center justify-center border ${selectedNew.has(a.id) ? 'bg-emerald-500 border-emerald-500 text-white' : 'border-slate-600'}`}>✓</div>
                                                 <div className="text-2xl">{EXERCISE_ICONS[a.type] || '⚡'}</div>
-                                                <div className="flex-1">
-                                                    <div className="font-bold text-white text-sm">{a.name}</div>
-                                                    <div className="text-xs text-slate-400">{new Date(a.start_date).toLocaleDateString()} • {a.distance ? (a.distance / 1000).toFixed(2) : 0} km • {a.elapsed_time ? (a.elapsed_time / 60).toFixed(0) : 0} min</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-bold text-white text-sm truncate">{a.name}</div>
+                                                    <div className="text-xs text-slate-400 flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
+                                                        <span>📅 {new Date(a.start_date).toLocaleDateString()}</span>
+                                                        <span>📏 {a.distance ? (a.distance / 1000).toFixed(2) : 0} km</span>
+                                                        <span className="flex items-center gap-1">
+                                                            ⏱️ <span className="text-emerald-400 font-medium">{(a.moving_time / 60).toFixed(1)}</span>
+                                                            <span className="text-slate-600">/</span>
+                                                            <span className="text-slate-500">{(a.elapsed_time / 60).toFixed(1)} min</span>
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {/* Exclude from PRs/Stats toggle */}
+                                                <div
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const next = { ...report, newActivities: report.newActivities.map(na => na.id === a.id ? { ...na, excludeFromStats: !na.excludeFromStats } : na) };
+                                                        setReport(next);
+                                                    }}
+                                                    className={`px-2 py-1 rounded border text-[10px] font-bold transition-all ${a.excludeFromStats ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-slate-300'}`}
+                                                    title="Markera som felaktig (exkludera från stats/PB)"
+                                                >
+                                                    {a.excludeFromStats ? 'EXKLUDERAD' : 'GILTIG'}
                                                 </div>
                                             </div>
                                         ))}
@@ -307,12 +330,32 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
                                             <div key={s.id} onClick={() => toggleChanged(s.id)} className={`flex items-start gap-4 p-3 rounded-lg border cursor-pointer ${selectedChanged.has(s.id) ? 'bg-amber-500/10 border-amber-500/30' : 'bg-slate-950/30 border-white/5 hover:bg-slate-800'}`}>
                                                 <div className={`w-5 h-5 mt-1 rounded flex items-center justify-center border ${selectedChanged.has(s.id) ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-600'}`}>✓</div>
                                                 <div className="text-2xl">{EXERCISE_ICONS[s.type] || '⚡'}</div>
-                                                <div className="flex-1">
-                                                    <div className="font-bold text-white text-sm">{s.name}</div>
-                                                    <div className="text-xs text-slate-400 mb-2">{new Date(s.start_date).toLocaleDateString()}</div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-bold text-white text-sm truncate">{s.name}</div>
+                                                    <div className="text-xs text-slate-400 flex flex-wrap gap-x-3 gap-y-1 mb-2">
+                                                        <span>📅 {new Date(s.start_date).toLocaleDateString()}</span>
+                                                        <span className="flex items-center gap-1">
+                                                            ⏱️ <span className="text-amber-400 font-medium">{(s.moving_time / 60).toFixed(1)}</span>
+                                                            <span className="text-slate-600">/</span>
+                                                            <span className="text-slate-500">{(s.elapsed_time / 60).toFixed(1)} min</span>
+                                                        </span>
+                                                    </div>
                                                     <div className="text-xs bg-black/30 p-2 rounded text-amber-300 font-mono">
                                                         {changes.map((c, i) => <div key={i}>• {c}</div>)}
                                                     </div>
+                                                </div>
+
+                                                {/* Exclude from PRs/Stats toggle */}
+                                                <div
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const next = { ...report, changedActivities: report.changedActivities.map(ca => ca.strava.id === s.id ? { ...ca, strava: { ...ca.strava, excludeFromStats: !ca.strava.excludeFromStats } } : ca) };
+                                                        setReport(next);
+                                                    }}
+                                                    className={`px-2 py-1 rounded border text-[10px] font-bold transition-all ${s.excludeFromStats ? 'bg-red-500/20 border-red-500/40 text-red-400' : 'bg-slate-800 border-white/5 text-slate-500 hover:text-slate-300'}`}
+                                                    title="Markera som felaktig (exkludera från stats/PB)"
+                                                >
+                                                    {s.excludeFromStats ? 'EXKLUDERAD' : 'GILTIG'}
                                                 </div>
                                             </div>
                                         ))}

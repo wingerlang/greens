@@ -24,6 +24,7 @@ import {
     RotateCcw
 } from 'lucide-react';
 import { ExerciseEntry, WeightEntry } from '../../models/types.ts';
+import { formatActivityDuration } from '../../utils/formatters.ts';
 import { EXERCISE_TYPES } from '../../components/training/ExerciseModal.tsx';
 
 // --- Types ---
@@ -176,7 +177,7 @@ export function ToolsReplayPage() {
                     isGold: isRace || isPB,
                     title: isRace ? 'TÄVLING!' : (pbs ? 'NYTT PERSONBÄSTA!' : (typeConfig?.label || 'Träning')),
                     subtitle: pbs ? pbs[0] : (ex.title || ex.notes || 'Inga anteckningar'),
-                    value: ex.distance ? `${ex.distance} km` : `${ex.durationMinutes} min`,
+                    value: ex.distance ? `${ex.distance} km` : formatActivityDuration(ex.durationMinutes),
                     color: isRace ? 'bg-amber-400' : (isPB ? 'bg-amber-300' : (ex.type === 'strength' ? 'bg-emerald-500' : 'bg-blue-500')),
                     icon: isRace ? <Trophy size={16} /> : (isPB ? <Trophy size={16} /> : (ex.type === 'strength' ? <Dumbbell size={16} /> : <Activity size={16} />))
                 });

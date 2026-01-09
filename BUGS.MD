@@ -4,28 +4,30 @@
 * Aktiva mål bör ha ett kryss så att man kan ta bort dem.
 * Tydliggör huruvida "kalorimål" behövs nu när vi har ett viktmål. Viktmål kan vara en "kalorimål" i sig, och vi kan sätta vikten på "stabil" - det är inget "viktnedgångsmål".
 
-Introducera koncpetet "Inkomplett" för att markera att en dag inte blev färdigt ifylld. Antingen för att kunna hitta inkompletta dagar, men annars för att "bortse" ifrån kaloriräkningens snitt. Det ska vara tydligt vilka dagar som är inkompletta och kompletta. Det ska vara enkelt att spara och persistera.
-
-När vi hovrar över en dags aktivitet på dashboardens "SENASTE 7 DAGARNA" - lägg till en  ~1px blur på bakgrunden för att fokusera på det vi hovrar på.
-
-NOcco o clock - lägg till en "avbryt" knapp.
-Kaffe ska stänga modalen. Kaffe och/eller nocco ska uppdatera koffeinet på dashboarden.
 
 Lägg till "koffein" på något lämpligt sätt i matdatabasen. Kaffe och nocco ska ha koffein tillagt.
 
 
-Profil:
-"Lägg till plats" - det tycks INTE persisteras. Det MÅSTE persisteras ovillkorligt. Lös root cause. När vi sparar datan ska vi få success eller fail.
+Strava-aktivieter: Det ska vara "moving" time. Vissa aktiviteter har felaktig moving time (t.ex. om man springer med död gps). Därför ska vi printa ut BÅDE elapsed time och moving time, men ange tiden i moving time. Vi ska också kunna markera typ "not eligible for PB", eller "felaktig" eller
 
-Vår "feed" ska synas här, vilket ska speglas i "visa som" också.
+-----
+"Time pickers". Vi har en extremt mängd olika timepickers. Jag vill att vi använder samma och återanvänder alla kod
 
-/profile/biometrics - 
-grafen över vikt är helt tom även om jag ser datan
-Mätningarna tycks inte laddas in, varken "senaste mätningar" eller på Mått-fliken.
+ALL, <nuvarande år>, <aktiv träningsperiod>, 7D, 14D, 30D, 3M, 6M, 12M, <föregående år>, <andra träningsperiod som en lista>, TTM (12M). Koden ska vara extremt smart och flexibel. Den ska fortfarande kunna vara "sticky" och stödja lite olika storlekar (t.ex. dölja vissa av peruodenra. Dashboarden behöver bara några enstaka (7D, 14D, 30D, i år )). Det ska finnas en "kompakt" vy och en "snygg" vy - villkorat.
 
-På inställningar "Nocco 'o Clock" - lägg till en knapp för att "testa" den så man kan se hur den ska se ut.
+--
+Möjliggör att starta hela projektet med NodeJS. Undersök vad som är Deno-specifikt och se om det går att ersätta med en Node-verison (utan att försämra det). Lokalt kommer jag vilja köra det via Deno, men på vissa miljöer som är NodeJS-only vore det föredraget. Framförallt är det för AI-agenters skulle som har bättre stöd för Deno.
 
-På /profile/biometrics
-- Målvikt verkar saknas (den ska hämtas från nuvarande träningsperiodsmål)
-"TILL MÅLVIKT
-80.0 kg kvar" - då min vikt är 80kg antar jag att den beräknar "nu vs undefined" och får fram nu, det är helt tokigt och borde åtgärdas.
+-- 
+På /stryka
+"Pass denna vecka" ska enbart inkludera styrkepass (men kondition inom parentes).
+
+
+På year-in-review:
+Snygga till url (url year-in-review -> review, år ska ha - eller _, inte %2C)
+"Föredelning" - grafens label har svart text, syns knappt.
+"Distans per vecka (Löpning)" - när den sträcker sig under multipla år får den skifta till "Distans mer månad" istället, då bredden blir helt galen.
+
+
+Styrkeövning:
+"All-time PB ska vara "Tyngsta lyft". Lägg till en "Bästa lyft" som står t.ex.  7x100kg (1eRM: 130KG)

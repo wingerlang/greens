@@ -36,14 +36,53 @@ interface OmniboxProps {
 
 // Navigation routes for slash commands
 const NAVIGATION_ROUTES = [
-    { path: '/calories', label: 'Kalorier', aliases: ['kalorier', 'kcal', 'cal', 'calories'], icon: '◎' },
-    { path: '/recipes', label: 'Recept', aliases: ['recept', 'recipes', 'recipe'], icon: '📖' },
+    // Core
+    { path: '/', label: 'Dashboard', aliases: ['hem', 'home', 'start', 'dashboard'], icon: '🏠' },
     { path: '/planera', label: 'Veckoplanering', aliases: ['planera', 'plan', 'vecka', 'weekly'], icon: '📅' },
     { path: '/training', label: 'Träning', aliases: ['träning', 'training', 'gym', 'workout'], icon: '💪' },
-    { path: '/pantry', label: 'Skafferi', aliases: ['skafferi', 'pantry', 'förråd'], icon: '🗄️' },
-    { path: '/database', label: 'Databas', aliases: ['databas', 'database', 'db', 'livsmedel'], icon: '📊' },
-    { path: '/', label: 'Dashboard', aliases: ['hem', 'home', 'start', 'dashboard'], icon: '🏠' },
-    { path: '/health', label: 'Hälsa / Mått', aliases: ['hälsa', 'health', 'halsa', 'mått', 'mät', 'body', 'measurements', 'vikt', 'weight', 'sömn', 'sleep', 'träning'], icon: '📏' },
+
+    // Tools
+    { path: '/tools', label: 'Verktyg & Kalkylatorer', aliases: ['tools', 'verktyg', 'kalkylator', 'calculators'], icon: '🛠️' },
+    { path: '/tools/1rm', label: '1RM & Lastning', aliases: ['1rm', 'max', 'lastning', 'plate', 'loading', 'bänkpress', 'knäböj', 'marklyft', 'bench', 'squat', 'deadlift'], icon: '🏋️' },
+    { path: '/tools/race', label: 'Race Predictor', aliases: ['race', 'predictor', 'vdot', 'riegel', 'prognos', 'tävlingstid'], icon: '🏃' },
+    { path: '/tools/race-planner', label: 'Race Planner', aliases: ['raceplan', 'planner', 'lopp', 'marathon', 'halvmarathon', 'lidingö', 'vasaloppet'], icon: '📝' },
+    { path: '/tools/pace', label: 'Pace Converter', aliases: ['pace', 'tempo', 'km/min', 'min/km', 'konvertera', 'hastighet'], icon: '⏱️' },
+    { path: '/tools/cooper', label: 'Coopers Test', aliases: ['cooper', 'vo2max', '12min', 'konditionstest'], icon: '👟' },
+    { path: '/tools/hr', label: 'Pulszoner', aliases: ['puls', 'hr', 'heartrate', 'zoner', 'zones', 'karvonen'], icon: '💓' },
+    { path: '/tools/power', label: 'Energiberäknare', aliases: ['power', 'watt', 'cykling', 'energi', 'kaloriförbrukning'], icon: '⚡' },
+    { path: '/tools/hyrox', label: 'Hyrox Predictor', aliases: ['hyrox', 'roxzone', 'wallballs', 'burpees', 'skierg', 'row'], icon: '👊' },
+    { path: '/tools/health', label: 'Hälsokalkylator', aliases: ['hälsa', 'bmi', 'bmr', 'tdee', 'vikt', 'kroppsfett'], icon: '⚕️' },
+    { path: '/tools/macros', label: 'Makrofördelning', aliases: ['makro', 'macros', 'protein', 'kolhydrater', 'fett', 'fördelning'], icon: '🥩' },
+    { path: '/tools/standards', label: 'Styrkestandard', aliases: ['standard', 'wilks', 'ipf', 'dots', 'nivå', 'ranking', 'jämför'], icon: '📊' },
+    { path: '/tools/olympic', label: 'Tyngdlyftning', aliases: ['olympic', 'ol', 'tyngdlyftning', 'ryck', 'stöt', 'snatch', 'clean', 'jerk', 'sinclair'], icon: '🏋️‍♀️' },
+    { path: '/tools/replay', label: 'Replay Mode', aliases: ['replay', 'återblick', 'tidslinje', 'historik', 'animation'], icon: '⏪' },
+
+    // Main Sections
+    { path: '/logg', label: 'Loggbok', aliases: ['logg', 'log', 'dagbok', 'activities', 'aktiviteter', 'historik'], icon: '📒' },
+    { path: '/styrka', label: 'Styrketräning', aliases: ['styrka', 'strength', 'lyft', 'övningar', 'exercises', 'pr', 'pb'], icon: '💪' },
+    { path: '/pass', label: 'Pass / Workouts', aliases: ['pass', 'workouts', 'rutiner', 'programmering', 'builder', 'bygg'], icon: '📝' },
+    { path: '/statistik', label: 'Statistik', aliases: ['statistik', 'stats', 'analys', 'data', 'charts', 'grafer'], icon: '📈' },
+    { path: '/mal', label: 'Mål', aliases: ['mål', 'goals', 'targets', 'målsättning'], icon: '🎯' },
+    { path: '/tävling', label: 'Tävling', aliases: ['tävling', 'competition', 'comp', 'event'], icon: '🏆' },
+    { path: '/community', label: 'Community', aliases: ['community', 'vänner', 'friends', 'social', 'users', 'användare'], icon: '👥' },
+    { path: '/feed', label: 'Feed', aliases: ['feed', 'flöde', 'lifestream', 'socialt', 'nyheter'], icon: '📱' },
+    { path: '/matchup', label: 'Matchup', aliases: ['matchup', 'jämför', 'kamrat', 'vs', 'duell'], icon: '⚔️' },
+    { path: '/exercises', label: 'Övningsbank', aliases: ['övningsbank', 'bank', 'bibliotek', 'library', 'övning'], icon: '📚' },
+    { path: '/review', label: 'Årssammanfattning', aliases: ['review', 'år', 'year', 'sammanfattning', 'recap'], icon: '📅' },
+    { path: '/docs', label: 'Dokumentation', aliases: ['docs', 'hjälp', 'regler', 'rules', 'manual', 'info'], icon: '📄' },
+
+    // Nutrition
+    { path: '/calories', label: 'Kalorier', aliases: ['kalorier', 'kcal', 'cal', 'calories', 'dagbok'], icon: '◎' },
+    { path: '/recipes', label: 'Recept', aliases: ['recept', 'recipes', 'recipe', 'matlagning'], icon: '📖' },
+    { path: '/pantry', label: 'Skafferi', aliases: ['skafferi', 'pantry', 'förråd', 'lager'], icon: '🗄️' },
+    { path: '/database', label: 'Databas', aliases: ['databas', 'database', 'db', 'livsmedel', 'sök'], icon: '🔍' },
+
+    // Health & System
+    { path: '/health', label: 'Hälsa / Mått', aliases: ['hälsa', 'health', 'halsa', 'mått', 'mät', 'body', 'measurements', 'vikt', 'weight', 'sömn', 'sleep'], icon: '📏' },
+    { path: '/admin', label: 'Admin', aliases: ['admin', 'administration', 'root', 'backend'], icon: '🔒' },
+    { path: '/api', label: 'API', aliases: ['api', 'utvecklare', 'developer', 'endpoints', 'docs'], icon: '🤖' },
+    { path: '/garmin', label: 'Garmin Sync', aliases: ['garmin', 'connect', 'sync', 'klocka', 'import'], icon: '⌚' },
+    { path: '/sync', label: 'Integrationer', aliases: ['integrationer', 'strava', 'polar', 'suunto', 'coros', 'export'], icon: '🔄' },
 ];
 
 // Exercise types
@@ -391,8 +430,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                 setSelectedIndex(prev => Math.max(prev - 1, 0));
             }
         };
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
+        globalThis.addEventListener('keydown', handleKeyDown);
+        return () => globalThis.removeEventListener('keydown', handleKeyDown);
     }, [onClose, selectableItems.length]);
 
     const logFoodItem = (item: FoodItem, quantity: number = 100) => {

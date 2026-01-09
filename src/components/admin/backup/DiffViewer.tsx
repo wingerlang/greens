@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import type { BackupSnapshot, BackupDiff, DiffChange, BackupEntityCounts } from '../../../models/backup.ts';
 import { compareSnapshots, getCategoryLabel, formatFieldValue, getDiffStats } from '../../../services/diffEngine.ts';
 import { backupService } from '../../../services/backupService.ts';
@@ -13,10 +13,24 @@ export function DiffViewer({ snapshots, onClose }: DiffViewerProps) {
     const [toId, setToId] = useState<string>(snapshots[0]?.id || '');
     const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
     const [filterType, setFilterType] = useState<'all' | 'ADDED' | 'REMOVED' | 'MODIFIED'>('all');
+    const [diff, setDiff] = useState<BackupDiff | null>(null);
+    const [isLoading, setIsLoading] = useState(false);
 
-    const diff = useMemo(() => {
-        if (!fromId || !toId || fromId === toId) return null;
-        return compareSnapshots(fromId, toId);
+    // Load diff when IDs change
+    useEffect(() => {
+        if (!fromId || !toId || fromId === toId) {
+            setDiff(null);
+            return;
+        }
+
+        setIsLoading(true);
+        compareSnapshots(fromId, toId)
+            .then(result => setDiff(result))
+            .catch(e => {
+                console.error('[DiffViewer] Error comparing snapshots:', e);
+                setDiff(null);
+            })
+            .finally(() => setIsLoading(false));
     }, [fromId, toId]);
 
     const stats = useMemo(() => diff ? getDiffStats(diff) : null, [diff]);
@@ -148,29 +162,67 @@ export function DiffViewer({ snapshots, onClose }: DiffViewerProps) {
                             <h4 className="text-sm font-bold text-white mb-3">Per kategori</h4>
                             <div className="space-y-2">
                                 {stats.categories.map(cat => (
-                                    <button
-                                        key={cat.name}
-                                        onClick={() => toggleCategory(cat.name)}
-                                        className="w-full flex items-center justify-between p-3 rounded-lg bg-white/[0.02] hover:bg-white/5 transition-colors text-left"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-sm">{getCategoryLabel(cat.name as keyof BackupEntityCounts)}</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 text-xs">
-                                            {cat.added > 0 && (
-                                                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">+{cat.added}</span>
-                                            )}
-                                            {cat.removed > 0 && (
-                                                <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">-{cat.removed}</span>
-                                            )}
-                                            {cat.modified > 0 && (
-                                                <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">~{cat.modified}</span>
-                                            )}
-                                            <span className="text-slate-600 ml-2">
-                                                {expandedCategories.has(cat.name) ? '▼' : '▶'}
-                                            </span>
-                                        </div>
-                                    </button>
+                                    <React.Fragment key={cat.name}>
+                                        <button
+                                            onClick={() => toggleCategory(cat.name)}
+                                            className="w-full flex items-center justify-between p-3 rounded-lg bg-white/[0.02] hover:bg-white/5 transition-colors text-left"
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-sm">{getCategoryLabel(cat.name as keyof BackupEntityCounts)}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs">
+                                                {cat.added > 0 && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">+{cat.added}</span>
+                                                )}
+                                                {cat.removed > 0 && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-red-500/20 text-red-400">-{cat.removed}</span>
+                                                )}
+                                                {cat.modified > 0 && (
+                                                    <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">~{cat.modified}</span>
+                                                )}
+                                                <span className="text-slate-600 ml-2">
+                                                    {expandedCategories.has(cat.name) ? '▼' : '▶'}
+                                                </span>
+                                            </div>
+                                        </button>
+
+                                        {/* Expanded Content */}
+                                        {expandedCategories.has(cat.name) && (
+                                            <div className="ml-4 pl-4 border-l border-white/5 space-y-2 py-2">
+                                                {diff.changes
+                                                    .filter(c => c.category === cat.name)
+                                                    .map((change, i) => (
+                                                        <div
+                                                            key={`${change.entityId}-${i}`}
+                                                            className={`rounded-lg border p-3 ${getChangeColor(change.type)}`}
+                                                        >
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span>{getChangeIcon(change.type)}</span>
+                                                                    <span className="text-sm font-medium">{change.entityLabel}</span>
+                                                                </div>
+                                                                <span className="text-[10px] opacity-60 uppercase">
+                                                                    {change.type === 'ADDED' ? 'Tillagd' : change.type === 'REMOVED' ? 'Borttagen' : 'Ändrad'}
+                                                                </span>
+                                                            </div>
+
+                                                            {change.type === 'MODIFIED' && change.fieldChanges && change.fieldChanges.length > 0 && (
+                                                                <div className="mt-2 pt-2 border-t border-current/10 space-y-1">
+                                                                    {change.fieldChanges.slice(0, 5).map((fc, j) => (
+                                                                        <div key={j} className="flex items-center gap-2 text-[10px]">
+                                                                            <span className="opacity-60 w-20 truncate">{fc.field}:</span>
+                                                                            <span className="line-through opacity-50">{formatFieldValue(fc.oldValue)}</span>
+                                                                            <span>→</span>
+                                                                            <span>{formatFieldValue(fc.newValue)}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        )}
+                                    </React.Fragment>
                                 ))}
                             </div>
                         </div>
@@ -183,8 +235,8 @@ export function DiffViewer({ snapshots, onClose }: DiffViewerProps) {
                                 key={type}
                                 onClick={() => setFilterType(type)}
                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filterType === type
-                                        ? 'bg-indigo-500 text-white'
-                                        : 'bg-white/5 text-slate-400 hover:text-white'
+                                    ? 'bg-indigo-500 text-white'
+                                    : 'bg-white/5 text-slate-400 hover:text-white'
                                     }`}
                             >
                                 {type === 'all' ? 'Alla' : type === 'ADDED' ? '➕ Tillagda' : type === 'REMOVED' ? '➖ Borttagna' : '✏️ Ändrade'}

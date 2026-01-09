@@ -116,8 +116,9 @@ export interface StrengthWorkout {
     // Metadata
     duration?: number;               // minutes
     notes?: string;
-    source: 'strengthlog' | 'manual' | 'garmin';
+    source: 'strengthlog' | 'manual' | 'garmin' | 'strava' | 'hevy';
     sourceWorkoutName?: string;      // Original name from import
+    excludeFromStats?: boolean;
 
     createdAt: string;
     updatedAt: string;

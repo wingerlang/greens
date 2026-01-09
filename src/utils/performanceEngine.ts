@@ -24,7 +24,9 @@ export function calculateAdaptiveGoals(
     const baseCarbs = settings.dailyCarbsGoal || 50; // Often low for keto/deff
     const baseFat = settings.dailyFatGoal || 30;
 
-    const totalBurned = exercises.reduce((sum, ex) => sum + ex.caloriesBurned, 0);
+    const totalBurned = exercises
+        .filter(ex => !(ex.excludeFromStats || (ex as any).performance?.excludeFromStats))
+        .reduce((sum, ex) => sum + ex.caloriesBurned, 0);
 
     if (totalBurned <= 50) {
         return {
@@ -143,11 +145,15 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
     let isPersonalBest = false;
 
     // Filter history to current activity type and exclude current activity
+    // Also EXCLUDE any activities marked as faulty (excludeFromStats)
     const activityDate = new Date(activity.date).getTime();
     const historyBefore = history.filter(h =>
         h.id !== activity.id &&
+        !(h.excludeFromStats || h.performance?.excludeFromStats) &&
         new Date(h.date).getTime() < activityDate
     );
+
+    const isCurrentExcluded = activity.excludeFromStats || activity.performance?.excludeFromStats;
 
     // 1. RUNNING / CARDIO
     if (isRunning) {
@@ -216,12 +222,12 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
             components.push({ label: 'Uthållighets-boost', value: '+5', score: 50, max: 100, description: 'Bonus för pass över 30 minuter.', icon: '⏱️', color: 'text-blue-400' });
         }
 
-        if (historyBefore.length > 0) {
+        if (historyBefore.length > 0 && !isCurrentExcluded) {
             const runningHistory = historyBefore.filter(h => {
                 const t = (h.type || h.activityType || '').toLowerCase();
                 return ['running', 'run'].some(tag => t.includes(tag));
             });
-
+            // ... (rest of running PB logic)
             if (runningHistory.length > 0) {
                 const maxDist = Math.max(...runningHistory.map(h => h.distance || 0));
                 if (dist > maxDist && dist > 2) {
@@ -240,6 +246,10 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
                     }
                 }
             }
+        }
+
+        if (isCurrentExcluded) {
+            components.push({ label: 'Data-varning', value: 'Exkluderad', score: 0, max: 100, description: 'Detta pass är markerat som felaktigt och räknas ej i statistik/PBs.', icon: '⚠️', color: 'text-red-400' });
         }
 
         const roundedScore = Math.min(100, Math.round(totalScore));
@@ -284,7 +294,7 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
             components.push({ label: 'Volym-boost', value: '+10', score: 100, max: 100, description: 'Bonus för rejäl passlängd.', icon: '⏱️', color: 'text-indigo-400' });
         }
 
-        if (historyBefore.length > 0) {
+        if (historyBefore.length > 0 && !isCurrentExcluded) {
             const strengthHistory = historyBefore.filter(h => {
                 const t = (h.type || h.activityType || '').toLowerCase();
                 return ['strength', 'weightlifting', 'gym', 'styrka'].some(tag => t.includes(tag));
@@ -305,6 +315,10 @@ export function getPerformanceBreakdown(activity: any, history: any[] = []): Per
                     components.push({ label: 'PB Intensitet', value: '🏆', score: 100, max: 100, description: 'Ditt högsta arbetstempo hittills!', icon: '⚡', color: 'text-yellow-400', isPersonalBest: true });
                 }
             }
+        }
+
+        if (isCurrentExcluded) {
+            components.push({ label: 'Data-varning', value: 'Exkluderad', score: 0, max: 100, description: 'Detta pass är markerat som felaktigt och räknas ej i statistik/PBs.', icon: '⚠️', color: 'text-red-400' });
         }
 
         const roundedScore = Math.min(100, Math.round(totalScore));

@@ -7,6 +7,7 @@ import { ExerciseType } from '../models/types.ts';
 import { NutritionBreakdownModal } from './calories/NutritionBreakdownModal.tsx';
 import { useData } from '../context/DataContext.tsx';
 import { GlobalNotification } from './common/GlobalNotification.tsx';
+import { Footer } from './Footer.tsx';
 
 interface LayoutProps {
     children: ReactNode;
@@ -93,6 +94,7 @@ export function Layout({ children }: LayoutProps) {
             <main className="flex-1 w-full max-w-[1536px] mx-auto p-3 md:p-6">
                 {children}
             </main>
+            <Footer />
         </div>
     );
 }

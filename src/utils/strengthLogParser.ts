@@ -45,6 +45,25 @@ interface ParserContext {
 export function parseStrengthLogCSV(csvContent: string, userId: string): ParsedCSV {
     const lines = csvContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
+    // Detect format
+    // Legacy format has a specific header or "Workouts" keyword typically
+    // New (flat) format starts with "workout,start,end,exercise..."
+    const firstLine = lines[0].toLowerCase();
+    const isNewFormat = firstLine.startsWith('workout,start,end');
+    const isHevyFormat = (firstLine.includes('"title"') && firstLine.includes('"start_time"')) || (firstLine.includes('title,') && firstLine.includes('start_time,'));
+
+    if (isNewFormat) {
+        return parseNewStrengthLogFormat(lines, userId);
+    }
+
+    if (isHevyFormat) {
+        return parseHevyLogFormat(lines, userId);
+    }
+
+    return parseLegacyStrengthLogCSV(lines, userId);
+}
+
+function parseLegacyStrengthLogCSV(lines: string[], userId: string): ParsedCSV {
     const context: ParserContext = {
         userId,
         currentWorkout: null,
@@ -88,9 +107,190 @@ export function parseStrengthLogCSV(csvContent: string, userId: string): ParsedC
 
     return {
         userInfo,
-        workouts: context.workouts,
+        workouts: context.workouts, // Legacy parser populates this array
         exercises: context.exercises,
         personalBests: Array.from(context.personalBests.values())
+    };
+}
+
+// ----------------------------------------------------------------------
+// New Flat Format Parser
+// ----------------------------------------------------------------------
+
+function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
+    // Header: workout,start,end,exercise,weight,bodyweight,extraWeight,assistingWeight,distanceKM,distanceM,reps,rpm,time-per-500,calories,time,warmup,max,fail,checked,setComment,workoutComment,form,sleep,calories,stress
+    // We'll map header names to indices
+    const header = parseCSVLine(lines[0]).map(h => h.trim());
+    const getIdx = (col: string) => header.indexOf(col);
+
+    const idx = {
+        workout: getIdx('workout'),
+        start: getIdx('start'),
+        end: getIdx('end'),
+        exercise: getIdx('exercise'),
+        weight: getIdx('weight'),
+        bodyweight: getIdx('bodyweight'),
+        extraWeight: getIdx('extraWeight'),
+        distanceKM: getIdx('distanceKM'),
+        distanceM: getIdx('distanceM'),
+        reps: getIdx('reps'),
+        time: getIdx('time'),
+        warmup: getIdx('warmup'),
+        workoutComment: getIdx('workoutComment'),
+        sleep: getIdx('sleep'),
+        stress: getIdx('stress'),
+        calories: 23 // Warning: 'calories' appears twice in header (idx 13 and 23 in example). 23 is usually the workout metric? Or row metric?
+        // Let's use simple lookup for now.
+    };
+
+    const ctx: ParserContext = {
+        userId,
+        currentWorkout: null, // Not used strictly, we use map
+        currentExercise: null,
+        exercises: new Map(),
+        workouts: [],
+        personalBests: new Map(),
+        errors: []
+    };
+
+    const workoutMap = new Map<string, StrengthWorkout>();
+
+    // Skip header
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+
+        try {
+            const vals = parseCSVLine(line);
+
+            // 1. Identify Workout Group (by start timestamp + name)
+            const workoutName = vals[idx.workout] || 'Unknown Workout';
+            const startTimeStr = vals[idx.start];
+            const startDate = new Date(parseInt(startTimeStr));
+            const dateStr = startDate.toISOString().split('T')[0];
+            const workoutIdKey = `${startTimeStr}-${workoutName}`;
+
+            let workout = workoutMap.get(workoutIdKey);
+            if (!workout) {
+                workout = {
+                    id: generateStrengthId(),
+                    userId,
+                    date: dateStr,
+                    name: workoutName,
+                    source: 'strengthlog',
+                    exercises: [],
+                    totalVolume: 0,
+                    totalSets: 0,
+                    totalReps: 0,
+                    uniqueExercises: 0,
+                    createdAt: new Date().toISOString(), // or use startTime
+                    updatedAt: new Date().toISOString(),
+                    notes: vals[idx.workoutComment],
+                    // Optional metadata
+                    // bodyWeight: ?? Not clearly in row for whole workout, maybe in set data?
+                    sleep: parseFloat(vals[idx.sleep]) || undefined,
+                    stress: parseFloat(vals[idx.stress]) || undefined
+                };
+                workoutMap.set(workoutIdKey, workout);
+            }
+
+            // 2. Process Exercise
+            const exerciseName = vals[idx.exercise];
+            if (!exerciseName) continue;
+
+            const normalizedName = normalizeExerciseName(exerciseName);
+            if (!ctx.exercises.has(normalizedName)) {
+                ctx.exercises.set(normalizedName, {
+                    id: `ex-${normalizedName.replace(/\s/g, '-')}`,
+                    name: exerciseName,
+                    normalizedName,
+                    category: guessExerciseCategory(exerciseName),
+                    primaryMuscle: 'full_body',
+                    isCompound: guessIsCompound(exerciseName)
+                });
+            }
+            const exerciseDef = ctx.exercises.get(normalizedName)!;
+
+            // Find or create Exercise Group in Workout
+            // Note: In flat CSV, sets for same exercise might be scattered if user did circuit?
+            // Usually simpler to just append or find existing by ID.
+            let workoutExercise = workout.exercises.find(we => we.exerciseId === exerciseDef.id);
+            if (!workoutExercise) {
+                workoutExercise = {
+                    exerciseId: exerciseDef.id,
+                    exerciseName: exerciseName,
+                    sets: []
+                };
+                workout.exercises.push(workoutExercise);
+            }
+
+            // 3. Process Set
+            // weight, bodyweight, extraWeight
+            // Logic: if bodyweight is set, use it?
+            const weightVal = parseFloat(vals[idx.weight]) || 0;
+            const bodyweightVal = parseFloat(vals[idx.bodyweight]);
+            const extraWeightVal = parseFloat(vals[idx.extraWeight]);
+            const repsVal = parseInt(vals[idx.reps]) || 0;
+            const distKM = parseFloat(vals[idx.distanceKM]) || 0;
+            const distM = parseFloat(vals[idx.distanceM]) || 0;
+            const timeVal = vals[idx.time]; // "00:04:44" or similar
+            const isWarmup = (vals[idx.warmup] || '').toLowerCase() === 'true';
+
+            const set: StrengthSet = {
+                setNumber: workoutExercise.sets.length + 1,
+                reps: repsVal,
+                weight: weightVal,
+                isWarmup
+            };
+
+            // Handle Bodyweight logic
+            if (!isNaN(bodyweightVal) && bodyweightVal > 0) {
+                set.isBodyweight = true;
+                set.bodyweight = bodyweightVal;
+                // If weight column is empty/zero but BW is present, user might mean BW exercise
+                // Commonly: weight = bodyweight + extraWeight
+                if (!set.weight) set.weight = bodyweightVal + (extraWeightVal || 0);
+            }
+            if (!isNaN(extraWeightVal)) {
+                set.extraWeight = extraWeightVal;
+            }
+
+            // Handle Distance/Time
+            const totalDistM = (distKM * 1000) + distM;
+            if (totalDistM > 0) {
+                set.distance = totalDistM;
+                set.distanceUnit = 'm';
+            }
+            if (timeVal) {
+                set.time = timeVal;
+                set.timeSeconds = parseTimeToSeconds(timeVal);
+            }
+
+            workoutExercise.sets.push(set);
+
+            // 4. Update Stats & PBs
+            // We'll do a final pass for stats, but PBs can be tracked incrementally or after.
+            // Let's use the helper to track PBs, but we need to mock context slightly or refactor trackPersonalBest
+            // trackPersonalBest expects context.currentWorkout to be set.
+            ctx.currentWorkout = workout;
+            trackPersonalBest(ctx, exerciseDef, set);
+
+        } catch (e) {
+            ctx.errors.push(`Row ${i}: ${e}`);
+        }
+    }
+
+    // Finalize all workouts (calc totals)
+    for (const workout of workoutMap.values()) {
+        ctx.currentWorkout = workout;
+        finalizeWorkout(ctx); // This pushes to ctx.workouts and clears ctx.currentWorkout
+    }
+
+    return {
+        userInfo: { name: 'User', email: '' }, // New format lacks this
+        workouts: ctx.workouts,
+        exercises: ctx.exercises,
+        personalBests: Array.from(ctx.personalBests.values())
     };
 }
 
@@ -448,6 +648,199 @@ function trackPersonalBest(ctx: ParserContext, exercise: StrengthExercise, set: 
             previousBest: existing?.value
         });
     }
+}
+
+
+// ----------------------------------------------------------------------
+// Hevy / Generic Format Parser
+// ----------------------------------------------------------------------
+
+function parseHevyLogFormat(lines: string[], userId: string): ParsedCSV {
+    // Header: "title","start_time","end_time","description","exercise_title","superset_id","exercise_notes","set_index","set_type","weight_kg","reps","distance_km","duration_seconds","rpe"
+
+    // Helper to strip quotes
+    const stripQuotes = (s: string) => {
+        if (s.startsWith('"') && s.endsWith('"')) return s.slice(1, -1);
+        return s;
+    };
+
+    const header = parseCSVLine(lines[0]).map(h => stripQuotes(h).trim());
+    const getIdx = (col: string) => header.indexOf(col);
+
+    const idx = {
+        title: getIdx('title'),
+        start_time: getIdx('start_time'),
+        end_time: getIdx('end_time'),
+        exercise_title: getIdx('exercise_title'),
+        weight_kg: getIdx('weight_kg'),
+        reps: getIdx('reps'),
+        distance_km: getIdx('distance_km'),
+        duration_seconds: getIdx('duration_seconds'),
+        rpe: getIdx('rpe'),
+        exercise_notes: getIdx('exercise_notes'),
+        set_type: getIdx('set_type')
+    };
+
+    const ctx: ParserContext = {
+        userId,
+        currentWorkout: null,
+        currentExercise: null,
+        exercises: new Map(),
+        workouts: [],
+        personalBests: new Map(),
+        errors: []
+    };
+
+    const workoutMap = new Map<string, StrengthWorkout>();
+
+    // Skip header
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line) continue;
+
+        try {
+            const vals = parseCSVLine(line);
+            const val = (index: number) => {
+                const v = vals[index];
+                return v ? stripQuotes(v) : '';
+            };
+
+            // 1. Identify Workout Group
+            const workoutName = val(idx.title) || 'Unknown Workout';
+            const startTimeStr = val(idx.start_time); // "7 Jan 2026, 19:21"
+
+            // Parse Date: "7 Jan 2026, 19:21"
+            // JS Date constructor handles "7 Jan 2026 19:21" well usually, but removing comma helps
+            const dateParams = startTimeStr.replace(',', '');
+            const startDate = new Date(dateParams);
+
+            if (isNaN(startDate.getTime())) {
+                // If standard parse failed, fallback or skip
+                // Try simple manual parse if needed, but standard should work for "7 Jan 2026 19:21"
+                console.warn(`Invalid date: ${startTimeStr}`);
+                continue;
+            }
+
+            const dateStr = startDate.toISOString().split('T')[0];
+            const workoutIdKey = `${startTimeStr}-${workoutName}`;
+
+            let workout = workoutMap.get(workoutIdKey);
+            if (!workout) {
+                workout = {
+                    id: generateStrengthId(),
+                    userId,
+                    date: dateStr,
+                    name: workoutName,
+                    source: 'hevy',
+                    exercises: [],
+                    totalVolume: 0,
+                    totalSets: 0,
+                    totalReps: 0,
+                    uniqueExercises: 0,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                };
+                workoutMap.set(workoutIdKey, workout);
+            }
+
+            // Ensure workout is defined for TS
+            if (!workout) continue;
+
+            // 2. Process Exercise
+            const exerciseName = val(idx.exercise_title);
+            if (!exerciseName) continue;
+
+            const normalizedName = normalizeExerciseName(exerciseName);
+            if (!ctx.exercises.has(normalizedName)) {
+                ctx.exercises.set(normalizedName, {
+                    id: `ex-${normalizedName.replace(/\s/g, '-')}`,
+                    name: exerciseName,
+                    normalizedName,
+                    category: guessExerciseCategory(exerciseName),
+                    primaryMuscle: 'full_body',
+                    isCompound: guessIsCompound(exerciseName)
+                });
+            }
+            const exerciseDef = ctx.exercises.get(normalizedName)!;
+
+            // Find or create Exercise Group
+            // In Hevy export, sets are usually sequential rows.
+            // We check the last exercise added. If it matches, we append.
+            // If not, we check if it exists (for supersets mixed rows?) -- Hevy export usually groups sets?
+            // Actually Hevy export is flat row per set.
+            // If the row order is strictly chronological per set, we can just look at the last exercise in the array.
+
+            let workoutExercise = workout.exercises.length > 0 ? workout.exercises[workout.exercises.length - 1] : undefined;
+
+            // If the last exercise isn't this one, we create a new group.
+            // Note: This logic splits split-sets (A1, B1, A2, B2). 
+            // If we want to group all Squats together even if interleaved, we should search by ID using find().
+            // BUT, strictly preserving order of execution (A1, B1...) is often preferred for logs.
+            // However, our data model `StrengthWorkout` usually groups by exercise.
+            // Let's group by exercise ID to keep the model clean.
+
+            workoutExercise = workout.exercises.find(we => we.exerciseId === exerciseDef.id);
+            if (!workoutExercise) {
+                workoutExercise = {
+                    exerciseId: exerciseDef.id,
+                    exerciseName: exerciseName,
+                    sets: []
+                };
+                workout.exercises.push(workoutExercise);
+            }
+
+            // 3. Process Set
+            const weightVal = parseFloat(val(idx.weight_kg)) || 0;
+            const repsVal = parseInt(val(idx.reps)) || 0;
+            const distKmVal = parseFloat(val(idx.distance_km)) || 0;
+            const durationSecVal = parseInt(val(idx.duration_seconds)) || 0;
+            const rpeVal = parseFloat(val(idx.rpe));
+
+            const set: StrengthSet = {
+                setNumber: workoutExercise.sets.length + 1,
+                reps: repsVal,
+                weight: weightVal,
+                rpe: !isNaN(rpeVal) ? rpeVal : undefined
+            };
+
+            // Hevy specific: 'set_type' (normal, warmup, failure, drop)
+            const setType = val(idx.set_type).toLowerCase();
+            if (setType === 'warmup') set.isWarmup = true;
+            // if (setType === 'failure') ...
+            // if (setType === 'drop') ...
+
+            if (distKmVal > 0) {
+                set.distance = distKmVal * 1000;
+                set.distanceUnit = 'm';
+            }
+            if (durationSecVal > 0) {
+                set.timeSeconds = durationSecVal;
+                // Format time string if needed, or leave optional
+            }
+
+            workoutExercise.sets.push(set);
+
+            // 4. Update PBs
+            ctx.currentWorkout = workout;
+            trackPersonalBest(ctx, exerciseDef, set);
+
+        } catch (e) {
+            ctx.errors.push(`Row ${i}: ${e}`);
+        }
+    }
+
+    // Finalize
+    for (const workout of workoutMap.values()) {
+        ctx.currentWorkout = workout;
+        finalizeWorkout(ctx);
+    }
+
+    return {
+        userInfo: { name: 'User', email: '' },
+        workouts: ctx.workouts,
+        exercises: ctx.exercises,
+        personalBests: Array.from(ctx.personalBests.values())
+    };
 }
 
 // ============================================

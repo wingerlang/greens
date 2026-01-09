@@ -14,10 +14,11 @@ import { handleGetCommunityStats } from "./handlers/statistics.ts";
 import { handleAdminKvRoutes } from "./handlers/adminKv.ts";
 import { handleUploadRoutes } from "./handlers/upload.ts";
 import { handleDebugRoutes } from "./handlers/debug.ts";
+import { handleBackupRoutes } from "./handlers/backup.ts";
 import { debugMiddleware } from "./middleware/debugMiddleware.ts";
 import { handleRacePlanRoutes } from "./handlers/racePlans.ts";
 import { logError, logMetric } from "./utils/logger.ts";
-import { serveDir } from "https://deno.land/std@0.208.0/http/file_server.ts";
+import { serveDir } from "./utils/fileServer.ts";
 
 export async function router(req: Request): Promise<Response> {
     // Wrap with debug middleware
@@ -101,6 +102,8 @@ async function internalRouter(req: Request): Promise<Response> {
             response = await handleGetCommunityStats(req);
         } else if (url.pathname.startsWith("/api/debug")) {
             response = await handleDebugRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/backup")) {
+            response = await handleBackupRoutes(req, url, headers);
         } else {
             response = new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
         }
