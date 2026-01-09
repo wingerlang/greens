@@ -15,6 +15,7 @@ import { ProfilePage } from './pages/ProfilePage.tsx';
 import { TrainingPeriodPage } from './pages/TrainingPeriodPage.tsx';
 import { TrainingPage } from './pages/TrainingPage.tsx';
 import { PlanningPage } from './pages/PlanningPage.tsx';
+import { TrainingPlanningPage } from './pages/TrainingPlanningPage.tsx';
 import { ApiPage } from './pages/ApiPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
 import { DocumentationPage } from './components/DocumentationPage.tsx';
@@ -109,6 +110,8 @@ export function App() {
                                                 <Route path="vecka" element={<WeeklyPage />} />
                                                 <Route path="vecka/recept/:recipeId/*" element={<WeeklyPage />} />
                                                 <Route path="planera" element={<PlanningPage />} />
+                                                <Route path="planning/training" element={<TrainingPlanningPage />} />
+                                                <Route path="planera/traning" element={<TrainingPlanningPage />} />
                                                 <Route path="planner" element={<PlannerPage />} />
                                                 <Route path="pantry" element={<PantryPage />} />
                                                 <Route path="recipes" element={<RecipesPage />} />
