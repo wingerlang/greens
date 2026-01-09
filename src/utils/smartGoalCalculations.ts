@@ -1,4 +1,5 @@
-import { ExerciseEntry, ExerciseType, PerformanceGoalType } from "../models/types";
+import { ExerciseEntry, ExerciseType, PerformanceGoalType } from "../models/types.ts";
+import { getActivityMultiplier } from "./calculatorTypes.ts";
 
 // Helper to calculate BMR and TDEE based targets
 export const calculateCalorieTarget = (
@@ -6,13 +7,8 @@ export const calculateCalorieTarget = (
     activityLevel: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active' = 'moderate',
     goal: 'cut' | 'maintain' | 'bulk' = 'cut'
 ) => {
-    const multipliers = {
-        sedentary: 1.2,
-        light: 1.375,
-        moderate: 1.55,
-        active: 1.725,
-        very_active: 1.9
-    };
+    // Map legacy/simple levels to standard keys if needed, but getActivityMultiplier handles 'light'/'moderate' aliases
+    const multiplier = getActivityMultiplier(activityLevel);
 
     const adjustments = {
         cut: -500, // ~0.5kg loss/week
@@ -20,13 +16,13 @@ export const calculateCalorieTarget = (
         bulk: 300
     };
 
-    const tdee = Math.round(bmr * multipliers[activityLevel]);
+    const tdee = Math.round(bmr * multiplier);
     const target = Math.round(tdee + adjustments[goal]);
 
     return {
         tdee,
         target,
-        explanation: `Baserat på BMR (${bmr}) × aktivitetsnivå (${multipliers[activityLevel]}) ${adjustments[goal] >= 0 ? '+' : ''}${adjustments[goal]} kcal`
+        explanation: `Baserat på BMR (${bmr}) × aktivitetsnivå (${multiplier}) ${adjustments[goal] >= 0 ? '+' : ''}${adjustments[goal]} kcal`
     };
 };
 

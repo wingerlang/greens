@@ -3,6 +3,10 @@
  * BMI, BMR, TDEE, Deficit
  */
 
+import { ActivityLevel, getActivityMultiplier } from './calculatorTypes.ts';
+
+export { type ActivityLevel };
+
 export function calculateBMI(weightKg: number, heightCm: number): number {
     if (heightCm <= 0) return 0;
     const heightM = heightCm / 100;
@@ -18,17 +22,9 @@ export function calculateBMR(weightKg: number, heightCm: number, age: number, ge
     return Math.round(gender === 'male' ? base + 5 : base - 161);
 }
 
-export type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_active' | 'extra_active';
-
 export function calculateTDEE(bmr: number, activityLevel: ActivityLevel): number {
-    const multipliers: Record<ActivityLevel, number> = {
-        'sedentary': 1.2,      // Little or no exercise
-        'lightly_active': 1.375, // Light exercise 1-3 days/week
-        'active': 1.55,        // Moderate exercise 3-5 days/week
-        'very_active': 1.725,  // Hard exercise 6-7 days/week
-        'extra_active': 1.9    // Very hard exercise & physical job
-    };
-    return Math.round(bmr * (multipliers[activityLevel] || 1.2));
+    const multiplier = getActivityMultiplier(activityLevel);
+    return Math.round(bmr * multiplier);
 }
 
 export function calculateCalorieDeficit(
