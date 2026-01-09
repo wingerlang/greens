@@ -18,7 +18,7 @@ import { handleBackupRoutes } from "./handlers/backup.ts";
 import { debugMiddleware } from "./middleware/debugMiddleware.ts";
 import { handleRacePlanRoutes } from "./handlers/racePlans.ts";
 import { logError, logMetric } from "./utils/logger.ts";
-import { serveDir } from "https://deno.land/std@0.208.0/http/file_server.ts";
+import { serveDir } from "./utils/fileServer.ts";
 
 export async function router(req: Request): Promise<Response> {
     // Wrap with debug middleware

@@ -8,9 +8,11 @@ import { addDebugLog, getDebugContext } from "./utils/debugContext.ts";
  * Wrapped to intercept operations for debugging
  */
 
-const baseKv = await Deno.openKv("./greens.db");
+// @ts-ignore: Deno is polyfilled
+const baseKv = await (globalThis.Deno ? Deno.openKv("./greens.db") : (globalThis as any).Deno.openKv("./greens.db"));
 
 // Proxy handler to intercept KV operations
+// @ts-ignore: Deno is polyfilled
 const kvHandler: ProxyHandler<Deno.Kv> = {
     get(target, prop, receiver) {
         const original = Reflect.get(target, prop, receiver);

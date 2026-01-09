@@ -1,4 +1,4 @@
-import { encodeBase64 } from "jsr:@std/encoding/base64";
+import { encodeBase64 } from "./deps/encoding.ts";
 
 /**
  * Common password hashing utility using PBKDF2.

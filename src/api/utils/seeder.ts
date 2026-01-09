@@ -1,4 +1,4 @@
-import { parse } from "jsr:@std/csv";
+import { parse } from "./deps/csv.ts";
 import { foodRepo } from "../repositories/foodRepository.ts";
 import { createUser, getUser } from "../db/user.ts";
 import { FoodItem, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY } from "../../models/types.ts";
