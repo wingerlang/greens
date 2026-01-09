@@ -17,6 +17,7 @@ import { handleDebugRoutes } from "./handlers/debug.ts";
 import { handleBackupRoutes } from "./handlers/backup.ts";
 import { debugMiddleware } from "./middleware/debugMiddleware.ts";
 import { handleRacePlanRoutes } from "./handlers/racePlans.ts";
+import { handleExerciseMapperRoutes } from "./handlers/exerciseMapper.ts";
 import { logError, logMetric } from "./utils/logger.ts";
 import { serveDir } from "./utils/fileServer.ts";
 
@@ -96,6 +97,8 @@ async function internalRouter(req: Request): Promise<Response> {
             response = await handleParserRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/race-plans")) {
             response = await handleRacePlanRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/exercises/map")) {
+            response = await handleExerciseMapperRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/upload-temp") || url.pathname.startsWith("/api/parse-image")) {
             response = await handleUploadRoutes(req, url, headers);
         } else if (url.pathname === "/api/stats/community") {

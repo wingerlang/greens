@@ -11,6 +11,7 @@ import { DailyVitals, WeightEntry, SleepSession, IntakeLog, BodyMeasurementEntry
 import { Competition } from './social.ts';
 import { TrainingCycle } from './activity.ts';
 import { PerformanceGoal, TrainingPeriod } from './goals.ts';
+import { RacePlan } from './race.ts';
 
 /** Storage structure for LocalStorage persistence */
 export interface AppData {
@@ -32,6 +33,7 @@ export interface AppData {
     trainingCycles?: TrainingCycle[];
     performanceGoals?: PerformanceGoal[];
     trainingPeriods?: TrainingPeriod[];
+    racePlans?: RacePlan[];
     // Phase 8
     sleepSessions?: SleepSession[];
     intakeLogs?: IntakeLog[];

@@ -1,6 +1,6 @@
 
 export function encodeBase64(input: string | Uint8Array | ArrayBuffer | SharedArrayBuffer): string {
-    if (globalThis.Deno) {
+    if (globalThis.Deno && !(globalThis as any).IS_NODE_COMPAT_MODE) {
         // We can just use btoa for string, or implement a simple util.
         // But to match the Deno std/encoding/base64 signature which accepts buffers:
         if (typeof input === 'string') {

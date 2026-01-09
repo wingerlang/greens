@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useCooking } from '../context/CookingModeProvider.tsx';
 import { type Recipe, type MealType, type PriceCategory, type Season, MEAL_TYPE_LABELS } from '../models/types.ts';
@@ -36,9 +37,21 @@ const EMPTY_FORM: RecipeFormState = {
 export function RecipesPage() {
     const { recipes, addRecipe, updateRecipe, deleteRecipe, foodItems } = useData();
     const { openRecipe } = useCooking();
+    const [searchParams] = useSearchParams();
+    const hasAutoOpened = useRef(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
     const [formData, setFormData] = useState<RecipeFormState>(EMPTY_FORM);
+
+    // Handle ?action=new
+    useEffect(() => {
+        if (searchParams.get('action') === 'new' && !hasAutoOpened.current) {
+            hasAutoOpened.current = true;
+            setTimeout(() => {
+                handleOpenForm();
+            }, 100);
+        }
+    }, [searchParams]);
 
     // Live nutrition estimate
     const liveEstimate = useMemo(() => {
