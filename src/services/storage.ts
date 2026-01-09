@@ -4,7 +4,10 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry } from '../models/types.ts';
+import { type AppData } from '../models/persistence.ts';
+import { type WeeklyPlan } from '../models/planning.ts';
+import { type PerformanceGoal, type TrainingPeriod } from '../models/goals.ts';
+import { type WeightEntry } from '../models/health.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 import { notificationService } from './notificationService.ts';
 
