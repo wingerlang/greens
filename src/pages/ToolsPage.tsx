@@ -24,6 +24,12 @@ export function ToolsPage() {
                     desc: "Sinclair-poäng och teknisk analys för Ryck & Stöt.",
                     path: "/tools/olympic",
                     color: "from-rose-500 to-pink-500"
+                },
+                {
+                    name: "Smart Belastning",
+                    desc: "Analysera effektiv volym och styrkeutveckling utan RPE.",
+                    path: "/tools/load-analysis",
+                    color: "from-cyan-500 to-blue-500"
                 }
             ]
         },
