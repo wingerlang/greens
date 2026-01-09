@@ -191,9 +191,6 @@ export function ExerciseDetailModal({
                     bodyWeight: bwData?.weight,
                     bwDaysDiff: bwData?.daysDiff,
                     relativeMaxWeight,
-                    bodyWeight: bwData?.weight,
-                    bwDaysDiff: bwData?.daysDiff,
-                    relativeMaxWeight,
                     relativeEst1RM,
                     maxWeightReps
                 });
@@ -507,14 +504,16 @@ export function ExerciseDetailModal({
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
             <div
-                className="bg-slate-900 border border-white/10 rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-6 space-y-6 shadow-2xl custom-scrollbar"
+                className="bg-slate-900 border border-white/10 rounded-3xl max-w-2xl w-full max-h-[85vh] overflow-y-auto p-4 md:p-6 space-y-4 shadow-2xl custom-scrollbar"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
                 <div className="flex items-start justify-between">
                     <div>
-                        <h2 className="text-2xl font-black text-white">{exerciseName}</h2>
-                        <p className="text-slate-400 text-sm">{exerciseHistory.length} pass med denna övning</p>
+                        <div className="flex items-baseline gap-3">
+                            <h2 className="text-2xl font-black text-white">{exerciseName}</h2>
+                            <p className="text-slate-500 text-xs font-medium translate-y-[-2px]">{exerciseHistory.length} pass med denna övning</p>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <button
@@ -648,33 +647,32 @@ export function ExerciseDetailModal({
                             </button>
                         </div>
                     </div>
+
+
                 )}
 
                 {/* Summary Stats Grid */}
                 <div className="grid grid-cols-2 gap-2">
-                    {/* Top Row: Stats & Volume (50/50) */}
-                    <div className="bg-slate-800/50 rounded-xl p-3 flex flex-col justify-center items-center h-full">
+                    {/* Stats & Volume Combined */}
+                    <div className="col-span-2 bg-slate-800/50 rounded-xl p-3 flex flex-col justify-center items-center h-full">
                         <div className="flex items-center gap-2 text-white font-black text-sm md:text-base">
                             <span>{exerciseHistory.length} <span className="text-[9px] text-slate-500 font-bold uppercase">Pass</span></span>
                             <span className="text-slate-700">|</span>
                             <span>{totalSets} <span className="text-[9px] text-slate-500 font-bold uppercase">Set</span></span>
                             <span className="text-slate-700">|</span>
                             <span>{totalReps} <span className="text-[9px] text-slate-500 font-bold uppercase">Reps</span></span>
+                            <span className="text-slate-700">|</span>
+                            <span>
+                                {isDistanceBasedExercise(exerciseName)
+                                    ? (totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 'km' : Math.round(totalVolume) + 'm')
+                                    : (totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 't' : Math.round(totalVolume) + 'kg')
+                                } <span className="text-[9px] text-slate-500 font-bold uppercase">Volym</span>
+                            </span>
                         </div>
                     </div>
 
-                    <div className="bg-slate-800/50 rounded-xl p-3 text-center flex flex-col justify-center items-center h-full">
-                        <p className="text-lg font-black text-white text-blue-400 leading-none">
-                            {isDistanceBasedExercise(exerciseName)
-                                ? (totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 'km' : Math.round(totalVolume) + 'm')
-                                : (totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 't' : Math.round(totalVolume) + 'kg')
-                            }
-                        </p>
-                        <p className="text-[9px] text-slate-500 uppercase font-bold mt-1">Volym</p>
-                    </div>
-
                     {/* Tyngsta Lyft (Max Weight) */}
-                    <div className={`bg-emerald-500/10 border border-emerald-500/30 rounded-xl py-3 px-2 text-center relative flex flex-col items-center justify-start ${isDistanceBasedExercise(exerciseName) ? 'col-span-2' : 'col-span-1'}`}>
+                    <div className={`bg-emerald-500/10 border border-emerald-500/30 rounded-xl pt-3 pb-1 px-2 text-center relative flex flex-col items-center justify-start ${isDistanceBasedExercise(exerciseName) ? 'col-span-2' : 'col-span-1'}`}>
                         {/* Main Content Link */}
                         <button
                             onClick={() => maxRecord && onSelectWorkout?.(maxRecord.workout)}
@@ -781,7 +779,7 @@ export function ExerciseDetailModal({
 
                     {/* Bästa Lyft (1eRM) */}
                     {!isDistanceBasedExercise(exerciseName) && (
-                        <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl py-3 px-2 text-center relative flex flex-col items-center justify-start col-span-1">
+                        <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl pt-3 pb-1 px-2 text-center relative flex flex-col items-center justify-start col-span-1">
                             <button
                                 onClick={() => bestRecord && onSelectWorkout?.(bestRecord.workout)}
                                 className="w-full hover:bg-purple-500/5 rounded-lg transition-colors pb-1 group/main"
@@ -1188,51 +1186,80 @@ export function ExerciseDetailModal({
                             const cMax = minVal === maxVal ? maxVal * 1.1 : maxVal * 1.05;
                             const range = (cMax - cMin) || 1;
 
+                            // Y-Axis Labels (Min, Mid, Max)
+                            const yLabels = [cMin, (cMin + cMax) / 2, cMax];
+
                             return (
                                 <>
-                                    <div className="flex items-end gap-1.5 h-40 mb-6">
-                                        {activeData.map((h, i) => {
-                                            const val = getMetric(h);
+                                    <div className="relative h-40 mb-2 mt-8">
 
-                                            let heightPercent = ((val - cMin) / range) * 100;
-                                            if (isNaN(heightPercent) || heightPercent < 15) heightPercent = 15;
-
-                                            // Is this the "best" bar?
-                                            // Note: using simple comparison logic
-                                            const isBest = val === maxVal;
-
-                                            return (
-                                                <div key={i} className="flex-1 flex flex-col justify-end items-center gap-2 group relative h-full">
-                                                    <div className="absolute -top-10 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] py-1 px-2 rounded-md z-20 pointer-events-none border border-white/10 shadow-xl whitespace-nowrap">
-                                                        <p className="font-bold">{val} {getUnit()}</p>
-                                                        <p className="text-[9px] text-slate-400">{h.date}</p>
-                                                    </div>
-                                                    <div
-                                                        className={`w-full relative transition-all duration-300 group-hover:brightness-110 ${isBest ? (isHistory ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]' : 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.3)]') : (isHistory ? 'bg-amber-500/60' : 'bg-emerald-500/60')} border-t border-white/5`}
-                                                        style={{
-                                                            height: `${heightPercent}%`,
-                                                            minWidth: '4px',
-                                                            borderRadius: '2px 2px 0 0'
-                                                        }}
-                                                    />
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    <div className="flex justify-between text-[10px] text-slate-500 mt-4 font-mono font-medium">
-                                        <span>{activeData[0]?.date}</span>
-                                        <div className={`flex items-center gap-2 px-3 py-1 rounded-full border ${isHistory ? 'bg-amber-500/10 border-amber-500/10 text-amber-400' : 'bg-emerald-500/10 border-emerald-500/10 text-emerald-400'}`}>
-                                            <span className={`w-2 h-2 rounded-full animate-pulse ${isHistory ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
-                                            <span className="font-bold uppercase tracking-wider">
-                                                {maxVal} {getUnit()} (Max)
-                                            </span>
+                                        {/* Y-Axis Labels */}
+                                        <div className="absolute inset-y-0 -left-6 flex flex-col justify-between text-[9px] text-slate-500 font-mono py-1">
+                                            <span>{Math.round(cMax)}</span>
+                                            <span>{Math.round((cMin + cMax) / 2)}</span>
+                                            <span>{Math.round(cMin)}</span>
                                         </div>
+
+                                        <div className="absolute -top-6 inset-x-0 flex justify-center pointer-events-none">
+                                            <div className={`flex items-center gap-2 px-3 py-1 rounded-full border backdrop-blur-sm ${isHistory ? 'bg-amber-500/10 border-amber-500/10 text-amber-400' : 'bg-emerald-500/10 border-emerald-500/10 text-emerald-400'}`}>
+                                                <span className={`w-2 h-2 rounded-full animate-pulse ${isHistory ? 'bg-amber-400' : 'bg-emerald-400'}`}></span>
+                                                <span className="font-bold uppercase tracking-wider text-[10px]">
+                                                    {maxVal} {getUnit()} (Max)
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-end gap-1.5 h-full pl-2">
+                                            {activeData.map((h, i) => {
+                                                const val = getMetric(h);
+
+                                                let heightPercent = ((val - cMin) / range) * 100;
+                                                if (isNaN(heightPercent) || heightPercent < 15) heightPercent = 15;
+
+                                                // Is this the "best" bar?
+                                                // Note: using simple comparison logic
+                                                const isBest = val === maxVal;
+
+                                                return (
+                                                    <div key={i} className="flex-1 flex flex-col justify-end items-center gap-2 group relative h-full">
+                                                        <div
+                                                            className="absolute -top-12 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[10px] py-2 px-3 rounded-xl z-20 border border-slate-700 shadow-xl whitespace-nowrap min-w-[120px] text-center pointer-events-none"
+                                                            style={{ transitionDelay: '0ms' }}
+                                                        >
+                                                            <div className="flex flex-col gap-0.5">
+                                                                <p className="font-black text-emerald-400 text-xs">{val} {getUnit()}</p>
+                                                                {!isDistanceBasedExercise(exerciseName) && (h as any).reps && (
+                                                                    <p className="text-[9px] text-slate-300 font-medium">
+                                                                        {(h as any).reps}x{(h as any).weight || (h as any).maxWeight || 0}kg <span className="opacity-50">({(h as any).sets || (h as any).workout?.sets?.length || '-'} set)</span>
+                                                                    </p>
+                                                                )}
+                                                                <p className="text-[9px] text-slate-500 mt-1 pt-1 border-t border-white/5">{h.date}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div
+                                                            className={`w-full relative transition-all duration-300 group-hover:brightness-110 ${isBest ? (isHistory ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]' : 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.3)]') : (isHistory ? 'bg-amber-500/60' : 'bg-emerald-500/60')} border-t border-white/5`}
+                                                            style={{
+                                                                height: `${heightPercent}%`,
+                                                                minWidth: '4px',
+                                                                borderRadius: '2px 2px 0 0'
+                                                            }}
+                                                        />
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-between text-[10px] text-slate-500 mt-4 font-mono font-medium pl-2">
+                                        <span>{activeData[0]?.date}</span>
+                                        {activeData.length > 2 && (
+                                            <span>{activeData[Math.floor(activeData.length / 2)]?.date}</span>
+                                        )}
                                         <span>{activeData[activeData.length - 1]?.date}</span>
                                     </div>
                                 </>
                             );
                         })()}
-                    </div>
+                    </div >
                 </div>
 
                 {/* Content Area */}
@@ -1261,8 +1288,8 @@ export function ExerciseDetailModal({
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <th className="px-4 py-3 text-right font-bold">Reps</th>
                                                         <th className="px-4 py-3 text-right font-bold">Max</th>
+                                                        <th className="px-4 py-3 text-right font-bold">Reps</th>
                                                         <th className="px-4 py-3 text-right font-bold">Volym</th>
                                                     </>
                                                 )}
@@ -1295,14 +1322,16 @@ export function ExerciseDetailModal({
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <td className="px-4 py-3 text-right text-blue-400 group-hover:text-blue-300 transition-colors">{h.reps}</td>
                                                             <td className="px-4 py-3 text-right text-white font-bold">
                                                                 {isWeightedDistanceExercise(exerciseName)
                                                                     ? <span>{formatValue(h.maxWeight, h.workout)} <span className="text-slate-500 text-xs font-normal">({h.maxDistance}m)</span></span>
                                                                     : formatValue(h.maxWeight, h.workout)
                                                                 }
                                                             </td>
-                                                            <td className="px-4 py-3 text-right text-emerald-400 group-hover:text-emerald-300 transition-colors">
+                                                            <td className="px-4 py-3 text-right text-slate-400 text-xs">
+                                                                {h.reps}
+                                                            </td>
+                                                            <td className="px-4 py-3 text-right text-slate-400 text-xs">
                                                                 {Math.round(h.volume).toLocaleString()} {isWeightedDistanceExercise(exerciseName) ? 'kg' : 'kg'}
                                                             </td>
                                                         </>
@@ -1483,7 +1512,7 @@ export function ExerciseDetailModal({
                         </div>
                     )}
                 </div>
-            </div >
-        </div >
+            </div>
+        </div>
     );
 }
