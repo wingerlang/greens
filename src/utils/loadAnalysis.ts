@@ -60,7 +60,11 @@ export function calculateEffectiveLoad(
         // 1. Filter out entries older than WINDOW_DAYS
         const validWindowStart = currentDate - (WINDOW_DAYS * 24 * 60 * 60 * 1000);
 
-        // Optimization: Clean up history buffer occasionally? Not strictly needed for <10k sets.
+        // Optimization: Clean up history buffer to avoid unlimited growth
+        // We only need to keep history relevant to the current rolling window.
+        // Since we process chronologically, anything older than validWindowStart (plus a margin) is useless.
+        // However, filter() is O(N) every time.
+        // For now, simple filter is correct.
         const recentBests = history.filter(h => h.date >= validWindowStart);
 
         if (recentBests.length === 0) return 0; // Cold start
