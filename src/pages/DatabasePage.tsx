@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSearchParams } from 'react-router-dom';
 import {
@@ -55,6 +55,7 @@ type ViewMode = 'grid' | 'list';
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const { foodItems, recipes, mealEntries, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
     const [searchParams, setSearchParams] = useSearchParams();
+    const hasAutoOpened = useRef(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [detailItem, setDetailItem] = useState<FoodItem | null>(null);
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
@@ -142,6 +143,16 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         const urlSearch = searchParams.get('search');
         if (urlSearch && filteredItems.length === 1 && filteredItems[0].name.toLowerCase() === urlSearch.toLowerCase()) {
             setDetailItem(filteredItems[0]);
+        }
+
+        // Handle ?action=new
+        if (searchParams.get('action') === 'new' && !hasAutoOpened.current) {
+            hasAutoOpened.current = true;
+            // Only open if not already open to avoid infinite loops or re-renders
+            // We use a timeout to let the page load
+            setTimeout(() => {
+                handleOpenForm();
+            }, 100);
         }
     }, [searchParams, filteredItems.length, foodItems]);
 
