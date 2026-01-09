@@ -1249,6 +1249,7 @@ export interface AppData {
     competitions?: Competition[];
     trainingCycles?: TrainingCycle[];
     performanceGoals?: PerformanceGoal[];
+    trainingPeriods?: TrainingPeriod[];
     // Phase 8
     sleepSessions?: SleepSession[];
     intakeLogs?: IntakeLog[];

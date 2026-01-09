@@ -1913,12 +1913,15 @@ export function DashboardPage() {
                             {/* Stats Grid */}
                             <div className="flex-[1.5] grid grid-cols-3 gap-4">
                                 {/* Training Daily */}
-                                <div className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20">
+                                <div
+                                    className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-all"
+                                    onClick={() => navigate('/planning/training')}
+                                >
                                     <div className="flex items-center gap-2 mb-1">
-                                        <Dumbbell size={12} className="text-indigo-500" />
-                                        <span className="text-[8px] font-bold uppercase text-slate-400">Träningsstreak</span>
+                                        <Calendar size={12} className="text-indigo-500" />
+                                        <span className="text-[8px] font-bold uppercase text-slate-400">Planera Träning</span>
                                     </div>
-                                    <div className="text-xl font-black text-slate-900 dark:text-white">{trainingStreak} <span className="text-[10px] text-slate-400">dag</span></div>
+                                    <div className="text-xl font-black text-indigo-500 dark:text-indigo-400">+ Pass</div>
                                 </div>
                                 {/* Training Weekly */}
                                 <div className="p-3 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-2xl border border-emerald-100/50 dark:border-emerald-900/20">
