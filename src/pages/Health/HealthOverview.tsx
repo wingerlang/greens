@@ -146,13 +146,10 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
 
             <div className="flex flex-col md:flex-row items-start gap-6">
                 {/* Left Column: Energy Balance Chart */}
-                <div className="flex-1 w-full space-y-6">
+                <div className="flex-1 w-full space-y-4">
                     <div className="health-card glass flex flex-col overflow-hidden">
-                        <div className="card-header border-b border-white/5 pb-4 mb-4">
-                            <div className="flex justify-between items-center">
-                                <h2 className="text-[10px] uppercase font-black tracking-[0.2em] text-slate-500">Vikt & Trend</h2>
-                                <span className="text-lg opacity-40">⚖️</span>
-                            </div>
+                        <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none overflow-hidden">
+                            <span className="text-[200px] leading-none">⚖️</span>
                         </div>
 
                         <div className="w-full h-[400px] px-2" style={{ minHeight: '320px' }}>
@@ -206,14 +203,13 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                         </div>
 
                         {stats.exerciseBreakdown.totalDistance > 0 ? (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-baseline border-b border-white/5 pb-2">
-                                    <span className="text-sm text-slate-400">Distans</span>
-                                    <span className="text-xl font-bold text-white">{stats.exerciseBreakdown.totalDistance.toFixed(1)} <span className="text-xs text-slate-500">km</span></span>
-                                </div>
-                                <div className="flex justify-between items-baseline border-b border-white/5 pb-2">
-                                    <span className="text-sm text-slate-400">Tid</span>
-                                    <span className="text-xl font-bold text-white">{Math.round(stats.exerciseBreakdown.totalCardioDuration / 60)}h <span className="text-xs text-slate-500">{Math.round(stats.exerciseBreakdown.totalCardioDuration % 60)}m</span></span>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-2 text-white font-mono text-sm border-b border-white/5 pb-2">
+                                    <span className="font-bold">{stats.exerciseBreakdown.cardioSessions} pass</span>
+                                    <span className="text-slate-600">|</span>
+                                    <span className="text-slate-300">{stats.exerciseBreakdown.totalDistance.toFixed(1)} km</span>
+                                    <span className="text-slate-600">|</span>
+                                    <span className="text-slate-300">{Math.round(stats.exerciseBreakdown.totalCardioDuration / 60)}h</span>
                                 </div>
                             </div>
                         ) : (
@@ -233,14 +229,13 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                         </div>
 
                         {stats.exerciseBreakdown.strengthSessions > 0 ? (
-                            <div className="space-y-4">
-                                <div className="flex justify-between items-baseline border-b border-white/5 pb-2">
-                                    <span className="text-sm text-slate-400">Pass</span>
-                                    <span className="text-xl font-bold text-white">{stats.exerciseBreakdown.strengthSessions} <span className="text-xs text-slate-500">st</span></span>
-                                </div>
-                                <div className="flex justify-between items-baseline border-b border-white/5 pb-2">
-                                    <span className="text-sm text-slate-400">Volym</span>
-                                    <span className="text-xl font-bold text-indigo-400">{(stats.exerciseBreakdown.totalTonnage / 1000).toFixed(1)} <span className="text-xs text-slate-500">ton</span></span>
+                            <div className="flex flex-col gap-2">
+                                <div className="flex items-center gap-2 text-white font-mono text-sm border-b border-white/5 pb-2">
+                                    <span className="font-bold">{stats.exerciseBreakdown.strengthSessions} pass</span>
+                                    <span className="text-slate-600">|</span>
+                                    <span className="text-indigo-400">{(stats.exerciseBreakdown.totalTonnage / 1000).toFixed(1)} ton</span>
+                                    <span className="text-slate-600">|</span>
+                                    <span className="text-slate-300">{Math.round(stats.exerciseBreakdown.strengthSessions * 1.5)}h</span>
                                 </div>
                             </div>
                         ) : (

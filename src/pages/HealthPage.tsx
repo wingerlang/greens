@@ -144,12 +144,14 @@ export function HealthPage() {
             case '9m': return 270;
             case 'year': return 365;
             case '2025': {
-                const diff = now.getTime() - startOf2025.getTime();
-                return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+                // If we are past 2025, return full year, else return YTD
+                const endOf2025 = new Date('2025-12-31T23:59:59');
+                const endDate = now > endOf2025 ? endOf2025 : now;
+                const diff = endDate.getTime() - startOf2025.getTime();
+                return Math.ceil(diff / (1000 * 60 * 60 * 24));
             }
             case '2024': {
-                const diff = now.getTime() - startOf2024.getTime();
-                return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+                return 366; // Leap year
             }
             case 'all': return 3650;
             default: return 30;
