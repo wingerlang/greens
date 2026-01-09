@@ -326,6 +326,32 @@ export interface MealEntry {
     createdAt: string;
 }
 
+import type { RaceProfile, RunnerProfile, IntakeEvent, PacingStrategy } from '../utils/racePlannerCalculators.ts';
+
+export interface RacePlan {
+    id: string;
+    userId: string;
+    name: string;
+    createdAt: string;
+    updatedAt: string;
+
+    // Config
+    raceProfile: RaceProfile;
+    runnerProfile: RunnerProfile;
+    environment: {
+        temperatureC: number;
+        humidityPercent: number;
+        sunsetTime?: string;
+    };
+
+    // Strategy
+    pacingStrategy: PacingStrategy;
+
+    // Logistics
+    intakeEvents: IntakeEvent[];
+    dropbagKms: number[];
+}
+
 // ============================================
 // Weekly Planning Types
 // ============================================
@@ -1232,13 +1258,15 @@ export interface AppData {
     users?: User[];
     currentUserId?: string;
     coachConfig?: CoachConfig;
+    trainingPeriods?: TrainingPeriod[];
+    performanceGoals?: PerformanceGoal[];
+    racePlans?: RacePlan[];
     plannedActivities?: PlannedActivity[];
     dailyVitals?: Record<string, DailyVitals>; // Key is YYYY-MM-DD
     exerciseEntries?: ExerciseEntry[];
     weightEntries?: WeightEntry[];
     competitions?: Competition[];
     trainingCycles?: TrainingCycle[];
-    performanceGoals?: PerformanceGoal[];
     // Phase 8
     sleepSessions?: SleepSession[];
     intakeLogs?: IntakeLog[];

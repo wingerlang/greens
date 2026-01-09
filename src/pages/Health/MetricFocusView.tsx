@@ -24,6 +24,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
     const [editDate, setEditDate] = useState<string>('');
     const [hoverIndex, setHoverIndex] = useState<number | null>(null);
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const hasAutoOpened = useRef(false);
 
     const isWeight = type === 'weight';
     const isSleep = type === 'sleep';
