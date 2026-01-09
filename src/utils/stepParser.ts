@@ -2,7 +2,8 @@
  * Step Parser - Parses cooking instructions to extract timers and ingredient references
  */
 
-import { type FoodItem } from '../models/types.ts';
+import { type FoodItem } from '../models/nutrition.ts';
+import { formatNumber } from './number.ts';
 
 // ============================================
 // Types
@@ -50,11 +51,6 @@ const COOKING_VERBS = [
 
 /**
  * Extract verb context for timer label
- * Strategy:
- * 1. Find the sentence boundary ending before the match.
- * 2. Scan the current sentence (up to the match) for known cooking verbs.
- * 3. Use the first found verb.
- * 4. If "Låt", take the next word if it's also a verb/activity (e.g. "Låt puttra").
  */
 function extractTimerLabel(text: string, matchIndex: number): string | null {
     // 1. Get text segment from last sentence boundary up to match
@@ -81,10 +77,6 @@ function extractTimerLabel(text: string, matchIndex: number): string | null {
 
     for (let i = 0; i < words.length; i++) {
         const word = words[i].toLowerCase();
-        // Check exact match or if word starts with verb (e.g. "stek" matches "stekta")
-        // But be careful: "stek" matches "stekspade" (false positive).
-        // Best to match against list of exact stems?
-        // Swedish morphology is tricky. Let's do exact match or simple stems.
         const match = COOKING_VERBS.find(v => word === v || word.startsWith(v));
         if (match) {
             foundVerb = words[i]; // Keep original case/form (e.g. "Stek")
@@ -112,7 +104,6 @@ function extractTimerLabel(text: string, matchIndex: number): string | null {
         }
 
         // Try to include object? "Stek tofun"
-        // If next word is not a preposition/conjunction
         if (words[foundVerbIndex + 1]) {
             const nextWord = words[foundVerbIndex + 1];
             const lowerNext = nextWord.toLowerCase();
@@ -175,23 +166,11 @@ export function extractTimer(text: string): { minutes: number; label: string; is
 
 /**
  * Parse ingredient line into components
- * Examples:
- * - "3 dl belugalinser" -> { amount: "3", unit: "dl", name: "belugalinser" }
- * - "2 msk tomatpuré" -> { amount: "2", unit: "msk", name: "tomatpuré" }
  */
 export function parseIngredientLine(line: string): MatchedIngredient | null {
     const trimmed = line.trim();
     if (!trimmed) return null;
 
-    // Pattern: [amount] [unit] [name]
-    // Updated to handle "port", "portion", "st port"
-    // Also captures "4 st port" -> amount: 4, unit: port, name: ...
-    // Regex breakdown:
-    // 1. Amount: numbers with chars ,./
-    // 2. Unit: standard units OR port/portion
-    // 3. Name: rest
-
-    // First try to catch specific "st port" case which is tricky
     const stPortMatch = trimmed.match(/^([\d,./]+)?\s*st\s*(?:port|portion(?:er)?)\s*(.+)$/i);
     if (stPortMatch) {
         return {
@@ -297,7 +276,7 @@ export function scaleAmount(amount: string, multiplier: number): string {
     if (amount.includes('/')) {
         const [num, den] = amount.split('/').map(Number);
         const result = (num / den) * multiplier;
-        return formatNumber(result);
+        return formatNumber(result, 1);
     }
 
     // Handle commas (Swedish decimal)
@@ -306,18 +285,5 @@ export function scaleAmount(amount: string, multiplier: number): string {
 
     if (isNaN(num)) return amount;
 
-    return formatNumber(num * multiplier);
-}
-
-/**
- * Format number nicely (avoid "2.0000000001")
- */
-function formatNumber(n: number): string {
-    if (Number.isInteger(n)) return n.toString();
-
-    // Round to 1 decimal if needed
-    const rounded = Math.round(n * 10) / 10;
-
-    // Use Swedish comma for decimals
-    return rounded.toString().replace('.', ',');
+    return formatNumber(num * multiplier, 1);
 }

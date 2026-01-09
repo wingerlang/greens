@@ -3,8 +3,8 @@
  * Logic for converting and formatting ingredient quantities with rich context
  */
 
-import { type FoodItem } from '../models/types.ts';
-import { type ParsedIngredient } from './ingredientParser.ts';
+import { type FoodItem } from '../models/nutrition.ts';
+import { formatNumber } from './number.ts';
 
 /**
  * Format ingredient quantity with rich unit detail
@@ -15,7 +15,7 @@ export function formatIngredientQuantity(
     unit: string,
     foodItem?: FoodItem
 ): string {
-    const formattedQuantity = formatNumber(quantity);
+    const formattedQuantity = formatNumber(quantity, 1);
     if (!foodItem) return `${formattedQuantity} ${unit}`;
 
     const parts: string[] = [];
@@ -31,7 +31,7 @@ export function formatIngredientQuantity(
         // Add volume if available
         if (foodItem.gramsPerDl) {
             const dl = grams / foodItem.gramsPerDl;
-            extraInfo.push(`${formatNumber(dl)} dl`);
+            extraInfo.push(`${formatNumber(dl, 1)} dl`);
         }
 
         // Add weight
@@ -51,27 +51,8 @@ export function formatIngredientQuantity(
     // If unit is 'g' and we have volume
     else if ((unit === 'g') && foodItem.gramsPerDl) {
         const dl = quantity / foodItem.gramsPerDl;
-        parts.push(`(${formatNumber(dl)} dl)`);
-    }
-
-    // Cooked/Raw distinction hint
-    if (foodItem.isCooked !== undefined) {
-        if (foodItem.isCooked) {
-            // parts.push('(kokt)'); // Name usually says matched item name
-        } else if (foodItem.yieldFactor && foodItem.yieldFactor > 1) {
-            // Maybe hint about cooked weight?
-            // "100g (okot) -> 250g kokt"
-        }
+        parts.push(`(${formatNumber(dl, 1)} dl)`);
     }
 
     return parts.join(' ');
-}
-
-/**
- * Format number nicely
- */
-function formatNumber(n: number): string {
-    if (Number.isInteger(n)) return n.toString();
-    // Round to 1 decimal
-    return (Math.round(n * 10) / 10).toString().replace('.', ',');
 }
