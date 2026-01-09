@@ -58,6 +58,7 @@ import { ToolsReplayPage } from './pages/tools/ToolsReplayPage.tsx';
 import { PlannerPage } from './components/planner/PlannerPage.tsx';
 import { RoadmapPage } from './pages/RoadmapPage.tsx';
 import { DocsPage } from './pages/DocsPage.tsx';
+import { SummaryPage } from './pages/SummaryPage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -169,6 +170,8 @@ export function App() {
                                                 <Route path="review" element={<YearInReviewPage />} />
                                                 <Route path="year-in-review" element={<Navigate to="/review" replace />} />
                                                 <Route path="ars-sammanfattning" element={<Navigate to="/review" replace />} />
+                                                <Route path="summary" element={<SummaryPage />} />
+                                                <Route path="sammanfattning" element={<SummaryPage />} />
                                                 <Route path="goals" element={<GoalsPage />} />
                                                 <Route path="mal" element={<GoalsPage />} />
                                                 <Route path="activity/:id" element={<ActivityStandalonePage />} />

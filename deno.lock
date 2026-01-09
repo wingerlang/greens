@@ -17,6 +17,7 @@
     "npm:autoprefixer@^10.4.0": "10.4.23_postcss@8.5.6",
     "npm:csv-parse@^6.1.0": "6.1.0",
     "npm:dotenv@^16.4.5": "16.6.1",
+    "npm:html2canvas@^1.4.1": "1.4.1",
     "npm:lucide-react@0.469": "0.469.0_react@18.3.1",
     "npm:mime-types@^2.1.35": "2.1.35",
     "npm:print-js@^1.6.0": "1.6.0",
@@ -954,6 +955,9 @@
     "balanced-match@1.0.2": {
       "integrity": "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="
     },
+    "base64-arraybuffer@1.0.2": {
+      "integrity": "sha512-I3yl4r9QB5ZRY3XuJVEPfc2XhZO6YweFPI+UovAzn+8/hb3oJ6lnysaFcjVpkCPfVWFUDvoZ8kmVDP7WyRtYtQ=="
+    },
     "baseline-browser-mapping@2.9.6": {
       "integrity": "sha512-v9BVVpOTLB59C9E7aSnmIF8h7qRsFpx+A2nugVMTszEOMcfjlZMsXRm4LF23I3Z9AJxc8ANpIvzbzONoX9VJlg==",
       "bin": true
@@ -1035,6 +1039,12 @@
         "path-key",
         "shebang-command",
         "which"
+      ]
+    },
+    "css-line-break@2.1.0": {
+      "integrity": "sha512-FHcKFCZcAha3LwfVBhCQbW2nCNbkZXn7KVUJcsT5/P8YmfsVja0FMPJr0B903j/E69HUphKiV9iQArX8SDYA4w==",
+      "dependencies": [
+        "utrie"
       ]
     },
     "cssesc@3.0.0": {
@@ -1330,6 +1340,13 @@
       "integrity": "sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==",
       "dependencies": [
         "function-bind"
+      ]
+    },
+    "html2canvas@1.4.1": {
+      "integrity": "sha512-fPU6BHNpsyIhr8yyMpTLLxAbkaK8ArIBcmZIRiBLiDhjeqvXolaEmDGmELFuX9I4xDcaKKcJl+TKZLqruBbmWA==",
+      "dependencies": [
+        "css-line-break",
+        "text-segmentation"
       ]
     },
     "idb-keyval@6.2.2": {
@@ -1863,6 +1880,12 @@
       ],
       "scripts": true
     },
+    "text-segmentation@1.0.3": {
+      "integrity": "sha512-iOiPUo/BGnZ6+54OsWxZidGCsdU8YbE4PSpdPinp7DeMtUJNJBoJ/ouUSTJjHkh1KntHaltHl/gDs2FC4i5+Nw==",
+      "dependencies": [
+        "utrie"
+      ]
+    },
     "thenify-all@1.6.0": {
       "integrity": "sha512-RNxQH/qI8/t3thXJDwcstUO4zeqo64+Uy/+sNVRBx4Xn2OX+OZ9oP+iJnNFqplFra2ZUVeKCSa2oVWi3T4uVmA==",
       "dependencies": [
@@ -1922,6 +1945,12 @@
     },
     "util-deprecate@1.0.2": {
       "integrity": "sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw=="
+    },
+    "utrie@1.0.2": {
+      "integrity": "sha512-1MLa5ouZiOmQzUbjbu9VmjLzn1QLXBhwpUa7kdLUQK+KQ5KA9I1vk5U4YHe/X2Ch7PYnJfWuWT+VbuxbGwljhw==",
+      "dependencies": [
+        "base64-arraybuffer"
+      ]
     },
     "victory-vendor@36.9.2": {
       "integrity": "sha512-PnpQQMuxlwYdocC8fIJqVXvkeViHYzotI+NJrCuav0ZYFoq912ZHBk3mCeuj+5/VpodOjPe1z0Fk2ihgzlXqjQ==",
@@ -2165,6 +2194,7 @@
       "npm:@dnd-kit/utilities@^3.2.2",
       "npm:@types/react-dom@^18.3.1",
       "npm:@types/react@^18.3.1",
+      "npm:html2canvas@^1.4.1",
       "npm:lucide-react@0.469",
       "npm:print-js@^1.6.0",
       "npm:react-dom@^18.3.1",
