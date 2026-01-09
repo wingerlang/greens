@@ -8,12 +8,12 @@ import { calculateEffectiveLoad, generateLoadInsights } from '../../utils/loadAn
 import { WeeklyLoadData } from '../../models/loadAnalysisTypes.ts';
 import { ExerciseMapperModule } from '../../components/admin/ExerciseMapperModule';
 import { GRANULAR_MUSCLES, MUSCLE_DISPLAY_NAMES } from '../../data/muscleList.ts';
-import { MuscleGroup } from '../../models/strengthTypes.ts';
+import { MuscleGroup, StrengthWorkout } from '../../models/strengthTypes.ts';
 
 export default function ToolsLoadAnalysisPage() {
     const { user } = useAuth();
     const [isLoading, setIsLoading] = useState(true);
-    const [rawData, setRawData] = useState<any[]>([]); // StrengthSessions
+    const [rawData, setRawData] = useState<StrengthWorkout[]>([]);
     const [mappings, setMappings] = useState<Record<string, MuscleGroup>>({});
     const [unmapped, setUnmapped] = useState<string[]>([]);
 
