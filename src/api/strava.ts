@@ -6,9 +6,12 @@ import {
 } from '../models/types.ts';
 
 // Environment variables (set these in your deployment)
-const STRAVA_CLIENT_ID = Deno.env.get('STRAVA_CLIENT_ID') || '';
-const STRAVA_CLIENT_SECRET = Deno.env.get('STRAVA_CLIENT_SECRET') || '';
-const STRAVA_REDIRECT_URI = Deno.env.get('STRAVA_REDIRECT_URI') || 'http://localhost:3000/api/strava/callback';
+// @ts-ignore: Deno is polyfilled
+const STRAVA_CLIENT_ID = globalThis.Deno ? Deno.env.get('STRAVA_CLIENT_ID') || '' : process.env.STRAVA_CLIENT_ID || '';
+// @ts-ignore: Deno is polyfilled
+const STRAVA_CLIENT_SECRET = globalThis.Deno ? Deno.env.get('STRAVA_CLIENT_SECRET') || '' : process.env.STRAVA_CLIENT_SECRET || '';
+// @ts-ignore: Deno is polyfilled
+const STRAVA_REDIRECT_URI = globalThis.Deno ? Deno.env.get('STRAVA_REDIRECT_URI') || 'http://localhost:3000/api/strava/callback' : process.env.STRAVA_REDIRECT_URI || 'http://localhost:3000/api/strava/callback';
 
 const STRAVA_AUTH_URL = 'https://www.strava.com/oauth/authorize';
 const STRAVA_TOKEN_URL = 'https://www.strava.com/oauth/token';

@@ -1,4 +1,4 @@
-import { parse } from "jsr:@std/csv";
+import { parse } from "./deps/csv.ts";
 import { foodRepo } from "../repositories/foodRepository.ts";
 import { createUser, getUser } from "../db/user.ts";
 import { FoodItem, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY } from "../../models/types.ts";
@@ -35,7 +35,7 @@ export async function ensureSeeded() {
 
     // 2. Seed Food Database
     try {
-        const content = await Deno.readTextFile("LivsmedelsDB_Cleaned_Vegan.csv");
+        const content = await Deno.readTextFile("data/LivsmedelsDB_Cleaned_Vegan.csv");
         const records = parse(content, {
             skipFirstRow: true,
             columns: [
