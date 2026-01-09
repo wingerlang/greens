@@ -52,7 +52,8 @@ export function TrainingPage() {
         addGoal,
         updateGoal,
         deleteGoal,
-        universalActivities = []
+        universalActivities = [],
+        strengthSessions = []
     } = useData();
 
     const navigate = useNavigate();
@@ -63,12 +64,25 @@ export function TrainingPage() {
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null);
 
+        const strength = (strengthSessions || []).map((w): ExerciseEntry => ({
+            id: w.id,
+            date: w.date,
+            type: 'strength',
+            durationMinutes: w.duration || (w.exercises.length * 4) + (w.totalSets * 1.5) || 45,
+            intensity: 'high',
+            caloriesBurned: w.totalVolume ? Math.round(w.totalVolume * 0.05) : 300,
+            tonnage: w.totalVolume,
+            notes: w.name,
+            source: 'strength',
+            createdAt: w.createdAt
+        }));
+
         // Combine: prefer server entries, add unique legacy entries
         const serverIds = new Set(serverEntries.map(e => e.id));
         const uniqueLegacy = (legacyExerciseEntries || []).filter(e => !serverIds.has(e.id));
 
-        return [...serverEntries, ...uniqueLegacy];
-    }, [universalActivities, legacyExerciseEntries]);
+        return [...serverEntries, ...strength, ...uniqueLegacy];
+    }, [universalActivities, legacyExerciseEntries, strengthSessions]);
 
     // Handlers for Chart Interaction
     const [selectedCycle, setSelectedCycle] = useState<TrainingCycle | null>(null);
@@ -267,7 +281,7 @@ export function TrainingPage() {
     // Let's match variable text:
     const tdee = dailyTdee + goalAdjustment;
 
-    const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
+    const [selectedActivity, setSelectedActivity] = useState<(ExerciseEntry & { source: string; _mergeData?: any }) | null>(null);
 
     const handleEditExercise = (ex: any) => {
         // Transform to full object if needed, or just pass 'ex' if it matches ExerciseEntry

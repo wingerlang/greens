@@ -25,12 +25,13 @@ export async function handleStrengthRoutes(req: Request, url: URL, headers: Head
         try {
             const body = await req.json();
             const csvContent = body.csv;
+            const source = body.source || 'strengthlog';
 
             if (!csvContent || typeof csvContent !== 'string') {
                 return new Response(JSON.stringify({ error: 'Missing CSV content' }), { status: 400, headers });
             }
 
-            const parsed = parseStrengthLogCSV(csvContent, userId);
+            const parsed = parseStrengthLogCSV(csvContent, userId, source);
             const result = await strengthRepo.importWorkouts(
                 userId,
                 parsed.workouts,

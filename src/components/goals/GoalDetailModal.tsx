@@ -48,6 +48,16 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
             const absVal = Math.abs(val);
             return `${val >= 0 ? '+' : '-'}${formatDuration(absVal)}`;
         }
+        // For weight goals: show clearer text
+        if (goal.type === 'weight') {
+            const absVal = Math.abs(val);
+            if (val >= 0) {
+                return `${absVal.toFixed(1)} kg före`;
+            } else {
+                return `${absVal.toFixed(1)} kg efter`;
+            }
+        }
+        // Default for other goal types
         return `${val >= 0 ? '+' : ''}${val.toFixed(1)} ${unit || ''}`;
     };
 
@@ -498,7 +508,7 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                             />
                             <div>
                                 <h2 className="text-2xl font-black text-white tracking-tight">{goal.name}</h2>
-                                <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-2 mt-1 flex-wrap">
                                     <span
                                         className="text-xs font-bold px-2 py-0.5 rounded"
                                         style={{
@@ -511,7 +521,34 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                                     <span className="text-xs text-slate-500">
                                         {getPeriodLabel()}
                                     </span>
+                                    {/* Day progress for time-bound goals */}
+                                    {goal.endDate && (
+                                        <span className="text-xs text-slate-400 bg-slate-800/50 px-2 py-0.5 rounded flex items-center gap-1">
+                                            <span>📅</span>
+                                            Dag {daysElapsed} / {daysElapsed + (actualDaysRemaining || 0)}
+                                        </span>
+                                    )}
                                 </div>
+                                {/* Progress stats row for weight goals */}
+                                {goal.type === 'weight' && weightStats && (
+                                    <div className="flex items-center gap-3 mt-2 text-[10px]">
+                                        <span className="text-emerald-400 font-bold">
+                                            {Math.round(progress.percentage || 0)}% avklarat
+                                        </span>
+                                        <span className="text-slate-600">•</span>
+                                        <span className="text-slate-400">
+                                            {weightStats.currentWeight?.toFixed(1)} → {goal.targetWeight} kg
+                                        </span>
+                                        {weightStats.daysToComplete > 0 && (
+                                            <>
+                                                <span className="text-slate-600">•</span>
+                                                <span className="text-slate-500">
+                                                    ~{weightStats.daysToComplete} dagar kvar (prognos)
+                                                </span>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
                                 {progress.isComplete && progress.linkedActivityId && (
                                     <div className="mt-2">
                                         <a
@@ -541,30 +578,63 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                 <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh]">
                     {/* Progress Summary */}
                     <div className="grid grid-cols-3 gap-4">
-                        <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5 text-center">
+                        {/* Progress % */}
+                        <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/5 rounded-xl border border-indigo-500/20 text-center group relative">
                             <div className="text-3xl font-black text-white">{(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%</div>
-                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Progress</div>
+                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                <span>📊</span> Framsteg
+                            </div>
+                            {goal.type === 'weight' && (
+                                <div className="text-[9px] text-slate-600 mt-1 italic">Hur långt mot målet</div>
+                            )}
                         </div>
-                        <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5 text-center">
+
+                        {/* Current - different display for different goal types */}
+                        <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 rounded-xl border border-emerald-500/20 text-center">
                             <div className="text-3xl font-black text-white">
                                 {goal.type === 'speed'
                                     ? formatDuration(effectiveCurrent)
-                                    : effectiveCurrent.toFixed(goal.type === 'weight' ? 1 : 0)
+                                    : goal.type === 'weight'
+                                        ? (() => {
+                                            const latestWeight = relevantWeights.length > 0
+                                                ? relevantWeights[relevantWeights.length - 1]?.weight
+                                                : 0;
+                                            return latestWeight ? latestWeight.toFixed(1) : '-';
+                                        })()
+                                        : effectiveCurrent.toFixed(0)
                                 }
                             </div>
-                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                                {goal.type === 'speed' ? 'Bästa Tid' : `Nuvarande ${goal.targets[0]?.unit || ''}`}
+                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                {goal.type === 'speed' ? (
+                                    <><span>⏱️</span> Bästa Tid</>
+                                ) : goal.type === 'weight' ? (
+                                    <><span>⚖️</span> Nuvarande Vikt</>
+                                ) : (
+                                    <><span>📈</span> Nuvarande {goal.targets[0]?.unit || ''}</>
+                                )}
                             </div>
                             {progress.current === 0 && goal.type === 'speed' && topSpeedActivities.length > 0 && (
                                 <div className="text-[9px] text-slate-600 mt-1">(Historiskt bäst)</div>
                             )}
+                            {goal.type === 'weight' && relevantWeights.length > 0 && (
+                                <div className="text-[9px] text-slate-600 mt-1 italic">
+                                    {formatDate(relevantWeights[relevantWeights.length - 1]?.date)}
+                                </div>
+                            )}
                         </div>
-                        <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5 text-center">
+
+                        {/* Target */}
+                        <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 rounded-xl border border-amber-500/20 text-center">
                             <div className="text-3xl font-black text-white">
-                                {goal.type === 'speed' ? formatDuration(progress.target) : progress.target}
+                                {goal.type === 'speed'
+                                    ? formatDuration(progress.target)
+                                    : goal.type === 'weight'
+                                        ? (goal.targetWeight?.toFixed(1) || '-')
+                                        : progress.target
+                                }
                             </div>
-                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
-                                Mål {goal.targets[0]?.unit || ''}
+                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                <span>🎯</span> Mål {goal.type === 'weight' ? 'kg' : (goal.targets[0]?.unit || '')}
                             </div>
                         </div>
                     </div>
@@ -821,61 +891,100 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                                 <span>📊</span> Viktstatistik
                             </h3>
 
-                            {/* Main stats grid */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                                <div className="p-3 bg-slate-900/50 rounded-lg text-center">
-                                    <div className={`text-xl font-black ${weightStats.isLoss ? 'text-emerald-400' : 'text-purple-400'}`}>
-                                        {weightStats.isLoss ? '-' : '+'}{weightStats.totalChange.toFixed(1)} kg
+                            {/* Main stats grid - 5 columns */}
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+                                {/* Start Weight */}
+                                <div className="p-2.5 bg-gradient-to-br from-slate-500/10 to-slate-600/5 rounded-lg border border-slate-500/20 text-center">
+                                    <div className="text-lg font-black text-white">
+                                        {weightStats.startWeight?.toFixed(1)} kg
                                     </div>
-                                    <div className="text-[9px] uppercase font-bold text-slate-500">Total förändring</div>
-                                </div>
-                                <div className="p-3 bg-slate-900/50 rounded-lg text-center">
-                                    <div className={`text-xl font-black ${weightStats.isLoss ? 'text-emerald-400' : 'text-purple-400'}`}>
-                                        {weightStats.weeklyRate.toFixed(2)} kg
+                                    <div className="text-[8px] uppercase font-bold text-slate-500 flex items-center justify-center gap-1">
+                                        <span>🏁</span> Startvikt
                                     </div>
-                                    <div className="text-[9px] uppercase font-bold text-slate-500">Per vecka</div>
                                 </div>
-                                <div className="p-3 bg-slate-900/50 rounded-lg text-center">
-                                    <div className="text-xl font-black text-white">
+
+                                {/* Total Change */}
+                                <div className="p-2.5 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 rounded-lg border border-emerald-500/20 text-center">
+                                    <div className={`text-lg font-black ${weightStats.isLoss ? 'text-emerald-400' : 'text-purple-400'}`}>
+                                        {weightStats.isLoss ? '↓' : '↑'} {weightStats.totalChange.toFixed(1)} kg
+                                    </div>
+                                    <div className="text-[8px] uppercase font-bold text-slate-500 flex items-center justify-center gap-1">
+                                        <span>📉</span> {weightStats.isLoss ? 'Gått Ner' : 'Gått Upp'}
+                                    </div>
+                                </div>
+
+                                {/* Weekly Rate */}
+                                <div className="p-2.5 bg-gradient-to-br from-blue-500/10 to-indigo-500/5 rounded-lg border border-blue-500/20 text-center">
+                                    <div className={`text-lg font-black ${weightStats.isLoss ? 'text-blue-400' : 'text-purple-400'}`}>
+                                        ~{weightStats.weeklyRate.toFixed(2)} kg
+                                    </div>
+                                    <div className="text-[8px] uppercase font-bold text-slate-500 flex items-center justify-center gap-1">
+                                        <span>📅</span> Per Vecka
+                                    </div>
+                                </div>
+
+                                {/* Remaining */}
+                                <div className="p-2.5 bg-gradient-to-br from-amber-500/10 to-orange-500/5 rounded-lg border border-amber-500/20 text-center">
+                                    <div className="text-lg font-black text-amber-400">
                                         {weightStats.remainingToTarget.toFixed(1)} kg
                                     </div>
-                                    <div className="text-[9px] uppercase font-bold text-slate-500">Kvar till mål</div>
+                                    <div className="text-[8px] uppercase font-bold text-slate-500 flex items-center justify-center gap-1">
+                                        <span>🎯</span> Kvar
+                                    </div>
                                 </div>
-                                <div className="p-3 bg-slate-900/50 rounded-lg text-center">
-                                    <div className="text-xl font-black text-white">
+
+                                {/* Measurement Count */}
+                                <div className="p-2.5 bg-gradient-to-br from-purple-500/10 to-pink-500/5 rounded-lg border border-purple-500/20 text-center">
+                                    <div className="text-lg font-black text-purple-400">
                                         {weightStats.measurementCount}
                                     </div>
-                                    <div className="text-[9px] uppercase font-bold text-slate-500">Vägningar</div>
+                                    <div className="text-[8px] uppercase font-bold text-slate-500 flex items-center justify-center gap-1">
+                                        <span>📊</span> Vägningar
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Calorie deficit estimation */}
-                            <div className="p-3 bg-slate-900/30 rounded-lg mb-3">
-                                <h4 className="text-xs font-bold text-slate-400 mb-2 flex items-center gap-1">
-                                    <span>🔥</span> Kaloriunderskott (uppskattat)
+                            <div className="p-4 bg-gradient-to-br from-orange-500/5 to-red-500/5 rounded-xl border border-orange-500/10 mb-3">
+                                <h4 className="text-xs font-bold text-slate-300 mb-3 flex items-center gap-2">
+                                    <span>🔥</span> Kaloribalans (beräknad)
                                 </h4>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
+                                <div className="grid grid-cols-2 gap-4 mb-3">
+                                    <div className="p-2 bg-slate-900/40 rounded-lg">
                                         <div className="text-lg font-black text-amber-400">
                                             ~{weightStats.dailyDeficit.toLocaleString()} kcal
                                         </div>
-                                        <div className="text-[9px] uppercase text-slate-500">Dagligt snitt (hållit)</div>
+                                        <div className="text-[9px] uppercase text-slate-500 flex items-center gap-1">
+                                            <span>📆</span> Dagligt {weightStats.isLoss ? 'Underskott' : 'Överskott'}
+                                        </div>
+                                        <div className="text-[8px] text-slate-600 italic">i snitt hittills</div>
                                     </div>
-                                    <div>
+                                    <div className="p-2 bg-slate-900/40 rounded-lg">
                                         <div className="text-lg font-black text-white">
                                             ~{weightStats.totalCaloriesChange.toLocaleString()} kcal
                                         </div>
-                                        <div className="text-[9px] uppercase text-slate-500">Totalt</div>
+                                        <div className="text-[9px] uppercase text-slate-500 flex items-center gap-1">
+                                            <span>📊</span> Totalt {weightStats.isLoss ? 'Underskott' : 'Överskott'}
+                                        </div>
+                                        <div className="text-[8px] text-slate-600 italic">sedan start</div>
                                     </div>
                                 </div>
+
+                                {/* Explanation */}
+                                <div className="p-2 bg-slate-950/50 rounded-lg border border-white/5 text-[9px] text-slate-500 leading-relaxed">
+                                    <span className="text-slate-400 font-bold">💡 Så räknas det:</span> 1 kg kroppsvikt ≈ 7700 kcal.
+                                    Din viktförändring × 7700 ÷ antal dagar = dagligt {weightStats.isLoss ? 'underskott' : 'överskott'}.
+                                </div>
+
                                 {weightStats.requiredDeficit > 0 && (
-                                    <div className="mt-2 pt-2 border-t border-white/5">
+                                    <div className="mt-3 pt-3 border-t border-white/5">
                                         <div className="flex items-center justify-between text-xs">
-                                            <span className="text-slate-400">
-                                                Krävs för deadline:
+                                            <span className="text-slate-400 flex items-center gap-1">
+                                                <span>⏰</span> Krävs för deadline:
                                             </span>
                                             <span className={`font-bold ${weightStats.requiredDeficit > weightStats.dailyDeficit * 1.2 ? 'text-red-400' : 'text-emerald-400'}`}>
                                                 ~{weightStats.requiredDeficit.toLocaleString()} kcal/dag
+                                                {weightStats.requiredDeficit > weightStats.dailyDeficit * 1.2 && ' ⚠️'}
                                             </span>
                                         </div>
                                     </div>
@@ -1112,28 +1221,35 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                         </div>
                     )}
 
-                    {/* Goal Details */}
-                    <div className="grid grid-cols-2 gap-3 text-xs">
-                        <div className="p-3 bg-slate-900/30 rounded-lg">
-                            <span className="text-slate-500">Startdatum</span>
-                            <div className="text-white font-bold">{formatDate(goal.startDate)}</div>
-                        </div>
-                        {goal.endDate && (
-                            <div className="p-3 bg-slate-900/30 rounded-lg">
-                                <span className="text-slate-500">Slutdatum</span>
-                                <div className="text-white font-bold">{formatDate(goal.endDate)}</div>
+                    {/* Unified Goal Footer */}
+                    <div className="p-3 bg-gradient-to-r from-slate-800/50 via-slate-900/50 to-slate-800/50 rounded-xl border border-white/5">
+                        <div className="flex items-center justify-between text-xs divide-x divide-white/10">
+                            {/* Start Date */}
+                            <div className="flex-1 text-center px-2">
+                                <div className="text-[9px] uppercase text-slate-500 font-bold mb-0.5">🏁 Start</div>
+                                <div className="text-white font-bold">{formatDate(goal.startDate)}</div>
                             </div>
-                        )}
-                        {actualDaysRemaining !== undefined && (
-                            <div className="p-3 bg-slate-900/30 rounded-lg">
-                                <span className="text-slate-500">Dagar kvar</span>
-                                <div className="text-white font-bold">{actualDaysRemaining}</div>
+
+                            {/* End Date */}
+                            <div className="flex-1 text-center px-2">
+                                <div className="text-[9px] uppercase text-slate-500 font-bold mb-0.5">🏆 Slut</div>
+                                <div className="text-white font-bold">{goal.endDate ? formatDate(goal.endDate) : '—'}</div>
                             </div>
-                        )}
-                        <div className="p-3 bg-slate-900/30 rounded-lg">
-                            <span className="text-slate-500">Status</span>
-                            <div className={`font-bold ${progress.isOnTrack ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                {progress.isComplete ? '✅ Klart' : progress.isOnTrack ? '✓ På spår' : '⚠️ Halkar efter'}
+
+                            {/* Days Remaining */}
+                            <div className="flex-1 text-center px-2">
+                                <div className="text-[9px] uppercase text-slate-500 font-bold mb-0.5">⏳ Kvar</div>
+                                <div className={`font-bold ${actualDaysRemaining !== undefined && actualDaysRemaining < 7 ? 'text-amber-400' : 'text-white'}`}>
+                                    {actualDaysRemaining !== undefined ? `${actualDaysRemaining} dagar` : '—'}
+                                </div>
+                            </div>
+
+                            {/* Status */}
+                            <div className="flex-1 text-center px-2">
+                                <div className="text-[9px] uppercase text-slate-500 font-bold mb-0.5">📊 Status</div>
+                                <div className={`font-bold ${progress.isComplete ? 'text-emerald-400' : progress.isOnTrack ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                    {progress.isComplete ? '✅ Klart!' : progress.isOnTrack ? '✓ På spår' : '⚠️ Halkar efter'}
+                                </div>
                             </div>
                         </div>
                     </div>

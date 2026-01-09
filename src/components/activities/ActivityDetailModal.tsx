@@ -158,6 +158,7 @@ export function ActivityDetailModal({
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
     const hasWorkoutStructure = parsedWorkout.segments.length > 0;
     const isWorthyOfAnalysis = hasSplits || hasHeartRate || hasWorkoutStructure || isMergedActivity;
+    const showStravaCard = activity.source === 'strava' || isMergedActivity || isMerged;
 
     // Unmerge handler
     const handleUnmerge = async () => {
@@ -429,7 +430,7 @@ export function ActivityDetailModal({
                             <div>
                                 <div className="flex items-center gap-3">
                                     <h2 className="text-2xl font-black text-white capitalize flex items-center gap-3">
-                                        {activity.type}
+                                        {universalActivity?.plan?.title || (activity.notes && activity.notes.length < 50 && !activity.notes.includes('\n') ? activity.notes : activity.type)}
                                         {/* Edit Button */}
                                         {!isMerged && activity.source !== 'strava' && (
                                             <button
@@ -506,7 +507,7 @@ export function ActivityDetailModal({
                             >
                                 Statistik
                             </button>
-                            {activity.distance && (
+                            {activity.distance > 0 && (
                                 <button
                                     onClick={() => setActiveTab('compare')}
                                     className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 ${activeTab === 'compare' ? 'text-indigo-400 border-indigo-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
@@ -559,20 +560,9 @@ export function ActivityDetailModal({
                                     }
                                 }
 
-                                // Display Strava sync badge
-                                if (activity.source === 'strava' && activity.externalId) {
-                                    return (
-                                        <a
-                                            href={`https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 bg-[#FC4C02]/20 text-[#FC4C02] px-3 py-1.5 rounded-lg text-xs font-bold uppercase hover:bg-[#FC4C02]/30 transition-colors"
-                                            title="Öppna i Strava"
-                                        >
-                                            <span>🔥</span> Synkad från Strava ↗
-                                        </a>
-                                    );
-                                } else if (isMergedActivity && stravaLink) {
+                                // Display Strava sync badge - REMOVED per user request
+                                // Logical flow continues for Merged/Strength badges
+                                if (isMergedActivity && stravaLink) {
                                     // Merged activity with Strava component - link to longest
                                     return (
                                         <a
@@ -592,13 +582,6 @@ export function ActivityDetailModal({
                                             <span>⚡</span> Sammanslagen Aktivitet
                                         </div>
                                     );
-                                } else if (activity.source === 'strava') {
-                                    // Strava without externalId
-                                    return (
-                                        <div className="inline-flex items-center gap-2 bg-[#FC4C02]/20 text-[#FC4C02] px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
-                                            <span>🔥</span> Synkad från Strava
-                                        </div>
-                                    );
                                 } else if (activity.source === 'strength') {
                                     return (
                                         <div className="inline-flex items-center gap-2 bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
@@ -606,7 +589,6 @@ export function ActivityDetailModal({
                                         </div>
                                     );
                                 } else {
-                                    // Manual or other - do not show redundant badge if Strava source was already shown as "Synkad"
                                     return null;
                                 }
                             })()}
@@ -654,15 +636,15 @@ export function ActivityDetailModal({
                                             </tr>
                                             <tr>
                                                 <td className="px-4 py-3 text-white">💪 Övningar</td>
-                                                <td className="px-4 py-3 text-center text-emerald-400 font-bold">{strengthWorkout?.uniqueExercises || 0} st ✓</td>
+                                                <td className="px-4 py-3 text-center text-emerald-400 font-bold">{strengthWorkout?.uniqueExercises || '-'} st ✓</td>
                                                 <td className="px-4 py-3 text-center text-slate-500">-</td>
-                                                <td className="px-4 py-3 text-right text-emerald-400">{strengthWorkout?.uniqueExercises || 0}</td>
+                                                <td className="px-4 py-3 text-right text-emerald-400">{strengthWorkout?.uniqueExercises || '-'}</td>
                                             </tr>
                                             <tr>
                                                 <td className="px-4 py-3 text-white">🎯 Set</td>
-                                                <td className="px-4 py-3 text-center text-emerald-400 font-bold">{strengthWorkout?.totalSets || 0} ✓</td>
+                                                <td className="px-4 py-3 text-center text-emerald-400 font-bold">{strengthWorkout?.totalSets || '-'} ✓</td>
                                                 <td className="px-4 py-3 text-center text-slate-500">-</td>
-                                                <td className="px-4 py-3 text-right text-emerald-400">{strengthWorkout?.totalSets || 0}</td>
+                                                <td className="px-4 py-3 text-right text-emerald-400">{strengthWorkout?.totalSets || '-'}</td>
                                             </tr>
                                         </tbody>
                                     </table>
@@ -676,53 +658,228 @@ export function ActivityDetailModal({
                         {/* COMBINED VIEW */}
                         {(viewMode === 'combined' || !isMerged) && activeTab === 'stats' && (
                             <>
-                                {/* Main Stats Grid */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                        <p className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</p>
-                                        <p className="text-xs text-slate-500 uppercase">Tid</p>
+                                {/* Main Stats Display - Swaps between Strava Card and Generic Grid */}
+                                {showStravaCard ? (
+                                    <div className="space-y-4">
+                                        <div className="bg-[#FC4C02]/5 border border-[#FC4C02]/20 rounded-2xl p-5 space-y-4 shadow-xl shadow-[#FC4C02]/5 mb-2">
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="font-black text-[#FC4C02] uppercase text-xs tracking-widest flex items-center gap-2">
+                                                    <span>🔥</span> Strava-data
+                                                </h4>
+                                                {(() => {
+                                                    let stravaLink = null;
+                                                    if (activity.source === 'strava' && activity.externalId) {
+                                                        stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
+                                                    } else if (isMergedActivity) {
+                                                        const stravaOriginals = originalActivities
+                                                            .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
+                                                            .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
+                                                        if (stravaOriginals.length > 0) {
+                                                            const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
+                                                            stravaLink = `https://www.strava.com/activities/${extId}`;
+                                                        }
+                                                    }
+                                                    return stravaLink ? (
+                                                        <a
+                                                            href={stravaLink}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-[10px] font-bold text-white bg-[#FC4C02] px-3 py-1.5 rounded-lg hover:shadow-lg hover:shadow-[#FC4C02]/20 transition-all flex items-center gap-1.5 uppercase tracking-tighter"
+                                                        >
+                                                            Öppna i Strava ↗
+                                                        </a>
+                                                    ) : null;
+                                                })()}
+                                            </div>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
+                                                {/* Distance */}
+                                                {(activity.distance || 0) > 0 && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Distans</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-xl font-black text-white">{activity.distance.toFixed(1)}</span>
+                                                            <span className="text-[10px] uppercase text-slate-500">km</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Pace */}
+                                                {(activity.distance || 0) > 0 && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">{activity.type === 'cycling' ? 'Snittfart' : 'Snittempo'}</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-xl font-black text-white">
+                                                                {activity.type === 'cycling'
+                                                                    ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
+                                                                    : formatPace((activity.durationMinutes * 60) / activity.distance).replace('/km', '')
+                                                                }
+                                                            </span>
+                                                            <span className="text-[10px] uppercase text-slate-500">{activity.type === 'cycling' ? 'km/h' : '/km'}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Time */}
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Tid (Rörelse / Total)</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
+                                                        {perf?.elapsedTimeSeconds && (
+                                                            <span className="text-xs text-slate-500 font-bold">/ {formatDuration(perf.elapsedTimeSeconds)}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* Energy */}
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-xl font-black text-white">{activity.caloriesBurned || perf?.calories || '-'}</span>
+                                                        <span className="text-[10px] uppercase text-slate-500">kcal</span>
+                                                        {perf?.kilojoules && <span className="text-[9px] text-[#FC4C02] font-black ml-2">{perf.kilojoules} KJ</span>}
+                                                    </div>
+                                                </div>
+
+                                                {/* Heart Rate */}
+                                                {(perf?.avgHeartRate || activity.avgHeartRate) && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Medelpuls</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-xl font-black text-white">{Math.round(perf?.avgHeartRate || activity.avgHeartRate || 0)}</span>
+                                                            <span className="text-[10px] uppercase text-slate-500">bpm</span>
+                                                            {perf?.maxHeartRate && <span className="text-[9px] text-red-500 font-black ml-1">MAX {Math.round(perf.maxHeartRate)}</span>}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Watts */}
+                                                {perf?.averageWatts && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effekt</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-xl font-black text-white">{Math.round(perf.averageWatts)}</span>
+                                                            <span className="text-[10px] uppercase text-slate-500">w</span>
+                                                            {perf?.maxWatts && <span className="text-[9px] text-indigo-400 font-black ml-1">MAX {Math.round(perf.maxWatts)}</span>}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Max Speed */}
+                                                {perf?.maxSpeed && (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Maxfart</span>
+                                                        <div className="flex items-baseline gap-1">
+                                                            <span className="text-xl font-black text-white">{perf.maxSpeed.toFixed(1)}</span>
+                                                            <span className="text-[10px] uppercase text-slate-500">km/h</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Achievements */}
+                                                {(perf?.achievementCount !== undefined || perf?.prCount !== undefined || perf?.kudosCount !== undefined) && (
+                                                    <div className="flex flex-col col-span-2">
+                                                        <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Engagemang & Prestationer</span>
+                                                        <div className="flex items-center gap-4">
+                                                            {perf?.prCount !== undefined && (
+                                                                <div className="flex items-center gap-1.5 sh-tooltip" title={`${perf.prCount} Personbästa`}>
+                                                                    <span className="text-orange-400">⚡</span>
+                                                                    <span className="text-lg font-black text-white">{perf.prCount}</span>
+                                                                    <span className="text-[9px] text-slate-500 uppercase font-bold">PB</span>
+                                                                </div>
+                                                            )}
+                                                            {perf?.achievementCount !== undefined && (
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-yellow-400">🏆</span>
+                                                                    <span className="text-lg font-black text-white">{perf.achievementCount}</span>
+                                                                    <span className="text-[9px] text-slate-500 uppercase font-bold">Awards</span>
+                                                                </div>
+                                                            )}
+                                                            {perf?.kudosCount !== undefined && (
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span className="text-pink-400">❤️</span>
+                                                                    <span className="text-lg font-black text-white">{perf.kudosCount}</span>
+                                                                    <span className="text-[9px] text-slate-500 uppercase font-bold">Kudos</span>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Additional non-Strava Metrics (Greens Score, Tonnage) */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* Greens Score Tile */}
+                                            <div
+                                                className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
+                                                onClick={() => setShowScoreInfo(!showScoreInfo)}
+                                            >
+                                                <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore || '-'}</p>
+                                                <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
+                                                    Greens Score
+                                                    <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
+                                                </p>
+                                            </div>
+
+                                            {/* Tonnage (if existing) */}
+                                            {(activity.tonnage && activity.tonnage > 0) && (
+                                                <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                                                    <p className="text-2xl font-black text-purple-400">{(activity.tonnage / 1000).toFixed(1)}</p>
+                                                    <p className="text-xs text-slate-500 uppercase">Ton</p>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
-
-                                    {/* Distance (Only if running/has value) */}
-                                    {(activity.distance && activity.distance > 0) ? (
+                                ) : (
+                                    /* Generic Stats Grid (Non-Strava) */
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                            <p className="text-2xl font-black text-emerald-400">{activity.distance.toFixed(1)}</p>
-                                            <p className="text-xs text-slate-500 uppercase">Km</p>
+                                            <p className="text-2xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</p>
+                                            <p className="text-xs text-slate-500 uppercase">Tid</p>
                                         </div>
-                                    ) : null}
 
-                                    {/* Tonnage (Only if strength/has value) */}
-                                    {(activity.tonnage && activity.tonnage > 0) ? (
-                                        <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                            <p className="text-2xl font-black text-purple-400">{(activity.tonnage / 1000).toFixed(1)}</p>
-                                            <p className="text-xs text-slate-500 uppercase">Ton</p>
-                                        </div>
-                                    ) : null}
+                                        {/* Distance (Only if running/has value) */}
+                                        {(activity.distance || 0) > 0 ? (
+                                            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                                                <p className="text-2xl font-black text-emerald-400">{activity.distance.toFixed(1)}</p>
+                                                <p className="text-xs text-slate-500 uppercase">Km</p>
+                                            </div>
+                                        ) : null}
 
-                                    {/* Pace Card (Only if distance exists) */}
-                                    {(activity.distance && activity.distance > 0) ? (
-                                        <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                            <p className="text-2xl font-black text-emerald-400">
-                                                {activity.type === 'cycling'
-                                                    ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
-                                                    : formatPace((activity.durationMinutes * 60) / activity.distance).replace('/km', '')
-                                                }
+                                        {/* Tonnage (Only if strength/has value) */}
+                                        {(activity.tonnage && activity.tonnage > 0) ? (
+                                            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                                                <p className="text-2xl font-black text-purple-400">{(activity.tonnage / 1000).toFixed(1)}</p>
+                                                <p className="text-xs text-slate-500 uppercase">Ton</p>
+                                            </div>
+                                        ) : null}
+
+                                        {/* Pace Card (Only if distance exists) */}
+                                        {(activity.distance || 0) > 0 ? (
+                                            <div className="bg-slate-800/50 rounded-xl p-4 text-center">
+                                                <p className="text-2xl font-black text-emerald-400">
+                                                    {activity.type === 'cycling'
+                                                        ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
+                                                        : formatPace((activity.durationMinutes * 60) / activity.distance).replace('/km', '')
+                                                    }
+                                                </p>
+                                                <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
+                                            </div>
+                                        ) : null}
+
+                                        <div
+                                            className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
+                                            onClick={() => setShowScoreInfo(!showScoreInfo)}
+                                        >
+                                            <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore || '-'}</p>
+                                            <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
+                                                Greens Score
+                                                <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
                                             </p>
-                                            <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
                                         </div>
-                                    ) : null}
-
-                                    <div
-                                        className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
-                                        onClick={() => setShowScoreInfo(!showScoreInfo)}
-                                    >
-                                        <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore}</p>
-                                        <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
-                                            Greens Score
-                                            <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
-                                        </p>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Greens Score Visual Breakdown */}
                                 {showScoreInfo && (
@@ -756,7 +913,7 @@ export function ActivityDetailModal({
                                                         />
                                                     </svg>
                                                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                        <span className="text-3xl font-black text-white">{perfBreakdown.totalScore}</span>
+                                                        <span className="text-3xl font-black text-white">{perfBreakdown.totalScore || '-'}</span>
                                                         <span className="text-[8px] text-slate-500 uppercase font-bold">Poäng</span>
                                                     </div>
                                                 </div>
@@ -808,10 +965,10 @@ export function ActivityDetailModal({
                                     />
                                 )}
 
-                                {/* Simple HR display fallback (for strength or merged) */}
-                                {(perf?.avgHeartRate || perf?.maxHeartRate) && activity.type?.toLowerCase() === 'strength' && (
+                                {/* Simple HR display fallback (for strength or merged) - Only show if Strava Card is NOT shown */}
+                                {(perf?.avgHeartRate || perf?.maxHeartRate) && activity.type?.toLowerCase() === 'strength' && !showStravaCard && (
                                     <div className="bg-red-950/30 border border-red-500/20 rounded-xl p-4 w-fit">
-                                        <h3 className="text-xs font-bold text-red-400 uppercase mb-2">❤️ Puls {isMerged && <span className="text-slate-500">(från Strava)</span>}</h3>
+                                        <h3 className="text-xs font-bold text-red-400 uppercase mb-2">❤️ Puls</h3>
                                         <div className="flex gap-6">
                                             {perf?.avgHeartRate && (
                                                 <div>
@@ -845,14 +1002,14 @@ export function ActivityDetailModal({
 
                                 {/* Elevation & Performance (GAP) */}
                                 <div className="grid grid-cols-2 gap-4">
-                                    {(perf?.elevationGain > 0) && (
+                                    {(perf ? perf.elevationGain > 0 : false) && (
                                         <div className="bg-emerald-950/30 border border-emerald-500/20 rounded-xl p-4">
                                             <h3 className="text-xs font-bold text-emerald-400 uppercase mb-2">⛰️ Höjdmeter</h3>
                                             <span className="text-2xl font-black text-white">{Math.round(perf.elevationGain)}</span>
                                             <span className="text-xs text-slate-400 ml-1">m</span>
                                         </div>
                                     )}
-                                    {(activity.distance && activity.distance > 0 && perf?.elevationGain) ? (
+                                    {((activity.distance || 0) > 0 && (perf?.elevationGain || 0) > 0) ? (
                                         <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4">
                                             <h3 className="text-xs font-bold text-indigo-400 uppercase mb-2">📈 Effektivt Tempo (GAP)</h3>
                                             <span className="text-2xl font-black text-white">
@@ -863,135 +1020,26 @@ export function ActivityDetailModal({
                                     ) : null}
                                 </div>
 
-                                {/* Strava Data Card (for Strava-sourced activities) */}
-                                {(activity.source === 'strava' || isMergedActivity || isMerged) && (
-                                    <div className="bg-[#FC4C02]/5 border border-[#FC4C02]/20 rounded-2xl p-5 space-y-4 shadow-xl shadow-[#FC4C02]/5">
-                                        <div className="flex items-center justify-between">
-                                            <h4 className="font-black text-[#FC4C02] uppercase text-xs tracking-widest flex items-center gap-2">
-                                                <span>🔥</span> Strava-data
-                                            </h4>
-                                            {(() => {
-                                                // Link extraction logic (reused from header)
-                                                let stravaLink = null;
-                                                if (activity.source === 'strava' && activity.externalId) {
-                                                    stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
-                                                } else if (isMergedActivity) {
-                                                    const stravaOriginals = originalActivities
-                                                        .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
-                                                        .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
-                                                    if (stravaOriginals.length > 0) {
-                                                        const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
-                                                        stravaLink = `https://www.strava.com/activities/${extId}`;
-                                                    }
-                                                }
 
-                                                return stravaLink ? (
-                                                    <a
-                                                        href={stravaLink}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                        className="text-[10px] font-bold text-white bg-[#FC4C02] px-3 py-1.5 rounded-lg hover:shadow-lg hover:shadow-[#FC4C02]/20 transition-all flex items-center gap-1.5 uppercase tracking-tighter"
-                                                    >
-                                                        Öppna i Strava ↗
-                                                    </a>
-                                                ) : null;
-                                            })()}
-                                        </div>
-
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
-                                            {/* Moving vs Elapsed Time */}
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Tid (Rörelse / Total)</span>
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className="text-xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
-                                                    {perf?.elapsedTimeSeconds && (
-                                                        <span className="text-xs text-slate-500 font-bold">/ {formatDuration(perf.elapsedTimeSeconds)}</span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Energy */}
-                                            <div className="flex flex-col">
-                                                <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
-                                                <span className="text-xl font-black text-white">{activity.caloriesBurned || perf?.calories || '-'} <span className="text-[10px] uppercase text-slate-500">kcal</span></span>
-                                                {perf?.kilojoules && <span className="text-[9px] text-[#FC4C02] font-black">{perf.kilojoules} KJ</span>}
-                                            </div>
-
-                                            {/* Heart Rate */}
-                                            {(perf?.avgHeartRate || activity.avgHeartRate) && (
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Medelpuls</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-xl font-black text-white">{Math.round(perf?.avgHeartRate || activity.avgHeartRate || 0)}</span>
-                                                        <span className="text-[10px] uppercase text-slate-500">bpm</span>
-                                                        {perf?.maxHeartRate && <span className="text-[9px] text-red-500 font-black ml-1">MAX {Math.round(perf.maxHeartRate)}</span>}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Watts (Cycling only) */}
-                                            {perf?.averageWatts && (
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effekt</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-xl font-black text-white">{Math.round(perf.averageWatts)}</span>
-                                                        <span className="text-[10px] uppercase text-slate-500">w</span>
-                                                        {perf?.maxWatts && <span className="text-[9px] text-indigo-400 font-black ml-1">MAX {Math.round(perf.maxWatts)}</span>}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Achievements & Kudos */}
-                                            {(perf?.achievementCount !== undefined || perf?.prCount !== undefined || perf?.kudosCount !== undefined) && (
-                                                <div className="flex flex-col col-span-2">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Engagemang & Prestationer</span>
-                                                    <div className="flex items-center gap-4">
-                                                        {perf?.prCount !== undefined && (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="text-orange-400">⚡</span>
-                                                                <span className="text-lg font-black text-white">{perf.prCount}</span>
-                                                                <span className="text-[9px] text-slate-500 uppercase font-bold">PB</span>
-                                                            </div>
-                                                        )}
-                                                        {perf?.achievementCount !== undefined && (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="text-yellow-400">🏆</span>
-                                                                <span className="text-lg font-black text-white">{perf.achievementCount}</span>
-                                                                <span className="text-[9px] text-slate-500 uppercase font-bold">Awards</span>
-                                                            </div>
-                                                        )}
-                                                        {perf?.kudosCount !== undefined && (
-                                                            <div className="flex items-center gap-1.5">
-                                                                <span className="text-pink-400">❤️</span>
-                                                                <span className="text-lg font-black text-white">{perf.kudosCount}</span>
-                                                                <span className="text-[9px] text-slate-500 uppercase font-bold">Kudos</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Max Speed */}
-                                            {perf?.maxSpeed && (
-                                                <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Maxfart</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-xl font-black text-white">{perf.maxSpeed.toFixed(1)}</span>
-                                                        <span className="text-[10px] uppercase text-slate-500">km/h</span>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
 
                                 {/* Notes */}
-                                {(activity.notes || perf?.notes) && (
-                                    <div className="bg-slate-800/50 rounded-xl p-4">
-                                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">📝 Anteckning</h3>
-                                        <p className="text-white">{activity.notes || perf?.notes}</p>
-                                    </div>
-                                )}
+                                {/* Notes - Only show if they are NOT just a short title-like string (which is likely displayed in Header) */}
+                                {(() => {
+                                    const notes = activity.notes || perf?.notes;
+                                    // If notes exist and are "meaty" (long or multiline), show them.
+                                    // If they are short (<50 chars) and single line, assume it's a title that we've promoted to the header, so hide it here.
+                                    const shouldShowNotes = notes && (notes.length >= 50 || notes.includes('\n'));
+
+                                    if (shouldShowNotes) {
+                                        return (
+                                            <div className="bg-slate-800/50 rounded-xl p-4 mt-4">
+                                                <h3 className="text-xs font-bold text-slate-400 uppercase mb-2">📝 Anteckning</h3>
+                                                <p className="text-white whitespace-pre-wrap">{notes}</p>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                             </>
                         )}
 
@@ -1091,7 +1139,7 @@ export function ActivityDetailModal({
                                                     <td className="px-4 py-4 text-right text-rose-400 font-bold">{perf?.avgHeartRate ? Math.round(perf.avgHeartRate) : '-'}</td>
                                                     <td className="px-4 py-4 text-right">
                                                         <span className="bg-indigo-500 text-white text-[10px] font-black px-2 py-1 rounded">
-                                                            {calculatePerformanceScore(activity)}
+                                                            {calculatePerformanceScore(activity) || '-'}
                                                         </span>
                                                     </td>
                                                 </tr>
@@ -1120,7 +1168,7 @@ export function ActivityDetailModal({
                                                                 <span className={`text-[10px] font-black px-2 py-1 rounded ${aScore >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
                                                                     aScore >= 60 ? 'bg-indigo-500/20 text-indigo-400' : 'bg-slate-500/20 text-slate-400'
                                                                     }`}>
-                                                                    {aScore}
+                                                                    {aScore || '-'}
                                                                 </span>
                                                             </td>
                                                         </tr>

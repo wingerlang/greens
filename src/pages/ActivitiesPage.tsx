@@ -12,6 +12,285 @@ import { formatDuration } from '../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP } from '../utils/performanceEngine.ts';
 import { mergeStrengthWorkouts } from '../api/services/activityMergeService.ts';
 
+interface ActivityRowProps {
+    activity: ExerciseEntry & { source: string };
+    index: number;
+    isSelectedForMerge: boolean;
+    showFilters: boolean; // Is this needed? No.
+    onToggleMerge: (id: string, index: number, e: React.MouseEvent) => void;
+    universalActivities: UniversalActivity[];
+    allActivities: any[];
+    onSelectActivity: (activity: (ExerciseEntry & { source: string })) => void;
+}
+
+const ActivityRow = ({
+    activity,
+    index,
+    isSelectedForMerge,
+    onToggleMerge,
+    universalActivities,
+    allActivities,
+    onSelectActivity
+}: ActivityRowProps) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    const universalMatch = universalActivities.find(u => u.id === activity.id);
+    const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged';
+
+    // Get title for merged activities
+    let displayTitle = activity.title || '-';
+    let mergedSources: { id: string, source: string, title: string, type: string }[] = [];
+
+    if (isMergedActivity && universalMatch?.mergeInfo?.originalActivityIds) {
+        // 1. Collect all original activities
+        mergedSources = universalMatch.mergeInfo.originalActivityIds.map(oid => {
+            const match = universalActivities.find(u => u.id === oid);
+            const matchAny = match as any;
+            // Source is typically nested in performance.source, but check top-level legacy too
+            const activitySource = match?.performance?.source?.source || matchAny?.source || 'unknown';
+
+            return {
+                id: oid,
+                source: activitySource,
+                title: match?.plan?.title || match?.performance?.notes || 'Unknown Activity',
+                type: (matchAny?.type as string) || 'unknown'
+            };
+        });
+
+        // 2. Prioritize Strava title
+        const stravaSource = mergedSources.find(s => s.source === 'strava');
+        const strengthSource = mergedSources.find(s => s.source === 'strength' || s.source === 'strengthlog' || s.source === 'hevy');
+
+        if (stravaSource?.title && stravaSource.title !== 'Morgonlöpning') {
+            displayTitle = stravaSource.title;
+        } else if (strengthSource?.title) {
+            displayTitle = strengthSource.title;
+        } else if (universalMatch?.plan?.title) {
+            // Fallback to the plan title if no specific source title found
+            displayTitle = universalMatch.plan.title;
+        } else if (universalMatch?.performance?.notes) {
+            // Fallback to notes if really desperate (e.g. "Morning Run") 
+            // causing generic title but correct visual
+            const notes = universalMatch.performance.notes;
+            if (notes.length < 30) displayTitle = notes;
+        }
+    }
+
+    // Calculate pace
+    const pace = activity.distance && activity.durationMinutes > 0
+        ? (activity.durationMinutes / activity.distance).toFixed(2).replace('.', ':')
+        : null;
+
+    // Score
+    const score = calculatePerformanceScore(activity, allActivities);
+
+    return (
+        <React.Fragment>
+            <tr
+                className={`transition-colors cursor-pointer group ${isSelectedForMerge
+                    ? 'bg-indigo-500/20 hover:bg-indigo-500/30 ring-1 ring-indigo-500/50'
+                    : 'hover:bg-white/5'
+                    }`}
+                onClick={() => {
+                    if (isMergedActivity) {
+                        setIsExpanded(!isExpanded);
+                    } else {
+                        onSelectActivity(activity);
+                    }
+                }}
+            >
+                {/* Mark for merge button */}
+                <td className="w-8 px-1">
+                    <button
+                        onClick={(e) => onToggleMerge(activity.id, index, e)}
+                        className={`opacity-0 group-hover:opacity-100 transition-all w-5 h-5 rounded flex items-center justify-center text-xs ${isSelectedForMerge
+                            ? 'opacity-100 bg-indigo-500 text-white'
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                            }`}
+                        title={isSelectedForMerge ? 'Ta bort från merge' : 'Markera för merge (Shift+klick för flera)'}
+                    >
+                        {isSelectedForMerge ? '✓' : '+'}
+                    </button>
+                </td>
+                <td className="px-3 py-2 font-mono text-white text-xs whitespace-nowrap">
+                    {activity.date.split('T')[0]}
+                </td>
+                <td className="px-3 py-2">
+                    <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-2">
+                            <span className="text-white font-bold text-xs truncate max-w-[180px]" title={displayTitle}>
+                                {displayTitle}
+                            </span>
+                        </div>
+                        {isMergedActivity && (
+                            <span className="text-[9px] text-slate-500 italic">
+                                ⚡ {universalMatch?.mergeInfo?.originalActivityIds?.length || 0} källor
+                            </span>
+                        )}
+                    </div>
+                </td>
+                <td className="px-3 py-2">
+                    <div className="flex items-center gap-1.5">
+                        <span className="capitalize text-white font-bold text-xs">{activity.type}</span>
+                        {/* Score badge inline */}
+                        <span
+                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
+                                score >= 60 ? 'bg-indigo-500/20 text-indigo-400' :
+                                    'bg-slate-500/20 text-slate-400'
+                                }`}
+                            title={`Poäng: ${score}`}
+                        >
+                            {score}
+                        </span>
+                        {activity.subType === 'interval' && (
+                            <span className="text-[8px] uppercase font-bold bg-red-500/20 text-red-400 px-1 rounded" title="Intervallpass">⚡</span>
+                        )}
+                        {activity.subType === 'long-run' && (
+                            <span className="text-[8px] uppercase font-bold bg-blue-500/20 text-blue-400 px-1 rounded" title="Långpass">🏃</span>
+                        )}
+                        {activity.subType === 'race' && (
+                            <span className="text-[8px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1 rounded" title="Tävling">🏆</span>
+                        )}
+                    </div>
+                </td>
+                <td className="px-3 py-2">
+                    {(() => {
+                        if (isMergedActivity) {
+                            return (
+                                <div
+                                    className="flex items-center gap-2 cursor-pointer group/source min-w-[100px]"
+                                    onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                                >
+                                    {!isExpanded ? (
+                                        <>
+                                            <span className="text-[10px] font-black tracking-wider text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 group-hover/source:bg-indigo-500/20 transition-colors uppercase">
+                                                Merged
+                                            </span>
+                                            <div className="flex items-center -space-x-1 opacity-50 group-hover/source:opacity-100 transition-opacity">
+                                                {mergedSources.some(s => s.source === 'strava') && <span title="Strava" className="text-xs">🔥</span>}
+                                                {mergedSources.some(s => s.source === 'strength' || s.source === 'strengthlog') && <span title="StrengthLog" className="text-xs">💪</span>}
+                                                {mergedSources.some(s => s.source === 'hevy') && <span title="Hevy" className="text-xs">🏋️</span>}
+                                                {mergedSources.some(s => s.source === 'garmin') && <span title="Garmin" className="text-xs">⌚</span>}
+                                            </div>
+                                            <span className="text-[10px] text-slate-600 group-hover/source:text-slate-400">▶</span>
+                                        </>
+                                    ) : (
+                                        <div className="flex flex-col gap-1.5 animate-in fade-in slide-in-from-left-2 duration-200">
+                                            {mergedSources.map(s => (
+                                                <div key={s.id} className="flex items-center gap-2 text-[10px] font-bold uppercase truncate">
+                                                    {s.source === 'strava' && <span className="text-[#FC4C02] bg-[#FC4C02]/10 px-1 rounded">🔥 Strava</span>}
+                                                    {(s.source === 'strength' || s.source === 'strengthlog') && <span className="text-purple-400 bg-purple-400/10 px-1 rounded">💪 Strength</span>}
+                                                    {s.source === 'hevy' && <span className="text-blue-400 bg-blue-400/10 px-1 rounded">🏋️ Hevy</span>}
+                                                    {s.source === 'garmin' && <span className="text-sky-400 bg-sky-400/10 px-1 rounded">⌚ Garmin</span>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        } else if (activity.source === 'strava') {
+                            return (
+                                <span className="text-[#FC4C02] font-bold text-[9px] uppercase">🔥 Strava</span>
+                            );
+                        } else if (activity.source === 'strength' || activity.source === 'strengthlog') {
+                            return (
+                                <span className="text-purple-400 font-bold text-[9px] uppercase">💪 StrengthLog</span>
+                            );
+                        } else if (activity.source === 'hevy') {
+                            return (
+                                <span className="text-blue-400 font-bold text-[9px] uppercase">🏋️ Hevy</span>
+                            );
+                        } else {
+                            return (
+                                <span className="text-blue-400 font-bold text-[9px] uppercase">✏️ Man</span>
+                            );
+                        }
+                    })()}
+                </td>
+                <td className="px-3 py-2">
+                    <div className="flex flex-col text-[10px] font-mono text-slate-300 leading-tight">
+                        <span>{formatDuration(activity.durationMinutes * 60)}</span>
+                        {activity.distance && (
+                            <span className="text-slate-400">{activity.distance.toFixed(1)} km</span>
+                        )}
+                        {pace && (
+                            <span className="text-indigo-400">{pace}/km</span>
+                        )}
+                        {activity.tonnage && (
+                            <span className="text-purple-400">{(activity.tonnage / 1000).toFixed(1)}t</span>
+                        )}
+                    </div>
+                </td>
+                <td className="px-3 py-2 text-[10px] italic opacity-50 truncate max-w-[80px]" title={activity.notes || ''}>
+                    {activity.notes ? (activity.notes.length > 20 ? activity.notes.slice(0, 20) + '…' : activity.notes) : '-'}
+                </td>
+            </tr>
+
+            {/* Expanded Details Row */}
+            {isMergedActivity && isExpanded && (
+                <tr className="bg-slate-900/50 animate-in fade-in duration-200">
+                    <td colSpan={7} className="px-4 py-4 cursor-default">
+                        <div className="flex flex-col gap-3 pl-8 border-l-2 border-indigo-500/30">
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Källaktiviteter</h4>
+                            <div className="space-y-2">
+                                {mergedSources.map(source => (
+                                    <div key={source.id} className="flex items-center justify-between bg-slate-950 p-2 rounded-lg border border-white/5">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-6 h-6 rounded flex items-center justify-center bg-slate-900 text-xs">
+                                                {source.source === 'strava' ? '🔥' : source.source === 'strength' ? '💪' : source.source === 'hevy' ? '🏋️' : '✏️'}
+                                            </div>
+                                            <div>
+                                                <p className="text-xs font-bold text-white">{source.title}</p>
+                                                <p className="text-[10px] text-slate-500 capitalize">{source.type} • {source.source}</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const fullActivity = universalActivities.find(u => u.id === source.id);
+                                                if (fullActivity) {
+                                                    const perf = fullActivity.performance;
+                                                    const plan = fullActivity.plan;
+
+                                                    let mappedType: 'run' | 'strength' | 'other' = 'other';
+                                                    const uType = perf?.activityType || plan?.activityType;
+                                                    if (uType === 'running' || (uType as any) === 'run') mappedType = 'run';
+                                                    else if (uType === 'strength') mappedType = 'strength';
+
+                                                    // note: subType casting to any as temporary fix for potential type mismatch
+                                                    const mapped: ExerciseEntry & { source: string } = {
+                                                        id: fullActivity.id,
+                                                        date: fullActivity.date,
+                                                        type: mappedType as any,
+                                                        subType: perf?.subType as any,
+                                                        durationMinutes: perf?.durationMinutes ?? plan?.durationMinutes ?? 0,
+                                                        distance: perf?.distanceKm ?? plan?.distanceKm ?? 0,
+                                                        title: plan?.title || (fullActivity as any).name || 'Unknown',
+                                                        notes: perf?.notes,
+                                                        source: perf?.source?.source || 'unknown',
+                                                        // Default required props to satisfy TS
+                                                        intensity: 'moderate',
+                                                        caloriesBurned: 0,
+                                                        createdAt: fullActivity.createdAt
+                                                    };
+                                                    onSelectActivity(mapped);
+                                                }
+                                            }}
+                                            className="text-[10px] bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-white transition-colors"
+                                        >
+                                            Visa
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            )}
+        </React.Fragment>
+    );
+};
+
 export function ActivitiesPage() {
     const { unifiedActivities: allActivities, universalActivities, strengthSessions, addStrengthSession, deleteStrengthSession } = useData();
     const { token } = useAuth();
@@ -552,134 +831,19 @@ export function ActivitiesPage() {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
-                        {processedActivities.slice(0, page * ITEMS_PER_PAGE).map((activity, i) => {
-                            const isSelectedForMerge = selectedForMerge.has(activity.id);
-                            const universalMatch = universalActivities.find(u => u.id === activity.id);
-                            const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged';
-
-                            // Get title for merged activities
-                            let displayTitle = activity.title || '-';
-                            if (displayTitle === '-' && isMergedActivity && universalMatch?.mergeInfo?.originalActivityIds) {
-                                // Try to get Strava title from one of the originals
-                                for (const origId of universalMatch.mergeInfo.originalActivityIds) {
-                                    const origActivity = universalActivities.find(u => u.id === origId);
-                                    if (origActivity?.plan?.title || origActivity?.performance?.notes) {
-                                        displayTitle = origActivity.plan?.title || origActivity.performance?.notes || '-';
-                                        break;
-                                    }
-                                }
-                            }
-
-                            // Calculate pace
-                            const pace = activity.distance && activity.durationMinutes > 0
-                                ? (activity.durationMinutes / activity.distance).toFixed(2).replace('.', ':')
-                                : null;
-
-                            // Score
-                            const score = calculatePerformanceScore(activity, allActivities);
-
-                            return (
-                                <tr
-                                    key={activity.id || i}
-                                    className={`transition-colors cursor-pointer group ${isSelectedForMerge
-                                        ? 'bg-indigo-500/20 hover:bg-indigo-500/30 ring-1 ring-indigo-500/50'
-                                        : 'hover:bg-white/5'
-                                        }`}
-                                    onClick={() => handleSetSelectedActivity(activity)}
-                                >
-                                    {/* Mark for merge button */}
-                                    <td className="w-8 px-1">
-                                        <button
-                                            onClick={(e) => toggleMergeSelection(activity.id, i, e)}
-                                            className={`opacity-0 group-hover:opacity-100 transition-all w-5 h-5 rounded flex items-center justify-center text-xs ${isSelectedForMerge
-                                                ? 'opacity-100 bg-indigo-500 text-white'
-                                                : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
-                                                }`}
-                                            title={isSelectedForMerge ? 'Ta bort från merge' : 'Markera för merge (Shift+klick för flera)'}
-                                        >
-                                            {isSelectedForMerge ? '✓' : '+'}
-                                        </button>
-                                    </td>
-                                    <td className="px-3 py-2 font-mono text-white text-xs whitespace-nowrap">
-                                        {activity.date.split('T')[0]}
-                                    </td>
-                                    <td className="px-3 py-2">
-                                        <div className="flex flex-col gap-0.5">
-                                            <span className="text-white font-bold text-xs truncate max-w-[180px]" title={displayTitle}>
-                                                {displayTitle}
-                                            </span>
-                                            {isMergedActivity && (
-                                                <span className="text-[9px] text-slate-500 italic">
-                                                    ⚡ {universalMatch?.mergeInfo?.originalActivityIds?.length || 2} aktiviteter
-                                                </span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-2">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="capitalize text-white font-bold text-xs">{activity.type}</span>
-                                            {/* Score badge inline */}
-                                            <span
-                                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-                                                    score >= 60 ? 'bg-indigo-500/20 text-indigo-400' :
-                                                        'bg-slate-500/20 text-slate-400'
-                                                    }`}
-                                                title={`Poäng: ${score}`}
-                                            >
-                                                {score}
-                                            </span>
-                                            {activity.subType === 'interval' && (
-                                                <span className="text-[8px] uppercase font-bold bg-red-500/20 text-red-400 px-1 rounded" title="Intervallpass">⚡</span>
-                                            )}
-                                            {activity.subType === 'long-run' && (
-                                                <span className="text-[8px] uppercase font-bold bg-blue-500/20 text-blue-400 px-1 rounded" title="Långpass">🏃</span>
-                                            )}
-                                            {activity.subType === 'race' && (
-                                                <span className="text-[8px] uppercase font-bold bg-amber-500/20 text-amber-400 px-1 rounded" title="Tävling">🏆</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-2">
-                                        {(() => {
-                                            if (isMergedActivity) {
-                                                return (
-                                                    <span className="text-emerald-400 font-bold text-[9px] uppercase">⚡ Merged</span>
-                                                );
-                                            } else if (activity.source === 'strava') {
-                                                return (
-                                                    <span className="text-[#FC4C02] font-bold text-[9px] uppercase">🔥 Strava</span>
-                                                );
-                                            } else if (activity.source === 'strength') {
-                                                return (
-                                                    <span className="text-purple-400 font-bold text-[9px] uppercase">💪 Styrka</span>
-                                                );
-                                            } else {
-                                                return (
-                                                    <span className="text-blue-400 font-bold text-[9px] uppercase">✏️ Man</span>
-                                                );
-                                            }
-                                        })()}
-                                    </td>
-                                    <td className="px-3 py-2">
-                                        <div className="flex flex-col text-[10px] font-mono text-slate-300 leading-tight">
-                                            <span>{formatDuration(activity.durationMinutes * 60)}</span>
-                                            {activity.distance && (
-                                                <span className="text-slate-400">{activity.distance.toFixed(1)} km</span>
-                                            )}
-                                            {pace && (
-                                                <span className="text-indigo-400">{pace}/km</span>
-                                            )}
-                                            {activity.tonnage && (
-                                                <span className="text-purple-400">{(activity.tonnage / 1000).toFixed(1)}t</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="px-3 py-2 text-[10px] italic opacity-50 truncate max-w-[80px]" title={activity.notes || ''}>
-                                        {activity.notes ? (activity.notes.length > 15 ? activity.notes.slice(0, 15) + '…' : activity.notes) : '-'}
-                                    </td>
-                                </tr>
-                            );
-                        })}
+                        {processedActivities.slice(0, page * ITEMS_PER_PAGE).map((activity, i) => (
+                            <ActivityRow
+                                key={activity.id || i}
+                                activity={activity}
+                                index={i}
+                                isSelectedForMerge={selectedForMerge.has(activity.id)}
+                                onToggleMerge={toggleMergeSelection}
+                                universalActivities={universalActivities}
+                                allActivities={allActivities}
+                                onSelectActivity={handleSetSelectedActivity}
+                                showFilters={false} // removed from prop usage but keeping for TS compliance if needed (removed from interface above so removing here)
+                            />
+                        ))}
                     </tbody>
                 </table>
 
