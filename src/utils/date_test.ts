@@ -1,0 +1,46 @@
+import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { parseTimeToSeconds, formatDurationSeconds, formatDurationMinutes } from "./time.ts";
+import { formatDaysAgoCompact, getRelativeTime, formatDateFull } from "./date.ts";
+
+// Time Tests
+Deno.test("parseTimeToSeconds - handles colon format", () => {
+  assertEquals(parseTimeToSeconds("1:30"), 90);
+  assertEquals(parseTimeToSeconds("1:00:00"), 3600);
+});
+
+Deno.test("parseTimeToSeconds - handles unit format", () => {
+  assertEquals(parseTimeToSeconds("1h 30m"), 5400);
+  assertEquals(parseTimeToSeconds("45min"), 2700);
+  assertEquals(parseTimeToSeconds("45 min"), 2700);
+});
+
+Deno.test("parseTimeToSeconds - handles raw numbers", () => {
+  assertEquals(parseTimeToSeconds("45"), 2700); // < 300 -> minutes
+  assertEquals(parseTimeToSeconds("300"), 300); // >= 300 -> seconds
+});
+
+Deno.test("formatDurationSeconds", () => {
+  assertEquals(formatDurationSeconds(5400), "1h 30m");
+  assertEquals(formatDurationSeconds(2700), "45m");
+});
+
+Deno.test("formatDurationMinutes", () => {
+  assertEquals(formatDurationMinutes(90), "1h 30min");
+  assertEquals(formatDurationMinutes(45), "45min");
+});
+
+// Date Tests
+Deno.test("formatDaysAgoCompact", () => {
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const threeDaysAgo = new Date(now);
+  threeDaysAgo.setDate(now.getDate() - 3);
+
+  assertEquals(formatDaysAgoCompact(now.toISOString()), "idag");
+  assertEquals(formatDaysAgoCompact(yesterday.toISOString()), "igår");
+  // Note: specific output depends on implementation but we test consistency
+});
+
+// We can add more specific date tests if we mock the current date,
+// but for now this ensures basic function existence and return types.
