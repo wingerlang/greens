@@ -35,7 +35,7 @@ export async function ensureSeeded() {
 
     // 2. Seed Food Database
     try {
-        const content = await Deno.readTextFile("LivsmedelsDB_Cleaned_Vegan.csv");
+        const content = await Deno.readTextFile("data/LivsmedelsDB_Cleaned_Vegan.csv");
         const records = parse(content, {
             skipFirstRow: true,
             columns: [
