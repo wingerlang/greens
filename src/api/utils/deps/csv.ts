@@ -2,7 +2,8 @@
 import { parse as parseCsv } from "csv-parse/sync";
 
 export async function parse(input: string, options: any = {}): Promise<any[]> {
-    if (globalThis.Deno) {
+    // Check for Deno AND ensure we are not in the Node polyfill mode
+    if (globalThis.Deno && !(globalThis as any).IS_NODE_COMPAT_MODE) {
         // Dynamic import for Deno
         try {
             const { parse } = await import("https://jsr.io/@std/csv/1.0.6/mod.ts");
