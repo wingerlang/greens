@@ -1,0 +1,59 @@
+                    </div>
+                </header>
+
+                <div className={`grid grid-cols-1 md:grid-cols-12 ${density === 'compact' ? 'gap-3' : density === 'slim' ? 'gap-4' : 'gap-6'} items-stretch`}>
+                    {/* Top Section: Daily Summary & Active Goals */}
+                    <div className="md:col-span-12 flex flex-col gap-4 mb-4">
+                        <DailySummaryCard
+                            calories={{ current: consumed, target: target }}
+                            protein={{ current: proteinCurrent, target: proteinTarget }}
+                            trainingMinutes={completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0)}
+                            measurementsCount={0}
+                            weighInDone={latest3Weights.some(w => w.date === today)}
+                            sleepHours={vitals?.sleep || 0}
+                            alcoholUnits={vitals?.alcohol || 0}
+                            density={density === 'compact' ? 'compact' : 'normal'}
+                        />
+                        <ActiveGoalsCard />
+
+                        {/* Weekly Summary Row */}
+                        <div className="md:col-span-12 mt-2 mb-4">
+                            {(() => {
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 7-Day Performance Summary - Horizontal Timeline */}
+                    <div
+                        className="col-span-12 md:col-span-12 relative z-[60]"
+                        onMouseEnter={() => setIsHoveringChart(true)}
+                        onMouseLeave={() => setIsHoveringChart(false)}
+                    >
+                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800 transition-all duration-300 ${isHoveringChart ? 'scale-[1.01] shadow-2xl shadow-indigo-500/10 border-indigo-500/20' : ''}`}>
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-6">
+                                <div className="flex items-center gap-2">
+                    </div>
+
+
+                    <div className={`md:col-span-12 ${density === 'compact' ? 'p-3 rounded-2xl' : 'p-6 rounded-[2rem]'} bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-center`}>
+                        <div className="flex flex-col md:flex-row gap-6">
+                            {/* Main Activity Streak */}
+                            <div className="flex-1 border-r border-slate-100 dark:border-slate-800 pr-6">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-rose-500/10 rounded-full text-rose-500 ring-2 ring-rose-500/5">
+                                            <Flame className={density === 'compact' ? 'w-4 h-4' : 'w-5 h-5'} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div >
+        </div >
+
+            {/* Activity Modal */ }
+    {
+        selectedActivity && (

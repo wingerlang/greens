@@ -61,6 +61,34 @@ export function ExerciseDetailModal({
         }
     };
 
+    // Body Weight History Helper
+    const bodyWeightHistory = useMemo(() => {
+        return workouts
+            .filter(w => w.bodyWeight && w.bodyWeight > 0)
+            .map(w => ({ date: new Date(w.date).getTime(), weight: w.bodyWeight! }))
+            .sort((a, b) => a.date - b.date);
+    }, [workouts]);
+
+    const getBodyWeightForDate = (dateStr: string) => {
+        if (bodyWeightHistory.length === 0) return null;
+        const targetTime = new Date(dateStr).getTime();
+
+        // Find closest measurement
+        let closest = bodyWeightHistory[0];
+        let minDiff = Math.abs(targetTime - closest.date);
+
+        for (let i = 1; i < bodyWeightHistory.length; i++) {
+            const diff = Math.abs(targetTime - bodyWeightHistory[i].date);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closest = bodyWeightHistory[i];
+            }
+        }
+
+        const daysDiff = Math.round(minDiff / (1000 * 60 * 60 * 24));
+        return { weight: closest.weight, daysDiff, isEstimated: daysDiff > 0 };
+    };
+
     // Get all instances of this exercise across workouts
     const exerciseHistory = useMemo(() => {
         const history: {
@@ -76,6 +104,14 @@ export function ExerciseDetailModal({
             maxTime?: number;
             maxTimeFormatted?: string;
             bestTempo?: string;
+            bestSetString?: string;
+
+            // Relative Metrics
+            bodyWeight?: number;
+            bwDaysDiff?: number;
+            relativeMaxWeight?: number;
+            relativeEst1RM?: number;
+            maxWeightReps?: number;
         }[] = [];
 
         workouts.forEach(w => {
@@ -89,9 +125,9 @@ export function ExerciseDetailModal({
                 const allSets = exerciseEntries.flatMap(e => e.sets);
                 const maxWeight = Math.max(...allSets.map(s => s.weight));
                 const totalReps = allSets.reduce((sum, s) => sum + s.reps, 0);
+
                 // Calculate Volume & Max Weight
                 let volume = 0;
-
                 if (isWeightedDistanceExercise(exerciseName)) {
                     volume = allSets.reduce((sum, s) => sum + (s.weight * (s.distance || 0)), 0);
                 } else if (isDistanceBasedExercise(exerciseName)) {
@@ -101,14 +137,21 @@ export function ExerciseDetailModal({
                 }
 
                 const est1RMs = allSets.map(s => {
-                    // For weighted distance, est1RM is just the weight (since reps are 0)
-                    if (isWeightedDistanceExercise(exerciseName)) return s.weight;
-                    if (isDistanceBasedExercise(exerciseName)) return 0;
+                    if (isWeightedDistanceExercise(exerciseName)) return { val: s.weight, set: s };
+                    if (isDistanceBasedExercise(exerciseName)) return { val: 0, set: s };
                     const isBW = s.isBodyweight || s.weight === 0;
                     const calcWeight = isBW ? (s.extraWeight || 0) : s.weight;
-                    return calculateEstimated1RM(calcWeight, s.reps);
+                    return { val: calculateEstimated1RM(calcWeight, s.reps), set: s };
                 });
-                const best1RMValue = Math.max(...est1RMs);
+
+                const bestSetEntry = est1RMs.reduce((prev, curr) => curr.val > prev.val ? curr : prev, est1RMs[0]);
+                const best1RMValue = bestSetEntry.val;
+                const bestSet = bestSetEntry.set;
+                const bestSetString = `${bestSet.reps}x${bestSet.weight}kg`;
+
+                // Find set for Max Weight (Actual)
+                const maxWeightSet = allSets.find(s => s.weight === maxWeight);
+                const maxWeightReps = maxWeightSet ? maxWeightSet.reps : 0;
 
                 // Cardio/Distance metrics
                 const distances = allSets.map(s => s.distance || 0);
@@ -117,11 +160,18 @@ export function ExerciseDetailModal({
 
                 const times = allSets.map(s => s.timeSeconds || 0);
                 const maxTime = Math.max(...times);
-                // Prefer formatted time from the longest duration set
                 const maxTimeFormatted = allSets.find(s => s.timeSeconds === maxTime)?.time || '';
-
-                // Tempo from best set (longest distance or time)
                 const bestTempo = allSets.find(s => (s.distance === maxDistance && maxDistance > 0) || (s.timeSeconds === maxTime && maxTime > 0))?.tempo;
+
+                // Derive Body Weight
+                const bwData = getBodyWeightForDate(w.date);
+                let relativeMaxWeight = 0;
+                let relativeEst1RM = 0;
+
+                if (bwData && bwData.weight > 0) {
+                    relativeMaxWeight = maxWeight / bwData.weight;
+                    relativeEst1RM = best1RMValue / bwData.weight;
+                }
 
                 history.push({
                     date: w.date,
@@ -135,13 +185,73 @@ export function ExerciseDetailModal({
                     totalDistance,
                     maxTime,
                     maxTimeFormatted,
-                    bestTempo
+                    bestTempo,
+                    bestSetString,
+
+                    bodyWeight: bwData?.weight,
+                    bwDaysDiff: bwData?.daysDiff,
+                    relativeMaxWeight,
+                    bodyWeight: bwData?.weight,
+                    bwDaysDiff: bwData?.daysDiff,
+                    relativeMaxWeight,
+                    relativeEst1RM,
+                    maxWeightReps
                 });
             }
         });
 
         return history.sort((a, b) => a.date.localeCompare(b.date));
-    }, [workouts, exerciseName]);
+    }, [workouts, exerciseName, bodyWeightHistory]); // Added bodyWeightHistory dependency
+
+
+
+    // Need to be careful here: prProgression logic was relying on closure? No, it uses exerciseHistory.
+    // We can just rely on exerciseHistory which we just updated.
+    // But the previous implementation iterated exerciseHistory inside this useMemo.
+    // I will just keep the existing logic structure for prProgression below this block.
+    // Wait, replace_file_content replaces the BLOCK. I need to make sure I don't delete prProgression.
+    // The EndLine is 275. prProgression starts at 154.
+    // My replacement includes getBodyWeightForDate AND exerciseHistory.
+    // I need to exclude prProgression from the replacement if I verify lines.
+    // Original code:
+    // 65: const exerciseHistory = useMemo...
+    // ...
+    // 151: }, [workouts, exerciseName]);
+    // 153: // Calculate PR progression...
+    //
+    // So I should replace from 65 to 151 with new logic.
+    // I also need to insert `bodyWeightHistory` and `getBodyWeightForDate` BEFORE 65.
+    //
+    // I will target StartLine: 65, EndLine: 151.
+    // AND I will insert the helper functions at the beginning of the replacement.
+
+
+
+
+    // I need to find where to insert helpers.
+    // Line 65 is `const exerciseHistory = useMemo(() => {`.
+    // I will replace from 65 to 151.
+
+    // Actually, I can just replace the whole exerciseHistory block with the new one containing helpers (or put helpers inside the component body, before this hook).
+    // The previous view_file showed lines 1-200.
+
+    // The previous plan was to replace up to 275, which would overwrite prProgression (lines 153+) and maxRecord/bestRecord (lines 263+).
+    // I should only replace `exerciseHistory` definition first.
+    // Or I can replace everything if I include the code.
+
+    // Let's stick to replacing `exerciseHistory` (lines 65-151) and verify the lines for `maxRecord` and `bestRecord` later to update them to use `metricMode`.
+
+    // Wait, `getBodyWeightForDate` needs `bodyWeightHistory`.
+    // `bodyWeightHistory` needs `workouts`.
+    // I can put these before `exerciseHistory`.
+
+    /* 
+       Target: lines 64-151
+       Content: 
+         - bodyWeightHistory
+         - getBodyWeightForDate
+         - exerciseHistory useMemo
+    */
 
     // Calculate PR progression (Weight-PRs) - check every single set
     const prProgression = useMemo(() => {
@@ -249,41 +359,59 @@ export function ExerciseDetailModal({
     }, [exerciseHistory]);
 
     const totalSets = useMemo(() => exerciseHistory.reduce((sum, h) => sum + h.sets, 0), [exerciseHistory]);
+    const totalReps = useMemo(() => exerciseHistory.reduce((sum, h) => sum + h.reps, 0), [exerciseHistory]);
     const totalVolume = exerciseHistory.reduce((sum: number, h) => sum + h.volume, 0);
 
     // Find workout for Max 1RM
     const maxRecord = useMemo(() => {
         if (exerciseHistory.length === 0) return null;
+        if (metricMode === 'relative') {
+            return exerciseHistory.reduce((prev, curr) => ((curr.relativeMaxWeight || 0) > (prev.relativeMaxWeight || 0) ? curr : prev), exerciseHistory[0]);
+        }
         return exerciseHistory.reduce((prev, curr) => (curr.maxWeight > prev.maxWeight ? curr : prev), exerciseHistory[0]);
-    }, [exerciseHistory]);
+    }, [exerciseHistory, metricMode]);
+
+    // For absolute display, we still want the max weight ever lifted, regardless of mode? 
+    // Usually "Tyngsta Lyft" means heaviest absolute weight. 
+    // "Weight Adjusted" usually implies identifying the BEST PERFORMANCE relative to BW.
+    // So if I lifted 120kg at 80kg BW (1.5x) vs 130kg at 100kg BW (1.3x), the 120kg lift is "better" relatively.
+    // So yes, switching maxRecord to the relative best makes sense.
+
     const maxEver = maxRecord?.maxWeight || 0;
+    const maxEverRelative = maxRecord?.relativeMaxWeight || 0;
 
     const bestRecord = useMemo(() => {
         if (exerciseHistory.length === 0) return null;
         if (isDistanceBasedExercise(exerciseName)) {
             return exerciseHistory.reduce((prev, curr) => ((curr.maxDistance || 0) > (prev.maxDistance || 0) ? curr : prev), exerciseHistory[0]);
         }
+        if (metricMode === 'relative') {
+            return exerciseHistory.reduce((prev, curr) => ((curr.relativeEst1RM || 0) > (prev.relativeEst1RM || 0) ? curr : prev), exerciseHistory[0]);
+        }
         return exerciseHistory.reduce((prev, curr) => (curr.est1RM > prev.est1RM ? curr : prev), exerciseHistory[0]);
-    }, [exerciseHistory, exerciseName]);
+    }, [exerciseHistory, exerciseName, metricMode]);
 
     // Best value for the summary card (1RM, Distance, or Weight+Dist)
     const bestValueDisplay = useMemo(() => {
         if (!maxRecord && !bestRecord) return '0';
 
         if (isWeightedDistanceExercise(exerciseName)) {
-            // Show Max Weight (and distance)
             const rec = maxRecord || bestRecord;
             return `${rec?.maxWeight}kg (${rec?.maxDistance}m)`;
         }
 
         if (isDistanceBasedExercise(exerciseName)) {
-            // Show Max Distance
             return `${Math.round(bestRecord?.maxDistance || 0)}m`;
+        }
+
+        if (metricMode === 'relative') {
+            const val = bestRecord?.relativeEst1RM || 0;
+            return val > 0 ? `${val.toFixed(2)}x kroppsvikt` : 'N/A';
         }
 
         // Default Strength
         return `${bestRecord?.est1RM || 0} kg`;
-    }, [maxRecord, bestRecord, exerciseName]);
+    }, [maxRecord, bestRecord, exerciseName, metricMode]);
 
     // Contextual Calculations (Motivation Mode)
     const contextStats = useMemo(() => {
@@ -300,10 +428,10 @@ export function ExerciseDetailModal({
         const annualBestEst = currentYearHistory.reduce((max, h) => Math.max(max, h.est1RM), 0);
         const annualBestAct = currentYearHistory.reduce((max, h) => Math.max(max, h.maxWeight), 0);
 
-        // Find the specific session for the Annual Best (Est 1RM)
-        const bestSession = currentYearHistory.find(h => h.est1RM === annualBestEst);
+        const bestSession = currentYearHistory.find(h => h.maxWeight === annualBestAct);
         const bestSessionWorkout = bestSession?.workout;
         const bestDate = bestSession ? bestSession.date : '';
+        const annualBestReps = bestSession ? (bestSession.maxWeightReps || 0) : 0;
 
         // Calculate "Time Ago"
         let timeAgo = '';
@@ -316,10 +444,15 @@ export function ExerciseDetailModal({
         }
 
         // Is Current Session the Annual Best?
-        const isAnnualBest = lastSession.est1RM >= annualBestEst && annualBestEst > 0;
+        const isAnnualBest = lastSession.maxWeight >= annualBestAct && annualBestAct > 0;
 
         // Is Annual Best also an All-Time PR?
-        const isAllTimeBest = annualBestEst >= overallBestEst && overallBestEst > 0;
+        // Note: For All-Time PR we usually compare actual weight too? 
+        // Or should "All Time PR" be based on e1RM? 
+        // Usually "PR" implies actual weight lifted. "Best e1RM" implies theoretical.
+        // Let's settle on: "Annual Best" = Heaviest Lift of Year.
+        const overallBestAct = exerciseHistory.reduce((max, h) => Math.max(max, h.maxWeight), 0);
+        const isAllTimeBest = annualBestAct >= overallBestAct && overallBestAct > 0;
 
         // 3-Month Trend
         const threeMonthsAgo = new Date();
@@ -347,6 +480,7 @@ export function ExerciseDetailModal({
         return {
             annualBestEst,
             annualBestAct,
+            annualBestReps,
             bestDate,
             timeAgo,
             bestSessionWorkout,
@@ -361,8 +495,11 @@ export function ExerciseDetailModal({
 
     // Helper for Relative Strength Display
     const formatValue = (val: number, workout?: StrengthWorkout, suffix = 'kg') => {
-        if (metricMode === 'relative' && workout?.bodyWeight) {
-            return (val / workout.bodyWeight).toFixed(2) + 'x';
+        if (metricMode === 'relative') {
+            if (workout?.bodyWeight) {
+                return (val / workout.bodyWeight).toFixed(2) + 'x';
+            }
+            return 'N/A'; // Marker for missing BW
         }
         return Math.round(val) + suffix;
     };
@@ -447,7 +584,7 @@ export function ExerciseDetailModal({
                                 <div className="flex items-center gap-2 mb-1">
                                     <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Årsbästa {new Date().getFullYear()}</p>
                                     {contextStats.isAllTimeBest && (
-                                        <span className="text-[8px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-black tracking-tighter animate-pulse">ALL-TIME PR</span>
+                                        <span className="text-[8px] bg-amber-500 text-slate-950 px-1.5 py-0.5 rounded font-black tracking-tighter animate-pulse">ALL TIME REKORD</span>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-3">
@@ -455,8 +592,8 @@ export function ExerciseDetailModal({
                                         <div className="flex items-center gap-2">
                                             <span className={`text-2xl font-black ${contextStats.isAnnualBest ? 'text-yellow-400' : 'text-white'} leading-none`}>
                                                 {metricMode === 'relative' && contextStats.bestSessionWorkout?.bodyWeight
-                                                    ? (contextStats.annualBestEst / contextStats.bestSessionWorkout.bodyWeight).toFixed(2) + 'x'
-                                                    : contextStats.annualBestEst + ' kg'}
+                                                    ? (contextStats.annualBestAct / contextStats.bestSessionWorkout.bodyWeight).toFixed(2) + 'x'
+                                                    : `${contextStats.annualBestReps}x${contextStats.annualBestAct}kg`}
                                             </span>
                                             {contextStats.isAnnualBest && (
                                                 <span className="text-xl animate-bounce" title="Nytt Årsbästa!">🏆</span>
@@ -465,7 +602,7 @@ export function ExerciseDetailModal({
                                         <div className="flex gap-2 text-[10px] text-slate-400 font-medium mt-1">
                                             <span>Est. 1RM</span>
                                             <span className="text-slate-600">|</span>
-                                            <span>Lyft: {contextStats.annualBestAct}kg</span>
+                                            <span>e1RM: {Math.round(contextStats.annualBestEst)}kg</span>
                                         </div>
                                     </div>
                                     {contextStats.bestSessionWorkout && onSelectWorkout && (
@@ -513,38 +650,219 @@ export function ExerciseDetailModal({
                     </div>
                 )}
 
-                {/* Summary Stats */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <div className="bg-slate-800/50 rounded-xl p-2.5 text-center">
-                        <p className="text-lg font-black text-white">{exerciseHistory.length}</p>
-                        <p className="text-[9px] text-slate-500 uppercase font-bold">Pass</p>
+                {/* Summary Stats Grid */}
+                <div className="grid grid-cols-2 gap-2">
+                    {/* Top Row: Stats & Volume (50/50) */}
+                    <div className="bg-slate-800/50 rounded-xl p-3 flex flex-col justify-center items-center h-full">
+                        <div className="flex items-center gap-2 text-white font-black text-sm md:text-base">
+                            <span>{exerciseHistory.length} <span className="text-[9px] text-slate-500 font-bold uppercase">Pass</span></span>
+                            <span className="text-slate-700">|</span>
+                            <span>{totalSets} <span className="text-[9px] text-slate-500 font-bold uppercase">Set</span></span>
+                            <span className="text-slate-700">|</span>
+                            <span>{totalReps} <span className="text-[9px] text-slate-500 font-bold uppercase">Reps</span></span>
+                        </div>
                     </div>
-                    <div className="bg-slate-800/50 rounded-xl p-2.5 text-center">
-                        <p className="text-lg font-black text-white">{totalSets}</p>
-                        <p className="text-[9px] text-slate-500 uppercase font-bold">Set</p>
-                    </div>
-                    <div className="bg-slate-800/50 rounded-xl p-2.5 text-center">
-                        {/* Intelligent Volume Display */}
-                        <p className="text-lg font-black text-white text-blue-400">
+
+                    <div className="bg-slate-800/50 rounded-xl p-3 text-center flex flex-col justify-center items-center h-full">
+                        <p className="text-lg font-black text-white text-blue-400 leading-none">
                             {isDistanceBasedExercise(exerciseName)
                                 ? (totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 'km' : Math.round(totalVolume) + 'm')
                                 : (totalVolume > 1000 ? (totalVolume / 1000).toFixed(1) + 't' : Math.round(totalVolume) + 'kg')
                             }
                         </p>
-                        <p className="text-[9px] text-slate-500 uppercase font-bold">Total Volym</p>
+                        <p className="text-[9px] text-slate-500 uppercase font-bold mt-1">Volym</p>
                     </div>
-                    <button
-                        onClick={() => maxRecord && onSelectWorkout?.(maxRecord.workout)}
-                        className="bg-emerald-500/10 border border-emerald-500/30 hover:border-emerald-500/60 rounded-xl p-2.5 text-center group/pb transition-all active:scale-[0.98]"
-                    >
-                        <p className="text-lg font-black text-emerald-400 group-hover/pb:text-emerald-300 transition-colors text-nowrap truncate px-1">
-                            {bestValueDisplay}
-                        </p>
-                        <p className="text-[9px] text-emerald-500 uppercase font-bold flex items-center justify-center gap-1">
-                            {isDistanceBasedExercise(exerciseName) ? 'Längsta Distans' : 'All-Time PB'}
-                            <span className="opacity-0 group-hover/pb:opacity-100 transition-opacity">→</span>
-                        </p>
-                    </button>
+
+                    {/* Tyngsta Lyft (Max Weight) */}
+                    <div className={`bg-emerald-500/10 border border-emerald-500/30 rounded-xl py-3 px-2 text-center relative flex flex-col items-center justify-start ${isDistanceBasedExercise(exerciseName) ? 'col-span-2' : 'col-span-1'}`}>
+                        {/* Main Content Link */}
+                        <button
+                            onClick={() => maxRecord && onSelectWorkout?.(maxRecord.workout)}
+                            className="w-full hover:bg-emerald-500/5 rounded-lg transition-colors pb-1 group/main"
+                        >
+                            {maxRecord && (
+                                <span className="absolute top-1.5 right-2 text-[9px] text-emerald-500/60 font-mono">
+                                    {new Date(maxRecord.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', year: '2-digit' })}
+                                </span>
+                            )}
+                            <div className="mb-1 mt-1">
+                                {(() => {
+                                    const maxSet = !isDistanceBasedExercise(exerciseName) && maxRecord
+                                        ? maxRecord.workout.exercises.flatMap(e => e.sets).find(s => s.weight === maxRecord.maxWeight)
+                                        : null;
+
+                                    let mainText = '';
+                                    let subText = '';
+
+                                    if (isDistanceBasedExercise(exerciseName)) {
+                                        mainText = bestValueDisplay;
+                                    } else if (metricMode === 'relative') {
+                                        const rel = maxRecord?.relativeMaxWeight || 0;
+                                        mainText = rel > 0 ? `${rel.toFixed(2)}x` : 'N/A';
+                                        if (maxSet) subText = `${maxSet.reps}x${maxSet.weight}kg`;
+                                    } else {
+                                        mainText = maxSet ? `${maxSet.reps}x${maxSet.weight}kg` : `${maxEver} kg`;
+                                    }
+
+                                    return (
+                                        <div className="flex flex-col items-center leading-none">
+                                            <div className="flex items-center gap-1 justify-center">
+                                                <p className="text-lg font-black text-emerald-400 group-hover/main:text-emerald-300 transition-colors text-nowrap truncate px-1">
+                                                    {mainText}
+                                                </p>
+                                                {metricMode === 'relative' && (maxRecord?.bwDaysDiff || 0) > 60 && (
+                                                    <span title={`Viktdata är ${maxRecord?.bwDaysDiff} dagar gammal`} className="text-[10px] cursor-help">⚠️</span>
+                                                )}
+                                            </div>
+                                            {subText && (
+                                                <p className="text-[10px] text-emerald-500/70 font-medium mt-0.5">
+                                                    {subText}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                                <p className="text-[9px] text-emerald-500 uppercase font-bold flex items-center justify-center gap-1 mt-0.5">
+                                    {isDistanceBasedExercise(exerciseName) ? 'Längsta Distans' : 'Tyngsta Lyft'}
+                                    <span className="opacity-0 group-hover/main:opacity-100 transition-opacity">→</span>
+                                </p>
+                            </div>
+                        </button>
+
+                        {/* Runner Ups (2nd and 3rd heaviest) */}
+                        {!isDistanceBasedExercise(exerciseName) && maxRecord && (() => {
+                            // Get top 3 distinct sessions
+                            const top3 = [...exerciseHistory]
+                                .sort((a, b) => metricMode === 'relative'
+                                    ? (b.relativeMaxWeight || 0) - (a.relativeMaxWeight || 0)
+                                    : b.maxWeight - a.maxWeight
+                                )
+                                .slice(1, 3);
+
+                            if (top3.length === 0) return null;
+
+                            return (
+                                <div className="space-y-0.5 mt-2 border-t border-emerald-500/20 pt-1 w-full px-1">
+                                    {top3.map((rec, i) => {
+                                        // Try to find the set string for this record
+                                        const recSet = rec.workout.exercises
+                                            .flatMap(e => e.sets)
+                                            .find(s => s.weight === rec.maxWeight);
+                                        const weightText = recSet ? `${recSet.reps}x${recSet.weight}kg` : `${rec.maxWeight}kg`;
+
+                                        let displayText = weightText;
+                                        if (metricMode === 'relative') {
+                                            displayText = `${(rec.relativeMaxWeight || 0).toFixed(2)}x`;
+                                        }
+
+                                        return (
+                                            <button
+                                                key={i}
+                                                onClick={() => onSelectWorkout?.(rec.workout)}
+                                                className="flex justify-between items-center text-[9px] text-emerald-500/60 w-full hover:bg-emerald-500/10 rounded px-1 transition-colors"
+                                            >
+                                                <div className="flex items-center gap-1">
+                                                    <span>#{i + 2}: {displayText}</span>
+                                                    {metricMode === 'relative' && (
+                                                        <span className="opacity-50 text-[8px]">({weightText})</span>
+                                                    )}
+                                                    {metricMode === 'relative' && (rec.bwDaysDiff || 0) > 60 && (
+                                                        <span title="Gammal viktdata">⚠️</span>
+                                                    )}
+                                                </div>
+                                                <span className="font-mono opacity-70 ml-1">{new Date(rec.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', year: '2-digit' })}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
+                    </div>
+
+                    {/* Bästa Lyft (1eRM) */}
+                    {!isDistanceBasedExercise(exerciseName) && (
+                        <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl py-3 px-2 text-center relative flex flex-col items-center justify-start col-span-1">
+                            <button
+                                onClick={() => bestRecord && onSelectWorkout?.(bestRecord.workout)}
+                                className="w-full hover:bg-purple-500/5 rounded-lg transition-colors pb-1 group/main"
+                            >
+                                {bestRecord && (
+                                    <span className="absolute top-1.5 right-2 text-[9px] text-purple-500/60 font-mono">
+                                        {new Date(bestRecord.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', year: '2-digit' })}
+                                    </span>
+                                )}
+                                <div className="mb-1 mt-1">
+                                    <div className="flex flex-col items-center leading-none">
+                                        <div className="flex items-center gap-1 justify-center">
+                                            <span className="text-lg font-black text-purple-400 group-hover/main:text-purple-300 transition-colors text-nowrap truncate px-1">
+                                                {metricMode === 'relative'
+                                                    ? (bestRecord?.relativeEst1RM ? `${bestRecord.relativeEst1RM.toFixed(2)}x` : 'N/A')
+                                                    : (bestRecord?.bestSetString || '0 kg')
+                                                }
+                                            </span>
+                                            {metricMode === 'relative' && (bestRecord?.bwDaysDiff || 0) > 60 && (
+                                                <span title={`Viktdata är ${bestRecord?.bwDaysDiff} dagar gammal`} className="text-[10px] cursor-help">⚠️</span>
+                                            )}
+                                        </div>
+                                        {bestRecord && (
+                                            <span className="text-[10px] text-purple-400/70 font-bold mt-0.5">
+                                                {metricMode === 'relative'
+                                                    ? `(1eRM: ${Math.round(bestRecord.est1RM)}kg)`
+                                                    : `(1eRM: ${Math.round(bestRecord.est1RM)}kg)`
+                                                }
+                                            </span>
+                                        )}
+                                    </div>
+                                    <p className="text-[9px] text-purple-500 uppercase font-bold flex items-center justify-center gap-1 mt-0.5">
+                                        Bästa Lyft
+                                        <span className="opacity-0 group-hover/main:opacity-100 transition-opacity">→</span>
+                                    </p>
+                                </div>
+                            </button>
+
+                            {/* Runner Ups */}
+                            {bestRecord && (() => {
+                                const top3 = [...exerciseHistory]
+                                    .sort((a, b) => metricMode === 'relative'
+                                        ? (b.relativeEst1RM || 0) - (a.relativeEst1RM || 0)
+                                        : b.est1RM - a.est1RM
+                                    )
+                                    .slice(1, 3);
+
+                                if (top3.length === 0) return null;
+
+                                return (
+                                    <div className="space-y-0.5 mt-2 border-t border-purple-500/20 pt-1 w-full px-1">
+                                        {top3.map((rec, i) => {
+                                            let displayText = rec.bestSetString || `${rec.est1RM}kg`;
+                                            let subText = `(1eRM: ${Math.round(rec.est1RM)})`;
+
+                                            if (metricMode === 'relative') {
+                                                displayText = `${(rec.relativeEst1RM || 0).toFixed(2)}x`;
+                                                subText = rec.bestSetString || `${rec.est1RM}kg`;
+                                            }
+
+                                            return (
+                                                <button
+                                                    key={i}
+                                                    onClick={() => onSelectWorkout?.(rec.workout)}
+                                                    className="flex justify-between items-center text-[9px] text-purple-500/60 w-full hover:bg-purple-500/10 rounded px-1 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-1">
+                                                        <span>#{i + 2}: {displayText} <span className="opacity-50 text-[8px]">{subText}</span></span>
+                                                        {metricMode === 'relative' && (rec.bwDaysDiff || 0) > 60 && (
+                                                            <span title="Gammal viktdata">⚠️</span>
+                                                        )}
+                                                    </div>
+                                                    <span className="font-mono opacity-70 ml-1">{new Date(rec.date).toLocaleDateString('sv-SE', { month: 'short', day: 'numeric', year: '2-digit' })}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
                 </div>
 
                 {/* Progression Chart */}
@@ -569,8 +887,8 @@ export function ExerciseDetailModal({
                                 </>
                             ) : (
                                 <>
-                                    <span className="text-purple-500">🏆 Årsbästa</span>
-                                    <span className="text-[10px] text-slate-500 font-normal normal-case italic">(EST 1RM vs Faktiskt)</span>
+                                    <span className="text-purple-500">🏆 Årets bästa lyft</span>
+                                    <span className="text-[10px] text-slate-500 font-normal normal-case italic">(Faktiskt vs e1RM)</span>
                                 </>
                             )}
                         </h3>
@@ -610,8 +928,10 @@ export function ExerciseDetailModal({
                                 // If relative, we divide value by bodyweight (if available)
                                 // We need to be careful with aggregations. 
                                 // For Annual View, we should ideally re-calculate "Max Relative Strength" for the year.
+                                // For Annual View, we should ideally re-calculate "Max Relative Strength" for the year.
                                 const getRelativeVal = (val: number, workout?: StrengthWorkout) => {
-                                    if (metricMode !== 'relative' || !workout?.bodyWeight) return val;
+                                    if (metricMode !== 'relative') return val;
+                                    if (!workout?.bodyWeight) return 0; // Return 0 to indicate missing data instead of mixing units
                                     return val / workout.bodyWeight;
                                 };
 
@@ -738,58 +1058,87 @@ export function ExerciseDetailModal({
                                             />
 
                                             {/* Data Points & Tooltips */}
-                                            {chartData.map((d, i) => (
-                                                <g
-                                                    key={i}
-                                                    className="group"
-                                                    onClick={() => d.maxEst1RMWorkout && onSelectWorkout?.(d.maxEst1RMWorkout)}
-                                                >
-                                                    <circle
-                                                        cx={getX(i)}
-                                                        cy={getY(d.displayEst)}
-                                                        r="4"
-                                                        fill={isDist ? "#3b82f6" : "#f59e0b"} // blue or amber
-                                                        className="stroke-slate-900 stroke-2 cursor-pointer transition-all hover:r-5"
-                                                    />
-                                                    {/* Tooltip */}
-                                                    <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                                        <rect
-                                                            x={getX(i) - 30}
-                                                            y={getY(d.displayEst) - 40}
-                                                            width="60"
-                                                            height="30"
-                                                            rx="4"
-                                                            fill="#0f172a"
-                                                            stroke="rgba(255,255,255,0.1)"
+                                            {chartData.map((d, i) => {
+                                                const rawEst = isDist ? d.maxDistance : d.maxEst1RM;
+                                                const rawAct = d.maxWeight;
+                                                const actSet = !isDist && d.maxWeightWorkout ? d.maxWeightWorkout.exercises.flatMap(e => e.sets).find(s => s.weight === rawAct) : null;
+                                                const actString = actSet ? `${actSet.reps}x${actSet.weight}kg` : `${rawAct}kg`;
+
+                                                return (
+                                                    <g
+                                                        key={i}
+                                                        className="group"
+                                                        onClick={() => d.maxEst1RMWorkout && onSelectWorkout?.(d.maxEst1RMWorkout)}
+                                                    >
+                                                        <circle
+                                                            cx={getX(i)}
+                                                            cy={getY(d.displayEst)}
+                                                            r="4"
+                                                            fill={isDist ? "#3b82f6" : "#f59e0b"} // blue or amber
+                                                            className="stroke-slate-900 stroke-2 cursor-pointer transition-all hover:r-5"
                                                         />
-                                                        <text
-                                                            x={getX(i)}
-                                                            y={getY(d.displayEst) - 22}
-                                                            textAnchor="middle"
-                                                            fill="white"
-                                                            fontSize="10"
-                                                            fontWeight="bold"
-                                                        >
-                                                            {metricMode === 'relative'
-                                                                ? d.displayEst.toFixed(2) + 'x'
-                                                                : (isDist ? Math.round(d.maxDistance) + 'm' : Math.round(d.maxEst1RM) + 'kg')
-                                                            }
-                                                        </text>
+                                                        {/* Tooltip */}
+                                                        <g className="opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                                            <rect
+                                                                x={getX(i) - 40}
+                                                                y={getY(d.displayEst) - 60}
+                                                                width="80"
+                                                                height="50"
+                                                                rx="4"
+                                                                fill="#0f172a"
+                                                                stroke="rgba(255,255,255,0.1)"
+                                                            />
+                                                            <text
+                                                                x={getX(i)}
+                                                                y={getY(d.displayEst) - 42}
+                                                                textAnchor="middle"
+                                                                fill="white"
+                                                                fontSize="10"
+                                                                fontWeight="bold"
+                                                            >
+                                                                {metricMode === 'relative'
+                                                                    ? d.displayEst.toFixed(2) + 'x'
+                                                                    : (isDist ? Math.round(d.maxDistance) + 'm' : actString)
+                                                                }
+                                                            </text>
+                                                            <text
+                                                                x={getX(i)}
+                                                                y={getY(d.displayEst) - 28}
+                                                                textAnchor="middle"
+                                                                fill="#94a3b8"
+                                                                fontSize="8"
+                                                                fontFamily="monospace"
+                                                            >
+                                                                {metricMode === 'relative'
+                                                                    ? `(e1RM: ${Math.round(rawEst)}kg)`
+                                                                    : `(e1RM: ${Math.round(rawEst)}kg)`
+                                                                }
+                                                            </text>
+                                                        </g>
                                                     </g>
-                                                </g>
-                                            ))}
+                                                );
+                                            })}
                                         </svg>
 
                                         {/* X-Axis Labels */}
                                         <div className="flex justify-between mt-2 px-2">
-                                            {annualBestData.map(d => (
-                                                <div key={d.year} className="text-center">
-                                                    <p className="text-xs text-slate-400 font-bold">{d.year}</p>
-                                                    {!isDist && (
-                                                        <p className="text-[9px] text-emerald-500/80">{d.maxWeight}kg (Act)</p>
-                                                    )}
-                                                </div>
-                                            ))}
+                                            {annualBestData.map(d => {
+                                                const rawAct = d.maxWeight;
+                                                const actSet = !isDist && d.maxWeightWorkout ? d.maxWeightWorkout.exercises.flatMap(e => e.sets).find(s => s.weight === rawAct) : null;
+                                                const actString = actSet ? `${actSet.reps}x${actSet.weight}kg` : `${rawAct}kg`;
+
+                                                return (
+                                                    <div key={d.year} className="text-center">
+                                                        <p className="text-xs text-slate-400 font-bold">{d.year}</p>
+                                                        {!isDist && (
+                                                            <div className="flex flex-col items-center">
+                                                                <p className="text-[10px] text-emerald-500/80 font-bold">{actString}</p>
+                                                                <p className="text-[8px] text-amber-500/60 font-mono scale-90">e1RM: {Math.round(d.maxEst1RM)}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
 
                                         {/* Legend */}

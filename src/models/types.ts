@@ -425,6 +425,7 @@ export interface GoalTarget {
 /** Performance goal for detailed tracking */
 export interface PerformanceGoal {
     id: string;
+    userId: string; // Owner of the goal
     name: string;
     type: PerformanceGoalType;
     period: GoalPeriod;

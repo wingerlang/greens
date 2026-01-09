@@ -163,8 +163,9 @@ export function App() {
                                                 <Route path="kamrat" element={<MatchupPage />} />
                                                 <Route path="feed" element={<LifeStreamPage />} />
                                                 <Route path="lifestream" element={<LifeStreamPage />} />
-                                                <Route path="year-in-review" element={<YearInReviewPage />} />
-                                                <Route path="ars-sammanfattning" element={<YearInReviewPage />} />
+                                                <Route path="review" element={<YearInReviewPage />} />
+                                                <Route path="year-in-review" element={<Navigate to="/review" replace />} />
+                                                <Route path="ars-sammanfattning" element={<Navigate to="/review" replace />} />
                                                 <Route path="goals" element={<GoalsPage />} />
                                                 <Route path="mal" element={<GoalsPage />} />
                                                 <Route path="activity/:id" element={<ActivityStandalonePage />} />

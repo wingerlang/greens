@@ -1,0 +1,128 @@
+import React from 'react';
+import { Activity, WeightEntry, BodyMeasurement } from '../../models/types';
+
+interface WeeklySummaryCardProps {
+    selectedDate: string;
+    unifiedActivities: Activity[];
+    weightEntries: WeightEntry[];
+    bodyMeasurements: BodyMeasurement[];
+}
+
+export const WeeklySummaryCard: React.FC<WeeklySummaryCardProps> = ({
+    selectedDate,
+    unifiedActivities,
+    weightEntries,
+    bodyMeasurements
+}) => {
+    // Determine "Current Week" based on selectedDate
+    const d = new Date(selectedDate);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+    const monday = new Date(d.setDate(diff)).toISOString().split('T')[0];
+    const sunday = new Date(d.setDate(diff + 6)).toISOString().split('T')[0];
+
+    // Simple ISO week number
+    const targetDate = new Date(monday);
+    const jan4 = new Date(targetDate.getFullYear(), 0, 4);
+    const weekNum = 1 + Math.round((((targetDate.getTime() - jan4.getTime()) / 86400000) - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+
+    // Aggregate data for this calendar week
+    const weekActivities = unifiedActivities.filter(a => a.date >= monday && a.date <= sunday);
+    const weekVolume = weekActivities.reduce((sum, a) => sum + (a.tonnage || 0), 0) / 1000;
+    const weekDistance = weekActivities.reduce((sum, a) => sum + (a.distance || 0), 0);
+
+    // Calculate context label
+    const currentWeekNum = (() => {
+        const d = new Date();
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const mon = new Date(d.setDate(diff));
+        const jan4 = new Date(mon.getFullYear(), 0, 4);
+        return 1 + Math.round((((mon.getTime() - jan4.getTime()) / 86400000) - 3 + ((jan4.getDay() + 6) % 7)) / 7);
+    })();
+
+    let mainTitle = `Vecka ${weekNum} Summary`;
+    if (weekNum === currentWeekNum) {
+        mainTitle = 'NUVARANDE VECKA SUMMARY';
+    }
+
+    // Measurement Diffs
+    const getDiff = (type: 'weight' | 'waist' | 'chest') => {
+        const records = type === 'weight'
+            ? weightEntries.map(w => ({ date: w.date, value: w.weight }))
+            : bodyMeasurements.filter(m => m.type === type).map(m => ({ date: m.date, value: m.value }));
+
+        records.sort((a, b) => a.date.localeCompare(b.date));
+        const inWeek = records.filter(r => r.date >= monday && r.date <= sunday);
+        if (inWeek.length === 0) return null;
+
+        const latestInWeek = inWeek[inWeek.length - 1];
+        const beforeWeek = records.filter(r => r.date < monday);
+
+        if (beforeWeek.length > 0) {
+            const baseline = beforeWeek[beforeWeek.length - 1];
+            return { diff: latestInWeek.value - baseline.value, current: latestInWeek.value };
+        } else if (inWeek.length > 1) {
+            const baseline = inWeek[0];
+            return { diff: latestInWeek.value - baseline.value, current: latestInWeek.value };
+        }
+        return { diff: 0, current: latestInWeek.value };
+    };
+
+    const wDiff = getDiff('weight');
+    const waistDiff = getDiff('waist');
+    const chestDiff = getDiff('chest');
+
+    return (
+        <div className="flex flex-col items-center">
+            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 opacity-70">
+                {mainTitle}
+            </div>
+            <div className="flex flex-wrap justify-center gap-4 w-full">
+                {/* Running Box */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-8 py-5 flex flex-col items-center justify-center shadow-sm min-w-[220px] hover:shadow-md transition-shadow">
+                    <div className="text-xl mb-1">🏃‍♂️</div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">Löpning</div>
+                    <div className="text-lg font-bold text-emerald-500">
+                        {weekActivities.filter(a => a.type === 'running' || a.type === 'cycling' || a.type === 'walking').length} pass <span className="text-slate-300 mx-1">|</span> {Math.round(weekDistance)}km
+                    </div>
+                </div>
+
+                {/* Strength Box */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-8 py-5 flex flex-col items-center justify-center shadow-sm min-w-[220px] hover:shadow-md transition-shadow">
+                    <div className="text-xl mb-1">💪</div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">Styrka</div>
+                    <div className="text-lg font-bold text-indigo-500">
+                        {weekActivities.filter(a => a.type === 'strength').length} pass <span className="text-slate-300 mx-1">|</span> {weekVolume.toFixed(1)} ton
+                    </div>
+                </div>
+
+                {/* Measurement Diffs Card */}
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-8 py-5 flex flex-col items-center justify-center shadow-sm min-w-[220px] hover:shadow-md transition-shadow">
+                    <div className="text-xl mb-1">⚖️</div>
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2">Framsteg</div>
+                    <div className="grid grid-cols-3 gap-4 w-full">
+                        <div className="flex flex-col items-center">
+                            <span className="text-[8px] font-bold text-slate-400 uppercase">Vikt</span>
+                            <span className={`text-xs font-black ${wDiff && wDiff.diff !== 0 ? (wDiff.diff < 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-300'}`}>
+                                {wDiff ? (wDiff.diff > 0 ? `+${wDiff.diff.toFixed(1)}` : wDiff.diff.toFixed(1)) : '-'}
+                            </span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-[8px] font-bold text-slate-400 uppercase">Midja</span>
+                            <span className={`text-xs font-black ${waistDiff && waistDiff.diff !== 0 ? (waistDiff.diff < 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-300'}`}>
+                                {waistDiff ? (waistDiff.diff > 0 ? `+${waistDiff.diff.toFixed(1)}` : waistDiff.diff.toFixed(1)) : '-'}
+                            </span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                            <span className="text-[8px] font-bold text-slate-400 uppercase">Bröst</span>
+                            <span className={`text-xs font-black ${chestDiff && chestDiff.diff !== 0 ? (chestDiff.diff < 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-300'}`}>
+                                {chestDiff ? (chestDiff.diff > 0 ? `+${chestDiff.diff.toFixed(1)}` : chestDiff.diff.toFixed(1)) : '-'}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};

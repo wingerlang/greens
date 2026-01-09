@@ -6,6 +6,7 @@ import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
 import { formatDuration, formatSwedishDate, formatPace } from '../utils/dateUtils.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, CartesianGrid, Legend } from 'recharts';
+import { Dumbbell } from 'lucide-react';
 import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { WeeklyVolumeChart } from '../components/training/WeeklyVolumeChart.tsx';
 import { WeeklyDistanceChart } from '../components/training/WeeklyDistanceChart.tsx';
@@ -60,10 +61,32 @@ export function YearInReviewPage() {
     };
 
     const [searchParams, setSearchParams] = useSearchParams();
+
+    // Dynamically calculate available years from data
+    const availableYears = useMemo(() => {
+        const years = new Set<number>();
+        // Check unifiedActivities
+        unifiedActivities.forEach(a => {
+            const y = new Date(a.date).getFullYear();
+            if (!isNaN(y)) years.add(y);
+        });
+        // Check strengthSessions too just in case
+        strengthSessions.forEach(s => {
+            const y = new Date(s.date).getFullYear();
+            if (!isNaN(y)) years.add(y);
+        });
+
+        // Ensure current year is always available
+        years.add(new Date().getFullYear());
+
+        return Array.from(years).sort((a, b) => b - a);
+    }, [unifiedActivities, strengthSessions]);
+
     const [selectedYears, setSelectedYears] = useState<number[]>(() => {
         const yearsParam = searchParams.get('years');
         if (yearsParam) {
-            return yearsParam.split(',').map(Number).filter(n => !isNaN(n));
+            // Support both comma (legacy) and underscore (new)
+            return yearsParam.split(/[_,]/).map(Number).filter(n => !isNaN(n));
         }
         // Try localStorage
         const saved = localStorage.getItem('yir_years');
@@ -74,13 +97,14 @@ export function YearInReviewPage() {
                 // ignore
             }
         }
+        // Default to current year only
         return [new Date().getFullYear()];
     });
 
     // Sync to URL & LocalStorage
     useEffect(() => {
         if (selectedYears.length > 0) {
-            setSearchParams({ years: selectedYears.join(',') }, { replace: true });
+            setSearchParams({ years: selectedYears.join('_') }, { replace: true });
             localStorage.setItem('yir_years', JSON.stringify(selectedYears));
         }
     }, [selectedYears, setSearchParams]);
@@ -157,8 +181,14 @@ export function YearInReviewPage() {
     // Compute activities in legacy format for goal calculations
     const legacyActivities = useMemo(() => {
         return unifiedActivities
-            .map(mapUniversalToLegacyEntry)
-            .filter((a): a is import('../models/types').ExerciseEntry => a !== null);
+            .map(u => {
+                // Manual safe cast or mapper adjustment
+                const entry = mapUniversalToLegacyEntry(u as any);
+                if (!entry) return null;
+                // Add missing source if needed by ExerciseEntry & source
+                return { ...entry, source: u.source };
+            })
+            .filter((a): a is import('../models/types').ExerciseEntry & { source: string } => a !== null);
     }, [unifiedActivities]);
 
     // Data for goal calculations
@@ -511,12 +541,12 @@ export function YearInReviewPage() {
                     <p className="text-slate-400 uppercase tracking-widest font-bold mt-2">Annual Performance Review</p>
                 </div>
 
-                <div className="flex gap-2 bg-slate-900 border border-white/10 rounded-lg p-1">
-                    {[2023, 2024, 2025, 2026].map(y => (
+                <div className="flex gap-2 bg-slate-900 border border-white/10 rounded-lg p-1 overflow-x-auto max-w-full">
+                    {availableYears.map(y => (
                         <button
                             key={y}
                             onClick={() => toggleYear(y)}
-                            className={`px-4 py-2 rounded-md font-bold text-sm transition-all ${selectedYears.includes(y)
+                            className={`px-4 py-2 rounded-md font-bold text-sm transition-all whitespace-nowrap ${selectedYears.includes(y)
                                 ? 'bg-emerald-500 text-white shadow-lg'
                                 : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
                                 }`}
@@ -688,13 +718,15 @@ export function YearInReviewPage() {
                                     innerRadius={60}
                                     outerRadius={80}
                                     paddingAngle={5}
+                                    label={{ fill: 'white', fontSize: 11, fontWeight: 'bold' }}
                                 >
                                     {stats.types.map((entry, index) => (
                                         <Cell key={`cell-${index}`} fill={(COLORS as any)[entry.name.toLowerCase()] || COLORS.other} />
                                     ))}
                                 </Pie>
                                 <Tooltip
-                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px' }}
+                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '8px', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.5)' }}
+                                    itemStyle={{ color: '#fff', fontWeight: 'bold' }}
                                     formatter={(val: number) => [`${val} pass`, '']}
                                 />
                             </PieChart>
@@ -702,7 +734,7 @@ export function YearInReviewPage() {
                         {/* Center Text */}
                         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
                             <span className="text-3xl font-black text-white">{Math.round(stats.totalTime / 60)}</span>
-                            <span className="block text-[10px] text-slate-500 uppercase tracking-widest">Timmar</span>
+                            <span className="block text-[10px] text-white uppercase tracking-widest">Timmar</span>
                         </div>
                     </div>
                     <div className="w-full space-y-2 mt-4">
@@ -710,9 +742,9 @@ export function YearInReviewPage() {
                             <div key={t.name} className="flex justify-between items-center text-sm">
                                 <div className="flex items-center gap-2">
                                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: (COLORS as any)[t.name.toLowerCase()] || COLORS.other }}></div>
-                                    <span className="capitalize text-slate-300">{t.name}</span>
+                                    <span className="capitalize text-white font-medium">{t.name}</span>
                                 </div>
-                                <span className="font-bold text-slate-400">{t.count} ({Math.round(t.count / stats.totalSessions * 100)}%)</span>
+                                <span className="font-bold text-white">{t.count} ({Math.round(t.count / stats.totalSessions * 100)}%)</span>
                             </div>
                         ))}
                     </div>
@@ -732,12 +764,56 @@ export function YearInReviewPage() {
                 </div>
 
                 {/* Running Distance */}
+                {/* Running Distance - Toggle between Weekly (1 year) and Monthly (>1 year) */}
                 <div className="bg-slate-900/30 border border-white/5 p-6 rounded-3xl">
                     <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                        <span>🏃</span> Distans per vecka (Löpning)
+                        <span>🏃</span> {selectedYears.length > 1 ? 'Distans per månad (Löpning)' : 'Distans per vecka (Löpning)'}
                     </h3>
-                    <div className="w-full">
-                        <WeeklyDistanceChart activities={yearlyActivities} fixedDateRange={dateRange} />
+                    <div className="w-full h-80">
+                        {selectedYears.length > 1 ? (
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={(() => {
+                                    // Compute Monthly Data on the fly
+                                    const buckets = new Map<string, number>();
+                                    // Initialize range to ensure continuous timeline logic could go here, 
+                                    // but sparse is fine for bar chart usually.
+
+                                    // Sort activities first to ensure order?
+                                    // actually mapping to YYYY-MM handles sorting by string 
+                                    yearlyActivities.filter(a => a.performance?.activityType === 'running').forEach(a => {
+                                        const d = new Date(a.date);
+                                        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                                        buckets.set(key, (buckets.get(key) || 0) + (a.performance?.distanceKm || 0));
+                                    });
+
+                                    return Array.from(buckets.entries())
+                                        .sort((a, b) => a[0].localeCompare(b[0]))
+                                        .map(([date, dist]) => ({ date, dist }));
+                                })()}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#ffffff05" vertical={false} />
+                                    <XAxis
+                                        dataKey="date"
+                                        stroke="#64748b"
+                                        fontSize={12}
+                                        tickLine={false}
+                                        axisLine={false}
+                                        tickFormatter={(val) => val.substring(2)} // YY-MM
+                                        minTickGap={30}
+                                    />
+                                    <YAxis stroke="#10b981" fontSize={12} tickLine={false} axisLine={false} unit="km" />
+                                    <Tooltip
+                                        cursor={{ fill: 'rgba(255, 255, 255, 0.05)' }}
+                                        contentStyle={{ backgroundColor: '#0f172a', border: '1px solid #1e293b', borderRadius: '12px' }}
+                                        labelStyle={{ color: '#cbd5e1' }}
+                                        formatter={(value: number) => [`${Math.round(value)} km`, 'Distans']}
+                                        labelFormatter={(label) => label}
+                                    />
+                                    <Bar dataKey="dist" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <WeeklyDistanceChart activities={yearlyActivities} fixedDateRange={dateRange} />
+                        )}
                     </div>
                 </div>
             </div>

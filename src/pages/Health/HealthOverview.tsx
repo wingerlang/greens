@@ -155,7 +155,7 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                             </div>
                         </div>
 
-                        <div className="w-full aspect-square max-w-md mx-auto" style={{ minHeight: '320px' }}>
+                        <div className="w-full h-[400px] px-2" style={{ minHeight: '320px' }}>
                             {enrichedWeightEntries && enrichedWeightEntries.length > 0 ? (
                                 <WeightTrendChart
                                     entries={enrichedWeightEntries}

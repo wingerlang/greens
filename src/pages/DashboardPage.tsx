@@ -35,7 +35,7 @@ import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
 import { StravaActivityImportModal } from '../components/integrations/StravaActivityImportModal.tsx';
 import { RefreshCw } from 'lucide-react';
-import { CaffeineCard } from '../components/dashboard';
+import { CaffeineCard, WeightSparkline } from '../components/dashboard';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -195,214 +195,6 @@ const getRangeStartDate = (range: '14d' | '30d' | '3m' | '1y' | 'all') => {
     else if (range === '1y') d.setFullYear(d.getFullYear() - 1);
     else return '0000-00-00';
     return d.toISOString().split('T')[0];
-};
-
-const WeightSparkline = ({
-    data,
-    dates,
-    onPointClick
-}: {
-    data: { weight: number, waist?: number, chest?: number }[],
-    dates: string[],
-    onPointClick?: (index: number) => void
-}) => {
-    const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
-    const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-
-    if (data.length < 2) return <div className="h-[40px] w-full flex items-center justify-center text-[8px] text-slate-300 uppercase font-bold tracking-widest bg-slate-50/50 dark:bg-slate-800/20 rounded-xl">Trend saknas</div>;
-
-    // Collect values for dual scales
-    const weightValues: number[] = [];
-    const cmValues: number[] = [];
-
-    data.forEach(d => {
-        if (d.weight) weightValues.push(d.weight);
-        if (d.waist) cmValues.push(d.waist);
-        if (d.chest) cmValues.push(d.chest);
-    });
-
-    if (weightValues.length === 0) return null;
-
-    // Weight Scale (Left Axis)
-    const wMin = Math.min(...weightValues);
-    const wMax = Math.max(...weightValues);
-    const wPadding = (wMax - wMin) * 0.15 || 1;
-    const wAdjMin = wMin - wPadding;
-    const wAdjMax = wMax + wPadding;
-    const wRange = wAdjMax - wAdjMin || 1;
-
-    // CM Scale (Right Axis)
-    const cmMin = cmValues.length > 0 ? Math.min(...cmValues) : 0;
-    const cmMax = cmValues.length > 0 ? Math.max(...cmValues) : 100;
-    const cmPadding = (cmMax - cmMin) * 0.15 || 5;
-    const cmAdjMin = cmMin - cmPadding;
-    const cmAdjMax = cmMax + cmPadding;
-    const cmRange = cmAdjMax - cmAdjMin || 1;
-
-    const width = 100;
-    const heightFixed = 90;
-
-    // Generate points helpers
-    const getX = (i: number) => (i / (data.length - 1)) * width;
-
-    // Y for Weight
-    const getYWeight = (val: number) => heightFixed - ((val - wAdjMin) / wRange) * heightFixed;
-
-    // Y for CM
-    const getYCm = (val: number) => heightFixed - ((val - cmAdjMin) / cmRange) * heightFixed;
-
-    const weightPoints = data.map((d, i) => {
-        if (!d.weight) return null;
-        return { x: getX(i), y: getYWeight(d.weight), value: d.weight, index: i };
-    }).filter(p => p !== null) as { x: number, y: number, value: number, index: number }[];
-
-    const waistPoints = data.map((d, i) => {
-        if (!d.waist) return null;
-        return { x: getX(i), y: getYCm(d.waist), value: d.waist, index: i };
-    }).filter(p => p !== null) as { x: number, y: number, value: number, index: number }[];
-
-    const chestPoints = data.map((d, i) => {
-        if (!d.chest) return null;
-        return { x: getX(i), y: getYCm(d.chest), value: d.chest, index: i };
-    }).filter(p => p !== null) as { x: number, y: number, value: number, index: number }[];
-
-    const getPolyline = (pts: { x: number, y: number }[]) => pts.map(p => `${p.x},${p.y}`).join(' ');
-
-    // Grid lines (Weight based - Left Side)
-    const gridLines = [wAdjMin, wAdjMin + wRange / 2, wAdjMax].map((val, i) => {
-        const relativeY = (val - wAdjMin) / wRange;
-        const cmVal = cmAdjMin + (relativeY * cmRange);
-        const y = heightFixed - relativeY * heightFixed;
-        return { y, wLabel: val.toFixed(1), cmLabel: cmValues.length > 0 ? cmVal.toFixed(0) : '' };
-    });
-
-    return (
-        <div
-            className="w-full h-full px-1 group/sparkline relative"
-            onMouseMove={(e) => {
-                const rect = e.currentTarget.getBoundingClientRect();
-                setMousePos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-            }}
-            onMouseLeave={() => setHoveredIdx(null)}
-        >
-            <svg
-                viewBox={`0 0 ${width} ${heightFixed}`}
-                preserveAspectRatio="none"
-                className={`w-full h-full overflow-visible`}
-            >
-                {/* Horizontal Grid Lines */}
-                {gridLines.map((line, i) => (
-                    <g key={i} className="opacity-20">
-                        <line x1="0" y1={line.y} x2={width} y2={line.y} stroke="currentColor" strokeWidth="0.5" strokeDasharray="2,2" className="text-slate-500" />
-                        <text x="-2" y={line.y} fontSize="3" className="fill-slate-400 font-bold text-right opacity-80" style={{ dominantBaseline: 'middle', textAnchor: 'end' }}>{line.wLabel}</text>
-                        {line.cmLabel && <text x={width + 2} y={line.y} fontSize="3" className="fill-slate-400 font-bold text-left opacity-80" style={{ dominantBaseline: 'middle', textAnchor: 'start' }}>{line.cmLabel}</text>}
-                    </g>
-                ))}
-
-                {/* Right Axis Title (if CM exists) */}
-                {cmValues.length > 0 && (
-                    <text x={width + 2} y={-5} fontSize="3" className="fill-slate-400 font-black uppercase tracking-widest" style={{ textAnchor: 'start' }}>CM</text>
-                )}
-                <text x="-2" y={-5} fontSize="3" className="fill-slate-400 font-black uppercase tracking-widest" style={{ textAnchor: 'end' }}>KG</text>
-
-                {/* Chest Line (Indigo) */}
-                <polyline
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1"
-                    points={getPolyline(chestPoints)}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-indigo-500 drop-shadow-sm transition-all duration-500 opacity-60"
-                />
-
-                {/* Waist Line (Emerald) */}
-                <polyline
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1"
-                    points={getPolyline(waistPoints)}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-emerald-500 drop-shadow-sm transition-all duration-500 opacity-80"
-                />
-
-                {/* Weight Line (Primary - Rose/Normal) */}
-                <polyline
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    points={getPolyline(weightPoints)}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="text-slate-900 dark:text-white drop-shadow-sm transition-all duration-500"
-                />
-
-                {/* Interactive Data Points (Only for hover detection on all indices) */}
-                {data.map((_, i) => {
-                    const x = (i / (data.length - 1)) * width;
-                    // Find y from weight, or first available metric
-                    const primaryY = weightPoints.find(p => p.index === i)?.y ?? waistPoints.find(p => p.index === i)?.y ?? chestPoints.find(p => p.index === i)?.y ?? heightFixed / 2;
-
-                    return (
-                        <g
-                            key={i}
-                            className="cursor-pointer"
-                            onClick={() => onPointClick?.(i)}
-                            onMouseEnter={() => setHoveredIdx(i)}
-                        >
-                            {/* Tall hit area strip */}
-                            <rect x={x - (width / (data.length * 2))} y="0" width={width / (data.length)} height={heightFixed} fill="transparent" />
-
-                            {/* Dots for each metric at this index */}
-                            {weightPoints.find(p => p.index === i) && (
-                                <circle cx={weightPoints.find(p => p.index === i)!.x} cy={weightPoints.find(p => p.index === i)!.y} r={hoveredIdx === i ? "3" : "0"} className="fill-slate-900 dark:fill-white transition-all duration-200" />
-                            )}
-                            {waistPoints.find(p => p.index === i) && (
-                                <circle cx={waistPoints.find(p => p.index === i)!.x} cy={waistPoints.find(p => p.index === i)!.y} r={hoveredIdx === i ? "2.5" : "0"} className="fill-emerald-500 transition-all duration-200" />
-                            )}
-                            {chestPoints.find(p => p.index === i) && (
-                                <circle cx={chestPoints.find(p => p.index === i)!.x} cy={chestPoints.find(p => p.index === i)!.y} r={hoveredIdx === i ? "2.5" : "0"} className="fill-indigo-500 transition-all duration-200" />
-                            )}
-                        </g>
-                    );
-                })}
-            </svg>
-
-            {/* Hover Tooltip/Card */}
-            {hoveredIdx !== null && (
-                <div
-                    className="absolute z-50 pointer-events-none bg-slate-900/95 dark:bg-white/95 backdrop-blur-md px-3 py-2.5 rounded-xl border border-white/10 dark:border-black/5 shadow-2xl flex flex-col gap-1 min-w-[100px]"
-                    style={{
-                        left: `${(hoveredIdx / (data.length - 1)) * 100}%`,
-                        top: '0',
-                        transform: `translate(${hoveredIdx > data.length / 2 ? '-100%' : '20%'}, -10%)`
-                    }}
-                >
-                    <div className="text-[10px] font-black text-white/50 dark:text-black/50 uppercase tracking-widest border-b border-white/10 dark:border-black/5 pb-1 mb-1">{dates[hoveredIdx]}</div>
-
-                    {data[hoveredIdx].weight !== undefined && (
-                        <div className="flex items-center justify-between gap-3 text-white dark:text-slate-900">
-                            <span className="text-[10px] uppercase font-bold text-slate-400">Vikt</span>
-                            <span className="text-sm font-black">{data[hoveredIdx].weight.toFixed(1)} <span className="text-[9px] opacity-50">kg</span></span>
-                        </div>
-                    )}
-                    {data[hoveredIdx].waist !== undefined && (
-                        <div className="flex items-center justify-between gap-3 text-emerald-400 dark:text-emerald-600">
-                            <span className="text-[10px] uppercase font-bold opacity-70">Midja</span>
-                            <span className="text-sm font-black">{data[hoveredIdx].waist} <span className="text-[9px] opacity-50">cm</span></span>
-                        </div>
-                    )}
-                    {data[hoveredIdx].chest !== undefined && (
-                        <div className="flex items-center justify-between gap-3 text-indigo-400 dark:text-indigo-600">
-                            <span className="text-[10px] uppercase font-bold opacity-70">Bröst</span>
-                            <span className="text-sm font-black">{data[hoveredIdx].chest} <span className="text-[9px] opacity-50">cm</span></span>
-                        </div>
-                    )}
-                </div>
-            )}
-        </div>
-    );
 };
 
 const DayHoverCard = ({
@@ -1133,7 +925,7 @@ export function DashboardPage() {
                             alcoholUnits={vitals.alcohol || 0}
                             density={density === 'compact' ? 'compact' : 'normal'}
                         />
-                        <ActiveGoalsCard />
+
 
                         {/* Weekly Summary Row */}
                         <div className="md:col-span-12 mt-2 mb-4">
@@ -1450,12 +1242,15 @@ export function DashboardPage() {
                                 <Wrapper key="training" className="md:col-span-12 lg:col-span-6 h-full">
                                     <div
                                         onClick={() => navigate('/training')}
-                                        className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full`}
+                                        className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full relative overflow-hidden`}
                                     >
-                                        <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors shrink-0`}>
+                                        {/* Background Icon */}
+                                        <Dumbbell className="absolute -bottom-4 -right-4 w-24 h-24 text-emerald-500/5 dark:text-emerald-400/10 pointer-events-none transform -rotate-12 transition-all group-hover:scale-110" />
+
+                                        <div className={`${density === 'compact' ? 'w-8 h-8' : 'w-14 h-14'} bg-[#DCFCE7] dark:bg-emerald-900/30 rounded-full flex items-center justify-center text-emerald-600 dark:text-emerald-400 group-hover:bg-emerald-600 group-hover:text-white dark:group-hover:bg-emerald-500 transition-colors shrink-0 z-10`}>
                                             <Dumbbell className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
                                         </div>
-                                        <div className="flex-1 min-w-0 text-left">
+                                        <div className="flex-1 min-w-0 text-left z-10">
                                             <div className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} text-slate-500 dark:text-slate-400 font-semibold mb-1`}>Dagens träning</div>
                                             <div className="w-full">{trainingContent}</div>
                                         </div>
@@ -1869,7 +1664,7 @@ export function DashboardPage() {
                         onMouseEnter={() => setIsHoveringChart(true)}
                         onMouseLeave={() => setIsHoveringChart(false)}
                     >
-                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800 transition-all duration-300 ${isHoveringChart ? 'scale-[1.01] shadow-2xl shadow-indigo-500/10 border-indigo-500/20' : ''}`}>
+                        <div className={`w-full ${density === 'compact' ? 'p-4' : 'p-6'} bg-slate-900 rounded-2xl border border-slate-800 transition-all duration-300`}>
                             {/* Header */}
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-2">
@@ -2079,6 +1874,9 @@ export function DashboardPage() {
                         </div>
                     </div>
 
+
+                    {/* Moved Active Goals Card */}
+                    <ActiveGoalsCard />
 
                     <div className={`md:col-span-12 ${density === 'compact' ? 'p-3 rounded-2xl' : 'p-6 rounded-[2rem]'} bg-white dark:bg-slate-900 shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-center`}>
                         <div className="flex flex-col md:flex-row gap-6">

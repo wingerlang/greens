@@ -32,6 +32,8 @@ export const CaffeineCard = ({
             onClick={onCardClick}
             className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm hover:scale-[1.02] transition-all cursor-pointer overflow-hidden relative ${isCaffHigh ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30' : isCaffWarning ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}
         >
+            <Coffee className="absolute -bottom-4 -right-4 w-24 h-24 text-amber-500/5 dark:text-amber-400/10 pointer-events-none transform -rotate-12 transition-all group-hover:scale-110" />
+
             <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'}`}>
                 <div className={`p-1.5 rounded-full ${isCaffHigh ? 'bg-rose-100 text-rose-600' : isCaffWarning ? 'bg-amber-100 text-amber-600' : 'bg-amber-50 dark:bg-amber-900/30 text-amber-600'}`}>
                     <Coffee className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
