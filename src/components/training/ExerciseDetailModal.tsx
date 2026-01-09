@@ -570,7 +570,7 @@ export function ExerciseDetailModal({
                 )}
 
                 {/* Contextual Hero Section (Motivation Mode) */}
-                {!isDistanceBasedExercise(exerciseName) && contextStats && (
+                {!isDistanceBasedExercise(exerciseName) && contextStats && contextStats.annualBestAct > 0 && (
                     <div className="bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700/50 rounded-xl p-4 flex items-center justify-between relative overflow-hidden group">
                         {/* Background Glow for Annual Best / PR */}
                         {(contextStats.isAnnualBest || contextStats.isAllTimeBest) && (

@@ -98,7 +98,7 @@ export function SimilarWorkouts({ currentWorkout, allWorkouts, onSelectWorkout }
                 </span>
             </button>
 
-            <div className="space-y-2">
+            <div className="space-y-1.5">
                 {displayedWorkouts.map(match => {
                     const isVolumeUp = match.volumeDiff > 0;
                     const volumeDiffPercent = match.workout.totalVolume > 0
@@ -109,30 +109,25 @@ export function SimilarWorkouts({ currentWorkout, allWorkouts, onSelectWorkout }
                         <div
                             key={match.workout.id}
                             onClick={() => onSelectWorkout?.(match.workout)}
-                            className="flex items-center justify-between p-3 bg-slate-800/50 hover:bg-slate-800 rounded-xl cursor-pointer transition-colors"
+                            className="flex items-center justify-between p-2 bg-slate-800/30 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors border border-white/5"
                         >
-                            <div className="flex-1">
+                            <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <span className="text-white font-medium text-sm">
+                                    <span className="text-white font-bold text-xs truncate">
                                         {match.workout.name || 'Styrkepass'}
                                     </span>
-                                    <span className="text-[9px] px-1.5 py-0.5 bg-sky-500/20 text-sky-400 rounded font-bold">
+                                    <span className="text-[8px] px-1 py-px bg-sky-500/10 text-sky-400 rounded font-bold whitespace-nowrap border border-sky-500/20">
                                         {Math.round(match.overlapPercent)}% match
                                     </span>
                                 </div>
-                                <p className="text-xs text-slate-500 mt-0.5">
-                                    {formatDateShort(match.workout.date)} • {match.overlapCount} gemensamma övningar
+                                <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                                    {formatDateShort(match.workout.date)} • {match.overlapCount} övn
                                 </p>
                             </div>
-                            <div className="text-right">
-                                <div className="text-sm font-bold text-slate-300">
+                            <div className="text-right pl-2">
+                                <div className="text-xs font-bold text-slate-400 font-mono">
                                     {Math.round(match.workout.totalVolume / 1000)}t
                                 </div>
-                                {volumeDiffPercent !== 0 && (
-                                    <div className={`text-[10px] font-bold ${isVolumeUp ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {isVolumeUp ? '+' : ''}{volumeDiffPercent}% nu
-                                    </div>
-                                )}
                             </div>
                         </div>
                     );

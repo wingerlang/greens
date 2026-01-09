@@ -6,10 +6,11 @@ interface TopExercisesTableProps {
     workouts: StrengthWorkout[];
     personalBests?: PersonalBest[];
     onSelectExercise?: (name: string) => void;
+    onSelectWorkout?: (workout: StrengthWorkout) => void;
 }
 
-export function TopExercisesTable({ workouts, personalBests = [], onSelectExercise }: TopExercisesTableProps) {
-    const [sortBy, setSortBy] = useState<'name' | 'count' | 'sets' | 'reps' | 'volume' | 'pb'>('volume');
+export function TopExercisesTable({ workouts, personalBests = [], onSelectExercise, onSelectWorkout }: TopExercisesTableProps) {
+    const [sortBy, setSortBy] = useState<'name' | 'count' | 'sets' | 'reps' | 'volume' | 'pb' | 'last' | 'freq'>('volume');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [filter, setFilter] = useState<'all' | 'bw' | 'weighted' | 'cardio' | 'hyrox'>('all');
     const [searchTerm, setSearchTerm] = useState('');
@@ -55,8 +56,12 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
             isTimeBased: boolean;
             pb?: PersonalBest;
             estimated1RM: number;
+            est1RMDate?: string;
+            est1RMWorkout?: StrengthWorkout;
             maxWeight: number;
             maxWeightDate?: string;
+            maxWeightWorkout?: StrengthWorkout;
+            lastTrainedDate?: string;
             maxTimeSeconds: number;
             maxTimeFormatted: string;
             isHyrox: boolean;
@@ -85,6 +90,7 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         isTimeBased: isTime,
                         pb,
                         estimated1RM: pb?.estimated1RM || 0,
+                        est1RMDate: pb?.date,
                         maxWeight: pb?.weight || 0,
                         maxWeightDate: pb?.date,
                         maxTimeSeconds: 0,
@@ -106,6 +112,9 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                             stats[key].maxTimeSeconds = timeResult.seconds;
                             stats[key].maxTimeFormatted = timeResult.formatted;
                             stats[key].maxWeightDate = w.date;
+                            stats[key].maxWeightWorkout = w;
+                            stats[key].est1RMDate = w.date; // Use same date for consistency
+                            stats[key].est1RMWorkout = w;
                         }
                     }
 
@@ -122,10 +131,13 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         const est1RM = calculateEstimated1RM(calcWeight, set.reps);
                         if (est1RM > stats[key].estimated1RM) {
                             stats[key].estimated1RM = est1RM;
+                            stats[key].est1RMDate = w.date;
+                            stats[key].est1RMWorkout = w;
                         }
                         if (displayWeight > stats[key].maxWeight) {
                             stats[key].maxWeight = displayWeight;
                             stats[key].maxWeightDate = w.date;
+                            stats[key].maxWeightWorkout = w;
                         }
                     } else if (stats[key].isBW && set.reps > 0 && (!set.extraWeight || set.extraWeight === 0)) {
                         // Pure bodyweight (no extra weight) - track max reps instead
@@ -147,10 +159,21 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                 }
                 stats[key].volume += volume;
                 stats[key].count += 1;
+
+                // Track last trained date
+                if (!stats[key].lastTrainedDate || w.date > stats[key].lastTrainedDate) {
+                    stats[key].lastTrainedDate = w.date;
+                }
             });
         });
 
         let result = Object.values(stats);
+
+        // Calculate recurrence percentage
+        const totalWorkouts = workouts.length;
+        result.forEach(r => {
+            (r as any).recurrence = totalWorkouts > 0 ? (r.count / totalWorkouts) * 100 : 0;
+        });
 
         // Apply equipment filter
         if (filter === 'bw') {
@@ -174,8 +197,13 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
             let mult = sortOrder === 'asc' ? 1 : -1;
             if (sortBy === 'name') return mult * a.name.localeCompare(b.name);
             if (sortBy === 'pb') {
-                // Sort by max metric depending on type? mostly e1rm or maxWeight 
                 return mult * (a.estimated1RM - b.estimated1RM);
+            }
+            if (sortBy === 'last') {
+                return mult * ((a as any).lastTrainedDate || '').localeCompare((b as any).lastTrainedDate || '');
+            }
+            if (sortBy === 'freq') {
+                return mult * ((a as any).recurrence - (b as any).recurrence);
             }
             // For other numeric fields
             // @ts-ignore - dynamic access to properties we know exist
@@ -259,16 +287,19 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                                 Övning {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
                             <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('pb')}>
-                                e1RM / Max {sortBy === 'pb' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                1eRM {sortBy === 'pb' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('count')}>
-                                Gånger {sortBy === 'count' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors">
+                                Max
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors hidden md:table-cell" onClick={() => handleSort('sets')}>
-                                Set {sortBy === 'sets' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('sets')}>
+                                Set & Reps {sortBy === 'sets' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors hidden md:table-cell" onClick={() => handleSort('reps')}>
-                                Reps {sortBy === 'reps' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('last')}>
+                                Senast {sortBy === 'last' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            </th>
+                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('freq')}>
+                                Frekvens {sortBy === 'freq' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
                             <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('volume')}>
                                 Total volym {sortBy === 'volume' && (sortOrder === 'asc' ? '↑' : '↓')}
@@ -289,66 +320,92 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                                     {ex.isHyrox && <span className="ml-2 text-[9px] text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded bg-amber-500/10 tracking-wider">HYROX</span>}
                                     {ex.isWeightedDistance && <span className="ml-2 text-[9px] text-emerald-500 border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/10">DIST</span>}
                                 </td>
-                                <td className="px-4 py-4 text-right">
-                                    {/* Time-based exercises - show duration */}
-                                    {ex.isTimeBased && ex.maxTimeSeconds > 0 ? (
+                                <td className="px-4 py-4 text-right font-mono">
+                                    {(ex.isTimeBased || ex.isDistanceBased || ex.isWeightedDistance) ? (
+                                        <span className="text-slate-600">-</span>
+                                    ) : (
                                         <div className="flex flex-col items-end gap-0.5">
-                                            <span className="text-cyan-400 font-bold">{ex.maxTimeFormatted} <span className="text-[9px] text-slate-500">rekord</span></span>
+                                            {ex.estimated1RM > 0 ? (
+                                                onSelectWorkout && ex.est1RMWorkout ? (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onSelectWorkout(ex.est1RMWorkout!); }}
+                                                        className="text-purple-400 font-bold hover:underline hover:text-purple-300 transition-colors"
+                                                    >
+                                                        {ex.estimated1RM}kg
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-purple-400 font-bold">{ex.estimated1RM}kg</span>
+                                                )
+                                            ) : <span className="text-slate-600">-</span>}
+                                            {ex.est1RMDate && (
+                                                <span className="text-[9px] text-slate-500 whitespace-nowrap">{new Date(ex.est1RMDate).toLocaleDateString('sv-SE')}</span>
+                                            )}
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="px-4 py-4 text-right font-mono">
+                                    {ex.isTimeBased ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <span className="text-cyan-400 font-bold">{ex.maxTimeFormatted}</span>
                                             {ex.maxWeightDate && (
-                                                <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
+                                                <span className="text-[9px] text-slate-500 whitespace-nowrap">{new Date(ex.maxWeightDate).toLocaleDateString('sv-SE')}</span>
                                             )}
                                         </div>
                                     ) : ex.isDistanceBased ? (
                                         <div className="flex flex-col items-end gap-0.5">
                                             <span className="text-cyan-400 font-bold">{ex.maxDistance > 0 ? ex.maxDistance + 'm' : '-'}</span>
                                             {ex.maxWeightDate && (
-                                                <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
+                                                <span className="text-[9px] text-slate-500 whitespace-nowrap">{new Date(ex.maxWeightDate).toLocaleDateString('sv-SE')}</span>
                                             )}
                                         </div>
-                                    ) : ex.isWeightedDistance && (ex.maxWeight > 0 || ex.maxDistance > 0) ? (
+                                    ) : ex.isWeightedDistance ? (
                                         <div className="flex flex-col items-end gap-0.5">
                                             <span className="text-emerald-400 font-bold">
                                                 {ex.maxWeight}kg <span className="text-slate-400 text-[10px] font-normal">({ex.maxDistance}{ex.maxDistanceUnit})</span>
-                                                <span className="text-[9px] text-slate-500 ml-1">PB</span>
                                             </span>
                                             {ex.maxWeightDate && (
-                                                <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
-                                            )}
-                                        </div>
-                                    ) : ex.estimated1RM > 0 || ex.maxWeight > 0 ? (
-                                        <div className="flex flex-col items-end gap-0.5">
-                                            {/* For bodyweight exercises, show actual 1RM (max reps) as primary */}
-                                            {ex.isBW ? (
-                                                <>
-                                                    {ex.maxWeight > 0 && (
-                                                        <span className="text-sky-400 font-bold">{ex.maxWeight}kg <span className="text-[9px] text-slate-500">1RM</span></span>
-                                                    )}
-                                                    {ex.estimated1RM > 0 && ex.estimated1RM !== ex.maxWeight && (
-                                                        <span className="text-amber-400/60 font-bold text-xs">{ex.estimated1RM}kg <span className="text-[9px] text-slate-500">e1RM</span></span>
-                                                    )}
-                                                </>
-                                            ) : (
-                                                <>
-                                                    {/* Weighted exercises - show e1RM as primary */}
-                                                    {ex.estimated1RM > 0 && (
-                                                        <span className="text-amber-400 font-bold">{ex.estimated1RM}kg <span className="text-[9px] text-slate-500">e1RM</span></span>
-                                                    )}
-                                                    {ex.maxWeight > 0 && ex.maxWeight !== ex.estimated1RM && (
-                                                        <span className="text-sky-400 font-bold text-xs">{ex.maxWeight}kg <span className="text-[9px] text-slate-500">max</span></span>
-                                                    )}
-                                                </>
-                                            )}
-                                            {ex.maxWeightDate && (
-                                                <span className="text-[9px] text-slate-500">{formatDaysAgoCompact(ex.maxWeightDate)}</span>
+                                                <span className="text-[9px] text-slate-500 whitespace-nowrap">{new Date(ex.maxWeightDate).toLocaleDateString('sv-SE')}</span>
                                             )}
                                         </div>
                                     ) : (
-                                        <span className="text-slate-600">-</span>
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            {ex.maxWeight > 0 ? (
+                                                onSelectWorkout && ex.maxWeightWorkout ? (
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); onSelectWorkout(ex.maxWeightWorkout!); }}
+                                                        className="text-emerald-400 font-bold hover:underline hover:text-emerald-300 transition-colors"
+                                                    >
+                                                        {ex.maxWeight}kg
+                                                    </button>
+                                                ) : (
+                                                    <span className="text-emerald-400 font-bold">{ex.maxWeight}kg</span>
+                                                )
+                                            ) : <span className="text-slate-600">-</span>}
+                                            {ex.maxWeightDate && (
+                                                <span className="text-[9px] text-slate-500 whitespace-nowrap">{new Date(ex.maxWeightDate).toLocaleDateString('sv-SE')}</span>
+                                            )}
+                                        </div>
                                     )}
                                 </td>
-                                <td className="px-4 py-4 text-right text-slate-400">{ex.count}</td>
-                                <td className="px-4 py-4 text-right text-slate-500 hidden md:table-cell">{ex.sets > 0 ? ex.sets : '-'}</td>
-                                <td className="px-4 py-4 text-right text-slate-500 hidden md:table-cell">{ex.reps > 0 ? ex.reps : '-'}</td>
+                                <td className="px-4 py-4 text-right text-slate-400 font-mono">
+                                    <span className="text-slate-300 font-bold">{ex.sets}</span>
+                                    <span className="text-slate-600 mx-1">|</span>
+                                    <span className="text-slate-500">{ex.reps}</span>
+                                </td>
+                                <td className="px-4 py-4 text-right font-mono">
+                                    {(ex as any).lastTrainedDate ? (
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <span className="text-slate-300 text-xs">{formatDaysAgoCompact((ex as any).lastTrainedDate)}</span>
+                                            <span className="text-[9px] text-slate-500">{(ex as any).lastTrainedDate}</span>
+                                        </div>
+                                    ) : <span className="text-slate-600">-</span>}
+                                </td>
+                                <td className="px-4 py-4 text-right font-mono">
+                                    <div className="flex flex-col items-end gap-0.5">
+                                        <span className="text-slate-300 font-bold">{((ex as any).recurrence || 0).toFixed(1)}%</span>
+                                        <span className="text-[9px] text-slate-500">{ex.count} pass</span>
+                                    </div>
+                                </td>
                                 <td className="px-4 py-4 text-right text-emerald-400 font-bold whitespace-nowrap">
                                     {(ex.isDistanceBased ? (ex.volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 }) + 'km' :
                                         (ex.volume / 1000).toLocaleString('sv-SE', { maximumFractionDigits: 1 }) + 't')}

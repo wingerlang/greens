@@ -42,7 +42,7 @@ export function StrengthPage() {
     const [mainTab, setMainTab] = useState<'overview' | 'analysis' | 'research'>('overview');
 
     const { exerciseName: exerciseSlug } = useParams();
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
 
     const exerciseName = exerciseSlug ? decodeURIComponent(exerciseSlug) : null;
     const sessionId = searchParams.get('sessionId');
@@ -79,6 +79,42 @@ export function StrengthPage() {
     const handleCloseExercise = useCallback(() => {
         navigate('/styrka');
     }, [navigate]);
+
+    // Handle workout selection with URL update
+    const handleSelectWorkout = useCallback((workout: StrengthWorkout) => {
+        setSelectedWorkout(workout);
+        setSearchParams(prev => {
+            prev.set('sessionId', workout.id);
+            return prev;
+        }, { replace: true });
+    }, [setSearchParams]);
+
+    const handleCloseWorkout = useCallback(() => {
+        setSelectedWorkout(null);
+        setSearchParams(prev => {
+            prev.delete('sessionId');
+            return prev;
+        }, { replace: true });
+    }, [setSearchParams]);
+
+    // Calculate session number for selected workout
+    const currentSessionInfo = useMemo(() => {
+        if (!selectedWorkout || workouts.length === 0) return null;
+
+        // Get workouts for the same year
+        const year = new Date(selectedWorkout.date).getFullYear();
+        // Sort ascending by date to find index
+        const yearWorkouts = workouts
+            .filter(w => new Date(w.date).getFullYear() === year)
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        const index = yearWorkouts.findIndex(w => w.id === selectedWorkout.id);
+        return {
+            number: index + 1,
+            total: yearWorkouts.length,
+            year
+        };
+    }, [selectedWorkout, workouts]);
 
 
     const { token } = useAuth();
@@ -341,7 +377,9 @@ export function StrengthPage() {
     const periodStats = React.useMemo(() => {
         const count = filteredWorkouts.length;
         const volume = filteredWorkouts.reduce((sum, w) => sum + (w.totalVolume || 0), 0);
-        return { count, volume };
+        const sets = filteredWorkouts.reduce((sum, w) => sum + (w.totalSets || 0), 0);
+        const uniqueExercises = new Set(filteredWorkouts.flatMap(w => w.exercises.map(e => e.exerciseName))).size;
+        return { count, volume, sets, uniqueExercises };
     }, [filteredWorkouts]);
 
     // Reset date filter
@@ -536,27 +574,27 @@ export function StrengthPage() {
                                 })()}
                                 <input
                                     type="range"
-                                    min={Math.min(new Date(dateRange.min).getTime(), new Date(startDate || dateRange.min).getTime())}
-                                    max={Math.max(new Date(dateRange.max).getTime(), new Date(endDate || dateRange.max).getTime())}
+                                    min={new Date(dateRange.min).getTime()}
+                                    max={new Date(dateRange.max).getTime()}
                                     value={new Date(startDate || dateRange.min).getTime()}
                                     onChange={(e) => {
                                         const newStart = Math.min(parseInt(e.target.value), new Date(endDate || dateRange.max).getTime() - 86400000);
                                         setStartDate(new Date(newStart).toISOString().split('T')[0]);
                                     }}
                                     className={`absolute inset-0 w-full appearance-none bg-transparent cursor-pointer slider-thumb-dual ${new Date(startDate || dateRange.min).getTime() > (new Date(dateRange.max).getTime() + new Date(dateRange.min).getTime()) / 2 ? 'z-30' : 'z-20'}`}
-                                    style={{ pointerEvents: 'auto' }}
+                                    style={{ pointerEvents: 'none' }}
                                 />
                                 <input
                                     type="range"
-                                    min={Math.min(new Date(dateRange.min).getTime(), new Date(startDate || dateRange.min).getTime())}
-                                    max={Math.max(new Date(dateRange.max).getTime(), new Date(endDate || dateRange.max).getTime())}
+                                    min={new Date(dateRange.min).getTime()}
+                                    max={new Date(dateRange.max).getTime()}
                                     value={new Date(endDate || dateRange.max).getTime()}
                                     onChange={(e) => {
                                         const newEnd = Math.max(parseInt(e.target.value), new Date(startDate || dateRange.min).getTime() + 86400000);
                                         setEndDate(new Date(newEnd).toISOString().split('T')[0]);
                                     }}
                                     className={`absolute inset-0 w-full appearance-none bg-transparent cursor-pointer slider-thumb-dual ${new Date(endDate || dateRange.max).getTime() <= (new Date(dateRange.max).getTime() + new Date(dateRange.min).getTime()) / 2 ? 'z-30' : 'z-20'}`}
-                                    style={{ pointerEvents: 'auto' }}
+                                    style={{ pointerEvents: 'none' }}
                                 />
                             </div>
                         </div>
@@ -596,11 +634,26 @@ export function StrengthPage() {
 
             {/* Stats Cards */}
             {mainTab === 'overview' && stats && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard label="Totalt pass" value={hasDateFilter ? periodStats.count : stats.totalWorkouts} />
-                    <StatCard label="Pass denna vecka" value={stats.workoutsThisWeek} />
-                    <StatCard label="Total volym" value={hasDateFilter ? `${Math.round(periodStats.volume / 1000)}t` : `${Math.round(stats.totalVolume / 1000)}t`} />
-                    <StatCard label="Volym denna månad" value={`${Math.round(stats.volumeThisMonth / 1000)}t`} />
+                <div className="bg-slate-900/50 border border-white/5 rounded-2xl p-4 md:px-8 flex flex-wrap justify-between items-center gap-4 text-sm font-medium text-slate-400">
+                    <div className="flex items-center gap-2">
+                        <span className="text-white font-black text-xl md:text-2xl">{periodStats.count}</span>
+                        <span className="uppercase text-[10px] md:text-xs font-bold tracking-widest opacity-60">Pass</span>
+                    </div>
+                    <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-white font-black text-xl md:text-2xl">{periodStats.uniqueExercises}</span>
+                        <span className="uppercase text-[10px] md:text-xs font-bold tracking-widest opacity-60">Övningar</span>
+                    </div>
+                    <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-white font-black text-xl md:text-2xl">{periodStats.sets}</span>
+                        <span className="uppercase text-[10px] md:text-xs font-bold tracking-widest opacity-60">Set</span>
+                    </div>
+                    <div className="w-px h-8 bg-white/10 hidden sm:block"></div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-white font-black text-xl md:text-2xl">{(periodStats.volume / 1000).toFixed(1)}</span>
+                        <span className="uppercase text-[10px] md:text-xs font-bold tracking-widest opacity-60">Ton</span>
+                    </div>
                 </div>
             )}
 
@@ -951,7 +1004,7 @@ export function StrengthPage() {
                     icon="🔥"
                     className="mb-8"
                 >
-                    <TopExercisesTable workouts={filteredWorkouts} personalBests={personalBests} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} />
+                    <TopExercisesTable workouts={filteredWorkouts} personalBests={personalBests} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} onSelectWorkout={handleSelectWorkout} />
                 </CollapsibleSection>
             )}
 
@@ -1002,7 +1055,7 @@ export function StrengthPage() {
                                             workout={workout}
                                             isAnnualBest={annualBestWorkoutIds.has(workout.id)}
                                             isPR={allTimePBWorkoutIds.has(workout.id)}
-                                            onClick={() => setSelectedWorkout(workout)}
+                                            onClick={() => handleSelectWorkout(workout)}
                                         />
                                     ))}
                                 </div>
@@ -1060,15 +1113,18 @@ export function StrengthPage() {
                 selectedWorkout && (
                     <WorkoutDetailModal
                         workout={selectedWorkout}
-                        onClose={() => setSelectedWorkout(null)}
+                        onClose={handleCloseWorkout}
                         onSelectExercise={(name) => {
-                            setSelectedWorkout(null);
+                            handleCloseWorkout();
                             navigate(`/styrka/${slugify(name)}`);
                         }}
                         pbs={filteredPBs}
                         allWorkouts={workouts}
+                        sessionNumber={currentSessionInfo?.number}
+                        sessionTotal={currentSessionInfo?.total}
+                        sessionYear={currentSessionInfo?.year}
                         onDeleted={() => {
-                            setSelectedWorkout(null);
+                            handleCloseWorkout();
                             fetchData();  // Refresh the list
                         }}
                     />
