@@ -21,7 +21,7 @@ export type { GoalProgress, StreakInfo };
  */
 export function useGoalProgress(goal: PerformanceGoal | null | undefined): GoalProgress | null {
     const {
-        exerciseEntries = [],
+        unifiedActivities = [],
         mealEntries = [],
         foodItems = [],
         recipes = [],
@@ -31,15 +31,16 @@ export function useGoalProgress(goal: PerformanceGoal | null | undefined): GoalP
     return useMemo(() => {
         if (!goal) return null;
 
+        // Use unifiedActivities which includes merged strength sessions
         return calculateGoalProgress(
             goal,
-            exerciseEntries,
+            unifiedActivities as any[], // Cast to ExerciseEntry[] for compatibility
             mealEntries,
             foodItems,
             recipes,
             weightEntries
         );
-    }, [goal, exerciseEntries, mealEntries, foodItems, recipes, weightEntries]);
+    }, [goal, unifiedActivities, mealEntries, foodItems, recipes, weightEntries]);
 }
 
 /**
@@ -48,7 +49,7 @@ export function useGoalProgress(goal: PerformanceGoal | null | undefined): GoalP
 export function useAllGoalsProgress(): Map<string, GoalProgress> {
     const {
         performanceGoals = [],
-        exerciseEntries = [],
+        unifiedActivities = [],
         mealEntries = [],
         foodItems = [],
         recipes = [],
@@ -59,9 +60,10 @@ export function useAllGoalsProgress(): Map<string, GoalProgress> {
         const progressMap = new Map<string, GoalProgress>();
 
         performanceGoals.forEach(goal => {
+            // Use unifiedActivities which includes merged strength sessions
             const progress = calculateGoalProgress(
                 goal,
-                exerciseEntries,
+                unifiedActivities as any[], // Cast to ExerciseEntry[] for compatibility
                 mealEntries,
                 foodItems,
                 recipes,
@@ -71,7 +73,7 @@ export function useAllGoalsProgress(): Map<string, GoalProgress> {
         });
 
         return progressMap;
-    }, [performanceGoals, exerciseEntries, mealEntries, foodItems, recipes, weightEntries]);
+    }, [performanceGoals, unifiedActivities, mealEntries, foodItems, recipes, weightEntries]);
 }
 
 /**
@@ -183,20 +185,22 @@ export function useGoalsSummary() {
  * Hook to get training streak info.
  */
 export function useTrainingStreak(exerciseType?: string) {
-    const { exerciseEntries = [] } = useData();
+    const { unifiedActivities = [] } = useData();
 
     return useMemo(() => {
-        return calculateStreak(exerciseEntries, 'daily', exerciseType);
-    }, [exerciseEntries, exerciseType]);
+        // Use unifiedActivities which includes strength sessions
+        return calculateStreak(unifiedActivities as any[], 'daily', exerciseType);
+    }, [unifiedActivities, exerciseType]);
 }
 
 /**
  * Hook to get weekly training streak.
  */
 export function useWeeklyStreak(exerciseType?: string) {
-    const { exerciseEntries = [] } = useData();
+    const { unifiedActivities = [] } = useData();
 
     return useMemo(() => {
-        return calculateStreak(exerciseEntries, 'weekly', exerciseType);
-    }, [exerciseEntries, exerciseType]);
+        // Use unifiedActivities which includes strength sessions
+        return calculateStreak(unifiedActivities as any[], 'weekly', exerciseType);
+    }, [unifiedActivities, exerciseType]);
 }

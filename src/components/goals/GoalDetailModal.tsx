@@ -24,7 +24,7 @@ const CATEGORY_CONFIG: Record<GoalCategory, { label: string; icon: string; color
 };
 
 export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps) {
-    const { weightEntries = [], universalActivities = [], strengthSessions = [] } = useData();
+    const { weightEntries = [], universalActivities = [], strengthSessions = [], unifiedActivities = [] } = useData();
     const progressData = useGoalProgress(goal);
 
     // Format helpers
@@ -318,19 +318,45 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
             : new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
         endDate.setHours(0, 0, 0, 0);
 
-        const targetValue = progress.target || 1;
+        // Per-period target (e.g., 4 sessions per week)
+        const perPeriodTarget = progress.target || 1;
+
+        // Calculate TOTAL expected over the entire goal period
+        const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        const totalWeeks = totalDays / 7;
+
+        // For weekly goals: total expected = per-week target × number of weeks
+        // For daily goals: total expected = per-day target × number of days
+        const isWeekly = goal.period === 'weekly';
+        const isMonthly = goal.period === 'monthly';
+        const totalExpected = isWeekly
+            ? perPeriodTarget * totalWeeks
+            : isMonthly
+                ? perPeriodTarget * (totalDays / 30)
+                : perPeriodTarget; // 'once' or 'daily' (for daily it's actually per day already)
+
+        // Calculate expected progress by today
+        const daysFromStart = Math.ceil((today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        const progressRatio = Math.min(1, daysFromStart / totalDays);
+        const expectedToday = totalExpected * progressRatio;
+
         const chartWidth = 500;
         const chartHeight = 180;
         const padding = { top: 20, right: 30, bottom: 30, left: 55 };
         const graphWidth = chartWidth - padding.left - padding.right;
         const graphHeight = chartHeight - padding.top - padding.bottom;
 
-        // Get activities in period
-        const periodActivities = universalActivities
+        // Get activities in period - use unifiedActivities (same as goal progress calculation)
+        // This ensures the chart matches the progress.current value
+        const targetExerciseType = goal.targets[0]?.exerciseType;
+        const periodActivities = (unifiedActivities as any[])
             .filter(a => {
                 const aDate = new Date(a.date);
                 aDate.setHours(0, 0, 0, 0);
-                return aDate >= startDate && aDate <= today;
+                if (aDate < startDate || aDate > today) return false;
+                // Filter by exercise type if specified
+                if (targetExerciseType && a.type !== targetExerciseType) return false;
+                return true;
             })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
@@ -375,9 +401,8 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
             });
         });
 
-        // Calculate ranges
-        const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-        const maxValue = Math.max(targetValue, cumulative * 1.1) || 1;
+        // Calculate ranges - use totalExpected for proper scaling
+        const maxValue = Math.max(totalExpected, cumulative * 1.1, 1);
 
         // Convert functions
         const dateToX = (date: Date) => {
@@ -402,13 +427,16 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
             }
         }
 
-        // Target line (horizontal)
-        const targetY = valueToY(targetValue);
+        // Expected progress line (diagonal from 0 to totalExpected)
+        const expectedPath = `M ${dateToX(startDate)} ${valueToY(0)} L ${dateToX(endDate)} ${valueToY(totalExpected)}`;
+
+        // Expected Y at today
+        const expectedTodayY = valueToY(expectedToday);
 
         // Trend/projection line (if we have data)
         let projectionPath = '';
         if (dailyData.length >= 2) {
-            const dailyRate = cumulative / Math.max(1, daysElapsed);
+            const dailyRate = cumulative / Math.max(1, daysFromStart);
             const projectedEnd = cumulative + dailyRate * (actualDaysRemaining || 30);
             projectionPath = `M ${dateToX(today)} ${valueToY(cumulative)} L ${dateToX(endDate)} ${valueToY(projectedEnd)}`;
         }
@@ -423,20 +451,24 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
             graphWidth,
             graphHeight,
             maxValue,
-            targetValue,
+            perPeriodTarget,
+            totalExpected: Math.round(totalExpected * 10) / 10,
+            expectedToday: Math.round(expectedToday * 10) / 10,
+            totalWeeks: Math.round(totalWeeks * 10) / 10,
             startDate,
             endDate,
             dailyData,
             cumulative,
             cumulativePath,
+            expectedPath,
+            expectedTodayY,
             projectionPath,
-            targetY,
             todayX,
             dateToX,
             valueToY,
             isOngoing: !goal.endDate
         };
-    }, [goal, universalActivities, progress.target, daysElapsed, actualDaysRemaining]);
+    }, [goal, unifiedActivities, progress.target, daysElapsed, actualDaysRemaining]);
 
     // Calculate Top Activities for Speed Goals
     const topSpeedActivities = useMemo(() => {
@@ -1061,12 +1093,10 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                                         );
                                     })}
 
-                                    {/* Target line (horizontal dashed) */}
-                                    <line
-                                        x1={activityChartData.padding.left}
-                                        y1={activityChartData.targetY}
-                                        x2={activityChartData.chartWidth - activityChartData.padding.right}
-                                        y2={activityChartData.targetY}
+                                    {/* Expected progress line (diagonal) */}
+                                    <path
+                                        d={activityChartData.expectedPath}
+                                        fill="none"
                                         stroke="#10b981"
                                         strokeWidth="1.5"
                                         strokeDasharray="4 4"
@@ -1074,12 +1104,12 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                                     />
                                     <text
                                         x={activityChartData.chartWidth - activityChartData.padding.right + 5}
-                                        y={activityChartData.targetY + 4}
+                                        y={activityChartData.valueToY(activityChartData.totalExpected) + 4}
                                         fill="#10b981"
                                         fontSize="9"
                                         fontWeight="bold"
                                     >
-                                        Mål
+                                        Mål ({activityChartData.totalExpected})
                                     </text>
 
                                     {/* Projection line (dashed) */}
@@ -1161,6 +1191,52 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                                         {goal.endDate ? formatDate(goal.endDate) : '+30d'}
                                     </text>
                                 </svg>
+                            )}
+
+                            {/* Cumulative Stats Summary */}
+                            {activityChartData && goal.period === 'weekly' && (
+                                <div className="grid grid-cols-3 gap-2 mb-4">
+                                    <div className="p-2.5 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 rounded-lg border border-emerald-500/20 text-center">
+                                        <div className="text-lg font-black text-emerald-400">
+                                            {activityChartData.cumulative}
+                                        </div>
+                                        <div className="text-[8px] uppercase font-bold text-slate-500">
+                                            ✅ Avklarat
+                                        </div>
+                                    </div>
+                                    <div className="p-2.5 bg-gradient-to-br from-blue-500/10 to-indigo-500/5 rounded-lg border border-blue-500/20 text-center">
+                                        <div className="text-lg font-black text-blue-400">
+                                            {activityChartData.expectedToday}
+                                        </div>
+                                        <div className="text-[8px] uppercase font-bold text-slate-500">
+                                            📅 Förväntat Idag
+                                        </div>
+                                    </div>
+                                    <div className="p-2.5 bg-gradient-to-br from-amber-500/10 to-orange-500/5 rounded-lg border border-amber-500/20 text-center">
+                                        <div className="text-lg font-black text-amber-400">
+                                            {activityChartData.totalExpected}
+                                        </div>
+                                        <div className="text-[8px] uppercase font-bold text-slate-500">
+                                            🎯 Totalt Mål
+                                        </div>
+                                        <div className="text-[7px] text-slate-600 italic">
+                                            {activityChartData.perPeriodTarget}/v × {activityChartData.totalWeeks}v
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Difference indicator */}
+                            {activityChartData && goal.period === 'weekly' && (
+                                <div className={`text-center text-xs font-bold mb-3 px-3 py-1.5 rounded-lg ${activityChartData.cumulative >= activityChartData.expectedToday
+                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                    }`}>
+                                    {activityChartData.cumulative >= activityChartData.expectedToday
+                                        ? `✅ ${(activityChartData.cumulative - activityChartData.expectedToday).toFixed(1)} före schema!`
+                                        : `⚠️ ${(activityChartData.expectedToday - activityChartData.cumulative).toFixed(1)} efter schema`
+                                    }
+                                </div>
                             )}
                             <div className="relative h-8 bg-slate-800 rounded-lg overflow-hidden mb-4">
                                 <div

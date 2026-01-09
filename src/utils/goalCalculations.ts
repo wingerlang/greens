@@ -470,13 +470,29 @@ export function calculateAheadBehind(
     if (daysElapsed <= 0) return { value: 0, text: 'Har inte startat', unit: '' };
     if (daysElapsed >= totalDays) return { value: 0, text: 'Avslutad', unit: '' };
 
-    const expectedProgress = (progress.target / totalDays) * daysElapsed;
+    // For weekly/monthly goals, progress.target is the per-period value
+    // We need to calculate total expected across the entire goal period
+    const totalWeeks = totalDays / 7;
+    const isWeekly = goal.period === 'weekly';
+    const isMonthly = goal.period === 'monthly';
+
+    // Calculate total expected for the entire goal period
+    const totalExpected = isWeekly
+        ? progress.target * totalWeeks
+        : isMonthly
+            ? progress.target * (totalDays / 30)
+            : progress.target; // 'once' or 'daily'
+
+    // Calculate expected progress by today (linear interpolation)
+    const progressRatio = daysElapsed / totalDays;
+    const expectedProgress = totalExpected * progressRatio;
+
     const diff = progress.current - expectedProgress;
 
     const unit = goal.targets[0]?.unit || '';
     const text = diff >= 0
-        ? `+${diff.toFixed(1)} ${unit} före`
-        : `${diff.toFixed(1)} ${unit} efter`;
+        ? `+${diff.toFixed(1)} före`
+        : `${diff.toFixed(1)} efter`;
 
     return { value: diff, text, unit };
 }
