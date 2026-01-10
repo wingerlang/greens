@@ -138,7 +138,7 @@ export function ExerciseModal({
                         ))}
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className={`grid ${['running', 'cycling', 'walking', 'swimming'].includes(effectiveExerciseType) ? 'grid-cols-3' : 'grid-cols-2'} gap-4`}>
                         <div className="input-group">
                             <label>Längd (min)</label>
                             <input
@@ -151,6 +151,22 @@ export function ExerciseModal({
                                 className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white"
                             />
                         </div>
+                        {['running', 'cycling', 'walking', 'swimming'].includes(effectiveExerciseType) && (
+                            <div className="input-group">
+                                <label>Distans (km)</label>
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    placeholder="-"
+                                    value={exerciseForm.distance || ''}
+                                    onChange={e => {
+                                        setExerciseForm({ ...exerciseForm, distance: e.target.value });
+                                        setSmartInput('');
+                                    }}
+                                    className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white border-emerald-500/20 focus:border-emerald-500/50"
+                                />
+                            </div>
+                        )}
                         <div className="input-group">
                             <label>Intensitet</label>
                             <select
@@ -159,7 +175,7 @@ export function ExerciseModal({
                                     setExerciseForm({ ...exerciseForm, intensity: e.target.value as ExerciseIntensity });
                                     setSmartInput('');
                                 }}
-                                className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white appearance-none"
+                                className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white appearance-none h-[46px]"
                             >
                                 {INTENSITIES.map(i => <option key={i.value} value={i.value}>{i.label}</option>)}
                             </select>
@@ -173,7 +189,7 @@ export function ExerciseModal({
                             <select
                                 value={exerciseForm.subType || 'default'}
                                 onChange={e => setExerciseForm({ ...exerciseForm, subType: e.target.value as ExerciseSubType })}
-                                className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white appearance-none text-xs"
+                                className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white appearance-none text-xs h-[46px]"
                             >
                                 <option value="default">Standard</option>
                                 <option value="interval">Intervaller</option>
@@ -183,20 +199,6 @@ export function ExerciseModal({
                                 <option value="competition">Tävlingsmoment</option>
                             </select>
                         </div>
-
-                        {(effectiveExerciseType === 'running' || effectiveExerciseType === 'cycling' || effectiveExerciseType === 'walking' || effectiveExerciseType === 'swimming') && (
-                            <div className="input-group">
-                                <label>Distans (km)</label>
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    placeholder="-"
-                                    value={exerciseForm.distance || ''}
-                                    onChange={e => setExerciseForm({ ...exerciseForm, distance: e.target.value })}
-                                    className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white text-xs"
-                                />
-                            </div>
-                        )}
 
                         {effectiveExerciseType === 'strength' && (
                             <div className="input-group">

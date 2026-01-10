@@ -42,7 +42,7 @@ interface ParserContext {
 /**
  * Parse a StrengthLog CSV file content
  */
-export function parseStrengthLogCSV(csvContent: string, userId: string): ParsedCSV {
+export function parseStrengthLogCSV(csvContent: string, userId: string, source: 'strengthlog' | 'hevy' = 'strengthlog'): ParsedCSV {
     const lines = csvContent.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
     // Detect format
@@ -50,7 +50,7 @@ export function parseStrengthLogCSV(csvContent: string, userId: string): ParsedC
     // New (flat) format starts with "workout,start,end,exercise..."
     const firstLine = lines[0].toLowerCase();
     const isNewFormat = firstLine.startsWith('workout,start,end');
-    const isHevyFormat = (firstLine.includes('"title"') && firstLine.includes('"start_time"')) || (firstLine.includes('title,') && firstLine.includes('start_time,'));
+    const isHevyFormat = source === 'hevy' || (firstLine.includes('"title"') && firstLine.includes('"start_time"')) || (firstLine.includes('title,') && firstLine.includes('start_time,'));
 
     if (isNewFormat) {
         return parseNewStrengthLogFormat(lines, userId);
@@ -139,13 +139,12 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
         workoutComment: getIdx('workoutComment'),
         sleep: getIdx('sleep'),
         stress: getIdx('stress'),
-        calories: 23 // Warning: 'calories' appears twice in header (idx 13 and 23 in example). 23 is usually the workout metric? Or row metric?
-        // Let's use simple lookup for now.
+        calories: header.lastIndexOf('calories')
     };
 
     const ctx: ParserContext = {
         userId,
-        currentWorkout: null, // Not used strictly, we use map
+        currentWorkout: null,
         currentExercise: null,
         exercises: new Map(),
         workouts: [],
@@ -162,10 +161,36 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
 
         try {
             const vals = parseCSVLine(line);
+            if (vals.length < 5) continue;
+
+            // Auto-detect offset based on 'start' column being a 13-digit timestamp
+            // (StrengthLog milisecond timestamp is 13 digits)
+            let actualStartIdx = -1;
+            for (let j = 0; j < vals.length; j++) {
+                if (/^\d{13}$/.test(vals[j])) {
+                    actualStartIdx = j;
+                    break;
+                }
+            }
+
+            if (actualStartIdx === -1) {
+                // Fallback: look for ANY 13+ digit number if the strictly keyed one fails
+                actualStartIdx = idx.start;
+            }
+
+            const offset = actualStartIdx - idx.start;
+            const val = (index: number) => {
+                if (index === 0) {
+                    // workout field: handle commas by joining all parts before start timestamp
+                    return vals.slice(0, 1 + offset).join(', ');
+                }
+                const v = vals[index + offset];
+                return v !== undefined ? v : '';
+            };
 
             // 1. Identify Workout Group (by start timestamp + name)
-            const workoutName = vals[idx.workout] || 'Unknown Workout';
-            const startTimeStr = vals[idx.start];
+            const workoutName = val(idx.workout) || 'Unknown Workout';
+            const startTimeStr = val(idx.start);
             const startDate = new Date(parseInt(startTimeStr));
             const dateStr = startDate.toISOString().split('T')[0];
             const workoutIdKey = `${startTimeStr}-${workoutName}`;
@@ -183,19 +208,17 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
                     totalSets: 0,
                     totalReps: 0,
                     uniqueExercises: 0,
-                    createdAt: new Date().toISOString(), // or use startTime
+                    createdAt: new Date().toISOString(),
                     updatedAt: new Date().toISOString(),
-                    notes: vals[idx.workoutComment],
-                    // Optional metadata
-                    // bodyWeight: ?? Not clearly in row for whole workout, maybe in set data?
-                    sleep: parseFloat(vals[idx.sleep]) || undefined,
-                    stress: parseFloat(vals[idx.stress]) || undefined
+                    notes: val(idx.workoutComment),
+                    sleep: parseFloat(val(idx.sleep)) || undefined,
+                    stress: parseFloat(val(idx.stress)) || undefined
                 };
                 workoutMap.set(workoutIdKey, workout);
             }
 
             // 2. Process Exercise
-            const exerciseName = vals[idx.exercise];
+            const exerciseName = val(idx.exercise);
             if (!exerciseName) continue;
 
             const normalizedName = normalizeExerciseName(exerciseName);
@@ -211,9 +234,6 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
             }
             const exerciseDef = ctx.exercises.get(normalizedName)!;
 
-            // Find or create Exercise Group in Workout
-            // Note: In flat CSV, sets for same exercise might be scattered if user did circuit?
-            // Usually simpler to just append or find existing by ID.
             let workoutExercise = workout.exercises.find(we => we.exerciseId === exerciseDef.id);
             if (!workoutExercise) {
                 workoutExercise = {
@@ -225,16 +245,14 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
             }
 
             // 3. Process Set
-            // weight, bodyweight, extraWeight
-            // Logic: if bodyweight is set, use it?
-            const weightVal = parseFloat(vals[idx.weight]) || 0;
-            const bodyweightVal = parseFloat(vals[idx.bodyweight]);
-            const extraWeightVal = parseFloat(vals[idx.extraWeight]);
-            const repsVal = parseInt(vals[idx.reps]) || 0;
-            const distKM = parseFloat(vals[idx.distanceKM]) || 0;
-            const distM = parseFloat(vals[idx.distanceM]) || 0;
-            const timeVal = vals[idx.time]; // "00:04:44" or similar
-            const isWarmup = (vals[idx.warmup] || '').toLowerCase() === 'true';
+            const weightVal = parseFloat(val(idx.weight)) || 0;
+            const bodyweightVal = parseFloat(val(idx.bodyweight));
+            const extraWeightVal = parseFloat(val(idx.extraWeight));
+            const repsVal = parseInt(val(idx.reps)) || 0;
+            const distKM = parseFloat(val(idx.distanceKM)) || 0;
+            const distM = parseFloat(val(idx.distanceM)) || 0;
+            const timeVal = val(idx.time);
+            const isWarmup = (val(idx.warmup) || '').toLowerCase() === 'true';
 
             const set: StrengthSet = {
                 setNumber: workoutExercise.sets.length + 1,
@@ -243,19 +261,15 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
                 isWarmup
             };
 
-            // Handle Bodyweight logic
             if (!isNaN(bodyweightVal) && bodyweightVal > 0) {
                 set.isBodyweight = true;
                 set.bodyweight = bodyweightVal;
-                // If weight column is empty/zero but BW is present, user might mean BW exercise
-                // Commonly: weight = bodyweight + extraWeight
                 if (!set.weight) set.weight = bodyweightVal + (extraWeightVal || 0);
             }
             if (!isNaN(extraWeightVal)) {
                 set.extraWeight = extraWeightVal;
             }
 
-            // Handle Distance/Time
             const totalDistM = (distKM * 1000) + distM;
             if (totalDistM > 0) {
                 set.distance = totalDistM;
@@ -267,11 +281,6 @@ function parseNewStrengthLogFormat(lines: string[], userId: string): ParsedCSV {
             }
 
             workoutExercise.sets.push(set);
-
-            // 4. Update Stats & PBs
-            // We'll do a final pass for stats, but PBs can be tracked incrementally or after.
-            // Let's use the helper to track PBs, but we need to mock context slightly or refactor trackPersonalBest
-            // trackPersonalBest expects context.currentWorkout to be set.
             ctx.currentWorkout = workout;
             trackPersonalBest(ctx, exerciseDef, set);
 
@@ -669,6 +678,7 @@ function parseHevyLogFormat(lines: string[], userId: string): ParsedCSV {
 
     const idx = {
         title: getIdx('title'),
+        description: getIdx('description'),
         start_time: getIdx('start_time'),
         end_time: getIdx('end_time'),
         exercise_title: getIdx('exercise_title'),
@@ -706,7 +716,7 @@ function parseHevyLogFormat(lines: string[], userId: string): ParsedCSV {
             };
 
             // 1. Identify Workout Group
-            const workoutName = val(idx.title) || 'Unknown Workout';
+            const workoutName = val(idx.title) || val(idx.description) || 'Unknown Workout';
             const startTimeStr = val(idx.start_time); // "7 Jan 2026, 19:21"
 
             // Parse Date: "7 Jan 2026, 19:21"

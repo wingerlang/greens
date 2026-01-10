@@ -49,7 +49,7 @@ export function WeightHistorySection({ currentWeight, targetWeight }: WeightHist
                             const isLatest = i === chartData.length - 1;
                             return (
                                 <div
-                                    key={h.date}
+                                    key={`${h.date}-${i}`}
                                     className={`flex-1 rounded-t ${isLatest ? 'bg-emerald-500' : 'bg-slate-600'}`}
                                     style={{ height: `${Math.max(height, 5)}%` }}
                                     title={`${h.weight} kg - ${h.date}`}
@@ -117,7 +117,7 @@ export function WeightHistorySection({ currentWeight, targetWeight }: WeightHist
                                 const prev = arr[i + 1];
                                 const delta = prev ? h.weight - prev.weight : 0;
                                 return (
-                                    <tr key={h.date} className="border-t border-white/5">
+                                    <tr key={`${h.date}-${i}`} className="border-t border-white/5">
                                         <td className="p-2 text-slate-400">{new Date(h.date).toLocaleDateString('sv-SE')}</td>
                                         <td className="p-2 text-right text-white font-medium">{h.weight} kg</td>
                                         <td className={`p-2 text-right ${delta < 0 ? 'text-emerald-400' : delta > 0 ? 'text-red-400' : 'text-slate-500'}`}>

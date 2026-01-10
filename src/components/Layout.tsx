@@ -16,9 +16,9 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
     const [isOmniboxOpen, setIsOmniboxOpen] = useState(false);
     const [isTrainingModalOpen, setIsTrainingModalOpen] = useState(false);
-    const [trainingModalDefaults, setTrainingModalDefaults] = useState<{ type?: ExerciseType; input?: string }>({});
+    const [trainingModalDefaults, setTrainingModalDefaults] = useState<{ type?: ExerciseType; input?: string; date?: string }>({});
 
-    const handleOpenTraining = (defaults: { type?: ExerciseType; input?: string }) => {
+    const handleOpenTraining = (defaults: { type?: ExerciseType; input?: string; date?: string }) => {
         setTrainingModalDefaults(defaults);
         setIsOmniboxOpen(false);
         setIsTrainingModalOpen(true);
@@ -38,10 +38,14 @@ export function Layout({ children }: LayoutProps) {
     const { recipes, foodItems, getFoodItem } = useData();
     const [nutritionBreakdownItem, setNutritionBreakdownItem] = useState<{ type: 'recipe' | 'foodItem'; referenceId: string; servings: number } | null>(null);
 
-    // Handle 'breakdown' query param globally
+    // Handle 'breakdown' and 'registerDate' query params globally
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const breakdownId = params.get('breakdown');
+        const registerDate = params.get('registerDate');
+        const registerType = params.get('registerType') as ExerciseType | null;
+        const registerInput = params.get('registerInput');
+
         if (breakdownId) {
             const recipe = recipes.find(r => r.id === breakdownId);
             if (recipe) {
@@ -52,6 +56,17 @@ export function Layout({ children }: LayoutProps) {
                     setNutritionBreakdownItem({ type: 'foodItem', referenceId: food.id, servings: 100 });
                 }
             }
+        }
+
+        if (registerDate) {
+            handleOpenTraining({
+                date: registerDate,
+                type: registerType || undefined,
+                input: registerInput || undefined
+            });
+        }
+
+        if (breakdownId || registerDate) {
             // Clean up URL without reload
             const newUrl = window.location.pathname + window.location.hash;
             window.history.replaceState({}, '', newUrl);
@@ -78,6 +93,7 @@ export function Layout({ children }: LayoutProps) {
                 onClose={() => setIsTrainingModalOpen(false)}
                 initialType={trainingModalDefaults.type}
                 initialInput={trainingModalDefaults.input}
+                initialDate={trainingModalDefaults.date}
             />
 
             {nutritionBreakdownItem && (

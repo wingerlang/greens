@@ -1228,20 +1228,32 @@ export function ExerciseDetailModal({
                                                         >
                                                             <div className="flex flex-col gap-0.5">
                                                                 <p className="font-black text-emerald-400 text-xs">{val} {getUnit()}</p>
-                                                                {!isDistanceBasedExercise(exerciseName) && (h as any).reps && (
+                                                                {!isDistanceBasedExercise(exerciseName) && (
                                                                     <p className="text-[9px] text-slate-300 font-medium">
-                                                                        {(h as any).reps}x{(h as any).weight || (h as any).maxWeight || 0}kg <span className="opacity-50">({(h as any).sets || (h as any).workout?.sets?.length || '-'} set)</span>
+                                                                        {/* Use bestSetString for est1RM view, maxWeightReps for max weight */}
+                                                                        {isHistory && (h as any).bestSetString
+                                                                            ? (h as any).bestSetString
+                                                                            : `${(h as any).maxWeightReps || '-'}x${(h as any).maxWeight || 0}kg`
+                                                                        } <span className="opacity-50">({(h as any).sets || '-'} set)</span>
                                                                     </p>
                                                                 )}
                                                                 <p className="text-[9px] text-slate-500 mt-1 pt-1 border-t border-white/5">{h.date}</p>
+                                                                {onSelectWorkout && (h as any).workout && (
+                                                                    <p className="text-[8px] text-blue-400 mt-1">Klicka för att öppna</p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                         <div
-                                                            className={`w-full relative transition-all duration-300 group-hover:brightness-110 ${isBest ? (isHistory ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]' : 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.3)]') : (isHistory ? 'bg-amber-500/60' : 'bg-emerald-500/60')} border-t border-white/5`}
+                                                            className={`w-full relative transition-all duration-300 group-hover:brightness-110 ${isBest ? (isHistory ? 'bg-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.3)]' : 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.3)]') : (isHistory ? 'bg-amber-500/60' : 'bg-emerald-500/60')} border-t border-white/5 ${onSelectWorkout && (h as any).workout ? 'cursor-pointer hover:ring-2 hover:ring-white/30' : ''}`}
                                                             style={{
                                                                 height: `${heightPercent}%`,
                                                                 minWidth: '4px',
                                                                 borderRadius: '2px 2px 0 0'
+                                                            }}
+                                                            onClick={() => {
+                                                                if (onSelectWorkout && (h as any).workout) {
+                                                                    onSelectWorkout((h as any).workout);
+                                                                }
                                                             }}
                                                         />
                                                     </div>
@@ -1296,8 +1308,8 @@ export function ExerciseDetailModal({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-white/5">
-                                            {exerciseHistory.slice().reverse().map(h => (
-                                                <tr key={h.date} className="hover:bg-white/5 transition-colors group">
+                                            {exerciseHistory.slice().reverse().map((h, idx) => (
+                                                <tr key={h.workout?.id || `${h.date}-${idx}`} className="hover:bg-white/5 transition-colors group">
                                                     <td className="px-4 py-3">
                                                         <button
                                                             onClick={() => onSelectWorkout?.(h.workout)}

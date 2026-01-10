@@ -29,7 +29,6 @@ import {
     ChevronLeft,
     Info
 } from 'lucide-react';
-import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { GoalsOverviewWidget } from '../components/goals/GoalsOverviewWidget.tsx';
 import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
@@ -206,7 +205,7 @@ const DayHoverCard = ({
     date: string,
     activities: any[],
     nutrition: any,
-    onActivityClick: (act: any) => void
+    onActivityClick: (actId: string) => void
 }) => {
     const navigate = useNavigate();
     const dayName = new Date(date).toLocaleDateString('sv-SE', { weekday: 'long' });
@@ -238,7 +237,7 @@ const DayHoverCard = ({
                                 return (
                                     <div
                                         key={act.id}
-                                        onClick={(e) => { e.stopPropagation(); onActivityClick(act); }}
+                                        onClick={(e) => { e.stopPropagation(); onActivityClick(act.id); }}
                                         className="flex items-center gap-2 p-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-700 transition-colors cursor-pointer group"
                                     >
                                         <div className="text-sm">{typeDef?.icon || '💪'}</div>
@@ -326,7 +325,6 @@ export function DashboardPage() {
     const [tempValue, setTempValue] = useState<string>("");
     const [tempWaist, setTempWaist] = useState<string>("");
     const [tempChest, setTempChest] = useState<string>("");
-    const [selectedActivity, setSelectedActivity] = useState<any>(null);
     const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
     const [bulkInput, setBulkInput] = useState("");
     const [showActivityModal, setShowActivityModal] = useState(false);
@@ -446,7 +444,6 @@ export function DashboardPage() {
         const handleEsc = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 setIsWeightModalOpen(false);
-                setSelectedActivity(null);
                 setEditing(null);
             }
         };
@@ -694,7 +691,7 @@ export function DashboardPage() {
                             key={act.id}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedActivity(act);
+                                navigate(`/logg?activityId=${act.id}`);
                             }}
                             className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md -translate-y-[1px]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
@@ -818,7 +815,36 @@ export function DashboardPage() {
             {isHoveringChart && (
                 <div className="fixed inset-0 bg-white/60 dark:bg-slate-950/60 backdrop-blur-sm z-[50] transition-all duration-500 pointer-events-none" />
             )}
-            <div className="max-w-5xl mx-auto">
+
+            {/* Sticky Date Header - appears when scrolling */}
+            <div className={`fixed top-16 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm transition-all ${selectedDate !== today ? 'py-2' : 'py-2'}`}>
+                <div className="max-w-5xl mx-auto px-4 flex items-center justify-center gap-4">
+                    <button
+                        onClick={() => changeDate(-1)}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                    >
+                        <ChevronLeft size={18} />
+                    </button>
+                    <div
+                        onClick={() => setSelectedDate(today)}
+                        className={`font-bold text-sm cursor-pointer px-3 py-1 rounded-lg transition-all ${selectedDate !== today
+                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
+                            : 'text-slate-900 dark:text-white'
+                            }`}
+                    >
+                        {selectedDate === today ? 'Idag' : selectedDate === getISODate(new Date(Date.now() - 86400000)) ? 'Igår' : new Date(selectedDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
+                        {selectedDate !== today && <span className="ml-2 text-[10px] opacity-70">← Klicka för idag</span>}
+                    </div>
+                    <button
+                        onClick={() => changeDate(1)}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                    >
+                        <ChevronRight size={18} />
+                    </button>
+                </div>
+            </div>
+
+            <div className="max-w-5xl mx-auto pt-12">
                 <header className={`${density === 'compact' ? 'mb-4' : 'mb-10'} flex flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-4">
@@ -1074,7 +1100,9 @@ export function DashboardPage() {
                         if (card.id === 'intake') {
                             return (
                                 <Wrapper key="intake" className="md:col-span-12 lg:col-span-6 h-full flex">
-                                    <div className={`flex-1 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full relative`}>
+                                    <div
+                                        onClick={() => navigate(`/calories?date=${selectedDate}`)}
+                                        className={`flex-1 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full relative cursor-pointer hover:scale-[1.01] transition-transform`}>
                                         <DoubleCircularProgress
                                             value={consumed}
                                             max={target}
@@ -1774,7 +1802,7 @@ export function DashboardPage() {
                                                                     date={date}
                                                                     activities={dayActivities}
                                                                     nutrition={calculateDailyNutrition(date)}
-                                                                    onActivityClick={(act) => setSelectedActivity(act)}
+                                                                    onActivityClick={(id) => navigate(`/logg?activityId=${id}`)}
                                                                 />
                                                             </div>
                                                         )}
@@ -1945,15 +1973,7 @@ export function DashboardPage() {
                 </div >
             </div >
 
-            {/* Activity Modal */}
-            {
-                selectedActivity && (
-                    <ActivityDetailModal
-                        activity={selectedActivity}
-                        onClose={() => setSelectedActivity(null)}
-                    />
-                )
-            }
+
 
             {/* Weight & Measurements Modal */}
             <MeasurementEntryModal

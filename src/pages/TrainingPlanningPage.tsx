@@ -7,8 +7,7 @@ import {
     getISODate,
     getWeekStartDate,
     WEEKDAYS,
-    Weekday,
-    WEEKDAY_LABELS
+    Weekday
 } from '../models/types.ts';
 import {
     ChevronLeft,
@@ -19,31 +18,60 @@ import {
     Activity,
     Zap,
     X,
-    Check
+    Check,
+    Target,
+    TrendingUp,
+    Clock,
+    Trophy
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatDuration } from '../utils/dateUtils.ts';
+import { TrainingPeriodBanner } from '../components/planning/TrainingPeriodBanner.tsx';
+import { ActivityModal } from '../components/planning/ActivityModal.tsx';
+import { WeeklyStatsAnalysis } from '../components/planning/WeeklyStatsAnalysis.tsx';
 
 const SHORT_WEEKDAYS = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
 export function TrainingPlanningPage() {
     const navigate = useNavigate();
     const {
-        exerciseEntries,
+        strengthSessions,
+        performanceGoals,
         plannedActivities,
         savePlannedActivities,
-        deletePlannedActivity
+        deletePlannedActivity,
+        updatePlannedActivity,
+        universalActivities = [],
+        unifiedActivities = []
     } = useData();
 
     const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStartDate());
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingActivity, setEditingActivity] = useState<PlannedActivity | null>(null);
 
-    // Form State
-    const [formType, setFormType] = useState<'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE'>('RUN');
-    const [formDuration, setFormDuration] = useState('45');
-    const [formDistance, setFormDistance] = useState('');
-    const [formNotes, setFormNotes] = useState('');
-    const [formIntensity, setFormIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
+    // Keyboard Navigation & ESC handler
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Modal closing
+            if (e.key === 'Escape' && isModalOpen) {
+                setIsModalOpen(false);
+                setEditingActivity(null);
+                return;
+            }
+
+            // Week Navigation with Ctrl + Arrow
+            if (e.ctrlKey && !isModalOpen) {
+                if (e.key === 'ArrowLeft') {
+                    handleWeekChange(-1);
+                } else if (e.key === 'ArrowRight') {
+                    handleWeekChange(1);
+                }
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isModalOpen, currentWeekStart]);
 
     // Navigation
     const handleWeekChange = (offset: number) => {
@@ -69,79 +97,161 @@ export function TrainingPlanningPage() {
         return dates;
     }, [currentWeekStart]);
 
-    // Smart Suggestions
-    const suggestions = useMemo(() => {
-        if (!selectedDate) return [];
-        return getTrainingSuggestions(exerciseEntries, selectedDate);
-    }, [selectedDate, exerciseEntries]);
+    // Helper for calculating weekly stats
+    const calculateWeeklyStats = (start: string) => {
+        const weekStart = new Date(start);
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekEnd.getDate() + 6);
+
+        const startStr = getISODate(weekStart);
+        const endStr = getISODate(weekEnd);
+
+        // All completed sessions from unifiedActivities
+        const weekCompleted = unifiedActivities.filter((a: any) => a.date >= startStr && a.date <= endStr);
+
+        // Running stats (Running + any other cardio that isn't strength)
+        const runningActivities = weekCompleted.filter((a: any) => a.type === 'running' || ['cycling', 'walking', 'swimming'].includes(a.type));
+        const runningSessions = runningActivities.length;
+        const runningKm = runningActivities.reduce((sum: number, a: any) => sum + (a.distance || 0), 0);
+        const runningTime = runningActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);
+
+        // Strength stats
+        const strengthActivities = weekCompleted.filter((a: any) => a.type === 'strength');
+        const strengthSessionCount = strengthActivities.length;
+        const strengthTime = strengthActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);
+        const strengthTonnage = strengthActivities.reduce((sum: number, a: any) => sum + (a.tonnage || 0), 0);
+
+        // Forecast from planned activities
+        const plannedThisWeek = plannedActivities.filter((p: any) =>
+            p.date >= startStr && p.date <= endStr && p.status === 'PLANNED'
+        );
+        const plannedRunning = plannedThisWeek.filter((p: any) =>
+            p.title?.toLowerCase().includes('löpning') ||
+            p.category === 'EASY' || p.category === 'INTERVALS' || p.category === 'TEMPO' ||
+            p.category === 'LONG_RUN' || p.category === 'RECOVERY'
+        );
+        const plannedStrength = plannedThisWeek.filter((p: any) =>
+            p.title?.toLowerCase().includes('styrka') || p.category === 'STRENGTH'
+        );
+
+        const forecastRunningSessions = runningSessions + plannedRunning.length;
+        const forecastRunningKm = runningKm + plannedRunning.reduce((sum: number, p: any) => sum + (p.estimatedDistance || 0), 0);
+        const forecastStrengthSessions = strengthSessionCount + plannedStrength.length;
+
+        return {
+            running: {
+                sessions: runningSessions,
+                km: runningKm,
+                time: runningTime
+            },
+            strength: {
+                sessions: strengthSessionCount,
+                time: strengthTime,
+                tonnage: strengthTonnage
+            },
+            forecast: {
+                runningSessions: forecastRunningSessions,
+                runningKm: forecastRunningKm,
+                strengthSessions: forecastStrengthSessions
+            }
+        };
+    };
+
+    const weeklyStats = useMemo(() => calculateWeeklyStats(currentWeekStart), [currentWeekStart, unifiedActivities, plannedActivities]);
+
+    const lastWeeklyStats = useMemo(() => {
+        const lastWeekStart = new Date(currentWeekStart);
+        lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+        return calculateWeeklyStats(getISODate(lastWeekStart));
+    }, [currentWeekStart, unifiedActivities, plannedActivities]);
+
+    // Goal progress for sessions/km per week
+    const goalProgress = useMemo(() => {
+        const activeGoals = performanceGoals.filter(g => g.status === 'active');
+
+        // Find session goals - distinguish between styrka and total/löpning
+        const sessionGoals = activeGoals.filter(g =>
+            g.targets?.some(t => t.unit === 'sessions' || t.unit?.toLowerCase().includes('pass'))
+        );
+
+        const strengthSessionGoal = sessionGoals.find(g =>
+            g.name.toLowerCase().includes('styrka') || g.type === 'tonnage'
+        );
+
+        const totalSessionGoal = sessionGoals.find(g =>
+            !g.name.toLowerCase().includes('styrka') && g.type !== 'tonnage'
+        );
+
+        // Find km goal (unit === 'km' or name contains km)
+        const kmGoal = activeGoals.find(g =>
+            g.targets?.some(t => t.unit === 'km') || g.name.toLowerCase().includes('km')
+        );
+
+        const strengthSessionsCount = weeklyStats.strength.sessions;
+        const totalSessions = weeklyStats.running.sessions + strengthSessionsCount;
+        const currentKm = weeklyStats.running.km;
+
+        // Helper to extract target value
+        const getTargetValue = (goal: any, unit: string) => {
+             return goal.targets?.find((t: any) => t.unit === unit || t.unit?.toLowerCase().includes(unit === 'sessions' ? 'pass' : unit))?.count ||
+                    goal.targets?.find((t: any) => t.unit === unit || t.unit?.toLowerCase().includes(unit === 'sessions' ? 'pass' : unit))?.value || 0;
+        };
+
+        const strengthTarget = strengthSessionGoal ? getTargetValue(strengthSessionGoal, 'sessions') : 0;
+        const totalTarget = totalSessionGoal ? getTargetValue(totalSessionGoal, 'sessions') : 0;
+        const kmTarget = kmGoal ? getTargetValue(kmGoal, 'km') : 0;
+
+        // Calculate "Planned but not done"
+        // This is: Forecast - Actual. If negative, 0.
+        const strengthPlanned = Math.max(0, weeklyStats.forecast.strengthSessions - weeklyStats.strength.sessions);
+        const totalPlanned = Math.max(0, (weeklyStats.forecast.runningSessions + weeklyStats.forecast.strengthSessions) - (weeklyStats.running.sessions + weeklyStats.strength.sessions));
+        const kmPlanned = Math.max(0, weeklyStats.forecast.runningKm - weeklyStats.running.km);
+
+        return {
+            strengthSessions: strengthSessionGoal ? {
+                target: strengthTarget,
+                current: strengthSessionsCount,
+                planned: strengthPlanned,
+                name: 'Styrkepass'
+            } : null,
+            totalSessions: totalSessionGoal ? {
+                target: totalTarget,
+                current: totalSessions,
+                planned: totalPlanned,
+                name: totalSessionGoal.name
+            } : null,
+            km: kmGoal ? {
+                target: kmTarget,
+                current: currentKm,
+                planned: kmPlanned,
+                name: 'Distans'
+            } : null
+        };
+    }, [performanceGoals, weeklyStats]);
 
     // Handlers
-    const handleOpenModal = (date: string) => {
+    const handleOpenModal = (date: string, activity?: PlannedActivity) => {
         setSelectedDate(date);
+        setEditingActivity(activity || null);
         setIsModalOpen(true);
-        // Reset form
-        setFormType('RUN');
-        setFormDuration('45');
-        setFormDistance('');
-        setFormNotes('');
-        setFormIntensity('moderate');
     };
 
-    const handleSave = () => {
-        if (!selectedDate) return;
-
-        const newActivity: PlannedActivity = {
-            id: generateId(),
-            date: selectedDate,
-            type: 'RUN', // Tech debt: Type is currently hardcoded to 'RUN' in PlannedActivity interface, using Category for others
-            category: formType === 'RUN' ? 'EASY' :
-                      formType === 'STRENGTH' ? 'STRENGTH' :
-                      formType === 'HYROX' ? 'INTERVALS' : 'EASY', // Approximation
-            title: formType === 'RUN' ? 'Löpning' :
-                   formType === 'STRENGTH' ? 'Styrka' :
-                   formType === 'HYROX' ? 'Hyrox' : 'Cykling',
-            description: formNotes || `${formType} pass`,
-            estimatedDistance: formDistance ? parseFloat(formDistance) : 0,
-            targetPace: '',
-            targetHrZone: formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4,
-            structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 },
-            status: 'PLANNED'
-        };
-
-        // Note: Currently PlannedActivity interface is strict on 'type: RUN'.
-        // We are hijacking 'category' and 'title' to store the real type for this MVP.
-        // Ideally we should update the PlannedActivity type definition to allow 'STRENGTH', etc.
-
-        savePlannedActivities([newActivity]);
+    const handleSaveActivity = (activity: PlannedActivity) => {
+        if (editingActivity) {
+            updatePlannedActivity(editingActivity.id, activity);
+        } else {
+            savePlannedActivities([activity]);
+        }
         setIsModalOpen(false);
-    };
-
-    const handleApplySuggestion = (s: TrainingSuggestion) => {
-        if (!selectedDate) return;
-
-        // Map suggestion type to form/model
-        const type = s.type === 'REST' ? 'RUN' : s.type; // REST not fully supported yet, defaulting
-
-        const newActivity: PlannedActivity = {
-            id: generateId(),
-            date: selectedDate,
-            type: 'RUN',
-            category: s.type === 'STRENGTH' ? 'STRENGTH' : s.type === 'HYROX' ? 'INTERVALS' : 'EASY',
-            title: s.label,
-            description: s.description,
-            estimatedDistance: s.distance || 0,
-            targetPace: '',
-            targetHrZone: s.intensity === 'low' ? 2 : s.intensity === 'moderate' ? 3 : 4,
-            structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 },
-            status: 'PLANNED'
-        };
-
-        savePlannedActivities([newActivity]);
-        setIsModalOpen(false);
+        setEditingActivity(null);
     };
 
     return (
         <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-8 font-sans text-slate-900 dark:text-white">
+            <div className="max-w-6xl mx-auto mb-6">
+                <TrainingPeriodBanner />
+            </div>
+
             {/* Header */}
             <div className="max-w-6xl mx-auto flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
@@ -168,32 +278,238 @@ export function TrainingPlanningPage() {
                 </div>
             </div>
 
+            {/* Weekly Summary & Goals Widget */}
+            <div className="max-w-6xl mx-auto mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+                {/* 0. Föregående Vecka (Historical) */}
+                <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm opacity-80">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Clock size={16} className="text-slate-400" />
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Föregående Vecka</span>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">🏃 Löpning</div>
+                            <div className="text-xs font-bold text-slate-700 dark:text-slate-400">
+                                {lastWeeklyStats.running.sessions} pass | {lastWeeklyStats.running.km.toFixed(1)} km | {formatDuration(lastWeeklyStats.running.time * 60)}
+                            </div>
+                        </div>
+                        <div className="border-t border-slate-100 dark:border-slate-800/50 pt-3">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">💪 Styrka</div>
+                            <div className="text-xs font-bold text-slate-700 dark:text-slate-400">
+                                {lastWeeklyStats.strength.sessions} pass | {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)}t | {formatDuration(lastWeeklyStats.strength.time * 60)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 1. Denna Vecka (Actuals) */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                        <TrendingUp size={16} className="text-emerald-500" />
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Denna Vecka</span>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">🏃 Löpning</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">
+                                {weeklyStats.running.sessions} pass | {weeklyStats.running.km.toFixed(1)} km | {formatDuration(weeklyStats.running.time * 60)}
+                            </div>
+                        </div>
+                        <div className="border-t border-slate-50 dark:border-slate-800 pt-3">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">💪 Styrka</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">
+                                {weeklyStats.strength.sessions} pass | {(weeklyStats.strength.tonnage / 1000).toFixed(1)}t | {formatDuration(weeklyStats.strength.time * 60)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* 2. Veckomål (Goals) */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Target size={16} className="text-indigo-500" />
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Veckomål</span>
+                    </div>
+                    {(!goalProgress.strengthSessions && !goalProgress.totalSessions && !goalProgress.km) ? (
+                        <p className="text-xs text-slate-400 italic">Inga aktiva veckomål.</p>
+                    ) : (
+                        <div className="space-y-4">
+                            {/* Reusable Progress Bar Component */}
+                            {[
+                                goalProgress.strengthSessions && { ...goalProgress.strengthSessions, colorClass: 'bg-purple-500', plannedClass: 'bg-purple-500/30' },
+                                goalProgress.totalSessions && { ...goalProgress.totalSessions, colorClass: 'bg-indigo-500', plannedClass: 'bg-indigo-500/30' },
+                                goalProgress.km && { ...goalProgress.km, colorClass: 'bg-emerald-500', plannedClass: 'bg-emerald-500/30' }
+                            ].filter(Boolean).map((goal: any, i) => {
+                                const currentPct = Math.min(100, (goal.current / goal.target) * 100);
+                                const plannedPct = Math.min(100 - currentPct, (goal.planned / goal.target) * 100);
+                                const isMet = goal.current >= goal.target;
+
+                                return (
+                                    <div key={i}>
+                                        <div className="flex justify-between text-[10px] font-black uppercase mb-1">
+                                            <span className="text-slate-400">{goal.name}</span>
+                                            <span className={isMet ? 'text-emerald-500' : 'text-slate-500'}>
+                                                {typeof goal.current === 'number' && !Number.isInteger(goal.current) ? goal.current.toFixed(1) : goal.current}
+                                                <span className="text-slate-300 mx-1">/</span>
+                                                {goal.target}
+                                                {goal.planned > 0 && !isMet && (
+                                                    <span className="text-slate-400 ml-1 italic">(+{typeof goal.planned === 'number' && !Number.isInteger(goal.planned) ? goal.planned.toFixed(1) : goal.planned})</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                            {/* Completed Segment (Solid) */}
+                                            <div
+                                                className={`h-full transition-all ${isMet ? 'bg-emerald-500' : goal.colorClass}`}
+                                                style={{ width: `${currentPct}%` }}
+                                            />
+                                            {/* Planned Segment (Striped/Dashed) */}
+                                            {plannedPct > 0 && (
+                                                <div
+                                                    className={`h-full transition-all ${goal.plannedClass}`}
+                                                    style={{
+                                                        width: `${plannedPct}%`,
+                                                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)'
+                                                     }}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* 3. Prognos (Forecast) */}
+                <div className="bg-emerald-50/50 dark:bg-emerald-900/5 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 p-4 shadow-sm">
+                    <div className="flex items-center gap-2 mb-4">
+                        <Zap size={16} className="text-amber-500 fill-amber-500" />
+                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Prognos</span>
+                    </div>
+                    <div className="space-y-4">
+                        <div>
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">Löpning Totalt</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">
+                                {weeklyStats.forecast.runningSessions} pass | {weeklyStats.forecast.runningKm.toFixed(1)} km
+                            </div>
+                        </div>
+                        <div className="border-t border-emerald-100/50 dark:border-emerald-800/30 pt-3">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">Styrka Totalt</div>
+                            <div className="text-xs font-bold text-slate-900 dark:text-white">
+                                {weeklyStats.forecast.strengthSessions} pass
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Calendar Grid */}
             <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-7 gap-4">
                 {weekDates.map((day) => {
                     const dayActivities = plannedActivities.filter(a => a.date === day.date && a.status !== 'COMPLETED');
+
+                    // Filter completed activities from ALL sources
+                    const dayRunningActivities = universalActivities.filter(a =>
+                        a.date === day.date &&
+                        a.performance?.activityType === 'running'
+                    );
+
+                    const dayStrengthSessions = strengthSessions.filter(s => s.date === day.date);
+
+                    // Day summary calculation
+                    const daySessions = dayRunningActivities.length + dayStrengthSessions.length;
+                    const dayKm = dayRunningActivities.reduce((sum, a) => sum + (a.performance?.distanceKm || 0), 0);
+                    const dayTime = (dayRunningActivities.reduce((sum, a) => sum + (a.performance?.durationMinutes || 0), 0) +
+                        dayStrengthSessions.reduce((sum, s) => sum + (s.duration || 0), 0));
+
                     const isToday = day.date === getISODate();
+                    const isPast = day.date < getISODate();
 
                     return (
-                        <div key={day.date} className={`flex flex-col h-[400px] bg-white dark:bg-slate-900 rounded-2xl border ${isToday ? 'border-emerald-500 ring-1 ring-emerald-500/50' : 'border-slate-200 dark:border-slate-800'} relative group`}>
+                        <div key={day.date} className={`flex flex-col h-[400px] bg-white dark:bg-slate-900 rounded-2xl border ${isToday ? 'border-emerald-500 ring-1 ring-emerald-500/50' : (isPast ? 'border-slate-100 dark:border-slate-800/50 opacity-90' : 'border-slate-200 dark:border-slate-800')} relative group shadow-sm`}>
+                            {/* Background Date */}
+                            <div className="absolute bottom-4 right-4 text-7xl font-black text-slate-100 dark:text-slate-800/20 select-none z-0 pointer-events-none">
+                                {day.date.split('-')[2]}
+                            </div>
+
                             {/* Header */}
-                            <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/50 rounded-t-2xl">
-                                <span className="text-xs font-black uppercase tracking-wider text-slate-500">{day.label}</span>
-                                <span className={`text-xs font-bold ${isToday ? 'text-emerald-500' : 'text-slate-900 dark:text-white'}`}>
-                                    {day.date.split('-')[2]}
-                                </span>
+                            <div className={`p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-1 ${isToday ? 'bg-emerald-500/10 dark:bg-emerald-500/5' : (isPast ? 'bg-slate-50/20 dark:bg-slate-900/50' : 'bg-slate-50/50 dark:bg-slate-800/50')} rounded-t-2xl z-10 relative pointer-events-none`}>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs font-black uppercase tracking-wider text-slate-500">{day.label}</span>
+                                    <span className={`text-xs font-bold ${isToday ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                                        {day.date.split('-')[2]}
+                                    </span>
+                                </div>
+                                {(daySessions > 0 || dayKm > 0 || dayTime > 0) && (
+                                    <div className="text-[9px] font-black text-slate-400 flex items-center gap-1.5">
+                                        {dayKm > 0 && <span>🏃 {dayKm.toFixed(1)} km</span>}
+                                        {dayTime > 0 && <span>⏱️ {formatDuration(dayTime * 60)}</span>}
+                                    </div>
+                                )}
                             </div>
 
                             {/* Activities */}
                             <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar">
-                                {dayActivities.map(act => (
-                                    <div key={act.id} className="p-3 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 rounded-xl group/card relative hover:shadow-md transition-all">
+                                {/* Running / Cardio Activities (from universalActivities) */}
+                                {dayRunningActivities.map((act) => (
+                                    <div
+                                        key={`run-${act.id}`}
+                                        onClick={() => navigate(`/logg?activityId=${act.id}`)}
+                                        className="p-3 bg-emerald-500/10 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl relative cursor-pointer hover:bg-emerald-500/20 transition-colors z-10"
+                                    >
                                         <div className="flex justify-between items-start mb-1">
-                                            <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider">
-                                                {act.title}
+                                            <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider flex items-center gap-1">
+                                                <Check size={10} />
+                                                Löpning
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
+                                            {act.performance?.distanceKm ? `${act.performance.distanceKm.toFixed(1)} km` : ''}
+                                            {act.performance?.durationMinutes ? ` ${Math.round(act.performance.durationMinutes)} min` : ''}
+                                        </p>
+                                    </div>
+                                ))}
+
+                                {/* Strength Sessions (separate from exerciseEntries) */}
+                                {dayStrengthSessions.map(session => (
+                                    <div
+                                        key={`str-${session.id}`}
+                                        onClick={() => navigate(`/logg?activityId=${session.id}`)}
+                                        className="p-3 bg-purple-500/10 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl relative cursor-pointer hover:bg-purple-500/20 transition-colors z-10"
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1">
+                                                <Dumbbell size={10} />
+                                                Styrka
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
+                                            {session.name || `${session.uniqueExercises} övningar`}
+                                        </p>
+                                        <p className="text-[10px] text-slate-500 mt-1">
+                                            {(session.totalVolume / 1000).toFixed(1)}t • {Math.round(session.duration || 0)} min
+                                        </p>
+                                    </div>
+                                ))}
+
+                                {/* Planned Activities - Clickable for edit */}
+                                {dayActivities.map(act => (
+                                    <div
+                                        key={act.id}
+                                        onClick={() => handleOpenModal(day.date, act)}
+                                        className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 ${act.type === 'REST' || act.category === 'REST'
+                                            ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+                                            : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700'
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className={`text-[10px] font-black uppercase tracking-wider ${act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' : 'text-blue-600 dark:text-blue-400'
+                                                }`}>
+                                                {act.type === 'REST' || act.category === 'REST' ? '💤 Vila' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
                                             </span>
                                             <button
-                                                onClick={() => deletePlannedActivity(act.id)}
+                                                onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
                                                 className="text-slate-400 hover:text-rose-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
                                             >
                                                 <X size={12} />
@@ -212,11 +528,19 @@ export function TrainingPlanningPage() {
                                 ))}
 
                                 <button
-                                    onClick={() => handleOpenModal(day.date)}
-                                    className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-emerald-500 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex flex-col items-center gap-1 opacity-0 group-hover:opacity-100 focus:opacity-100"
+                                    onClick={() => {
+                                        if (isPast) {
+                                            navigate(`?registerDate=${day.date}&registerInput=löpning`);
+                                        } else {
+                                            handleOpenModal(day.date);
+                                        }
+                                    }}
+                                    className="w-full py-3 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-emerald-500 hover:border-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all flex flex-col items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 focus:opacity-100"
                                 >
                                     <Plus size={20} />
-                                    <span className="text-[10px] font-bold uppercase tracking-wide">Planera</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-wide">
+                                        {isPast ? 'Registrera' : 'Planera'}
+                                    </span>
                                 </button>
                             </div>
                         </div>
@@ -224,112 +548,22 @@ export function TrainingPlanningPage() {
                 })}
             </div>
 
-            {/* Planning Modal */}
-            {isModalOpen && selectedDate && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200">
-                        {/* Header */}
-                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-                            <div>
-                                <h2 className="text-lg font-black uppercase tracking-tight">Planera {selectedDate}</h2>
-                                <p className="text-xs text-slate-500 font-medium">Välj aktivitet eller använd förslag</p>
-                            </div>
-                            <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
+            <ActivityModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                selectedDate={selectedDate}
+                editingActivity={editingActivity}
+                onSave={handleSaveActivity}
+                weeklyStats={weeklyStats}
+                goalProgress={goalProgress}
+            />
 
-                        <div className="p-6 max-h-[80vh] overflow-y-auto">
-                            {/* Suggestions */}
-                            {suggestions.length > 0 && (
-                                <div className="mb-6">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <Zap size={14} className="text-amber-500 fill-amber-500" />
-                                        <span className="text-xs font-black uppercase tracking-wider text-slate-400">Smarta Förslag</span>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {suggestions.map(s => (
-                                            <button
-                                                key={s.id}
-                                                onClick={() => handleApplySuggestion(s)}
-                                                className="w-full p-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl flex items-center justify-between group hover:scale-[1.02] transition-transform text-left"
-                                            >
-                                                <div>
-                                                    <div className="text-xs font-black text-slate-900 dark:text-white mb-0.5">{s.label}</div>
-                                                    <div className="text-[10px] text-slate-500 font-medium">{s.reason}</div>
-                                                </div>
-                                                <div className="p-1.5 bg-white dark:bg-slate-800 rounded-full shadow-sm text-amber-500">
-                                                    <Plus size={14} />
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
+            {/* Deep Stats Analysis */}
+            <WeeklyStatsAnalysis
+                weekStart={currentWeekStart}
+                weeklyStats={weeklyStats}
+            />
 
-                            {/* Manual Form */}
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
-                                    <button
-                                        onClick={() => setFormType('RUN')}
-                                        className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'RUN' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    >
-                                        Kondition
-                                    </button>
-                                    <button
-                                        onClick={() => setFormType('STRENGTH')}
-                                        className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'STRENGTH' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    >
-                                        Styrka
-                                    </button>
-                                </div>
-
-                                {formType === 'RUN' && (
-                                     <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Distans (km)</label>
-                                            <input
-                                                type="number"
-                                                value={formDistance}
-                                                onChange={e => setFormDistance(e.target.value)}
-                                                className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border-none outline-none focus:ring-2 ring-emerald-500/20 font-bold"
-                                                placeholder="ex. 5"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tid (min)</label>
-                                            <input
-                                                type="number"
-                                                value={formDuration}
-                                                onChange={e => setFormDuration(e.target.value)}
-                                                className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border-none outline-none focus:ring-2 ring-emerald-500/20 font-bold"
-                                                placeholder="45"
-                                            />
-                                        </div>
-                                     </div>
-                                )}
-
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Anteckningar</label>
-                                    <textarea
-                                        value={formNotes}
-                                        onChange={e => setFormNotes(e.target.value)}
-                                        className="w-full p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border-none outline-none focus:ring-2 ring-emerald-500/20 text-sm font-medium h-24 resize-none"
-                                        placeholder="Beskriv passet..."
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={handleSave}
-                                    className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-white font-black uppercase tracking-widest rounded-xl shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                                >
-                                    Spara Pass
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }

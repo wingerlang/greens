@@ -1171,11 +1171,13 @@ export function DataProvider({ children }: DataProviderProps) {
             caloriesBurned: 0,
             distance: undefined,
             tonnage: w.totalVolume || 0,
+            title: w.name || w.title || 'Styrkepass',
             notes: w.name || w.title,
             source: 'strength',
             createdAt: w.createdAt || new Date().toISOString(),
             subType: undefined,
-            externalId: undefined
+            externalId: undefined,
+            movingTime: (w.duration || w.durationMinutes || 60) * 60
         }));
 
         // Smart Merge: Combine StrengthLog with Strava data

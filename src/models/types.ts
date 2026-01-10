@@ -1133,8 +1133,8 @@ export interface PlannedActivity {
     id: string;
     goalId?: string; // Link to a specific CoachGoal
     date: string; // ISO Date (YYYY-MM-DD)
-    type: 'RUN';
-    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH';
+    type: 'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST' | 'OTHER';
+    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH' | 'REST';
     title: string;
     description: string;
     structure: {
@@ -1156,6 +1156,7 @@ export interface PlannedActivity {
     isVolumePR?: boolean;
     isLongestInPlan?: boolean;
     customScalingFactor?: number; // Scale target distances/paces (e.g. 0.85 for "piano")
+    isRace?: boolean;
 }
 
 /** Weight and body measurements tracking entry */
@@ -1277,8 +1278,6 @@ export interface AppData {
     weightEntries?: WeightEntry[];
     competitions?: Competition[];
     trainingCycles?: TrainingCycle[];
-    performanceGoals?: PerformanceGoal[];
-    trainingPeriods?: TrainingPeriod[];
     // Phase 8
     sleepSessions?: SleepSession[];
     intakeLogs?: IntakeLog[];

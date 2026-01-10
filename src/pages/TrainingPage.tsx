@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { ExerciseEntry } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
@@ -52,7 +51,8 @@ export function TrainingPage() {
         addGoal,
         updateGoal,
         deleteGoal,
-        universalActivities = []
+        universalActivities = [],
+        strengthSessions = []
     } = useData();
 
     const navigate = useNavigate();
@@ -63,12 +63,25 @@ export function TrainingPage() {
             .map(mapUniversalToLegacyEntry)
             .filter((e): e is ExerciseEntry => e !== null);
 
+        const strength = (strengthSessions || []).map((w): ExerciseEntry => ({
+            id: w.id,
+            date: w.date,
+            type: 'strength',
+            durationMinutes: w.duration || (w.exercises.length * 4) + (w.totalSets * 1.5) || 45,
+            intensity: 'high',
+            caloriesBurned: w.totalVolume ? Math.round(w.totalVolume * 0.05) : 300,
+            tonnage: w.totalVolume,
+            notes: w.name,
+            source: 'strength',
+            createdAt: w.createdAt
+        }));
+
         // Combine: prefer server entries, add unique legacy entries
         const serverIds = new Set(serverEntries.map(e => e.id));
         const uniqueLegacy = (legacyExerciseEntries || []).filter(e => !serverIds.has(e.id));
 
-        return [...serverEntries, ...uniqueLegacy];
-    }, [universalActivities, legacyExerciseEntries]);
+        return [...serverEntries, ...strength, ...uniqueLegacy];
+    }, [universalActivities, legacyExerciseEntries, strengthSessions]);
 
     // Handlers for Chart Interaction
     const [selectedCycle, setSelectedCycle] = useState<TrainingCycle | null>(null);
@@ -267,13 +280,8 @@ export function TrainingPage() {
     // Let's match variable text:
     const tdee = dailyTdee + goalAdjustment;
 
-    const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
-
     const handleEditExercise = (ex: any) => {
-        // Transform to full object if needed, or just pass 'ex' if it matches ExerciseEntry
-        // ensuring we have the source if missing
-        const fullActivity = { ...ex, source: ex.source || 'manual' };
-        setSelectedActivity(fullActivity);
+        navigate(`/logg?activityId=${ex.id}`);
     };
 
     return (
@@ -893,14 +901,7 @@ export function TrainingPage() {
                 editingGoal={editingGoal}
             />
 
-            {/* Activity Detail / Edit Modal */}
-            {selectedActivity && (
-                <ActivityDetailModal
-                    activity={selectedActivity}
-                    onClose={() => setSelectedActivity(null)}
-                    initiallyEditing={true}
-                />
-            )}
+
         </div>
     );
 }

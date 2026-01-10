@@ -21,6 +21,7 @@ import { ACWRGauge } from '../components/training/ACWRGauge.tsx';
 import { StatCard, WorkoutCard, RecordTrendLine } from '../components/training/StrengthCards.tsx';
 import { StrengthPageSkeleton } from '../components/training/StrengthSkeletons.tsx';
 import { formatDateFull, slugify } from '../utils/formatters.ts';
+import { ImportWorkoutModal } from '../components/training/ImportWorkoutModal.tsx';
 
 // ============================================
 // Strength Page - Main Component
@@ -163,9 +164,11 @@ export function StrengthPage() {
         fetchData();
     }, [fetchData]);
 
+    // Import State
+    const [showImportModal, setShowImportModal] = useState(false);
+
     // Handle file import
-    const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+    const handleImport = async (file: File, source: 'strengthlog' | 'hevy') => {
         if (!file || !token) return;
 
         setImporting(true);
@@ -179,7 +182,7 @@ export function StrengthPage() {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ csv: text })
+                body: JSON.stringify({ csv: text, source })
             });
 
             const result = await res.json();
@@ -187,13 +190,13 @@ export function StrengthPage() {
 
             if (result.success) {
                 await fetchData();
+                setShowImportModal(false);
             }
         } catch (e) {
             console.error('Import failed:', e);
             setImportResult({ success: false, errors: ['Import failed'], workoutsImported: 0, workoutsUpdated: 0, workoutsSkipped: 0, exercisesDiscovered: 0, personalBestsFound: 0 });
         } finally {
             setImporting(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
@@ -433,25 +436,25 @@ export function StrengthPage() {
                         <p className="text-slate-400">Dina pass, övningar och personliga rekord.</p>
                     </div>
                     <div className="flex gap-3 items-center">
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".csv"
-                            onChange={handleImport}
-                            className="hidden"
-                            id="csv-import"
-                        />
-                        <label
-                            htmlFor="csv-import"
+                        <button
+                            onClick={() => setShowImportModal(true)}
                             className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-all ${importing
-                                ? 'bg-slate-700 text-slate-400'
+                                ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                                 : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
                                 }`}
+                            disabled={importing}
                         >
-                            {importing ? '⏳ Importerar...' : '📥 Importera CSV'}
-                        </label>
+                            {importing ? '⏳ Importerar...' : '📥 Importera Pass'}
+                        </button>
                     </div>
                 </div>
+
+                <ImportWorkoutModal
+                    isOpen={showImportModal}
+                    onClose={() => setShowImportModal(false)}
+                    onImport={handleImport}
+                    isImporting={importing}
+                />
 
                 {/* Main Tab Navigation */}
                 <div className="flex gap-2 bg-slate-900/50 p-1.5 rounded-2xl border border-white/5 w-fit">

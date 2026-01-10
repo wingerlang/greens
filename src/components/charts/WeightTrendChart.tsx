@@ -195,7 +195,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                     <div className="text-2xl font-black text-white">
                         {currentWeight.toFixed(1)} <span className="text-xs text-slate-500 font-bold">kg</span>
                         {latestWaist && (
-                            <span className="ml-3 text-lg text-emerald-400">
+                            <span className="ml-3 text-lg text-purple-400">
                                 {latestWaist} <span className="text-xs text-slate-500 font-bold">cm (midja)</span>
                             </span>
                         )}
@@ -217,18 +217,17 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
 
                 <div className="flex gap-3 text-[8px] uppercase font-bold text-slate-500 flex-wrap justify-end">
                     <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500" /> Ner
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-rose-500" /> Upp
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <span className="w-2 h-2 rounded-full bg-blue-500" /> Stabil
+                        <div className="flex -space-x-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 z-30" />
+                            <span className="w-2 h-2 rounded-full bg-blue-500 z-20" />
+                            <span className="w-2 h-2 rounded-full bg-rose-500 z-10" />
+                        </div>
+                        Vikt
                     </span>
                     {hasMeasurements && (
                         <>
                             <span className="flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-emerald-400" /> Midja
+                                <span className="w-2 h-2 rounded-full bg-purple-500" /> Midja
                             </span>
                             <span className="flex items-center gap-1">
                                 <span className="w-2 h-2 rounded-full bg-indigo-400" /> Bröst
@@ -295,15 +294,17 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                                                 {data.weight.toFixed(1)} kg
                                             </div>
                                             {data.waist && (
-                                                <div className="text-sm font-bold text-emerald-400">
+                                                <div className="text-sm font-bold text-purple-400">
                                                     {data.waist} cm <span className="text-xs text-slate-500">(midja)</span>
                                                 </div>
                                             )}
-                                            {data.chest && (
-                                                <div className="text-sm font-bold text-indigo-400">
-                                                    {data.chest} cm <span className="text-xs text-slate-500">(bröst)</span>
-                                                </div>
-                                            )}
+                                            {
+                                                data.chest && (
+                                                    <div className="text-sm font-bold text-indigo-400">
+                                                        {data.chest} cm <span className="text-xs text-slate-500">(bröst)</span>
+                                                    </div>
+                                                )
+                                            }
                                             <div className="text-[10px] text-slate-400 mt-1">
                                                 {data.date}
                                             </div>
@@ -353,11 +354,11 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                                     yAxisId="cm"
                                     type="monotone"
                                     dataKey="waist"
-                                    stroke="#34d399"
+                                    stroke="#a855f7"
                                     strokeWidth={2}
                                     strokeDasharray="4 2"
-                                    dot={{ r: 3, fill: '#34d399' }}
-                                    activeDot={{ r: 5, fill: '#34d399' }}
+                                    dot={{ r: 3, fill: '#a855f7' }}
+                                    activeDot={{ r: 5, fill: '#a855f7' }}
                                     isAnimationActive={false}
                                     connectNulls={true}
                                 />
@@ -394,7 +395,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                     </LineChart>
                 </ResponsiveContainer>
             </div>
-        </div>
+        </div >
     );
 }
 

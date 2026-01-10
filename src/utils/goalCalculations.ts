@@ -470,13 +470,29 @@ export function calculateAheadBehind(
     if (daysElapsed <= 0) return { value: 0, text: 'Har inte startat', unit: '' };
     if (daysElapsed >= totalDays) return { value: 0, text: 'Avslutad', unit: '' };
 
-    const expectedProgress = (progress.target / totalDays) * daysElapsed;
+    // For weekly/monthly goals, progress.target is the per-period value
+    // We need to calculate total expected across the entire goal period
+    const totalWeeks = totalDays / 7;
+    const isWeekly = goal.period === 'weekly';
+    const isMonthly = goal.period === 'monthly';
+
+    // Calculate total expected for the entire goal period
+    const totalExpected = isWeekly
+        ? progress.target * totalWeeks
+        : isMonthly
+            ? progress.target * (totalDays / 30)
+            : progress.target; // 'once' or 'daily'
+
+    // Calculate expected progress by today (linear interpolation)
+    const progressRatio = daysElapsed / totalDays;
+    const expectedProgress = totalExpected * progressRatio;
+
     const diff = progress.current - expectedProgress;
 
     const unit = goal.targets[0]?.unit || '';
     const text = diff >= 0
-        ? `+${diff.toFixed(1)} ${unit} före`
-        : `${diff.toFixed(1)} ${unit} efter`;
+        ? `+${diff.toFixed(1)} före`
+        : `${diff.toFixed(1)} efter`;
 
     return { value: diff, text, unit };
 }
@@ -489,13 +505,144 @@ export function assessGoalDifficulty(
     goal: PerformanceGoal,
     exerciseEntries: ExerciseEntry[]
 ): { score: number; label: string; color: string } {
-    // Simplified heuristic:
-    // If it's a frequency goal, compare target/week vs avg sessions/week last 3 months.
-    // If distance, compare target distance vs avg distance.
+    // Default values
+    let score = 5;
+    let label = 'Medel';
+    let color = 'text-yellow-400';
 
-    // For MVP, return a static "Utmanande" for active goals
-    // In real implementation, this would query historical averages.
-    return { score: 6.5, label: 'Utmanande', color: 'text-orange-400' };
+    // Look at last 90 days of history
+    const today = new Date();
+    const ninetyDaysAgo = new Date(today);
+    ninetyDaysAgo.setDate(today.getDate() - 90);
+    const cutoffDate = ninetyDaysAgo.toISOString().split('T')[0];
+
+    const recentEntries = exerciseEntries.filter(e => e.date >= cutoffDate);
+
+    if (goal.type === 'frequency') {
+        // Compare target sessions/week vs historical average
+        const target = goal.targets[0];
+        const targetPerWeek = target?.count || 1;
+
+        // Count sessions per week in history
+        const matchingEntries = recentEntries.filter(e =>
+            !target?.exerciseType || e.type === target.exerciseType
+        );
+        const weeksOfData = Math.max(1, 90 / 7);
+        const avgPerWeek = matchingEntries.length / weeksOfData;
+
+        // Ratio of target to average
+        const ratio = targetPerWeek / Math.max(0.1, avgPerWeek);
+
+        if (ratio <= 0.5) { score = 1; label = 'Väldigt Lätt'; color = 'text-emerald-400'; }
+        else if (ratio <= 0.8) { score = 3; label = 'Lätt'; color = 'text-emerald-400'; }
+        else if (ratio <= 1.0) { score = 5; label = 'Lagom'; color = 'text-yellow-400'; }
+        else if (ratio <= 1.2) { score = 6; label = 'Utmanande'; color = 'text-orange-400'; }
+        else if (ratio <= 1.5) { score = 7.5; label = 'Svårt'; color = 'text-orange-400'; }
+        else if (ratio <= 2.0) { score = 8.5; label = 'Mycket Svårt'; color = 'text-red-400'; }
+        else { score = 9.5; label = 'Extremt Svårt'; color = 'text-red-400'; }
+    } else if (goal.type === 'distance') {
+        // Compare target distance/period vs historical average
+        const target = goal.targets[0];
+        const targetValue = target?.value || 0;
+
+        const totalDistance = recentEntries
+            .filter(e => !target?.exerciseType || e.type === target.exerciseType)
+            .reduce((sum, e) => sum + (e.distance || 0), 0);
+        const avgPerWeek = totalDistance / Math.max(1, 90 / 7);
+        const targetPerWeek = goal.period === 'weekly' ? targetValue :
+            goal.period === 'monthly' ? targetValue / 4 : targetValue / 12;
+
+        const ratio = targetPerWeek / Math.max(0.1, avgPerWeek);
+
+        if (ratio <= 0.5) { score = 2; label = 'Lätt'; color = 'text-emerald-400'; }
+        else if (ratio <= 0.8) { score = 4; label = 'Lagom'; color = 'text-yellow-400'; }
+        else if (ratio <= 1.0) { score = 5; label = 'Medel'; color = 'text-yellow-400'; }
+        else if (ratio <= 1.3) { score = 7; label = 'Utmanande'; color = 'text-orange-400'; }
+        else if (ratio <= 1.6) { score = 8; label = 'Svårt'; color = 'text-red-400'; }
+        else { score = 9; label = 'Mycket Svårt'; color = 'text-red-400'; }
+    } else if (goal.type === 'speed') {
+        // Compare target time vs best historical time
+        const target = goal.targets[0];
+        if (target?.distanceKm && target?.timeSeconds) {
+            const validRuns = recentEntries.filter(e =>
+                e.type === 'running' && (e.distance || 0) >= target.distanceKm!
+            );
+
+            if (validRuns.length > 0) {
+                let bestTime = Infinity;
+                validRuns.forEach(e => {
+                    const dist = e.distance || 0;
+                    const dur = (e.durationMinutes || 0) * 60;
+                    if (dist > 0 && dur > 0) {
+                        const projectedTime = (dur / dist) * target.distanceKm!;
+                        bestTime = Math.min(bestTime, projectedTime);
+                    }
+                });
+
+                if (bestTime < Infinity) {
+                    const improvement = (bestTime - target.timeSeconds) / bestTime * 100;
+                    // How much faster than current best?
+                    if (improvement <= 0) { score = 1; label = 'Redan Uppnått'; color = 'text-emerald-400'; }
+                    else if (improvement <= 2) { score = 3; label = 'Inom Räckhåll'; color = 'text-emerald-400'; }
+                    else if (improvement <= 5) { score = 5; label = 'Utmanande'; color = 'text-yellow-400'; }
+                    else if (improvement <= 10) { score = 7; label = 'Svårt'; color = 'text-orange-400'; }
+                    else if (improvement <= 15) { score = 8.5; label = 'Mycket Svårt'; color = 'text-red-400'; }
+                    else { score = 9.5; label = 'Extremt Ambitiöst'; color = 'text-red-400'; }
+                }
+            } else {
+                // No historical data
+                score = 6;
+                label = 'Okänd (Ingen Data)';
+                color = 'text-slate-400';
+            }
+        }
+    } else if (goal.type === 'weight') {
+        // Weight loss/gain difficulty based on rate
+        const startWeight = goal.milestoneProgress || 85;
+        const targetWeight = goal.targetWeight || 80;
+        const totalChange = Math.abs(targetWeight - startWeight);
+
+        // Calculate required rate (kg per week)
+        const startDate = new Date(goal.startDate);
+        const endDate = goal.endDate ? new Date(goal.endDate) : new Date(startDate.getTime() + 90 * 24 * 60 * 60 * 1000);
+        const totalWeeks = Math.max(1, (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 7));
+        const requiredRatePerWeek = totalChange / totalWeeks;
+
+        // Sustainable weight loss is ~0.5-1kg/week, gain ~0.25-0.5kg/week
+        const isLoss = targetWeight < startWeight;
+        const sustainableRate = isLoss ? 0.75 : 0.375;
+        const ratio = requiredRatePerWeek / sustainableRate;
+
+        if (ratio <= 0.5) { score = 2; label = 'Bekväm Takt'; color = 'text-emerald-400'; }
+        else if (ratio <= 0.8) { score = 4; label = 'Realistiskt'; color = 'text-emerald-400'; }
+        else if (ratio <= 1.0) { score = 5; label = 'Stabil'; color = 'text-yellow-400'; }
+        else if (ratio <= 1.3) { score = 6.5; label = 'Utmanande'; color = 'text-orange-400'; }
+        else if (ratio <= 1.6) { score = 8; label = 'Aggressiv'; color = 'text-orange-400'; }
+        else { score = 9; label = 'Mycket Aggressiv'; color = 'text-red-400'; }
+    } else if (goal.type === 'tonnage') {
+        // Similar logic for tonnage goals
+        const target = goal.targets[0];
+        const targetValue = target?.value || 0;
+
+        const totalTonnage = recentEntries.reduce((sum, e) => sum + (e.tonnage || 0), 0) / 1000;
+        const avgPerWeek = totalTonnage / Math.max(1, 90 / 7);
+        const targetPerWeek = goal.period === 'weekly' ? targetValue :
+            goal.period === 'monthly' ? targetValue / 4 : targetValue / 12;
+
+        const ratio = targetPerWeek / Math.max(0.1, avgPerWeek);
+
+        if (ratio <= 0.7) { score = 3; label = 'Lätt'; color = 'text-emerald-400'; }
+        else if (ratio <= 1.0) { score = 5; label = 'Lagom'; color = 'text-yellow-400'; }
+        else if (ratio <= 1.3) { score = 6.5; label = 'Utmanande'; color = 'text-orange-400'; }
+        else { score = 8; label = 'Svårt'; color = 'text-red-400'; }
+    } else {
+        // Default for other goal types
+        score = 5;
+        label = 'Medel';
+        color = 'text-yellow-400';
+    }
+
+    return { score: Math.round(score * 10) / 10, label, color };
 }
 
 /**

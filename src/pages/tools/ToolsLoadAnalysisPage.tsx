@@ -3,7 +3,7 @@ import { Layout } from '../../components/Layout';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart
 } from 'recharts';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../context/AuthContext';
 import { calculateEffectiveLoad, generateLoadInsights } from '../../utils/loadAnalysis.ts';
 import { WeeklyLoadData } from '../../models/loadAnalysisTypes.ts';
 import { ExerciseMapperModule } from '../../components/admin/ExerciseMapperModule';
@@ -11,7 +11,7 @@ import { GRANULAR_MUSCLES, MUSCLE_DISPLAY_NAMES } from '../../data/muscleList.ts
 import { MuscleGroup, StrengthWorkout } from '../../models/strengthTypes.ts';
 
 export default function ToolsLoadAnalysisPage() {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const [isLoading, setIsLoading] = useState(true);
     const [rawData, setRawData] = useState<StrengthWorkout[]>([]);
     const [mappings, setMappings] = useState<Record<string, MuscleGroup>>({});
@@ -27,12 +27,19 @@ export default function ToolsLoadAnalysisPage() {
         const fetchData = async () => {
             setIsLoading(true);
             try {
+                // Get token from localStorage if not available from context
+                const authToken = token || localStorage.getItem('auth_token');
+                const headers: Record<string, string> = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
                 // Fetch Sessions
-                const sessionsRes = await fetch('/api/strength/workouts');
+                const sessionsRes = await fetch('/api/strength/workouts', { headers });
                 const sessionsJson = await sessionsRes.json();
 
                 // Fetch Mappings
-                const mapRes = await fetch('/api/exercises/map');
+                const mapRes = await fetch('/api/exercises/map', { headers });
                 const mapJson = await mapRes.json();
 
                 if (sessionsJson && Array.isArray(sessionsJson.workouts)) {
@@ -51,7 +58,7 @@ export default function ToolsLoadAnalysisPage() {
             }
         };
         fetchData();
-    }, [user]);
+    }, [user, token]);
 
     // Derived Data: Available Exercises (filtered by muscle if selected)
     const availableExercises = useMemo(() => {
@@ -196,7 +203,7 @@ export default function ToolsLoadAnalysisPage() {
                     <div className="flex justify-between items-center mb-8">
                         <div>
                             <h3 className="text-xl font-bold text-white">Volym vs Styrka</h3>
-                            <p className="text-sm text-slate-500">Staplar = Effektiva Set (>75%), Linje = e1RM Trend</p>
+                            <p className="text-sm text-slate-500">Staplar = Effektiva Set (&gt;75%), Linje = e1RM Trend</p>
                         </div>
                         {selectedExercise && (
                             <div className="text-right">
@@ -214,7 +221,7 @@ export default function ToolsLoadAnalysisPage() {
                                     <XAxis
                                         dataKey="week"
                                         stroke="#64748b"
-                                        tick={{fill: '#64748b', fontSize: 12}}
+                                        tick={{ fill: '#64748b', fontSize: 12 }}
                                         axisLine={false}
                                         tickLine={false}
                                         dy={10}
@@ -223,7 +230,7 @@ export default function ToolsLoadAnalysisPage() {
                                     <YAxis
                                         yAxisId="left"
                                         stroke="#38bdf8"
-                                        tick={{fill: '#38bdf8', fontSize: 12}}
+                                        tick={{ fill: '#38bdf8', fontSize: 12 }}
                                         axisLine={false}
                                         tickLine={false}
                                         label={{ value: 'Effektiva Set', angle: -90, position: 'insideLeft', fill: '#38bdf8', fontSize: 10 }}
@@ -233,7 +240,7 @@ export default function ToolsLoadAnalysisPage() {
                                         yAxisId="right"
                                         orientation="right"
                                         stroke="#f472b6"
-                                        tick={{fill: '#f472b6', fontSize: 12}}
+                                        tick={{ fill: '#f472b6', fontSize: 12 }}
                                         axisLine={false}
                                         tickLine={false}
                                         domain={['auto', 'auto']}
@@ -263,8 +270,8 @@ export default function ToolsLoadAnalysisPage() {
                                         dataKey="maxE1RM"
                                         stroke="#f472b6"
                                         strokeWidth={3}
-                                        dot={{r: 4, fill: '#f472b6', strokeWidth: 0}}
-                                        activeDot={{r: 6, strokeWidth: 0}}
+                                        dot={{ r: 4, fill: '#f472b6', strokeWidth: 0 }}
+                                        activeDot={{ r: 6, strokeWidth: 0 }}
                                     />
                                 </ComposedChart>
                             </ResponsiveContainer>
@@ -291,9 +298,9 @@ export default function ToolsLoadAnalysisPage() {
                         </p>
 
                         <div className="mt-6 flex gap-4 text-xs text-slate-500">
-                             <div className="bg-black/20 px-3 py-1.5 rounded-lg border border-white/5">
+                            <div className="bg-black/20 px-3 py-1.5 rounded-lg border border-white/5">
                                 Analys baserad på senaste 4 veckorna
-                             </div>
+                            </div>
                         </div>
                     </div>
                 </div>

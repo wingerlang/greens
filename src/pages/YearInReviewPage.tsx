@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
@@ -7,7 +7,6 @@ import { formatDuration, formatSwedishDate, formatPace } from '../utils/dateUtil
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, CartesianGrid, Legend } from 'recharts';
 import { Dumbbell } from 'lucide-react';
-import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { WeeklyVolumeChart } from '../components/training/WeeklyVolumeChart.tsx';
 import { WeeklyDistanceChart } from '../components/training/WeeklyDistanceChart.tsx';
 import { PersonalBest } from '../models/strengthTypes.ts';
@@ -48,7 +47,7 @@ function formatYearRange(years: number[]) {
 export function YearInReviewPage() {
     const { universalActivities = [], strengthSessions = [], performanceGoals = [], unifiedActivities = [] } = useData();
     const { token } = useAuth();
-    const [selectedActivity, setSelectedActivity] = useState<UniversalActivity | null>(null);
+    const navigate = useNavigate();
     const [strengthPBs, setStrengthPBs] = useState<PersonalBest[]>([]);
     const [paceInterval, setPaceInterval] = useState<'1d' | '1w' | '2w' | '1m' | '3m'>('2w');
     const [durationInterval, setDurationInterval] = useState<'1d' | '1w' | '2w' | '1m' | '3m'>('2w');
@@ -946,7 +945,7 @@ export function YearInReviewPage() {
                                     key={i}
                                     className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-emerald-500/10 p-4 rounded-2xl border border-emerald-500/20 shadow-lg shadow-emerald-500/5' : ''
                                         }`}
-                                    onClick={() => setSelectedActivity(a)}
+                                    onClick={() => navigate(`/logg?activityId=${a.id}`)}
                                 >
                                     <div className="flex flex-col">
                                         <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-300'}`}>
@@ -969,7 +968,7 @@ export function YearInReviewPage() {
                                     key={i}
                                     className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-cyan-500/10 p-4 rounded-2xl border border-cyan-500/20 shadow-lg shadow-cyan-500/5' : ''
                                         }`}
-                                    onClick={() => setSelectedActivity(a)}
+                                    onClick={() => navigate(`/logg?activityId=${a.id}`)}
                                 >
                                     <div className="flex flex-col">
                                         <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-300'}`}>
@@ -994,6 +993,7 @@ export function YearInReviewPage() {
                                     key={i}
                                     className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-purple-500/10 p-4 rounded-2xl border border-purple-500/20 shadow-lg shadow-purple-500/5' : ''
                                         }`}
+                                    onClick={() => navigate(`/logg?activityId=${l.id}`)}
                                 >
                                     <div className="flex flex-col">
                                         <span className={`font-black truncate ${i === 0 ? 'text-xl text-white' : 'text-base text-slate-300'} max-w-[140px]`} title={l.exercise}>{l.exercise}</span>
@@ -1017,6 +1017,7 @@ export function YearInReviewPage() {
                                     key={i}
                                     className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-fuchsia-500/10 p-4 rounded-2xl border border-fuchsia-500/20 shadow-lg shadow-fuchsia-500/5' : ''
                                         }`}
+                                    onClick={() => navigate(`/logg?activityId=${s.id}`)}
                                 >
                                     <div className="flex flex-col">
                                         <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-300'}`}>
@@ -1039,7 +1040,7 @@ export function YearInReviewPage() {
                                     key={i}
                                     className={`cursor-pointer group flex items-center justify-between transition-all hover:scale-[1.02] ${i === 0 ? 'bg-indigo-500/10 p-4 rounded-2xl border border-indigo-500/20 shadow-lg shadow-indigo-500/5' : ''
                                         }`}
-                                    onClick={() => setSelectedActivity(ms.activity)}
+                                    onClick={() => navigate(`/logg?activityId=${ms.activity.id}`)}
                                 >
                                     <div className="flex flex-col">
                                         <span className={`font-black ${i === 0 ? 'text-3xl text-white' : 'text-lg text-slate-300'}`}>
@@ -1055,10 +1056,10 @@ export function YearInReviewPage() {
                         </div>
                     </div>
                 </div>
-            </div>
+            </div >
 
             {/* HEATMAP / CONTRIBUTION GRID */}
-            <div className="space-y-8">
+            < div className="space-y-8" >
                 <div className="flex flex-col md:flex-row justify-between items-end mb-2 gap-4">
                     <h3 className="text-xl font-bold flex items-center gap-2">
                         <span>🗓️</span> Aktivitetshistorik
@@ -1073,49 +1074,42 @@ export function YearInReviewPage() {
                     </div>
                 </div>
 
-                {[...selectedYears].sort((a, b) => b - a).map(year => (
-                    <div key={year} className="bg-slate-900/30 border border-white/5 p-6 rounded-3xl overflow-hidden">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{year} Activity Map</span>
-                            <span className="text-[10px] text-slate-600 font-bold uppercase">{yearlyGrids[year]?.filter((d: any) => d.minutes > 0)?.length || 0} aktiva dagar</span>
-                        </div>
-                        <div className="flex gap-[3px] overflow-x-auto pb-2">
-                            {Array.from({ length: 53 }).map((_, weekIndex) => (
-                                <div key={weekIndex} className="flex flex-col gap-[3px]">
-                                    {Array.from({ length: 7 }).map((_, dayIndex) => {
-                                        const dayData = yearlyGrids[year]?.[weekIndex * 7 + dayIndex];
-                                        if (!dayData) return <div key={dayIndex} className="w-3 h-3 rounded-sm bg-transparent" />;
+                {
+                    [...selectedYears].sort((a, b) => b - a).map(year => (
+                        <div key={year} className="bg-slate-900/30 border border-white/5 p-6 rounded-3xl overflow-hidden">
+                            <div className="flex justify-between items-center mb-4">
+                                <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">{year} Activity Map</span>
+                                <span className="text-[10px] text-slate-600 font-bold uppercase">{yearlyGrids[year]?.filter((d: any) => d.minutes > 0)?.length || 0} aktiva dagar</span>
+                            </div>
+                            <div className="flex gap-[3px] overflow-x-auto pb-2">
+                                {Array.from({ length: 53 }).map((_, weekIndex) => (
+                                    <div key={weekIndex} className="flex flex-col gap-[3px]">
+                                        {Array.from({ length: 7 }).map((_, dayIndex) => {
+                                            const dayData = yearlyGrids[year]?.[weekIndex * 7 + dayIndex];
+                                            if (!dayData) return <div key={dayIndex} className="w-3 h-3 rounded-sm bg-transparent" />;
 
-                                        const intensityClass =
-                                            dayData.minutes === 0 ? 'bg-slate-800/50' :
-                                                dayData.minutes < 30 ? 'bg-emerald-900' :
-                                                    dayData.minutes < 60 ? 'bg-emerald-700' :
-                                                        dayData.minutes < 90 ? 'bg-emerald-500' :
-                                                            'bg-emerald-300';
+                                            const intensityClass =
+                                                dayData.minutes === 0 ? 'bg-slate-800/50' :
+                                                    dayData.minutes < 30 ? 'bg-emerald-900' :
+                                                        dayData.minutes < 60 ? 'bg-emerald-700' :
+                                                            dayData.minutes < 90 ? 'bg-emerald-500' :
+                                                                'bg-emerald-300';
 
-                                        return (
-                                            <div
-                                                key={dayIndex}
-                                                className={`w-3 h-3 rounded-sm ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all cursor-pointer`}
-                                                title={`${dayData.date}: ${dayData.minutes} min`}
-                                            />
-                                        );
-                                    })}
-                                </div>
-                            ))}
+                                            return (
+                                                <div
+                                                    key={dayIndex}
+                                                    className={`w-3 h-3 rounded-sm ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all cursor-pointer`}
+                                                    title={`${dayData.date}: ${dayData.minutes} min`}
+                                                />
+                                            );
+                                        })}
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    ))}
             </div>
-
-            {/* Modal for viewing highlights */}
-            {selectedActivity && (
-                <ActivityDetailModal
-                    activity={{ ...mapUniversalToLegacyEntry(selectedActivity)!, source: (selectedActivity as any).source || 'manual' }}
-                    universalActivity={selectedActivity}
-                    onClose={() => setSelectedActivity(null)}
-                />
-            )}
         </div>
+
     );
 }

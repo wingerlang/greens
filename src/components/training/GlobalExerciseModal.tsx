@@ -9,11 +9,13 @@ interface GlobalExerciseModalProps {
     onClose: () => void;
     initialType?: ExerciseType;
     initialInput?: string;
+    initialDate?: string;
 }
 
-export function GlobalExerciseModal({ isOpen, onClose, initialType, initialInput }: GlobalExerciseModalProps) {
+export function GlobalExerciseModal({ isOpen, onClose, initialType, initialInput, initialDate }: GlobalExerciseModalProps) {
     const { addExercise, userSettings } = useData();
     const [smartInput, setSmartInput] = useState('');
+    const [customDate, setCustomDate] = useState<string | null>(null);
 
     // Form State
     const [exerciseForm, setExerciseForm] = useState<{
@@ -36,11 +38,12 @@ export function GlobalExerciseModal({ isOpen, onClose, initialType, initialInput
     useEffect(() => {
         if (isOpen) {
             setSmartInput(initialInput || '');
+            setCustomDate(initialDate || null);
             if (initialType) {
                 setExerciseForm(prev => ({ ...prev, type: initialType }));
             }
         }
-    }, [isOpen, initialType, initialInput]);
+    }, [isOpen, initialType, initialInput, initialDate]);
 
     // Derived values for smart inputs
     const parsed = parseTrainingString(smartInput);
@@ -73,7 +76,7 @@ export function GlobalExerciseModal({ isOpen, onClose, initialType, initialInput
             : getCalories(effectiveExerciseType, duration, effectiveIntensity);
 
         addExercise({
-            date: new Date().toISOString().split('T')[0], // Today
+            date: customDate || new Date().toISOString().split('T')[0],
             type: effectiveExerciseType,
             durationMinutes: duration,
             intensity: effectiveIntensity,
