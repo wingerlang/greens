@@ -1,0 +1,108 @@
+{
+  "version": 1,
+  "categories": [
+    {
+      "id": "upper",
+      "name": "Överkropp",
+      "groups": [
+        {
+          "id": "chest",
+          "name": "Bröst",
+          "children": [
+            { "id": "chest_upper", "name": "Övre bröst", "isLeaf": true },
+            { "id": "chest_middle", "name": "Mellersta bröst", "isLeaf": true },
+            { "id": "chest_lower", "name": "Nedre bröst", "isLeaf": true }
+          ]
+        },
+        {
+          "id": "back",
+          "name": "Rygg",
+          "children": [
+            { "id": "lats", "name": "Lats", "isLeaf": true },
+            { "id": "traps", "name": "Traps", "isLeaf": true },
+            { "id": "rhomboids", "name": "Romboida", "isLeaf": true },
+            { "id": "lower_back", "name": "Ländrygg", "isLeaf": true }
+          ]
+        },
+        {
+          "id": "shoulders",
+          "name": "Axlar",
+          "children": [
+            { "id": "shoulders_front", "name": "Främre axlar", "isLeaf": true },
+            { "id": "shoulders_mid", "name": "Mellersta axlar", "isLeaf": true },
+            { "id": "shoulders_rear", "name": "Bakre axlar", "isLeaf": true }
+          ]
+        },
+        {
+          "id": "arms",
+          "name": "Armar",
+          "children": [
+            { "id": "biceps", "name": "Biceps", "isLeaf": true },
+            { "id": "triceps", "name": "Triceps", "isLeaf": true },
+            { "id": "forearms", "name": "Underarmar", "isLeaf": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "core",
+      "name": "Core",
+      "groups": [
+        {
+          "id": "abs",
+          "name": "Mage",
+          "children": [
+            { "id": "abs_upper", "name": "Övre mage", "isLeaf": true },
+            { "id": "abs_lower", "name": "Nedre mage", "isLeaf": true },
+            { "id": "obliques", "name": "Seda mage / Obliques", "isLeaf": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lower",
+      "name": "Underkropp",
+      "groups": [
+        {
+          "id": "legs_upper",
+          "name": "Lår",
+          "children": [
+            { "id": "quads", "name": "Framsida lår (Quadriceps)", "isLeaf": true },
+            { "id": "hamstrings", "name": "Baksida lår (Hamstrings)", "isLeaf": true },
+            { "id": "adductors", "name": "Insida lår (Adductors)", "isLeaf": true },
+            { "id": "abductors", "name": "Utsida lår (Abductors)", "isLeaf": true }
+          ]
+        },
+        {
+          "id": "glutes",
+          "name": "Säte",
+          "children": [
+             { "id": "glute_max", "name": "Gluteus Maximus", "isLeaf": true },
+             { "id": "glute_med", "name": "Gluteus Medius", "isLeaf": true }
+          ]
+        },
+        {
+          "id": "legs_lower",
+          "name": "Vader",
+          "children": [
+             { "id": "calves", "name": "Vader", "isLeaf": true }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cardio",
+      "name": "Kondition",
+      "groups": [
+          { "id": "cardio_system", "name": "Hjärt- & lungsystem", "isLeaf": true }
+      ]
+    },
+    {
+        "id": "other",
+        "name": "Övrigt",
+        "groups": [
+            { "id": "full_body", "name": "Helkropp", "isLeaf": true }
+        ]
+    }
+  ]
+}

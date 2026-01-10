@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "lastUpdated": "2024-05-22T10:00:00.000Z",
+  "exercises": [
+    {
+      "id": "bench_press",
+      "name_en": "Bench Press",
+      "name_sv": "Bänkpress",
+      "primaryMuscles": ["chest_middle"],
+      "secondaryMuscles": ["triceps", "shoulders_front"]
+    },
+    {
+      "id": "squat",
+      "name_en": "Squat",
+      "name_sv": "Knäböj",
+      "primaryMuscles": ["quads"],
+      "secondaryMuscles": ["glute_max", "core"]
+    },
+    {
+      "id": "deadlift",
+      "name_en": "Deadlift",
+      "name_sv": "Marklyft",
+      "primaryMuscles": ["lower_back", "hamstrings", "glute_max"],
+      "secondaryMuscles": ["lats", "traps", "forearms"]
+    },
+    {
+      "id": "overhead_press",
+      "name_en": "Overhead Press",
+      "name_sv": "Militärpress",
+      "primaryMuscles": ["shoulders_front", "shoulders_mid"],
+      "secondaryMuscles": ["triceps", "core"]
+    },
+    {
+        "id": "pull_up",
+        "name_en": "Pull Up",
+        "name_sv": "Chins",
+        "primaryMuscles": ["lats"],
+        "secondaryMuscles": ["biceps", "rhomboids"]
+    },
+    {
+        "id": "bicep_curl",
+        "name_en": "Bicep Curl",
+        "name_sv": "Bicepscurl",
+        "primaryMuscles": ["biceps"],
+        "secondaryMuscles": ["forearms"]
+    },
+    {
+        "id": "tricep_extension",
+        "name_en": "Tricep Extension",
+        "name_sv": "Tricepspress",
+        "primaryMuscles": ["triceps"],
+        "secondaryMuscles": []
+    },
+    {
+        "id": "leg_press",
+        "name_en": "Leg Press",
+        "name_sv": "Benpress",
+        "primaryMuscles": ["quads"],
+        "secondaryMuscles": ["glute_max"]
+    },
+    {
+        "id": "lunges",
+        "name_en": "Lunges",
+        "name_sv": "Utfall",
+        "primaryMuscles": ["glute_max", "quads"],
+        "secondaryMuscles": ["hamstrings", "core"]
+    },
+    {
+        "id": "sled_push",
+        "name_en": "Sled Push",
+        "name_sv": "Sled Push",
+        "primaryMuscles": ["quads"],
+        "secondaryMuscles": ["glute_max", "shoulders_front", "core"]
+    }
+  ]
+}
