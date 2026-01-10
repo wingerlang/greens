@@ -8,6 +8,7 @@ import { Layout } from './components/Layout.tsx';
 import { WeeklyPage } from './pages/WeeklyPage.tsx';
 import { DashboardPage } from './pages/DashboardPage.tsx';
 import { DatabasePage } from './pages/DatabasePage.tsx';
+import ExerciseDatabasePage from './pages/admin/ExerciseDatabasePage.tsx';
 import { PantryPage } from './pages/PantryPage.tsx';
 import { RecipesPage } from './pages/RecipesPage.tsx';
 import { CaloriesPage } from './pages/CaloriesPage.tsx';
@@ -138,6 +139,11 @@ export function App() {
                                                 <Route path="admin" element={
                                                     <RequireAdmin>
                                                         <AdminPage />
+                                                    </RequireAdmin>
+                                                } />
+                                                <Route path="admin/exercises" element={
+                                                    <RequireAdmin>
+                                                        <ExerciseDatabasePage />
                                                     </RequireAdmin>
                                                 } />
                                                 <Route path="api" element={<ApiPage />} />
