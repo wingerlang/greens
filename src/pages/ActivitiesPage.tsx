@@ -35,44 +35,59 @@ const ActivityRow = ({
     const [isExpanded, setIsExpanded] = useState(false);
 
     const universalMatch = universalActivities.find(u => u.id === activity.id);
-    const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged';
+    const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged' || !!(activity as any)._mergeData;
 
     // Get title for merged activities
-    let displayTitle = activity.title || '-';
+    let displayTitle = activity.title && activity.title !== '-' ? activity.title : '-';
     let mergedSources: { id: string, source: string, title: string, type: string }[] = [];
 
-    if (isMergedActivity && universalMatch?.mergeInfo?.originalActivityIds) {
-        // 1. Collect all original activities
-        mergedSources = universalMatch.mergeInfo.originalActivityIds.map(oid => {
-            const match = universalActivities.find(u => u.id === oid);
-            const matchAny = match as any;
-            // Source is typically nested in performance.source, but check top-level legacy too
-            const activitySource = match?.performance?.source?.source || matchAny?.source || 'unknown';
+    if (isMergedActivity) {
+        if (universalMatch?.mergeInfo?.originalActivityIds) {
+            // 1. collect from server-side merge info
+            mergedSources = universalMatch.mergeInfo.originalActivityIds.map(oid => {
+                const match = universalActivities.find(u => u.id === oid);
+                const matchAny = match as any;
+                const activitySource = match?.performance?.source?.source || matchAny?.source || 'unknown';
 
-            return {
-                id: oid,
-                source: activitySource,
-                title: match?.plan?.title || match?.performance?.notes || 'Unknown Activity',
-                type: (matchAny?.type as string) || 'unknown'
-            };
-        });
+                return {
+                    id: oid,
+                    source: activitySource,
+                    title: match?.plan?.title || match?.performance?.notes || matchAny?.title || 'Unknown Activity',
+                    type: (matchAny?.type as string) || (match?.performance?.activityType as string) || 'unknown'
+                };
+            });
+        } else if ((activity as any)._mergeData) {
+            // 2. collect from client-side merge info (DataContext.tsx)
+            const md = (activity as any)._mergeData;
+            if (md.strava) {
+                mergedSources.push({
+                    id: md.strava.id,
+                    source: 'strava',
+                    title: md.strava.title || 'Strava Activity',
+                    type: md.strava.type || 'running'
+                });
+            }
+            if (md.strength || md.strengthWorkout) {
+                const sw = md.strengthWorkout || md.strength;
+                mergedSources.push({
+                    id: sw.id,
+                    source: 'strength',
+                    title: sw.name || sw.title || 'Styrkepass',
+                    type: 'strength'
+                });
+            }
+        }
 
-        // 2. Prioritize Strava title
-        const stravaSource = mergedSources.find(s => s.source === 'strava');
-        const strengthSource = mergedSources.find(s => s.source === 'strength' || s.source === 'strengthlog' || s.source === 'hevy');
+        // Title prioritization logic
+        if (displayTitle === '-' || displayTitle === 'Styrkepass' || displayTitle === 'Strava Activity') {
+            const stravaSource = mergedSources.find(s => s.source === 'strava');
+            const strengthSource = mergedSources.find(s => s.source === 'strength' || s.source === 'strengthlog' || s.source === 'hevy');
 
-        if (stravaSource?.title && stravaSource.title !== 'Morgonlöpning') {
-            displayTitle = stravaSource.title;
-        } else if (strengthSource?.title) {
-            displayTitle = strengthSource.title;
-        } else if (universalMatch?.plan?.title) {
-            // Fallback to the plan title if no specific source title found
-            displayTitle = universalMatch.plan.title;
-        } else if (universalMatch?.performance?.notes) {
-            // Fallback to notes if really desperate (e.g. "Morning Run") 
-            // causing generic title but correct visual
-            const notes = universalMatch.performance.notes;
-            if (notes.length < 30) displayTitle = notes;
+            if (stravaSource?.title && !['Morgonlöpning', 'Lunchlöpning', 'Kvällslöpning', 'Eftermiddagslöpning', 'Morgonpass', '-', 'Strava Activity'].includes(stravaSource.title)) {
+                displayTitle = stravaSource.title;
+            } else if (strengthSource?.title && strengthSource.title !== 'Styrkepass' && strengthSource.title !== '-') {
+                displayTitle = strengthSource.title;
+            }
         }
     }
 
@@ -91,13 +106,7 @@ const ActivityRow = ({
                     ? 'bg-indigo-500/20 hover:bg-indigo-500/30 ring-1 ring-indigo-500/50'
                     : 'hover:bg-white/5'
                     }`}
-                onClick={() => {
-                    if (isMergedActivity) {
-                        setIsExpanded(!isExpanded);
-                    } else {
-                        onSelectActivity(activity);
-                    }
-                }}
+                onClick={() => onSelectActivity(activity)}
             >
                 {/* Mark for merge button */}
                 <td className="w-8 px-1">
@@ -160,11 +169,12 @@ const ActivityRow = ({
                                 <div
                                     className="flex items-center gap-2 cursor-pointer group/source min-w-[100px]"
                                     onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+                                    title="Visa källor"
                                 >
                                     {!isExpanded ? (
                                         <>
                                             <span className="text-[10px] font-black tracking-wider text-indigo-400 bg-indigo-500/10 px-1.5 py-0.5 rounded border border-indigo-500/20 group-hover/source:bg-indigo-500/20 transition-colors uppercase">
-                                                Merged
+                                                Merged {mergedSources.length > 0 ? `(${mergedSources.length})` : ''}
                                             </span>
                                             <div className="flex items-center -space-x-1 opacity-50 group-hover/source:opacity-100 transition-opacity">
                                                 {mergedSources.some(s => s.source === 'strava') && <span title="Strava" className="text-xs">🔥</span>}
@@ -176,14 +186,12 @@ const ActivityRow = ({
                                         </>
                                     ) : (
                                         <div className="flex flex-col gap-1.5 animate-in fade-in slide-in-from-left-2 duration-200">
-                                            {mergedSources.map(s => (
-                                                <div key={s.id} className="flex items-center gap-2 text-[10px] font-bold uppercase truncate">
-                                                    {s.source === 'strava' && <span className="text-[#FC4C02] bg-[#FC4C02]/10 px-1 rounded">🔥 Strava</span>}
-                                                    {(s.source === 'strength' || s.source === 'strengthlog') && <span className="text-purple-400 bg-purple-400/10 px-1 rounded">💪 Strength</span>}
-                                                    {s.source === 'hevy' && <span className="text-blue-400 bg-blue-400/10 px-1 rounded">🏋️ Hevy</span>}
-                                                    {s.source === 'garmin' && <span className="text-sky-400 bg-sky-400/10 px-1 rounded">⌚ Garmin</span>}
-                                                </div>
-                                            ))}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-black tracking-wider text-indigo-400 bg-indigo-500/20 px-1.5 py-0.5 rounded border border-indigo-500/30 uppercase">
+                                                    Sources
+                                                </span>
+                                                <span className="text-[10px] text-slate-600 group-hover/source:text-slate-400">▼</span>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -332,7 +340,25 @@ export function ActivitiesPage() {
     useEffect(() => {
         const linkedId = searchParams.get('activityId');
         if (linkedId && allActivities.length > 0) {
-            const match = allActivities.find(a => a.id === linkedId);
+            // 1. Direct match
+            let match = allActivities.find(a => a.id === linkedId);
+
+            // 2. If no direct match, look inside merged/unified activities
+            if (!match) {
+                match = allActivities.find(a => {
+                    // Check Strava ID
+                    if (a.externalId === linkedId) return true;
+                    // Check _mergeData (for strength/strava merged)
+                    const am = a as any;
+                    if (am._mergeData) {
+                        if (am._mergeData.strava?.id === linkedId) return true;
+                        if (am._mergeData.strength?.id === linkedId) return true;
+                        if (am._mergeData.universalActivity?.id === linkedId) return true;
+                    }
+                    return false;
+                });
+            }
+
             if (match) {
                 setSelectedActivity(match);
             }

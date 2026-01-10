@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ExerciseEntry, UniversalActivity } from '../../models/types.ts';
 import { StrengthWorkout } from '../../models/strengthTypes.ts';
 import { useData } from '../../context/DataContext.tsx';
@@ -82,6 +83,7 @@ export function ActivityDetailModal({
     onSeparate,
     initiallyEditing = false
 }: ActivityDetailModalProps) {
+    const navigate = useNavigate();
     const [isEditing, setIsEditing] = useState(initiallyEditing);
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
     const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis'>('stats');
@@ -157,7 +159,7 @@ export function ActivityDetailModal({
     // Analysis visibility criteria
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
     const hasWorkoutStructure = parsedWorkout.segments.length > 0;
-    const isWorthyOfAnalysis = hasSplits || hasHeartRate || hasWorkoutStructure || isMergedActivity;
+    const isWorthyOfAnalysis = hasSplits || hasHeartRate || hasWorkoutStructure;
     const showStravaCard = activity.source === 'strava' || isMergedActivity || isMerged;
 
     // Unmerge handler
@@ -722,10 +724,10 @@ export function ActivityDetailModal({
 
                                                 {/* Time */}
                                                 <div className="flex flex-col">
-                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Tid (Rörelse / Total)</span>
+                                                    <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Tid {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 30 ? '(Rörelse / Total)' : ''}</span>
                                                     <div className="flex items-baseline gap-1">
                                                         <span className="text-xl font-black text-white">{activity.durationMinutes > 0 ? formatDuration(activity.durationMinutes * 60) : '-'}</span>
-                                                        {perf?.elapsedTimeSeconds && (
+                                                        {perf?.elapsedTimeSeconds && Math.abs(perf.elapsedTimeSeconds - (activity.durationMinutes * 60)) > 30 && (
                                                             <span className="text-xs text-slate-500 font-bold">/ {formatDuration(perf.elapsedTimeSeconds)}</span>
                                                         )}
                                                     </div>
@@ -1308,14 +1310,8 @@ export function ActivityDetailModal({
                                                         key={orig.id}
                                                         className="w-full bg-slate-800/50 border border-white/5 rounded-lg p-3 hover:bg-slate-700/50 hover:border-amber-500/30 transition-all text-left group"
                                                         onClick={() => {
-                                                            // Open this component activity in a new modal
-                                                            // For now, we'll use a simple approach - set it as selected
-                                                            // This requires passing a callback or using context
-                                                            // For simplicity, open in new tab via URL if possible
-                                                            const extId = orig.performance?.source?.externalId;
-                                                            if (extId) {
-                                                                window.open(`https://www.strava.com/activities/${extId.replace('strava_', '')}`, '_blank');
-                                                            }
+                                                            // Navigate to this component activity
+                                                            navigate(`/logg?activityId=${orig.id}`);
                                                         }}
                                                         title={title || 'Visa aktivitet'}
                                                     >

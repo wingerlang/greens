@@ -29,7 +29,6 @@ import {
     ChevronLeft,
     Info
 } from 'lucide-react';
-import { ActivityDetailModal } from '../components/activities/ActivityDetailModal.tsx';
 import { GoalsOverviewWidget } from '../components/goals/GoalsOverviewWidget.tsx';
 import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
@@ -206,7 +205,7 @@ const DayHoverCard = ({
     date: string,
     activities: any[],
     nutrition: any,
-    onActivityClick: (act: any) => void
+    onActivityClick: (actId: string) => void
 }) => {
     const navigate = useNavigate();
     const dayName = new Date(date).toLocaleDateString('sv-SE', { weekday: 'long' });
@@ -238,7 +237,7 @@ const DayHoverCard = ({
                                 return (
                                     <div
                                         key={act.id}
-                                        onClick={(e) => { e.stopPropagation(); onActivityClick(act); }}
+                                        onClick={(e) => { e.stopPropagation(); onActivityClick(act.id); }}
                                         className="flex items-center gap-2 p-1.5 rounded-lg bg-slate-800/50 hover:bg-slate-700 transition-colors cursor-pointer group"
                                     >
                                         <div className="text-sm">{typeDef?.icon || '💪'}</div>
@@ -326,7 +325,6 @@ export function DashboardPage() {
     const [tempValue, setTempValue] = useState<string>("");
     const [tempWaist, setTempWaist] = useState<string>("");
     const [tempChest, setTempChest] = useState<string>("");
-    const [selectedActivity, setSelectedActivity] = useState<any>(null);
     const [isWeightModalOpen, setIsWeightModalOpen] = useState(false);
     const [bulkInput, setBulkInput] = useState("");
     const [showActivityModal, setShowActivityModal] = useState(false);
@@ -446,7 +444,6 @@ export function DashboardPage() {
         const handleEsc = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 setIsWeightModalOpen(false);
-                setSelectedActivity(null);
                 setEditing(null);
             }
         };
@@ -694,7 +691,7 @@ export function DashboardPage() {
                             key={act.id}
                             onClick={(e) => {
                                 e.stopPropagation();
-                                setSelectedActivity(act);
+                                navigate(`/logg?activityId=${act.id}`);
                             }}
                             className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md -translate-y-[1px]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
@@ -1805,7 +1802,7 @@ export function DashboardPage() {
                                                                     date={date}
                                                                     activities={dayActivities}
                                                                     nutrition={calculateDailyNutrition(date)}
-                                                                    onActivityClick={(act) => setSelectedActivity(act)}
+                                                                    onActivityClick={(id) => navigate(`/logg?activityId=${id}`)}
                                                                 />
                                                             </div>
                                                         )}
@@ -1976,15 +1973,7 @@ export function DashboardPage() {
                 </div >
             </div >
 
-            {/* Activity Modal */}
-            {
-                selectedActivity && (
-                    <ActivityDetailModal
-                        activity={selectedActivity}
-                        onClose={() => setSelectedActivity(null)}
-                    />
-                )
-            }
+
 
             {/* Weight & Measurements Modal */}
             <MeasurementEntryModal
