@@ -7,8 +7,7 @@ import {
     getISODate,
     getWeekStartDate,
     WEEKDAYS,
-    Weekday,
-    WEEKDAY_LABELS
+    Weekday
 } from '../models/types.ts';
 import {
     ChevronLeft,
@@ -22,17 +21,20 @@ import {
     Check,
     Target,
     TrendingUp,
-    Clock
+    Clock,
+    Trophy
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatDuration } from '../utils/dateUtils.ts';
+import { TrainingPeriodBanner } from '../components/planning/TrainingPeriodBanner.tsx';
+import { ActivityModal } from '../components/planning/ActivityModal.tsx';
+import { WeeklyStatsAnalysis } from '../components/planning/WeeklyStatsAnalysis.tsx';
 
 const SHORT_WEEKDAYS = ['Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör', 'Sön'];
 
 export function TrainingPlanningPage() {
     const navigate = useNavigate();
     const {
-        exerciseEntries,
         strengthSessions,
         performanceGoals,
         plannedActivities,
@@ -48,24 +50,28 @@ export function TrainingPlanningPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingActivity, setEditingActivity] = useState<PlannedActivity | null>(null);
 
-    // ESC key handler
+    // Keyboard Navigation & ESC handler
     React.useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Modal closing
             if (e.key === 'Escape' && isModalOpen) {
                 setIsModalOpen(false);
                 setEditingActivity(null);
+                return;
+            }
+
+            // Week Navigation with Ctrl + Arrow
+            if (e.ctrlKey && !isModalOpen) {
+                if (e.key === 'ArrowLeft') {
+                    handleWeekChange(-1);
+                } else if (e.key === 'ArrowRight') {
+                    handleWeekChange(1);
+                }
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [isModalOpen]);
-
-    // Form State
-    const [formType, setFormType] = useState<'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST'>('RUN');
-    const [formDuration, setFormDuration] = useState('45');
-    const [formDistance, setFormDistance] = useState('');
-    const [formNotes, setFormNotes] = useState('');
-    const [formIntensity, setFormIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
+    }, [isModalOpen, currentWeekStart]);
 
     // Navigation
     const handleWeekChange = (offset: number) => {
@@ -185,203 +191,67 @@ export function TrainingPlanningPage() {
         const totalSessions = weeklyStats.running.sessions + strengthSessionsCount;
         const currentKm = weeklyStats.running.km;
 
+        // Helper to extract target value
+        const getTargetValue = (goal: any, unit: string) => {
+             return goal.targets?.find((t: any) => t.unit === unit || t.unit?.toLowerCase().includes(unit === 'sessions' ? 'pass' : unit))?.count ||
+                    goal.targets?.find((t: any) => t.unit === unit || t.unit?.toLowerCase().includes(unit === 'sessions' ? 'pass' : unit))?.value || 0;
+        };
+
+        const strengthTarget = strengthSessionGoal ? getTargetValue(strengthSessionGoal, 'sessions') : 0;
+        const totalTarget = totalSessionGoal ? getTargetValue(totalSessionGoal, 'sessions') : 0;
+        const kmTarget = kmGoal ? getTargetValue(kmGoal, 'km') : 0;
+
+        // Calculate "Planned but not done"
+        // This is: Forecast - Actual. If negative, 0.
+        const strengthPlanned = Math.max(0, weeklyStats.forecast.strengthSessions - weeklyStats.strength.sessions);
+        const totalPlanned = Math.max(0, (weeklyStats.forecast.runningSessions + weeklyStats.forecast.strengthSessions) - (weeklyStats.running.sessions + weeklyStats.strength.sessions));
+        const kmPlanned = Math.max(0, weeklyStats.forecast.runningKm - weeklyStats.running.km);
+
         return {
             strengthSessions: strengthSessionGoal ? {
-                target: strengthSessionGoal.targets?.find(t => t.unit === 'sessions' || t.unit?.toLowerCase().includes('pass'))?.count ||
-                    strengthSessionGoal.targets?.find(t => t.unit === 'sessions' || t.unit?.toLowerCase().includes('pass'))?.value || 0,
+                target: strengthTarget,
                 current: strengthSessionsCount,
+                planned: strengthPlanned,
                 name: 'Styrkepass'
             } : null,
             totalSessions: totalSessionGoal ? {
-                target: totalSessionGoal.targets?.find(t => t.unit === 'sessions' || t.unit?.toLowerCase().includes('pass'))?.count ||
-                    totalSessionGoal.targets?.find(t => t.unit === 'sessions' || t.unit?.toLowerCase().includes('pass'))?.value || 0,
+                target: totalTarget,
                 current: totalSessions,
+                planned: totalPlanned,
                 name: totalSessionGoal.name
             } : null,
             km: kmGoal ? {
-                target: kmGoal.targets?.find(t => t.unit === 'km')?.value || 0,
+                target: kmTarget,
                 current: currentKm,
+                planned: kmPlanned,
                 name: 'Distans'
             } : null
         };
     }, [performanceGoals, weeklyStats]);
 
-    // Smart Suggestions - now with goal awareness and planned-session awareness
-    const suggestions = useMemo(() => {
-        if (!selectedDate) return [];
-
-        // Combine history with planned activities to make suggestions smarter
-        const combinedHistory = [
-            ...exerciseEntries,
-            ...plannedActivities.map(p => ({
-                id: p.id,
-                date: p.date,
-                type: (p.type === 'STRENGTH' || p.category === 'STRENGTH') ? 'strength' : 'running',
-                durationMinutes: p.targetHrZone >= 4 ? 60 : 45, // Rough estimate
-                intensity: p.category === 'LONG_RUN' || p.targetHrZone >= 4 ? 'high' : (p.targetHrZone <= 2 ? 'low' : 'moderate'),
-                distance: p.estimatedDistance,
-                caloriesBurned: 0,
-                createdAt: new Date().toISOString()
-            })) as any
-        ];
-
-        // 1. Get base suggestions
-        const baseSuggestions = getTrainingSuggestions(combinedHistory, selectedDate);
-
-        // 2. Add goal-based suggestions using FORECAST (actual + planned)
-        const goalSuggestions: TrainingSuggestion[] = [];
-
-        // If forecast strength goal met but running behind → suggest running
-        const strengthForecastMet = goalProgress.strengthSessions &&
-            weeklyStats.forecast.strengthSessions >= (goalProgress.strengthSessions.target || 0);
-
-        const runningForecastBehind = goalProgress.km &&
-            weeklyStats.forecast.runningKm < (goalProgress.km.target || 0);
-
-        if (strengthForecastMet && runningForecastBehind) {
-            goalSuggestions.push({
-                id: generateId(),
-                type: 'RUN',
-                label: '🎯 Prioritera Löpning',
-                description: `Prognos: ${weeklyStats.forecast.runningKm.toFixed(1)}km av ${goalProgress.km?.target}km mål`,
-                reason: 'Styrka planerad/klar, men löpning saknas!',
-                duration: 45,
-                intensity: 'moderate'
-            });
-        }
-
-        // If forecast running goal met but strength behind → suggest strength
-        const runningForecastMet = goalProgress.km &&
-            weeklyStats.forecast.runningKm >= (goalProgress.km.target || 0);
-
-        const strengthForecastBehind = goalProgress.strengthSessions &&
-            weeklyStats.forecast.strengthSessions < (goalProgress.strengthSessions.target || 0);
-
-        if (runningForecastMet && strengthForecastBehind) {
-            goalSuggestions.push({
-                id: generateId(),
-                type: 'STRENGTH',
-                label: '🎯 Prioritera Styrka',
-                description: `Prognos: ${weeklyStats.forecast.strengthSessions} styrkepass (mål: ${goalProgress.strengthSessions?.target})`,
-                reason: 'Löpvärden planerad/klar, prioritera styrka.',
-                duration: 50,
-                intensity: 'high'
-            });
-        }
-
-        const combined = [...goalSuggestions, ...baseSuggestions];
-
-        // 3. Filter by currently selected formType in modal if open
-        if (isModalOpen && formType) {
-            const filtered = combined.filter(s => {
-                if (formType === 'RUN') return s.type === 'RUN' || s.type === 'HYROX' || s.type === 'BIKE';
-                if (formType === 'STRENGTH') return s.type === 'STRENGTH';
-                if (formType === 'REST') return s.type === 'REST';
-                return s.type === formType;
-            });
-            return filtered.slice(0, 4);
-        }
-
-        return combined.slice(0, 4);
-    }, [selectedDate, exerciseEntries, goalProgress, weeklyStats, plannedActivities, isModalOpen, formType]);
-
     // Handlers
     const handleOpenModal = (date: string, activity?: PlannedActivity) => {
         setSelectedDate(date);
+        setEditingActivity(activity || null);
         setIsModalOpen(true);
-
-        if (activity) {
-            // Edit mode - pre-fill form
-            setEditingActivity(activity);
-            // Infer type from title/category
-            if (activity.type === 'REST' || activity.category === 'REST') {
-                setFormType('REST');
-            } else if (activity.title.toLowerCase().includes('styrka') || activity.category === 'STRENGTH') {
-                setFormType('STRENGTH');
-            } else if (activity.title.toLowerCase().includes('hyrox') || activity.category === 'INTERVALS') {
-                setFormType('HYROX');
-            } else {
-                setFormType('RUN');
-            }
-            setFormDistance(activity.estimatedDistance?.toString() || '');
-            setFormNotes(activity.description || '');
-            setFormIntensity(activity.targetHrZone <= 2 ? 'low' : activity.targetHrZone >= 4 ? 'high' : 'moderate');
-            setFormDuration('45'); // Fallback
-        } else {
-            // Create mode - reset form
-            setEditingActivity(null);
-            setFormType('RUN');
-            setFormDuration('45');
-            setFormDistance('');
-            setFormNotes('');
-            setFormIntensity('moderate');
-        }
     };
 
-    const handleSave = () => {
-        if (!selectedDate) return;
-
-        const activityData = {
-            date: selectedDate,
-            type: (formType === 'REST' ? 'REST' : 'RUN') as PlannedActivity['type'],
-            category: (formType === 'RUN' ? 'EASY' :
-                formType === 'STRENGTH' ? 'STRENGTH' :
-                    formType === 'HYROX' ? 'INTERVALS' :
-                        formType === 'REST' ? 'REST' : 'EASY') as PlannedActivity['category'],
-            title: formType === 'RUN' ? 'Löpning' :
-                formType === 'STRENGTH' ? 'Styrka' :
-                    formType === 'HYROX' ? 'Hyrox' :
-                        formType === 'REST' ? 'Vilodag' : 'Cykling',
-            description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : formType + ' pass'}`,
-            estimatedDistance: formType === 'RUN' && formDistance ? parseFloat(formDistance) : 0,
-            targetPace: '',
-            targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
-            structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
-            status: 'PLANNED' as const
-        };
-
+    const handleSaveActivity = (activity: PlannedActivity) => {
         if (editingActivity) {
-            // Update existing activity
-            updatePlannedActivity(editingActivity.id, activityData);
+            updatePlannedActivity(editingActivity.id, activity);
         } else {
-            // Create new activity
-            const newActivity: PlannedActivity = {
-                id: generateId(),
-                ...activityData
-            };
-            savePlannedActivities([newActivity]);
+            savePlannedActivities([activity]);
         }
-
+        setIsModalOpen(false);
         setEditingActivity(null);
-        setIsModalOpen(false);
-    };
-
-    const handleApplySuggestion = (s: TrainingSuggestion) => {
-        if (!selectedDate) return;
-
-        // Map suggestion type to form/model
-        const type = s.type === 'REST' ? 'RUN' : s.type; // REST not fully supported yet, defaulting
-
-        const newActivity: PlannedActivity = {
-            id: generateId(),
-            date: selectedDate,
-            type: (s.type === 'STRENGTH' ? 'STRENGTH' : s.type === 'REST' ? 'REST' : 'RUN') as PlannedActivity['type'],
-            category: s.type === 'STRENGTH' ? 'STRENGTH' : s.type === 'REST' ? 'REST' : s.type === 'HYROX' ? 'INTERVALS' : 'EASY',
-            title: s.label,
-            description: s.description,
-            estimatedDistance: s.distance || 0,
-            targetPace: '',
-            targetHrZone: s.intensity === 'low' ? 2 : s.intensity === 'moderate' ? 3 : 4,
-            structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 },
-            status: 'PLANNED'
-        };
-
-        savePlannedActivities([newActivity]);
-        setIsModalOpen(false);
     };
 
     return (
         <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-8 font-sans text-slate-900 dark:text-white">
+            <div className="max-w-6xl mx-auto mb-6">
+                <TrainingPeriodBanner />
+            </div>
+
             {/* Header */}
             <div className="max-w-6xl mx-auto flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
@@ -464,54 +334,49 @@ export function TrainingPlanningPage() {
                         <p className="text-xs text-slate-400 italic">Inga aktiva veckomål.</p>
                     ) : (
                         <div className="space-y-4">
-                            {goalProgress.strengthSessions && (
-                                <div>
-                                    <div className="flex justify-between text-[10px] font-black uppercase mb-1">
-                                        <span className="text-slate-400">Styrkepass</span>
-                                        <span className={goalProgress.strengthSessions.current >= goalProgress.strengthSessions.target ? 'text-emerald-500' : 'text-slate-500'}>
-                                            {goalProgress.strengthSessions.current} / {goalProgress.strengthSessions.target}
-                                        </span>
+                            {/* Reusable Progress Bar Component */}
+                            {[
+                                goalProgress.strengthSessions && { ...goalProgress.strengthSessions, colorClass: 'bg-purple-500', plannedClass: 'bg-purple-500/30' },
+                                goalProgress.totalSessions && { ...goalProgress.totalSessions, colorClass: 'bg-indigo-500', plannedClass: 'bg-indigo-500/30' },
+                                goalProgress.km && { ...goalProgress.km, colorClass: 'bg-emerald-500', plannedClass: 'bg-emerald-500/30' }
+                            ].filter(Boolean).map((goal: any, i) => {
+                                const currentPct = Math.min(100, (goal.current / goal.target) * 100);
+                                const plannedPct = Math.min(100 - currentPct, (goal.planned / goal.target) * 100);
+                                const isMet = goal.current >= goal.target;
+
+                                return (
+                                    <div key={i}>
+                                        <div className="flex justify-between text-[10px] font-black uppercase mb-1">
+                                            <span className="text-slate-400">{goal.name}</span>
+                                            <span className={isMet ? 'text-emerald-500' : 'text-slate-500'}>
+                                                {typeof goal.current === 'number' && !Number.isInteger(goal.current) ? goal.current.toFixed(1) : goal.current}
+                                                <span className="text-slate-300 mx-1">/</span>
+                                                {goal.target}
+                                                {goal.planned > 0 && !isMet && (
+                                                    <span className="text-slate-400 ml-1 italic">(+{typeof goal.planned === 'number' && !Number.isInteger(goal.planned) ? goal.planned.toFixed(1) : goal.planned})</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                            {/* Completed Segment (Solid) */}
+                                            <div
+                                                className={`h-full transition-all ${isMet ? 'bg-emerald-500' : goal.colorClass}`}
+                                                style={{ width: `${currentPct}%` }}
+                                            />
+                                            {/* Planned Segment (Striped/Dashed) */}
+                                            {plannedPct > 0 && (
+                                                <div
+                                                    className={`h-full transition-all ${goal.plannedClass}`}
+                                                    style={{
+                                                        width: `${plannedPct}%`,
+                                                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)'
+                                                     }}
+                                                />
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full transition-all ${goalProgress.strengthSessions.current >= goalProgress.strengthSessions.target ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                                            style={{ width: `${Math.min(100, (goalProgress.strengthSessions.current / goalProgress.strengthSessions.target) * 100)}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                            {goalProgress.totalSessions && (
-                                <div>
-                                    <div className="flex justify-between text-[10px] font-black uppercase mb-1">
-                                        <span className="text-slate-400">{goalProgress.totalSessions.name}</span>
-                                        <span className={goalProgress.totalSessions.current >= goalProgress.totalSessions.target ? 'text-emerald-500' : 'text-slate-500'}>
-                                            {goalProgress.totalSessions.current} / {goalProgress.totalSessions.target}
-                                        </span>
-                                    </div>
-                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full transition-all ${goalProgress.totalSessions.current >= goalProgress.totalSessions.target ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                                            style={{ width: `${Math.min(100, (goalProgress.totalSessions.current / goalProgress.totalSessions.target) * 100)}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-                            {goalProgress.km && (
-                                <div>
-                                    <div className="flex justify-between text-[10px] font-black uppercase mb-1">
-                                        <span className="text-slate-400">Kilometer</span>
-                                        <span className={goalProgress.km.current >= goalProgress.km.target ? 'text-emerald-500' : 'text-slate-500'}>
-                                            {goalProgress.km.current.toFixed(1)} / {goalProgress.km.target}
-                                        </span>
-                                    </div>
-                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full transition-all ${goalProgress.km.current >= goalProgress.km.target ? 'bg-emerald-500' : 'bg-indigo-500'}`}
-                                            style={{ width: `${Math.min(100, (goalProgress.km.current / goalProgress.km.target) * 100)}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
@@ -683,163 +548,21 @@ export function TrainingPlanningPage() {
                 })}
             </div>
 
-            {/* Planning Modal */}
-            {isModalOpen && selectedDate && (
-                <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200">
-                        {/* Header */}
-                        <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900">
-                            <div>
-                                <h2 className="text-lg font-black uppercase tracking-tight">
-                                    {editingActivity ? '✏️ Redigera pass' : `📅 Planera ${selectedDate}`}
-                                </h2>
-                                <p className="text-xs text-slate-500 font-medium">
-                                    {editingActivity ? 'Uppdatera planerat pass' : 'Välj aktivitet eller använd förslag'}
-                                </p>
-                            </div>
-                            <button onClick={() => { setIsModalOpen(false); setEditingActivity(null); }} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
-                                <X size={20} />
-                            </button>
-                        </div>
+            <ActivityModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                selectedDate={selectedDate}
+                editingActivity={editingActivity}
+                onSave={handleSaveActivity}
+                weeklyStats={weeklyStats}
+                goalProgress={goalProgress}
+            />
 
-                        <div className="p-6 max-h-[80vh] overflow-y-auto">
-                            {/* Suggestions */}
-                            {suggestions.length > 0 && (
-                                <div className="mb-6">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <Zap size={14} className="text-amber-500 fill-amber-500" />
-                                        <span className="text-xs font-black uppercase tracking-wider text-slate-400">Smarta Förslag</span>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {suggestions.map(s => (
-                                            <button
-                                                key={s.id}
-                                                onClick={() => handleApplySuggestion(s)}
-                                                className="w-full p-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl flex items-center justify-between group hover:scale-[1.02] transition-transform text-left"
-                                            >
-                                                <div>
-                                                    <div className="text-xs font-black text-slate-900 dark:text-white mb-0.5">{s.label}</div>
-                                                    <div className="text-[10px] text-slate-500 font-medium">{s.reason}</div>
-                                                </div>
-                                                <div className="p-1.5 bg-white dark:bg-slate-800 rounded-full shadow-sm text-amber-500">
-                                                    <Plus size={14} />
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* Manual Form */}
-                            <div className="space-y-4">
-                                <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
-                                    <button
-                                        onClick={() => setFormType('RUN')}
-                                        className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'RUN' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    >
-                                        Löpning
-                                    </button>
-                                    <button
-                                        onClick={() => setFormType('STRENGTH')}
-                                        className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'STRENGTH' ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    >
-                                        Styrka
-                                    </button>
-                                    <button
-                                        onClick={() => setFormType('REST')}
-                                        className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'REST' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                    >
-                                        Vila
-                                    </button>
-                                </div>
-
-                                {formType !== 'REST' && (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Distans (km)</label>
-                                            <div className="space-y-2">
-                                                <input
-                                                    type="number"
-                                                    value={formDistance}
-                                                    onChange={(e) => setFormDistance(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                                    placeholder="0.0"
-                                                />
-                                                {formType === 'RUN' && (
-                                                    <div className="flex flex-wrap gap-1.5">
-                                                        {[5, 10, 21, 42].map(d => (
-                                                            <button
-                                                                key={d}
-                                                                onClick={() => setFormDistance(d.toString())}
-                                                                className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg text-[10px] font-black uppercase text-slate-500 transition-colors"
-                                                            >
-                                                                {d}km
-                                                            </button>
-                                                        ))}
-                                                        <button
-                                                            onClick={() => {
-                                                                const recentDistances = exerciseEntries.filter(e => e.type === 'running' && e.distance).map(e => e.distance!);
-                                                                if (recentDistances.length > 0) {
-                                                                    const avg = recentDistances.reduce((a, b) => a + b, 0) / recentDistances.length;
-                                                                    setFormDistance(Math.round(avg).toString());
-                                                                }
-                                                            }}
-                                                            className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg text-[10px] font-black uppercase text-blue-600 transition-colors"
-                                                        >
-                                                            Snitt
-                                                        </button>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Intensitet</label>
-                                            <select
-                                                value={formIntensity}
-                                                onChange={(e) => setFormIntensity(e.target.value as any)}
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
-                                            >
-                                                <option value="low">Låg</option>
-                                                <option value="moderate">Medel</option>
-                                                <option value="high">Hög</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                )}
-                                {formType !== 'REST' && (
-                                    <div className="space-y-1">
-                                        <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tid (min)</label>
-                                        <input
-                                            type="number"
-                                            value={formDuration}
-                                            onChange={e => setFormDuration(e.target.value)}
-                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                            placeholder="45"
-                                        />
-                                    </div>
-                                )}
-                                <div className="space-y-1">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Anteckningar</label>
-                                    <textarea
-                                        value={formNotes}
-                                        onChange={e => setFormNotes(e.target.value)}
-                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium h-24 focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none"
-                                        placeholder="Beskriv passet..."
-                                    />
-                                </div>
-
-                                <button
-                                    onClick={handleSave}
-                                    className="w-full py-4 bg-blue-500 hover:bg-blue-400 text-white font-black uppercase tracking-widest rounded-xl shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
-                                >
-                                    {editingActivity ? 'Uppdatera Pass' : 'Spara Pass'}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
+            {/* Deep Stats Analysis */}
+            <WeeklyStatsAnalysis
+                weekStart={currentWeekStart}
+                weeklyStats={weeklyStats}
+            />
 
         </div>
     );
