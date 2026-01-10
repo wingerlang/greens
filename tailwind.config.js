@@ -1,27 +1,30 @@
+/** @type {import('tailwindcss').Config} */
 export default {
-    content: [
-        "./index.html",
-        "./src/**/*.{js,ts,jsx,tsx}",
-    ],
-    theme: {
-        extend: {
-            fontFamily: {
-                sans: ['Inter', 'system-ui', 'sans-serif'],
-            },
-            colors: {
-                // We can extend specific colors here if we need custom brand colors later
-                // For now, we'll rely on Slate and Emerald from standard Tailwind
-            },
-            keyframes: {
-                'fade-slide-in': {
-                    '0%': { opacity: '0', transform: 'translateX(-20px)' },
-                    '100%': { opacity: '1', transform: 'translateX(0)' },
-                }
-            },
-            animation: {
-                'fade-slide-in': 'fade-slide-in 1s ease-out forwards',
-            }
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.2s ease-out',
+        'slide-up': 'slideUp 0.3s ease-out',
+        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
         },
+        slideUp: {
+          '0%': { transform: 'translateY(10px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        }
+      }
     },
-    plugins: [],
+  },
+  plugins: [],
 }

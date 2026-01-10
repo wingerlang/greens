@@ -106,7 +106,7 @@ export async function handleAdminRoutes(req: Request, url: URL, headers: Headers
             const userId = url.pathname.split("/")[4]; // /api/admin/users/:id/role
             const body = await req.json();
 
-            if (!['user', 'admin'].includes(body.role)) {
+            if (!['user', 'admin', 'developer'].includes(body.role)) {
                 return new Response(JSON.stringify({ error: "Invalid role" }), { status: 400, headers });
             }
 
