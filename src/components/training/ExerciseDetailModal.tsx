@@ -1308,8 +1308,8 @@ export function ExerciseDetailModal({
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-white/5">
-                                            {exerciseHistory.slice().reverse().map(h => (
-                                                <tr key={h.date} className="hover:bg-white/5 transition-colors group">
+                                            {exerciseHistory.slice().reverse().map((h, idx) => (
+                                                <tr key={h.workout?.id || `${h.date}-${idx}`} className="hover:bg-white/5 transition-colors group">
                                                     <td className="px-4 py-3">
                                                         <button
                                                             onClick={() => onSelectWorkout?.(h.workout)}

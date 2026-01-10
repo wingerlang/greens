@@ -63,8 +63,14 @@ export function CaloriesPage() {
 
     const [isFormOpen, setIsFormOpen] = useState(false);
 
-    // Smart meal type default based on time of day
-    const getDefaultMealType = (): MealType => {
+    // Smart meal type default based on time of day and selected date
+    const getDefaultMealType = (date: string): MealType => {
+        const today = getISODate();
+        // If logging for a past date, default to snack (mellanmål)
+        if (date !== today) {
+            return 'snack';
+        }
+        // For today, use time-based logic
         const hour = new Date().getHours();
         if (hour >= 5 && hour < 10) return 'breakfast';
         if (hour >= 10 && hour < 14) return 'lunch';
@@ -72,7 +78,7 @@ export function CaloriesPage() {
         return 'snack';
     };
 
-    const [mealType, setMealType] = useState<MealType>(getDefaultMealType());
+    const [mealType, setMealType] = useState<MealType>(getDefaultMealType(urlDate || getISODate()));
     const [viewMode, setViewMode] = useState<'normal' | 'compact'>('compact');
 
     // Quick-add state
@@ -373,7 +379,43 @@ export function CaloriesPage() {
 
     return (
         <div className="calories-page">
-            <div className="my-6">
+            {/* Sticky Date Header - always visible when scrolling */}
+            <div className={`fixed top-16 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm py-2 transition-all`}>
+                <div className="max-w-3xl mx-auto px-4 flex items-center justify-center gap-4">
+                    <button
+                        onClick={() => {
+                            const d = new Date(selectedDate);
+                            d.setDate(d.getDate() - 1);
+                            setSelectedDate(d.toISOString().split('T')[0]);
+                        }}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500"
+                    >
+                        ←
+                    </button>
+                    <div
+                        onClick={() => setSelectedDate(getISODate())}
+                        className={`font-bold text-sm cursor-pointer px-3 py-1 rounded-lg transition-all ${!isToday
+                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
+                            : 'text-slate-900 dark:text-white'
+                            }`}
+                    >
+                        {isToday ? 'Idag' : selectedDate === getISODate(new Date(Date.now() - 86400000)) ? 'Igår' : new Date(selectedDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
+                        {!isToday && <span className="ml-2 text-[10px] opacity-70">← Klicka för idag</span>}
+                    </div>
+                    <button
+                        onClick={() => {
+                            const d = new Date(selectedDate);
+                            d.setDate(d.getDate() + 1);
+                            setSelectedDate(d.toISOString().split('T')[0]);
+                        }}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500"
+                    >
+                        →
+                    </button>
+                </div>
+            </div>
+
+            <div className="pt-14 my-6">
                 <DatePicker
                     selectedDate={selectedDate}
                     onDateChange={setSelectedDate}

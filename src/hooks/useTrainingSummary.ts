@@ -14,10 +14,15 @@ export interface SummaryStats {
     totalPRs: number;
     runningPRs: number;
     strengthPRs: number;
+    raceCount: number;
     avgScore: number;
     activeDays: number;
     longestGap: number;
     totalTonnage: number;
+    uniqueExercises: number;
+    totalSets: number;
+    totalReps: number;
+    mostTrainedExercise: string;
     types: { name: string; count: number; time: number; dist: number }[];
     longestRuns: UniversalActivity[];
     fastestRuns: UniversalActivity[];
@@ -39,8 +44,8 @@ export function useTrainingSummary(startDate: string, endDate: string) {
         })
             .then(res => res.json())
             .then(data => {
-                if (data.pbs && Array.isArray(data.pbs)) {
-                    setStrengthPBs(data.pbs);
+                if (data.personalBests && Array.isArray(data.personalBests)) {
+                    setStrengthPBs(data.personalBests);
                 }
             })
             .catch(err => console.error('Failed to load strength PBs', err));
@@ -89,6 +94,7 @@ export function useTrainingSummary(startDate: string, endDate: string) {
         let scoreCount = 0;
         let runningPRs = 0;
         let strengthPRs = 0;
+        let raceCount = 0;
         let totalTonnage = 0;
         let activeDays = new Set<string>();
 
@@ -132,6 +138,13 @@ export function useTrainingSummary(startDate: string, endDate: string) {
                 runningPRs += prs;
             }
 
+            // Count races based on workout_type or subType
+            const workoutType = (a as any).workout_type?.toLowerCase() || '';
+            const subType = a.performance?.subType?.toLowerCase() || '';
+            if (workoutType.includes('race') || subType.includes('race') || (a as any).type?.toLowerCase() === 'race') {
+                raceCount++;
+            }
+
             activeDays.add(a.date.split('T')[0]);
 
             const type = a.performance?.activityType || 'other';
@@ -162,11 +175,19 @@ export function useTrainingSummary(startDate: string, endDate: string) {
         // Strength Stats
         let bestLift = { weight: 0, exercise: '', activity: null as UniversalActivity | null };
         let maxVolumeSession: any = null;
+        let totalSets = 0;
+        let totalReps = 0;
+        const exerciseCountMap = new Map<string, number>();
+        const uniqueExercisesSet = new Set<string>();
 
         filteredStrengthSessions.forEach(s => {
             totalTonnage += (s.totalVolume || 0);
             s.exercises.forEach(e => {
+                uniqueExercisesSet.add(e.exerciseName.toLowerCase());
+                exerciseCountMap.set(e.exerciseName, (exerciseCountMap.get(e.exerciseName) || 0) + 1);
                 e.sets.forEach(set => {
+                    totalSets++;
+                    totalReps += (set.reps || 0);
                     const weight = set.weight || 0;
                     if (weight > bestLift.weight) {
                         bestLift = {
@@ -188,6 +209,16 @@ export function useTrainingSummary(startDate: string, endDate: string) {
             }
         });
 
+        // Find most trained exercise
+        let mostTrainedExercise = '';
+        let maxCount = 0;
+        exerciseCountMap.forEach((count, exercise) => {
+            if (count > maxCount) {
+                maxCount = count;
+                mostTrainedExercise = exercise;
+            }
+        });
+
         const totalPRs = runningPRs + strengthPRs;
 
         const longestRuns = [...filteredActivities]
@@ -206,7 +237,7 @@ export function useTrainingSummary(startDate: string, endDate: string) {
 
         const maxScores = [...filteredActivities]
             .map((a: UniversalActivity) => {
-                 const mappedActivity = {
+                const mappedActivity = {
                     ...a,
                     type: a.performance?.activityType || 'other',
                     activityType: a.performance?.activityType || 'other',
@@ -247,11 +278,16 @@ export function useTrainingSummary(startDate: string, endDate: string) {
             totalPRs,
             runningPRs,
             strengthPRs,
+            raceCount,
             avgScore: scoreCount > 0 ? Math.round(totalScore / scoreCount) : 0,
             activeDays: activeDays.size,
             types: Array.from(typeMap.entries()).map(([k, v]) => ({ name: k, ...v })),
             longestGap,
             totalTonnage,
+            uniqueExercises: uniqueExercisesSet.size,
+            totalSets,
+            totalReps,
+            mostTrainedExercise,
             longestRuns,
             fastestRuns,
             maxScores,
