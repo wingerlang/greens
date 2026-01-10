@@ -7,7 +7,7 @@ interface ExerciseEditorModalProps {
     exercise?: ExerciseDefinition; // If undefined, we are creating
     hierarchy: MuscleHierarchy | null;
     onClose: () => void;
-    onSave: (exercise: ExerciseDefinition) => Promise<void>;
+    onSave: (exercise: ExerciseDefinition) => Promise<boolean>;
 }
 
 export const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ exercise, hierarchy, onClose, onSave }) => {
@@ -16,7 +16,8 @@ export const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ exerci
         name_en: '',
         name_sv: '',
         primaryMuscles: [],
-        secondaryMuscles: []
+        secondaryMuscles: [],
+        aliases: []
     });
 
     useEffect(() => {
@@ -29,95 +30,158 @@ export const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ exerci
                 name_en: '',
                 name_sv: '',
                 primaryMuscles: [],
-                secondaryMuscles: []
+                secondaryMuscles: [],
+                aliases: []
             });
         }
     }, [exercise]);
+
+    // Escape to close
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         // Validation
         if (!formData.name_en || !formData.name_sv) {
-            alert("Names are required");
+            alert("Både engelskt och svenskt namn krävs.");
             return;
         }
         await onSave(formData as ExerciseDefinition);
-        onClose();
+        // Parent handles closing on success
+    };
+
+    // Alias handling
+    const [newAlias, setNewAlias] = useState('');
+    const addAlias = () => {
+        if (!newAlias.trim()) return;
+        const currentAliases = formData.aliases || [];
+        if (!currentAliases.includes(newAlias.trim())) {
+            setFormData({ ...formData, aliases: [...currentAliases, newAlias.trim()] });
+        }
+        setNewAlias('');
+    };
+    const removeAlias = (alias: string) => {
+        setFormData({ ...formData, aliases: (formData.aliases || []).filter(a => a !== alias) });
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-                <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="text-lg font-medium text-gray-900">
-                        {exercise ? 'Edit Exercise' : 'Add New Exercise'}
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={onClose} />
+            <div className="relative bg-slate-900 border border-white/10 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
+                <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-slate-900">
+                    <h3 className="text-xl font-bold text-white">
+                        {exercise ? 'Redigera övning' : 'Ny övning'}
                     </h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+                    <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors">
                         <span className="sr-only">Close</span>
-                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        ✕
                     </button>
                 </div>
 
-                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div className="space-y-4">
+                <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-transparent">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        <div className="space-y-6">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">English Name</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Engelskt Namn</label>
                                 <input
                                     type="text"
                                     value={formData.name_en}
-                                    onChange={e => setFormData({...formData, name_en: e.target.value})}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    onChange={e => setFormData({ ...formData, name_en: e.target.value })}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500/50"
+                                    placeholder="e.g. Bench Press"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Swedish Name</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Svenskt Namn</label>
                                 <input
                                     type="text"
                                     value={formData.name_sv}
-                                    onChange={e => setFormData({...formData, name_sv: e.target.value})}
-                                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                    onChange={e => setFormData({ ...formData, name_sv: e.target.value })}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500/50"
+                                    placeholder="e.g. Bänkpress"
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">ID (Internal)</label>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">ID (Internal)</label>
                                 <input
                                     type="text"
                                     value={formData.id}
                                     readOnly={!!exercise}
-                                    onChange={e => setFormData({...formData, id: e.target.value})}
-                                    className="mt-1 block w-full bg-gray-100 border border-gray-300 rounded-md shadow-sm py-2 px-3 text-gray-500 sm:text-sm"
+                                    onChange={e => setFormData({ ...formData, id: e.target.value })}
+                                    className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-4 py-3 text-slate-500 font-mono text-sm"
                                 />
+                            </div>
+
+                            {/* Aliases Section */}
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Alias / Varianter</label>
+                                <div className="flex gap-2 mb-2">
+                                    <input
+                                        type="text"
+                                        value={newAlias}
+                                        onChange={e => setNewAlias(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addAlias())}
+                                        className="flex-1 bg-slate-950 border border-white/10 rounded-xl px-4 py-2 text-white text-sm focus:outline-none focus:border-emerald-500/50"
+                                        placeholder="Lägg till alias..."
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={addAlias}
+                                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-white font-bold text-sm transition-colors"
+                                    >
+                                        +
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {formData.aliases?.map(alias => (
+                                        <span key={alias} className="inline-flex items-center gap-1 bg-slate-800 text-slate-300 px-2 py-1 rounded-lg text-xs font-mono border border-white/5">
+                                            {alias}
+                                            <button
+                                                type="button"
+                                                onClick={() => removeAlias(alias)}
+                                                className="hover:text-rose-400 ml-1 font-bold"
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Muscle Mapping</label>
-                            <MusclePicker
-                                hierarchy={hierarchy}
-                                selectedPrimary={formData.primaryMuscles || []}
-                                selectedSecondary={formData.secondaryMuscles || []}
-                                onChange={(p, s) => setFormData({...formData, primaryMuscles: p, secondaryMuscles: s})}
-                            />
+                            <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Muskelkarta</label>
+                            <div className="bg-slate-950 rounded-xl border border-white/10 p-4 h-[400px] overflow-y-auto">
+                                <MusclePicker
+                                    hierarchy={hierarchy}
+                                    selectedPrimary={formData.primaryMuscles || []}
+                                    selectedSecondary={formData.secondaryMuscles || []}
+                                    onChange={(p, s) => setFormData({ ...formData, primaryMuscles: p, secondaryMuscles: s })}
+                                />
+                            </div>
                         </div>
                     </div>
                 </form>
 
-                <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+                <div className="px-6 py-4 border-t border-white/5 bg-slate-900 flex justify-end gap-3">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 mr-3"
+                        className="px-6 py-2.5 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all"
                     >
-                        Cancel
+                        Avbryt
                     </button>
                     <button
                         onClick={handleSubmit}
-                        className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="px-6 py-2.5 rounded-xl font-bold text-slate-900 bg-emerald-500 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20 transition-all"
                     >
-                        Save
+                        Spara Övning
                     </button>
                 </div>
             </div>
