@@ -44,6 +44,7 @@ export function Layout({ children }: LayoutProps) {
         const breakdownId = params.get('breakdown');
         const registerDate = params.get('registerDate');
         const registerType = params.get('registerType') as ExerciseType | null;
+        const registerInput = params.get('registerInput');
 
         if (breakdownId) {
             const recipe = recipes.find(r => r.id === breakdownId);
@@ -60,7 +61,8 @@ export function Layout({ children }: LayoutProps) {
         if (registerDate) {
             handleOpenTraining({
                 date: registerDate,
-                type: registerType || undefined
+                type: registerType || undefined,
+                input: registerInput || undefined
             });
         }
 

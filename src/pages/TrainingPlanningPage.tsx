@@ -665,7 +665,7 @@ export function TrainingPlanningPage() {
                                 <button
                                     onClick={() => {
                                         if (isPast) {
-                                            navigate(`/logg?registerDate=${day.date}`);
+                                            navigate(`?registerDate=${day.date}&registerInput=löpning`);
                                         } else {
                                             handleOpenModal(day.date);
                                         }
