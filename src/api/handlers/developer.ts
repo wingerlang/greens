@@ -17,13 +17,49 @@ export async function handleDeveloperRoutes(req: Request, url: URL, headers: Hea
         }
 
         if (url.pathname === "/api/developer/structure") {
-            const structure = await service.getFileStructure();
+            // Check for stats query param
+            const showStats = url.searchParams.get("stats") === "true";
+            const structure = showStats
+                ? await service.getExtendedFileStructure()
+                : await service.getFileStructure();
             return new Response(JSON.stringify({ structure }), { headers });
         }
 
         if (url.pathname === "/api/developer/analysis") {
             const issues = await service.analyzeCodebase();
             return new Response(JSON.stringify({ issues }), { headers });
+        }
+
+        if (url.pathname === "/api/developer/functions") {
+            const duplicates = await service.analyzeFunctions();
+            return new Response(JSON.stringify({ duplicates }), { headers });
+        }
+
+        if (url.pathname === "/api/developer/similarity") {
+            const clusters = await service.findSimilarFiles();
+            return new Response(JSON.stringify({ clusters }), { headers });
+        }
+
+        if (url.pathname === "/api/developer/search") {
+            const query = url.searchParams.get("q");
+            if (!query) {
+                return new Response(JSON.stringify({ results: [] }), { headers });
+            }
+            const results = await service.searchCodebase(query);
+            return new Response(JSON.stringify({ results }), { headers });
+        }
+
+        if (url.pathname === "/api/developer/file") {
+            const path = url.searchParams.get("path");
+            if (!path) {
+                return new Response(JSON.stringify({ error: "Path required" }), { status: 400, headers });
+            }
+            try {
+                const content = await service.getFileContent(path);
+                return new Response(JSON.stringify({ content }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: (e as Error).message }), { status: 400, headers });
+            }
         }
 
         if (url.pathname === "/api/developer/report") {
