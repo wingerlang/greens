@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PlannedActivity, generateId } from '../../models/types.ts';
 import { X, Zap, Plus, Trophy, AlertTriangle, Clock } from 'lucide-react';
 import { TrainingSuggestion } from '../../utils/trainingSuggestions.ts';
-import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts'; // Import the new hook!
+import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts';
 import { useData } from '../../context/DataContext.tsx';
 
 interface ActivityModalProps {
@@ -12,8 +12,6 @@ interface ActivityModalProps {
     editingActivity: PlannedActivity | null;
     onSave: (activity: PlannedActivity) => void;
     onDelete?: (id: string) => void;
-    // Context data passed down to avoid prop drilling mania,
-    // but in a real app we might just use useData inside here.
     weeklyStats: any;
     goalProgress: any;
 }
@@ -32,11 +30,14 @@ export function ActivityModal({
 
     // Internal Form State
     const [formType, setFormType] = useState<'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST'>('RUN');
-    const [formDuration, setFormDuration] = useState('00:45'); // Changed default to hh:mm format
+    // New: Sub-category state for UI chips (only for RUN)
+    const [runSubCategory, setRunSubCategory] = useState<'EASY' | 'LONG_RUN' | 'INTERVALS' | 'RECOVERY'>('EASY');
+
+    const [formDuration, setFormDuration] = useState('00:45');
     const [formDistance, setFormDistance] = useState('');
     const [formNotes, setFormNotes] = useState('');
     const [formIntensity, setFormIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
-    const [isRace, setIsRace] = useState(false); // New Race Toggle
+    const [isRace, setIsRace] = useState(false);
 
     // Long Run Settings
     const [showLongRunSettings, setShowLongRunSettings] = useState(false);
@@ -64,20 +65,38 @@ export function ActivityModal({
     };
     const hasExistingActivity = React.useMemo(() => {
         if (!selectedDate) return false;
-        // Check planned (excluding current editing)
         const hasPlanned = plannedActivities.some(a =>
             a.date === selectedDate &&
             a.status !== 'COMPLETED' &&
             a.id !== editingActivity?.id
         );
-        // Check completed
         const hasCompleted = exerciseEntries.some(e => e.date === selectedDate);
         return hasPlanned || hasCompleted;
     }, [selectedDate, plannedActivities, exerciseEntries, editingActivity]);
 
     // 2. Smart Suggestions Hook
-    // We use the new hook here to get "Genius" suggestions
     const smartSuggestions = useSmartTrainingSuggestions(selectedDate, weeklyStats, goalProgress);
+
+    // Smart Note Logic: Update "X km" in notes when distance changes
+    useEffect(() => {
+        if (formDistance && formNotes) {
+            // Regex to match "Xkm" or "X km" or "X.Xkm" etc
+            // We only replace if the context looks like "5km löpning" or "10 km distans"
+            const regex = /(\d+(?:[.,]\d+)?)\s*km/i;
+            const match = formNotes.match(regex);
+
+            if (match) {
+                const currentNoteDist = parseFloat(match[1].replace(',', '.'));
+                const newDist = parseFloat(formDistance);
+
+                // Only update if difference is significant (avoid flickers)
+                if (Math.abs(currentNoteDist - newDist) > 0.1) {
+                    const newNote = formNotes.replace(regex, `${formDistance} km`);
+                    setFormNotes(newNote);
+                }
+            }
+        }
+    }, [formDistance]);
 
     // Initialize Form on Open
     useEffect(() => {
@@ -89,20 +108,17 @@ export function ActivityModal({
                         (editingActivity.title.toLowerCase().includes('hyrox') ? 'HYROX' :
                             (editingActivity.type === 'BIKE' ? 'BIKE' : 'RUN'))));
 
-                // Format duration to hh:mm
-                // First try to extract total duration. Since PlannedActivity structure is flexible,
-                // we often inferred it. If 'durationMinutes' existed (it doesn't on PlannedActivity interface currently,
-                // but we might want to check if it's stored in 'structure' or implicitly).
-                // Let's assume description has it, or we default to 45.
+                // Map category to Run Sub Category
+                if (editingActivity.category === 'LONG_RUN') setRunSubCategory('LONG_RUN');
+                else if (editingActivity.category === 'INTERVALS' || editingActivity.category === 'TEMPO') setRunSubCategory('INTERVALS');
+                else if (editingActivity.category === 'RECOVERY') setRunSubCategory('RECOVERY');
+                else setRunSubCategory('EASY');
 
-                // A better approach: check regex in description " (45 min)" or similar? No, fragile.
-                // Let's check if we can parse it from description if we saved it as `... (hh:mm)`
                 const durMatch = editingActivity.description?.match(/\((\d{2}:\d{2})\)$/);
 
                 if (durMatch) {
                     setFormDuration(durMatch[1]);
                 } else {
-                    // Fallback to 45 min
                     setFormDuration('00:45');
                 }
 
@@ -113,6 +129,7 @@ export function ActivityModal({
             } else {
                 // Create mode
                 setFormType('RUN');
+                setRunSubCategory('EASY');
                 setFormDuration('00:45');
                 setFormDistance('');
                 setFormNotes('');
@@ -122,6 +139,23 @@ export function ActivityModal({
         }
     }, [isOpen, selectedDate, editingActivity]);
 
+    // Helper to handle Run Sub-category clicks
+    const handleRunSubCategoryClick = (sub: 'EASY' | 'LONG_RUN' | 'INTERVALS' | 'RECOVERY') => {
+        setRunSubCategory(sub);
+
+        // Auto-set Intensity & Title logic
+        if (sub === 'RECOVERY') {
+            setFormIntensity('low');
+        } else if (sub === 'INTERVALS') {
+            setFormIntensity('high');
+        } else if (sub === 'LONG_RUN') {
+            setFormIntensity('moderate');
+            // If we have a threshold, maybe suggest it? Kept simple for now.
+        } else {
+            setFormIntensity('moderate');
+        }
+    };
+
     const handleSave = () => {
         if (!selectedDate) return;
 
@@ -129,21 +163,46 @@ export function ActivityModal({
         const [hours, minutes] = formDuration.split(':').map(Number);
         const totalMinutes = (hours * 60) + minutes;
 
+        // Determine Final Category
+        let finalCategory = 'EASY';
+        if (formType === 'RUN') {
+            if (isRace) finalCategory = 'TEMPO'; // Or specific RACE category if added later
+            else finalCategory = runSubCategory;
+        } else if (formType === 'STRENGTH') {
+            finalCategory = 'STRENGTH';
+        } else if (formType === 'HYROX') {
+            finalCategory = 'INTERVALS';
+        } else if (formType === 'REST') {
+            finalCategory = 'REST';
+        }
+
+        // Determine Title
+        let title = 'Löpning';
+        if (formType === 'RUN') {
+             if (isRace) title = 'TÄVLING 🏆';
+             else if (runSubCategory === 'LONG_RUN') title = 'Långpass';
+             else if (runSubCategory === 'INTERVALS') title = 'Intervaller';
+             else if (runSubCategory === 'RECOVERY') title = 'Återhämtning';
+             else title = 'Löpning';
+        } else if (formType === 'STRENGTH') {
+            title = 'Styrka';
+        } else if (formType === 'HYROX') {
+            title = 'Hyrox';
+        } else if (formType === 'REST') {
+            title = 'Vilodag';
+        } else if (formType === 'BIKE') {
+            title = 'Cykling';
+        }
+
         const activityData: PlannedActivity = {
             id: editingActivity?.id || generateId(),
             date: selectedDate,
             type: (formType === 'REST' ? 'REST' : 'RUN') as PlannedActivity['type'],
-            category: (formType === 'RUN' ? (isRace ? 'TEMPO' : 'EASY') : // Map race to Tempo or just Keep as Easy?
-                formType === 'STRENGTH' ? 'STRENGTH' :
-                    formType === 'HYROX' ? 'INTERVALS' :
-                        formType === 'REST' ? 'REST' : 'EASY') as PlannedActivity['category'],
-            title: formType === 'RUN' ? (isRace ? 'TÄVLING 🏆' : 'Löpning') :
-                formType === 'STRENGTH' ? 'Styrka' :
-                    formType === 'HYROX' ? 'Hyrox' :
-                        formType === 'REST' ? 'Vilodag' : 'Cykling',
-            description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : formType + ' pass'} (${formDuration})`,
+            category: finalCategory as PlannedActivity['category'],
+            title: title,
+            description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
             estimatedDistance: formType === 'RUN' && formDistance ? parseFloat(formDistance) : 0,
-            targetPace: '', // Could calculate from dist/time
+            targetPace: '',
             targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
             structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
             status: 'PLANNED' as const,
@@ -157,11 +216,20 @@ export function ActivityModal({
     const handleApplySuggestion = (s: TrainingSuggestion) => {
         if (!selectedDate) return;
 
+        // Map suggestion type to form category
+        let category = 'EASY';
+        if (s.type === 'STRENGTH') category = 'STRENGTH';
+        else if (s.type === 'REST') category = 'REST';
+        else if (s.type === 'HYROX') category = 'INTERVALS';
+        else if (s.label.includes('Långpass')) category = 'LONG_RUN';
+        else if (s.label.includes('Intervaller') || s.label.includes('Tempo') || s.label.includes('Kvalitet')) category = 'INTERVALS';
+        else if (s.label.includes('Återhämtning')) category = 'RECOVERY';
+
         const newActivity: PlannedActivity = {
             id: generateId(),
             date: selectedDate,
             type: (s.type === 'STRENGTH' ? 'STRENGTH' : s.type === 'REST' ? 'REST' : 'RUN') as PlannedActivity['type'],
-            category: s.type === 'STRENGTH' ? 'STRENGTH' : s.type === 'REST' ? 'REST' : s.type === 'HYROX' ? 'INTERVALS' : 'EASY',
+            category: category as PlannedActivity['category'],
             title: s.label,
             description: s.description,
             estimatedDistance: s.distance || 0,
@@ -173,6 +241,17 @@ export function ActivityModal({
 
         onSave(newActivity);
         onClose();
+    };
+
+    // Get Suggestion Color
+    const getSuggestionColor = (s: TrainingSuggestion) => {
+        if (s.label.includes('Måljakt')) return 'from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400';
+        if (s.type === 'STRENGTH') return 'from-purple-50 to-fuchsia-50 dark:from-purple-900/20 dark:to-fuchsia-900/20 border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-400';
+        if (s.label.includes('Återhämtning') || s.type === 'REST') return 'from-blue-50 to-sky-50 dark:from-blue-900/20 dark:to-sky-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400';
+        if (s.label.includes('Intervaller') || s.label.includes('Tempo') || s.label.includes('Kvalitet') || s.intensity === 'high') return 'from-rose-50 to-orange-50 dark:from-rose-900/20 dark:to-orange-900/20 border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-400';
+
+        // Default (Distance/Vanlig)
+        return 'from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300';
     };
 
     if (!isOpen) return null;
@@ -216,35 +295,33 @@ export function ActivityModal({
                                 <span className="text-xs font-black uppercase tracking-wider text-slate-400">Smarta Förslag</span>
                             </div>
                             <div className="space-y-2">
-                                {smartSuggestions.map(s => (
-                                    <button
-                                        key={s.id}
-                                        onClick={() => handleApplySuggestion(s)}
-                                        className="w-full p-3 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 border border-amber-100 dark:border-amber-900/30 rounded-xl flex items-center justify-between group hover:scale-[1.02] transition-transform text-left"
-                                    >
-                                        <div>
-                                            <div className="text-xs font-black text-slate-900 dark:text-white mb-0.5">{s.label}</div>
-                                            <div className="text-[10px] text-slate-500 font-medium">{s.description}</div>
-                                        </div>
-                                        <div className="p-1.5 bg-white dark:bg-slate-800 rounded-full shadow-sm text-amber-500">
-                                            <Plus size={14} />
-                                        </div>
-                                    </button>
-                                ))}
+                                {smartSuggestions.map(s => {
+                                    const colorClasses = getSuggestionColor(s);
+                                    return (
+                                        <button
+                                            key={s.id}
+                                            onClick={() => handleApplySuggestion(s)}
+                                            className={`w-full p-3 bg-gradient-to-r border rounded-xl flex items-center justify-between group hover:scale-[1.02] transition-transform text-left ${colorClasses}`}
+                                        >
+                                            <div>
+                                                <div className="text-xs font-black mb-0.5">{s.label}</div>
+                                                <div className="text-[10px] opacity-80 font-medium">{s.description}</div>
+                                            </div>
+                                            <div className="p-1.5 bg-white/50 dark:bg-slate-800/50 rounded-full shadow-sm">
+                                                <Plus size={14} />
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     )}
 
-                    {/* Smart Average Preset (User Request) */}
+                    {/* Smart Average Preset */}
                     {formType === 'RUN' && !editingActivity && (
                         <div className="mb-6">
-                            {/* Calculation Logic Inline (or better, memoized above) */}
                             {(() => {
-                                const history = exerciseEntries || []; // Using exerciseEntries as proxy for history if universalActivities not passed. 
-                                // Wait, ActivityModal receives `weeklyStats` but not full history.
-                                // We have `exerciseEntries` from useData().
-
-                                // Filter running, last 5 weeks
+                                const history = exerciseEntries || [];
                                 const now = new Date();
                                 const fiveWeeksAgo = new Date();
                                 fiveWeeksAgo.setDate(now.getDate() - 35);
@@ -256,7 +333,7 @@ export function ActivityModal({
                                     !e.excludeFromStats
                                 );
 
-                                if (recentRuns.length < 3) return null; // Need some data
+                                if (recentRuns.length < 3) return null;
 
                                 const avgDistance = recentRuns.reduce((sum, r) => sum + (r.distance || 0), 0) / recentRuns.length;
                                 const formattedAvg = avgDistance.toFixed(1);
@@ -307,6 +384,30 @@ export function ActivityModal({
                                 Vila
                             </button>
                         </div>
+
+                        {/* Run Sub-Category Selector */}
+                        {formType === 'RUN' && (
+                            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                                {[
+                                    { id: 'EASY', label: 'Distans', color: 'blue' },
+                                    { id: 'LONG_RUN', label: 'Långpass', color: 'indigo' },
+                                    { id: 'INTERVALS', label: 'Intervall/Tempo', color: 'rose' },
+                                    { id: 'RECOVERY', label: 'Återhämtning', color: 'emerald' },
+                                ].map((sub) => (
+                                    <button
+                                        key={sub.id}
+                                        onClick={() => handleRunSubCategoryClick(sub.id as any)}
+                                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all border ${
+                                            runSubCategory === sub.id
+                                                ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md transform scale-105`
+                                                : `bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-${sub.color}-300`
+                                        }`}
+                                    >
+                                        {sub.label}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
 
                         {/* Race Toggle & Long Run Settings */}
                         {formType === 'RUN' && (
