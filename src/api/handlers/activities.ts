@@ -31,9 +31,9 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
     if (url.pathname === "/api/activities" && method === "POST") {
         try {
             const activity = await req.json() as UniversalActivity;
-            if (activity.userId !== session.userId) {
-                return new Response(JSON.stringify({ error: "UserId mismatch" }), { status: 403, headers });
-            }
+            // Always enforce session user
+            activity.userId = session.userId;
+
             await activityRepo.saveActivity(activity);
             return new Response(JSON.stringify({ success: true, id: activity.id }), { status: 200, headers });
         } catch (e) {
@@ -138,6 +138,76 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 originalActivities,
                 separatedCount: originalActivities.length
             }), { status: 200, headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
+
+    // PATCH /api/activities/:id - Partial update (e.g. title)
+    if (url.pathname.startsWith("/api/activities/") && method === "PATCH") {
+        try {
+            const parts = url.pathname.split('/');
+            const activityId = parts[3];
+            const dateParams = url.searchParams.get('date');
+
+            const updates = await req.json();
+
+            let activity: UniversalActivity | null = null;
+
+            // 1. Try direct lookup if date provided
+            if (dateParams) {
+                activity = await activityRepo.getActivity(session.userId, dateParams, activityId);
+            }
+
+            // 2. Fallback: Scan if not found or no date
+            if (!activity) {
+                // Determine search range - could be huge, but for now let's try reasonable bounds or just scan all if needed.
+                // Since this is a "fix" operation, scanning all for user is acceptable performance-wise temporarily.
+                const all = await activityRepo.getAllActivities(session.userId);
+                activity = all.find(a => a.id === activityId) || null;
+            }
+
+            if (!activity) {
+                return new Response(JSON.stringify({ error: "Activity not found" }), { status: 404, headers });
+            }
+
+            // Apply updates
+            // Map flat "title" to plan.title
+            if (updates.title !== undefined) {
+                if (!activity.plan) {
+                    // Create minimal valid plan section
+                    const type = activity.performance?.activityType || 'other';
+                    activity.plan = {
+                        title: updates.title,
+                        activityType: type,
+                        distanceKm: activity.performance?.distanceKm || 0
+                    };
+                } else {
+                    activity.plan.title = updates.title;
+                }
+            }
+
+            // Map flat "notes" to plan.description or performance.notes
+            if (updates.notes !== undefined) {
+                if (!activity.performance) {
+                    activity.performance = {
+                        durationMinutes: 0,
+                        calories: 0,
+                        notes: updates.notes
+                    };
+                } else {
+                    activity.performance.notes = updates.notes;
+                }
+
+                // Also update plan description if it exists
+                if (activity.plan) activity.plan.description = updates.notes;
+            }
+
+            activity.updatedAt = new Date().toISOString();
+            await activityRepo.saveActivity(activity);
+
+            return new Response(JSON.stringify({ success: true, activity }), { status: 200, headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
         }

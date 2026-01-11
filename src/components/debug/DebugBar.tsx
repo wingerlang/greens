@@ -87,15 +87,15 @@ export default function DebugBar() {
             });
             // Fallback heuristics for custom modals
             if (modals.length === 0) {
-                 // Check for our specific common modal classes if role is missing
-                 // This is heuristic-based
-                 document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => {
-                     // Try to find a named child component
-                     const info = getComponentInfo(el as HTMLElement);
-                     if (info?.name && info.name !== 'div') {
-                         modals.push(info.name);
-                     }
-                 });
+                // Check for our specific common modal classes if role is missing
+                // This is heuristic-based
+                document.querySelectorAll('.fixed.inset-0.z-50').forEach(el => {
+                    // Try to find a named child component
+                    const info = getComponentInfo(el as HTMLElement);
+                    if (info?.name && info.name !== 'div') {
+                        modals.push(info.name);
+                    }
+                });
             }
             setActiveModals(modals);
         }, 1000);
@@ -166,16 +166,16 @@ export default function DebugBar() {
 
                     {/* Quick Stats */}
                     <div className="flex items-center gap-3 text-[10px] text-slate-500">
-                         <div className="flex items-center gap-1">
-                             <Globe size={12} />
-                             <span className="truncate max-w-[150px] text-slate-300" title="Current Route">{currentRoute}</span>
-                         </div>
-                         {activeModals.length > 0 && (
-                             <div className="flex items-center gap-1 text-yellow-500">
-                                 <Layers size={12} />
-                                 <span className="font-bold">{activeModals.length} Modal(s)</span>
-                             </div>
-                         )}
+                        <div className="flex items-center gap-1">
+                            <Globe size={12} />
+                            <span className="truncate max-w-[150px] text-slate-300" title="Current Route">{currentRoute}</span>
+                        </div>
+                        {activeModals.length > 0 && (
+                            <div className="flex items-center gap-1 text-yellow-500">
+                                <Layers size={12} />
+                                <span className="font-bold">{activeModals.length} Modal(s)</span>
+                            </div>
+                        )}
                     </div>
 
                     {currentRequest && (
@@ -189,8 +189,8 @@ export default function DebugBar() {
                     )}
                 </div>
                 <div className="flex items-center gap-4">
-                     <span className="opacity-60 hidden sm:inline">{requests.length} requests</span>
-                     {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <span className="opacity-60 hidden sm:inline">{requests.length} requests</span>
+                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                 </div>
             </div>
 
@@ -251,8 +251,8 @@ export default function DebugBar() {
                                             </Card>
 
                                             <Card title="Current Route Info">
-                                                 <Row label="Path" value={currentRoute} />
-                                                 <Row label="Active Modals" value={activeModals.join(', ') || 'None'} />
+                                                <Row label="Path" value={currentRoute} />
+                                                <Row label="Active Modals" value={activeModals.join(', ') || 'None'} />
                                             </Card>
 
                                             {inspectedElement.props && (
@@ -301,7 +301,14 @@ export default function DebugBar() {
 
                             {activeTab === 'overview' && profile && (
                                 <div className="grid grid-cols-2 gap-4">
-                                    <Card title="Request Info">
+                                    <Card title="Request Info" action={
+                                        <button
+                                            onClick={() => navigator.clipboard.writeText(JSON.stringify(profile, null, 2))}
+                                            className="text-[10px] bg-slate-800 hover:bg-slate-700 text-white px-2 py-0.5 rounded transition-colors"
+                                        >
+                                            COPY JSON
+                                        </button>
+                                    }>
                                         <Row label="Method" value={profile.method} />
                                         <Row label="URL" value={profile.url} />
                                         <Row label="Status" value={profile.status} />
@@ -316,6 +323,24 @@ export default function DebugBar() {
                                         <div className="col-span-2 p-4 bg-red-900/20 border border-red-900 text-red-400 rounded">
                                             <h3 className="font-bold mb-1">Error</h3>
                                             <pre>{profile.error}</pre>
+                                        </div>
+                                    )}
+                                    {profile.payload && (
+                                        <div className="col-span-2">
+                                            <Card title="Payload">
+                                                <div className="bg-slate-950 p-2 rounded overflow-auto max-h-[200px] text-[10px] font-mono text-green-300">
+                                                    <pre>{typeof profile.payload === 'string' ? profile.payload : JSON.stringify(profile.payload, null, 2)}</pre>
+                                                </div>
+                                            </Card>
+                                        </div>
+                                    )}
+                                    {profile.responseBody && (
+                                        <div className="col-span-2">
+                                            <Card title="Response Body">
+                                                <div className="bg-slate-950 p-2 rounded overflow-auto max-h-[200px] text-[10px] font-mono text-blue-300">
+                                                    <pre>{typeof profile.responseBody === 'string' ? profile.responseBody : JSON.stringify(profile.responseBody, null, 2)}</pre>
+                                                </div>
+                                            </Card>
                                         </div>
                                     )}
                                 </div>
@@ -376,10 +401,13 @@ function TabButton({ active, onClick, icon, label }: { active: boolean, onClick:
     );
 }
 
-function Card({ title, children }: { title: string, children: React.ReactNode }) {
+function Card({ title, children, action }: { title: string, children: React.ReactNode, action?: React.ReactNode }) {
     return (
         <div className="bg-slate-900 border border-slate-800 rounded p-4">
-            <h3 className="font-bold mb-3 text-slate-400 uppercase tracking-wider text-[10px]">{title}</h3>
+            <div className="flex justify-between items-center mb-3">
+                <h3 className="font-bold text-slate-400 uppercase tracking-wider text-[10px]">{title}</h3>
+                {action}
+            </div>
             <div className="space-y-2">{children}</div>
         </div>
     );

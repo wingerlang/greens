@@ -25,6 +25,8 @@ export interface DebugProfile {
     };
     logs: DebugLog[];
     error?: string;
+    payload?: any;
+    responseBody?: any;
 }
 
 export interface RequestSummary {

@@ -38,13 +38,14 @@ const kvHandler: ProxyHandler<Deno.Kv> = {
                 if (promise instanceof Promise) {
                     return promise.then((result: any) => {
                         const duration = performance.now() - start;
+                        const details = prop === 'list' ? { count: 'stream' } : (prop === 'set' ? args[1] : undefined);
                         addDebugLog({
                             type: 'kv',
                             operation: String(prop),
                             key: args[0] ? JSON.stringify(args[0]) : undefined,
                             duration,
                             timestamp: Date.now(),
-                            details: prop === 'list' ? { count: 'stream' } : undefined // simplified
+                            details
                         });
                         return result;
                     }).catch((err: any) => {
@@ -103,7 +104,8 @@ function createAtomicProxy(atomic: Deno.AtomicOperation): Deno.AtomicOperation {
                             operation: `atomic.${String(prop)}`,
                             key: args[0] ? JSON.stringify(args[0]) : undefined,
                             duration: 0, // sync setup
-                            timestamp: Date.now()
+                            timestamp: Date.now(),
+                            details: String(prop) === 'set' ? args[1] : undefined
                         });
                     }
                     return original.apply(target, args);

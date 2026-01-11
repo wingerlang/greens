@@ -93,7 +93,7 @@ export function ActivityDetailModal({
     // Edit Form State
     const [editForm, setEditForm] = useState({
         type: activity.type,
-        duration: activity.durationMinutes.toString(),
+        duration: (activity.durationMinutes || 0).toString(),
         intensity: activity.intensity || 'moderate',
         notes: activity.notes || '',
         subType: activity.subType || 'default',
@@ -103,6 +103,15 @@ export function ActivityDetailModal({
 
     const { exerciseEntries, universalActivities, updateExercise, deleteExercise, addExercise, calculateExerciseCalories } = useData();
     const { token } = useAuth();
+
+    // Local title state for immediate optimistic updates
+    const [displayTitle, setDisplayTitle] = useState(universalActivity?.plan?.title || activity.title || activity.type || 'Activity');
+
+    // Sync display title if prop changes (e.g. on load)
+    useEffect(() => {
+        const t = universalActivity?.plan?.title || activity.title || activity.type;
+        if (t) setDisplayTitle(t);
+    }, [universalActivity?.plan?.title, activity.title, activity.type]);
 
     // Check if this is a manually merged activity (using our new merge system)
     const isMergedActivity = universalActivity?.mergeInfo?.isMerged === true;
@@ -196,10 +205,11 @@ export function ActivityDetailModal({
     const splits = perf?.splits || [];
     const hasSplits = splits.length > 0;
 
-    // Analysis visibility criteria
+    // Analysis visibility criteria - Strict check for meaningful content
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
     const hasWorkoutStructure = parsedWorkout.segments.length > 0;
-    const isWorthyOfAnalysis = hasSplits || hasHeartRate || hasWorkoutStructure;
+    // Only show analysis if we have splits (intervals), structure, or HR data on non-strength activities
+    const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure;
     const showStravaCard = activity.source === 'strava' || isTrulyMerged;
 
     // Unmerge handler
@@ -323,6 +333,106 @@ export function ActivityDetailModal({
             onClose();
         }
     };
+
+    // Update Title Helper
+    const handleUpdateTitle = async (newTitle: string) => {
+        if (!newTitle) return;
+        setDisplayTitle(newTitle); // Immediate UI update
+        updateExercise(activity.id, { title: newTitle });
+
+        // Persist to backend
+        if (token) {
+            try {
+                const dateParam = activity.date.split('T')[0];
+                const res = await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ title: newTitle })
+                });
+
+                if (res.status === 404) {
+                    // Fallback to Upsert (POST) if not found (e.g. fresh Strava activity)
+                    const { userId: _u, ...activityNoUser } = activity;
+                    const updatedActivity = {
+                        ...activityNoUser,
+                        plan: { ...(activity.plan || {}), title: newTitle, activityType: activity.performance?.activityType || 'other' }
+                    };
+                    await fetch('/api/activities', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(updatedActivity)
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to persist title:", e);
+            }
+        }
+    };
+
+    // Enforce Strava Title Priority on Mount
+    const titleCheckedRef = React.useRef<string | null>(null);
+
+    useEffect(() => {
+        // Reset check if activity changes (though modal usually remounts, this handles prop changes)
+        if (titleCheckedRef.current !== activity.id) {
+            titleCheckedRef.current = null;
+        }
+
+        if (titleCheckedRef.current === activity.id) return;
+
+        if (isTrulyMerged && originalActivities.length > 0) {
+            const stravaSource = originalActivities.find(a => a.performance?.source?.source === 'strava');
+            const currentTitle = universalActivity?.plan?.title || activity.title;
+            const stravaTitle = stravaSource?.plan?.title || stravaSource?.performance?.notes;
+
+            // If we have a Strava title, and the current title is likely a default/fallback (or just different),
+            // we update it. We check if it's NOT already the Strava title.
+            // We use a loose check or just force it effectively.
+            if (stravaTitle && currentTitle !== stravaTitle) {
+                setDisplayTitle(stravaTitle); // Sync local state
+                updateExercise(activity.id, { title: stravaTitle });
+
+                // Persist auto-fix
+                if (token) {
+                    const dateParam = activity.date.split('T')[0];
+                    fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                        method: 'PATCH',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ title: stravaTitle })
+                    }).then(async (res) => {
+                        if (res.status === 404) {
+                            // Fallback to Upsert
+                            const { userId: _u, ...activityNoUser } = activity;
+                            const updatedActivity = {
+                                ...activityNoUser,
+                                plan: { ...(activity.plan || {}), title: stravaTitle, activityType: activity.performance?.activityType || 'other' }
+                            };
+                            await fetch('/api/activities', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify(updatedActivity)
+                            });
+                        }
+                    }).catch(e => console.error("Auto-persist failed:", e));
+                }
+            }
+
+            // Mark as checked so we don't loop
+            titleCheckedRef.current = activity.id;
+        }
+    }, [isTrulyMerged, originalActivities, universalActivity?.plan?.title, activity.title, activity.id, token]);
 
     // ESC to close
     useEffect(() => {
@@ -472,7 +582,7 @@ export function ActivityDetailModal({
                             <div>
                                 <div className="flex items-center gap-3">
                                     <h2 className="text-2xl font-black text-white capitalize flex items-center gap-3">
-                                        {universalActivity?.plan?.title || (activity.notes && activity.notes.length < 50 && !activity.notes.includes('\n') ? activity.notes : activity.type)}
+                                        {displayTitle}
                                         {/* Edit Button */}
                                         {!isMerged && activity.source !== 'strava' && (
                                             <button
@@ -669,11 +779,25 @@ export function ActivityDetailModal({
                                                 {/* Title */}
                                                 <tr className="hover:bg-white/5 transition-colors">
                                                     <td className="px-6 py-4 font-bold text-slate-400">Namn</td>
-                                                    {originalActivities.map((a) => (
-                                                        <td key={a.id} className="px-6 py-4 text-center text-slate-300 font-mono text-xs truncate max-w-[150px]" title={a.plan?.title || a.performance?.notes || ''}>
-                                                            {a.plan?.title || a.performance?.notes || '-'}
+                                                    {originalActivities.map((a) => {
+                                                        const sourceTitle = a.plan?.title || a.performance?.notes || '-';
+                                                        const isActive = displayTitle === sourceTitle;
+
+                                                        return (<td key={a.id} className="px-6 py-4 text-center">
+                                                            <button
+                                                                onClick={() => handleUpdateTitle(sourceTitle)}
+                                                                disabled={isActive}
+                                                                className={`font-mono text-xs truncate max-w-[150px] px-2 py-1 rounded transition-all ${isActive
+                                                                    ? 'bg-emerald-500/20 text-emerald-400 font-bold cursor-default ring-1 ring-emerald-500/50'
+                                                                    : 'text-slate-300 hover:bg-white/10 hover:text-white cursor-pointer'
+                                                                    }`}
+                                                                title={`Använd detta namn: ${sourceTitle}`}
+                                                            >
+                                                                {sourceTitle}
+                                                            </button>
                                                         </td>
-                                                    ))}
+                                                        );
+                                                    })}
                                                     <td className="px-6 py-4 text-right font-bold text-white font-mono text-xs">
                                                         {universalActivity?.plan?.title || activity.title || activity.type}
                                                     </td>
@@ -1170,7 +1294,18 @@ export function ActivityDetailModal({
                         {/* RAW DATA VIEW */}
                         {viewMode === 'raw' && (
                             <div className="space-y-4">
-                                <h3 className="text-sm font-bold text-slate-400 uppercase">📄 Rådata för felsökning</h3>
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-bold text-slate-400 uppercase">📄 Rådata för felsökning</h3>
+                                    <button
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(JSON.stringify(activity, null, 2));
+                                            // Optional: visual feedback could be added here, but keeping it simple as requested
+                                        }}
+                                        className="text-[10px] bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded transition-colors uppercase font-bold tracking-wider"
+                                    >
+                                        Kopiera JSON
+                                    </button>
+                                </div>
                                 <div className="bg-slate-950 border border-white/5 rounded-xl p-4 overflow-auto max-h-[50vh] custom-scrollbar">
                                     <pre className="text-[10px] text-slate-500 font-mono leading-relaxed">
                                         {JSON.stringify(activity, null, 2)}
@@ -1375,7 +1510,7 @@ export function ActivityDetailModal({
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">⚡ Sammanslagen aktivitet</h3>
                                     <span className="text-[10px] text-slate-500 uppercase font-mono">
-                                        Skapad {mergeInfo?.mergedAt ? formatSwedishDate(mergeInfo.mergedAt.split('T')[0]) : '-'}
+                                        Skapad {effectiveMergeInfo?.mergedAt ? formatSwedishDate(effectiveMergeInfo.mergedAt.split('T')[0]) : '-'}
                                     </span>
                                 </div>
 
