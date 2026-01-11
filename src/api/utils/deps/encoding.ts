@@ -17,9 +17,12 @@ export function encodeBase64(input: string | Uint8Array | ArrayBuffer | SharedAr
         return btoa(binary);
     } else {
         // Node.js
+        // @ts-ignore Buffer is Node.js specific
         if (typeof input === 'string') {
+            // @ts-ignore Buffer is Node.js specific
             return Buffer.from(input).toString('base64');
         }
+        // @ts-ignore Buffer is Node.js specific
         return Buffer.from(input as any).toString('base64');
     }
 }

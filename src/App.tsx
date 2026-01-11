@@ -65,6 +65,7 @@ import { DeveloperDashboard } from './pages/developer/DeveloperDashboard.tsx';
 import { DeveloperLayout } from './pages/developer/DeveloperLayout.tsx';
 import { DeveloperExplorer } from './pages/developer/DeveloperExplorer.tsx';
 import { DeveloperAnalysis } from './pages/developer/DeveloperAnalysis.tsx';
+import { DeveloperTodos } from './pages/developer/DeveloperTodos.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -146,6 +147,7 @@ export function App() {
                                                     </RequireRole>
                                                 }>
                                                     <Route index element={<DeveloperDashboard />} />
+                                                    <Route path="todos" element={<DeveloperTodos />} />
                                                     <Route path="explorer" element={<DeveloperExplorer />} />
                                                     <Route path="analysis" element={<DeveloperAnalysis />} />
                                                 </Route>
