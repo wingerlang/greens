@@ -40,6 +40,15 @@ export function useSmartTrainingSuggestions(
                 if (hasLongRunPlanned) return false;
             }
 
+            // Filter "Måljakt" if we already have a run planned for TODAY (don't suggest chasing goal if we already have a plan to execute)
+            if (suggestion.label.includes('Måljakt')) {
+                const hasRunToday = plannedActivities.some(a =>
+                    a.date === selectedDate &&
+                    (a.type === 'RUN' || a.category === 'EASY' || a.category === 'INTERVALS' || a.category === 'TEMPO' || a.category === 'LONG_RUN')
+                );
+                if (hasRunToday) return false;
+            }
+
             // Filter Strength if done or planned today
             if (suggestion.type === 'STRENGTH') {
                 const hasStrengthToday = plannedActivities.some(a =>
@@ -54,7 +63,7 @@ export function useSmartTrainingSuggestions(
 
         return filteredSuggestions;
 
-    }, [selectedDate, exerciseEntries, weeklyStats, goalProgress, plannedActivities, performanceGoals]);
+    }, [selectedDate, exerciseEntries, weeklyStats, goalProgress, plannedActivities, performanceGoals, currentUser]);
 }
 
 // Helper for week number
