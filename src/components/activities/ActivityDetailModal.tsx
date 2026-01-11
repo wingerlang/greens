@@ -106,7 +106,12 @@ export function ActivityDetailModal({
 
     // Check if this is a manually merged activity (using our new merge system)
     const isMergedActivity = universalActivity?.mergeInfo?.isMerged === true;
-    const mergeInfo = universalActivity?.mergeInfo;
+    const mergeData = activity._mergeData;
+    const isMerged = activity.source === 'merged' && !!mergeData;
+
+    // Unified Merge State
+    const isTrulyMerged = isMergedActivity || isMerged;
+    const effectiveMergeInfo = universalActivity?.mergeInfo || mergeData;
 
     // Check if THIS activity has been merged INTO another activity (i.e., it's a component)
     const isMergedInto = universalActivity?.mergedIntoId != null;
@@ -126,17 +131,54 @@ export function ActivityDetailModal({
     useEffect(() => {
         if (isEditing && editForm.subType === 'default' && parsedWorkout?.suggestedSubType &&
             parsedWorkout.suggestedSubType !== 'default' && parsedWorkout.suggestedSubType !== 'tempo') {
-            // Note: 'tempo' in parser currently mapped to 'interval' usually, but double checking valid types
-            // Valid types: interval, long-run, race, tonnage, competition
             setEditForm(prev => ({ ...prev, subType: parsedWorkout.suggestedSubType as any }));
         }
     }, [isEditing, parsedWorkout]);
 
     // Get original activities for merged view
     const originalActivities = React.useMemo(() => {
-        if (!isMergedActivity || !mergeInfo?.originalActivityIds) return [];
-        return universalActivities.filter(u => mergeInfo.originalActivityIds.includes(u.id));
-    }, [isMergedActivity, mergeInfo, universalActivities]);
+        // 1. Try standard lookup via IDs
+        if (isTrulyMerged && effectiveMergeInfo?.originalActivityIds?.length > 0) {
+            const found = universalActivities.filter(u => effectiveMergeInfo.originalActivityIds!.includes(u.id));
+            if (found.length > 0) return found;
+        }
+
+        // 2. Fallback: Reconstruct from _mergeData logic (Legacy/Manual merge)
+        if (isTrulyMerged && mergeData) {
+            const reconstructed: UniversalActivity[] = [];
+
+            // A. Strength Part
+            if (mergeData.strengthWorkout) {
+                reconstructed.push({
+                    id: 'strength-part',
+                    userId: activity.userId || '',
+                    date: activity.date,
+                    status: 'COMPLETED',
+                    plan: {
+                        title: mergeData.strengthWorkout.title || 'Strength Workout',
+                        activityType: 'strength',
+                        distanceKm: 0
+                    },
+                    performance: {
+                        source: { source: 'strength' },
+                        durationMinutes: mergeData.strengthWorkout.durationMinutes || 0,
+                        calories: mergeData.strengthWorkout.estimatedCalories || 0,
+                        activityType: 'strength',
+                        notes: 'Reconstructed from StrengthLog data'
+                    }
+                } as UniversalActivity);
+            }
+
+            // B. Strava/Cardio Part
+            if (mergeData.universalActivity) {
+                reconstructed.push(mergeData.universalActivity);
+            }
+
+            return reconstructed;
+        }
+
+        return [];
+    }, [isTrulyMerged, effectiveMergeInfo, universalActivities, mergeData, activity]);
 
     // Combine manual entries with mapped universal activities
     const allActivities = React.useMemo(() => {
@@ -148,8 +190,6 @@ export function ActivityDetailModal({
 
     const perfBreakdown = getPerformanceBreakdown(activity, allActivities);
     const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
-    const mergeData = activity._mergeData;
-    const isMerged = activity.source === 'merged' && mergeData;
     const strengthWorkout = mergeData?.strengthWorkout;
 
     // Derived splits helper
@@ -160,7 +200,7 @@ export function ActivityDetailModal({
     const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
     const hasWorkoutStructure = parsedWorkout.segments.length > 0;
     const isWorthyOfAnalysis = hasSplits || hasHeartRate || hasWorkoutStructure;
-    const showStravaCard = activity.source === 'strava' || isMergedActivity || isMerged;
+    const showStravaCard = activity.source === 'strava' || isTrulyMerged;
 
     // Unmerge handler
     const handleUnmerge = async () => {
@@ -450,7 +490,7 @@ export function ActivityDetailModal({
                                         let stravaTitle = null;
                                         if (activity.source === 'strava' && activity.externalId) {
                                             stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
-                                        } else if (isMergedActivity) {
+                                        } else if (isTrulyMerged) {
                                             const stravaOriginals = originalActivities
                                                 .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
                                                 .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
@@ -463,7 +503,7 @@ export function ActivityDetailModal({
                                         }
 
                                         // Merged Badge (Priority)
-                                        if (isMergedActivity || isMerged) {
+                                        if (isTrulyMerged) {
                                             if (stravaLink) {
                                                 return (
                                                     <a
@@ -478,9 +518,12 @@ export function ActivityDetailModal({
                                                 );
                                             }
                                             return (
-                                                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 shadow-sm">
+                                                <button
+                                                    onClick={() => setActiveTab('merge')}
+                                                    className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-500/20 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                                                >
                                                     <span>⚡</span> Sammanslagen
-                                                </div>
+                                                </button>
                                             );
                                         }
 
@@ -551,7 +594,7 @@ export function ActivityDetailModal({
                                     Splits
                                 </button>
                             )}
-                            {isMergedActivity && (
+                            {isTrulyMerged && (
                                 <button
                                     onClick={() => setActiveTab('merge')}
                                     className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 flex items-center gap-2 ${activeTab === 'merge' ? 'text-amber-400 border-amber-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
@@ -592,7 +635,7 @@ export function ActivityDetailModal({
 
                         {/* DIFF VIEW */}
                         {/* MERGE TAB CONTENT - DIFF TABLE */}
-                        {isMergedActivity && activeTab === 'merge' && (
+                        {isTrulyMerged && activeTab === 'merge' && (
                             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                                 <div className="flex items-center justify-between">
                                     <h3 className="text-xl font-black text-white flex items-center gap-2">
@@ -717,7 +760,7 @@ export function ActivityDetailModal({
                                                     let stravaLink = null;
                                                     if (activity.source === 'strava' && activity.externalId) {
                                                         stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
-                                                    } else if (isMergedActivity) {
+                                                    } else if (isTrulyMerged) {
                                                         const stravaOriginals = originalActivities
                                                             .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
                                                             .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
@@ -789,7 +832,7 @@ export function ActivityDetailModal({
                                                 </div>
 
                                                 {/* Heart Rate */}
-                                                {(perf?.avgHeartRate || activity.avgHeartRate) && (
+                                                {(!!perf?.avgHeartRate || !!activity.avgHeartRate) && (
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Medelpuls</span>
                                                         <div className="flex items-baseline gap-1">
@@ -801,7 +844,7 @@ export function ActivityDetailModal({
                                                 )}
 
                                                 {/* Watts */}
-                                                {perf?.averageWatts && (
+                                                {!!perf?.averageWatts && (
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Effekt</span>
                                                         <div className="flex items-baseline gap-1">
@@ -813,7 +856,7 @@ export function ActivityDetailModal({
                                                 )}
 
                                                 {/* Max Speed */}
-                                                {perf?.maxSpeed && (
+                                                {!!perf?.maxSpeed && (
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Maxfart</span>
                                                         <div className="flex items-baseline gap-1">
@@ -824,25 +867,25 @@ export function ActivityDetailModal({
                                                 )}
 
                                                 {/* Achievements */}
-                                                {(perf?.achievementCount || perf?.prCount || perf?.kudosCount) && (
+                                                {(perf?.achievementCount || perf?.prCount || perf?.kudosCount) ? (
                                                     <div className="flex flex-col col-span-2">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Engagemang & Prestationer</span>
                                                         <div className="flex items-center gap-4">
-                                                            {perf?.prCount && perf.prCount > 0 && (
+                                                            {(perf?.prCount || 0) > 0 && (
                                                                 <div className="flex items-center gap-1.5 sh-tooltip" title={`${perf.prCount} Personbästa`}>
                                                                     <span className="text-orange-400">⚡</span>
                                                                     <span className="text-lg font-black text-white">{perf.prCount}</span>
                                                                     <span className="text-[9px] text-slate-500 uppercase font-bold">PB</span>
                                                                 </div>
                                                             )}
-                                                            {perf?.achievementCount && perf.achievementCount > 0 && (
+                                                            {(perf?.achievementCount || 0) > 0 && (
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="text-yellow-400">🏆</span>
                                                                     <span className="text-lg font-black text-white">{perf.achievementCount}</span>
                                                                     <span className="text-[9px] text-slate-500 uppercase font-bold">Awards</span>
                                                                 </div>
                                                             )}
-                                                            {perf?.kudosCount && perf.kudosCount > 0 && (
+                                                            {(perf?.kudosCount || 0) > 0 && (
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="text-pink-400">❤️</span>
                                                                     <span className="text-lg font-black text-white">{perf.kudosCount}</span>
@@ -851,7 +894,7 @@ export function ActivityDetailModal({
                                                             )}
                                                         </div>
                                                     </div>
-                                                )}
+                                                ) : null}
                                             </div>
                                         </div>
 

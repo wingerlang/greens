@@ -48,7 +48,7 @@ export const UsersModule: React.FC = () => {
                                     <select
                                         value={user.role}
                                         onChange={(e) => {
-                                            const newRole = e.target.value as 'user' | 'admin';
+                                            const newRole = e.target.value as 'user' | 'admin' | 'developer';
                                             if (!confirm(`Are you sure you want to change ${user.username}'s role to ${newRole}?`)) return;
 
                                             // Optimistic update
@@ -69,11 +69,14 @@ export const UsersModule: React.FC = () => {
                                         }}
                                         className={`text-[10px] px-2 py-1 rounded-lg uppercase tracking-widest font-bold border-none outline-none cursor-pointer ${user.role === 'admin'
                                             ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500/20'
-                                            : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
+                                            : user.role === 'developer'
+                                                ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
+                                                : 'bg-slate-800 text-gray-400 hover:bg-slate-700'
                                             }`}
                                     >
                                         <option value="user">USER</option>
                                         <option value="admin">ADMIN</option>
+                                        <option value="developer">DEVELOPER</option>
                                     </select>
                                 </td>
                                 <td className="px-6 py-4">
