@@ -195,7 +195,7 @@ export class CodeAnalysisService {
         const filenameMap = new Map<string, string[]>();
         for (const file of files) {
             if (file.lines > 300) {
-                 issues.push({
+                issues.push({
                     type: 'large_file',
                     severity: file.lines > 600 ? 'high' : 'medium',
                     message: `Large file detected: ${file.lines} lines`,
@@ -231,12 +231,12 @@ export class CodeAnalysisService {
                 if (entry.isDirectory) {
                     await this.gatherFiles(fullPath, list, excludedPaths);
                 } else if (entry.isFile) {
-                     const ext = entry.name.split('.').pop() || '';
-                     if (!['ts', 'tsx', 'js', 'jsx'].includes(ext)) continue;
-                     try {
+                    const ext = entry.name.split('.').pop() || '';
+                    if (!['ts', 'tsx', 'js', 'jsx'].includes(ext)) continue;
+                    try {
                         const content = await Deno.readTextFile(fullPath);
                         list.push({ path: fullPath, content, lines: content.split('\n').length, name: entry.name });
-                     } catch (e) { }
+                    } catch (e) { }
                 }
             }
         } catch (e) { }
@@ -261,7 +261,7 @@ export class CodeAnalysisService {
                 const name = matchFunc?.[1] || matchConst?.[1] || matchMethod?.[3];
 
                 if (name && name.length > 3 && !IGNORE_EXACT.includes(name) && !IGNORE_PATTERNS.test(name)) {
-                     functions.push({ name, file: file.path, line: i + 1 });
+                    functions.push({ name, file: file.path, line: i + 1 });
                 }
             }
         }
@@ -401,15 +401,27 @@ export class CodeAnalysisService {
         const importedPaths = new Set<string>();
 
         // Known entry points that are implicitly used
-        const entries = [
-            'src/main.tsx', 'src/api/server.ts', 'src/api/node-entry.ts',
+        const entryPatterns = [
+            'src/main.tsx', 'src/App.tsx', 'src/api/server.ts', 'src/api/node-entry.ts',
             'vite.config.ts', 'tailwind.config.ts', 'postcss.config.js',
-            'src/api/node-polyfill.ts'
+            'src/api/node-polyfill.ts', 'src/api/main.ts'
         ];
-        entries.forEach(e => importedPaths.add(e));
+        entryPatterns.forEach(e => importedPaths.add(e));
+
+        // Patterns for files that are implicitly used (routes, contexts, hooks, types)
+        const implicitPatterns = [
+            /Page\.tsx$/, // Route pages rendered by React Router
+            /Context\.tsx$/, // Context providers
+            /Layout\.tsx$/, // Layout components
+            /index\.tsx?$/, // Barrel exports
+            /sampleData\.ts$/, // Sample/seed data
+            /types\.ts$/, // Type definitions
+            /globals\.css$/, // Global styles
+        ];
 
         const importRegex = /(?:import|from|require)\s+['"]([^'"]+)['"]/g;
         const dynamicImportRegex = /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+        const lazyImportRegex = /lazy\s*\(\s*\(\s*\)\s*=>\s*import\s*\(\s*['"]([^'"]+)['"]/g;
 
         for (const file of files) {
             const content = file.content;
@@ -419,6 +431,8 @@ export class CodeAnalysisService {
                 if (imp.startsWith('.')) {
                     // Resolve relative path
                     let resolved = join(currentDir, imp);
+                    // Normalize to forward slashes (Windows compatibility)
+                    resolved = resolved.replace(/\\/g, '/');
                     if (resolved.startsWith('src/')) resolved = './' + resolved; // consistency
 
                     // Try extensions
@@ -446,23 +460,31 @@ export class CodeAnalysisService {
             while ((match = dynamicImportRegex.exec(content)) !== null) {
                 checkImport(match[1]);
             }
+            while ((match = lazyImportRegex.exec(content)) !== null) {
+                checkImport(match[1]);
+            }
         }
 
         const unused: string[] = [];
         for (const path of allPaths) {
-            if (!importedPaths.has(path) && !path.endsWith('.d.ts')) {
-                unused.push(path);
-            }
+            // Skip already imported files
+            if (importedPaths.has(path)) continue;
+            // Skip type definition files
+            if (path.endsWith('.d.ts')) continue;
+            // Skip files matching implicit patterns
+            if (implicitPatterns.some(p => p.test(path))) continue;
+
+            unused.push(path);
         }
 
         return unused;
     }
 
-    async extractComments(excludedPaths: string[] = []): Promise<{ file: string, line: number, text: string, type: 'todo' | 'code' | 'info' }[]> {
+    async extractComments(excludedPaths: string[] = []): Promise<{ file: string, line: number, text: string, type: 'todo' | 'code' | 'info', context: string[] }[]> {
         const files: { path: string, content: string }[] = [];
         await this.gatherFiles(this.rootDir, files as any, excludedPaths);
 
-        const results: { file: string, line: number, text: string, type: 'todo' | 'code' | 'info' }[] = [];
+        const results: { file: string, line: number, text: string, type: 'todo' | 'code' | 'info', context: string[] }[] = [];
         const codePatterns = [
             /const\s+[a-z]/i, /function\s/, /return\s/, /import\s/, /export\s/, /<[a-zA-Z]/, /\{\s*$/, /;\s*$/
         ];
@@ -473,6 +495,13 @@ export class CodeAnalysisService {
 
             for (let i = 0; i < lines.length; i++) {
                 let line = lines[i].trim();
+                const context: string[] = [];
+                if (i > 0) context.push(lines[i - 1]);
+                if (i < lines.length - 1) context.push(lines[i + 1]);
+
+                const addResult = (text: string, type: 'todo' | 'code' | 'info') => {
+                    results.push({ file: file.path, line: i + 1, text, type, context });
+                };
 
                 if (inBlockComment) {
                     if (line.includes('*/')) {
@@ -480,15 +509,15 @@ export class CodeAnalysisService {
                         line = line.substring(line.indexOf('*/') + 2).trim();
                         if (!line) continue;
                     } else {
-                         // Inside block comment
-                         const text = line.replace(/^\*\s?/, '').trim();
-                         if (text) {
+                        // Inside block comment
+                        const text = line.replace(/^\*\s?/, '').trim();
+                        if (text) {
                             let type: 'todo' | 'code' | 'info' = 'info';
                             if (text.toLowerCase().includes('todo') || text.toLowerCase().includes('fixme')) type = 'todo';
                             else if (codePatterns.some(p => p.test(text))) type = 'code';
-                            results.push({ file: file.path, line: i + 1, text, type });
-                         }
-                         continue;
+                            addResult(text, type);
+                        }
+                        continue;
                     }
                 }
 
@@ -496,12 +525,12 @@ export class CodeAnalysisService {
                     inBlockComment = true;
                     if (line.includes('*/')) {
                         inBlockComment = false;
-                         // Single line block comment
+                        // Single line block comment
                         const text = line.replace(/^\/\*/, '').replace(/\*\/$/, '').trim();
                         if (text) {
-                             let type: 'todo' | 'code' | 'info' = 'info';
-                             if (text.toLowerCase().includes('todo') || text.toLowerCase().includes('fixme')) type = 'todo';
-                             results.push({ file: file.path, line: i + 1, text, type });
+                            let type: 'todo' | 'code' | 'info' = 'info';
+                            if (text.toLowerCase().includes('todo') || text.toLowerCase().includes('fixme')) type = 'todo';
+                            addResult(text, type);
                         }
                     }
                     continue;
@@ -513,7 +542,7 @@ export class CodeAnalysisService {
                         let type: 'todo' | 'code' | 'info' = 'info';
                         if (text.toLowerCase().includes('todo') || text.toLowerCase().includes('fixme')) type = 'todo';
                         else if (codePatterns.some(p => p.test(text))) type = 'code';
-                        results.push({ file: file.path, line: i + 1, text, type });
+                        addResult(text, type);
                     }
                 }
             }

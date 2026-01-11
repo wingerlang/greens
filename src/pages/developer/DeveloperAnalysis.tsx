@@ -39,6 +39,7 @@ interface CodeComment {
     line: number;
     text: string;
     type: 'todo' | 'code' | 'info';
+    context?: string[];
 }
 
 interface Dependency {
@@ -93,18 +94,18 @@ export function DeveloperAnalysis() {
             fetch('/api/developer/dependencies', { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
             fetch(`/api/developer/report?${query}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json())
         ])
-        .then(([analysisData, funcsData, simData, unusedData, commentsData, routesData, depsData, reportData]) => {
-            setIssues(analysisData.issues || []);
-            setDuplicates(funcsData.duplicates || []);
-            setClusters(simData.clusters || []);
-            setUnusedFiles(unusedData.unused || []);
-            setComments(commentsData.comments || []);
-            setRoutes(routesData.routes || []);
-            setDependencies(depsData.dependencies || []);
-            setReport(reportData.report || '');
-        })
-        .catch(console.error)
-        .finally(() => setLoading(false));
+            .then(([analysisData, funcsData, simData, unusedData, commentsData, routesData, depsData, reportData]) => {
+                setIssues(analysisData.issues || []);
+                setDuplicates(funcsData.duplicates || []);
+                setClusters(simData.clusters || []);
+                setUnusedFiles(unusedData.unused || []);
+                setComments(commentsData.comments || []);
+                setRoutes(routesData.routes || []);
+                setDependencies(depsData.dependencies || []);
+                setReport(reportData.report || '');
+            })
+            .catch(console.error)
+            .finally(() => setLoading(false));
     }, [token, refreshTrigger, query]);
 
     const handleCopy = () => {
@@ -143,7 +144,7 @@ export function DeveloperAnalysis() {
             {/* Header / Settings Bar */}
             <div className="flex flex-col xl:flex-row xl:items-center justify-between bg-slate-900 p-4 rounded-lg border border-slate-700 gap-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 overflow-x-auto pb-2 sm:pb-0">
-                     <div className="flex items-center gap-2 text-white font-semibold mr-4 whitespace-nowrap">
+                    <div className="flex items-center gap-2 text-white font-semibold mr-4 whitespace-nowrap">
                         <FileWarning className="text-amber-400" />
                         <span>Analysis</span>
                     </div>
@@ -199,7 +200,7 @@ export function DeveloperAnalysis() {
                     </div>
                 )}
 
-                {activeTab === 'duplicates' && <DuplicatesList duplicates={duplicates} onCreateTodo={createTodo} />}
+                {activeTab === 'duplicates' && <DuplicatesList duplicates={duplicates} onCreateTodo={createTodo} token={token} />}
                 {activeTab === 'clusters' && <ClustersList clusters={clusters} />}
 
                 {activeTab === 'unused' && (
@@ -224,33 +225,20 @@ export function DeveloperAnalysis() {
                             <div className="space-y-3">
                                 <h3 className="text-amber-400 font-semibold sticky top-0 bg-slate-900 py-2">Suspicious Code Comments ({codeComments.length})</h3>
                                 {codeComments.map((c, i) => (
-                                    <div key={i} className="bg-slate-800 p-3 rounded border border-slate-700 group">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <span className="text-xs font-mono text-slate-500">{c.file}:{c.line}</span>
-                                            <button
-                                                onClick={() => createTodo(`Investigate commented code in ${c.file}`, c.file, 'comment')}
-                                                className="opacity-0 group-hover:opacity-100 px-2 py-0.5 text-xs bg-slate-700 text-slate-300 rounded hover:bg-emerald-600 hover:text-white"
-                                            >
-                                                + Todo
-                                            </button>
-                                        </div>
-                                        <SyntaxHighlighter language="typescript" style={vscDarkPlus} customStyle={{ margin: 0, padding: '0.5rem', fontSize: '12px' }}>
-                                            {c.text}
-                                        </SyntaxHighlighter>
-                                    </div>
+                                    <CommentCard key={i} comment={c} onCreateTodo={createTodo} token={token} />
                                 ))}
                             </div>
                         )}
-                         {todoComments.length > 0 && (
+                        {todoComments.length > 0 && (
                             <div className="space-y-3">
                                 <h3 className="text-blue-400 font-semibold sticky top-0 bg-slate-900 py-2">TODOs ({todoComments.length})</h3>
                                 {todoComments.map((c, i) => (
                                     <div key={i} className="bg-slate-800 p-3 rounded border border-slate-700 flex justify-between items-center group">
-                                         <div>
+                                        <div>
                                             <div className="text-xs font-mono text-slate-500">{c.file}:{c.line}</div>
                                             <div className="text-slate-300 text-sm mt-1">{c.text}</div>
-                                         </div>
-                                         <button
+                                        </div>
+                                        <button
                                             onClick={() => createTodo(`Address TODO: ${c.text}`, c.file, 'comment')}
                                             className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded hover:bg-emerald-600 hover:text-white"
                                         >
@@ -288,7 +276,7 @@ export function DeveloperAnalysis() {
                                 ))}
                             </div>
                         </div>
-                         <div>
+                        <div>
                             <h3 className="text-slate-300 font-semibold mb-4">Dev</h3>
                             <div className="space-y-2">
                                 {dependencies.filter(d => d.type === 'dev').map(d => (
@@ -302,7 +290,7 @@ export function DeveloperAnalysis() {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 }
 
@@ -310,11 +298,10 @@ function TabButton({ active, onClick, icon, label, count }: { active: boolean, o
     return (
         <button
             onClick={onClick}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
-                active
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${active
                 ? 'bg-indigo-600 text-white'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
-            }`}
+                }`}
         >
             {icon}
             {label}
@@ -339,13 +326,13 @@ function IssuesList({ issues }: { issues: CodeIssue[] }) {
                 </div>
             )}
             {highSeverity.length > 0 && (
-                    <div className="space-y-4">
+                <div className="space-y-4">
                     <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider">Critical ({highSeverity.length})</h3>
                     {highSeverity.map((issue, i) => <IssueCard key={i} issue={issue} />)}
                 </div>
             )}
             {mediumSeverity.length > 0 && (
-                    <div className="space-y-4">
+                <div className="space-y-4">
                     <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Warnings ({mediumSeverity.length})</h3>
                     {mediumSeverity.map((issue, i) => <IssueCard key={i} issue={issue} />)}
                 </div>
@@ -354,49 +341,185 @@ function IssuesList({ issues }: { issues: CodeIssue[] }) {
     );
 }
 
-function DuplicatesList({ duplicates, onCreateTodo }: { duplicates: DuplicateFunction[], onCreateTodo: (desc: string, file: string, type: 'duplicate') => void }) {
+
+function CommentCard({ comment, onCreateTodo, token }: { comment: CodeComment, onCreateTodo: (d: string, f: string, t: 'comment') => void, token: string | null }) {
+    const [expanded, setExpanded] = useState(false);
+    const [fullContext, setFullContext] = useState<string | null>(null);
+
+    const handleExpand = async () => {
+        if (expanded) {
+            setExpanded(false);
+            return;
+        }
+        if (fullContext) {
+            setExpanded(true);
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/developer/file?path=${encodeURIComponent(comment.file)}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            }).then(r => r.json());
+
+            if (res.content) {
+                const lines = res.content.split('\n');
+                const startLine = Math.max(1, comment.line - 5);
+                const endLine = Math.min(lines.length, comment.line + 5);
+
+                // Adjust for 0-based index for slice
+                const content = lines.slice(startLine - 1, endLine).join('\n');
+                setFullContext(content);
+                setExpanded(true);
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    return (
+        <div className="bg-slate-800 p-3 rounded border border-slate-700 group">
+            <div className="flex justify-between items-start mb-2">
+                <span className="text-xs font-mono text-slate-500">{comment.file}:{comment.line}</span>
+                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={handleExpand} className="px-2 py-0.5 text-xs bg-slate-700 text-slate-300 rounded hover:bg-indigo-600 hover:text-white">
+                        {expanded ? 'Collapse' : 'Expand'}
+                    </button>
+                    <button
+                        onClick={() => createTodo(`Investigate code: ${comment.file}`, comment.file, 'comment')}
+                        className="px-2 py-0.5 text-xs bg-slate-700 text-slate-300 rounded hover:bg-emerald-600 hover:text-white"
+                    >
+                        + Todo
+                    </button>
+                </div>
+            </div>
+
+            {expanded && fullContext ? (
+                <SyntaxHighlighter language="typescript" style={vscDarkPlus} customStyle={{ margin: 0, padding: '0.5rem', fontSize: '12px' }} showLineNumbers startingLineNumber={Math.max(1, comment.line - 5)}>
+                    {fullContext}
+                </SyntaxHighlighter>
+            ) : (
+                <div className="font-mono text-xs">
+                    {comment.context?.[0] && <div className="text-slate-600 px-2 select-none border-l-2 border-transparent">{comment.context[0]}</div>}
+                    <div className="border-l-2 border-amber-500/50">
+                        <SyntaxHighlighter language="typescript" style={vscDarkPlus} customStyle={{ margin: 0, padding: '0.5rem', fontSize: '12px' }}>
+                            {comment.text}
+                        </SyntaxHighlighter>
+                    </div>
+                    {comment.context?.[1] && <div className="text-slate-600 px-2 select-none border-l-2 border-transparent">{comment.context[1]}</div>}
+                </div>
+            )}
+        </div>
+    )
+}
+
+function DuplicatesList({ duplicates, onCreateTodo, token }: { duplicates: DuplicateFunction[], onCreateTodo: (desc: string, file: string, type: 'duplicate') => void, token: string | null }) {
+    const [selectedDup, setSelectedDup] = useState<DuplicateFunction | null>(null);
+    const [fileAContent, setFileAContent] = useState<string>('');
+    const [fileBContent, setFileBContent] = useState<string>('');
+    const [loadingDiff, setLoadingDiff] = useState(false);
+
+    const openDiff = async (dup: DuplicateFunction) => {
+        setSelectedDup(dup);
+        setLoadingDiff(true);
+        try {
+            const headers = { 'Authorization': `Bearer ${token}` };
+            const [resA, resB] = await Promise.all([
+                fetch(`/api/developer/file?path=${encodeURIComponent(dup.fileA)}`, { headers }).then(r => r.json()),
+                fetch(`/api/developer/file?path=${encodeURIComponent(dup.fileB)}`, { headers }).then(r => r.json())
+            ]);
+            setFileAContent(resA.content || 'Error loading file');
+            setFileBContent(resB.content || 'Error loading file');
+        } catch (e) {
+            setFileAContent('Error loading file');
+            setFileBContent('Error loading file');
+        }
+        setLoadingDiff(false);
+    };
+
     if (duplicates.length === 0) {
         return <div className="p-8 text-center text-slate-500 italic">No similar functions found.</div>;
     }
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {duplicates.map((d, i) => (
-                <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-indigo-500/50 transition-colors group relative">
-                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                         <button
-                            onClick={() => onCreateTodo(`Refactor duplicate function: ${d.nameA}`, d.fileA, 'duplicate')}
-                            className="p-1.5 bg-slate-700 hover:bg-emerald-600 text-slate-300 hover:text-white rounded"
-                            title="Add to Todo"
-                        >
-                             <Check size={14} />
-                         </button>
-                    </div>
-                    <div className="flex items-center justify-between mb-3">
-                        <div className="bg-indigo-500/10 text-indigo-400 text-xs px-2 py-1 rounded font-mono">
-                            {(d.similarity * 100).toFixed(0)}% Match
+        <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {duplicates.map((d, i) => (
+                    <div
+                        key={i}
+                        className="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-indigo-500/50 transition-colors group relative cursor-pointer"
+                        onClick={() => openDiff(d)}
+                    >
+                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onCreateTodo(`Refactor duplicate function: ${d.nameA}`, d.fileA, 'duplicate'); }}
+                                className="p-1.5 bg-slate-700 hover:bg-emerald-600 text-slate-300 hover:text-white rounded"
+                                title="Add to Todo"
+                            >
+                                <Check size={14} />
+                            </button>
+                        </div>
+                        <div className="flex items-center justify-between mb-3">
+                            <div className="bg-indigo-500/10 text-indigo-400 text-xs px-2 py-1 rounded font-mono">
+                                {(d.similarity * 100).toFixed(0)}% Match
+                            </div>
+                        </div>
+                        <div className="space-y-3">
+                            <div>
+                                <div className="font-mono text-sm text-white font-semibold truncate" title={d.nameA}>{d.nameA}</div>
+                                <div className="text-xs text-slate-500 truncate" title={d.fileA}>{d.fileA}</div>
+                            </div>
+                            <div className="flex justify-center text-slate-600"><GitMerge size={16} className="rotate-90" /></div>
+                            <div>
+                                <div className="font-mono text-sm text-white font-semibold truncate" title={d.nameB}>{d.nameB}</div>
+                                <div className="text-xs text-slate-500 truncate" title={d.fileB}>{d.fileB}</div>
+                            </div>
                         </div>
                     </div>
-                    <div className="space-y-3">
-                        <div>
-                            <div className="font-mono text-sm text-white font-semibold truncate" title={d.nameA}>{d.nameA}</div>
-                            <div className="text-xs text-slate-500 truncate" title={d.fileA}>{d.fileA}</div>
+                ))}
+            </div>
+
+            {/* Diff Modal */}
+            {selectedDup && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedDup(null)} />
+                    <div className="relative bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] overflow-hidden flex flex-col">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700 bg-slate-800">
+                            <div className="flex items-center gap-4">
+                                <GitMerge className="text-indigo-400" size={20} />
+                                <span className="text-white font-semibold">Diff: {selectedDup.nameA}</span>
+                                <span className="text-indigo-400 text-xs font-mono bg-indigo-500/10 px-2 py-1 rounded">
+                                    {(selectedDup.similarity * 100).toFixed(0)}% Match
+                                </span>
+                            </div>
+                            <button onClick={() => setSelectedDup(null)} className="p-2 text-slate-400 hover:text-white text-xl">×</button>
                         </div>
-                        <div className="flex justify-center text-slate-600"><GitMerge size={16} className="rotate-90" /></div>
-                        <div>
-                            <div className="font-mono text-sm text-white font-semibold truncate" title={d.nameB}>{d.nameB}</div>
-                            <div className="text-xs text-slate-500 truncate" title={d.fileB}>{d.fileB}</div>
+                        <div className="flex-1 overflow-auto">
+                            {loadingDiff ? (
+                                <div className="flex items-center justify-center h-64 text-slate-400">Loading files...</div>
+                            ) : (
+                                <div className="grid grid-cols-2 divide-x divide-slate-700 h-full">
+                                    <div className="flex flex-col">
+                                        <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700 text-xs font-mono text-slate-400">{selectedDup.fileA}</div>
+                                        <pre className="p-4 text-xs font-mono text-slate-300 overflow-auto flex-1 whitespace-pre-wrap">{fileAContent}</pre>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700 text-xs font-mono text-slate-400">{selectedDup.fileB}</div>
+                                        <pre className="p-4 text-xs font-mono text-slate-300 overflow-auto flex-1 whitespace-pre-wrap">{fileBContent}</pre>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
-            ))}
-        </div>
+            )}
+        </>
     );
 }
 
+
 function ClustersList({ clusters }: { clusters: SimilarFilePair[] }) {
     if (clusters.length === 0) {
-         return <div className="p-8 text-center text-slate-500 italic">No file clusters found.</div>;
+        return <div className="p-8 text-center text-slate-500 italic">No file clusters found.</div>;
     }
 
     return (
@@ -461,7 +584,7 @@ function IssueCard({ issue }: { issue: CodeIssue }) {
                     <h4 className="font-semibold text-slate-200">{issue.message}</h4>
                     <p className="text-xs font-mono text-slate-400 mt-1">{issue.file}</p>
                     {issue.relatedFile && (
-                         <p className="text-xs font-mono text-slate-500 mt-1">↳ {issue.relatedFile}</p>
+                        <p className="text-xs font-mono text-slate-500 mt-1">↳ {issue.relatedFile}</p>
                     )}
                     {issue.details && (
                         <p className="text-sm text-slate-400 mt-2 italic">"{issue.details}"</p>

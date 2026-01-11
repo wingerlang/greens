@@ -33,15 +33,15 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
                 </div>
 
                 <div className="pt-4 border-t border-slate-700">
-                     <h3 className="text-sm font-medium text-slate-400 mb-2">Add Custom Exclusion</h3>
-                     <div className="flex gap-2">
-                         <input
+                    <h3 className="text-sm font-medium text-slate-400 mb-2">Add Custom Exclusion</h3>
+                    <div className="flex gap-2">
+                        <input
                             value={custom}
                             onChange={e => setCustom(e.target.value)}
                             placeholder="e.g. src/legacy"
                             className="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-sm text-white font-mono"
-                         />
-                         <button
+                        />
+                        <button
                             onClick={() => {
                                 if (custom && !excludedFolders.includes(custom)) {
                                     toggleExclusion(custom);
@@ -49,18 +49,18 @@ function SettingsModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => vo
                                 }
                             }}
                             className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-sm font-medium"
-                         >
-                             Add
-                         </button>
-                     </div>
-                     <div className="mt-2 space-y-1">
-                         {excludedFolders.filter(f => !commonFolders.includes(f)).map(f => (
-                             <div key={f} className="flex items-center justify-between p-2 rounded bg-slate-800 text-sm">
-                                 <span className="font-mono text-slate-300">{f}</span>
-                                 <button onClick={() => toggleExclusion(f)} className="text-red-400 hover:text-red-300">Remove</button>
-                             </div>
-                         ))}
-                     </div>
+                        >
+                            Add
+                        </button>
+                    </div>
+                    <div className="mt-2 space-y-1">
+                        {excludedFolders.filter(f => !commonFolders.includes(f)).map(f => (
+                            <div key={f} className="flex items-center justify-between p-2 rounded bg-slate-800 text-sm">
+                                <span className="font-mono text-slate-300">{f}</span>
+                                <button onClick={() => toggleExclusion(f)} className="text-red-400 hover:text-red-300">Remove</button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </div>
         </Modal>
@@ -87,8 +87,7 @@ function DevLayoutContent() {
                             to="/developer"
                             end
                             className={({ isActive }) =>
-                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                    isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
+                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
                                 }`
                             }
                         >
@@ -101,8 +100,7 @@ function DevLayoutContent() {
                         <NavLink
                             to="/developer/todos"
                             className={({ isActive }) =>
-                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                    isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
+                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
                                 }`
                             }
                         >
@@ -115,8 +113,7 @@ function DevLayoutContent() {
                         <NavLink
                             to="/developer/explorer"
                             className={({ isActive }) =>
-                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                    isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
+                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
                                 }`
                             }
                         >
@@ -129,8 +126,7 @@ function DevLayoutContent() {
                         <NavLink
                             to="/developer/analysis"
                             className={({ isActive }) =>
-                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                    isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
+                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
                                 }`
                             }
                         >
@@ -163,56 +159,5 @@ export function DeveloperLayout() {
         <DeveloperProvider>
             <DevLayoutContent />
         </DeveloperProvider>
-    );
-                    <NavLink
-                        to="/developer"
-                        end
-                        className={({ isActive }) =>
-                            `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
-                            }`
-                        }
-                    >
-                        <div className="flex items-center gap-2">
-                            <Activity size={16} />
-                            Dashboard
-                        </div>
-                    </NavLink>
-
-                    <NavLink
-                        to="/developer/explorer"
-                        className={({ isActive }) =>
-                            `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
-                            }`
-                        }
-                    >
-                         <div className="flex items-center gap-2">
-                            <FolderTree size={16} />
-                            Explorer
-                        </div>
-                    </NavLink>
-
-                    <NavLink
-                        to="/developer/analysis"
-                        className={({ isActive }) =>
-                            `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                                isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
-                            }`
-                        }
-                    >
-                         <div className="flex items-center gap-2">
-                            <FileCode size={16} />
-                            Analysis & Agent
-                        </div>
-                    </NavLink>
-                </nav>
-            </div>
-
-            {/* Content Area */}
-            <div className="flex-1 overflow-auto p-6">
-                <Outlet />
-            </div>
-        </div>
     );
 }
