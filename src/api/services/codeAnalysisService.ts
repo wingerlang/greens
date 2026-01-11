@@ -15,6 +15,7 @@ export interface FileNode {
     size?: number;
     lines?: number;
     children?: FileNode[];
+    fileCount?: number;
 }
 
 export interface CodeIssue {
@@ -24,6 +25,32 @@ export interface CodeIssue {
     file: string;
     relatedFile?: string;
     details?: string;
+}
+
+export interface FunctionInfo {
+    name: string;
+    file: string;
+    line: number;
+}
+
+export interface DuplicateFunction {
+    nameA: string;
+    nameB: string;
+    fileA: string;
+    fileB: string;
+    similarity: number;
+}
+
+export interface SimilarFilePair {
+    fileA: string;
+    fileB: string;
+    similarity: number; // 0-1
+    sharedTerms: string[];
+}
+
+export interface SearchResult {
+    file: string;
+    matches: { line: number, content: string }[];
 }
 
 export class CodeAnalysisService {
@@ -53,8 +80,6 @@ export class CodeAnalysisService {
                     await this.walkAndCount(fullPath, stats);
                 } else if (entry.isFile) {
                     const ext = entry.name.split('.').pop() || 'unknown';
-
-                    // Skip binary or irrelevant files
                     if (['png', 'jpg', 'jpeg', 'ico', 'svg', 'woff', 'woff2', 'ttf'].includes(ext)) continue;
 
                     stats.totalFiles++;
@@ -65,9 +90,7 @@ export class CodeAnalysisService {
                         const lines = content.split('\n').length;
                         stats.totalLines += lines;
                         stats.linesByExtension[ext] = (stats.linesByExtension[ext] || 0) + lines;
-                    } catch (e) {
-                        // Ignore read errors
-                    }
+                    } catch (e) { }
                 }
             }
         } catch (e) {
@@ -77,6 +100,10 @@ export class CodeAnalysisService {
 
     async getFileStructure(): Promise<FileNode> {
         return await this.buildTree(this.rootDir);
+    }
+
+    async getExtendedFileStructure(): Promise<FileNode> {
+        return await this.buildExtendedTree(this.rootDir);
     }
 
     private async buildTree(path: string): Promise<FileNode> {
@@ -95,88 +122,97 @@ export class CodeAnalysisService {
                 if (entry.isDirectory) {
                     entries.push(await this.buildTree(fullPath));
                 } else {
-                    const fileNode: FileNode = {
-                        name: entry.name,
-                        path: fullPath,
-                        type: 'file'
-                    };
-                    // Optional: Get size/lines here if needed, but might be slow for tree
-                    entries.push(fileNode);
+                    entries.push({ name: entry.name, path: fullPath, type: 'file' });
                 }
             }
-            // Sort: Directories first, then files
             node.children = entries.sort((a, b) => {
                 if (a.type === b.type) return a.name.localeCompare(b.name);
                 return a.type === 'dir' ? -1 : 1;
             });
-        } catch (e) {
-            console.error(`Error building tree for ${path}:`, e);
-        }
+        } catch (e) { }
+        return node;
+    }
 
+    private async buildExtendedTree(path: string): Promise<FileNode> {
+        const name = path.split('/').pop() || path;
+        const node: FileNode = {
+            name,
+            path,
+            type: 'dir',
+            children: [],
+            lines: 0,
+            fileCount: 0,
+            size: 0
+        };
+
+        try {
+            const entries: FileNode[] = [];
+            for await (const entry of Deno.readDir(path)) {
+                const fullPath = `${path}/${entry.name}`;
+                if (entry.isDirectory) {
+                    const childDir = await this.buildExtendedTree(fullPath);
+                    entries.push(childDir);
+                    node.lines = (node.lines || 0) + (childDir.lines || 0);
+                    node.fileCount = (node.fileCount || 0) + (childDir.fileCount || 0);
+                    node.size = (node.size || 0) + (childDir.size || 0);
+                } else if (entry.isFile) {
+                    const ext = entry.name.split('.').pop() || '';
+                    let lines = 0;
+                    let size = 0;
+                    try {
+                        const stat = await Deno.stat(fullPath);
+                        size = stat.size;
+                        if (['ts', 'tsx', 'js', 'jsx', 'css', 'json', 'md', 'html'].includes(ext)) {
+                            const content = await Deno.readTextFile(fullPath);
+                            lines = content.split('\n').length;
+                        }
+                    } catch (e) { }
+
+                    entries.push({ name: entry.name, path: fullPath, type: 'file', lines, size });
+                    node.lines = (node.lines || 0) + lines;
+                    node.fileCount = (node.fileCount || 0) + 1;
+                    node.size = (node.size || 0) + size;
+                }
+            }
+            node.children = entries.sort((a, b) => {
+                if (a.type === b.type) return a.name.localeCompare(b.name);
+                return a.type === 'dir' ? -1 : 1;
+            });
+        } catch (e) { }
         return node;
     }
 
     async analyzeCodebase(): Promise<CodeIssue[]> {
         const issues: CodeIssue[] = [];
         const files: { path: string, content: string, lines: number, name: string }[] = [];
-
-        // 1. Gather all files
         await this.gatherFiles(this.rootDir, files);
 
-        // 2. Analyze
         const filenameMap = new Map<string, string[]>();
-
         for (const file of files) {
-            // Check Large Files
             if (file.lines > 300) {
-                issues.push({
+                 issues.push({
                     type: 'large_file',
                     severity: file.lines > 600 ? 'high' : 'medium',
                     message: `Large file detected: ${file.lines} lines`,
-                    file: file.path,
-                    details: `Files larger than 300 lines are harder to maintain.`
+                    file: file.path
                 });
             }
-
-            // Group by filename (ignoring extension) to find similar concepts
             const baseName = file.name.split('.')[0];
-            if (!filenameMap.has(baseName)) {
-                filenameMap.set(baseName, []);
-            }
+            if (!filenameMap.has(baseName)) filenameMap.set(baseName, []);
             filenameMap.get(baseName)?.push(file.path);
-
-            // Duplicate content check (simple exact match for now)
-            // (Skipped for performance unless requested specifically, but user asked for it)
-            // Let's do a quick hash or just comparison if sizes match?
-            // For now, let's rely on filenames and maybe content chunks.
         }
 
-        // Check for duplicate filenames
         for (const [name, paths] of filenameMap.entries()) {
             if (paths.length > 1) {
                 issues.push({
                     type: 'duplicate_file',
                     severity: 'medium',
-                    message: `Duplicate filename found: ${name}`,
+                    message: `Duplicate filename: ${name}`,
                     file: paths[0],
-                    relatedFile: paths.slice(1).join(', '),
-                    details: `Multiple files share the name '${name}'. This might indicate ambiguous architecture.`
+                    relatedFile: paths.slice(1).join(', ')
                 });
             }
         }
-
-        // Check for Service proliferation
-        const serviceFiles = files.filter(f => f.path.includes('/services/') || f.name.endsWith('Service.ts'));
-        if (serviceFiles.length > 20) {
-             issues.push({
-                type: 'many_services',
-                severity: 'low',
-                message: `High number of services detected (${serviceFiles.length})`,
-                file: 'src/api/services',
-                details: 'Ensure services have clear boundaries.'
-            });
-        }
-
         return issues;
     }
 
@@ -189,19 +225,164 @@ export class CodeAnalysisService {
                 } else if (entry.isFile) {
                      const ext = entry.name.split('.').pop() || '';
                      if (!['ts', 'tsx', 'js', 'jsx'].includes(ext)) continue;
-
                      try {
                         const content = await Deno.readTextFile(fullPath);
-                        list.push({
-                            path: fullPath,
-                            content,
-                            lines: content.split('\n').length,
-                            name: entry.name
-                        });
+                        list.push({ path: fullPath, content, lines: content.split('\n').length, name: entry.name });
                      } catch (e) { }
                 }
             }
         } catch (e) { }
+    }
+
+    async analyzeFunctions(): Promise<DuplicateFunction[]> {
+        const files: { path: string, content: string }[] = [];
+        await this.gatherFiles(this.rootDir, files as any);
+
+        const functions: FunctionInfo[] = [];
+        const IGNORE_PATTERNS = /^(use|set|get|handle|render|on|is|has|create|update|delete|fetch|load|moment|clsx|cn|z)$/i;
+        const IGNORE_EXACT = ['useEffect', 'useState', 'useCallback', 'useMemo', 'useRef', 't', 'log', 'error'];
+
+        for (const file of files) {
+            const lines = file.content.split('\n');
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                const matchFunc = line.match(/function\s+([a-zA-Z0-9_]+)\s*\(/);
+                const matchConst = line.match(/const\s+([a-zA-Z0-9_]+)\s*=\s*(async\s*)?(\([^)]*\)|[a-zA-Z0-9_]+)\s*=>/);
+                const matchMethod = line.match(/^\s*(public|private|protected)?\s*(async)?\s*([a-zA-Z0-9_]+)\s*\([^)]*\)\s*\{/);
+
+                const name = matchFunc?.[1] || matchConst?.[1] || matchMethod?.[3];
+
+                if (name && name.length > 3 && !IGNORE_EXACT.includes(name) && !IGNORE_PATTERNS.test(name)) {
+                     functions.push({ name, file: file.path, line: i + 1 });
+                }
+            }
+        }
+
+        const duplicates: DuplicateFunction[] = [];
+        functions.sort((a, b) => a.name.length - b.name.length);
+
+        for (let i = 0; i < functions.length; i++) {
+            for (let j = i + 1; j < functions.length; j++) {
+                const a = functions[i];
+                const b = functions[j];
+
+                if (Math.abs(a.name.length - b.name.length) > 3) continue;
+
+                if (a.name === b.name && a.file !== b.file) {
+                    duplicates.push({ nameA: a.name, nameB: b.name, fileA: a.file, fileB: b.file, similarity: 1 });
+                } else if (a.name !== b.name) {
+                    const dist = this.levenshtein(a.name, b.name);
+                    const maxLength = Math.max(a.name.length, b.name.length);
+                    const sim = 1 - (dist / maxLength);
+                    if (sim >= 0.85) {
+                        duplicates.push({ nameA: a.name, nameB: b.name, fileA: a.file, fileB: b.file, similarity: sim });
+                    }
+                }
+            }
+        }
+
+        const unique = duplicates.filter((d, index, self) =>
+            index === self.findIndex((t) => (t.nameA === d.nameA && t.nameB === d.nameB) || (t.nameA === d.nameB && t.nameB === d.nameA))
+        );
+
+        return unique.sort((a, b) => b.similarity - a.similarity).slice(0, 100);
+    }
+
+    async findSimilarFiles(): Promise<SimilarFilePair[]> {
+        const files: { path: string, content: string }[] = [];
+        await this.gatherFiles(this.rootDir, files as any);
+
+        const fileTerms = new Map<string, Set<string>>();
+        for (const file of files) {
+            const tokens = file.content.split(/[^a-zA-Z0-9_]+/).filter(t => t.length > 5 && !/^(import|export|const|from|return|function|class|interface|async|await)$/.test(t));
+            fileTerms.set(file.path, new Set(tokens));
+        }
+
+        const pairs: SimilarFilePair[] = [];
+        const filenames = Array.from(fileTerms.keys());
+
+        for (let i = 0; i < filenames.length; i++) {
+            for (let j = i + 1; j < filenames.length; j++) {
+                const fA = filenames[i];
+                const fB = filenames[j];
+
+                const setA = fileTerms.get(fA)!;
+                const setB = fileTerms.get(fB)!;
+
+                let intersection = 0;
+                const shared: string[] = [];
+                for (const t of setA) {
+                    if (setB.has(t)) {
+                        intersection++;
+                        if (shared.length < 5) shared.push(t);
+                    }
+                }
+
+                const union = setA.size + setB.size - intersection;
+                const similarity = intersection / union;
+
+                if (similarity > 0.4 && intersection > 10) {
+                    pairs.push({ fileA: fA, fileB: fB, similarity, sharedTerms: shared });
+                }
+            }
+        }
+        return pairs.sort((a, b) => b.similarity - a.similarity).slice(0, 50);
+    }
+
+    async searchCodebase(query: string): Promise<SearchResult[]> {
+        const results: SearchResult[] = [];
+        if (!query || query.length < 2) return results;
+
+        const files: { path: string, content: string }[] = [];
+        await this.gatherFiles(this.rootDir, files as any);
+
+        const lowerQuery = query.toLowerCase();
+
+        for (const file of files) {
+            // Check filename matches first (higher priority usually, but we return all)
+            const lines = file.content.split('\n');
+            const matches: { line: number, content: string }[] = [];
+
+            lines.forEach((line, index) => {
+                if (line.toLowerCase().includes(lowerQuery)) {
+                    matches.push({ line: index + 1, content: line.trim() });
+                }
+            });
+
+            if (matches.length > 0) {
+                results.push({ file: file.path, matches });
+            }
+        }
+
+        return results.slice(0, 50); // Limit results
+    }
+
+    async getFileContent(path: string): Promise<string> {
+        // Security check: Ensure path is within rootDir
+        if (!path.startsWith(this.rootDir) && !path.startsWith('./' + this.rootDir) && !path.startsWith('src/')) {
+            throw new Error("Access denied: Invalid path");
+        }
+        try {
+            return await Deno.readTextFile(path);
+        } catch (e) {
+            return `Error reading file: ${e}`;
+        }
+    }
+
+    private levenshtein(a: string, b: string): number {
+        const matrix: number[][] = [];
+        for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+        for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= b.length; i++) {
+            for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+                }
+            }
+        }
+        return matrix[b.length][a.length];
     }
 
     async generateAgentReport(): Promise<string> {
