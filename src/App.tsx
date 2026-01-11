@@ -60,6 +60,12 @@ import { PlannerPage } from './components/planner/PlannerPage.tsx';
 import { RoadmapPage } from './pages/RoadmapPage.tsx';
 import { DocsPage } from './pages/DocsPage.tsx';
 import { SummaryPage } from './pages/SummaryPage.tsx';
+import { RequireRole } from './components/RequireRole.tsx';
+import { DeveloperDashboard } from './pages/developer/DeveloperDashboard.tsx';
+import { DeveloperLayout } from './pages/developer/DeveloperLayout.tsx';
+import { DeveloperExplorer } from './pages/developer/DeveloperExplorer.tsx';
+import { DeveloperAnalysis } from './pages/developer/DeveloperAnalysis.tsx';
+import { ExerciseDatabasePage } from './pages/admin/ExerciseDatabasePage.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -71,20 +77,6 @@ function RequireAuth({ children }: { children: JSX.Element }) {
 
     if (!user) {
         return <Navigate to="/login" state={{ from: location }} replace />;
-    }
-
-    return children;
-}
-
-function RequireAdmin({ children }: { children: JSX.Element }) {
-    const { user, loading } = useAuth();
-
-    if (loading) {
-        return <div className="h-screen w-full flex items-center justify-center bg-slate-900 text-slate-500">Laddar...</div>;
-    }
-
-    if (user?.role !== 'admin') {
-        return <Navigate to="/" replace />;
     }
 
     return children;
@@ -136,12 +128,29 @@ export function App() {
                                                 <Route path="competition" element={<CompetitionPage />} />
                                                 <Route path="competition" element={<CompetitionPage />} />
                                                 <Route path="tävling" element={<CompetitionPage />} />
+
                                                 <Route path="admin" element={
-                                                    <RequireAdmin>
+                                                    <RequireRole role="admin">
                                                         <AdminPage />
-                                                    </RequireAdmin>
+                                                    </RequireRole>
                                                 } />
                                                 <Route path="admin/exercises" element={
+                                                    <RequireRole role="admin">
+                                                        <ExerciseDatabasePage />
+                                                    </RequireRole>
+                                                } />
+
+                                                {/* Developer Routes */}
+                                                <Route path="developer" element={
+                                                    <RequireRole role="developer">
+                                                        <DeveloperLayout />
+                                                    </RequireRole>
+                                                }>
+                                                    <Route index element={<DeveloperDashboard />} />
+                                                    <Route path="explorer" element={<DeveloperExplorer />} />
+                                                    <Route path="analysis" element={<DeveloperAnalysis />} />
+                                                </Route>
+
                                                     <RequireAdmin>
                                                         <ExerciseDatabasePage />
                                                     </RequireAdmin>
