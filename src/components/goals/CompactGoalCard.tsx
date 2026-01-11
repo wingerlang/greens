@@ -41,95 +41,84 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
         return val.toString();
     };
 
-    const targetText = (() => {
+    const friendlyTargetText = (() => {
         const t = goal.targets[0];
-        if (goal.type === 'weight') return `${goal.targetWeight} kg`;
-        if (!t) return '';
-        if (goal.type === 'frequency') return `${t.count}x/${goal.period === 'weekly' ? 'v' : 'p'}`;
-        if (goal.type === 'streak') {
-            const suffix = goal.category === 'nutrition' || goal.category === 'lifestyle' ? 'dagar' : 'pass';
-            return `${t.count} ${suffix}`;
+        if (goal.type === 'weight') {
+            if (goal.targetWeight === undefined) return 'Mål: Stabil vikt';
+            const isLoss = (progress?.current || 0) > goal.targetWeight;
+            return isLoss ? `Gå ner till ${goal.targetWeight} kg` : `Gå upp till ${goal.targetWeight} kg`;
         }
-        return `${formatValue(t.value || 0)} ${t.unit}`;
+        if (goal.type === 'frequency') {
+            const periodText = goal.period === 'weekly' ? 'i veckan' : 'totalt';
+            return `Träna ${t.count} gånger ${periodText}`;
+        }
+        if (goal.type === 'streak') return `Håll i ${t.count} dagars streak`;
+        if (!t) return 'Mål';
+        return `Mål: ${formatValue(t.value || 0)} ${t.unit}`;
     })();
 
-    const progressText = (() => {
-        if (goal.type === 'weight') return `${progress?.current.toFixed(1)} kg`;
-        return formatValue(Math.round(progress?.current || 0));
+    const friendlyProgressText = (() => {
+        if (goal.type === 'weight') {
+            return `Just nu: ${progress?.current.toFixed(1)} kg`;
+        }
+        if (goal.type === 'frequency') {
+            // "2 av 4 pass avklarade"
+            return `${progress?.current} av ${goal.targets[0]?.count} pass klara`;
+        }
+        if (goal.type === 'streak') {
+            return `${progress?.current} dagar i rad`;
+        }
+        // Generic: "45 / 100 km"
+        return `${formatValue(Math.round(progress?.current || 0))} / ${formatValue(goal.targets[0]?.value || 0)} ${goal.targets[0]?.unit}`;
     })();
 
     return (
         <div
             onClick={onClick}
-            className="group relative bg-[#1e1e24] hover:bg-[#25252b] border border-white/5 rounded-lg p-3 transition-all cursor-pointer flex items-center gap-3 overflow-hidden"
+            className="group relative bg-[#1e1e24] border border-white/5 rounded-xl p-4 transition-all cursor-pointer flex items-center gap-4 hover:border-white/10 hover:bg-[#232329]"
         >
-            {/* Progress Bar Background */}
-            <div
-                className="absolute bottom-0 left-0 h-0.5 bg-white/10 w-full"
-            >
+            {/* Progress Bar Background (Integrated at bottom) */}
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5">
                 <div
-                    className="h-full transition-all duration-500"
+                    className="h-full transition-all duration-500 ease-out"
                     style={{ width: `${percentage}%`, backgroundColor: color }}
                 />
             </div>
 
             {/* Icon */}
             <div
-                className="w-8 h-8 rounded-md flex items-center justify-center text-lg shrink-0"
+                className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0 shadow-sm"
                 style={{ backgroundColor: `${color}15`, color: color }}
             >
                 {TYPE_ICONS[goal.type] || '🎯'}
             </div>
 
             {/* Content */}
-            <div className="flex-1 min-w-0">
-                <div className="flex flex-col">
-                    <h4 className="font-bold text-white text-sm truncate pr-2">{goal.name}</h4>
-                    <div className="text-[11px] text-white/70 mt-0.5">
-                        {goal.type === 'frequency' && (
-                            <span>Mål: {targetText} (just nu: <span className={percentage >= 100 ? 'text-emerald-400 font-bold' : 'text-white font-bold'}>{progressText}</span>)</span>
-                        )}
-                        {goal.type === 'weight' && (
-                            <span>{goal.targetWeight! < (progress?.current || 0) ? 'Gå ner till' : 'Gå upp till'} <span className="text-white font-bold">{goal.targetWeight} kg</span> (nu: {progress?.current.toFixed(1)})</span>
-                        )}
-                        {(goal.type !== 'frequency' && goal.type !== 'weight') && (
-                            <span>{progressText} / {targetText}</span>
-                        )}
-                    </div>
-                </div>
-                <div className="flex justify-between items-center mt-1">
-                    <span className="text-[9px] text-white/30 uppercase tracking-widest">
-                        {goal.period === 'once' ? 'Slutmål' : goal.period}
-                    </span>
-                    {percentage >= 100 && (
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded flex items-center gap-1">
-                            UPPNÅTT!
-                        </span>
+            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                <div className="flex justify-between items-start">
+                    <h4 className="font-bold text-white text-base truncate pr-8">{goal.name}</h4>
+                    {/* Delete X Button - Always visible but subtle */}
+                    {onDelete && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onDelete(goal.id); }}
+                            className="absolute top-3 right-3 w-6 h-6 flex items-center justify-center text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-full transition-colors"
+                            title="Ta bort mål"
+                        >
+                            ✕
+                        </button>
                     )}
+                </div>
+
+                <div className="flex flex-col gap-0.5 mt-1">
+                    <span className="text-xs text-slate-400 font-medium">{friendlyTargetText}</span>
+                    <span className={`text-xs font-bold ${percentage >= 100 ? 'text-emerald-400' : 'text-slate-300'}`}>
+                        {friendlyProgressText}
+                    </span>
                 </div>
             </div>
 
-            {/* Hover Actions (Desktop) */}
-            <div className="hidden group-hover:flex items-center gap-1 absolute right-2 bg-[#25252b] pl-2 shadow-[-10px_0_10px_-5px_rgba(37,37,43,1)]">
-                {onEdit && (
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onEdit(goal); }}
-                        className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded"
-                        title="Redigera"
-                    >
-                        ✏️
-                    </button>
-                )}
-                {onDelete && (
-                    <button
-                        onClick={(e) => { e.stopPropagation(); onDelete(goal.id); }}
-                        className="p-1.5 text-white/40 hover:text-rose-400 hover:bg-rose-500/10 rounded"
-                        title="Ta bort"
-                    >
-                        ✕
-                    </button>
-                )}
-            </div>
+            {/* Percentage Badge (if meaningful space allows, maybe keep it clean) */}
+            {/* Keeping it clean as requested "less ugly boxes" */}
         </div>
     );
 };

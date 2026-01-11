@@ -142,6 +142,43 @@ export function HealthOverview({ snapshots, stats, timeframe, exerciseEntries, w
                         <span className="text-xs text-slate-500">g</span>
                     </div>
                 </div>
+
+                {/* Training Load Card (New) */}
+                {(() => {
+                    // Calculate Training Load
+                    const loadScore = useMemo(() => {
+                        if (!snapshots.length) return 0;
+                        // Filter entries that fall within the snapshots date range
+                        const startDate = snapshots[snapshots.length - 1].date;
+                        const endDate = snapshots[0].date;
+
+                        const relevantEntries = exerciseEntries.filter(e => e.date >= startDate && e.date <= endDate);
+
+                        const totalLoad = relevantEntries.reduce((sum, e) => {
+                            const duration = e.durationMinutes || 0;
+                            let factor = 2; // low
+                            if (e.intensity === 'moderate') factor = 4;
+                            if (e.intensity === 'high') factor = 7;
+                            if (e.intensity === 'ultra') factor = 10;
+                            return sum + (duration * factor);
+                        }, 0);
+
+                        return totalLoad / snapshots.length * 7; // Weekly average
+                    }, [snapshots, exerciseEntries]);
+
+                    return (
+                        <div className="glass border-l-4 border-violet-500/50 p-3 rounded-lg flex flex-col justify-center relative overflow-hidden">
+                            <div className="absolute -right-2 -bottom-2 text-6xl opacity-5 pointer-events-none">
+                                ⚡
+                            </div>
+                            <div className="text-[10px] uppercase font-bold text-slate-500 mb-0.5 relative z-10">Belastning / v</div>
+                            <div className="flex items-baseline gap-1 relative z-10">
+                                <span className="text-xl font-black text-violet-400">{Math.round(loadScore)}</span>
+                                <span className="text-xs text-slate-500">au</span>
+                            </div>
+                        </div>
+                    );
+                })()}
             </section>
 
             <div className="flex flex-col md:flex-row items-start gap-6">

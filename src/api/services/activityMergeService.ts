@@ -104,12 +104,25 @@ export function createMergedActivity(
 
     // Create merged activity
     const now = new Date().toISOString();
+
+    // Determine Name
+    const stravaSource = activities.find(a => a.performance?.source?.source === 'strava' || a.plan?.source === 'strava' || (a as any).source === 'strava');
+    const baseName = stravaSource
+        ? (stravaSource.plan?.title || stravaSource.performance?.notes || 'Strava Activity')
+        : getMergedActivityTitle(activities);
+
     const mergedActivity: UniversalActivity = {
         id: generateId(),
         userId,
         date: earliestDate,
         status: 'COMPLETED',
         performance: mergedPerformance,
+        plan: {
+            title: baseName,
+            activityType: mergedPerformance.activityType || 'other',
+            description: `Merged from ${activities.length} activities`,
+            distanceKm: 0,
+        },
         mergeInfo: {
             isMerged: true,
             originalActivityIds: activities.map(a => a.id),
@@ -243,6 +256,12 @@ export function mergeStrengthWorkouts(
     // Calculate total duration
     const totalDuration = workouts.reduce((sum, w) => sum + (w.duration || 0), 0);
 
+    // Determine Name: Prioritize Strava Name if available
+    const stravaSource = workouts.find(w => w.source === 'strava');
+    const baseName = stravaSource
+        ? (stravaSource.name || stravaSource.sourceWorkoutName || 'Strava Activity')
+        : `Sammanslagen (${workouts.length} pass)`;
+
     // Create merged workout
     const now = new Date().toISOString();
     const id = `str-merged-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -251,7 +270,7 @@ export function mergeStrengthWorkouts(
         id,
         userId,
         date: earliestDate,
-        name: `Sammanslagen (${workouts.length} pass)`,
+        name: baseName,
         exercises: mergedExercises,
         totalVolume,
         totalSets,
@@ -259,7 +278,7 @@ export function mergeStrengthWorkouts(
         uniqueExercises: mergedExercises.length,
         duration: totalDuration,
         notes: `Sammanslagen från ${workouts.length} pass: ${workouts.map(w => w.name || w.sourceWorkoutName || 'Okänt').join(', ')}`,
-        source: 'manual',
+        source: 'manual', // The merged result is effectively manually created
         createdAt: now,
         updatedAt: now,
     };
@@ -301,6 +320,12 @@ export function createMergedStrengthActivity(
             durationMinutes: mergedWorkout.duration || 60,
             calories: 0, // Would need to recalculate
             notes: mergedWorkout.notes,
+        },
+        plan: {
+            title: mergedWorkout.name,
+            description: mergedWorkout.notes,
+            activityType: 'strength',
+            distanceKm: 0,
         },
         mergeInfo: {
             isMerged: true,

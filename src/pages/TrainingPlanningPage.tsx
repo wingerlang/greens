@@ -165,68 +165,75 @@ export function TrainingPlanningPage() {
         return calculateWeeklyStats(getISODate(lastWeekStart));
     }, [currentWeekStart, unifiedActivities, plannedActivities]);
 
-    // Goal progress for sessions/km per week
+    // Unified Goal Progress Logic
     const goalProgress = useMemo(() => {
-        const activeGoals = performanceGoals.filter(g => g.status === 'active');
+        return performanceGoals
+            .filter(g => g.status === 'active')
+            .map(goal => {
+                let current = 0;
+                let planned = 0;
+                let target = 0;
+                let unitLabel = '';
 
-        // Find session goals - distinguish between styrka and total/löpning
-        const sessionGoals = activeGoals.filter(g =>
-            g.targets?.some(t => t.unit === 'sessions' || t.unit?.toLowerCase().includes('pass'))
-        );
+                // Extract Target
+                // Priority: KM > Sessions > Tonnage
+                const kmTarget = goal.targets?.find(t => t.unit === 'km')?.value;
+                const sessionTarget = goal.targets?.find(t => ['sessions', 'pass', 'x/v'].some(u => t.unit?.toLowerCase().includes(u)))?.value
+                    || goal.targets?.find(t => ['sessions', 'pass', 'x/v'].some(u => t.unit?.toLowerCase().includes(u)))?.count;
+                const tonTarget = goal.targets?.find(t => t.unit === 'ton')?.value;
 
-        const strengthSessionGoal = sessionGoals.find(g =>
-            g.name.toLowerCase().includes('styrka') || g.type === 'tonnage'
-        );
+                if (kmTarget) {
+                    target = kmTarget;
+                    current = weeklyStats.running.km;
+                    planned = Math.max(0, weeklyStats.forecast.runningKm - current);
+                    unitLabel = 'km';
+                } else if (tonTarget) {
+                    target = tonTarget;
+                    current = weeklyStats.strength.tonnage / 1000; // Assuming tons
+                    planned = 0; // No forecast for tonnage yet
+                    unitLabel = 'ton';
+                } else if (sessionTarget) {
+                    target = sessionTarget;
+                    const isStrength = goal.name.toLowerCase().includes('styrka') || goal.name.toLowerCase().includes('strength');
+                    const isRunning = goal.name.toLowerCase().includes('löpning') || goal.name.toLowerCase().includes('run');
 
-        const totalSessionGoal = sessionGoals.find(g =>
-            !g.name.toLowerCase().includes('styrka') && g.type !== 'tonnage'
-        );
+                    if (isStrength) {
+                        current = weeklyStats.strength.sessions;
+                        planned = Math.max(0, weeklyStats.forecast.strengthSessions - current);
+                    } else if (isRunning) {
+                        current = weeklyStats.running.sessions;
+                        planned = Math.max(0, weeklyStats.forecast.runningSessions - current);
+                    } else {
+                        // Total
+                        current = weeklyStats.running.sessions + weeklyStats.strength.sessions;
+                        // For forecast total, we sum them
+                        const forecastTotal = weeklyStats.forecast.runningSessions + weeklyStats.forecast.strengthSessions;
+                        planned = Math.max(0, forecastTotal - current);
+                    }
+                    unitLabel = 'pass';
+                }
 
-        // Find km goal (unit === 'km' or name contains km)
-        const kmGoal = activeGoals.find(g =>
-            g.targets?.some(t => t.unit === 'km') || g.name.toLowerCase().includes('km')
-        );
+                // Color coding
+                const isStrength = goal.name.toLowerCase().includes('styrka');
+                const isRunning = goal.name.toLowerCase().includes('löpning') || kmTarget;
+                const colorClass = isStrength ? 'bg-purple-500' : (isRunning ? 'bg-emerald-500' : 'bg-indigo-500');
+                const plannedClass = isStrength ? 'bg-purple-500/30' : (isRunning ? 'bg-emerald-500/30' : 'bg-indigo-500/30');
 
-        const strengthSessionsCount = weeklyStats.strength.sessions;
-        const totalSessions = weeklyStats.running.sessions + strengthSessionsCount;
-        const currentKm = weeklyStats.running.km;
-
-        // Helper to extract target value
-        const getTargetValue = (goal: any, unit: string) => {
-             return goal.targets?.find((t: any) => t.unit === unit || t.unit?.toLowerCase().includes(unit === 'sessions' ? 'pass' : unit))?.count ||
-                    goal.targets?.find((t: any) => t.unit === unit || t.unit?.toLowerCase().includes(unit === 'sessions' ? 'pass' : unit))?.value || 0;
-        };
-
-        const strengthTarget = strengthSessionGoal ? getTargetValue(strengthSessionGoal, 'sessions') : 0;
-        const totalTarget = totalSessionGoal ? getTargetValue(totalSessionGoal, 'sessions') : 0;
-        const kmTarget = kmGoal ? getTargetValue(kmGoal, 'km') : 0;
-
-        // Calculate "Planned but not done"
-        // This is: Forecast - Actual. If negative, 0.
-        const strengthPlanned = Math.max(0, weeklyStats.forecast.strengthSessions - weeklyStats.strength.sessions);
-        const totalPlanned = Math.max(0, (weeklyStats.forecast.runningSessions + weeklyStats.forecast.strengthSessions) - (weeklyStats.running.sessions + weeklyStats.strength.sessions));
-        const kmPlanned = Math.max(0, weeklyStats.forecast.runningKm - weeklyStats.running.km);
-
-        return {
-            strengthSessions: strengthSessionGoal ? {
-                target: strengthTarget,
-                current: strengthSessionsCount,
-                planned: strengthPlanned,
-                name: 'Styrkepass'
-            } : null,
-            totalSessions: totalSessionGoal ? {
-                target: totalTarget,
-                current: totalSessions,
-                planned: totalPlanned,
-                name: totalSessionGoal.name
-            } : null,
-            km: kmGoal ? {
-                target: kmTarget,
-                current: currentKm,
-                planned: kmPlanned,
-                name: 'Distans'
-            } : null
-        };
+                return {
+                    id: goal.id,
+                    name: goal.name,
+                    target,
+                    current,
+                    planned,
+                    unit: unitLabel,
+                    isMet: current >= target,
+                    isProjectedMet: (current + planned) >= target,
+                    colorClass,
+                    plannedClass
+                };
+            })
+            // Filter out goals with 0 target to avoid division by zero or weird UI
+            .filter(g => g.target > 0);
     }, [performanceGoals, weeklyStats]);
 
     // Handlers
@@ -244,6 +251,28 @@ export function TrainingPlanningPage() {
         }
         setIsModalOpen(false);
         setEditingActivity(null);
+    };
+
+    // UI Helper: Format duration as hh:mm
+    const formatDurationHHMM = (minutes: number) => {
+        if (!minutes) return '00:00';
+        const h = Math.floor(minutes / 60);
+        const m = Math.round(minutes % 60);
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    };
+
+    // Helper: Update URL params
+    const updateUrlParams = (params: Record<string, string>) => {
+        const searchParams = new URLSearchParams(window.location.search);
+        Object.entries(params).forEach(([key, value]) => {
+            searchParams.set(key, value);
+        });
+        const newUrl = window.location.pathname + '?' + searchParams.toString() + window.location.hash;
+        window.history.replaceState({}, '', newUrl);
+        // Force re-render/logic run via popstate or just rely on Layout.tsx listening to URL
+        // To be safe, we can navigate(current + search) but we want to avoid refresh.
+        // Since we are using react-router in Layout.tsx, using navigate() with search params is best.
+        navigate('?' + searchParams.toString(), { replace: true });
     };
 
     return (
@@ -279,24 +308,40 @@ export function TrainingPlanningPage() {
             </div>
 
             {/* Weekly Summary & Goals Widget */}
-            <div className="max-w-6xl mx-auto mb-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="max-w-6xl mx-auto mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 0. Föregående Vecka (Historical) */}
                 <div className="bg-slate-50/50 dark:bg-slate-800/30 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm opacity-80">
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex items-center gap-2 mb-3">
                         <Clock size={16} className="text-slate-400" />
                         <span className="text-xs font-black uppercase tracking-wider text-slate-500">Föregående Vecka</span>
                     </div>
-                    <div className="space-y-4">
-                        <div>
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">🏃 Löpning</div>
-                            <div className="text-xs font-bold text-slate-700 dark:text-slate-400">
-                                {lastWeeklyStats.running.sessions} pass | {lastWeeklyStats.running.km.toFixed(1)} km | {formatDuration(lastWeeklyStats.running.time * 60)}
+                    <div className="flex items-start gap-4">
+                        <div className="flex flex-col flex-1">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">🏃 Löpning</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-2xl font-black text-slate-700 dark:text-slate-300">
+                                    {lastWeeklyStats.running.km.toFixed(1)}
+                                    <span className="text-sm font-bold text-slate-400 ml-1">km</span>
+                                </span>
+                            </div>
+                            <div className="text-xs font-medium text-slate-500">
+                                {lastWeeklyStats.running.sessions} pass • {formatDuration(lastWeeklyStats.running.time * 60)}
                             </div>
                         </div>
-                        <div className="border-t border-slate-100 dark:border-slate-800/50 pt-3">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">💪 Styrka</div>
-                            <div className="text-xs font-bold text-slate-700 dark:text-slate-400">
-                                {lastWeeklyStats.strength.sessions} pass | {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)}t | {formatDuration(lastWeeklyStats.strength.time * 60)}
+
+                        {/* Divider */}
+                        <div className="w-px bg-slate-200 dark:bg-slate-700 self-stretch"></div>
+
+                        <div className="flex flex-col flex-1">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">💪 Styrka</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-xl font-black text-slate-700 dark:text-slate-300">
+                                    {lastWeeklyStats.strength.sessions}
+                                    <span className="text-sm font-bold text-slate-400 ml-1">pass</span>
+                                </span>
+                            </div>
+                            <div className="text-xs font-medium text-slate-500">
+                                {(lastWeeklyStats.strength.tonnage / 1000).toFixed(1)} ton • {formatDuration(lastWeeklyStats.strength.time * 60)}
                             </div>
                         </div>
                     </div>
@@ -304,63 +349,109 @@ export function TrainingPlanningPage() {
 
                 {/* 1. Denna Vecka (Actuals) */}
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex items-center gap-2 mb-3">
                         <TrendingUp size={16} className="text-emerald-500" />
                         <span className="text-xs font-black uppercase tracking-wider text-slate-500">Denna Vecka</span>
                     </div>
-                    <div className="space-y-4">
-                        <div>
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">🏃 Löpning</div>
-                            <div className="text-xs font-bold text-slate-900 dark:text-white">
-                                {weeklyStats.running.sessions} pass | {weeklyStats.running.km.toFixed(1)} km | {formatDuration(weeklyStats.running.time * 60)}
+                    <div className="flex items-start gap-4">
+                        <div className="flex flex-col flex-1">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">🏃 Löpning</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-3xl font-black text-slate-900 dark:text-white">
+                                    {weeklyStats.running.km.toFixed(1)}
+                                    <span className="text-lg font-bold text-slate-400 ml-1">km</span>
+                                </span>
+                            </div>
+                            <div className="text-xs font-medium text-slate-500 flex items-center gap-2">
+                                <span>{weeklyStats.running.sessions} pass</span>
+                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                <span>{formatDuration(weeklyStats.running.time * 60)}</span>
                             </div>
                         </div>
-                        <div className="border-t border-slate-50 dark:border-slate-800 pt-3">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">💪 Styrka</div>
-                            <div className="text-xs font-bold text-slate-900 dark:text-white">
-                                {weeklyStats.strength.sessions} pass | {(weeklyStats.strength.tonnage / 1000).toFixed(1)}t | {formatDuration(weeklyStats.strength.time * 60)}
+
+                        {/* Divider */}
+                        <div className="w-px bg-slate-100 dark:bg-slate-800 self-stretch"></div>
+
+                        <div className="flex flex-col flex-1">
+                            <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">💪 Styrka</div>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-2xl font-black text-slate-900 dark:text-white">
+                                    {weeklyStats.strength.sessions}
+                                    <span className="text-base font-bold text-slate-400 ml-1">pass</span>
+                                </span>
+                            </div>
+                            <div className="text-xs font-medium text-slate-500 flex items-center gap-2">
+                                <span>{(weeklyStats.strength.tonnage / 1000).toFixed(1)} ton</span>
+                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                <span>{formatDuration(weeklyStats.strength.time * 60)}</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* 2. Veckomål (Goals) */}
-                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Target size={16} className="text-indigo-500" />
-                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Veckomål</span>
+                {/* 2. Veckomål & Prognos (Compact Combined) */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm relative overflow-hidden">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Target size={16} className="text-indigo-500" />
+                            <span className="text-xs font-black uppercase tracking-wider text-slate-500">Mål & Prognos</span>
+                        </div>
+                        {/* Forecast Mini-Summary */}
+                        <div className="flex gap-2 text-[10px] uppercase font-black text-slate-400">
+                            <span className="flex items-center gap-1"><Zap size={10} className="text-amber-500 fill-amber-500" /> {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
+                        </div>
                     </div>
-                    {(!goalProgress.strengthSessions && !goalProgress.totalSessions && !goalProgress.km) ? (
+
+                    {goalProgress.length === 0 ? (
                         <p className="text-xs text-slate-400 italic">Inga aktiva veckomål.</p>
                     ) : (
-                        <div className="space-y-4">
-                            {/* Reusable Progress Bar Component */}
-                            {[
-                                goalProgress.strengthSessions && { ...goalProgress.strengthSessions, colorClass: 'bg-purple-500', plannedClass: 'bg-purple-500/30' },
-                                goalProgress.totalSessions && { ...goalProgress.totalSessions, colorClass: 'bg-indigo-500', plannedClass: 'bg-indigo-500/30' },
-                                goalProgress.km && { ...goalProgress.km, colorClass: 'bg-emerald-500', plannedClass: 'bg-emerald-500/30' }
-                            ].filter(Boolean).map((goal: any, i) => {
+                        <div className="space-y-3">
+                            {goalProgress.map((goal) => {
                                 const currentPct = Math.min(100, (goal.current / goal.target) * 100);
                                 const plannedPct = Math.min(100 - currentPct, (goal.planned / goal.target) * 100);
-                                const isMet = goal.current >= goal.target;
+
+                                const isActuallyMet = goal.current >= goal.target;
+                                const isProjectedMet = (goal.current + goal.planned) >= goal.target;
+
+                                // Over-performance calculation
+                                const overPerformance = Math.max(0, goal.current - goal.target);
+                                const isOverPerforming = overPerformance > 0;
 
                                 return (
-                                    <div key={i}>
+                                    <div key={goal.id}>
                                         <div className="flex justify-between text-[10px] font-black uppercase mb-1">
-                                            <span className="text-slate-400">{goal.name}</span>
-                                            <span className={isMet ? 'text-emerald-500' : 'text-slate-500'}>
-                                                {typeof goal.current === 'number' && !Number.isInteger(goal.current) ? goal.current.toFixed(1) : goal.current}
-                                                <span className="text-slate-300 mx-1">/</span>
-                                                {goal.target}
-                                                {goal.planned > 0 && !isMet && (
-                                                    <span className="text-slate-400 ml-1 italic">(+{typeof goal.planned === 'number' && !Number.isInteger(goal.planned) ? goal.planned.toFixed(1) : goal.planned})</span>
+                                            <span className="text-slate-500 dark:text-slate-400 truncate pr-2 flex items-center gap-1.5">
+                                                {goal.name}
+                                                {isActuallyMet ? (
+                                                    <Check size={12} className="text-emerald-500 stroke-[3]" />
+                                                ) : isProjectedMet ? (
+                                                    <Check size={12} className="text-emerald-500/50 stroke-[3]" />
+                                                ) : null}
+                                            </span>
+                                            <span className={isActuallyMet ? 'text-emerald-500' : isProjectedMet ? 'text-slate-700 dark:text-slate-300' : 'text-slate-500'}>
+                                                {/* Logic for Over-Performance Display */}
+                                                {isOverPerforming ? (
+                                                    <span className="flex items-center gap-1">
+                                                        <span>{goal.target} {goal.unit}</span>
+                                                        <span className="text-emerald-600 bg-emerald-100 dark:bg-emerald-500/20 px-1 rounded text-[9px]">+{(goal.current - goal.target).toFixed(1)}</span>
+                                                    </span>
+                                                ) : (
+                                                    <>
+                                                        {typeof goal.current === 'number' && !Number.isInteger(goal.current) ? goal.current.toFixed(1) : goal.current}
+                                                        <span className="text-slate-300 mx-1">/</span>
+                                                        {goal.target} {goal.unit}
+                                                    </>
+                                                )}
+
+                                                {goal.planned > 0 && !isActuallyMet && (
+                                                    <span className="text-slate-400 ml-1 italic font-medium">(+{typeof goal.planned === 'number' && !Number.isInteger(goal.planned) ? goal.planned.toFixed(1) : goal.planned})</span>
                                                 )}
                                             </span>
                                         </div>
-                                        <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                        <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden flex relative">
                                             {/* Completed Segment (Solid) */}
                                             <div
-                                                className={`h-full transition-all ${isMet ? 'bg-emerald-500' : goal.colorClass}`}
+                                                className={`h-full transition-all ${isActuallyMet ? 'bg-emerald-500' : goal.colorClass}`}
                                                 style={{ width: `${currentPct}%` }}
                                             />
                                             {/* Planned Segment (Striped/Dashed) */}
@@ -370,7 +461,15 @@ export function TrainingPlanningPage() {
                                                     style={{
                                                         width: `${plannedPct}%`,
                                                         backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(255,255,255,0.2) 4px, rgba(255,255,255,0.2) 8px)'
-                                                     }}
+                                                    }}
+                                                />
+                                            )}
+
+                                            {/* Over-performance Indicator (Bonus Bar) */}
+                                            {isOverPerforming && (
+                                                <div
+                                                    className="absolute right-0 top-0 bottom-0 w-1 bg-amber-400 animate-pulse shadow-[0_0_10px_rgba(251,191,36,0.5)]"
+                                                    title="Målet överträffat!"
                                                 />
                                             )}
                                         </div>
@@ -379,28 +478,6 @@ export function TrainingPlanningPage() {
                             })}
                         </div>
                     )}
-                </div>
-
-                {/* 3. Prognos (Forecast) */}
-                <div className="bg-emerald-50/50 dark:bg-emerald-900/5 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-4">
-                        <Zap size={16} className="text-amber-500 fill-amber-500" />
-                        <span className="text-xs font-black uppercase tracking-wider text-slate-500">Prognos</span>
-                    </div>
-                    <div className="space-y-4">
-                        <div>
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">Löpning Totalt</div>
-                            <div className="text-xs font-bold text-slate-900 dark:text-white">
-                                {weeklyStats.forecast.runningSessions} pass | {weeklyStats.forecast.runningKm.toFixed(1)} km
-                            </div>
-                        </div>
-                        <div className="border-t border-emerald-100/50 dark:border-emerald-800/30 pt-3">
-                            <div className="text-[10px] font-black uppercase text-slate-400 mb-1">Styrka Totalt</div>
-                            <div className="text-xs font-bold text-slate-900 dark:text-white">
-                                {weeklyStats.forecast.strengthSessions} pass
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -441,12 +518,10 @@ export function TrainingPlanningPage() {
                                         {day.date.split('-')[2]}
                                     </span>
                                 </div>
-                                {(daySessions > 0 || dayKm > 0 || dayTime > 0) && (
-                                    <div className="text-[9px] font-black text-slate-400 flex items-center gap-1.5">
-                                        {dayKm > 0 && <span>🏃 {dayKm.toFixed(1)} km</span>}
-                                        {dayTime > 0 && <span>⏱️ {formatDuration(dayTime * 60)}</span>}
-                                    </div>
-                                )}
+                                <div className="text-[9px] font-black text-slate-400 flex items-center gap-1.5">
+                                    {dayKm > 0 && <span>🏃 {dayKm.toFixed(1)} km</span>}
+                                    {dayTime > 0 && <span>⏱️ {formatDurationHHMM(dayTime)}</span>}
+                                </div>
                             </div>
 
                             {/* Activities */}
@@ -455,7 +530,7 @@ export function TrainingPlanningPage() {
                                 {dayRunningActivities.map((act) => (
                                     <div
                                         key={`run-${act.id}`}
-                                        onClick={() => navigate(`/logg?activityId=${act.id}`)}
+                                        onClick={() => updateUrlParams({ activityId: act.id })}
                                         className="p-3 bg-emerald-500/10 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl relative cursor-pointer hover:bg-emerald-500/20 transition-colors z-10"
                                     >
                                         <div className="flex justify-between items-start mb-1">
@@ -466,32 +541,43 @@ export function TrainingPlanningPage() {
                                         </div>
                                         <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
                                             {act.performance?.distanceKm ? `${act.performance.distanceKm.toFixed(1)} km` : ''}
-                                            {act.performance?.durationMinutes ? ` ${Math.round(act.performance.durationMinutes)} min` : ''}
+                                            {act.performance?.durationMinutes ? ` ${formatDurationHHMM(act.performance.durationMinutes)}` : ''}
                                         </p>
                                     </div>
                                 ))}
 
                                 {/* Strength Sessions (separate from exerciseEntries) */}
-                                {dayStrengthSessions.map(session => (
-                                    <div
-                                        key={`str-${session.id}`}
-                                        onClick={() => navigate(`/logg?activityId=${session.id}`)}
-                                        className="p-3 bg-purple-500/10 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl relative cursor-pointer hover:bg-purple-500/20 transition-colors z-10"
-                                    >
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1">
-                                                <Dumbbell size={10} />
-                                                Styrka
-                                            </span>
+                                {dayStrengthSessions.map(session => {
+                                    // Fallback: If no duration in Strength Session (common for StrengthLog imports),
+                                    // try to find a matching Strava activity on the same day to borrow duration from.
+                                    const linkedActivity = !session.duration ? universalActivities.find(a =>
+                                        a.date === day.date &&
+                                        (a.performance?.activityType === 'strength')
+                                    ) : undefined;
+
+                                    const displayDuration = session.duration || linkedActivity?.performance?.durationMinutes || 0;
+
+                                    return (
+                                        <div
+                                            key={`str-${session.id}`}
+                                            onClick={() => updateUrlParams({ activityId: session.id })}
+                                            className="p-3 bg-purple-500/10 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl relative cursor-pointer hover:bg-purple-500/20 transition-colors z-10"
+                                        >
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1">
+                                                    <Dumbbell size={10} />
+                                                    Styrka
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
+                                                {session.name || `${session.uniqueExercises} övningar`}
+                                            </p>
+                                            <p className="text-[10px] text-slate-500 mt-1">
+                                                {(session.totalVolume / 1000).toFixed(1)}t • {formatDurationHHMM(displayDuration)}
+                                            </p>
                                         </div>
-                                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                            {session.name || `${session.uniqueExercises} övningar`}
-                                        </p>
-                                        <p className="text-[10px] text-slate-500 mt-1">
-                                            {(session.totalVolume / 1000).toFixed(1)}t • {Math.round(session.duration || 0)} min
-                                        </p>
-                                    </div>
-                                ))}
+                                    );
+                                })}
 
                                 {/* Planned Activities - Clickable for edit */}
                                 {dayActivities.map(act => (
@@ -521,7 +607,7 @@ export function TrainingPlanningPage() {
                                         {(act.estimatedDistance || 0) > 0 && (
                                             <div className="mt-2 text-[10px] font-bold text-slate-500 flex items-center gap-1">
                                                 <Activity size={10} />
-                                                {act.estimatedDistance} km
+                                                {Number(act.estimatedDistance).toFixed(1)} km
                                             </div>
                                         )}
                                     </div>
@@ -530,7 +616,7 @@ export function TrainingPlanningPage() {
                                 <button
                                     onClick={() => {
                                         if (isPast) {
-                                            navigate(`?registerDate=${day.date}&registerInput=löpning`);
+                                            updateUrlParams({ registerDate: day.date, registerInput: 'löpning' });
                                         } else {
                                             handleOpenModal(day.date);
                                         }

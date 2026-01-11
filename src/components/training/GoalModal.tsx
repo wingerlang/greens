@@ -107,7 +107,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
     const [calculatedMacros, setCalculatedMacros] = useState<{ calories: number, protein: number, carbs: number, fat: number } | null>(null);
 
     // Get data from context
-    const { weightEntries = [], trainingPeriods = [], performanceGoals = [], calculateBMR, exerciseEntries = [] } = useData();
+    const { weightEntries = [], trainingPeriods = [], performanceGoals = [], calculateBMR, exerciseEntries = [], currentUser } = useData();
     const { settings, updateSettings } = useSettings();
 
     // Get latest weight entry
@@ -258,6 +258,37 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             setIncludeMeasurement(false);
         }
     }, [isOpen, editingGoal]);
+
+    // Period Link
+    const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
+
+    // Pre-fill period based on date or existing
+    useEffect(() => {
+        if (isOpen && !editingGoal) {
+            // New Goal: Auto-select active period
+            const today = new Date().toISOString().split('T')[0];
+            const active = trainingPeriods.find(p => p.startDate <= today && p.endDate >= today);
+            if (active) {
+                setSelectedPeriodId(active.id);
+                // User Request: Pre-set end date to period end
+                setDurationPreset('custom');
+                setCustomEndDate(active.endDate);
+            } else {
+                setSelectedPeriodId('');
+            }
+        } else if (isOpen && editingGoal) {
+            // Edit Goal: Use existing
+            setSelectedPeriodId(editingGoal.periodId || '');
+        }
+    }, [isOpen, editingGoal, trainingPeriods]);
+
+    const activePeriod = useMemo(() => {
+        if (!selectedPeriodId) return null;
+        return trainingPeriods.find(p => p.id === selectedPeriodId);
+    }, [selectedPeriodId, trainingPeriods]);
+
+    // Update activePeriodName helper
+    const activePeriodName = activePeriod?.name;
 
     // Pre-fill weight when switching to weight goal type
     useEffect(() => {
@@ -425,10 +456,11 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             category,
             status: editingGoal?.status || 'active',
             // Weight-specific fields
-            targetWeight: type === 'weight' || type === 'measurement' ? parseFloat(targetWeight) || undefined : undefined,
             targetWeightRate: type === 'weight' ? parseFloat(weeklyRate) || undefined : undefined,
             milestoneProgress: type === 'weight' ? parseFloat(currentWeight) || undefined : undefined,
             nutritionMacros: calculatedMacros || undefined,
+            periodId: selectedPeriodId || undefined,
+            userId: currentUser?.id || 'unknown'
         };
 
         onSave(goalData);
@@ -633,13 +665,33 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                 <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px]">2</span>
                                 Namnge målet
                             </label>
-                            <input
-                                type="text"
-                                placeholder="t.ex. 'Sommarform 2026' eller 'Styrka 3x'"
-                                value={name}
-                                onChange={e => setName(e.target.value)}
-                                className="w-full bg-slate-950/50 border border-white/10 rounded-xl p-3.5 text-white focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none"
-                            />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <input
+                                    type="text"
+                                    placeholder="t.ex. 'Sommarform 2026' eller 'Styrka 3x'"
+                                    value={name}
+                                    onChange={e => setName(e.target.value)}
+                                    className="w-full bg-slate-950/50 border border-white/10 rounded-xl p-3.5 text-white focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none"
+                                />
+                                {/* Period Selector */}
+                                <div className="relative">
+                                    <select
+                                        value={selectedPeriodId}
+                                        onChange={e => setSelectedPeriodId(e.target.value)}
+                                        className="w-full bg-slate-950/50 border border-white/10 rounded-xl p-3.5 text-white focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none appearance-none"
+                                    >
+                                        <option value="">Ingen specifik period</option>
+                                        {trainingPeriods.map(p => (
+                                            <option key={p.id} value={p.id}>
+                                                {p.name} ({formatDate(p.startDate)} - {formatDate(p.endDate)})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                        ▼
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* Target Configuration based on type */}
@@ -1214,7 +1266,17 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                             <div className="p-4 bg-slate-950/30 rounded-xl border border-white/5 space-y-4">
                                 {/* Start Date Presets */}
                                 <div className="space-y-2">
-                                    <label className="text-[10px] uppercase font-bold text-slate-500">Startdatum</label>
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-[10px] uppercase font-bold text-slate-500">Startdatum</label>
+                                        {activePeriod && (
+                                            <button
+                                                onClick={() => setCustomStartDate(activePeriod.startDate)}
+                                                className="text-[10px] text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-1"
+                                            >
+                                                <span>📅</span> Start av {activePeriod.name}
+                                            </button>
+                                        )}
+                                    </div>
                                     <div className="grid grid-cols-4 gap-2">
                                         {[
                                             { label: 'Idag', val: new Date().toISOString().split('T')[0] },
@@ -1312,7 +1374,9 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                 {durationPreset === 'custom' && (
                                     <div className="grid grid-cols-2 gap-3 p-3 bg-slate-900/50 rounded-lg">
                                         <div className="space-y-1.5">
-                                            <label className="text-[9px] uppercase font-bold text-slate-500">Startdatum</label>
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-[9px] uppercase font-bold text-slate-500">Startdatum</label>
+                                            </div>
                                             <input
                                                 type="date"
                                                 value={customStartDate}
@@ -1321,7 +1385,19 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                             />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <label className="text-[9px] uppercase font-bold text-slate-500">Slutdatum</label>
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-[9px] uppercase font-bold text-slate-500">Slutdatum</label>
+                                                {/* Helper for Period End */}
+                                                {activePeriod && (
+                                                    <button
+                                                        onClick={() => setCustomEndDate(activePeriod.endDate)}
+                                                        title={`Sätt till ${activePeriod.endDate}`}
+                                                        className="text-[9px] text-blue-400 hover:text-blue-300"
+                                                    >
+                                                        Slut av {activePeriod.name}
+                                                    </button>
+                                                )}
+                                            </div>
                                             <input
                                                 type="date"
                                                 value={customEndDate}

@@ -447,6 +447,7 @@ export function ActivityDetailModal({
                                     {/* Prominent Strava Link in Header */}
                                     {(() => {
                                         let stravaLink = null;
+                                        let stravaTitle = null;
                                         if (activity.source === 'strava' && activity.externalId) {
                                             stravaLink = `https://www.strava.com/activities/${activity.externalId.replace('strava_', '')}`;
                                         } else if (isMergedActivity) {
@@ -454,11 +455,36 @@ export function ActivityDetailModal({
                                                 .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
                                                 .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
                                             if (stravaOriginals.length > 0) {
-                                                const extId = stravaOriginals[0].performance?.source?.externalId?.replace('strava_', '');
+                                                const longest = stravaOriginals[0];
+                                                const extId = longest.performance?.source?.externalId?.replace('strava_', '');
                                                 stravaLink = `https://www.strava.com/activities/${extId}`;
+                                                stravaTitle = longest.plan?.title || longest.performance?.notes;
                                             }
                                         }
 
+                                        // Merged Badge (Priority)
+                                        if (isMergedActivity || isMerged) {
+                                            if (stravaLink) {
+                                                return (
+                                                    <a
+                                                        href={stravaLink}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 hover:bg-emerald-500 hover:text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all flex items-center gap-1.5 shadow-sm"
+                                                        title={`Sammanslagen (Strava: ${stravaTitle || 'Activity'})`}
+                                                    >
+                                                        <span>⚡</span> Sammanslagen ↗
+                                                    </a>
+                                                );
+                                            }
+                                            return (
+                                                <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight flex items-center gap-1.5 shadow-sm">
+                                                    <span>⚡</span> Sammanslagen
+                                                </div>
+                                            );
+                                        }
+
+                                        // Standalone Strava Link
                                         return stravaLink ? (
                                             <a
                                                 href={stravaLink}
@@ -546,53 +572,14 @@ export function ActivityDetailModal({
                         {/* Source Badge + View Toggle for Merged */}
                         <div className="flex items-center justify-between gap-3 flex-wrap">
                             {(() => {
-                                // For merged activities, find the longest Strava component to link
-                                let stravaLink: string | null = null;
-                                let stravaTitle: string | null = null;
-
-                                if (isMergedActivity && originalActivities.length > 0) {
-                                    const stravaOriginals = originalActivities
-                                        .filter(o => o.performance?.source?.source === 'strava' && o.performance?.source?.externalId)
-                                        .sort((a, b) => (b.performance?.distanceKm || 0) - (a.performance?.distanceKm || 0));
-                                    if (stravaOriginals.length > 0) {
-                                        const longest = stravaOriginals[0];
-                                        const extId = longest.performance?.source?.externalId?.replace('strava_', '');
-                                        stravaLink = `https://www.strava.com/activities/${extId}`;
-                                        stravaTitle = longest.plan?.title || longest.performance?.notes || 'Strava Activity';
-                                    }
-                                }
-
-                                // Display Strava sync badge - REMOVED per user request
-                                // Logical flow continues for Merged/Strength badges
-                                if (isMergedActivity && stravaLink) {
-                                    // Merged activity with Strava component - link to longest
-                                    return (
-                                        <a
-                                            href={stravaLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase hover:bg-emerald-500/30 transition-colors"
-                                            title={`Öppna i Strava: ${stravaTitle}`}
-                                        >
-                                            <span>⚡</span> Sammanslagen (Strava: {stravaTitle?.slice(0, 20)}{(stravaTitle?.length || 0) > 20 ? '...' : ''}) ↗
-                                        </a>
-                                    );
-                                } else if (isMergedActivity || isMerged) {
-                                    // Merged activity without Strava link
-                                    return (
-                                        <div className="inline-flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
-                                            <span>⚡</span> Sammanslagen Aktivitet
-                                        </div>
-                                    );
-                                } else if (activity.source === 'strength') {
+                                if (activity.source === 'strength') {
                                     return (
                                         <div className="inline-flex items-center gap-2 bg-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg text-xs font-bold uppercase">
                                             <span>💪</span> StrengthLog
                                         </div>
                                     );
-                                } else {
-                                    return null;
                                 }
+                                return null;
                             })()}
 
                             {/* Ultra Label */}
@@ -604,56 +591,114 @@ export function ActivityDetailModal({
                         </div>
 
                         {/* DIFF VIEW */}
-                        {isMerged && viewMode === 'diff' && (
-                            <div className="space-y-4">
-                                <h3 className="text-sm font-bold text-amber-400 uppercase">⚖️ Jämförelse mellan källor</h3>
-                                <div className="bg-slate-800/50 rounded-xl overflow-hidden">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-slate-950/50">
-                                            <tr>
-                                                <th className="px-4 py-2 text-left text-slate-500">Fält</th>
-                                                <th className="px-4 py-2 text-center text-purple-400">💪 StrengthLog</th>
-                                                <th className="px-4 py-2 text-center text-[#FC4C02]">🔥 Strava</th>
-                                                <th className="px-4 py-2 text-right text-slate-500">Valt</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-white/5">
-                                            <tr>
-                                                <td className="px-4 py-3 text-white">⏱️ Tid</td>
-                                                <td className="px-4 py-3 text-center text-slate-300">{formatDuration((mergeData.strength?.durationMinutes || 60) * 60)}</td>
-                                                <td className="px-4 py-3 text-center text-slate-300">{formatDuration((mergeData.strava?.durationMinutes || 0) * 60)}</td>
-                                                <td className="px-4 py-3 text-right text-emerald-400 font-bold">{formatDuration(activity.durationMinutes * 60)} ✓</td>
-                                            </tr>
-                                            <tr>
-                                                <td className="px-4 py-3 text-white">🔥 Kalorier</td>
-                                                <td className="px-4 py-3 text-center text-slate-500">-</td>
-                                                <td className="px-4 py-3 text-center text-slate-300">{mergeData.strava?.caloriesBurned || '-'} kcal</td>
-                                                <td className="px-4 py-3 text-right text-emerald-400 font-bold">{activity.caloriesBurned || '-'} ✓</td>
-                                            </tr>
-                                            <tr>
-                                                <td className="px-4 py-3 text-white">❤️ Snitt puls</td>
-                                                <td className="px-4 py-3 text-center text-slate-500">-</td>
-                                                <td className="px-4 py-3 text-center text-slate-300">{perf?.avgHeartRate ? Math.round(perf.avgHeartRate) : '-'} bpm</td>
-                                                <td className="px-4 py-3 text-right text-emerald-400 font-bold">{perf?.avgHeartRate ? `${Math.round(perf.avgHeartRate)} bpm ✓` : '-'}</td>
-                                            </tr>
-                                            <tr>
-                                                <td className="px-4 py-3 text-white">💪 Övningar</td>
-                                                <td className="px-4 py-3 text-center text-emerald-400 font-bold">{strengthWorkout?.uniqueExercises || '-'} st ✓</td>
-                                                <td className="px-4 py-3 text-center text-slate-500">-</td>
-                                                <td className="px-4 py-3 text-right text-emerald-400">{strengthWorkout?.uniqueExercises || '-'}</td>
-                                            </tr>
-                                            <tr>
-                                                <td className="px-4 py-3 text-white">🎯 Set</td>
-                                                <td className="px-4 py-3 text-center text-emerald-400 font-bold">{strengthWorkout?.totalSets || '-'} ✓</td>
-                                                <td className="px-4 py-3 text-center text-slate-500">-</td>
-                                                <td className="px-4 py-3 text-right text-emerald-400">{strengthWorkout?.totalSets || '-'}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                        {/* MERGE TAB CONTENT - DIFF TABLE */}
+                        {isMergedActivity && activeTab === 'merge' && (
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-xl font-black text-white flex items-center gap-2">
+                                        <span className="text-amber-400">⚡</span> Sammanslagen Analys
+                                    </h3>
+                                    <span className="text-xs text-slate-500 font-mono">
+                                        Jämför data från {originalActivities.length} källor
+                                    </span>
                                 </div>
-                                <p className="text-[10px] text-slate-500">
-                                    ✓ = Vald källa för fältet. Strava används för puls/kalorier/tid, StrengthLog för övningar/set.
-                                </p>
+
+                                <div className="bg-slate-800/50 rounded-2xl overflow-hidden border border-white/5">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-slate-950/50 text-xs uppercase font-black text-slate-500">
+                                                <tr>
+                                                    <th className="px-6 py-4">Fält</th>
+                                                    {originalActivities.map((original, i) => (
+                                                        <th key={original.id} className="px-6 py-4 text-center min-w-[140px]">
+                                                            <div className={`flex flex-col gap-1 ${original.performance?.source?.source === 'strava' ? 'text-[#FC4C02]' : 'text-purple-400'}`}>
+                                                                <span>{original.performance?.source?.source === 'strava' ? 'Strava' : 'StrengthLog/Annat'}</span>
+                                                                <span className="text-[9px] opacity-70 font-normal capitalize">
+                                                                    {original.plan?.title || original.performance?.activityType}
+                                                                </span>
+                                                            </div>
+                                                        </th>
+                                                    ))}
+                                                    <th className="px-6 py-4 text-right text-emerald-400">Resultat</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-white/5">
+                                                {/* Title */}
+                                                <tr className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-6 py-4 font-bold text-slate-400">Namn</td>
+                                                    {originalActivities.map((a) => (
+                                                        <td key={a.id} className="px-6 py-4 text-center text-slate-300 font-mono text-xs truncate max-w-[150px]" title={a.plan?.title || a.performance?.notes || ''}>
+                                                            {a.plan?.title || a.performance?.notes || '-'}
+                                                        </td>
+                                                    ))}
+                                                    <td className="px-6 py-4 text-right font-bold text-white font-mono text-xs">
+                                                        {universalActivity?.plan?.title || activity.title || activity.type}
+                                                    </td>
+                                                </tr>
+                                                {/* Description */}
+                                                <tr className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-6 py-4 font-bold text-slate-400">Beskrivning</td>
+                                                    {originalActivities.map((a) => (
+                                                        <td key={a.id} className="px-6 py-4 text-center text-slate-500 text-xs truncate max-w-[150px]" title={a.plan?.description || a.performance?.notes || ''}>
+                                                            {a.plan?.description || a.performance?.notes || '-'}
+                                                        </td>
+                                                    ))}
+                                                    <td className="px-6 py-4 text-right text-slate-400 text-xs">
+                                                        {universalActivity?.plan?.description || activity.notes || '-'}
+                                                    </td>
+                                                </tr>
+                                                {/* Duration */}
+                                                <tr className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-6 py-4 font-bold text-slate-400">Tid</td>
+                                                    {originalActivities.map((a) => (
+                                                        <td key={a.id} className="px-6 py-4 text-center text-slate-300 font-mono">
+                                                            {formatDuration((a.performance?.durationMinutes || 0) * 60)}
+                                                        </td>
+                                                    ))}
+                                                    <td className="px-6 py-4 text-right font-bold text-emerald-400 font-mono">
+                                                        {formatDuration(activity.durationMinutes * 60)}
+                                                    </td>
+                                                </tr>
+                                                {/* Distance */}
+                                                <tr className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-6 py-4 font-bold text-slate-400">Distans</td>
+                                                    {originalActivities.map((a) => (
+                                                        <td key={a.id} className="px-6 py-4 text-center text-slate-300 font-mono">
+                                                            {a.performance?.distanceKm ? `${a.performance.distanceKm.toFixed(2)} km` : '-'}
+                                                        </td>
+                                                    ))}
+                                                    <td className="px-6 py-4 text-right font-bold text-emerald-400 font-mono">
+                                                        {activity.distance ? `${activity.distance.toFixed(2)} km` : '-'}
+                                                    </td>
+                                                </tr>
+                                                {/* Calories */}
+                                                <tr className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-6 py-4 font-bold text-slate-400">Energi</td>
+                                                    {originalActivities.map((a) => (
+                                                        <td key={a.id} className="px-6 py-4 text-center text-slate-300 font-mono">
+                                                            {a.performance?.calories ? `${a.performance.calories} kcal` : '-'}
+                                                        </td>
+                                                    ))}
+                                                    <td className="px-6 py-4 text-right font-bold text-emerald-400 font-mono">
+                                                        {activity.caloriesBurned ? `${activity.caloriesBurned} kcal` : '-'}
+                                                    </td>
+                                                </tr>
+                                                {/* HR */}
+                                                <tr className="hover:bg-white/5 transition-colors">
+                                                    <td className="px-6 py-4 font-bold text-slate-400">Puls</td>
+                                                    {originalActivities.map((a) => (
+                                                        <td key={a.id} className="px-6 py-4 text-center text-slate-300 font-mono">
+                                                            {a.performance?.avgHeartRate ? `${Math.round(a.performance.avgHeartRate)} bpm` : '-'}
+                                                        </td>
+                                                    ))}
+                                                    <td className="px-6 py-4 text-right font-bold text-emerald-400 font-mono">
+                                                        {perf?.avgHeartRate ? `${Math.round(perf.avgHeartRate)} bpm` : '-'}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -779,25 +824,25 @@ export function ActivityDetailModal({
                                                 )}
 
                                                 {/* Achievements */}
-                                                {(perf?.achievementCount !== undefined || perf?.prCount !== undefined || perf?.kudosCount !== undefined) && (
+                                                {(perf?.achievementCount || perf?.prCount || perf?.kudosCount) && (
                                                     <div className="flex flex-col col-span-2">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Engagemang & Prestationer</span>
                                                         <div className="flex items-center gap-4">
-                                                            {perf?.prCount !== undefined && (
+                                                            {perf?.prCount && perf.prCount > 0 && (
                                                                 <div className="flex items-center gap-1.5 sh-tooltip" title={`${perf.prCount} Personbästa`}>
                                                                     <span className="text-orange-400">⚡</span>
                                                                     <span className="text-lg font-black text-white">{perf.prCount}</span>
                                                                     <span className="text-[9px] text-slate-500 uppercase font-bold">PB</span>
                                                                 </div>
                                                             )}
-                                                            {perf?.achievementCount !== undefined && (
+                                                            {perf?.achievementCount && perf.achievementCount > 0 && (
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="text-yellow-400">🏆</span>
                                                                     <span className="text-lg font-black text-white">{perf.achievementCount}</span>
                                                                     <span className="text-[9px] text-slate-500 uppercase font-bold">Awards</span>
                                                                 </div>
                                                             )}
-                                                            {perf?.kudosCount !== undefined && (
+                                                            {perf?.kudosCount && perf.kudosCount > 0 && (
                                                                 <div className="flex items-center gap-1.5">
                                                                     <span className="text-pink-400">❤️</span>
                                                                     <span className="text-lg font-black text-white">{perf.kudosCount}</span>

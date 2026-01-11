@@ -568,117 +568,15 @@ export function GoalsPage() {
                                 {periodGoals.length > 0 && (
                                     <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 ml-1">Övriga Mål</h3>
                                 )}
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                                    {looseGoals.map(({ goal, progress }) => (
-                                        <div
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {looseGoals.map(({ goal }) => (
+                                        <CompactGoalCard
                                             key={goal.id}
-                                            className={`goal-card ${progress.isComplete ? 'complete' : ''} ${!progress.isOnTrack && !progress.isComplete ? 'off-track' : ''}`}
-                                            style={{ '--accent': CATEGORY_CONFIG[goal.category || 'training'].color } as React.CSSProperties}
+                                            goal={goal}
                                             onClick={() => setSearchParams({ goal: goal.id })}
-                                        >
-                                            {/* Category badge */}
-                                            <div className="goal-category-badge">
-                                                {CATEGORY_CONFIG[goal.category || 'training'].icon}
-                                            </div>
-
-                                            {/* Progress Ring - Smaller */}
-                                            <div className="goal-ring">
-                                                <GoalProgressRing
-                                                    percentage={progress.percentage}
-                                                    size={60}
-                                                    strokeWidth={5}
-                                                    color={CATEGORY_CONFIG[goal.category || 'training'].color}
-                                                >
-                                                    <span className="text-sm">{GOAL_TYPE_ICONS[goal.type] || '🎯'}</span>
-                                                </GoalProgressRing>
-                                            </div>
-
-                                            {/* Goal Info */}
-                                            <div className="goal-info">
-                                                <h3 className="goal-name">{goal.name}</h3>
-                                                {goal.description && (
-                                                    <p className="text-[10px] text-slate-500 mb-2 line-clamp-2">{goal.description}</p>
-                                                )}
-                                                <div className="goal-meta flex-col gap-1 mb-3">
-                                                    <span className="text-2xl font-black text-white tracking-tight">
-                                                        {formatProgress(
-                                                            progress.current,
-                                                            progress.target
-                                                        )}
-                                                        <span className="text-sm font-bold text-slate-500 ml-1">
-                                                            {goal.targets[0]?.unit || (goal.type === 'frequency' ? 'pass' : '')}
-                                                        </span>
-                                                    </span>
-                                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                                                        {goal.type === 'frequency'
-                                                            ? (goal.period === 'weekly' ? 'i veckan' : 'totalt')
-                                                            : (goal.period === 'weekly' ? 'per vecka' : 'kvar att göra')
-                                                        }
-                                                    </span>
-                                                </div>
-
-                                                {/* Progress bar with percentage */}
-                                                <div className="goal-progress-container">
-                                                    <div className="goal-progress-bar">
-                                                        <div
-                                                            className="goal-progress-fill"
-                                                            style={{ width: `${(progress.percentage && !isNaN(progress.percentage)) ? Math.min(100, progress.percentage) : 0}%` }}
-                                                        />
-                                                    </div>
-                                                    <span className="goal-percentage">{(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%</span>
-                                                </div>
-
-                                                {/* Status badges */}
-                                                <div className="goal-badges">
-                                                    {progress.isComplete && (
-                                                        <span className="badge badge-complete">✓ Klart</span>
-                                                    )}
-                                                    {!progress.isOnTrack && !progress.isComplete && (
-                                                        <span className="badge badge-warning">⚠️ Halkar efter</span>
-                                                    )}
-                                                    {progress.daysRemaining !== undefined && progress.daysRemaining <= 3 && !progress.isComplete && (
-                                                        <span className="badge badge-urgent">
-                                                            ⏰ {progress.daysRemaining}d kvar
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Absolute X button for quick delete */}
-                                            <button
-                                                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white/5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 transition-colors z-10"
-                                                onClick={(e) => { e.stopPropagation(); handleDeleteGoal(goal.id); }}
-                                                title="Ta bort mål"
-                                            >
-                                                ✕
-                                            </button>
-
-                                            {/* Actions */}
-                                            <div className="goal-actions">
-                                                {progress.isComplete && (
-                                                    <button
-                                                        className="action-btn celebrate"
-                                                        onClick={(e) => { e.stopPropagation(); handleCompleteGoal(goal); }}
-                                                    >
-                                                        🎉 Fira
-                                                    </button>
-                                                )}
-                                                <button
-                                                    className="action-btn edit"
-                                                    onClick={(e) => { e.stopPropagation(); handleEditGoal(goal); }}
-                                                    title="Redigera"
-                                                >
-                                                    ✏️
-                                                </button>
-                                                <button
-                                                    className="action-btn delete"
-                                                    onClick={(e) => { e.stopPropagation(); handleDeleteGoal(goal.id); }}
-                                                    title="Ta bort"
-                                                >
-                                                    🗑️
-                                                </button>
-                                            </div>
-                                        </div>
+                                            onEdit={handleEditGoal}
+                                            onDelete={handleDeleteGoal}
+                                        />
                                     ))}
                                 </div>
                             </div>

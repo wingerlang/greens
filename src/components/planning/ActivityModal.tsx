@@ -28,7 +28,7 @@ export function ActivityModal({
     weeklyStats,
     goalProgress
 }: ActivityModalProps) {
-    const { exerciseEntries, plannedActivities } = useData();
+
 
     // Internal Form State
     const [formType, setFormType] = useState<'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST'>('RUN');
@@ -38,7 +38,30 @@ export function ActivityModal({
     const [formIntensity, setFormIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
     const [isRace, setIsRace] = useState(false); // New Race Toggle
 
-    // 1. Double Session Warning Logic
+    // Long Run Settings
+    const [showLongRunSettings, setShowLongRunSettings] = useState(false);
+    const [longRunThreshold, setLongRunThreshold] = useState(20);
+
+    const { exerciseEntries, plannedActivities, currentUser, updateCurrentUser } = useData();
+
+    // Initialize Long Run Threshold from User Settings
+    useEffect(() => {
+        if (currentUser?.settings?.trainingPreferences?.longRunThreshold) {
+            setLongRunThreshold(currentUser.settings.trainingPreferences.longRunThreshold);
+        }
+    }, [currentUser]);
+
+    const saveLongRunSettings = () => {
+        if (!currentUser) return;
+        const newSettings = {
+            ...currentUser.settings,
+            trainingPreferences: {
+                ...currentUser.settings.trainingPreferences,
+                longRunThreshold: longRunThreshold
+            }
+        };
+        updateCurrentUser({ settings: newSettings });
+    };
     const hasExistingActivity = React.useMemo(() => {
         if (!selectedDate) return false;
         // Check planned (excluding current editing)
@@ -62,9 +85,9 @@ export function ActivityModal({
             if (editingActivity) {
                 // Edit mode
                 setFormType(editingActivity.type === 'REST' ? 'REST' :
-                           (editingActivity.category === 'STRENGTH' ? 'STRENGTH' :
-                           (editingActivity.title.toLowerCase().includes('hyrox') ? 'HYROX' :
-                           (editingActivity.type === 'BIKE' ? 'BIKE' : 'RUN'))));
+                    (editingActivity.category === 'STRENGTH' ? 'STRENGTH' :
+                        (editingActivity.title.toLowerCase().includes('hyrox') ? 'HYROX' :
+                            (editingActivity.type === 'BIKE' ? 'BIKE' : 'RUN'))));
 
                 // Format duration to hh:mm
                 // First try to extract total duration. Since PlannedActivity structure is flexible,
@@ -83,7 +106,7 @@ export function ActivityModal({
                     setFormDuration('00:45');
                 }
 
-                setFormDistance(editingActivity.estimatedDistance?.toString() || '');
+                setFormDistance(editingActivity.estimatedDistance ? Number(editingActivity.estimatedDistance).toFixed(1) : '');
                 setFormNotes(editingActivity.description || '');
                 setFormIntensity(editingActivity.targetHrZone <= 2 ? 'low' : editingActivity.targetHrZone >= 4 ? 'high' : 'moderate');
                 setIsRace(editingActivity.isRace || false);
@@ -111,13 +134,13 @@ export function ActivityModal({
             date: selectedDate,
             type: (formType === 'REST' ? 'REST' : 'RUN') as PlannedActivity['type'],
             category: (formType === 'RUN' ? (isRace ? 'TEMPO' : 'EASY') : // Map race to Tempo or just Keep as Easy?
-                      formType === 'STRENGTH' ? 'STRENGTH' :
-                      formType === 'HYROX' ? 'INTERVALS' :
-                      formType === 'REST' ? 'REST' : 'EASY') as PlannedActivity['category'],
+                formType === 'STRENGTH' ? 'STRENGTH' :
+                    formType === 'HYROX' ? 'INTERVALS' :
+                        formType === 'REST' ? 'REST' : 'EASY') as PlannedActivity['category'],
             title: formType === 'RUN' ? (isRace ? 'TÄVLING 🏆' : 'Löpning') :
-                   formType === 'STRENGTH' ? 'Styrka' :
-                   formType === 'HYROX' ? 'Hyrox' :
-                   formType === 'REST' ? 'Vilodag' : 'Cykling',
+                formType === 'STRENGTH' ? 'Styrka' :
+                    formType === 'HYROX' ? 'Hyrox' :
+                        formType === 'REST' ? 'Vilodag' : 'Cykling',
             description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : formType + ' pass'} (${formDuration})`,
             estimatedDistance: formType === 'RUN' && formDistance ? parseFloat(formDistance) : 0,
             targetPace: '', // Could calculate from dist/time
@@ -212,6 +235,55 @@ export function ActivityModal({
                         </div>
                     )}
 
+                    {/* Smart Average Preset (User Request) */}
+                    {formType === 'RUN' && !editingActivity && (
+                        <div className="mb-6">
+                            {/* Calculation Logic Inline (or better, memoized above) */}
+                            {(() => {
+                                const history = exerciseEntries || []; // Using exerciseEntries as proxy for history if universalActivities not passed. 
+                                // Wait, ActivityModal receives `weeklyStats` but not full history.
+                                // We have `exerciseEntries` from useData().
+
+                                // Filter running, last 5 weeks
+                                const now = new Date();
+                                const fiveWeeksAgo = new Date();
+                                fiveWeeksAgo.setDate(now.getDate() - 35);
+
+                                const recentRuns = exerciseEntries.filter(e =>
+                                    (e.type === 'running') &&
+                                    new Date(e.date) >= fiveWeeksAgo &&
+                                    new Date(e.date) <= now &&
+                                    !e.excludeFromStats
+                                );
+
+                                if (recentRuns.length < 3) return null; // Need some data
+
+                                const avgDistance = recentRuns.reduce((sum, r) => sum + (r.distance || 0), 0) / recentRuns.length;
+                                const formattedAvg = avgDistance.toFixed(1);
+
+                                return (
+                                    <div
+                                        onClick={() => setFormDistance(formattedAvg)}
+                                        className="group cursor-pointer p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                    >
+                                        <div className="flex justify-between items-center mb-1">
+                                            <div className="flex items-center gap-2">
+                                                <Trophy size={14} className="text-blue-500" />
+                                                <span className="text-xs font-black uppercase text-blue-600 dark:text-blue-400">Din snittdistans</span>
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded shadow-sm group-hover:scale-110 transition-transform">
+                                                {formattedAvg} km
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-blue-600/80 dark:text-blue-400/80 font-medium">
+                                            Baserat på dina senaste 5 veckor. <span className="italic underline decoration-blue-300">Sträva efter att slå detta!</span> 🚀
+                                        </p>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    )}
+
                     {/* Form */}
                     <div className="space-y-4">
                         {/* Type Selector */}
@@ -236,15 +308,50 @@ export function ActivityModal({
                             </button>
                         </div>
 
-                        {/* Race Toggle */}
+                        {/* Race Toggle & Long Run Settings */}
                         {formType === 'RUN' && (
-                            <button
-                                onClick={() => setIsRace(!isRace)}
-                                className={`w-full p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${isRace ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-600 dark:text-yellow-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
-                            >
-                                <Trophy size={16} className={isRace ? 'fill-yellow-500' : ''} />
-                                <span className="text-xs font-black uppercase">Detta är en tävling</span>
-                            </button>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    onClick={() => setIsRace(!isRace)}
+                                    className={`w-full p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${isRace ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-600 dark:text-yellow-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
+                                >
+                                    <Trophy size={16} className={isRace ? 'fill-yellow-500' : ''} />
+                                    <span className="text-xs font-black uppercase">Tävling</span>
+                                </button>
+
+                                <button
+                                    onClick={() => setShowLongRunSettings(!showLongRunSettings)}
+                                    className={`w-full p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${showLongRunSettings ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-400 text-indigo-600 dark:text-indigo-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
+                                >
+                                    <Clock size={16} />
+                                    <span className="text-xs font-black uppercase">Långpass Inst.</span>
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Long Run Settings Panel */}
+                        {formType === 'RUN' && showLongRunSettings && (
+                            <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-xl space-y-3 animate-in slide-in-from-top-2">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400">Definition av Långpass</label>
+                                    <span className="text-[10px] text-indigo-400 bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 rounded-full">Spara automatiskt</span>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="relative grow">
+                                        <input
+                                            type="number"
+                                            value={longRunThreshold}
+                                            onChange={(e) => setLongRunThreshold(parseInt(e.target.value) || 0)}
+                                            onBlur={saveLongRunSettings}
+                                            className="w-full bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        />
+                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">km</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 flex items-center max-w-[140px] leading-tight">
+                                        Pass över denna distans räknas som långpass.
+                                    </div>
+                                </div>
+                            </div>
                         )}
 
                         {formType !== 'REST' && (
@@ -304,9 +411,8 @@ export function ActivityModal({
 
                         <button
                             onClick={handleSave}
-                            className={`w-full py-4 text-white font-black uppercase tracking-widest rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                                isRace ? 'bg-gradient-to-r from-yellow-500 to-orange-500 shadow-orange-500/20' : 'bg-blue-500 hover:bg-blue-400 shadow-blue-500/20'
-                            }`}
+                            className={`w-full py-4 text-white font-black uppercase tracking-widest rounded-xl shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98] ${isRace ? 'bg-gradient-to-r from-yellow-500 to-orange-500 shadow-orange-500/20' : 'bg-blue-500 hover:bg-blue-400 shadow-blue-500/20'
+                                }`}
                         >
                             {editingActivity ? 'Uppdatera Pass' : (isRace ? 'Spara Tävling' : 'Spara Pass')}
                         </button>

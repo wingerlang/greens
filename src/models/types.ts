@@ -83,6 +83,28 @@ export interface UserSettings {
     fixedCalorieBase?: number; // Base calories when calorieMode === 'fixed'
     incompleteDays?: Record<string, boolean>; // Map of date (YYYY-MM-DD) -> isIncomplete
     noccoOClockEnabled?: boolean;
+    trainingPreferences?: {
+        longRunThreshold?: number; // km
+    };
+}
+
+/** Weekly Stats Interface */
+export interface WeeklyStats {
+    running: {
+        sessions: number;
+        km: number;
+        time: number;
+    };
+    strength: {
+        sessions: number;
+        time: number;
+        tonnage: number;
+    };
+    forecast: {
+        runningSessions: number;
+        runningKm: number;
+        strengthSessions: number;
+    };
 }
 
 /** User roles for permissions */
@@ -191,7 +213,10 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
         'recent-workouts': true,
         'top-exercises': true
     },
-    noccoOClockEnabled: true
+    noccoOClockEnabled: true,
+    trainingPreferences: {
+        longRunThreshold: 20 // Default based on user request, or could be undefined to use smart default
+    }
 };
 
 // ============================================
