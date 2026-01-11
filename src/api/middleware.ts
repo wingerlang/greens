@@ -29,7 +29,8 @@ export async function authenticate(req: Request): Promise<AuthContext | null> {
 /**
  * Checks if the user has a specific role.
  */
-export function hasRole(ctx: AuthContext, role: 'user' | 'admin'): boolean {
-    if (role === 'admin') return ctx.user.role === 'admin';
+export function hasRole(ctx: AuthContext, role: 'user' | 'admin' | 'developer'): boolean {
+    if (role === 'developer') return ctx.user.role === 'developer';
+    if (role === 'admin') return ctx.user.role === 'admin' || ctx.user.role === 'developer';
     return true; // Everyone is a user
 }

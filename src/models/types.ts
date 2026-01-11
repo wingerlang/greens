@@ -108,7 +108,7 @@ export interface WeeklyStats {
 }
 
 /** User roles for permissions */
-export type UserRole = 'admin' | 'user' | 'coach' | 'athlete';
+export type UserRole = 'admin' | 'user' | 'coach' | 'athlete' | 'developer';
 
 /** Subscription plans for monetization */
 export type SubscriptionPlan = 'free' | 'evergreen';

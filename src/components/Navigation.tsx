@@ -24,6 +24,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
     const isTrainingRoute = ['/training', '/traning', '/pass', '/logg', '/styrka', '/coach'].some(path => location.pathname.startsWith(path));
     const isCommunityRoute = ['/community', '/feed', '/matchup', '/tävling'].some(path => location.pathname.startsWith(path));
     const isToolsRoute = ['/tools', '/verktyg'].some(path => location.pathname.startsWith(path));
+    const isDeveloperRoute = location.pathname.startsWith('/developer');
 
     const linkClasses = ({ isActive }: { isActive: boolean }) =>
         `flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
@@ -187,6 +188,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                         <span className="w-5 text-center">💪</span>
                                         <span>Styrketräning</span>
                                     </NavLink>
+                                    <NavLink to="/exercises" className={linkClasses}>
+                                        <span className="w-5 text-center">📚</span>
+                                        <span>Övningsbibliotek</span>
+                                    </NavLink>
                                     <NavLink to="/coach" className={linkClasses}>
                                         <span className="w-5 text-center">🧠</span>
                                         <span>Smart Coach</span>
@@ -300,7 +305,14 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                         }}
                                     >
                                         <span className="w-5 text-center">📦</span>
-                                        <span>Databas</span>
+                                        <span>Matdatabas</span>
+                                    </NavLink>
+                                    <NavLink
+                                        to="/admin/exercises"
+                                        className={({ isActive }) => linkClasses({ isActive })}
+                                    >
+                                        <span className="w-5 text-center">💪</span>
+                                        <span>Övningsdatabas</span>
                                     </NavLink>
                                     <NavLink
                                         to="/admin?tab=api"
@@ -328,6 +340,17 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Developer Tools Link (Only visible to developers) */}
+                        {user?.role === 'developer' && (
+                            <NavLink
+                                to="/developer"
+                                className={`${linkClasses({ isActive: isDeveloperRoute })} flex items-center gap-2`}
+                                title="Developer Tools"
+                            >
+                                <span className="text-emerald-400">⚡</span>
+                            </NavLink>
+                        )}
 
                         {/* User Profile & Logout */}
                         <div className="h-6 w-px bg-white/10 mx-2" />

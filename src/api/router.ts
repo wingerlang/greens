@@ -15,6 +15,7 @@ import { handleAdminKvRoutes } from "./handlers/adminKv.ts";
 import { handleUploadRoutes } from "./handlers/upload.ts";
 import { handleDebugRoutes } from "./handlers/debug.ts";
 import { handleBackupRoutes } from "./handlers/backup.ts";
+import { handleDeveloperRoutes } from "./handlers/developer.ts";
 import { debugMiddleware } from "./middleware/debugMiddleware.ts";
 import { handleRacePlanRoutes } from "./handlers/racePlans.ts";
 import { handleExerciseMapperRoutes } from "./handlers/exerciseMapper.ts";
@@ -113,6 +114,8 @@ async function internalRouter(req: Request): Promise<Response> {
             response = await handleDebugRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/backup")) {
             response = await handleBackupRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/developer")) {
+            response = await handleDeveloperRoutes(req, url, headers);
         } else {
             response = new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
         }
