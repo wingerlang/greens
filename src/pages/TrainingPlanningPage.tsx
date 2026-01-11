@@ -115,7 +115,7 @@ export function TrainingPlanningPage() {
         const runningKm = runningActivities.reduce((sum: number, a: any) => sum + (a.distance || 0), 0);
         const runningTime = runningActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);
 
-        // Strength stats
+        // Strength stats 
         const strengthActivities = weekCompleted.filter((a: any) => a.type === 'strength');
         const strengthSessionCount = strengthActivities.length;
         const strengthTime = strengthActivities.reduce((sum: number, a: any) => sum + (a.durationMinutes || 0), 0);

@@ -31,7 +31,7 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({ stats, startDate, endD
     const runningTime = runningStats?.time || 0;
     const runningCount = runningStats?.count || 0;
 
-    // Calculate strength-specific stats
+    // Calculate strength-specific stats  
     const strengthStats = stats.types.find(t => t.name.toLowerCase() === 'strength' || t.name.toLowerCase() === 'weighttraining');
     const strengthCount = strengthStats?.count || stats.topVolumeSessions.length;
 
