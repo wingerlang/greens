@@ -22,6 +22,17 @@ const STANDARDS = {
     }
 };
 
+// Calculated Total (SBD) Standards
+// Sum of Squat + Bench + Deadlift standards for each level
+const TOTAL_STANDARDS = {
+    male: Array.from({ length: 5 }, (_, i) =>
+        STANDARDS.male.squat[i] + STANDARDS.male.bench[i] + STANDARDS.male.deadlift[i]
+    ),
+    female: Array.from({ length: 5 }, (_, i) =>
+        STANDARDS.female.squat[i] + STANDARDS.female.bench[i] + STANDARDS.female.deadlift[i]
+    )
+};
+
 const LEVEL_LABELS = ['Nybörjare', 'Motionär', 'Atlet', 'Avancerad', 'Elit', 'Världsklass'];
 const LEVEL_COLORS = [
     'from-slate-600 to-slate-500', // Beginner
@@ -443,31 +454,24 @@ export function ToolsStrengthStandardsPage() {
                         <div className="relative z-10 w-full md:w-auto">
                             <div className="bg-slate-950/50 backdrop-blur-md border border-white/10 rounded-2xl p-6 text-center min-w-[200px]">
                                 <div className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-2">NUVARANDE NIVÅ</div>
-                                <div className={`text-3xl font-black bg-clip-text text-transparent bg-gradient-to-br ${LEVEL_COLORS[3]} mb-2`}>
-                                    {/* Calculated from average level of lifts? Or general Wilks level? Using Wilks map roughly */}
-                                    {/* Using rough map below based on score */}
-                                    {(() => {
-                                        // Simple hack for total score level
-                                        // This should ideally map SBD total relative to bodyweight
-                                        const sbdRatio = total / weight;
-                                        // Rough total multipliers: 3, 4, 5, 6, 7?
-                                        if (gender === 'male') {
-                                            if (sbdRatio < 3) return LEVEL_LABELS[0];
-                                            if (sbdRatio < 4) return LEVEL_LABELS[1];
-                                            if (sbdRatio < 5) return LEVEL_LABELS[2]; // 400kg @ 80bw = 5x
-                                            if (sbdRatio < 6) return LEVEL_LABELS[3];
-                                            if (sbdRatio < 7.5) return LEVEL_LABELS[4];
-                                            return LEVEL_LABELS[5];
-                                        } else {
-                                            if (sbdRatio < 2) return LEVEL_LABELS[0];
-                                            if (sbdRatio < 2.5) return LEVEL_LABELS[1];
-                                            if (sbdRatio < 3.2) return LEVEL_LABELS[2];
-                                            if (sbdRatio < 4) return LEVEL_LABELS[3];
-                                            if (sbdRatio < 5) return LEVEL_LABELS[4];
-                                            return LEVEL_LABELS[5];
-                                        }
-                                    })()}
-                                </div>
+                                {(() => {
+                                    // Calculate level based on SBD Total Standards
+                                    // We sum the individual lift ratio standards to get the total ratio standard
+                                    const sbdRatio = total / weight;
+                                    const stds = TOTAL_STANDARDS[gender];
+
+                                    let totalLevelIdx = 0;
+                                    for (let i = 0; i < stds.length; i++) {
+                                        if (sbdRatio >= stds[i]) totalLevelIdx = i + 1;
+                                    }
+                                    totalLevelIdx = Math.min(totalLevelIdx, 5);
+
+                                    return (
+                                        <div className={`text-3xl font-black bg-clip-text text-transparent bg-gradient-to-br ${LEVEL_COLORS[totalLevelIdx]} mb-2`}>
+                                            {LEVEL_LABELS[totalLevelIdx]}
+                                        </div>
+                                    );
+                                })()}
                                 <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                                     <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 w-3/4 rounded-full"></div>
                                 </div>
