@@ -1,7 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
-import { AlertTriangle, Copy, Check, FileWarning, Settings, Sliders, Layers, Search, GitMerge } from 'lucide-react';
+import { useDeveloper } from './DeveloperContext.tsx';
+import { AlertTriangle, Copy, Check, FileWarning, Settings, Sliders, Layers, GitMerge, FileX, MessageSquare, Network, Box } from 'lucide-react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface CodeIssue {
     type: string;
@@ -27,19 +30,43 @@ interface SimilarFilePair {
     sharedTerms: string[];
 }
 
+interface UnusedFile {
+    path: string;
+}
+
+interface CodeComment {
+    file: string;
+    line: number;
+    text: string;
+    type: 'todo' | 'code' | 'info';
+}
+
+interface Dependency {
+    name: string;
+    version: string;
+    type: 'prod' | 'dev';
+}
+
 export function DeveloperAnalysis() {
     const { token } = useAuth();
+    const { excludedFolders, refreshTrigger } = useDeveloper();
     const [issues, setIssues] = useState<CodeIssue[]>([]);
     const [duplicates, setDuplicates] = useState<DuplicateFunction[]>([]);
     const [clusters, setClusters] = useState<SimilarFilePair[]>([]);
+    const [unusedFiles, setUnusedFiles] = useState<string[]>([]);
+    const [comments, setComments] = useState<CodeComment[]>([]);
+    const [routes, setRoutes] = useState<string[]>([]);
+    const [dependencies, setDependencies] = useState<Dependency[]>([]);
     const [report, setReport] = useState<string>('');
     const [loading, setLoading] = useState(true);
     const [copied, setCopied] = useState(false);
 
     // UI State
-    const [activeTab, setActiveTab] = useState<'issues' | 'duplicates' | 'clusters'>('issues');
+    const [activeTab, setActiveTab] = useState<'issues' | 'duplicates' | 'clusters' | 'unused' | 'comments' | 'routes' | 'deps'>('issues');
     const [maxLines, setMaxLines] = useState<number>(300);
     const [showSettings, setShowSettings] = useState(false);
+
+    const query = new URLSearchParams({ excluded: excludedFolders.join(',') }).toString();
 
     useEffect(() => {
         const savedMaxLines = localStorage.getItem('dev_tools_max_lines');
@@ -57,20 +84,28 @@ export function DeveloperAnalysis() {
     useEffect(() => {
         setLoading(true);
         Promise.all([
-            fetch('/api/developer/analysis', { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
-            fetch('/api/developer/functions', { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
-            fetch('/api/developer/similarity', { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
-            fetch('/api/developer/report', { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json())
+            fetch(`/api/developer/analysis?${query}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+            fetch(`/api/developer/functions?${query}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+            fetch(`/api/developer/similarity?${query}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+            fetch(`/api/developer/unused?${query}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+            fetch(`/api/developer/comments?${query}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+            fetch('/api/developer/routes', { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+            fetch('/api/developer/dependencies', { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json()),
+            fetch(`/api/developer/report?${query}`, { headers: { 'Authorization': `Bearer ${token}` } }).then(r => r.json())
         ])
-        .then(([analysisData, funcsData, simData, reportData]) => {
+        .then(([analysisData, funcsData, simData, unusedData, commentsData, routesData, depsData, reportData]) => {
             setIssues(analysisData.issues || []);
             setDuplicates(funcsData.duplicates || []);
             setClusters(simData.clusters || []);
+            setUnusedFiles(unusedData.unused || []);
+            setComments(commentsData.comments || []);
+            setRoutes(routesData.routes || []);
+            setDependencies(depsData.dependencies || []);
             setReport(reportData.report || '');
         })
         .catch(console.error)
         .finally(() => setLoading(false));
-    }, [token]);
+    }, [token, refreshTrigger, query]);
 
     const handleCopy = () => {
         navigator.clipboard.writeText(report);
@@ -78,7 +113,16 @@ export function DeveloperAnalysis() {
         setTimeout(() => setCopied(false), 2000);
     };
 
-    if (loading) return <div className="p-8 text-slate-400 animate-pulse">Running heuristic analysis...</div>;
+    const createTodo = async (desc: string, file: string, type: 'duplicate' | 'unused' | 'comment') => {
+        await fetch('/api/developer/todos', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ description: desc, file, type })
+        });
+        alert("Todo created!");
+    };
+
+    if (loading) return <div className="p-8 text-slate-400 animate-pulse">Running advanced analysis...</div>;
 
     const filteredIssues = issues.filter(issue => {
         if (issue.type === 'large_file') {
@@ -91,39 +135,27 @@ export function DeveloperAnalysis() {
         return true;
     });
 
+    const codeComments = comments.filter(c => c.type === 'code');
+    const todoComments = comments.filter(c => c.type === 'todo');
+
     return (
         <div className="space-y-4 h-[calc(100vh-140px)] flex flex-col">
             {/* Header / Settings Bar */}
-            <div className="flex items-center justify-between bg-slate-900 p-4 rounded-lg border border-slate-700">
-                <div className="flex items-center gap-6">
-                     <div className="flex items-center gap-2 text-white font-semibold mr-4">
+            <div className="flex flex-col xl:flex-row xl:items-center justify-between bg-slate-900 p-4 rounded-lg border border-slate-700 gap-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 overflow-x-auto pb-2 sm:pb-0">
+                     <div className="flex items-center gap-2 text-white font-semibold mr-4 whitespace-nowrap">
                         <FileWarning className="text-amber-400" />
                         <span>Analysis</span>
                     </div>
 
                     {/* Tabs */}
                     <div className="flex items-center gap-2">
-                        <TabButton
-                            active={activeTab === 'issues'}
-                            onClick={() => setActiveTab('issues')}
-                            icon={<AlertTriangle size={14} />}
-                            label="Issues"
-                            count={filteredIssues.length}
-                        />
-                         <TabButton
-                            active={activeTab === 'duplicates'}
-                            onClick={() => setActiveTab('duplicates')}
-                            icon={<GitMerge size={14} />}
-                            label="Function Duplicates"
-                            count={duplicates.length}
-                        />
-                         <TabButton
-                            active={activeTab === 'clusters'}
-                            onClick={() => setActiveTab('clusters')}
-                            icon={<Layers size={14} />}
-                            label="Code Similarity"
-                            count={clusters.length}
-                        />
+                        <TabButton active={activeTab === 'issues'} onClick={() => setActiveTab('issues')} icon={<AlertTriangle size={14} />} label="Issues" count={filteredIssues.length} />
+                        <TabButton active={activeTab === 'duplicates'} onClick={() => setActiveTab('duplicates')} icon={<GitMerge size={14} />} label="Duplicates" count={duplicates.length} />
+                        <TabButton active={activeTab === 'unused'} onClick={() => setActiveTab('unused')} icon={<FileX size={14} />} label="Unused" count={unusedFiles.length} />
+                        <TabButton active={activeTab === 'comments'} onClick={() => setActiveTab('comments')} icon={<MessageSquare size={14} />} label="Comments" count={comments.length} />
+                        <TabButton active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} icon={<Network size={14} />} label="Routes" count={routes.length} />
+                        <TabButton active={activeTab === 'deps'} onClick={() => setActiveTab('deps')} icon={<Box size={14} />} label="Deps" count={dependencies.length} />
                     </div>
                 </div>
 
@@ -167,9 +199,108 @@ export function DeveloperAnalysis() {
                     </div>
                 )}
 
-                {activeTab === 'duplicates' && <DuplicatesList duplicates={duplicates} />}
-
+                {activeTab === 'duplicates' && <DuplicatesList duplicates={duplicates} onCreateTodo={createTodo} />}
                 {activeTab === 'clusters' && <ClustersList clusters={clusters} />}
+
+                {activeTab === 'unused' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {unusedFiles.map(f => (
+                            <div key={f} className="bg-slate-800 p-3 rounded border border-slate-700 flex justify-between items-center group">
+                                <span className="font-mono text-xs text-red-300">{f}</span>
+                                <button
+                                    onClick={() => createTodo(`Remove unused file: ${f}`, f, 'unused')}
+                                    className="opacity-0 group-hover:opacity-100 p-1 bg-slate-700 text-slate-300 rounded hover:bg-emerald-600 hover:text-white"
+                                >
+                                    + Todo
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {activeTab === 'comments' && (
+                    <div className="space-y-6">
+                        {codeComments.length > 0 && (
+                            <div className="space-y-3">
+                                <h3 className="text-amber-400 font-semibold sticky top-0 bg-slate-900 py-2">Suspicious Code Comments ({codeComments.length})</h3>
+                                {codeComments.map((c, i) => (
+                                    <div key={i} className="bg-slate-800 p-3 rounded border border-slate-700 group">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <span className="text-xs font-mono text-slate-500">{c.file}:{c.line}</span>
+                                            <button
+                                                onClick={() => createTodo(`Investigate commented code in ${c.file}`, c.file, 'comment')}
+                                                className="opacity-0 group-hover:opacity-100 px-2 py-0.5 text-xs bg-slate-700 text-slate-300 rounded hover:bg-emerald-600 hover:text-white"
+                                            >
+                                                + Todo
+                                            </button>
+                                        </div>
+                                        <SyntaxHighlighter language="typescript" style={vscDarkPlus} customStyle={{ margin: 0, padding: '0.5rem', fontSize: '12px' }}>
+                                            {c.text}
+                                        </SyntaxHighlighter>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                         {todoComments.length > 0 && (
+                            <div className="space-y-3">
+                                <h3 className="text-blue-400 font-semibold sticky top-0 bg-slate-900 py-2">TODOs ({todoComments.length})</h3>
+                                {todoComments.map((c, i) => (
+                                    <div key={i} className="bg-slate-800 p-3 rounded border border-slate-700 flex justify-between items-center group">
+                                         <div>
+                                            <div className="text-xs font-mono text-slate-500">{c.file}:{c.line}</div>
+                                            <div className="text-slate-300 text-sm mt-1">{c.text}</div>
+                                         </div>
+                                         <button
+                                            onClick={() => createTodo(`Address TODO: ${c.text}`, c.file, 'comment')}
+                                            className="opacity-0 group-hover:opacity-100 px-2 py-1 text-xs bg-slate-700 text-slate-300 rounded hover:bg-emerald-600 hover:text-white"
+                                        >
+                                            + Task
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'routes' && (
+                    <div className="bg-slate-800 rounded border border-slate-700 p-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {routes.map(r => (
+                                <div key={r} className="font-mono text-sm text-emerald-400 bg-slate-900 px-3 py-2 rounded">
+                                    {r}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'deps' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 className="text-slate-300 font-semibold mb-4">Production</h3>
+                            <div className="space-y-2">
+                                {dependencies.filter(d => d.type === 'prod').map(d => (
+                                    <div key={d.name} className="flex justify-between bg-slate-800 p-2 rounded border border-slate-700">
+                                        <span className="text-slate-200">{d.name}</span>
+                                        <span className="text-slate-500 font-mono text-sm">{d.version}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                         <div>
+                            <h3 className="text-slate-300 font-semibold mb-4">Dev</h3>
+                            <div className="space-y-2">
+                                {dependencies.filter(d => d.type === 'dev').map(d => (
+                                    <div key={d.name} className="flex justify-between bg-slate-800 p-2 rounded border border-slate-700">
+                                        <span className="text-slate-200">{d.name}</span>
+                                        <span className="text-slate-500 font-mono text-sm">{d.version}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -179,7 +310,7 @@ function TabButton({ active, onClick, icon, label, count }: { active: boolean, o
     return (
         <button
             onClick={onClick}
-            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors whitespace-nowrap ${
                 active
                 ? 'bg-indigo-600 text-white'
                 : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
@@ -223,7 +354,7 @@ function IssuesList({ issues }: { issues: CodeIssue[] }) {
     );
 }
 
-function DuplicatesList({ duplicates }: { duplicates: DuplicateFunction[] }) {
+function DuplicatesList({ duplicates, onCreateTodo }: { duplicates: DuplicateFunction[], onCreateTodo: (desc: string, file: string, type: 'duplicate') => void }) {
     if (duplicates.length === 0) {
         return <div className="p-8 text-center text-slate-500 italic">No similar functions found.</div>;
     }
@@ -231,7 +362,16 @@ function DuplicatesList({ duplicates }: { duplicates: DuplicateFunction[] }) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {duplicates.map((d, i) => (
-                <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-indigo-500/50 transition-colors">
+                <div key={i} className="bg-slate-800 border border-slate-700 rounded-lg p-4 hover:border-indigo-500/50 transition-colors group relative">
+                    <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <button
+                            onClick={() => onCreateTodo(`Refactor duplicate function: ${d.nameA}`, d.fileA, 'duplicate')}
+                            className="p-1.5 bg-slate-700 hover:bg-emerald-600 text-slate-300 hover:text-white rounded"
+                            title="Add to Todo"
+                        >
+                             <Check size={14} />
+                         </button>
+                    </div>
                     <div className="flex items-center justify-between mb-3">
                         <div className="bg-indigo-500/10 text-indigo-400 text-xs px-2 py-1 rounded font-mono">
                             {(d.similarity * 100).toFixed(0)}% Match

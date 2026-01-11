@@ -1,7 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useDeveloper } from './DeveloperContext.tsx';
 import { Folder, File, ChevronRight, ChevronDown, Search, BarChart2, AlertCircle } from 'lucide-react';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 interface FileNode {
     name: string;
@@ -19,6 +22,7 @@ interface SearchResult {
 
 export function DeveloperExplorer() {
     const { token } = useAuth();
+    const { excludedFolders, refreshTrigger } = useDeveloper();
     const [structure, setStructure] = useState<FileNode | null>(null);
     const [loading, setLoading] = useState(true);
     const [showStats, setShowStats] = useState(false);
@@ -32,17 +36,19 @@ export function DeveloperExplorer() {
     const [loadingFile, setLoadingFile] = useState(false);
     const [fileError, setFileError] = useState<string | null>(null);
 
+    const query = new URLSearchParams({ excluded: excludedFolders.join(',') }).toString();
+
     // Fetch structure when 'showStats' changes
     useEffect(() => {
         setLoading(true);
-        fetch(`/api/developer/structure?stats=${showStats}`, {
+        fetch(`/api/developer/structure?stats=${showStats}&${query}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         })
         .then(res => res.json())
         .then(data => setStructure(data.structure))
         .catch(console.error)
         .finally(() => setLoading(false));
-    }, [token, showStats]);
+    }, [token, showStats, refreshTrigger, query]);
 
     // Fetch file content when selectedFile changes
     useEffect(() => {
@@ -77,13 +83,23 @@ export function DeveloperExplorer() {
         }
 
         setIsSearching(true);
-        fetch(`/api/developer/search?q=${encodeURIComponent(searchQuery)}`, {
+        fetch(`/api/developer/search?q=${encodeURIComponent(searchQuery)}&${query}`, {
              headers: { 'Authorization': `Bearer ${token}` }
         })
         .then(res => res.json())
         .then(data => setSearchResults(data.results))
         .catch(console.error)
         .finally(() => setIsSearching(false));
+    };
+
+    const getLanguage = (filename: string) => {
+        const ext = filename.split('.').pop()?.toLowerCase();
+        if (ext === 'ts' || ext === 'tsx') return 'typescript';
+        if (ext === 'js' || ext === 'jsx') return 'javascript';
+        if (ext === 'css') return 'css';
+        if (ext === 'json') return 'json';
+        if (ext === 'md') return 'markdown';
+        return 'text';
     };
 
     return (
@@ -171,9 +187,14 @@ export function DeveloperExplorer() {
                                <span>{fileError}</span>
                            </div>
                        ) : selectedFile ? (
-                           <pre className="p-4">
-                               <code>{fileContent}</code>
-                           </pre>
+                           <SyntaxHighlighter
+                               language={getLanguage(selectedFile)}
+                               style={vscDarkPlus}
+                               customStyle={{ margin: 0, padding: '1rem', height: '100%', fontSize: '13px' }}
+                               showLineNumbers
+                           >
+                               {fileContent}
+                           </SyntaxHighlighter>
                        ) : (
                            <div className="absolute inset-0 flex items-center justify-center text-slate-600 italic">
                                Select a file to view its content.
