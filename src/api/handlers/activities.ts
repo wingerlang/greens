@@ -172,6 +172,28 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 return new Response(JSON.stringify({ error: "Activity not found" }), { status: 404, headers });
             }
 
+            // Auto-migrate legacy/flat structure to Universal
+            const legacy = activity as any;
+            if (!activity.performance && legacy.durationMinutes !== undefined) {
+                activity.performance = {
+                    durationMinutes: legacy.durationMinutes || 0,
+                    calories: legacy.calories || 0,
+                    distanceKm: legacy.distance || legacy.distanceKm || 0,
+                    activityType: legacy.type || 'other',
+                    source: legacy.source,
+                    notes: legacy.notes
+                };
+                // Ensure date is preserved if moving
+            }
+            if (!activity.plan && (legacy.title || legacy.type)) {
+                activity.plan = {
+                    title: legacy.title || 'Untitled',
+                    activityType: legacy.type || 'other',
+                    distanceKm: legacy.distance || legacy.distanceKm || 0,
+                    durationMinutes: legacy.durationMinutes
+                };
+            }
+
             // Apply updates
             // Map flat "title" to plan.title
             if (updates.title !== undefined) {

@@ -354,20 +354,29 @@ export function ActivityDetailModal({
                 });
 
                 if (res.status === 404) {
-                    // Fallback to Upsert (POST) if not found (e.g. fresh Strava activity)
-                    const { userId: _u, ...activityNoUser } = activity;
-                    const updatedActivity = {
-                        ...activityNoUser,
-                        plan: { ...(activity.plan || {}), title: newTitle, activityType: activity.performance?.activityType || 'other' }
-                    };
-                    await fetch('/api/activities', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: JSON.stringify(updatedActivity)
-                    });
+                    // Fallback to Upsert (POST) - MUST use universalActivity to preserve all Strava data
+                    if (universalActivity) {
+                        const { userId: _u, ...activityData } = universalActivity;
+                        const updatedActivity = {
+                            ...activityData,
+                            plan: {
+                                ...universalActivity.plan,
+                                title: newTitle,
+                                activityType: universalActivity.plan?.activityType || universalActivity.performance?.activityType || 'other',
+                                distanceKm: universalActivity.plan?.distanceKm || universalActivity.performance?.distanceKm || 0
+                            }
+                        };
+                        await fetch('/api/activities', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${token}`
+                            },
+                            body: JSON.stringify(updatedActivity)
+                        });
+                    } else {
+                        console.warn("Skipping fallback POST: universalActivity not available, would corrupt data");
+                    }
                 }
             } catch (e) {
                 console.error("Failed to persist title:", e);
@@ -410,20 +419,29 @@ export function ActivityDetailModal({
                         body: JSON.stringify({ title: stravaTitle })
                     }).then(async (res) => {
                         if (res.status === 404) {
-                            // Fallback to Upsert
-                            const { userId: _u, ...activityNoUser } = activity;
-                            const updatedActivity = {
-                                ...activityNoUser,
-                                plan: { ...(activity.plan || {}), title: stravaTitle, activityType: activity.performance?.activityType || 'other' }
-                            };
-                            await fetch('/api/activities', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${token}`
-                                },
-                                body: JSON.stringify(updatedActivity)
-                            });
+                            // Fallback to Upsert - MUST use universalActivity to preserve all Strava data
+                            if (universalActivity) {
+                                const { userId: _u, ...activityData } = universalActivity;
+                                const updatedActivity = {
+                                    ...activityData,
+                                    plan: {
+                                        ...universalActivity.plan,
+                                        title: stravaTitle,
+                                        activityType: universalActivity.plan?.activityType || universalActivity.performance?.activityType || 'other',
+                                        distanceKm: universalActivity.plan?.distanceKm || universalActivity.performance?.distanceKm || 0
+                                    }
+                                };
+                                await fetch('/api/activities', {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Authorization': `Bearer ${token}`
+                                    },
+                                    body: JSON.stringify(updatedActivity)
+                                });
+                            } else {
+                                console.warn("Skipping fallback POST: universalActivity not available");
+                            }
                         }
                     }).catch(e => console.error("Auto-persist failed:", e));
                 }

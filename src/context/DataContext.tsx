@@ -996,11 +996,17 @@ export function DataProvider({ children }: DataProviderProps) {
         setExerciseEntries(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
 
         // ALSO update universalActivities if this ID matches a server activity
-        // This ensures Strava activities get their subType updated and persisted
+        // This ensures Strava activities get their title and subType updated and persisted
         setUniversalActivities(prev => prev.map(ua => {
             if (ua.id === id) {
                 return {
                     ...ua,
+                    plan: updates.title ? {
+                        ...ua.plan,
+                        title: updates.title,
+                        activityType: ua.plan?.activityType || ua.performance?.activityType || 'other',
+                        distanceKm: ua.plan?.distanceKm || ua.performance?.distanceKm || 0
+                    } : ua.plan,
                     performance: {
                         ...ua.performance,
                         subType: updates.subType || ua.performance?.subType
