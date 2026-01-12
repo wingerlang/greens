@@ -30,21 +30,26 @@ interface IntensityBucket {
 }
 
 export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId: string | null) => {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
 
     const { data: workoutHistory, isLoading } = useQuery({
         queryKey: ['training-history-full', user?.username],
         queryFn: async () => {
-             // Fetch strength workouts
-             // Using the endpoint found in strength.ts
-             const res = await fetch(`/api/strength/workouts?limit=10000`);
-             if (!res.ok) throw new Error('Failed to fetch history');
-             const data = await res.json();
-             return data.workouts;
+            // Fetch strength workouts
+            // Using the endpoint found in strength.ts
+            const res = await fetch(`/api/strength/workouts?limit=10000`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (!res.ok) throw new Error('Failed to fetch history');
+            const data = await res.json();
+            return data.workouts;
         },
-        enabled: !!user,
+        enabled: !!user && !!token,
         staleTime: 5 * 60 * 1000
     });
+
 
     // Main Logic
     const stats = useMemo(() => {
@@ -147,8 +152,8 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
                             else if (e.exerciseName) {
                                 const norm = e.exerciseName.toLowerCase().trim();
                                 isSame = matched.def.name_sv.toLowerCase() === norm ||
-                                         matched.def.name_en.toLowerCase() === norm ||
-                                         matched.def.aliases?.some(a => a.toLowerCase() === norm);
+                                    matched.def.name_en.toLowerCase() === norm ||
+                                    matched.def.aliases?.some(a => a.toLowerCase() === norm);
                             }
 
                             if (isSame) {
