@@ -29,6 +29,7 @@
     "@dnd-kit/sortable": "npm:@dnd-kit/sortable@^8.0.0",
     "@dnd-kit/utilities": "npm:@dnd-kit/utilities@^3.2.2",
     "zod": "npm:zod@^3.23.8",
-    "html2canvas": "npm:html2canvas@^1.4.1"
+    "html2canvas": "npm:html2canvas@^1.4.1",
+    "@tanstack/react-query": "npm:@tanstack/react-query@^5.64.1"
   }
 }

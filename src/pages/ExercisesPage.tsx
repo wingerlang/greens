@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { ExerciseDefinition } from '../models/exercise.ts';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -45,9 +46,17 @@ export function ExercisesPage() {
 
     return (
         <div className="pt-2 md:pt-4 p-4 md:p-8 max-w-7xl mx-auto space-y-8">
-            <header>
-                <h1 className="text-3xl font-black text-white mb-2">📚 Övningsbibliotek</h1>
-                <p className="text-slate-400">Vår samling av kvalitetssäkrade övningar.</p>
+            <header className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-3xl font-black text-white mb-2">📚 Övningsbibliotek</h1>
+                    <p className="text-slate-400">Vår samling av kvalitetssäkrade övningar.</p>
+                </div>
+                <Link
+                    to="/exercises/muscles"
+                    className="px-4 py-2 bg-emerald-500/10 text-emerald-400 rounded-xl font-bold text-sm hover:bg-emerald-500 hover:text-black transition-all border border-emerald-500/20"
+                >
+                    Utforska muskler ➔
+                </Link>
             </header>
 
             <div className="relative">
