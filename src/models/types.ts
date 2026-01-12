@@ -1182,6 +1182,7 @@ export interface PlannedActivity {
     isLongestInPlan?: boolean;
     customScalingFactor?: number; // Scale target distances/paces (e.g. 0.85 for "piano")
     isRace?: boolean;
+    externalId?: string; // Reference to the activity that completed this plan
 }
 
 /** Weight and body measurements tracking entry */

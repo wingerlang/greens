@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useData } from '../../context/DataContext.tsx';
-import { Activity, Zap, TrendingUp, BarChart3, AlertCircle } from 'lucide-react';
+import { Activity, Zap, TrendingUp, BarChart3, AlertCircle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import { formatDuration } from '../../utils/dateUtils.ts';
 
 export function WeeklyStatsAnalysis({
@@ -10,7 +10,7 @@ export function WeeklyStatsAnalysis({
     weekStart: string,
     weeklyStats: any
 }) {
-    const { exerciseEntries } = useData();
+    const { exerciseEntries, plannedActivities, unifiedActivities } = useData();
 
     // 1. Calculate Intensity Distribution (HR Zones)
     const intensityStats = useMemo(() => {
@@ -73,6 +73,63 @@ export function WeeklyStatsAnalysis({
             status: pctDiff > 20 ? 'Aggressive' : pctDiff > 10 ? 'Progressive' : pctDiff < -10 ? 'Deload' : 'Maintenance'
         };
     }, [exerciseEntries, weekStart, weeklyStats]);
+
+    // 3. Automated Weekly Review Insights
+    const reviewInsights = useMemo(() => {
+        const start = new Date(weekStart);
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        const endStr = end.toISOString().split('T')[0];
+
+        const weekPlan = plannedActivities.filter(p => p.date >= weekStart && p.date <= endStr);
+        const weekActual = unifiedActivities.filter(a => a.date >= weekStart && a.date <= endStr);
+
+        const insights: string[] = [];
+        const completed = weekPlan.filter(p => p.status === 'COMPLETED');
+        const missed = weekPlan.filter(p => p.status === 'PLANNED' && new Date(p.date) < new Date());
+
+        // Adherence score
+        const adherencePct = weekPlan.length > 0 ? (completed.length / weekPlan.length) * 100 : 100;
+
+        if (weekPlan.length === 0 && weekActual.length > 0) {
+            insights.push("Du tränade bra trots att inget var planerat. Snyggt jobbat!");
+        } else if (adherencePct === 100 && weekPlan.length > 0) {
+            insights.push("100% följsamhet! Du har genomfört alla planerade pass denna vecka.");
+        } else if (adherencePct >= 75) {
+            insights.push(`Hög följsamhet (${Math.round(adherencePct)}%). Du missade bara ${weekPlan.length - completed.length} pass.`);
+        } else if (adherencePct > 0) {
+            insights.push(`Du har genomfört ${completed.length} av ${weekPlan.length} planerade pass.`);
+        }
+
+        // Specific discrepancies
+        completed.forEach(p => {
+            if (p.actualDistance && p.estimatedDistance) {
+                const diff = p.actualDistance - p.estimatedDistance;
+                if (diff > 2) {
+                    insights.push(`Passet "${p.title}" blev ${diff.toFixed(1)}km längre än planerat. Starkt!`);
+                } else if (diff < -2) {
+                    insights.push(`Passet "${p.title}" blev ${Math.abs(diff).toFixed(1)}km kortare än planerat.`);
+                }
+            }
+        });
+
+        missed.forEach(p => {
+            insights.push(`Missat pass: "${p.title}" (${p.date}).`);
+        });
+
+        // Extra activities
+        const extraActivities = weekActual.filter(a => !weekPlan.some(p => p.externalId === a.id));
+        if (extraActivities.length > 0) {
+            insights.push(`Du körde ${extraActivities.length} extra pass som inte fanns i planen.`);
+        }
+
+        return {
+            adherencePct,
+            insights,
+            completedCount: completed.length,
+            totalPlanned: weekPlan.length
+        };
+    }, [plannedActivities, unifiedActivities, weekStart]);
 
     return (
         <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -142,10 +199,10 @@ export function WeeklyStatsAnalysis({
                         <div className="text-[10px] font-bold uppercase text-slate-400">Planerad Volym</div>
                     </div>
                     <div className="text-right">
-                         <div className="text-lg font-bold text-slate-500">
+                        <div className="text-lg font-bold text-slate-500">
                             {volumeAnalysis.avg.toFixed(1)} <span className="text-xs">km</span>
                         </div>
-                         <div className="text-[10px] font-bold uppercase text-slate-400">4v Snitt</div>
+                        <div className="text-[10px] font-bold uppercase text-slate-400">4v Snitt</div>
                     </div>
                 </div>
 
@@ -158,18 +215,17 @@ export function WeeklyStatsAnalysis({
                     </div>
                     <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
-                            className={`h-full rounded-full ${
-                                volumeAnalysis.pctDiff > 10 ? 'bg-amber-500' :
-                                volumeAnalysis.pctDiff < -10 ? 'bg-blue-400' : 'bg-emerald-500'
-                            }`}
+                            className={`h-full rounded-full ${volumeAnalysis.pctDiff > 10 ? 'bg-amber-500' :
+                                    volumeAnalysis.pctDiff < -10 ? 'bg-blue-400' : 'bg-emerald-500'
+                                }`}
                             style={{ width: '100%' }} // Simplified visual for now
                         />
                     </div>
                     <div className="mt-3 flex items-center gap-2">
-                         {volumeAnalysis.status === 'Aggressive' ? <AlertCircle size={14} className="text-amber-500" /> : <TrendingUp size={14} className="text-slate-400" />}
-                         <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                             Status: <span className="font-bold">{volumeAnalysis.status}</span>
-                         </p>
+                        {volumeAnalysis.status === 'Aggressive' ? <AlertCircle size={14} className="text-amber-500" /> : <TrendingUp size={14} className="text-slate-400" />}
+                        <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                            Status: <span className="font-bold">{volumeAnalysis.status}</span>
+                        </p>
                     </div>
                 </div>
             </div>
@@ -186,21 +242,80 @@ export function WeeklyStatsAnalysis({
                         {volumeAnalysis.status === 'Aggressive'
                             ? 'Du ökar volymen kraftigt denna vecka. Var noga med sömn och återhämtning för att undvika överbelastning.'
                             : volumeAnalysis.status === 'Deload'
-                            ? 'En lugnare vecka. Passa på att jobba med rörlighet och styrka för att bygga upp kroppen.'
-                            : 'Balanserad träningsvecka. Du ligger bra till för att bibehålla och långsamt bygga fitness.'
+                                ? 'En lugnare vecka. Passa på att jobba med rörlighet och styrka för att bygga upp kroppen.'
+                                : 'Balanserad träningsvecka. Du ligger bra till för att bibehålla och långsamt bygga fitness.'
                         }
                     </p>
 
                     {intensityStats.z4_5 > 25 && (
                         <div className="flex items-start gap-2 p-3 bg-white/5 rounded-xl border border-white/10">
-                             <AlertCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
-                             <div className="text-xs">
-                                 <span className="font-bold text-rose-300">Hög intensitet!</span>
-                                 <p className="text-slate-400 mt-0.5">Mer än 25% av tiden i zon 4-5. Se till att de lugna passen verkligen är lugna.</p>
-                             </div>
+                            <AlertCircle size={16} className="text-rose-400 shrink-0 mt-0.5" />
+                            <div className="text-xs">
+                                <span className="font-bold text-rose-300">Hög intensitet!</span>
+                                <p className="text-slate-400 mt-0.5">Mer än 25% av tiden i zon 4-5. Se till att de lugna passen verkligen är lugna.</p>
+                            </div>
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* 4. Weekly Review (Auto-generated) */}
+            <div className="md:col-span-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                        <CheckCircle2 size={20} className="text-emerald-500" />
+                        <h3 className="text-lg font-black uppercase tracking-wider text-slate-800 dark:text-white">Veckans Review</h3>
+                    </div>
+                    <div className="flex flex-col items-end">
+                        <div className="text-2xl font-black text-slate-900 dark:text-white">
+                            {Math.round(reviewInsights.adherencePct)}%
+                        </div>
+                        <div className="text-[10px] font-bold uppercase text-slate-400">Följsamhet</div>
+                    </div>
+                </div>
+
+                {reviewInsights.insights.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-3">
+                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Insikter & Observationer</h4>
+                            {reviewInsights.insights.map((insight, i) => (
+                                <div key={i} className="flex items-start gap-3 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800">
+                                    <Info size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                                    <p className="text-xs font-medium text-slate-600 dark:text-slate-300 leading-relaxed">
+                                        {insight}
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="bg-slate-900 rounded-xl p-5 text-white flex flex-col justify-center">
+                            <h4 className="text-[10px] font-black uppercase text-slate-500 mb-4 tracking-widest">Statusuppdatering</h4>
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs text-slate-400">Planerade pass</span>
+                                    <span className="text-sm font-bold">{reviewInsights.totalPlanned}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-xs text-slate-400">Slutförda pass</span>
+                                    <span className="text-sm font-bold text-emerald-400">{reviewInsights.completedCount}</span>
+                                </div>
+                                <div className="pt-4 border-t border-white/10">
+                                    <p className="text-xs italic text-slate-400">
+                                        "{reviewInsights.adherencePct === 100
+                                            ? "Perfekt genomförande! Fortsätt så."
+                                            : reviewInsights.adherencePct >= 70
+                                                ? "Bra jobbat! Du håller dig till planen."
+                                                : "En tuff vecka? Bryt ihop och kom igen!"}"
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center py-8 text-slate-400">
+                        <AlertCircle size={32} className="mb-2 opacity-20" />
+                        <p className="text-sm">Ingen träningsdata tillgänglig för denna vecka.</p>
+                    </div>
+                )}
             </div>
 
         </div>

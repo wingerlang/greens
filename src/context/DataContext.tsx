@@ -1243,6 +1243,58 @@ export function DataProvider({ children }: DataProviderProps) {
         return result.sort((a, b) => b.date.localeCompare(a.date));
     }, [universalActivities, exerciseEntries, strengthSessions]);
 
+    // ============================================
+    // Automatic Reconciliation: Sync Planned Activities with Actual Sessions
+    // ============================================
+
+    useEffect(() => {
+        if (!isLoaded || plannedActivities.length === 0 || unifiedActivities.length === 0) return;
+
+        let hasChanges = false;
+        const updatedPlanned = plannedActivities.map(planned => {
+            // Only sync those that are still 'PLANNED'
+            if (planned.status !== 'PLANNED') return planned;
+
+            // Find matching activity on same date with matching type
+            const match = unifiedActivities.find(actual => {
+                const sameDate = actual.date.startsWith(planned.date);
+                if (!sameDate) return false;
+
+                // Type mapping for reconciliation
+                const pType = planned.type;
+                const aType = actual.type;
+
+                // Simple mapping logic
+                const isRunMatch = pType === 'RUN' && (aType === 'running' || aType === 'walking' || aType === 'other'); // Be generous with 'walking' for planned runs
+                const isStrengthMatch = pType === 'STRENGTH' && aType === 'strength';
+                const isBikeMatch = pType === 'BIKE' && aType === 'cycling';
+                const isHyroxMatch = pType === 'HYROX' && (aType === 'running' || aType === 'strength' || aType === 'other');
+
+                return isRunMatch || isStrengthMatch || isBikeMatch || isHyroxMatch;
+            });
+
+            if (match) {
+                hasChanges = true;
+                return {
+                    ...planned,
+                    status: 'COMPLETED' as const,
+                    completedDate: match.date,
+                    actualDistance: match.distance || planned.estimatedDistance,
+                    actualTimeSeconds: (match.durationMinutes || 0) * 60,
+                    // Store a reference to the activity that completed it
+                    externalId: match.id
+                };
+            }
+
+            return planned;
+        });
+
+        if (hasChanges) {
+            console.log(`[DataContext] Auto-reconciled ${updatedPlanned.filter(p => p.status === 'COMPLETED' && !plannedActivities.find(o => o.id === p.id && o.status === 'COMPLETED')).length} tasks.`);
+            setPlannedActivities(updatedPlanned);
+        }
+    }, [unifiedActivities, plannedActivities, isLoaded]);
+
     const getExercisesForDate = useCallback((date: string): ExerciseEntry[] => {
         // Use startsWith to match YYYY-MM-DD even if activity has time time YYYY-MM-DDTHH:mm:ss
         return unifiedActivities.filter(e => e.date.startsWith(date));
@@ -1741,7 +1793,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 if (entry.type === 'waist') updates.waist = entry.value;
                 if (entry.type === 'chest') updates.chest = entry.value;
                 if (entry.type === 'hips') updates.hips = entry.value;
-                if (entry.type === 'thigh') updates.thigh = entry.value;
+                if (entry.type === 'thigh_left' || entry.type === 'thigh_right') updates.thigh = entry.value;
 
                 if (Object.keys(updates).length > 0) {
                     const updatedWeight = { ...existing, ...updates, updatedAt: new Date().toISOString() };
