@@ -580,38 +580,51 @@ export function TrainingPlanningPage() {
                                 })}
 
                                 {/* Planned Activities - Clickable for edit */}
-                                {dayActivities.map(act => (
-                                    <div
-                                        key={act.id}
-                                        onClick={() => handleOpenModal(day.date, act)}
-                                        className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 ${act.type === 'REST' || act.category === 'REST'
-                                            ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
-                                            : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700'
-                                            }`}
-                                    >
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className={`text-[10px] font-black uppercase tracking-wider ${act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' : 'text-blue-600 dark:text-blue-400'
+                                {dayActivities.map(act => {
+                                    const isRace = act.isRace || act.category === 'RACE' || act.title?.toLowerCase().includes('tävling');
+
+                                    return (
+                                        <div
+                                            key={act.id}
+                                            onClick={() => handleOpenModal(day.date, act)}
+                                            className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 ${
+                                                isRace
+                                                    ? 'bg-amber-500/10 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700/50 hover:border-amber-500 dark:hover:border-amber-500'
+                                                    : act.type === 'REST' || act.category === 'REST'
+                                                        ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+                                                        : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700'
+                                                }`}
+                                        >
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                                                    isRace ? 'text-amber-600 dark:text-amber-400' :
+                                                    act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' : 'text-blue-600 dark:text-blue-400'
                                                 }`}>
-                                                {act.type === 'REST' || act.category === 'REST' ? '💤 Vila' : (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
-                                            </span>
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
-                                                className="text-slate-400 hover:text-rose-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
-                                            >
-                                                <X size={12} />
-                                            </button>
-                                        </div>
-                                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                            {act.description}
-                                        </p>
-                                        {(act.estimatedDistance || 0) > 0 && (
-                                            <div className="mt-2 text-[10px] font-bold text-slate-500 flex items-center gap-1">
-                                                <Activity size={10} />
-                                                {Number(act.estimatedDistance).toFixed(1)} km
+                                                    {isRace ? <Trophy size={10} /> : null}
+                                                    {isRace ? 'TÄVLING' :
+                                                     act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
+                                                     (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
+                                                </span>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
+                                                    className="text-slate-400 hover:text-rose-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                >
+                                                    <X size={12} />
+                                                </button>
                                             </div>
-                                        )}
-                                    </div>
-                                ))}
+                                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
+                                                {isRace && act.title && <span className="font-bold block mb-0.5">{act.title}</span>}
+                                                {act.description}
+                                            </p>
+                                            {(act.estimatedDistance || 0) > 0 && (
+                                                <div className={`mt-2 text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
+                                                    <Activity size={10} />
+                                                    {Number(act.estimatedDistance).toFixed(1)} km
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
 
                                 <button
                                     onClick={() => {
