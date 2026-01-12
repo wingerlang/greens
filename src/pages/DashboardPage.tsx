@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { useHealth } from '../hooks/useHealth.ts';
@@ -186,12 +186,16 @@ const getRelativeDateLabel = (dateStr: string) => {
     return dateStr;
 };
 
-const getRangeStartDate = (range: '14d' | '30d' | '3m' | '1y' | 'all') => {
+const getRangeStartDate = (range: '7d' | '14d' | '30d' | '3m' | '1y' | 'year' | 'all') => {
     const d = new Date();
-    if (range === '14d') d.setDate(d.getDate() - 14);
+    if (range === '7d') d.setDate(d.getDate() - 7);
+    else if (range === '14d') d.setDate(d.getDate() - 14);
     else if (range === '30d') d.setDate(d.getDate() - 30);
     else if (range === '3m') d.setMonth(d.getMonth() - 3);
     else if (range === '1y') d.setFullYear(d.getFullYear() - 1);
+    else if (range === 'year') {
+        d.setMonth(0, 1); // Jan 1st
+    }
     else return '0000-00-00';
     return d.toISOString().split('T')[0];
 };
@@ -330,7 +334,8 @@ export function DashboardPage() {
     const [showActivityModal, setShowActivityModal] = useState(false);
     const [isHoveringTraining, setIsHoveringTraining] = useState(false);
     const [showBulkImport, setShowBulkImport] = useState(false);
-    const [weightRange, setWeightRange] = useState<'14d' | '30d' | '3m' | '1y' | 'all'>('1y');
+    const [weightRange, setWeightRange] = useState<'7d' | '14d' | '30d' | '3m' | '1y' | 'year' | 'all'>('1y');
+    const [showAllHistory, setShowAllHistory] = useState(false);
     const [hoveredDay, setHoveredDay] = useState<string | null>(null);
     const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
@@ -347,10 +352,12 @@ export function DashboardPage() {
     // --- Derived Data: Weight & Measurement Logic (Moved up to avoid TDZ) ---
     const getRangeDays = (range: typeof weightRange) => {
         switch (range) {
+            case '7d': return 7;
             case '14d': return 14;
             case '30d': return 30;
             case '3m': return 90;
             case '1y': return 365;
+            case 'year': return 365; // Dynamic but roughly
             default: return 9999;
         }
     };
@@ -371,15 +378,87 @@ export function DashboardPage() {
     });
 
     // Filter and sort for sparkline, merging bodyMeasurements
-    const weightTrendEntries = [...weightEntries]
-        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
-        .filter(w => weightRange === 'all' || w.date >= rangeStartISO)
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map(entry => ({
-            ...entry,
-            waist: entry.waist || measurementsByDate[entry.date]?.waist,
-            chest: entry.chest || measurementsByDate[entry.date]?.chest,
-        }));
+    const weightTrendEntries = useMemo(() => {
+        // 1. Collect all unique dates from both weight entries and measurements
+        const allDates = new Set([
+            ...weightEntries.map(w => w.date),
+            ...(bodyMeasurements || []).map(m => m.date)
+        ]);
+
+        // 2. Filter dates by range and format
+        const filteredDates = Array.from(allDates)
+            .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+            .filter(d => weightRange === 'all' || d >= rangeStartISO)
+            .sort();
+
+        // 3. Map to entries
+        return filteredDates.map(date => {
+            const weightEntry = weightEntries.find(w => w.date === date);
+            const measurements = measurementsByDate[date];
+
+            // If we have a weight entry, use it as baseline
+            if (weightEntry) {
+                return {
+                    ...weightEntry,
+                    waist: weightEntry.waist ?? measurements?.waist,
+                    chest: weightEntry.chest ?? measurements?.chest,
+                };
+            }
+
+            // If we only have measurements, create a "virtual" entry
+            return {
+                id: `v-${date}`,
+                date,
+                weight: 0, // Mark as 0 to be ignored by weight line but shown in chart context
+                waist: measurements?.waist,
+                chest: measurements?.chest,
+                createdAt: new Date().toISOString()
+            } as any;
+        });
+    }, [weightEntries, bodyMeasurements, weightRange, rangeStartISO, measurementsByDate]);
+
+    // Unified latest values for KPIs
+    const allUniqueDatesDesc = useMemo(() => {
+        const dates = new Set([
+            ...weightEntries.map(w => w.date),
+            ...(bodyMeasurements || []).map(m => m.date)
+        ]);
+        return Array.from(dates).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort((a, b) => b.localeCompare(a));
+    }, [weightEntries, bodyMeasurements]);
+
+    const latestWaist = useMemo(() => {
+        for (const date of allUniqueDatesDesc) {
+            const wEntry = weightEntries.find(w => w.date === date);
+            if (wEntry?.waist) return wEntry.waist;
+            const bEntry = (bodyMeasurements || []).find(m => m.date === date && m.type === 'waist');
+            if (bEntry) return bEntry.value;
+        }
+        return undefined;
+    }, [allUniqueDatesDesc, weightEntries, bodyMeasurements]);
+
+    const latestChest = useMemo(() => {
+        for (const date of allUniqueDatesDesc) {
+            const wEntry = weightEntries.find(w => w.date === date);
+            if (wEntry?.chest) return wEntry.chest;
+            const bEntry = (bodyMeasurements || []).find(m => m.date === date && m.type === 'chest');
+            if (bEntry) return bEntry.value;
+        }
+        return undefined;
+    }, [allUniqueDatesDesc, weightEntries, bodyMeasurements]);
+
+    const unifiedHistory = useMemo(() => {
+        return allUniqueDatesDesc.map(date => {
+            const weightEntry = weightEntries.find(w => w.date === date);
+            const measurements = measurementsByDate[date];
+            return {
+                id: weightEntry?.id || `v-${date}`,
+                date,
+                weight: weightEntry?.weight,
+                waist: weightEntry?.waist ?? measurements?.waist,
+                chest: weightEntry?.chest ?? measurements?.chest,
+            };
+        });
+    }, [allUniqueDatesDesc, weightEntries, measurementsByDate]);
 
     const earliestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[0].weight : 0;
     const latestWeightInRange = weightTrendEntries.length > 0 ? weightTrendEntries[weightTrendEntries.length - 1].weight : 0;
@@ -387,18 +466,8 @@ export function DashboardPage() {
 
 
 
-    const latest3Weights = [...weightEntries]
-        .filter(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date))
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .slice(0, 3)
-        .map(entry => ({
-            ...entry,
-            waist: entry.waist || measurementsByDate[entry.date]?.waist,
-            chest: entry.chest || measurementsByDate[entry.date]?.chest,
-        }));
-
     const currentUserHeight = settings.height || 0;
-    const latestWeightVal = latest3Weights[0]?.weight || settings.weight || 0;
+    const latestWeightVal = unifiedHistory[0]?.weight || settings.weight || 0;
     const bmi = (latestWeightVal && currentUserHeight)
         ? (latestWeightVal / (Math.pow(currentUserHeight / 100, 2)))
         : null;
@@ -946,7 +1015,7 @@ export function DashboardPage() {
                             protein={{ current: proteinCurrent, target: proteinTarget }}
                             trainingMinutes={completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0)}
                             measurementsCount={0}
-                            weighInDone={latest3Weights.some(w => w.date === today)}
+                            weighInDone={unifiedHistory.some(w => w.date === today && w.weight)}
                             sleepHours={vitals.sleep || 0}
                             alcoholUnits={vitals.alcohol || 0}
                             density={density === 'compact' ? 'compact' : 'normal'}
@@ -992,13 +1061,20 @@ export function DashboardPage() {
 
                                 // Measurement Diffs
                                 const getDiff = (type: 'weight' | 'waist' | 'chest') => {
-                                    const records = type === 'weight'
-                                        ? weightEntries.map(w => ({ date: w.date, value: w.weight }))
-                                        : bodyMeasurements.filter(m => m.type === type).map(m => ({ date: m.date, value: m.value }));
+                                    const records = unifiedHistory
+                                        .map(h => ({ date: h.date, value: h[type] }))
+                                        .filter(r => r.value !== undefined && r.value !== null && r.value !== 0)
+                                        .sort((a, b) => a.date.localeCompare(b.date));
 
-                                    records.sort((a, b) => a.date.localeCompare(b.date));
+                                    if (records.length === 0) return null;
+
                                     const inWeek = records.filter(r => r.date >= monday && r.date <= sunday);
-                                    if (inWeek.length === 0) return null;
+                                    if (inWeek.length === 0) {
+                                        // If no measurements in week, we can't show a diff for the week, 
+                                        // but we can show the current value if it exists
+                                        const latestOverall = records[records.length - 1];
+                                        return { diff: 0, current: latestOverall.value };
+                                    }
 
                                     const latestInWeek = inWeek[inWeek.length - 1];
                                     const beforeWeek = records.filter(r => r.date < monday);
@@ -1522,7 +1598,7 @@ export function DashboardPage() {
 
                     {/* Health Metrics Card - Expanded */}
 
-                    <div className={`col-span-12 md:col-span-8 lg:col-span-6 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
+                    <div className={`col-span-12 md:col-span-8 lg:col-span-8 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
                         <div className={`h-full ${density === 'compact' ? 'p-2' : 'p-6'} bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col`}>
                             <div className="relative z-10 flex flex-col h-full">
                                 {/* Header with Title and Range Selector */}
@@ -1532,7 +1608,7 @@ export function DashboardPage() {
                                             <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Hälsomått</h3>
                                             <div className="flex items-baseline gap-1.5">
                                                 <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter">
-                                                    {(latest3Weights[0]?.weight || 0).toFixed(1)}
+                                                    {(latestWeightVal || 0).toFixed(1)}
                                                 </span>
                                                 <span className="text-sm font-bold text-slate-500">kg</span>
                                             </div>
@@ -1551,55 +1627,55 @@ export function DashboardPage() {
 
                                     {/* Range Selectors */}
                                     <div className="flex bg-slate-100 dark:bg-slate-800/50 p-0.5 rounded-lg">
-                                        {(['14d', '30d', '3m', '1y', 'all'] as const).map((r) => (
+                                        {(['7d', '14d', '30d', '3m', '1y', 'year', 'all'] as const).map((r) => (
                                             <button
                                                 key={r}
                                                 onClick={() => setWeightRange(r)}
                                                 className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase transition-all ${weightRange === r ? 'bg-white dark:bg-slate-700 text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'}`}
                                             >
-                                                {r === 'all' ? 'All' : r}
+                                                {r === 'all' ? 'All' : r === 'year' ? 'i år' : r.toUpperCase()}
                                             </button>
                                         ))}
                                     </div>
                                 </div>
 
                                 {/* Main Stats Grid */}
-                                <div className="grid grid-cols-3 gap-2 mb-4">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
                                     {/* Current Weight Detail */}
                                     <div className="cursor-pointer group/stat flex flex-col justify-center" onClick={() => {
-                                        setTempValue((latest3Weights[0]?.weight || "").toString());
-                                        setTempWaist((latest3Weights[0]?.waist || "").toString());
-                                        setTempChest((latest3Weights[0]?.chest || "").toString());
+                                        setTempValue((unifiedHistory[0]?.weight || "").toString());
+                                        setTempWaist((latestWaist || "").toString());
+                                        setTempChest((latestChest || "").toString());
                                         setIsWeightModalOpen(true);
                                     }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Vikt</div>
-                                        <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-blue-500">{(latest3Weights[0]?.weight || 0).toFixed(1)}<span className="text-[10px] ml-0.5 opacity-50 font-bold">kg</span></div>
+                                        <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-blue-500">{(latestWeightVal || 0).toFixed(1)}<span className="text-[10px] ml-0.5 opacity-50 font-bold">kg</span></div>
                                     </div>
 
                                     {/* Waist Detail */}
                                     <div className="cursor-pointer group/stat border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center" onClick={() => {
                                         setTempValue((latest3Weights[0]?.weight || "").toString());
-                                        setTempWaist((latest3Weights[0]?.waist || "").toString());
-                                        setTempChest((latest3Weights[0]?.chest || "").toString());
+                                        setTempWaist((latestWaist || "").toString());
+                                        setTempChest((latestChest || "").toString());
                                         setIsWeightModalOpen(true);
                                     }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Midja</div>
                                         <div className="text-xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-emerald-500">
-                                            {useData().bodyMeasurements?.filter(m => m.type === 'waist').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.value || latest3Weights[0]?.waist || '--'}
+                                            {latestWaist || '--'}
                                             <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
                                         </div>
                                     </div>
 
                                     {/* Chest (Bröst) */}
                                     <div className="border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center hidden md:flex cursor-pointer" onClick={() => {
-                                        setTempValue((latest3Weights[0]?.weight || "").toString());
-                                        setTempWaist((latest3Weights[0]?.waist || "").toString());
-                                        setTempChest((latest3Weights[0]?.chest || "").toString());
+                                        setTempValue((unifiedHistory[0]?.weight || "").toString());
+                                        setTempWaist((latestWaist || "").toString());
+                                        setTempChest((latestChest || "").toString());
                                         setIsWeightModalOpen(true);
                                     }}>
                                         <div className="text-[9px] font-bold text-slate-400 uppercase mb-0.5">Bröst</div>
                                         <div className="text-xl font-black text-slate-900 dark:text-white">
-                                            {useData().bodyMeasurements.filter(m => m.type === 'chest').sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.value || latest3Weights[0]?.chest || '--'}
+                                            {latestChest || '--'}
                                             <span className="text-[10px] ml-0.5 opacity-50 font-bold">cm</span>
                                         </div>
                                     </div>
@@ -1621,7 +1697,7 @@ export function DashboardPage() {
                                 </div>
 
                                 {/* Sparkline Visual */}
-                                <div className="bg-slate-50 dark:bg-white/[0.02] rounded-3xl p-4 border border-slate-100 dark:border-white/5 relative max-w-xl mx-auto">
+                                <div className="bg-slate-50 dark:bg-white/[0.02] rounded-3xl p-4 border border-slate-100 dark:border-white/5 relative w-full">
                                     <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Trendkurva</div>
                                     <div className="h-64 aspect-[4/3]">
                                         <WeightSparkline
@@ -1630,9 +1706,10 @@ export function DashboardPage() {
                                             onPointClick={(idx) => {
                                                 const entry = weightTrendEntries[idx];
                                                 if (entry) {
-                                                    setTempValue(entry.weight.toString());
+                                                    setTempValue(entry.weight > 0 ? entry.weight.toString() : "");
                                                     setTempWaist((entry.waist || "").toString());
                                                     setTempChest((entry.chest || "").toString());
+                                                    setSelectedDate(entry.date);
                                                     setIsWeightModalOpen(true);
                                                 }
                                             }}
@@ -1646,19 +1723,33 @@ export function DashboardPage() {
 
                                 {/* Footer / Latest 3 */}
                                 <div className="mt-8 pt-6 border-t border-slate-100 dark:border-white/5">
-                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Senaste historik</div>
-                                    <div className="grid grid-cols-1 md:grid-cols-1 gap-2">
-                                        {latest3Weights.length > 0 ? latest3Weights.map((w) => (
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Senaste historik</div>
+                                        <button
+                                            onClick={() => setShowAllHistory(!showAllHistory)}
+                                            className="w-6 h-6 flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-blue-500 hover:text-white transition-all transform active:scale-95"
+                                            title={showAllHistory ? "Visa färre" : "Visa fler"}
+                                        >
+                                            {showAllHistory ? <X size={12} /> : <div className="text-sm font-bold mt-[-1px]">+</div>}
+                                        </button>
+                                    </div>
+                                    <div className={`grid grid-cols-2 gap-2 ${showAllHistory ? 'max-h-[400px] overflow-y-auto pr-2 custom-scrollbar' : ''}`}>
+                                        {(showAllHistory ? unifiedHistory : unifiedHistory.slice(0, 4)).map((w) => (
                                             <div key={w.id} className="px-3 py-2 bg-white dark:bg-slate-800/20 rounded-xl border border-slate-100 dark:border-white/5 flex items-center justify-between group/item hover:border-blue-500/30 transition-all cursor-pointer" onClick={() => {
-                                                setTempValue(w.weight.toString());
+                                                setTempValue((w.weight || "").toString());
                                                 setTempWaist((w.waist || "").toString());
                                                 setTempChest((w.chest || "").toString());
+                                                setSelectedDate(w.date);
                                                 setIsWeightModalOpen(true);
                                             }}>
                                                 <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
                                                     <span className="text-[10px] font-black text-slate-400 uppercase min-w-[60px]">{getRelativeDateLabel(w.date)}</span>
                                                     <div className="flex items-center flex-wrap gap-x-2">
-                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{w.weight.toFixed(1)} <span className="text-[10px] text-slate-400">kg</span></span>
+                                                        {w.weight ? (
+                                                            <span className="text-sm font-black text-slate-900 dark:text-white">{w.weight.toFixed(1)} <span className="text-[10px] text-slate-400">kg</span></span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-bold text-slate-300 italic">Ingen vikt</span>
+                                                        )}
 
                                                         {w.waist && (
                                                             <>
@@ -1677,8 +1768,9 @@ export function DashboardPage() {
                                                 </div>
                                                 <ChevronRight size={12} className="text-slate-300 group-hover/item:text-blue-500 transition-colors" />
                                             </div>
-                                        )) : (
-                                            <div className="col-span-3 text-center py-4 text-xs text-slate-400 italic">Ingen historik tillgänglig ännu.</div>
+                                        ))}
+                                        {unifiedHistory.length === 0 && (
+                                            <div className="col-span-1 text-center py-4 text-xs text-slate-400 italic">Ingen historik tillgänglig ännu.</div>
                                         )}
                                     </div>
                                 </div>

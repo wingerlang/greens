@@ -7,6 +7,8 @@ import { weightRepo } from "../repositories/weightRepository.ts";
 import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { goalRepo } from "../repositories/goalRepository.ts";
 import { periodRepo } from "../repositories/periodRepository.ts";
+import { foodRepo } from "../repositories/foodRepository.ts";
+import { FoodItem } from "../../models/types.ts";
 
 export async function getUserData(userId: string): Promise<AppData | null> {
     const res = await kv.get(["user_profiles", userId]);
@@ -18,6 +20,8 @@ export async function getUserData(userId: string): Promise<AppData | null> {
         plannedActivities: [],
         pantryItems: [],
         pantryQuantities: {},
+        foodItems: [],
+        recipes: [],
     };
 
     // 0. Fetch Goals & Periods (Migration Support)
@@ -55,6 +59,16 @@ export async function getUserData(userId: string): Promise<AppData | null> {
         (userData as any).strengthSessions = strengthSessions;
     }
 
+    // 5. Global Food Items Sync
+    // Fetch from global repo and merge with profile-specific items
+    const globalFoods = await foodRepo.getAllFoods();
+    if (globalFoods.length > 0) {
+        const foodMap = new Map();
+        (userData.foodItems || []).forEach((f: FoodItem) => foodMap.set(f.id, f));
+        globalFoods.forEach((f: FoodItem) => foodMap.set(f.id, f));
+        userData.foodItems = Array.from(foodMap.values());
+    }
+
     return userData;
 }
 
@@ -83,8 +97,6 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
     }
 
     const {
-        foodItems,
-        recipes,
         universalActivities,
         mealEntries,
         weightEntries,

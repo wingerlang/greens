@@ -144,10 +144,11 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
     // 2. Prepare Chart Data
     const chartData = useMemo(() => {
         return sortedUniqueEntries.map((e, idx) => {
+            const hasWeight = e.weight > 0;
             const point: any = {
                 ...e,
                 displayDate: e.date.slice(5),
-                weight: e.weight,
+                weight: hasWeight ? e.weight : null,
                 waist: e.waist || null,
                 chest: e.chest || null,
             };
@@ -155,9 +156,9 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
             // Populate trend-specific fields
             trendSegments.forEach(seg => {
                 if (idx >= seg.startIndex && idx <= seg.endIndex) {
-                    if (seg.trend === 'loss') point.lossWeight = e.weight;
-                    if (seg.trend === 'gain') point.gainWeight = e.weight;
-                    if (seg.trend === 'stable') point.stableWeight = e.weight;
+                    if (seg.trend === 'loss') point.lossWeight = hasWeight ? e.weight : null;
+                    if (seg.trend === 'gain') point.gainWeight = hasWeight ? e.weight : null;
+                    if (seg.trend === 'stable') point.stableWeight = hasWeight ? e.weight : null;
                 }
             });
             return point;

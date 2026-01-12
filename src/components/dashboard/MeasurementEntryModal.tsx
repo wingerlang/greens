@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Settings, Zap } from 'lucide-react';
+import { X, Settings, Zap, Trash2 } from 'lucide-react';
 import { useData } from '../../context/DataContext.tsx';
 import { getISODate } from '../../models/types.ts';
 
@@ -20,7 +20,7 @@ export const MeasurementEntryModal: React.FC<MeasurementEntryModalProps> = ({
     initialWaist = "",
     initialChest = ""
 }) => {
-    const { addWeightEntry, bulkAddWeightEntries, weightEntries } = useData();
+    const { addWeightEntry, bulkAddWeightEntries, deleteWeightEntry, weightEntries } = useData();
     const [tempWeight, setTempWeight] = useState(initialWeight);
     const [tempWaist, setTempWaist] = useState(initialWaist);
     const [tempChest, setTempChest] = useState(initialChest);
@@ -62,8 +62,9 @@ export const MeasurementEntryModal: React.FC<MeasurementEntryModalProps> = ({
         const waist = tempWaist ? parseFloat(tempWaist.replace(',', '.')) : undefined;
         const chest = tempChest ? parseFloat(tempChest.replace(',', '.')) : undefined;
 
-        if (!isNaN(w)) {
-            addWeightEntry(w, selectedDate, waist, chest);
+        // Either weight or at least one measurement must be provided
+        if (!isNaN(w) || waist !== undefined || chest !== undefined) {
+            addWeightEntry(!isNaN(w) ? w : 0, selectedDate, waist, chest);
             onClose();
         }
     };
@@ -215,17 +216,31 @@ export const MeasurementEntryModal: React.FC<MeasurementEntryModalProps> = ({
                                                 )}
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                             <button
-                                                onClick={() => {
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
                                                     setTempWeight(entry.weight.toString());
                                                     setTempWaist((entry.waist || "").toString());
                                                     setTempChest((entry.chest || "").toString());
                                                     setShowBulkImport(false);
                                                 }}
                                                 className="p-1.5 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-lg text-blue-500 transition-colors"
+                                                title="Redigera"
                                             >
                                                 <Settings size={14} />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (window.confirm('Vill du verkligen ta bort denna loggning?')) {
+                                                        deleteWeightEntry(entry.id);
+                                                    }
+                                                }}
+                                                className="p-1.5 hover:bg-rose-100 dark:hover:bg-rose-900/30 rounded-lg text-rose-500 transition-colors"
+                                                title="Ta bort"
+                                            >
+                                                <Trash2 size={14} />
                                             </button>
                                         </div>
                                     </div>

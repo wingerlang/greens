@@ -24,17 +24,17 @@ export const WeightSparkline = ({
     const cmValues: number[] = [];
 
     data.forEach(d => {
-        if (d.weight) weightValues.push(d.weight);
+        if (d.weight && d.weight > 0) weightValues.push(d.weight);
         if (d.waist) cmValues.push(d.waist);
         if (d.chest) cmValues.push(d.chest);
     });
 
-    if (weightValues.length === 0) return null;
+    if (weightValues.length === 0 && cmValues.length === 0) return null;
 
     // Weight Scale (Left Axis)
-    const wMin = Math.min(...weightValues);
-    const wMax = Math.max(...weightValues);
-    const wPadding = (wMax - wMin) * 0.15 || 1;
+    const wMin = weightValues.length > 0 ? Math.min(...weightValues) : 70;
+    const wMax = weightValues.length > 0 ? Math.max(...weightValues) : 80;
+    const wPadding = weightValues.length > 0 ? (wMax - wMin) * 0.15 || 1 : 1;
     const wAdjMin = wMin - wPadding;
     const wAdjMax = wMax + wPadding;
     const wRange = wAdjMax - wAdjMin || 1;
@@ -42,7 +42,7 @@ export const WeightSparkline = ({
     // CM Scale (Right Axis)
     const cmMin = cmValues.length > 0 ? Math.min(...cmValues) : 0;
     const cmMax = cmValues.length > 0 ? Math.max(...cmValues) : 100;
-    const cmPadding = (cmMax - cmMin) * 0.15 || 5;
+    const cmPadding = cmValues.length > 0 ? (cmMax - cmMin) * 0.15 || 5 : 5;
     const cmAdjMin = cmMin - cmPadding;
     const cmAdjMax = cmMax + cmPadding;
     const cmRange = cmAdjMax - cmAdjMin || 1;
@@ -60,7 +60,7 @@ export const WeightSparkline = ({
     const getYCm = (val: number) => heightFixed - ((val - cmAdjMin) / cmRange) * heightFixed;
 
     const weightPoints = data.map((d, i) => {
-        if (!d.weight) return null;
+        if (!d.weight || d.weight <= 0) return null;
         return { x: getX(i), y: getYWeight(d.weight), value: d.weight, index: i };
     }).filter(p => p !== null) as { x: number, y: number, value: number, index: number }[];
 
@@ -182,7 +182,7 @@ export const WeightSparkline = ({
                 <div
                     className="absolute z-50 pointer-events-none bg-slate-900/95 dark:bg-white/95 backdrop-blur-md px-3 py-2.5 rounded-xl border border-white/10 dark:border-black/5 shadow-2xl flex flex-col gap-1 min-w-[100px]"
                     style={{
-                        left: `${(hoveredIdx / (data.length - 1)) * 100}%`,
+                        left: `${(hoveredIdx / (data.length > 1 ? data.length - 1 : 1)) * 100}%`, // Adjusted for single point
                         top: '0',
                         transform: `translate(${hoveredIdx > data.length / 2 ? '-100%' : '20%'}, -10%)`
                     }}

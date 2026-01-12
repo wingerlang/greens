@@ -1024,6 +1024,35 @@ export function DataProvider({ children }: DataProviderProps) {
 
 
     const addWeightEntry = useCallback((weight: number, date: string = getISODate(), waist?: number, chest?: number, hips?: number, thigh?: number): WeightEntry => {
+        // Check if an entry for this date already exists
+        const existingEntry = weightEntries.find(w => w.date === date);
+
+        if (existingEntry) {
+            // Update existing entry
+            const updatedEntry = {
+                ...existingEntry,
+                weight,
+                waist: waist !== undefined ? waist : existingEntry.waist,
+                chest: chest !== undefined ? chest : existingEntry.chest,
+                hips: hips !== undefined ? hips : existingEntry.hips,
+                thigh: thigh !== undefined ? thigh : existingEntry.thigh,
+                updatedAt: new Date().toISOString()
+            };
+
+            setWeightEntries(prev => {
+                const next = prev.map(w => w.id === existingEntry.id ? updatedEntry : w);
+                return next.sort((a, b) => b.date.localeCompare(a.date));
+            });
+
+            // Sync via API
+            storageService.updateWeightEntry(updatedEntry).catch(err => {
+                console.error("Failed to sync weight update:", err);
+            });
+
+            return updatedEntry;
+        }
+
+        // Otherwise create new entry
         const newEntry: WeightEntry = {
             id: generateId(),
             weight,
@@ -1035,44 +1064,17 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString(),
         };
 
-        // Optimistic UI Update - use functional update to get latest state
+        // Optimistic UI Update
         setWeightEntries(prev => {
             const next = [...prev, newEntry];
-
-            // ROBUST SORTING: Date (desc), CreatedAt (desc), ID (desc)
-            const sorted = next.sort((a, b) => {
+            return next.sort((a, b) => {
                 const dateCompare = b.date.localeCompare(a.date);
                 if (dateCompare !== 0) return dateCompare;
-
-                // Tiebreaker 1: CreatedAt
                 const timeA = a.createdAt || "";
                 const timeB = b.createdAt || "";
-                const timeCompare = timeB.localeCompare(timeA);
-                if (timeCompare !== 0) return timeCompare;
-
-                // Tiebreaker 2: ID (absolute stability)
-                return (b.id || "").localeCompare(a.id || "");
+                return timeB.localeCompare(timeA);
             });
-
-            // Immediately persist to localStorage to prevent any race conditions
-            try {
-                const currentData = localStorage.getItem('greens-app-data');
-                if (currentData) {
-                    const parsed = JSON.parse(currentData);
-                    parsed.weightEntries = sorted;
-                    localStorage.setItem('greens-app-data', JSON.stringify(parsed));
-                }
-            } catch (e) {
-                console.error('[WeightEntry] Failed to immediately persist:', e);
-            }
-
-            return sorted;
         });
-
-        // Sync via API but DO NOT skip auto-save.
-        // We want the subsequent auto-save loop to persist the new state to the monolithic blob
-        // as a safety net, even if the granular API call fails or if reload happens before cache is consistent.
-        // skipAutoSave.current = true; // REMOVED to ensure persistence
 
         storageService.addWeightEntry(newEntry).catch(err => {
             console.error("Failed to sync weight:", err);
@@ -1087,7 +1089,7 @@ export function DataProvider({ children }: DataProviderProps) {
         );
 
         return newEntry;
-    }, [emitFeedEvent]);
+    }, [weightEntries, emitFeedEvent]);
 
     const bulkAddWeightEntries = useCallback((entries: Partial<WeightEntry>[]) => {
         const newEntries = entries.map(e => ({
@@ -1730,6 +1732,25 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: new Date().toISOString()
         };
         setBodyMeasurements(prev => [...prev, newEntry]);
+
+        // Sync with WeightEntry if it exists for this date
+        setWeightEntries(prev => {
+            const existing = prev.find(w => w.date === entry.date);
+            if (existing) {
+                const updates: Partial<WeightEntry> = {};
+                if (entry.type === 'waist') updates.waist = entry.value;
+                if (entry.type === 'chest') updates.chest = entry.value;
+                if (entry.type === 'hips') updates.hips = entry.value;
+                if (entry.type === 'thigh') updates.thigh = entry.value;
+
+                if (Object.keys(updates).length > 0) {
+                    const updatedWeight = { ...existing, ...updates, updatedAt: new Date().toISOString() };
+                    storageService.updateWeightEntry(updatedWeight).catch(e => console.error("Failed to sync weight measurement:", e));
+                    return prev.map(w => w.id === existing.id ? updatedWeight : w);
+                }
+            }
+            return prev;
+        });
 
         // Persist
         storageService.saveBodyMeasurement?.(newEntry).catch(e => console.error("Failed to sync measurement:", e));

@@ -35,6 +35,15 @@ export class FoodRepository {
         return results;
     }
 
+    async getAllFoods(): Promise<FoodItem[]> {
+        const iter = kv.list<FoodItem>({ prefix: ["foods"] });
+        const results: FoodItem[] = [];
+        for await (const entry of iter) {
+            results.push(entry.value);
+        }
+        return results;
+    }
+
     async isSeeded(): Promise<boolean> {
         const res = await kv.get(["system", "seeded"]);
         return !!res.value;
