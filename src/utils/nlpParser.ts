@@ -73,7 +73,8 @@ export function parseOmniboxInput(input: string): OmniboxIntent {
             else path = '/health';
         }
         else if (target.includes('recept')) path = '/recipes';
-        else if (target.includes('mat') || target.includes('plan')) path = '/planera';
+        else if (target.includes('mat')) path = '/matplanera';
+        else if (target.includes('plan')) path = '/planera';
         else if (target.includes('kalori')) path = '/calories';
         else if (target.includes('skafferi')) path = '/pantry';
         else if (target.includes('tävling')) path = '/competition';

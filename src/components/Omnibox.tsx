@@ -38,7 +38,8 @@ interface OmniboxProps {
 const NAVIGATION_ROUTES = [
     // Core
     { path: '/', label: 'Dashboard', aliases: ['hem', 'home', 'start', 'dashboard'], icon: '🏠' },
-    { path: '/planera', label: 'Veckoplanering', aliases: ['planera', 'plan', 'vecka', 'weekly'], icon: '📅' },
+    { path: '/matplanera', label: 'Veckoplanering (Mat)', aliases: ['matplanera', 'plan', 'vecka', 'weekly', 'food'], icon: '🍽️' },
+    { path: '/planera', label: 'Träningsplanering', aliases: ['planera', 'traning', 'training', 'race', 'tavling'], icon: '📅' },
     { path: '/training', label: 'Träning', aliases: ['träning', 'training', 'gym', 'workout'], icon: '💪' },
 
     // Tools
