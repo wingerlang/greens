@@ -702,21 +702,29 @@ export function DataProvider({ children }: DataProviderProps) {
             updatedAt: now,
         };
         setRecipes((prev: Recipe[]) => [...prev, newRecipe]);
+
+        skipAutoSave.current = true;
+        storageService.saveRecipe(newRecipe).catch(e => console.error("Failed to save recipe", e));
+
         return newRecipe;
     }, []);
 
     const updateRecipe = useCallback((id: string, data: Partial<RecipeFormData>): void => {
-        setRecipes((prev: Recipe[]) =>
-            prev.map((recipe: Recipe) =>
-                recipe.id === id
-                    ? { ...recipe, ...data, updatedAt: new Date().toISOString() }
-                    : recipe
-            )
-        );
-    }, []);
+        const existing = recipes.find(r => r.id === id);
+        if (!existing) return;
+
+        const updated = { ...existing, ...data, updatedAt: new Date().toISOString() };
+
+        setRecipes((prev: Recipe[]) => prev.map(r => r.id === id ? updated : r));
+
+        skipAutoSave.current = true;
+        storageService.saveRecipe(updated).catch(e => console.error("Failed to update recipe", e));
+    }, [recipes]);
 
     const deleteRecipe = useCallback((id: string): void => {
         setRecipes((prev: Recipe[]) => prev.filter((recipe: Recipe) => recipe.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteRecipe(id).catch(e => console.error("Failed to delete recipe", e));
     }, []);
 
     const getRecipe = useCallback((id: string): Recipe | undefined => {
@@ -964,6 +972,9 @@ export function DataProvider({ children }: DataProviderProps) {
         };
         setExerciseEntries(prev => [...prev, newEntry]);
 
+        skipAutoSave.current = true;
+        storageService.saveExerciseEntry(newEntry).catch(e => console.error("Failed to save exercise", e));
+
         // Life Stream: Add event (Simplified: all activities trigger a feed event)
         const typeLabel = (data.type.charAt(0).toUpperCase() + data.type.slice(1)).replace('Strength', 'Styrka').replace('Walking', 'Promenad').replace('Running', 'Löpning').replace('Cycling', 'Cykling');
 
@@ -992,8 +1003,13 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [emitFeedEvent]);
 
     const updateExercise = useCallback((id: string, updates: Partial<ExerciseEntry>) => {
+        const existing = exerciseEntries.find(e => e.id === id);
+        if (!existing) return;
+
+        const updated = { ...existing, ...updates };
+
         // Update local exerciseEntries
-        setExerciseEntries(prev => prev.map(e => e.id === id ? { ...e, ...updates } : e));
+        setExerciseEntries(prev => prev.map(e => e.id === id ? updated : e));
 
         // ALSO update universalActivities if this ID matches a server activity
         // This ensures Strava activities get their subType updated and persisted
@@ -1009,10 +1025,26 @@ export function DataProvider({ children }: DataProviderProps) {
             }
             return ua;
         }));
-    }, []);
+
+        skipAutoSave.current = true;
+        if (existing.date && updated.date && existing.date !== updated.date) {
+            // Date changed: Delete old, Save new
+            storageService.deleteExerciseEntry(id, existing.date).catch(e => console.error("Failed to delete old exercise", e));
+            storageService.saveExerciseEntry(updated).catch(e => console.error("Failed to save new exercise", e));
+        } else {
+            storageService.saveExerciseEntry(updated).catch(e => console.error("Failed to update exercise", e));
+        }
+    }, [exerciseEntries]);
 
     const deleteExercise = useCallback((id: string) => {
-        setExerciseEntries(prev => prev.filter(e => e.id !== id));
+        setExerciseEntries(prev => {
+            const entry = prev.find(e => e.id === id);
+            if (entry) {
+                skipAutoSave.current = true;
+                storageService.deleteExerciseEntry(id, entry.date).catch(e => console.error("Failed to delete exercise", e));
+            }
+            return prev.filter(e => e.id !== id);
+        });
     }, []);
 
 
@@ -1414,31 +1446,40 @@ export function DataProvider({ children }: DataProviderProps) {
 
     const saveWeeklyPlan = useCallback((weekStartDate: string, meals: WeeklyPlan['meals']): void => {
         const now = new Date().toISOString();
+        const existingIndex = weeklyPlans.findIndex((p: WeeklyPlan) => p.weekStartDate === weekStartDate);
+
+        let newPlan: WeeklyPlan;
+
+        if (existingIndex >= 0) {
+            newPlan = {
+                ...weeklyPlans[existingIndex],
+                meals,
+                updatedAt: now,
+            };
+        } else {
+            newPlan = {
+                id: generateId(),
+                weekStartDate,
+                meals,
+                createdAt: now,
+                updatedAt: now,
+            };
+        }
 
         setWeeklyPlans((prev: WeeklyPlan[]) => {
-            const existingIndex = prev.findIndex((p: WeeklyPlan) => p.weekStartDate === weekStartDate);
-
-            if (existingIndex >= 0) {
-                // Update existing plan
+            const idx = prev.findIndex(p => p.weekStartDate === weekStartDate);
+            if (idx >= 0) {
                 const updated = [...prev];
-                updated[existingIndex] = {
-                    ...updated[existingIndex],
-                    meals,
-                    updatedAt: now,
-                };
+                updated[idx] = newPlan;
                 return updated;
-            } else {
-                // Create new plan
-                return [...prev, {
-                    id: generateId(),
-                    weekStartDate,
-                    meals,
-                    createdAt: now,
-                    updatedAt: now,
-                }];
             }
+            return [...prev, newPlan];
         });
-    }, []);
+
+        // Sync Granularly & Skip Monolithic Auto-Save
+        skipAutoSave.current = true;
+        storageService.saveWeeklyPlan(newPlan).catch(e => console.error("Failed to save weekly plan:", e));
+    }, [weeklyPlans]);
 
     // Get planned meals for a specific date
     const getPlannedMealsForDate = useCallback((date: string): { mealType: MealType; meal: PlannedMeal }[] => {

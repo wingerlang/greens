@@ -18,9 +18,12 @@ import { handleBackupRoutes } from "./handlers/backup.ts";
 import { handleDeveloperRoutes } from "./handlers/developer.ts";
 import { debugMiddleware } from "./middleware/debugMiddleware.ts";
 import { handleRacePlanRoutes } from "./handlers/racePlans.ts";
+import { handlePlanRoutes } from "./handlers/plans.ts";
 import { handleExerciseMapperRoutes } from "./handlers/exerciseMapper.ts";
 import { handleExerciseRoutes } from "./handlers/exercises.ts";
 import { handleMuscleRoutes } from "./handlers/muscles.ts";
+import { handleRecipeRoutes } from "./handlers/recipes.ts";
+import { handleExerciseEntryRoutes } from "./handlers/exerciseEntries.ts";
 import { logError, logMetric } from "./utils/logger.ts";
 import { serveDir } from "./utils/fileServer.ts";
 
@@ -100,10 +103,16 @@ async function internalRouter(req: Request): Promise<Response> {
             response = await handleParserRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/race-plans")) {
             response = await handleRacePlanRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/plans")) {
+            response = await handlePlanRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/exercises/map")) {
             response = await handleExerciseMapperRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/exercises")) {
             response = await handleExerciseRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/exercise-entries")) {
+            response = await handleExerciseEntryRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/recipes")) {
+            response = await handleRecipeRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/muscles")) {
             response = await handleMuscleRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/upload-temp") || url.pathname.startsWith("/api/parse-image")) {

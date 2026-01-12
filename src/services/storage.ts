@@ -29,6 +29,12 @@ export interface StorageService {
     createFoodItem(food: any): Promise<any>;
     updateFoodItem(food: any): Promise<any>;
     deleteFoodItem(id: string): Promise<void>;
+    // Recipe Granular
+    saveRecipe(recipe: any): Promise<any>;
+    deleteRecipe(id: string): Promise<void>;
+    // Exercise Granular
+    saveExerciseEntry(entry: any): Promise<any>;
+    deleteExerciseEntry(id: string, date: string): Promise<void>;
     // Granular updates
     updateMealEntry(meal: any): Promise<void>;
     deleteMealEntry(id: string, date: string): Promise<void>;
@@ -240,24 +246,69 @@ export class LocalStorageService implements StorageService {
     }
 
     async saveWeeklyPlan(plan: WeeklyPlan): Promise<void> {
+        // 1. Update Local Storage (Optimistic)
         const data = await this.load();
         const plans = data.weeklyPlans || [];
-        const existingIndex = plans.findIndex(p => p.id === plan.id);
+        const existingIndex = plans.findIndex(p => p.weekStartDate === plan.weekStartDate);
 
         if (existingIndex >= 0) {
             plans[existingIndex] = plan;
         } else {
             plans.push(plan);
         }
-
         data.weeklyPlans = plans;
-        await this.save(data);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+        // 2. Sync to Granular API
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('/api/plans', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(plan)
+                });
+                if (res.ok) {
+                    notificationService.notify('success', 'Veckoplan sparad');
+                } else {
+                    notificationService.notify('error', 'Kunde inte spara veckoplan');
+                }
+            } catch (e) {
+                console.error('[Storage] Plan sync failed:', e);
+                notificationService.notify('error', 'Nätverksfel vid sparande av plan');
+            }
+        }
     }
 
     async deleteWeeklyPlan(id: string): Promise<void> {
+        // Note: Ideally we delete by weekStartDate, but if ID is passed, we must find the date.
+        // The interface defines deleteWeeklyPlan(id), but our repo deletes by weekStartDate.
+        // We will need to lookup the plan first.
+
         const data = await this.load();
+        const planToDelete = data.weeklyPlans?.find(p => p.id === id);
+
+        // Update Local
         data.weeklyPlans = data.weeklyPlans?.filter(p => p.id !== id) || [];
-        await this.save(data);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+        // Sync to API
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC && planToDelete) {
+            try {
+                await fetch(`/api/plans?start=${planToDelete.weekStartDate}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                notificationService.notify('success', 'Veckoplan borttagen');
+            } catch (e) {
+                console.error('[Storage] Plan delete failed:', e);
+                notificationService.notify('error', 'Kunde inte ta bort veckoplan');
+            }
+        }
     }
 
     async addWeightEntry(entry: WeightEntry): Promise<void> {
@@ -551,6 +602,123 @@ export class LocalStorageService implements StorageService {
                 });
             } catch (e) {
                 console.error('[Storage] Food delete failed:', e);
+            }
+        }
+    }
+
+    async saveRecipe(recipe: any): Promise<any> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const method = recipe.createdAt === recipe.updatedAt ? 'POST' : 'PUT'; // Heuristic, or just upsert with PUT if ID exists? API supports POST for create, PUT for update.
+                // But addRecipe in DataContext passes a new recipe.
+                // We'll try POST if creating, PUT if updating.
+                // Actually, DataContext calls addRecipe then this.
+                // Let's rely on backend UPSERT or standard REST.
+                // Our API implementation: POST (Create), PUT (Update with ID).
+
+                // For simplicity, let's assume we can determine if it's new.
+                // If it's brand new, DataContext just created it.
+                // BUT, to be safe, we can check if we are updating.
+
+                // Let's use POST for create, PUT for update.
+                // But here we just receive "recipe".
+                // We can try to fetch it first? No that's slow.
+                // Let's try PUT if we have ID, but PUT usually requires existing resource.
+                // Our API: POST /api/recipes checks if ID exists? No, it just saves.
+                // Actually our POST /api/recipes implementation just does `recipeRepo.saveRecipe`.
+                // And PUT /api/recipes/:id also does `recipeRepo.saveRecipe`.
+                // So effectively both are UPSERT in the repo layer.
+                // But PUT checks if existing to return 404.
+                // So safe bet: Use POST for everything if we don't care about 404 on update.
+                // Or:
+                const url = recipe.createdAt === recipe.updatedAt ? '/api/recipes' : `/api/recipes/${recipe.id}`;
+                const fetchMethod = recipe.createdAt === recipe.updatedAt ? 'POST' : 'PUT';
+
+                const res = await fetch(url, {
+                    method: fetchMethod,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(recipe)
+                });
+
+                if (res.ok) {
+                    notificationService.notify('success', 'Recept sparat');
+                    const data = await res.json();
+                    return data.recipe;
+                } else {
+                    throw new Error('API sync failed');
+                }
+            } catch (e) {
+                console.error('[Storage] Recipe sync error:', e);
+                notificationService.notify('error', 'Kunde inte spara recept');
+            }
+        }
+        return recipe;
+    }
+
+    async deleteRecipe(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`/api/recipes/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                notificationService.notify('success', 'Recept borttaget');
+            } catch (e) {
+                console.error('[Storage] Recipe delete failed:', e);
+                notificationService.notify('error', 'Kunde inte ta bort recept');
+            }
+        }
+    }
+
+    async saveExerciseEntry(entry: any): Promise<any> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const method = entry.createdAt === entry.updatedAt ? 'POST' : 'PUT'; // Similar heuristic as recipes, or check if we have ID
+                const url = entry.createdAt === entry.updatedAt ? '/api/exercise-entries' : `/api/exercise-entries/${entry.id}`;
+                const fetchMethod = entry.createdAt === entry.updatedAt ? 'POST' : 'PUT';
+
+                const res = await fetch(url, {
+                    method: fetchMethod,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(entry)
+                });
+
+                if (res.ok) {
+                    notificationService.notify('success', 'Träning sparad');
+                    const data = await res.json();
+                    return data.entry;
+                } else {
+                    throw new Error('API sync failed');
+                }
+            } catch (e) {
+                console.error('[Storage] Exercise sync error:', e);
+                notificationService.notify('error', 'Kunde inte spara träning');
+            }
+        }
+        return entry;
+    }
+
+    async deleteExerciseEntry(id: string, date: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`/api/exercise-entries/${id}?date=${date}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                notificationService.notify('success', 'Träning borttagen');
+            } catch (e) {
+                console.error('[Storage] Exercise delete failed:', e);
+                notificationService.notify('error', 'Kunde inte ta bort träning');
             }
         }
     }
