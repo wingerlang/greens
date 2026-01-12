@@ -7,6 +7,9 @@ import { weightRepo } from "../repositories/weightRepository.ts";
 import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { goalRepo } from "../repositories/goalRepository.ts";
 import { periodRepo } from "../repositories/periodRepository.ts";
+import { weeklyPlanRepo } from "../repositories/weeklyPlanRepository.ts";
+import { recipeRepo } from "../repositories/recipeRepository.ts";
+import { exerciseEntryRepo } from "../repositories/exerciseEntryRepository.ts";
 
 export async function getUserData(userId: string): Promise<AppData | null> {
     const res = await kv.get(["user_profiles", userId]);
@@ -32,6 +35,24 @@ export async function getUserData(userId: string): Promise<AppData | null> {
 
     // Fetch periods
     (userData as any).trainingPeriods = await periodRepo.getPeriods(userId);
+
+    // Fetch weekly plans
+    const repoPlans = await weeklyPlanRepo.getPlans(userId);
+    if (repoPlans.length > 0) {
+        userData.weeklyPlans = repoPlans;
+    }
+
+    // Fetch recipes
+    const repoRecipes = await recipeRepo.getRecipes(userId);
+    if (repoRecipes.length > 0) {
+        userData.recipes = repoRecipes;
+    }
+
+    // Fetch exercise entries
+    const repoExercises = await exerciseEntryRepo.getEntriesInRange(userId, "2000-01-01", "2099-12-31");
+    if (repoExercises.length > 0) {
+        userData.exerciseEntries = repoExercises;
+    }
 
     // 1. Fetch meals (Source of truth is now mealRepo)
     const meals = await mealRepo.getMealsInRange(userId, "2000-01-01", "2099-12-31");
@@ -82,14 +103,37 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         }
     }
 
+    if (data.weeklyPlans && data.weeklyPlans.length > 0) {
+        for (const plan of data.weeklyPlans) {
+            await weeklyPlanRepo.savePlan(userId, plan);
+        }
+    }
+
+    if (data.recipes && data.recipes.length > 0) {
+        for (const recipe of data.recipes) {
+            await recipeRepo.saveRecipe(userId, recipe);
+        }
+    }
+
+    if (data.exerciseEntries && data.exerciseEntries.length > 0) {
+        for (const entry of data.exerciseEntries) {
+            // Migration: Only valid entries
+            if (entry.id && entry.date) {
+                await exerciseEntryRepo.saveEntry(userId, entry);
+            }
+        }
+    }
+
     const {
         foodItems,
         recipes,
         universalActivities,
         mealEntries,
         weightEntries,
+        exerciseEntries,  // Exclude from blob
         strengthSessions,
         performanceGoals, // Exclude from blob
+        weeklyPlans,      // Exclude from blob
         ...userSpecificData
     } = data;
 
