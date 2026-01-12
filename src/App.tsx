@@ -113,8 +113,9 @@ export function App() {
                                                     <Route path="weekly" element={<WeeklyPage />} />
                                                     <Route path="vecka" element={<WeeklyPage />} />
                                                     <Route path="vecka/recept/:recipeId/*" element={<WeeklyPage />} />
-                                                    <Route path="planera" element={<PlanningPage />} />
+                                                    <Route path="matplanera" element={<PlanningPage />} />
                                                     <Route path="planning/training" element={<TrainingPlanningPage />} />
+                                                    <Route path="planera" element={<TrainingPlanningPage />} />
                                                     <Route path="planera/traning" element={<TrainingPlanningPage />} />
                                                     <Route path="planner" element={<PlannerPage />} />
                                                     <Route path="pantry" element={<PantryPage />} />
