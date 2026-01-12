@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DataProvider } from './context/DataContext.tsx';
 import { SettingsProvider } from './context/SettingsContext.tsx';
 import { CookingModeProvider } from './context/CookingModeProvider.tsx';
@@ -33,6 +34,8 @@ import { IntegrationsPage } from './pages/IntegrationsPage.tsx';
 import { ActivitiesPage } from './pages/ActivitiesPage.tsx';
 import { StrengthPage } from './pages/StrengthPage.tsx';
 import { ExercisesPage } from './pages/ExercisesPage.tsx';
+import { MuscleOverviewPage } from './pages/exercises/MuscleOverviewPage.tsx';
+import { LoadAnalysisPage } from './pages/training/LoadAnalysisPage.tsx';
 import { WorkoutBuilderPage } from './pages/WorkoutBuilderPage.tsx';
 import { WorkoutDetailPage } from './pages/WorkoutDetailPage.tsx';
 import { MatchupPage } from './pages/MatchupPage.tsx';
@@ -82,8 +85,11 @@ function RequireAuth({ children }: { children: JSX.Element }) {
     return children;
 }
 
+const queryClient = new QueryClient();
+
 export function App() {
     return (
+        <QueryClientProvider client={queryClient}>
         <AuthProvider>
             <DataProvider>
                 <SettingsProvider>
@@ -175,6 +181,8 @@ export function App() {
                                                 <Route path="workouts/builder" element={<WorkoutBuilderPage />} />
                                                 <Route path="workouts/:id" element={<WorkoutDetailPage />} />
                                                 <Route path="/exercises" element={<ExercisesPage />} />
+                                                <Route path="/exercises/muscles" element={<MuscleOverviewPage />} />
+                                                <Route path="/training/load" element={<LoadAnalysisPage />} />
                                                 <Route path="matchup" element={<MatchupPage />} />
                                                 <Route path="kamrat" element={<MatchupPage />} />
                                                 <Route path="feed" element={<LifeStreamPage />} />
@@ -229,5 +237,6 @@ export function App() {
                 </SettingsProvider>
             </DataProvider>
         </AuthProvider>
+        </QueryClientProvider>
     );
 }

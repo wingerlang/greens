@@ -121,6 +121,9 @@ export const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ exerci
                             {/* Aliases Section */}
                             <div>
                                 <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Alias / Varianter</label>
+                                <p className="text-[10px] text-slate-500 mb-2">
+                                    Används för att matcha historiska pass (t.ex. "Knäböj (stång)"). Lägg till exakta namn från importen.
+                                </p>
                                 <div className="flex gap-2 mb-2">
                                     <input
                                         type="text"
@@ -187,4 +190,4 @@ export const ExerciseEditorModal: React.FC<ExerciseEditorModalProps> = ({ exerci
             </div>
         </div>
     );
-};
+}
