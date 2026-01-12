@@ -44,7 +44,7 @@
       "name_en": "Back Extension",
       "name_sv": "Back Extension",
       "primaryMuscles": [
-        "triceps"
+        "lower_back"
       ],
       "secondaryMuscles": []
     },
@@ -53,7 +53,7 @@
       "name_en": "Back Extension (Hyperextension)",
       "name_sv": "Back Extension (Hyperextension)",
       "primaryMuscles": [
-        "triceps"
+        "lower_back"
       ],
       "secondaryMuscles": []
     },
@@ -62,7 +62,7 @@
       "name_en": "Back Extension (Machine)",
       "name_sv": "Back Extension (Machine)",
       "primaryMuscles": [
-        "lats"
+        "lower_back"
       ],
       "secondaryMuscles": []
     },
@@ -71,7 +71,7 @@
       "name_en": "Back Extension (Weighted Hyperextension)",
       "name_sv": "Back Extension (Weighted Hyperextension)",
       "primaryMuscles": [
-        "triceps"
+        "lower_back"
       ],
       "secondaryMuscles": []
     },
@@ -332,7 +332,7 @@
       "name_en": "Cable Fly Crossovers",
       "name_sv": "Cable Fly Crossovers",
       "primaryMuscles": [
-        "abs_upper"
+        "chest_middle"
       ],
       "secondaryMuscles": []
     },
@@ -341,7 +341,7 @@
       "name_en": "Cable Lateral Raise",
       "name_sv": "Cable Lateral Raise",
       "primaryMuscles": [
-        "abs_upper"
+        "shoulders_mid"
       ],
       "secondaryMuscles": []
     },
@@ -350,7 +350,8 @@
       "name_en": "Cable Pull Through",
       "name_sv": "Cable Pull Through",
       "primaryMuscles": [
-        "lats"
+        "glute_max",
+        "hamstrings"
       ],
       "secondaryMuscles": []
     },
@@ -359,7 +360,7 @@
       "name_en": "Calf Press (Machine)",
       "name_sv": "Calf Press (Machine)",
       "primaryMuscles": [
-        "shoulders_front"
+        "calves"
       ],
       "secondaryMuscles": []
     },
@@ -368,7 +369,7 @@
       "name_en": "Calf Press on Seated Leg Press",
       "name_sv": "Calf Press on Seated Leg Press",
       "primaryMuscles": [
-        "shoulders_front"
+        "calves"
       ],
       "secondaryMuscles": []
     },
@@ -387,7 +388,7 @@
       "name_en": "Chest Fly (Machine)",
       "name_sv": "Chest Fly (Machine)",
       "primaryMuscles": [
-        "lats"
+        "chest_middle"
       ],
       "secondaryMuscles": []
     },
@@ -396,7 +397,7 @@
       "name_en": "Chest Press (Machine)",
       "name_sv": "Chest Press (Machine)",
       "primaryMuscles": [
-        "shoulders_front"
+        "chest_middle"
       ],
       "secondaryMuscles": []
     },
@@ -499,7 +500,7 @@
       "name_en": "Crunch (Machine)",
       "name_sv": "Crunch (Machine)",
       "primaryMuscles": [
-        "lats"
+        "abs_upper"
       ],
       "secondaryMuscles": []
     },
@@ -656,7 +657,8 @@
       "name_en": "Face Pull",
       "name_sv": "Face Pull",
       "primaryMuscles": [
-        "lats"
+        "shoulders_rear",
+        "rhomboids"
       ],
       "secondaryMuscles": []
     },
@@ -674,7 +676,7 @@
       "name_en": "Floor Back Extension",
       "name_sv": "Floor Back Extension",
       "primaryMuscles": [
-        "triceps"
+        "lower_back"
       ],
       "secondaryMuscles": []
     },
@@ -683,7 +685,7 @@
       "name_en": "Frog Pump",
       "name_sv": "Frog Pump",
       "primaryMuscles": [
-        "other"
+        "glute_max"
       ],
       "secondaryMuscles": []
     },
@@ -692,7 +694,7 @@
       "name_en": "Front Raise (Cable)",
       "name_sv": "Front Raise (Cable)",
       "primaryMuscles": [
-        "abs_upper"
+        "shoulders_front"
       ],
       "secondaryMuscles": []
     },
@@ -719,7 +721,7 @@
       "name_en": "Glute Bridge",
       "name_sv": "Glute Bridge",
       "primaryMuscles": [
-        "other"
+        "glute_max"
       ],
       "secondaryMuscles": []
     },
@@ -737,7 +739,8 @@
       "name_en": "Good Morning (Barbell)",
       "name_sv": "Good Morning (Barbell)",
       "primaryMuscles": [
-        "other"
+        "lower_back",
+        "hamstrings"
       ],
       "secondaryMuscles": []
     },
@@ -791,7 +794,7 @@
       "name_en": "Hanging Leg Raise",
       "name_sv": "Hanging Leg Raise",
       "primaryMuscles": [
-        "quads"
+        "abs_lower"
       ],
       "secondaryMuscles": []
     },
@@ -1112,7 +1115,7 @@
       "name_en": "Lying Leg Curl (Machine)",
       "name_sv": "Lying Leg Curl (Machine)",
       "primaryMuscles": [
-        "biceps"
+        "quads"
       ],
       "secondaryMuscles": []
     },
@@ -1475,7 +1478,7 @@
       "name_en": "Seated Leg Curl",
       "name_sv": "Seated Leg Curl",
       "primaryMuscles": [
-        "biceps"
+        "quads"
       ],
       "secondaryMuscles": []
     },
@@ -1484,7 +1487,7 @@
       "name_en": "Seated Leg Curl (Machine)",
       "name_sv": "Seated Leg Curl (Machine)",
       "primaryMuscles": [
-        "biceps"
+        "quads"
       ],
       "secondaryMuscles": []
     },

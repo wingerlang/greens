@@ -150,6 +150,45 @@ const getCategoryEmoji = (category?: string): string => {
     }
 };
 
+// Default yield factors for common cookable categories
+const DEFAULT_YIELD_FACTORS: Record<string, number> = {
+    'ris': 2.5,
+    'pasta': 2.2,
+    'quinoa': 3.0,
+    'bulgur': 2.5,
+    'couscous': 2.0,
+    'havregryn': 3.0,
+    'linser': 2.0,
+    'bönpasta': 2.0,
+};
+
+// Check if a food item can be logged as cooked
+const canLogAsCooked = (item: FoodItem): { canCook: boolean; effectiveYieldFactor: number } => {
+    // Already cooked = no toggle
+    if (item.isCooked) {
+        return { canCook: false, effectiveYieldFactor: 1 };
+    }
+
+    // Has explicit yieldFactor? Use it
+    if (item.yieldFactor && item.yieldFactor > 1) {
+        return { canCook: true, effectiveYieldFactor: item.yieldFactor };
+    }
+
+    // Smart detection: check if name matches a cookable item type
+    const lowerName = item.name.toLowerCase();
+    for (const [key, value] of Object.entries(DEFAULT_YIELD_FACTORS)) {
+        if (lowerName.includes(key)) {
+            // If name contains "kokt" or similar, it's probably already cooked
+            if (lowerName.includes('kokt') || lowerName.includes('tillagad') || lowerName.includes('stekt')) {
+                return { canCook: false, effectiveYieldFactor: 1 };
+            }
+            return { canCook: true, effectiveYieldFactor: value };
+        }
+    }
+
+    return { canCook: false, effectiveYieldFactor: 1 };
+};
+
 export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: OmniboxProps) {
     const navigate = useNavigate();
     const [input, setInput] = useState('');
@@ -192,6 +231,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     const [draftMeasurementValue, setDraftMeasurementValue] = useState<number | null>(null);
     const [draftMeasurementDate, setDraftMeasurementDate] = useState<string | null>(null);
 
+    // Cooked toggle state for raw ingredients
+    const [draftLogAsCooked, setDraftLogAsCooked] = useState(false);
+
     // Sync draft from intent
     useEffect(() => {
         if (!isManual && intent.type === 'exercise') {
@@ -212,6 +254,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             }
             if (foodData.mealType) setDraftFoodMealType(foodData.mealType);
             if (intent.date) setDraftFoodDate(intent.date);
+
+            // Auto-detect "kokt" in input text
+            if (lockedFood && input.toLowerCase().includes('kokt')) {
+                const { canCook } = canLogAsCooked(lockedFood);
+                if (canCook) {
+                    setDraftLogAsCooked(true);
+                }
+            }
         }
 
         if (!isManual && intent.type === 'measurement') {
@@ -219,7 +269,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             setDraftMeasurementValue(intent.data.value ?? null);
             setDraftMeasurementDate(intent.date || null);
         }
-    }, [intent, isManual, lockedFood]);
+    }, [intent, isManual, lockedFood, input]);
 
     // Reset drafts when input clears
     useEffect(() => {
@@ -236,6 +286,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             setDraftMeasurementType(null);
             setDraftMeasurementValue(null);
             setDraftMeasurementDate(null);
+            setDraftLogAsCooked(false);
         }
     }, [input]);
 
@@ -451,26 +502,39 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             else if (hour >= 17 && hour < 21) mealType = 'dinner';
         }
 
+        // Check if logging as cooked
+        const { canCook, effectiveYieldFactor } = canLogAsCooked(item);
+        const isLoggingAsCooked = draftLogAsCooked && canCook;
+
         addMealEntry({
             date: logDate,
             mealType,
             items: [{
                 type: 'foodItem',
                 referenceId: item.id,
-                servings: quantity // servings is grams
+                servings: quantity, // servings is grams
+                ...(isLoggingAsCooked && { loggedAsCooked: true }),
+                ...(isLoggingAsCooked && { effectiveYieldFactor }),
             }]
         });
 
+        // Calculate displayed calories (adjust for cooked if needed)
+        let displayCalories = item.calories * quantity / 100;
+        if (isLoggingAsCooked && effectiveYieldFactor > 1) {
+            displayCalories = displayCalories / effectiveYieldFactor;
+        }
+
         setLastLoggedItem({
-            name: item.name,
+            name: item.name + (isLoggingAsCooked ? ' (kokt)' : ''),
             brand: item.brand,
             id: item.id,
-            calories: Math.round(item.calories * quantity / 100),
+            calories: Math.round(displayCalories),
             quantity
         });
         setShowFeedback(true);
         setInput('');
         setLockedFood(null);
+        setDraftLogAsCooked(false);
         // Removed onClose() to allow multiple logging as requested
     };
 
@@ -856,19 +920,47 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 </div>
                             </div>
 
+                            {/* Cooked Toggle - only show for cookable items */}
+                            {canLogAsCooked(lockedFood).canCook && (
+                                <button
+                                    type="button"
+                                    onClick={() => setDraftLogAsCooked(!draftLogAsCooked)}
+                                    className={`w-full py-3 rounded-xl flex items-center justify-center gap-3 font-bold text-sm transition-all ${draftLogAsCooked
+                                        ? 'bg-amber-500/20 text-amber-400 border-2 border-amber-500/50'
+                                        : 'bg-slate-800/50 text-slate-400 border-2 border-transparent hover:bg-slate-700/50'
+                                        }`}
+                                >
+                                    <span className="text-2xl">🍳</span>
+                                    <span>{draftLogAsCooked ? 'Loggas som kokt vikt' : 'Logga som kokt?'}</span>
+                                    {draftLogAsCooked && (
+                                        <span className="text-xs bg-amber-500/30 px-2 py-0.5 rounded-full">
+                                            kcal ÷ {canLogAsCooked(lockedFood).effectiveYieldFactor}
+                                        </span>
+                                    )}
+                                </button>
+                            )}
+
                             {/* Calculated Nutrients Preview */}
-                            <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
-                                <NutritionLabel
-                                    calories={lockedFood.calories * (draftFoodQuantity || 100) / 100}
-                                    protein={lockedFood.protein * (draftFoodQuantity || 100) / 100}
-                                    carbs={(lockedFood.carbs || 0) * (draftFoodQuantity || 100) / 100}
-                                    variant="compact"
-                                    size="md"
-                                />
-                                <div className="text-xs text-slate-500">
-                                    för {draftFoodQuantity || 100}g
-                                </div>
-                            </div>
+                            {(() => {
+                                const qty = draftFoodQuantity || 100;
+                                const { canCook, effectiveYieldFactor } = canLogAsCooked(lockedFood);
+                                const isCooked = draftLogAsCooked && canCook;
+                                const multiplier = isCooked ? 1 / effectiveYieldFactor : 1;
+                                return (
+                                    <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
+                                        <NutritionLabel
+                                            calories={lockedFood.calories * qty / 100 * multiplier}
+                                            protein={lockedFood.protein * qty / 100 * multiplier}
+                                            carbs={(lockedFood.carbs || 0) * qty / 100 * multiplier}
+                                            variant="compact"
+                                            size="md"
+                                        />
+                                        <div className="text-xs text-slate-500">
+                                            {isCooked ? `för ${qty}g kokt` : `för ${qty}g`}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Action Button */}
                             <button

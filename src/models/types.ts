@@ -338,6 +338,8 @@ export interface MealItem {
     portionType?: 'serving' | 'weight';  // How to calculate
     weightGrams?: number;            // For weight-based portions
     componentLabel?: string;         // "Gryta", "Ris", etc.
+    loggedAsCooked?: boolean;        // If true, divide kcal by yieldFactor (raw→cooked conversion)
+    effectiveYieldFactor?: number;   // The yield factor used for calorie calculation when loggedAsCooked
 }
 
 /**

@@ -161,7 +161,9 @@ export function CaloriesPage() {
                 id: f.id,
                 name: f.name,
                 subtitle: `${f.calories} kcal/100g`,
-                defaultPortion: f.defaultPortionGrams
+                defaultPortion: f.defaultPortionGrams,
+                yieldFactor: f.yieldFactor,
+                isCooked: f.isCooked
             }));
 
         return [...recipeResults, ...foodResults].slice(0, 8);
@@ -196,12 +198,20 @@ export function CaloriesPage() {
                     return { type: 'recipe' as const, id: p.id, name: r?.name || 'Okänt recept', subtitle: 'Ofta använd' };
                 } else {
                     const f = foodItems.find(fi => fi.id === p.id);
-                    return { type: 'foodItem' as const, id: p.id, name: f?.name || 'Okänd råvara', subtitle: 'Ofta använd', defaultPortion: f?.defaultPortionGrams };
+                    return {
+                        type: 'foodItem' as const,
+                        id: p.id,
+                        name: f?.name || 'Okänd råvara',
+                        subtitle: 'Ofta använd',
+                        defaultPortion: f?.defaultPortionGrams,
+                        yieldFactor: f?.yieldFactor,
+                        isCooked: f?.isCooked
+                    };
                 }
             });
     }, [mealEntries, recipes, foodItems]);
 
-    const handleQuickAdd = (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number) => {
+    const handleQuickAdd = (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number) => {
         let servingsValue = quickAddServings;
 
         if (type === 'foodItem') {
@@ -221,6 +231,8 @@ export function CaloriesPage() {
                 type,
                 referenceId: id,
                 servings: servingsValue,
+                ...(loggedAsCooked && { loggedAsCooked: true }),
+                ...(effectiveYieldFactor && { effectiveYieldFactor }),
             }],
         });
 
@@ -289,7 +301,15 @@ export function CaloriesPage() {
         } else {
             const food = getFoodItem(item.referenceId);
             if (food) {
-                return Math.round(food.calories * (item.servings / 100));
+                let calories = food.calories * (item.servings / 100);
+                // If logged as cooked, divide by yieldFactor (raw→cooked conversion)
+                if (item.loggedAsCooked) {
+                    const yieldFactor = item.effectiveYieldFactor || food.yieldFactor || 2.3;
+                    if (yieldFactor > 1) {
+                        calories = calories / yieldFactor;
+                    }
+                }
+                return Math.round(calories);
             }
         }
         return 0;
@@ -318,7 +338,14 @@ export function CaloriesPage() {
         } else {
             const food = getFoodItem(item.referenceId);
             if (food) {
-                const mult = item.servings / 100;
+                let mult = item.servings / 100;
+                // If logged as cooked, divide by yieldFactor (raw→cooked conversion)
+                if (item.loggedAsCooked) {
+                    const yieldFactor = item.effectiveYieldFactor || food.yieldFactor || 2.3;
+                    if (yieldFactor > 1) {
+                        mult = mult / yieldFactor;
+                    }
+                }
                 return {
                     calories: Math.round(food.calories * mult),
                     protein: Math.round(food.protein * mult),

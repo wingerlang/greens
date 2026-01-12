@@ -1,6 +1,57 @@
 import { debugStorage, DebugContext } from "../utils/debugContext.ts";
 import { kv } from "../kv.ts";
 
+// Deno KV has a 65KB limit per value, we use 60KB to leave room for overhead
+const MAX_KV_SIZE = 60 * 1024;
+
+function estimateSize(data: unknown): number {
+    try {
+        return new TextEncoder().encode(JSON.stringify(data)).length;
+    } catch {
+        return Infinity;
+    }
+}
+
+function truncateForKV(debugData: Record<string, unknown>): Record<string, unknown> {
+    let size = estimateSize(debugData);
+
+    if (size <= MAX_KV_SIZE) {
+        return debugData;
+    }
+
+    const result = { ...debugData };
+
+    // First, truncate responseBody if it's large
+    if (result.responseBody && typeof result.responseBody === 'string' && result.responseBody.length > 1000) {
+        const originalLen = result.responseBody.length;
+        result.responseBody = `[Truncated, original: ${originalLen} bytes] ${result.responseBody.slice(0, 500)}...`;
+        size = estimateSize(result);
+    } else if (result.responseBody && typeof result.responseBody === 'object') {
+        result.responseBody = '[Object too large for KV storage]';
+        size = estimateSize(result);
+    }
+
+    // Then, truncate logs if still too large
+    if (size > MAX_KV_SIZE && Array.isArray(result.logs) && result.logs.length > 0) {
+        const logsLen = result.logs.length;
+        const truncatedLogs = (result.logs as unknown[]).slice(0, 10);
+        truncatedLogs.push({ message: `[Truncated ${logsLen - 10} additional logs]`, timestamp: Date.now() });
+        result.logs = truncatedLogs;
+        size = estimateSize(result);
+    }
+
+    // Finally, truncate payload if still too large
+    if (size > MAX_KV_SIZE && result.payload) {
+        if (typeof result.payload === 'string' && result.payload.length > 500) {
+            result.payload = `[Truncated payload, original: ${result.payload.length} bytes]`;
+        } else if (typeof result.payload === 'object') {
+            result.payload = '[Payload too large for KV storage]';
+        }
+    }
+
+    return result;
+}
+
 export async function debugMiddleware(req: Request, next: (req: Request) => Promise<Response>): Promise<Response> {
     // Only run if DEBUG_MODE is set or implicitly in dev (we rely on env var)
     const isDebugMode = Deno.env.get("DEBUG_MODE") === "true";
@@ -98,7 +149,8 @@ export async function debugMiddleware(req: Request, next: (req: Request) => Prom
 
             // Store debug data in KV (expire in 10 minutes)
             try {
-                await kv.set(['system', 'debug', requestId], debugData, { expireIn: 10 * 60 * 1000 });
+                const truncatedData = truncateForKV(debugData);
+                await kv.set(['system', 'debug', requestId], truncatedData, { expireIn: 10 * 60 * 1000 });
             } catch (e) {
                 console.error("Failed to save debug data", e);
             }
@@ -136,7 +188,8 @@ export async function debugMiddleware(req: Request, next: (req: Request) => Prom
                 logs: context.logs
             };
 
-            await kv.set(['system', 'debug', requestId], debugData, { expireIn: 10 * 60 * 1000 });
+            const truncatedData = truncateForKV(debugData);
+            await kv.set(['system', 'debug', requestId], truncatedData, { expireIn: 10 * 60 * 1000 });
             throw error;
         }
     });
