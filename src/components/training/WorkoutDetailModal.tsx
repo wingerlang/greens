@@ -6,6 +6,7 @@ import { UniversalActivity } from '../../models/types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { SimilarWorkouts } from './SimilarWorkouts.tsx';
 import { formatSecondsToTime } from '../../utils/dateUtils.ts';
+import { WorkoutAnalysisTab } from '../workouts/WorkoutAnalysisTab.tsx';
 
 interface WorkoutDetailModalProps {
     workout: StrengthWorkout;
@@ -27,6 +28,7 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
     const [linkCopied, setLinkCopied] = useState(false);
+    const [activeTab, setActiveTab] = useState<'DETAILS' | 'ANALYSIS'>('DETAILS');
 
     // ESC key to close
     useEffect(() => {
@@ -136,6 +138,10 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
             };
         });
     }, [workout, pbs]);
+
+    const grandTotalVolume = useMemo(() => {
+        return uniqueExercises.reduce((sum, ex) => sum + (ex.totalVolume || 0), 0);
+    }, [uniqueExercises]);
 
     if (!workout) return null;
 
@@ -290,176 +296,206 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                     )
                 }
 
-                {/* Exercises List */}
-                <div className="space-y-4">
-                    {uniqueExercises.map((exercise, idx) => {
-                        const isWeightedDist = isWeightedDistanceExercise(exercise.exerciseName);
-                        // Cast to boolean to ensure type safety
-                        const isDist = !!isDistanceBasedExercise(exercise.exerciseName);
-
-                        return (
-                            <div key={idx} className="bg-slate-800/30 rounded-xl overflow-hidden border border-white/5">
-                                <div className="px-3 py-2 bg-slate-900/30 border-b border-white/5 flex justify-between items-center">
-                                    <div>
-                                        <h3
-                                            className={`font-bold text-sm text-white ${onSelectExercise ? 'hover:text-blue-400 cursor-pointer transition-colors' : ''}`}
-                                            onClick={() => onSelectExercise?.(exercise.exerciseName)}
-                                        >
-                                            {exercise.exerciseName}
-                                            {onSelectExercise && <span className="opacity-0 group-hover:opacity-100 text-slate-500 ml-2 text-xs">→</span>}
-                                        </h3>
-                                        <p className="text-[10px] text-slate-500">{exercise.sets.length} set • {Math.round(exercise.totalVolume || 0)} kg</p>
-                                    </div>
-                                    {exercise.isPB && (
-                                        <span className="bg-amber-500/10 text-amber-500 text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase border border-amber-500/20 flex items-center gap-1">
-                                            ⭐ PB
-                                        </span>
-                                    )}
-                                </div>
-
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-xs">
-                                        <thead className="bg-white/5 text-[9px] text-slate-400 uppercase font-black">
-                                            <tr>
-                                                <th className="px-3 py-1.5 text-left w-12">Set</th>
-                                                {isWeightedDist ? (
-                                                    <>
-                                                        <th className="px-3 py-1.5 text-right">Vikt</th>
-                                                        <th className="px-3 py-1.5 text-right">Distans</th>
-                                                        {/* Empty col for alignment or maybe remove */}
-                                                        <th className="px-3 py-1.5 text-right text-slate-500">Not</th>
-                                                    </>
-                                                ) : isDist ? (
-                                                    <>
-                                                        <th className="px-3 py-1.5 text-right">Tempo</th>
-                                                        <th className="px-3 py-1.5 text-right">Distans</th>
-                                                        <th className="px-3 py-1.5 text-right">Tid</th>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <th className="px-3 py-1.5 text-right">Vikt</th>
-                                                        <th className="px-3 py-1.5 text-right">Reps</th>
-                                                        <th className="px-3 py-1.5 text-right text-slate-500">Volym</th>
-                                                        <th className="px-3 py-1.5 text-right text-slate-500">1eRM</th>
-                                                    </>
-                                                )}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-white/5">
-                                            {(() => {
-                                                // Pre-calculate 1RMs to find max
-                                                const setStats = exercise.sets.map(set => {
-                                                    const isBW = set.isBodyweight || set.weight === 0;
-                                                    const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
-                                                    const displayWeight = isBW ? (set.extraWeight || 0) : set.weight;
-                                                    const est1RM = calculateEstimated1RM(calcWeight, set.reps);
-                                                    const setVolume = displayWeight * set.reps;
-                                                    return { ...set, est1RM, isBW, calcWeight, setVolume };
-                                                });
-
-                                                const maxEst1RM = Math.max(...setStats.map(s => s.est1RM));
-
-                                                return setStats.map((set, sIdx) => {
-                                                    const weightDisplay = set.isBW ? (set.extraWeight ? `+${set.extraWeight}kg` : 'KV') : `${set.weight}kg`;
-                                                    const isBest1RM = set.est1RM === maxEst1RM && maxEst1RM > 0 && !isDist && !isWeightedDist;
-                                                    const isPB = exercise.isPB && set.weight === exercise.topSet?.weight;
-
-                                                    return (
-                                                        <tr
-                                                            key={sIdx}
-                                                            className={`transition-colors border-l-2 ${isBest1RM ? 'bg-emerald-500/10 border-emerald-500' : 'border-transparent hover:bg-white/5'}`}
-                                                        >
-                                                            <td className={`px-3 py-1.5 font-mono text-[10px] ${isBest1RM ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
-                                                                #{set.setNumber || sIdx + 1}
-                                                            </td>
-
-                                                            {isWeightedDist ? (
-                                                                <>
-                                                                    <td className="px-3 py-1.5 text-right font-bold text-white">
-                                                                        {weightDisplay}
-                                                                    </td>
-                                                                    <td className="px-3 py-1.5 text-right text-blue-400 font-mono">
-                                                                        {set.distance || 0} m
-                                                                    </td>
-                                                                    <td className="px-3 py-1.5 text-right text-slate-600 italic">
-                                                                        -
-                                                                    </td>
-                                                                </>
-                                                            ) : isDist ? (
-                                                                <>
-                                                                    <td className="px-3 py-1.5 text-right font-mono text-blue-300">
-                                                                        {set.tempo || '-'}
-                                                                    </td>
-                                                                    <td className="px-3 py-1.5 text-right font-bold text-white">
-                                                                        {set.distance || 0} m
-                                                                    </td>
-                                                                    <td className="px-3 py-1.5 text-right text-emerald-400 font-mono">
-                                                                        {set.time || '-'}
-                                                                    </td>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <td className="px-3 py-1.5 text-right">
-                                                                        <span className={`font-bold ${isBest1RM ? 'text-white' : 'text-slate-200'}`}>
-                                                                            {weightDisplay}
-                                                                        </span>
-                                                                        {isPB && (
-                                                                            <span className="ml-1 text-[10px]" title="Nytt PB!">⭐</span>
-                                                                        )}
-                                                                    </td>
-                                                                    <td className={`px-3 py-1.5 text-right font-bold ${isBest1RM ? 'text-emerald-400' : 'text-blue-400'}`}>
-                                                                        {set.reps}
-                                                                    </td>
-                                                                    <td className="px-3 py-1.5 text-right text-slate-500 font-mono text-[10px]">
-                                                                        {Math.round(set.setVolume)} kg
-                                                                    </td>
-                                                                    <td className="px-3 py-1.5 text-right">
-                                                                        <div className="flex items-center justify-end gap-1">
-                                                                            <span className={`font-mono text-[10px] ${isBest1RM ? 'text-emerald-300 font-bold' : 'text-slate-500'}`}>
-                                                                                {Math.round(set.est1RM)}
-                                                                            </span>
-                                                                            {isBest1RM && (
-                                                                                <span className="text-emerald-500 text-[8px]" title="Bästa 1eRM i passet">⚡</span>
-                                                                            )}
-                                                                        </div>
-                                                                    </td>
-                                                                </>
-                                                            )}
-                                                        </tr>
-                                                    );
-                                                });
-                                            })()}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        );
-                    })}
+                {/* Tab Navigation */}
+                <div className="flex gap-4 border-b border-white/10 px-2">
+                    {[
+                        { id: 'DETAILS', label: 'Övningar' },
+                        { id: 'ANALYSIS', label: 'Analys' }
+                    ].map((tab) => (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id as 'DETAILS' | 'ANALYSIS')}
+                            className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
+                                activeTab === tab.id
+                                    ? 'text-white border-indigo-500'
+                                    : 'text-slate-500 border-transparent hover:text-slate-300'
+                            }`}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
                 </div>
 
-                {/* Similar Workouts Section */}
-                {
-                    allWorkouts.length > 0 && (
-                        <SimilarWorkouts
-                            currentWorkout={workout}
-                            allWorkouts={allWorkouts}
-                            onSelectWorkout={(w) => {
-                                onClose();
-                                // Navigate handled by parent re-opening or navigation
-                                // But usually, we might need a direct callback to switch workout
-                                // Since we don't have a direct "switch" callback prop that takes ID, 
-                                // and Parent relies on URL or state... 
-                                // Ideally SimilarWorkouts should trigger navigation to ?sessionId=...
-                                // We'll rely on the user clicking the link in SimilarWorkouts which *should* ideally update URL.
-                                // But SimilarWorkouts probably calls onSelectWorkout.
-                                // Let's assume the parent handles the URL update if we pass it up via onClose or specific prop?
-                                // Actually, SimilarWorkouts calls onSelectWorkout with a workout object.
-                                // We can't easily switch "in place" without parent help unless we navigate.
-                                // For now, let's trust the parent's onClose logic or user navigation.
-                            }}
-                        />
-                    )
-                }
+                {activeTab === 'ANALYSIS' ? (
+                    <WorkoutAnalysisTab exercises={uniqueExercises} totalSessionVolume={grandTotalVolume} />
+                ) : (
+                    <>
+                        {/* Exercises List */}
+                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
+                            {uniqueExercises.map((exercise, idx) => {
+                                const isWeightedDist = isWeightedDistanceExercise(exercise.exerciseName);
+                                // Cast to boolean to ensure type safety
+                                const isDist = !!isDistanceBasedExercise(exercise.exerciseName);
+                                const volumePct = grandTotalVolume > 0 ? ((exercise.totalVolume || 0) / grandTotalVolume * 100) : 0;
+
+                                return (
+                                    <div key={idx} className="bg-slate-800/30 rounded-xl overflow-hidden border border-white/5">
+                                        <div className="px-3 py-2 bg-slate-900/30 border-b border-white/5 flex justify-between items-center">
+                                            <div>
+                                                <h3
+                                                    className={`font-bold text-sm text-white ${onSelectExercise ? 'hover:text-blue-400 cursor-pointer transition-colors' : ''}`}
+                                                    onClick={() => onSelectExercise?.(exercise.exerciseName)}
+                                                >
+                                                    {exercise.exerciseName}
+                                                    {grandTotalVolume > 0 && (exercise.totalVolume || 0) > 0 && (
+                                                        <span className="text-slate-500 text-[10px] font-normal ml-2">
+                                                            ({volumePct.toFixed(0)}% t)
+                                                        </span>
+                                                    )}
+                                                    {onSelectExercise && <span className="opacity-0 group-hover:opacity-100 text-slate-500 ml-2 text-xs">→</span>}
+                                                </h3>
+                                                <p className="text-[10px] text-slate-500">{exercise.sets.length} set • {Math.round(exercise.totalVolume || 0)} kg</p>
+                                            </div>
+                                            {exercise.isPB && (
+                                                <span className="bg-amber-500/10 text-amber-500 text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase border border-amber-500/20 flex items-center gap-1">
+                                                    ⭐ PB
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-xs">
+                                                <thead className="bg-white/5 text-[9px] text-slate-400 uppercase font-black">
+                                                    <tr>
+                                                        <th className="px-3 py-1.5 text-left w-12">Set</th>
+                                                        {isWeightedDist ? (
+                                                            <>
+                                                                <th className="px-3 py-1.5 text-right">Vikt</th>
+                                                                <th className="px-3 py-1.5 text-right">Distans</th>
+                                                                {/* Empty col for alignment or maybe remove */}
+                                                                <th className="px-3 py-1.5 text-right text-slate-500">Not</th>
+                                                            </>
+                                                        ) : isDist ? (
+                                                            <>
+                                                                <th className="px-3 py-1.5 text-right">Tempo</th>
+                                                                <th className="px-3 py-1.5 text-right">Distans</th>
+                                                                <th className="px-3 py-1.5 text-right">Tid</th>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <th className="px-3 py-1.5 text-right">Vikt</th>
+                                                                <th className="px-3 py-1.5 text-right">Reps</th>
+                                                                <th className="px-3 py-1.5 text-right text-slate-500">Volym</th>
+                                                                <th className="px-3 py-1.5 text-right text-slate-500">1eRM</th>
+                                                            </>
+                                                        )}
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-white/5">
+                                                    {(() => {
+                                                        // Pre-calculate 1RMs to find max
+                                                        const setStats = exercise.sets.map(set => {
+                                                            const isBW = set.isBodyweight || set.weight === 0;
+                                                            const calcWeight = isBW ? (set.extraWeight || 0) : set.weight;
+                                                            const displayWeight = isBW ? (set.extraWeight || 0) : set.weight;
+                                                            const est1RM = calculateEstimated1RM(calcWeight, set.reps);
+                                                            const setVolume = displayWeight * set.reps;
+                                                            return { ...set, est1RM, isBW, calcWeight, setVolume };
+                                                        });
+
+                                                        const maxEst1RM = Math.max(...setStats.map(s => s.est1RM));
+
+                                                        return setStats.map((set, sIdx) => {
+                                                            const weightDisplay = set.isBW ? (set.extraWeight ? `+${set.extraWeight}kg` : 'KV') : `${set.weight}kg`;
+                                                            const isBest1RM = set.est1RM === maxEst1RM && maxEst1RM > 0 && !isDist && !isWeightedDist;
+                                                            const isPB = exercise.isPB && set.weight === exercise.topSet?.weight;
+
+                                                            return (
+                                                                <tr
+                                                                    key={sIdx}
+                                                                    className={`transition-colors border-l-2 ${isBest1RM ? 'bg-emerald-500/10 border-emerald-500' : 'border-transparent hover:bg-white/5'}`}
+                                                                >
+                                                                    <td className={`px-3 py-1.5 font-mono text-[10px] ${isBest1RM ? 'text-emerald-400 font-bold' : 'text-slate-500'}`}>
+                                                                        #{set.setNumber || sIdx + 1}
+                                                                    </td>
+
+                                                                    {isWeightedDist ? (
+                                                                        <>
+                                                                            <td className="px-3 py-1.5 text-right font-bold text-white">
+                                                                                {weightDisplay}
+                                                                            </td>
+                                                                            <td className="px-3 py-1.5 text-right text-blue-400 font-mono">
+                                                                                {set.distance || 0} m
+                                                                            </td>
+                                                                            <td className="px-3 py-1.5 text-right text-slate-600 italic">
+                                                                                -
+                                                                            </td>
+                                                                        </>
+                                                                    ) : isDist ? (
+                                                                        <>
+                                                                            <td className="px-3 py-1.5 text-right font-mono text-blue-300">
+                                                                                {set.tempo || '-'}
+                                                                            </td>
+                                                                            <td className="px-3 py-1.5 text-right font-bold text-white">
+                                                                                {set.distance || 0} m
+                                                                            </td>
+                                                                            <td className="px-3 py-1.5 text-right text-emerald-400 font-mono">
+                                                                                {set.time || '-'}
+                                                                            </td>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <td className="px-3 py-1.5 text-right">
+                                                                                <span className={`font-bold ${isBest1RM ? 'text-white' : 'text-slate-200'}`}>
+                                                                                    {weightDisplay}
+                                                                                </span>
+                                                                                {isPB && (
+                                                                                    <span className="ml-1 text-[10px]" title="Nytt PB!">⭐</span>
+                                                                                )}
+                                                                            </td>
+                                                                            <td className={`px-3 py-1.5 text-right font-bold ${isBest1RM ? 'text-emerald-400' : 'text-blue-400'}`}>
+                                                                                {set.reps}
+                                                                            </td>
+                                                                            <td className="px-3 py-1.5 text-right text-slate-500 font-mono text-[10px]">
+                                                                                {Math.round(set.setVolume)} kg
+                                                                            </td>
+                                                                            <td className="px-3 py-1.5 text-right">
+                                                                                <div className="flex items-center justify-end gap-1">
+                                                                                    <span className={`font-mono text-[10px] ${isBest1RM ? 'text-emerald-300 font-bold' : 'text-slate-500'}`}>
+                                                                                        {Math.round(set.est1RM)}
+                                                                                    </span>
+                                                                                    {isBest1RM && (
+                                                                                        <span className="text-emerald-500 text-[8px]" title="Bästa 1eRM i passet">⚡</span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </td>
+                                                                        </>
+                                                                    )}
+                                                                </tr>
+                                                            );
+                                                        });
+                                                    })()}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {/* Similar Workouts Section */}
+                        {
+                            allWorkouts.length > 0 && (
+                                <SimilarWorkouts
+                                    currentWorkout={workout}
+                                    allWorkouts={allWorkouts}
+                                    onSelectWorkout={(w) => {
+                                        onClose();
+                                        // Navigate handled by parent re-opening or navigation
+                                        // But usually, we might need a direct callback to switch workout
+                                        // Since we don't have a direct "switch" callback prop that takes ID,
+                                        // and Parent relies on URL or state...
+                                        // Ideally SimilarWorkouts should trigger navigation to ?sessionId=...
+                                        // We'll rely on the user clicking the link in SimilarWorkouts which *should* ideally update URL.
+                                        // But SimilarWorkouts probably calls onSelectWorkout.
+                                        // We can't easily switch "in place" without parent help unless we navigate.
+                                        // For now, let's trust the parent's onClose logic or user navigation.
+                                    }}
+                                />
+                            )
+                        }
+                    </>
+                )}
 
                 {/* Delete Confirmation Dialog */}
                 {
