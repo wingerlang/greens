@@ -30,11 +30,12 @@ import './ProfilePage.css';
 
 const ALL_MEALS: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-type TabType = 'profile' | 'physical' | 'goals' | 'privacy' | 'account';
+type TabType = 'profile' | 'physical' | 'goals' | 'privacy' | 'account' | 'training';
 
 const TAB_CONFIG: { id: TabType; label: string; icon: string }[] = [
     { id: 'profile', label: 'Profil', icon: '👤' },
     { id: 'physical', label: 'Biometri', icon: '🧬' },
+    { id: 'training', label: 'Träning', icon: '👟' },
     { id: 'goals', label: 'Mål', icon: '🎯' },
     { id: 'privacy', label: 'Integritet', icon: '🛡️' },
     { id: 'account', label: 'Konto', icon: '⚙️' },
@@ -551,6 +552,75 @@ export function ProfilePage() {
                                 </div>
                             </div>
                         </section>
+                    </div>
+                )}
+
+                {/* === TRÄNING TAB === */}
+                {activeTab === 'training' && (
+                    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+
+                        {/* Training Interests */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-bold text-white mb-2">Mina Träningsintressen</h3>
+                            <p className="text-sm text-slate-400 mb-6">Aktivera de träningsformer du vill se i appen.</p>
+
+                            <div className="grid md:grid-cols-3 gap-4">
+                                {[
+                                    { id: 'running', label: 'Löpning', icon: '🏃' },
+                                    { id: 'strength', label: 'Styrka', icon: '💪' },
+                                    { id: 'hyrox', label: 'Hyrox', icon: '🏋️' },
+                                ].map(type => {
+                                    const isActive = settings.trainingInterests?.[type.id as 'running' | 'strength' | 'hyrox'] ?? true;
+                                    return (
+                                        <button
+                                            key={type.id}
+                                            onClick={() => {
+                                                const current = settings.trainingInterests || { running: true, strength: true, hyrox: true };
+                                                updateSettings({
+                                                    trainingInterests: {
+                                                        ...current,
+                                                        [type.id]: !isActive
+                                                    }
+                                                });
+                                            }}
+                                            className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${isActive
+                                                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
+                                                    : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'
+                                                }`}
+                                        >
+                                            <span className="text-3xl filter drop-shadow-lg">{type.icon}</span>
+                                            <span className="font-bold uppercase tracking-wide">{type.label}</span>
+                                            <div className={`w-3 h-3 rounded-full mt-1 ${isActive ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-slate-700'}`} />
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </section>
+
+                        {/* Specific Settings relying on interests */}
+                        {(settings.trainingInterests?.running ?? true) && (
+                            <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <span className="text-2xl">🏃</span>
+                                    <div>
+                                        <h3 className="text-lg font-bold text-white">Löpinställningar</h3>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 max-w-md">
+                                    <DataField
+                                        label="Långpassgräns (km)"
+                                        value={settings.longRunThreshold?.toString() || '15'}
+                                        type="number"
+                                        suffix="km"
+                                        onChange={(v: string) => updateSettings({ longRunThreshold: Number(v) })}
+                                    />
+                                    <p className="text-xs text-slate-500 mt-2">
+                                        Pass som överstiger denna distans klassas automatiskt som långpass.
+                                    </p>
+                                </div>
+                            </section>
+                        )}
                     </div>
                 )}
 

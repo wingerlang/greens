@@ -86,6 +86,13 @@ export interface UserSettings {
     trainingPreferences?: {
         longRunThreshold?: number; // km
     };
+    // New Feature Flags
+    trainingInterests?: {
+        running: boolean;
+        strength: boolean;
+        hyrox: boolean;
+    };
+    longRunThreshold?: number; // km
 }
 
 /** Weekly Stats Interface */
@@ -216,7 +223,13 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
     noccoOClockEnabled: true,
     trainingPreferences: {
         longRunThreshold: 20 // Default based on user request, or could be undefined to use smart default
-    }
+    },
+    trainingInterests: {
+        running: true,
+        strength: true,
+        hyrox: true
+    },
+    longRunThreshold: 20
 };
 
 // ============================================
@@ -1189,6 +1202,10 @@ export interface PlannedActivity {
     isRace?: boolean;
     externalId?: string; // Reference to the activity that completed this plan
     raceUrl?: string;
+
+    // Hyrox specific
+    includesRunning?: boolean;
+    startTime?: string; // HH:mm
 }
 
 /** Weight and body measurements tracking entry */
@@ -1398,6 +1415,30 @@ export interface AppSettings {
     visibleMeals: MealType[];
     calorieTarget?: number;
     theme?: 'light' | 'dark';
+
+    // Bio & Goals
+    height?: number;
+    birthYear?: number;
+    gender?: 'male' | 'female' | 'other';
+    dailyCalorieGoal?: number;
+    dailyProteinGoal?: number;
+    dailyCarbsGoal?: number;
+    dailyFatGoal?: number;
+    dailySleepGoal?: number;
+    dailyWaterGoal?: number;
+    dailyStepGoal?: number;
+    dailyCaffeineMax?: number;
+    dailyTrainingGoal?: number;
+    noccoOClockEnabled?: boolean;
+    densityMode?: 'compact' | 'slim' | 'cozy';
+
+    // Training Logic Flags
+    trainingInterests?: {
+        running: boolean;
+        strength: boolean;
+        hyrox: boolean;
+    };
+    longRunThreshold?: number; // km
 }
 
 /** Category display labels (Swedish, vegan only) */

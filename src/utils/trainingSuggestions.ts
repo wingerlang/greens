@@ -331,5 +331,14 @@ export function getTrainingSuggestions(
         return 50;
     };
 
-    return suggestions.sort((a, b) => score(b) - score(a));
+    return suggestions
+        .filter(s => {
+            const interests = userSettings?.trainingInterests;
+            if (!interests) return true; // Default to showing all if no settings
+            if (s.type === 'RUN' && interests.running === false) return false;
+            if (s.type === 'STRENGTH' && interests.strength === false) return false;
+            if (s.type === 'HYROX' && interests.hyrox === false) return false;
+            return true;
+        })
+        .sort((a, b) => score(b) - score(a));
 }

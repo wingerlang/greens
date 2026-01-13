@@ -4,6 +4,7 @@ import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell } from 'lucide-rea
 import { TrainingSuggestion } from '../../utils/trainingSuggestions.ts';
 import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts';
 import { useData } from '../../context/DataContext.tsx';
+import { useSettings } from '../../context/SettingsContext.tsx';
 
 interface ActivityModalProps {
     isOpen: boolean;
@@ -41,30 +42,13 @@ export function ActivityModal({
     const [formIntensity, setFormIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
     const [isRace, setIsRace] = useState(false);
 
-    // Long Run Settings
-    const [showLongRunSettings, setShowLongRunSettings] = useState(false);
-    const [longRunThreshold, setLongRunThreshold] = useState(20);
+    // Hyrox specific
+    const [formIncludesRunning, setFormIncludesRunning] = useState(true);
+    const [formStartTime, setFormStartTime] = useState('');
 
     const { exerciseEntries, plannedActivities, currentUser, updateCurrentUser } = useData();
+    const { settings } = useSettings();
 
-    // Initialize Long Run Threshold from User Settings
-    useEffect(() => {
-        if (currentUser?.settings?.trainingPreferences?.longRunThreshold) {
-            setLongRunThreshold(currentUser.settings.trainingPreferences.longRunThreshold);
-        }
-    }, [currentUser]);
-
-    const saveLongRunSettings = () => {
-        if (!currentUser) return;
-        const newSettings = {
-            ...currentUser.settings,
-            trainingPreferences: {
-                ...currentUser.settings.trainingPreferences,
-                longRunThreshold: longRunThreshold
-            }
-        };
-        updateCurrentUser({ settings: newSettings });
-    };
     const hasExistingActivity = React.useMemo(() => {
         if (!selectedDate) return false;
         const hasPlanned = plannedActivities.some(a =>
@@ -130,6 +114,8 @@ export function ActivityModal({
                 setFormNotes(editingActivity.description || '');
                 setFormIntensity(editingActivity.targetHrZone <= 2 ? 'low' : editingActivity.targetHrZone >= 4 ? 'high' : 'moderate');
                 setIsRace(editingActivity.isRace || false);
+                setFormIncludesRunning(editingActivity.includesRunning ?? true);
+                setFormStartTime(editingActivity.startTime || '');
             } else {
                 // Create mode
                 setFormType('RUN');
@@ -141,6 +127,8 @@ export function ActivityModal({
                 setFormNotes('');
                 setFormIntensity('moderate');
                 setIsRace(false);
+                setFormIncludesRunning(true); // Default to true for Hyrox
+                setFormStartTime('');
             }
         }
     }, [isOpen, selectedDate, editingActivity]);
@@ -217,8 +205,15 @@ export function ActivityModal({
             title: title,
             description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
             estimatedDistance: formType === 'RUN' && formDistance ? parseFloat(formDistance) : 0,
-            tonnage: formType === 'STRENGTH' && formTonnage ? parseInt(formTonnage) : undefined,
+
+            // Hyrox & Strength
+            tonnage: (formType === 'STRENGTH' || formType === 'HYROX') && formTonnage ? parseInt(formTonnage) : undefined,
             muscleGroups: formType === 'STRENGTH' ? formMuscleGroups as any : undefined,
+
+            // Hyrox specific
+            includesRunning: formType === 'HYROX' ? formIncludesRunning : undefined,
+            startTime: formType === 'HYROX' ? formStartTime : undefined,
+
             targetPace: '',
             targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
             structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
@@ -395,18 +390,22 @@ export function ActivityModal({
                             >
                                 Löpning
                             </button>
-                            <button
-                                onClick={() => setFormType('STRENGTH')}
-                                className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'STRENGTH' ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                Styrka
-                            </button>
-                            <button
-                                onClick={() => setFormType('HYROX')}
-                                className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'HYROX' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                                Hyrox
-                            </button>
+                            {(settings.trainingInterests?.strength ?? true) && (
+                                <button
+                                    onClick={() => setFormType('STRENGTH')}
+                                    className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'STRENGTH' ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    Styrka
+                                </button>
+                            )}
+                            {(settings.trainingInterests?.hyrox ?? true) && (
+                                <button
+                                    onClick={() => setFormType('HYROX')}
+                                    className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'HYROX' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    Hyrox
+                                </button>
+                            )}
                             <button
                                 onClick={() => setFormType('REST')}
                                 className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'REST' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
@@ -417,7 +416,7 @@ export function ActivityModal({
 
                         {/* Run Sub-Category Selector */}
                         {formType === 'RUN' && (
-                            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                            <div className="flex flex-wrap gap-2 pb-1">
                                 {[
                                     { id: 'EASY', label: 'Distans', color: 'blue' },
                                     { id: 'LONG_RUN', label: 'Långpass', color: 'indigo' },
@@ -438,49 +437,16 @@ export function ActivityModal({
                             </div>
                         )}
 
-                        {/* Race Toggle & Long Run Settings */}
+                        {/* Race Toggle */}
                         {formType === 'RUN' && (
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="flex justify-end mb-2">
                                 <button
                                     onClick={() => setIsRace(!isRace)}
-                                    className={`w-full p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${isRace ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-600 dark:text-yellow-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
+                                    className={`px-4 py-2 rounded-xl border flex items-center gap-2 transition-all ${isRace ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-600 dark:text-yellow-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
                                 >
                                     <Trophy size={16} className={isRace ? 'fill-yellow-500' : ''} />
                                     <span className="text-xs font-black uppercase">Tävling</span>
                                 </button>
-
-                                <button
-                                    onClick={() => setShowLongRunSettings(!showLongRunSettings)}
-                                    className={`w-full p-3 rounded-xl border flex items-center justify-center gap-2 transition-all ${showLongRunSettings ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-400 text-indigo-600 dark:text-indigo-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
-                                >
-                                    <Clock size={16} />
-                                    <span className="text-xs font-black uppercase">Långpass Inst.</span>
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Long Run Settings Panel */}
-                        {formType === 'RUN' && showLongRunSettings && (
-                            <div className="p-4 bg-indigo-50/50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-800 rounded-xl space-y-3 animate-in slide-in-from-top-2">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-xs font-black uppercase text-indigo-600 dark:text-indigo-400">Definition av Långpass</label>
-                                    <span className="text-[10px] text-indigo-400 bg-indigo-100 dark:bg-indigo-900/40 px-2 py-0.5 rounded-full">Spara automatiskt</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    <div className="relative grow">
-                                        <input
-                                            type="number"
-                                            value={longRunThreshold}
-                                            onChange={(e) => setLongRunThreshold(parseInt(e.target.value) || 0)}
-                                            onBlur={saveLongRunSettings}
-                                            className="w-full bg-white dark:bg-slate-800 border border-indigo-200 dark:border-indigo-700 rounded-lg px-3 py-2 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
-                                        />
-                                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">km</span>
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 flex items-center max-w-[140px] leading-tight">
-                                        Pass över denna distans räknas som långpass.
-                                    </div>
-                                </div>
                             </div>
                         )}
 
@@ -578,10 +544,24 @@ export function ActivityModal({
                                                 ))}
                                             </div>
                                         </div>
+                                    </div>
+                                )}
 
-                                        {/* Tonnage Estimation */}
+                                {/* Hyrox Specific Inputs */}
+                                {formType === 'HYROX' && (
+                                    <div className="space-y-4 animate-in slide-in-from-top-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-bold text-slate-200">Inkluderar löpning?</span>
+                                            <button
+                                                onClick={() => setFormIncludesRunning(!formIncludesRunning)}
+                                                className={`w-12 h-6 rounded-full transition-colors relative ${formIncludesRunning ? 'bg-amber-500' : 'bg-slate-700'}`}
+                                            >
+                                                <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${formIncludesRunning ? 'translate-x-6' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+
                                         <div className="space-y-1">
-                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Estimerat Tonnage (kg)</label>
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tonnage (frivilligt)</label>
                                             <div className="relative">
                                                 <Dumbbell className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                                 <input
@@ -589,7 +569,20 @@ export function ActivityModal({
                                                     value={formTonnage}
                                                     onChange={e => setFormTonnage(e.target.value)}
                                                     placeholder="t.ex. 5000"
-                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Starttid (frivilligt)</label>
+                                            <div className="relative">
+                                                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                                <input
+                                                    type="time"
+                                                    value={formStartTime}
+                                                    onChange={e => setFormStartTime(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-amber-500 outline-none transition-all"
                                                 />
                                             </div>
                                         </div>
