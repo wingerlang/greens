@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    BarChart, Bar, Legend, Brush, ReferenceArea
+    BarChart, Bar, Legend, Brush, ReferenceArea, ComposedChart
 } from 'recharts';
 import { useMuscleLoadAnalysis } from '../../hooks/useMuscleLoadAnalysis.ts';
 import exercisesData from '../../../data/exercises.json';
@@ -24,6 +24,37 @@ const allMuscles = muscleHierarchy.categories.flatMap(c =>
     )
 );
 
+const CustomXAxisTick = (props: any) => {
+    const { x, y, payload, allData } = props;
+    const data = allData?.find((d: any) => d.date === payload.value);
+
+    if (data?.isGap) {
+        return (
+            <g transform={`translate(${x},${y})`}>
+                <text x={0} y={12} fill="#fbbf24" fontSize={14} textAnchor="middle" fontWeight="black">
+                    ⚡
+                </text>
+                <text x={0} y={26} fill="#fbbf24" fontSize={9} textAnchor="middle" fontWeight="bold">
+                    {data.gapLabel}
+                </text>
+            </g>
+        );
+    }
+
+    // For non-gap ticks, we should avoid showing every single one if they are too many
+    // But Recharts 'interval' logic usually handles this. 
+    // If we use interval={0}, we must manually hide some.
+    // However, the user wants the GAP always visible.
+
+    return (
+        <g transform={`translate(${x},${y})`}>
+            <text x={0} y={15} fill="#94a3b8" fontSize={10} textAnchor="middle">
+                {payload.value.slice(5)}
+            </text>
+        </g>
+    );
+};
+
 export const LoadAnalysisPage: React.FC = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -40,22 +71,186 @@ export const LoadAnalysisPage: React.FC = () => {
     const [selectedEndDate, setSelectedEndDate] = useState<string | null>(null);
     const [isSelecting, setIsSelecting] = useState(false);
     const [rollingPeriod, setRollingPeriod] = useState<'day' | 'week' | 'month'>('day');
+    const [intensityThreshold, setIntensityThreshold] = useState(0.7);
+    const [showTrend, setShowTrend] = useState(true);
+    const [hiddenMetrics, setHiddenMetrics] = useState<Set<string>>(new Set());
 
-    const { stats, isLoading } = useMuscleLoadAnalysis(selectedMuscle, selectedExercise);
+    const scrollToDate = (date: string) => {
+        setSelectedStartDate(date);
+        setSelectedEndDate(date);
+        const element = document.getElementById(`session-${date}`);
+        if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    };
+
+    const toggleMetric = (props: any) => {
+        const { dataKey } = props;
+        setHiddenMetrics(prev => {
+            const next = new Set(prev);
+            if (next.has(dataKey)) next.delete(dataKey);
+            else next.add(dataKey);
+            return next;
+        });
+    };
+
+    const { stats, isLoading } = useMuscleLoadAnalysis(selectedMuscle, selectedExercise, intensityThreshold);
 
     // Compute rolling average data based on period
     const chartDataWithRolling = useMemo(() => {
         if (!stats?.chartData) return [];
-        if (rollingPeriod === 'day') return stats.chartData;
 
         const windowSize = rollingPeriod === 'week' ? 7 : 30;
-        return stats.chartData.map((point, idx, arr) => {
+        const rolling = stats.chartData.map((point, idx, arr) => {
+            if (rollingPeriod === 'day') return point;
             const windowStart = Math.max(0, idx - windowSize + 1);
             const window = arr.slice(windowStart, idx + 1);
-            const avg = window.reduce((sum, p) => sum + p.load, 0) / window.length;
-            return { ...point, load: Math.round(avg) };
+
+            // Volume is Summed for the period
+            const sumLoad = window.reduce((sum, p) => sum + p.load, 0);
+            const sumHard = window.reduce((sum, p) => sum + (p.hardVolume || 0), 0);
+            const sumLight = window.reduce((sum, p) => sum + (p.lightVolume || 0), 0);
+
+            // e1RM and Max Weight are Rolling MAX
+            const maxE1rmPoint = window.reduce((prev, curr) => (curr.e1rm > prev.e1rm ? curr : prev), window[0]);
+            const maxWeightPoint = window.reduce((prev, curr) => (curr.maxWeight > prev.maxWeight ? curr : prev), window[0]);
+
+            return {
+                ...point,
+                load: Math.round(sumLoad),
+                hardVolume: Math.round(sumHard),
+                lightVolume: Math.round(sumLight),
+                e1rm: maxE1rmPoint.e1rm,
+                maxWeight: maxWeightPoint.maxWeight,
+            };
         });
+
+        // Compression: Collapse gaps > 21 days
+        // We use RAW LOAD (stats.chartData) to identify gaps, so rolling averages don't hide them
+        const GAP_THRESHOLD = 21;
+        const compressed: any[] = [];
+        let i = 0;
+        while (i < rolling.length) {
+            const rawPoint = stats.chartData[i];
+            if (rawPoint.load > 0) {
+                compressed.push(rolling[i]);
+                i++;
+            } else {
+                let j = i;
+                while (j < rolling.length && stats.chartData[j].load === 0) {
+                    j++;
+                }
+                const gapSize = j - i;
+                if (gapSize > GAP_THRESHOLD) {
+                    // Keep small buffer of zeros at start/end
+                    compressed.push(rolling[i]);
+                    compressed.push(rolling[i + 1]);
+
+                    const months = Math.floor(gapSize / 30);
+                    const weeks = Math.round((gapSize % 30) / 7);
+                    let label = months > 0 ? `${months} mån` : "";
+                    if (weeks > 0) label += (label ? " " : "") + `${weeks} v`;
+                    if (!label) label = `${gapSize} d`;
+
+                    compressed.push({
+                        date: `gap-${rolling[i + 2].date}`,
+                        isGap: true,
+                        gapLabel: label,
+                        load: 0,
+                        e1rm: rolling[i + 1].e1rm,
+                        e1rmTrend: rolling[i + 1].e1rmTrend,
+                        maxWeight: rolling[i + 1].maxWeight
+                    });
+
+                    if (j - 2 > i + 1) {
+                        compressed.push(rolling[j - 2]);
+                        compressed.push(rolling[j - 1]);
+                    }
+                } else {
+                    for (let k = i; k < j; k++) {
+                        compressed.push(rolling[k]);
+                    }
+                }
+                i = j;
+            }
+        }
+        return compressed;
     }, [stats?.chartData, rollingPeriod]);
+
+    const displayData = useMemo(() => {
+        if (!chartDataWithRolling.length) return [];
+        return chartDataWithRolling.filter(p => {
+            if (p.isGap) {
+                const actualDate = p.date.replace('gap-', '');
+                if (selectedStartDate && actualDate < selectedStartDate) return false;
+                if (selectedEndDate && actualDate > selectedEndDate) return false;
+                return true;
+            }
+            if (selectedStartDate && p.date < selectedStartDate) return false;
+            if (selectedEndDate && p.date > selectedEndDate) return false;
+            return true;
+        });
+    }, [chartDataWithRolling, selectedStartDate, selectedEndDate]);
+
+    const brushIndices = useMemo(() => {
+        if (!chartDataWithRolling.length) return { start: 0, end: chartDataWithRolling.length - 1 };
+        let start = 0;
+        let end = chartDataWithRolling.length - 1;
+
+        if (selectedStartDate) {
+            const idx = chartDataWithRolling.findIndex(d => (d.isGap ? d.date.replace('gap-', '') : d.date) >= selectedStartDate);
+            if (idx !== -1) start = idx;
+        }
+        if (selectedEndDate) {
+            const idx = chartDataWithRolling.findIndex(d => (d.isGap ? d.date.replace('gap-', '') : d.date) > selectedEndDate);
+            if (idx !== -1) end = Math.max(0, idx - 1);
+            else end = chartDataWithRolling.length - 1;
+        }
+
+        return { start, end };
+    }, [chartDataWithRolling, selectedStartDate, selectedEndDate]);
+
+    const filteredSummary = useMemo(() => {
+        if (!stats?.chartData) return null;
+        const points = stats.chartData.filter(p => {
+            if (selectedStartDate && p.date < selectedStartDate) return false;
+            if (selectedEndDate && p.date > selectedEndDate) return false;
+            return true;
+        });
+
+        const hardTonnage = points.reduce((acc, curr) => acc + (curr.hardVolume || 0), 0);
+        const totalTonnage = points.reduce((acc, curr) => acc + (curr.load || 0), 0);
+
+        // Find best e1RM in range
+        const bestE1rm = points.reduce((max, p) => (p.e1rm > max ? p.e1rm : max), 0);
+
+        // Calculate frequency for this range
+        const sessions = points.filter(p => p.load > 0).length;
+        let frequency = 0;
+        if (points.length > 7) {
+            const weeks = points.length / 7;
+            frequency = Math.round((sessions / weeks) * 10) / 10;
+        }
+
+        return {
+            hardTonnage,
+            totalTonnage,
+            bestE1rm,
+            totalSets: sessions, // Rough estimate
+            totalSessions: sessions,
+            frequency
+        };
+    }, [stats?.chartData, selectedStartDate, selectedEndDate]);
+
+    const compressedTicks = useMemo(() => {
+        if (!chartDataWithRolling.length) return undefined;
+        // Select all gaps and every ~20th regular point to ensure gaps are always visible
+        const gaps = chartDataWithRolling.filter(d => d.isGap).map(d => d.date);
+        if (gaps.length === 0) return undefined; // Fallback to automatic if no gaps
+
+        const regulars = chartDataWithRolling.filter((d, i) => !d.isGap && i % 20 === 0).map(d => d.date);
+        return Array.from(new Set([...gaps, ...regulars])).sort();
+    }, [chartDataWithRolling]);
 
     // Compute detailed data for selected range
     const selectedRangeData = useMemo(() => {
@@ -74,7 +269,7 @@ export const LoadAnalysisPage: React.FC = () => {
             .sort();
 
         // Aggregate exercises and sets
-        const exerciseMap: Record<string, { name: string; role: string; sets: Array<{ weight: number; reps: number; volume: number; e1rm: number; date: string; workoutId?: string }> }> = {};
+        const exerciseMap: Record<string, { name: string; role: string; sets: Array<{ weight: number; reps: number; volume: number; e1rm: number; date: string; workoutId?: string; isHard: boolean }> }> = {};
 
         datesInRange.forEach(date => {
             stats.workoutDetailsByDate[date]?.forEach(exercise => {
@@ -271,27 +466,33 @@ export const LoadAnalysisPage: React.FC = () => {
 
                     {/* Summary Cards */}
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="p-4 bg-slate-900 rounded-2xl border border-white/5">
-                            <div className="text-xs text-slate-500 font-bold uppercase mb-1">Total Volym</div>
-                            <div className="text-2xl font-bold text-white">{(stats.totalTonnage / 1000).toFixed(1)} ton</div>
+                        <div className="p-4 bg-slate-900 rounded-2xl border border-white/5 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-2 opacity-10">🔥</div>
+                            <div className="text-xs text-slate-500 font-bold uppercase mb-1">Hård Volym</div>
+                            <div className="text-2xl font-black text-emerald-400">
+                                {((filteredSummary?.hardTonnage || 0) / 1000).toFixed(1)} <span className="text-xs font-normal opacity-70">ton</span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-1">
+                                {((filteredSummary?.totalTonnage || 0) / 1000).toFixed(1)} ton totalt
+                            </div>
                         </div>
                         <div className="p-4 bg-slate-900 rounded-2xl border border-white/5">
-                            <div className="text-xs text-slate-500 font-bold uppercase mb-1">Antal Set</div>
-                            <div className="text-2xl font-bold text-white">{stats.totalSets}</div>
+                            <div className="text-xs text-slate-500 font-bold uppercase mb-1">Antal Pass</div>
+                            <div className="text-2xl font-bold text-white">{filteredSummary?.totalSessions || 0}</div>
                         </div>
                         <div className="p-4 bg-slate-900 rounded-2xl border border-white/5">
                             <div className="text-xs text-slate-500 font-bold uppercase mb-1">Bästa e1RM</div>
-                            <div className="text-2xl font-bold text-orange-400">{stats.bestE1RM}kg</div>
-                            <div className="text-[10px] text-slate-600">Högsta beräknade styrka</div>
+                            <div className="text-2xl font-bold text-orange-400">{filteredSummary?.bestE1rm || 0}kg</div>
+                            <div className="text-[10px] text-slate-600">I valt intervall</div>
                         </div>
                         <div className="p-4 bg-slate-900 rounded-2xl border border-white/5" title="Hur ofta du tränar denna muskel/övning per vecka i genomsnitt">
                             <div className="text-xs text-slate-500 font-bold uppercase mb-1 flex items-center gap-1">
                                 Frekvens
                                 <span className="text-[10px] text-slate-600">ⓘ</span>
                             </div>
-                            <div className="text-2xl font-bold text-blue-400">{stats.frequencyPerWeek}x</div>
+                            <div className="text-2xl font-bold text-blue-400">{filteredSummary?.frequency || 0}x</div>
                             <div className="text-[10px] text-slate-600">
-                                /vecka ({stats.totalSessions} pass)
+                                /vecka ({filteredSummary?.totalSessions || 0} pass)
                             </div>
                         </div>
                     </div>
@@ -342,24 +543,116 @@ export const LoadAnalysisPage: React.FC = () => {
                                         </button>
                                     ))}
                                 </div>
+                                <button
+                                    onClick={() => setShowTrend(!showTrend)}
+                                    className={`px-3 py-1 text-[10px] font-bold uppercase rounded-lg transition-all border ${showTrend
+                                        ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+                                        : 'bg-slate-800 text-slate-500 border-white/5'
+                                        }`}
+                                    title="Visa 'trappan' (din absoluta styrkenivå över tid)"
+                                >
+                                    📈 Trend
+                                </button>
+                                <div className="flex flex-col items-end gap-1 px-2 border-l border-white/10 ml-1">
+                                    <div className="text-[9px] text-slate-500 font-bold uppercase whitespace-nowrap">Tröskel: {Math.round(intensityThreshold * 100)}%</div>
+                                    <input
+                                        type="range"
+                                        min="0.5"
+                                        max="0.9"
+                                        step="0.05"
+                                        value={intensityThreshold}
+                                        onChange={(e) => setIntensityThreshold(parseFloat(e.target.value))}
+                                        className="w-20 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 mb-6">💡 Klicka på en punkt eller dra i den gröna slidern nedan för tidsval. Streckad linje visar din faktiska högsta vikt.</p>
+
+                        {/* Date Range Selector (Relocated) */}
+                        <div className="mb-6 pb-6 border-b border-white/5">
+                            <div className="flex flex-wrap items-center gap-4">
+                                <div className="flex bg-slate-800/50 rounded-xl p-1 border border-white/5 overflow-x-auto max-w-full">
+                                    {[
+                                        { label: 'Alltid', start: null },
+                                        { label: '2 v', start: 14 },
+                                        { label: '4 v', start: 28 },
+                                        { label: '3 m', start: 90 },
+                                        { label: '9 m', start: 270 },
+                                        { label: '1 år', start: 365 },
+                                        { label: 'I år', start: 'year-start' },
+                                    ].map(p => {
+                                        let isActive = false;
+                                        if (p.label === 'Alltid') isActive = !selectedStartDate && !selectedEndDate;
+                                        else if (p.label === 'I år') {
+                                            const yearStart = `${new Date().getFullYear()}-01-01`;
+                                            isActive = selectedStartDate === yearStart && !selectedEndDate;
+                                        } else if (typeof p.start === 'number') {
+                                            const d = new Date();
+                                            d.setDate(d.getDate() - p.start);
+                                            const startStr = d.toISOString().split('T')[0];
+                                            isActive = selectedStartDate === startStr;
+                                        }
+
+                                        return (
+                                            <button
+                                                key={p.label}
+                                                onClick={() => {
+                                                    if (p.label === 'Alltid') {
+                                                        setSelectedStartDate(null);
+                                                        setSelectedEndDate(null);
+                                                    } else if (p.label === 'I år') {
+                                                        setSelectedStartDate(`${new Date().getFullYear()}-01-01`);
+                                                        setSelectedEndDate(null);
+                                                    } else if (typeof p.start === 'number') {
+                                                        const d = new Date();
+                                                        d.setDate(d.getDate() - p.start);
+                                                        setSelectedStartDate(d.toISOString().split('T')[0]);
+                                                        setSelectedEndDate(null);
+                                                    }
+                                                }}
+                                                className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-widest rounded-lg transition-all whitespace-nowrap ${isActive ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : 'text-slate-500 hover:text-slate-300'}`}
+                                            >
+                                                {p.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="date"
+                                        value={selectedStartDate || ''}
+                                        onChange={(e) => setSelectedStartDate(e.target.value)}
+                                        className="bg-slate-800/80 border border-white/5 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none transition-colors"
+                                    />
+                                    <span className="text-slate-600 text-xs">→</span>
+                                    <input
+                                        type="date"
+                                        value={selectedEndDate || ''}
+                                        onChange={(e) => setSelectedEndDate(e.target.value)}
+                                        className="bg-slate-800/80 border border-white/5 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 outline-none transition-colors"
+                                    />
+                                </div>
                                 {(selectedStartDate || selectedEndDate) && (
                                     <button
                                         onClick={() => { setSelectedStartDate(null); setSelectedEndDate(null); }}
-                                        className="text-xs px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded-full"
+                                        className="text-[10px] font-black uppercase tracking-widest px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors border border-white/5"
                                     >
-                                        ✕ Rensa
+                                        ✕ Rensa filter
                                     </button>
                                 )}
                             </div>
                         </div>
-                        <p className="text-xs text-slate-500 mb-4">💡 Klicka på en punkt eller dra i brushen nedan för tidsval. Streckad linje visar din faktiska högsta vikt.</p>
-                        <div className="h-80 w-full">
+                        <div className="h-96 w-full">
                             <ResponsiveContainer width="100%" height="100%">
-                                <LineChart
+                                <ComposedChart
                                     data={chartDataWithRolling}
+                                    margin={{ top: 10, right: 10, left: 0, bottom: 80 }}
                                     onMouseDown={(e) => {
-                                        if (e?.activeLabel) {
-                                            setSelectedStartDate(e.activeLabel);
+                                        if (e && e.activeLabel) {
+                                            const label = e.activeLabel.toString();
+                                            const date = label.includes('gap-') ? label.replace('gap-', '') : label;
+                                            setSelectedStartDate(date);
                                             setSelectedEndDate(null);
                                             setIsSelecting(true);
                                         }
@@ -379,10 +672,12 @@ export const LoadAnalysisPage: React.FC = () => {
                                     <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
                                     <XAxis
                                         dataKey="date"
+                                        type="category"
                                         stroke="#94a3b8"
-                                        tick={{ fill: '#94a3b8', fontSize: 10 }}
-                                        tickFormatter={(val) => val.slice(5)}
-                                        minTickGap={30}
+                                        tick={<CustomXAxisTick allData={chartDataWithRolling} />}
+                                        ticks={compressedTicks}
+                                        minTickGap={10}
+                                        height={50}
                                     />
                                     <YAxis
                                         yAxisId="left"
@@ -401,9 +696,17 @@ export const LoadAnalysisPage: React.FC = () => {
                                         contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
                                         itemStyle={{ color: '#fff' }}
                                         formatter={(val: number, name: string, props: any) => {
-                                            if (name === 'load') return [`${Math.round(val)} kg`, '📊 Volym'];
+                                            const payload = props.payload;
+                                            if (payload?.isGap) {
+                                                if (name === 'load') return [`${payload.gapDays} dagar utan träning`, '⏳ Uppehåll'];
+                                                return [null, null]; // Hide other metrics for gaps in tooltip
+                                            }
+
+                                            if (name === 'hardVolume') return [`${Math.round(val)} kg`, '🔥 Tung Volym'];
+                                            if (name === 'lightVolume') return [`${Math.round(val)} kg`, '🍃 Lätt Volym'];
+                                            if (name === 'load') return [`${Math.round(val)} kg`, '📊 Total Volym'];
+                                            if (name === 'e1rmTrend') return [`${Math.round(val)} kg`, '📈 Trend (e1RM)'];
                                             if (name === 'maxWeight') {
-                                                const payload = props.payload;
                                                 const maxWeightEx = payload?.maxWeightExercise;
                                                 const maxWeightOrig = payload?.maxWeightOriginal;
                                                 const isWeightPB = payload?.isWeightPB;
@@ -417,15 +720,11 @@ export const LoadAnalysisPage: React.FC = () => {
                                                 return [valueStr, '🏋️ Högsta vikt'];
                                             }
                                             if (name === 'e1rm') {
-                                                const payload = props.payload;
                                                 const isE1RMPB = payload?.isPB;
-                                                const isWeightPB = payload?.isWeightPB;
                                                 const isActual = payload?.isActual1RM;
                                                 const exName = payload?.pbExerciseName;
                                                 const repsCount = payload?.pbReps;
                                                 const wLifted = payload?.pbWeight;
-                                                const maxWeightEx = payload?.maxWeightExercise;
-                                                const maxWeightOriginal = payload?.maxWeightOriginal;
 
                                                 let label = isActual ? '💪 1RM' : '💪 e1RM';
                                                 let valueStr = `${Math.round(val)} kg`;
@@ -443,15 +742,37 @@ export const LoadAnalysisPage: React.FC = () => {
                                             }
                                             return [val, name];
                                         }}
-                                        labelFormatter={(label) => `📅 ${label}`}
+                                        labelFormatter={(label, payload) => {
+                                            const data = payload?.[0]?.payload;
+                                            if (data?.isGap) return `⏳ Uppehåll: ${data.gapLabel}`;
+                                            if (label.startsWith('gap-')) return `⏳ Uppehåll (${label.slice(4)})`;
+                                            return `📅 ${label}`;
+                                        }}
                                     />
                                     <Legend
-                                        wrapperStyle={{ paddingTop: 10 }}
-                                        formatter={(value) => {
-                                            if (value === 'load') return 'Volym';
-                                            if (value === 'e1rm') return '1RM / e1RM';
-                                            if (value === 'maxWeight') return 'Max vikt';
-                                            return value;
+                                        onClick={(e) => toggleMetric(e.dataKey as string)}
+                                        wrapperStyle={{ paddingTop: '20px', cursor: 'pointer' }}
+                                    />
+                                    <Brush
+                                        dataKey="date"
+                                        height={30}
+                                        stroke="#10b981"
+                                        fill="#0f172a"
+                                        startIndex={brushIndices.start}
+                                        endIndex={brushIndices.end}
+                                        tickFormatter={(val) => val.slice(5)}
+                                        y={350}
+                                        onChange={(range) => {
+                                            if (range && range.startIndex !== undefined && range.endIndex !== undefined) {
+                                                const startPoint = chartDataWithRolling[range.startIndex];
+                                                const endPoint = chartDataWithRolling[range.endIndex];
+                                                if (startPoint && endPoint) {
+                                                    const newStart = startPoint.isGap ? startPoint.date.replace('gap-', '') : startPoint.date;
+                                                    const newEnd = endPoint.isGap ? endPoint.date.replace('gap-', '') : endPoint.date;
+                                                    if (newStart !== selectedStartDate) setSelectedStartDate(newStart);
+                                                    if (newEnd !== selectedEndDate) setSelectedEndDate(newEnd);
+                                                }
+                                            }
                                         }}
                                     />
                                     {selectedStartDate && selectedEndDate && (
@@ -464,16 +785,54 @@ export const LoadAnalysisPage: React.FC = () => {
                                             strokeOpacity={0.5}
                                         />
                                     )}
-                                    <Line
+                                    <Bar
                                         yAxisId="left"
-                                        type="monotone"
-                                        dataKey="load"
-                                        stroke="#10b981"
-                                        strokeWidth={1.5}
-                                        dot={{ r: 2, fill: '#10b981' }}
-                                        activeDot={{ r: 5, fill: '#10b981', stroke: '#0f172a', strokeWidth: 2 }}
-                                        name="load"
+                                        dataKey="hardVolume"
+                                        stackId="volume"
+                                        fill="#064e3b"
+                                        name="hardVolume"
+                                        radius={[0, 0, 0, 0]}
+                                        hide={hiddenMetrics.has('hardVolume')}
+                                        onClick={(data) => data && scrollToDate(data.date)}
+                                        style={{ cursor: 'pointer' }}
                                     />
+                                    <Bar
+                                        yAxisId="left"
+                                        dataKey="lightVolume"
+                                        stackId="volume"
+                                        fill="#d1fae5"
+                                        name="lightVolume"
+                                        radius={[2, 2, 0, 0]}
+                                        hide={hiddenMetrics.has('lightVolume')}
+                                        onClick={(data) => data && scrollToDate(data.date)}
+                                        style={{ cursor: 'pointer' }}
+                                    />
+                                    {showTrend && (
+                                        <Line
+                                            yAxisId="right"
+                                            type="stepAfter"
+                                            dataKey="e1rmTrend"
+                                            stroke="#f59e0b"
+                                            strokeWidth={4}
+                                            strokeOpacity={0.5}
+                                            name="e1rmTrend"
+                                            hide={hiddenMetrics.has('e1rmTrend')}
+                                            dot={(props: any) => {
+                                                const { cx, cy, payload } = props;
+                                                // Show a marker if this is a Trend Break (new e1RM PB)
+                                                if (payload?.isPB) {
+                                                    return (
+                                                        <g key={`trend-pb-${payload.date}`}>
+                                                            <circle cx={cx} cy={cy} r={6} fill="#f59e0b" stroke="#0f172a" strokeWidth={1.5} />
+                                                            <path d={`M ${cx - 3} ${cy} L ${cx + 3} ${cy} M ${cx} ${cy - 3} L ${cx} ${cy + 3}`} stroke="#0f172a" strokeWidth={1.5} />
+                                                        </g>
+                                                    );
+                                                }
+                                                return <g key={`tnd-${payload?.date || 'x'}`} />;
+                                            }}
+                                            activeDot={false}
+                                        />
+                                    )}
                                     <Line
                                         yAxisId="right"
                                         type="monotone"
@@ -481,6 +840,7 @@ export const LoadAnalysisPage: React.FC = () => {
                                         stroke="#6366f1"
                                         strokeWidth={1.5}
                                         strokeDasharray="5 5"
+                                        hide={hiddenMetrics.has('maxWeight')}
                                         dot={(props: any) => {
                                             const { cx, cy, payload } = props;
                                             if (payload?.isWeightPB && !payload?.isPB) {
@@ -497,6 +857,7 @@ export const LoadAnalysisPage: React.FC = () => {
                                         stroke="#f59e0b"
                                         strokeWidth={2.5}
                                         name="e1rm"
+                                        hide={hiddenMetrics.has('e1rm')}
                                         dot={(props: any) => {
                                             const { cx, cy, payload } = props;
                                             if (payload?.isPB) {
@@ -517,14 +878,7 @@ export const LoadAnalysisPage: React.FC = () => {
                                         }}
                                         activeDot={{ r: 6, fill: '#f59e0b', stroke: '#0f172a', strokeWidth: 2 }}
                                     />
-                                    <Brush
-                                        dataKey="date"
-                                        height={30}
-                                        stroke="#10b981"
-                                        fill="#1e293b"
-                                        tickFormatter={(val) => val.slice(5)}
-                                    />
-                                </LineChart>
+                                </ComposedChart>
                             </ResponsiveContainer>
                         </div>
                     </div>
@@ -582,7 +936,10 @@ export const LoadAnalysisPage: React.FC = () => {
                                     <p className="text-sm text-slate-400 mt-1">
                                         {selectedRangeData.datesInRange.length} träningsdagar •
                                         {selectedRangeData.totalSets} set •
-                                        {(selectedRangeData.totalVolume / 1000).toFixed(1)} ton volym
+                                        {(selectedRangeData.totalVolume / 1000).toFixed(1)} ton totalt •
+                                        <span className="text-emerald-400 ml-1">
+                                            {(selectedRangeData.exercises.reduce((acc, ex) => acc + ex.sets.reduce((sAcc, s) => s.isHard ? sAcc + s.volume : sAcc, 0), 0) / 1000).toFixed(1)} ton hård
+                                        </span>
                                     </p>
                                 </div>
                             </div>
@@ -598,50 +955,29 @@ export const LoadAnalysisPage: React.FC = () => {
                                                     }`}>
                                                     {exercise.role === 'primary' ? 'P' : exercise.role === 'target' ? 'T' : 'S'}
                                                 </span>
-                                                <h3 className="font-bold text-white">{exercise.name}</h3>
+                                                <h3 className="font-bold text-white text-sm">{exercise.name}</h3>
                                             </div>
-                                            <span className="text-sm text-slate-400">{exercise.sets.length} set</span>
+                                            <div className="text-xs text-slate-400">
+                                                {exercise.sets.length} set • {Math.round(exercise.sets.reduce((sum, s) => sum + s.volume, 0))} kg
+                                                <span className="text-emerald-500 ml-2 font-bold">
+                                                    (🔥 {Math.round(exercise.sets.reduce((sum, s: any) => s.isHard ? sum + s.volume : sum, 0))} kg)
+                                                </span>
+                                            </div>
                                         </div>
-
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-xs">
-                                                <thead>
-                                                    <tr className="text-slate-500 uppercase">
-                                                        <th className="text-left py-1 pr-4">Datum</th>
-                                                        <th className="text-right py-1 pr-4">Vikt</th>
-                                                        <th className="text-right py-1 pr-4">Reps</th>
-                                                        <th className="text-right py-1 pr-4">Vol</th>
-                                                        <th className="text-right py-1">e1RM</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {exercise.sets.map((set, setIdx) => (
-                                                        <tr key={setIdx} className="text-white border-t border-white/5 hover:bg-slate-700/30">
-                                                            <td className="py-1.5 pr-4">
-                                                                {set.workoutId ? (
-                                                                    <button
-                                                                        onClick={() => navigate(`/training/strength/${set.workoutId}`)}
-                                                                        className="text-blue-400 hover:text-blue-300 underline font-mono"
-                                                                    >
-                                                                        {set.date.slice(5)} →
-                                                                    </button>
-                                                                ) : (
-                                                                    <button
-                                                                        onClick={() => navigate(`/training?date=${set.date}`)}
-                                                                        className="text-slate-400 hover:text-white font-mono"
-                                                                    >
-                                                                        {set.date.slice(5)}
-                                                                    </button>
-                                                                )}
-                                                            </td>
-                                                            <td className="text-right py-1.5 pr-4 font-bold">{set.weight}kg</td>
-                                                            <td className="text-right py-1.5 pr-4">{set.reps}</td>
-                                                            <td className="text-right py-1.5 pr-4 text-slate-400">{Math.round(set.volume)}kg</td>
-                                                            <td className="text-right py-1.5 text-emerald-400 font-bold">{set.e1rm}kg</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                        <div className="flex flex-wrap gap-2">
+                                            {exercise.sets.map((set: any, sIdx: number) => (
+                                                <div key={sIdx} className={`px-2 py-1 rounded text-[10px] border transition-all ${set.isHard
+                                                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                                                    : 'bg-slate-900/50 border-white/5 text-slate-400'
+                                                    }`}>
+                                                    <span className="flex items-center gap-1">
+                                                        {set.isHard && <span>🔥</span>}
+                                                        <span>{set.reps} × {set.weight}kg</span>
+                                                        <span className="opacity-40 mx-1">→</span>
+                                                        <span className={set.isHard ? 'text-emerald-400 font-bold' : 'text-slate-500'}>{set.e1rm}kg</span>
+                                                    </span>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 ))}

@@ -29,7 +29,7 @@ interface IntensityBucket {
     tonnage: number;
 }
 
-export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId: string | null) => {
+export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId: string | null, intensityThreshold: number = 0.7) => {
     const { user, token } = useAuth();
 
     const { data: workoutHistory, isLoading } = useQuery({
@@ -139,6 +139,11 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
         // Track e1RM progression by date for graphing (with rep info for PB annotation)
         const e1rmByDate: Record<string, { e1rm: number; reps: number; weight: number; exerciseName: string; isActual1RM: boolean }> = {};
 
+        // Track Hard vs Light volume
+        const hardVolumeByDate: Record<string, number> = {};
+        const lightVolumeByDate: Record<string, number> = {};
+        let totalHardTonnage = 0;
+
         // Track actual 1RM (reps = 1) separately
         const actual1rmByDate: Record<string, { weight: number; exerciseName: string }> = {};
 
@@ -154,13 +159,32 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
             exerciseId: string;
             role: 'primary' | 'secondary' | 'target';
             workoutId?: string;
-            sets: Array<{ weight: number; reps: number; volume: number; e1rm: number; setKey: string }>;
+            sets: Array<{ weight: number; reps: number; volume: number; e1rm: number; setKey: string; isHard: boolean }>;
         }>> = {};
 
         // Track seen set keys to prevent duplicates
         const seenSetKeys = new Set<string>();
 
         const historySorted = (workoutHistory as any[]).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        // Pre-calculate 1RM history for all relevant exercises to optimize intensity calculation
+        const e1rmHistoryAcrossExercises: Record<string, { date: number, e1rm: number }[]> = {};
+        historySorted.forEach(workout => {
+            const workoutDate = new Date(workout.date).getTime();
+            workout.exercises?.forEach((e: any) => {
+                const matchResult = findMatch(e);
+                if (matchResult.match) {
+                    const id = matchResult.match.def.id;
+                    if (!e1rmHistoryAcrossExercises[id]) e1rmHistoryAcrossExercises[id] = [];
+                    e.sets?.forEach((s: any) => {
+                        if (s.weight && s.reps) {
+                            const e1rmValue = s.weight * (1 + (s.reps / 30));
+                            e1rmHistoryAcrossExercises[id].push({ date: workoutDate, e1rm: e1rmValue });
+                        }
+                    });
+                }
+            });
+        });
 
         historySorted.forEach(workout => {
             const dateStr = new Date(workout.date).toISOString().split('T')[0];
@@ -208,6 +232,11 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
                     workoutDetailsByDate[dateStr].push(exerciseDetail);
                 }
 
+                // Get history for THIS specific exercise
+                const exerciseHistory = e1rmHistoryAcrossExercises[matched.def.id] || [];
+                const workoutDateMs = new Date(workout.date).getTime();
+                const sixMonthsAgoMs = workoutDateMs - (6 * 30 * 24 * 60 * 60 * 1000);
+
                 exerciseEntry.sets.forEach((set: WorkoutSet, setIndex: number) => {
                     const weight = set.weight || 0;
                     const reps = set.reps || 0;
@@ -225,88 +254,47 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
                     // Calculate e1RM
                     const e1rm = weight * (1 + (reps / 30));
                     const isActual1RM = reps === 1;
-                    const exerciseName = matched.def.name_en;
                     const isPrimaryExercise = matched.role === 'primary' || matched.role === 'target';
 
                     // Track e1RM for graphing - ONLY for primary exercises!
-                    // Secondary exercises (like biceps in pull-ups) shouldn't count for e1RM PBs
                     if (isPrimaryExercise) {
                         if (!e1rmByDate[dateStr] || e1rm > e1rmByDate[dateStr].e1rm) {
                             e1rmByDate[dateStr] = {
                                 e1rm: Math.round(e1rm),
                                 reps,
                                 weight,
-                                exerciseName,
+                                exerciseName: matched.def.name_en,
                                 isActual1RM
                             };
                         }
 
-                        // Track actual 1RM separately (only if reps = 1 and primary)
                         if (reps === 1) {
                             if (!actual1rmByDate[dateStr] || weight > actual1rmByDate[dateStr].weight) {
-                                actual1rmByDate[dateStr] = { weight, exerciseName };
+                                actual1rmByDate[dateStr] = { weight, exerciseName: matched.def.name_en };
                             }
                         }
                     }
 
-                    // Track max weight for bar chart (adjusted for rolestat)
+                    // Track max weight for bar chart (adjusted for role)
                     const weightedMax = weight * multiplier;
                     if (!maxWeightByDate[dateStr] || weightedMax > maxWeightByDate[dateStr].weight) {
                         maxWeightByDate[dateStr] = {
                             weight: weightedMax,
                             originalWeight: weight,
-                            exerciseName
+                            exerciseName: matched.def.name_en
                         };
                     }
 
-                    // Add to detailed sets
-                    exerciseDetail!.sets.push({ weight, reps, volume, e1rm: Math.round(e1rm), setKey });
+                    // Intensity - Find max for THIS specific matched exercise in window
+                    const max1RM = exerciseHistory
+                        .filter(h => h.date <= workoutDateMs && h.date >= sixMonthsAgoMs)
+                        .reduce((max, h) => Math.max(max, h.e1rm), 0);
 
-                    // Intensity
-                    // Find max for THIS specific matched exercise in window
-                    const workoutDate = new Date(workout.date);
-                    const sixMonthsAgo = new Date(workoutDate);
-                    sixMonthsAgo.setMonth(workoutDate.getMonth() - 6);
-
-                    let max1RM = 0;
-
-                    // Look through history for this specific exercise (by ID or Alias match)
-                    // Optimization: We could pre-compute 1RM history for every exercise.
-                    // But filtering here is safer for Alias logic.
-
-                    const relevantHistory = historySorted.filter(w =>
-                        new Date(w.date) >= sixMonthsAgo &&
-                        new Date(w.date) <= workoutDate
-                    );
-
-                    relevantHistory.forEach(w => {
-                        w.exercises?.forEach((e: any) => {
-                            // Check if 'e' is the SAME exercise as 'matched.def'
-                            // Use fuzzy matching
-                            const eNorm = normalize(e.exerciseName || '');
-                            const matchedNorm = normalize(matched.def.name_en);
-                            const matchedIdNorm = normalize(matched.def.id);
-
-                            let isSame = false;
-                            if (e.exerciseId === matched.def.id) isSame = true;
-                            else if (eNorm && (eNorm.includes(matchedIdNorm) || matchedIdNorm.includes(eNorm) ||
-                                eNorm.includes(matchedNorm) || matchedNorm.includes(eNorm))) {
-                                isSame = true;
-                            }
-
-                            if (isSame) {
-                                e.sets.forEach((s: WorkoutSet) => {
-                                    if (s.weight && s.reps) {
-                                        const e1rm = s.weight * (1 + (s.reps / 30));
-                                        if (e1rm > max1RM) max1RM = e1rm;
-                                    }
-                                });
-                            }
-                        });
-                    });
-
+                    let isHard = true;
                     if (max1RM > 0) {
                         const intensity = weight / max1RM;
+                        isHard = intensity >= intensityThreshold;
+
                         let bucket = '';
                         if (intensity < 0.5) bucket = '<50%';
                         else if (intensity < 0.6) bucket = '50-60%';
@@ -323,6 +311,24 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
                             intensityBuckets[bucket].tonnage += volume;
                         }
                     }
+
+                    // Categorize hard vs light volume (for stacked bar chart)
+                    if (isHard) {
+                        hardVolumeByDate[dateStr] = (hardVolumeByDate[dateStr] || 0) + volume;
+                        totalHardTonnage += volume;
+                    } else {
+                        lightVolumeByDate[dateStr] = (lightVolumeByDate[dateStr] || 0) + volume;
+                    }
+
+                    // Update detailed set flag
+                    exerciseDetail!.sets.push({
+                        weight,
+                        reps,
+                        volume,
+                        e1rm: Math.round(e1rm),
+                        setKey,
+                        isHard: isHard
+                    });
                 });
             });
         });
@@ -331,11 +337,22 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
         let runningBestE1RM = 0;
         let runningBestActual1RM = 0;
         let runningBestWeight = 0;
-        const allDates = Array.from(new Set([
+        const sortedDataDates = Array.from(new Set([
             ...Object.keys(loadByDate),
             ...Object.keys(e1rmByDate),
             ...Object.keys(maxWeightByDate)
         ])).sort();
+
+        let allDates: string[] = [];
+        if (sortedDataDates.length > 0) {
+            const first = new Date(sortedDataDates[0]);
+            const last = new Date(sortedDataDates[sortedDataDates.length - 1]);
+            const curr = new Date(first);
+            while (curr <= last) {
+                allDates.push(curr.toISOString().split('T')[0]);
+                curr.setDate(curr.getDate() + 1);
+            }
+        }
 
         const chartData = allDates.map(date => {
             const load = loadByDate[date] || 0;
@@ -356,6 +373,9 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
             const isE1RMPB = e1rm > runningBestE1RM && e1rm > 0;
             if (isE1RMPB) runningBestE1RM = e1rm;
 
+            // Trend is the running best e1RM (Step-up logic)
+            const e1rmTrend = runningBestE1RM;
+
             // Track actual 1RM PBs
             const isActual1RMPB = actual1rm > runningBestActual1RM && actual1rm > 0;
             if (isActual1RMPB) runningBestActual1RM = actual1rm;
@@ -367,7 +387,10 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
             return {
                 date,
                 load: Math.round(load),
+                hardVolume: Math.round(hardVolumeByDate[date] || 0),
+                lightVolume: Math.round(lightVolumeByDate[date] || 0),
                 e1rm,
+                e1rmTrend,
                 actual1rm,
                 maxWeight,
                 isPB: isE1RMPB,
@@ -401,6 +424,7 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
             intensityData,
             totalSets: intensityData.reduce((acc, curr) => acc + curr.sets, 0),
             totalTonnage: intensityData.reduce((acc, curr) => acc + curr.tonnage, 0),
+            totalHardTonnage: Math.round(totalHardTonnage),
             matchedExercises: Object.values(matchedExercisesMap),
             workoutDetailsByDate,
             bestE1RM: runningBestE1RM,
@@ -409,7 +433,7 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
             totalSessions: sessionsWithData
         };
 
-    }, [workoutHistory, muscleId, targetExerciseId]);
+    }, [workoutHistory, muscleId, targetExerciseId, intensityThreshold]);
 
     return { stats, isLoading };
 };
