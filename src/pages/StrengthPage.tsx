@@ -41,6 +41,7 @@ export function StrengthPage() {
 
     // Main tab navigation
     const [mainTab, setMainTab] = useState<'overview' | 'analysis' | 'research'>('overview');
+    const [hideJanuaryBests, setHideJanuaryBests] = useState(false);
 
     const { exerciseName: exerciseSlug } = useParams();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -326,7 +327,12 @@ export function StrengthPage() {
 
         // 1. Find Max Values per Year per Exercise
         workouts.forEach(w => {
+            const date = new Date(w.date);
             const year = w.date.substring(0, 4);
+
+            // If hiding January bests, skip if in January
+            if (hideJanuaryBests && date.getMonth() === 0) return;
+
             if (!bestsByYear[year]) bestsByYear[year] = {};
 
             w.exercises.forEach(e => {
@@ -348,7 +354,12 @@ export function StrengthPage() {
 
         // 2. Mark workouts that achieved the max
         workouts.forEach(w => {
+            const date = new Date(w.date);
             const year = w.date.substring(0, 4);
+
+            // If hiding January bests, skip January workouts entirely for classification
+            if (hideJanuaryBests && date.getMonth() === 0) return;
+
             const hasBest = w.exercises.some(e => {
                 const exName = normalizeExerciseName(e.exerciseName);
                 const sessionMax = e.sets.reduce((max, s) => {
@@ -365,7 +376,7 @@ export function StrengthPage() {
         });
 
         return ids;
-    }, [workouts]);
+    }, [workouts, hideJanuaryBests]);
 
     // Identify workouts that contain an All-Time PR
     const allTimePBWorkoutIds = useMemo(() => {
@@ -1019,6 +1030,17 @@ export function StrengthPage() {
                     icon="📋"
                     defaultOpen={true}
                     className="mb-8"
+                    headerContent={
+                        <label className="flex items-center gap-2 cursor-pointer bg-slate-800/50 hover:bg-slate-800 px-3 py-1 rounded-lg border border-white/5 hover:border-white/10 transition-colors" onClick={(e) => e.stopPropagation()}>
+                            <input
+                                type="checkbox"
+                                checked={hideJanuaryBests}
+                                onChange={(e) => setHideJanuaryBests(e.target.checked)}
+                                className="form-checkbox h-3.5 w-3.5 text-emerald-500 rounded border-slate-600 bg-slate-900 focus:ring-offset-slate-900"
+                            />
+                            <span className="text-[10px] font-bold text-slate-400 uppercase">Dölj årsbästa i januari</span>
+                        </label>
+                    }
                 >
                     {loading ? (
                         <div className="text-center text-slate-500 py-12">Laddar...</div>
