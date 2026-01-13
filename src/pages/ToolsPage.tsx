@@ -30,6 +30,12 @@ export function ToolsPage() {
                     desc: "Analysera effektiv volym och styrkeutveckling utan RPE.",
                     path: "/tools/load-analysis",
                     color: "from-cyan-500 to-blue-500"
+                },
+                {
+                    name: "Interferensanalys",
+                    desc: "Undvik krockar mellan mTOR (styrka) och AMPK (kardio).",
+                    path: "/tools/interference",
+                    color: "from-indigo-500 to-purple-500"
                 }
             ]
         },
