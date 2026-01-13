@@ -136,6 +136,17 @@ export function ActivityDetailModal({
         return parseWorkout(title, desc);
     }, [universalActivity, activity]);
 
+    // Derived splits helper
+    const splits = universalActivity?.performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || [];
+    const hasSplits = splits.length > 0;
+
+    // Analysis visibility criteria - Strict check for meaningful content
+    const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
+    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
+    const hasWorkoutStructure = parsedWorkout.segments.length > 0;
+    // Only show analysis if we have splits (intervals), structure, or HR data on non-strength activities
+    const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure;
+
     // Auto-populate subtype in edit form if detected
     useEffect(() => {
         if (isEditing && editForm.subType === 'default' && parsedWorkout?.suggestedSubType &&
@@ -198,18 +209,9 @@ export function ActivityDetailModal({
     }, [exerciseEntries, universalActivities]);
 
     const perfBreakdown = getPerformanceBreakdown(activity, allActivities);
-    const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
     const strengthWorkout = mergeData?.strengthWorkout;
 
-    // Derived splits helper
-    const splits = perf?.splits || [];
-    const hasSplits = splits.length > 0;
-
-    // Analysis visibility criteria - Strict check for meaningful content
-    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
-    const hasWorkoutStructure = parsedWorkout.segments.length > 0;
-    // Only show analysis if we have splits (intervals), structure, or HR data on non-strength activities
-    const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure;
+    // Derived variables for view logic
     const showStravaCard = activity.source === 'strava' || isTrulyMerged;
 
     // Unmerge handler
@@ -257,13 +259,7 @@ export function ActivityDetailModal({
     const handleApplyCategory = (category: ExerciseSubType) => {
         // Always update the existing activity - never create a duplicate
         updateExercise(activity.id, { subType: category });
-
-        // Give immediate feedback
-        const categoryLabel = category === 'interval' ? 'Intervaller' :
-            category === 'long-run' ? 'Långpass' :
-                category === 'race' ? 'Tävling' : category;
-        alert(`✅ Kategorin uppdaterad till '${categoryLabel}'.`);
-        onClose(); // Close to force refresh of data in list view
+        // No alert, rely on UI update
     };
 
     // Auto-apply category if confidence is high
@@ -309,7 +305,9 @@ export function ActivityDetailModal({
             caloriesBurned: calories
         };
 
-        if (activity.source === 'strava' || activity.source === 'merged') {
+        // For 'merged' virtual activities, we must create a new manual entry (override).
+        // For 'strava' activities, we can now patch them locally (e.g. changing duration/time preference).
+        if (activity.source === 'merged') {
             // Create manual override for foreign activity
             addExercise({
                 ...commonData,
@@ -317,10 +315,10 @@ export function ActivityDetailModal({
                 source: 'manual'
                 // We don't link via externalId yet, just creating a new entry
             });
-            // Close modal as the specific instance we were viewing (strava) is technically unchanged/hidden
+            // Close modal as the specific instance we were viewing (merged) is technically unchanged/hidden
             onClose();
         } else {
-            // Local update
+            // Local update (works for 'manual' and 'strava')
             updateExercise(activity.id, commonData);
             setIsEditing(false);
         }
@@ -499,6 +497,24 @@ export function ActivityDetailModal({
                                     onChange={e => setEditForm({ ...editForm, duration: e.target.value })}
                                     className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white focus:outline-none focus:border-emerald-500/50"
                                 />
+                                {perf?.elapsedTimeSeconds && Math.abs((perf.elapsedTimeSeconds / 60) - parseInt(editForm.duration || '0')) > 1 && (
+                                    <div className="flex gap-2 mt-1">
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditForm({ ...editForm, duration: Math.round(perf.elapsedTimeSeconds! / 60).toString() })}
+                                            className="text-[10px] bg-slate-800 border border-white/10 px-2 py-1 rounded text-slate-400 hover:text-white"
+                                        >
+                                            Använd totaltid ({Math.round(perf.elapsedTimeSeconds / 60)} min)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditForm({ ...editForm, duration: Math.round((perf.durationMinutes || 0)).toString() })}
+                                            className="text-[10px] bg-slate-800 border border-white/10 px-2 py-1 rounded text-slate-400 hover:text-white"
+                                        >
+                                            Använd rörelsetid ({Math.round(perf.durationMinutes || 0)} min)
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             <div className="space-y-1">
                                 <label className="text-xs font-bold text-slate-500 uppercase">Intensitet</label>
@@ -602,7 +618,7 @@ export function ActivityDetailModal({
                                     <h2 className="text-2xl font-black text-white capitalize flex items-center gap-3">
                                         {displayTitle}
                                         {/* Edit Button */}
-                                        {!isMerged && activity.source !== 'strava' && (
+                                        {!isMerged && (
                                             <button
                                                 onClick={() => setIsEditing(true)}
                                                 className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
