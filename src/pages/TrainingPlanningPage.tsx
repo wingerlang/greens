@@ -27,6 +27,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { formatDuration } from '../utils/dateUtils.ts';
 import { TrainingPeriodBanner } from '../components/planning/TrainingPeriodBanner.tsx';
+import { notificationService } from '../services/notificationService.ts';
 import { ActivityModal } from '../components/planning/ActivityModal.tsx';
 import { WeeklyStatsAnalysis } from '../components/planning/WeeklyStatsAnalysis.tsx';
 
@@ -246,8 +247,10 @@ export function TrainingPlanningPage() {
     const handleSaveActivity = (activity: PlannedActivity) => {
         if (editingActivity) {
             updatePlannedActivity(editingActivity.id, activity);
+            notificationService.notify('success', 'Aktiviteten uppdateraf och sparad till databasen!');
         } else {
             savePlannedActivities([activity]);
+            notificationService.notify('success', 'Ny aktivitet sparad till databasen!');
         }
         setIsModalOpen(false);
         setEditingActivity(null);
@@ -581,29 +584,27 @@ export function TrainingPlanningPage() {
 
                                 {/* Planned Activities - Clickable for edit */}
                                 {dayActivities.map(act => {
-                                    const isRace = act.isRace || act.category === 'RACE' || act.title?.toLowerCase().includes('tävling');
+                                    const isRace = act.isRace || act.title?.toLowerCase().includes('tävling');
 
                                     return (
                                         <div
                                             key={act.id}
                                             onClick={() => handleOpenModal(day.date, act)}
-                                            className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 ${
-                                                isRace
-                                                    ? 'bg-amber-500/10 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700/50 hover:border-amber-500 dark:hover:border-amber-500'
-                                                    : act.type === 'REST' || act.category === 'REST'
-                                                        ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
-                                                        : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700'
+                                            className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 ${isRace
+                                                ? 'bg-amber-500/10 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700/50 hover:border-amber-500 dark:hover:border-amber-500'
+                                                : act.type === 'REST' || act.category === 'REST'
+                                                    ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+                                                    : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700'
                                                 }`}
                                         >
                                             <div className="flex justify-between items-start mb-1">
-                                                <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
-                                                    isRace ? 'text-amber-600 dark:text-amber-400' :
+                                                <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' :
                                                     act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' : 'text-blue-600 dark:text-blue-400'
-                                                }`}>
+                                                    }`}>
                                                     {isRace ? <Trophy size={10} /> : null}
                                                     {isRace ? 'TÄVLING' :
-                                                     act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
-                                                     (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
+                                                        act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
+                                                            (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
                                                 </span>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
@@ -616,12 +617,44 @@ export function TrainingPlanningPage() {
                                                 {isRace && act.title && <span className="font-bold block mb-0.5">{act.title}</span>}
                                                 {act.description}
                                             </p>
-                                            {(act.estimatedDistance || 0) > 0 && (
-                                                <div className={`mt-2 text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
-                                                    <Activity size={10} />
-                                                    {Number(act.estimatedDistance).toFixed(1)} km
-                                                </div>
-                                            )}
+                                            <div className="flex flex-col gap-1 mt-1">
+                                                {/* Running Stats */}
+                                                {(act.estimatedDistance || 0) > 0 && (
+                                                    <div className={`text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
+                                                        <Activity size={10} />
+                                                        {Number(act.estimatedDistance).toFixed(1)} km
+                                                    </div>
+                                                )}
+
+                                                {/* Strength Stats */}
+                                                {(act.type === 'STRENGTH' || act.type === 'HYROX') && (
+                                                    <div className="flex flex-wrap gap-2">
+                                                        {act.tonnage && act.tonnage > 0 && (
+                                                            <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                                                                <Dumbbell size={10} />
+                                                                {(act.tonnage / 1000).toFixed(1)}t
+                                                            </div>
+                                                        )}
+                                                        {act.muscleGroups && act.muscleGroups.length > 0 && (
+                                                            <div className="text-[10px] font-medium text-slate-400 flex flex-wrap gap-1">
+                                                                {act.muscleGroups.slice(0, 3).map(m => (
+                                                                    <span key={m} className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                                                                        {({
+                                                                            legs: 'Ben',
+                                                                            chest: 'Bröst',
+                                                                            back: 'Rygg',
+                                                                            arms: 'Armar',
+                                                                            shoulders: 'Axlar',
+                                                                            core: 'Core'
+                                                                        } as Record<string, string>)[m] || m}
+                                                                    </span>
+                                                                ))}
+                                                                {act.muscleGroups.length > 3 && <span>+</span>}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     );
                                 })}
@@ -653,6 +686,11 @@ export function TrainingPlanningPage() {
                 selectedDate={selectedDate}
                 editingActivity={editingActivity}
                 onSave={handleSaveActivity}
+                onDelete={(id) => {
+                    deletePlannedActivity(id);
+                    notificationService.notify('info', 'Aktiviteten raderad från databasen.');
+                    setIsModalOpen(false);
+                }}
                 weeklyStats={weeklyStats}
                 goalProgress={goalProgress}
             />

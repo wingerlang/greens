@@ -694,7 +694,7 @@ export const DEFAULT_FINE_TUNING: FineTuningConfig = {
 // Phase 2: Strength & Cross-Training
 // ============================================
 
-export type StrengthMuscleGroup = 'legs' | 'core' | 'upper' | 'full_body' | 'mobility';
+export type StrengthMuscleGroup = 'legs' | 'chest' | 'back' | 'arms' | 'shoulders' | 'core' | 'full_body' | 'mobility';
 
 export interface StrengthExercise {
     id: string;
@@ -1172,6 +1172,9 @@ export interface PlannedActivity {
     targetPace: string;
     targetHrZone: number;
     estimatedDistance: number;
+    // Strength specific fields
+    tonnage?: number;
+    muscleGroups?: StrengthMuscleGroup[];
     // Progress Tracking
     status: 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'DRAFT';
     feedback?: 'EASY' | 'PERFECT' | 'HARD' | 'TOO_HARD' | 'INJURY';

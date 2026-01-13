@@ -4,7 +4,7 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry } from '../models/types.ts';
+import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry, type PlannedActivity } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 import { notificationService } from './notificationService.ts';
 
@@ -42,6 +42,10 @@ export interface StorageService {
     deleteWeightEntry(id: string, date: string): Promise<void>;
     saveBodyMeasurement(entry: any): Promise<void>;
     deleteBodyMeasurement(id: string): Promise<void>;
+    // Planned Activity Granular
+    savePlannedActivity(activity: PlannedActivity): Promise<void>;
+    savePlannedActivities(activities: PlannedActivity[]): Promise<void>;
+    deletePlannedActivity(id: string): Promise<void>;
     // Clear specific data from local cache
     clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
 }
@@ -848,6 +852,72 @@ export class LocalStorageService implements StorageService {
             } catch (e) {
                 console.error('[Storage] Body measurement delete failed:', e);
                 notificationService.notify('error', 'Nätverksfel vid borttagning av mått');
+            }
+        }
+    }
+
+    async savePlannedActivity(activity: PlannedActivity): Promise<void> {
+        // Optimistic local update not strictly needed as DataContext handles it, 
+        // but storage service should ideally update the blob too if we keep using load() from blob.
+        // However, with granular sync, we should be careful. 
+        // For now, let's just sync to API. DataContext manages local state.
+
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('/api/planned-activities', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(activity)
+                });
+                if (!res.ok) {
+                    console.error('[Storage] Failed to save planned activity');
+                }
+            } catch (e) {
+                console.error('[Storage] Planned activity sync failed:', e);
+            }
+        }
+    }
+
+    async savePlannedActivities(activities: PlannedActivity[]): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('/api/planned-activities', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(activities)
+                });
+                if (!res.ok) {
+                    console.error('[Storage] Failed to bulk save planned activities');
+                }
+            } catch (e) {
+                console.error('[Storage] Planned activities bulk sync failed:', e);
+            }
+        }
+    }
+
+    async deletePlannedActivity(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/planned-activities?id=${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (!res.ok) {
+                    console.error('[Storage] Failed to delete planned activity');
+                }
+            } catch (e) {
+                console.error('[Storage] Planned activity delete failed:', e);
             }
         }
     }

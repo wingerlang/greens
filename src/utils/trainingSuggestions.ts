@@ -101,11 +101,11 @@ export function getTrainingSuggestions(
 
             // Check if user is already way over goal (>110%)
             if (forecastKm > targetKm * 1.1) {
-                 // Suggest Recovery Jog
-                 const duration = 30;
-                 const distance = duration / (estimatedEasyPace * 1.2); // Very slow
+                // Suggest Recovery Jog
+                const duration = 30;
+                const distance = duration / (estimatedEasyPace * 1.2); // Very slow
 
-                 suggestions.push({
+                suggestions.push({
                     id: generateId(),
                     type: 'RUN',
                     label: 'Återhämtningsjogg 🧘',
@@ -138,7 +138,7 @@ export function getTrainingSuggestions(
 
                 // If under goal AND hasn't run hard recently -> Suggest Intervals/Tempo
                 if (daysSinceHardRun > 5 && !suggestions.some(s => s.intensity === 'high')) {
-                     suggestions.push({
+                    suggestions.push({
                         id: generateId(),
                         type: 'RUN',
                         label: 'Kvalitetspass 🔥',
@@ -225,10 +225,10 @@ export function getTrainingSuggestions(
     if (recentRuns.length >= 3) {
         // Round to nearest 0.5 or integer
         const distances = recentRuns.map(r => {
-             const dist = r.distance || 0;
-             // Round to nearest 2.5km bucket for broad categorization, or keep specific for median?
-             // User request: "5km, 7.5km, 8km, 12km"
-             return dist;
+            const dist = r.distance || 0;
+            // Round to nearest 2.5km bucket for broad categorization, or keep specific for median?
+            // User request: "5km, 7.5km, 8km, 12km"
+            return dist;
         });
 
         // Find Mode (most common rounded to nearest 0.5)
@@ -242,12 +242,12 @@ export function getTrainingSuggestions(
 
         // Take top 2 most common distances
         for (let i = 0; i < Math.min(2, sortedBuckets.length); i++) {
-             const distVal = parseFloat(sortedBuckets[i][0]);
-             const count = sortedBuckets[i][1];
+            const distVal = parseFloat(sortedBuckets[i][0]);
+            const count = sortedBuckets[i][1];
 
-             // Only suggest if significant frequency (at least 20% of runs or >2 times)
-             if (count >= 2 && !suggestions.some(s => Math.abs((s.distance || 0) - distVal) < 1)) {
-                 suggestions.push({
+            // Only suggest if significant frequency (at least 20% of runs or >2 times)
+            if (count >= 2 && !suggestions.some(s => Math.abs((s.distance || 0) - distVal) < 1)) {
+                suggestions.push({
                     id: generateId(),
                     type: 'RUN',
                     label: `${distVal} km standard`,
@@ -257,7 +257,7 @@ export function getTrainingSuggestions(
                     duration: distVal * estimatedEasyPace,
                     intensity: 'moderate'
                 });
-             }
+            }
         }
     }
 
@@ -286,6 +286,39 @@ export function getTrainingSuggestions(
             distance: parseFloat(distance.toFixed(1)),
             intensity: 'low'
         });
+    }
+
+    // 6. Strength Patterns - Suggest common strength workouts
+    const strengthHistory = history.filter(e => e.type === 'strength');
+    if (strengthHistory.length > 0) {
+        // Group by title to find favorites
+        const counts: Record<string, number> = {};
+        strengthHistory.forEach(e => {
+            // Normalize title a bit?
+            const title = e.title?.trim() || 'Styrkepass';
+            counts[title] = (counts[title] || 0) + 1;
+        });
+
+        const sortedStrength = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+        // Suggest top 3 most distinct strength workouts
+        for (let i = 0; i < Math.min(3, sortedStrength.length); i++) {
+            const [title, count] = sortedStrength[i];
+
+            // Skip generic names if we have better ones, or limit them?
+            // Also skip if already suggested
+            if (!suggestions.some(s => s.label === title)) {
+                suggestions.push({
+                    id: generateId(),
+                    type: 'STRENGTH',
+                    label: title,
+                    description: 'Ett av dina vanligaste pass',
+                    reason: `Du har kört "${title}" ${count} gånger totalt`,
+                    duration: 45, // Default for now, could be improved by calculating avg duration for this title
+                    intensity: 'moderate'
+                });
+            }
+        }
     }
 
     // Scoring / Sorting

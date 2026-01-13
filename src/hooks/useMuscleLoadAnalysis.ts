@@ -337,6 +337,11 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
         let runningBestE1RM = 0;
         let runningBestActual1RM = 0;
         let runningBestWeight = 0;
+
+        // Track last known e1rm for decay/carry-forward (Fix: prevent zero-dips)
+        let lastKnownE1rm = 0;
+        let daysSinceLastE1rm = 0;
+
         const sortedDataDates = Array.from(new Set([
             ...Object.keys(loadByDate),
             ...Object.keys(e1rmByDate),
@@ -358,7 +363,7 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
             const load = loadByDate[date] || 0;
             const e1rmData = e1rmByDate[date];
             const actual1rmData = actual1rmByDate[date];
-            const e1rm = e1rmData?.e1rm || 0;
+            const rawE1rm = e1rmData?.e1rm || 0;
             const pbReps = e1rmData?.reps || 0;
             const pbWeight = e1rmData?.weight || 0;
             const pbExerciseName = e1rmData?.exerciseName || '';
@@ -369,9 +374,22 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
             const maxWeightExercise = maxWeightData?.exerciseName || '';
             const maxWeightOriginal = maxWeightData?.originalWeight || 0;
 
-            // Track e1RM PBs
-            const isE1RMPB = e1rm > runningBestE1RM && e1rm > 0;
-            if (isE1RMPB) runningBestE1RM = e1rm;
+            // Carry-forward logic: if no e1rm today, use last known with slow decay
+            // Decay: ~1% per week = 0.14% per day
+            let displayE1rm = rawE1rm;
+            if (rawE1rm > 0) {
+                lastKnownE1rm = rawE1rm;
+                daysSinceLastE1rm = 0;
+            } else if (lastKnownE1rm > 0) {
+                daysSinceLastE1rm++;
+                // Decay factor: lose max 10% even after long inactivity
+                const decayFactor = Math.max(0.90, 1 - (daysSinceLastE1rm * 0.0014));
+                displayE1rm = Math.round(lastKnownE1rm * decayFactor);
+            }
+
+            // Track e1RM PBs (use raw value for accurate PB detection)
+            const isE1RMPB = rawE1rm > runningBestE1RM && rawE1rm > 0;
+            if (isE1RMPB) runningBestE1RM = rawE1rm;
 
             // Trend is the running best e1RM (Step-up logic)
             const e1rmTrend = runningBestE1RM;
@@ -389,7 +407,8 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
                 load: Math.round(load),
                 hardVolume: Math.round(hardVolumeByDate[date] || 0),
                 lightVolume: Math.round(lightVolumeByDate[date] || 0),
-                e1rm,
+                e1rm: displayE1rm,
+                rawE1rm, // Keep original for tooltip display
                 e1rmTrend,
                 actual1rm,
                 maxWeight,

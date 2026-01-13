@@ -58,3 +58,54 @@
 
 
 
+---
+OPTIMIZE LOAD
+1. Problemet med "Nollorna" (Dipparna i orange linje)
+Tittar man på din orangea linje så "kraschar" den ner till noll eller väldigt låga nivåer emellanåt.
+
+Varför det stör: Det förstör illusionen av "Max Hold". Om jag inte tränar marklyft på 2 veckor har jag ju inte tappat all min styrka. Att linjen går ner till botten gör grafen svårläst och rörig.
+
+Lösning: Decay istället för Drop. Låt aldrig linjen gå till noll bara för att data saknas. Låt den ligga kvar på senaste nivån (flatline) eller ha en mycket långsam "decay" (t.ex. -1% per vecka av inaktivitet). Då får du en snygg, sammanhängande kontur av användarens styrka över tid, utan de djupa dalarna.
+
+2. Volymstaplarna är svåra att avläsa (Quality vs Junk)
+De staplade baren (ljusgrön/mörkgrön) är en bra idé, men visuellt blir det plottrigt när staplarna är så smala och täta.
+
+Förfining:
+
+Gruppering: Istället för att visa varje pass (om man zoomar ut), gruppera per vecka. Då får du bredare, tydligare staplar.
+
+Fokusera på "Effective Load": Överväg att bara visa den mörkgröna (tung volym) som default, eller gör den ljusgröna (lätt volym) semitransparent/spöklik. Just nu slåss de om uppmärksamheten. Det intressanta för progressive overload är oftast den tunga volymen.
+
+3. "Trend"-knappen och Tröskel-slidern
+Du har lagt till en knapp för "Trend" och en slider för "Tröskel: 70%" uppe till höger. Det är bra funktioner, men de är lite gömda.
+
+UX-förbättring: Gör tröskeln tydligare direkt i grafen. Kanske en horisontell linje eller en text som förklarar: "Visar volym över 70% av 1RM". Just nu vet användaren inte riktigt vad den mörkgröna färgen representerar utan att gissa.
+
+4. Dubbla Y-axlar (Skalan)
+Du har Volym (0k-12k) till vänster och Vikt (0kg-160kg) till höger. Detta är nödvändigt men kan förvirra.
+
+Visuell separation:
+
+Färgkoda axlarna tydligare. Gör texten på vänster axel Grön (matcha volymstaplarna) och texten på höger axel Orange (matcha 1RM-linjen). Då kopplar hjärnan direkt ihop "Vänster = Staplar" och "Höger = Linje".
+
+5. Den saknade pusselbiten: "Rate of Progress"
+Grafen visar att du ökar, men inte hur snabbt eller i vilken fas du är.
+
+Avancerat förslag: Lägg till en bakgrundsgradient eller zoner.
+
+Om trendlinjen (orange) pekar uppåt över tid -> Svag grön bakgrundston ("Progressive Phase").
+
+Om den ligger platt länge -> Neutral/Grå ("Maintenance/Plateau").
+
+Detta ger användaren en omedelbar "känsla" för perioden utan att behöva analysera varenda datapunkt.
+
+Sammanfattning – Nästa steg (Mockup-instruktioner)
+För att göra den "ren":
+
+Fixa linjen: Ta bort dipparna till noll. Låt den orangea linjen vara en "tak-kontur" som bara kan gå ner om man faktiskt presterar sämre på ett max-test, inte för att man vilar.
+
+Färgkoda axlarna: Gör Y-axlarnas siffror färgade (Grön vs Orange).
+
+Bredda staplarna: Aggregera data veckovis som default om tidsintervallet är långt (t.ex. >3 månader).
+
+Tydligare Legend: Lägg en liten textruta i grafen: "Mörkgrön = Kvalitetsvolym (>70% 1RM)".

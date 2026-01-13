@@ -381,6 +381,36 @@ export function DataProvider({ children }: DataProviderProps) {
         }
 
         // EXTRA SYNC: Strength Workouts
+
+        // EXTRA SYNC: Planned Activities
+        if (token) {
+            try {
+                const planRes = await fetch('/api/planned-activities', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (planRes.ok) {
+                    const planData = await planRes.json();
+                    if (planData.activities && Array.isArray(planData.activities)) {
+                        console.log('[DataContext] Loaded planned activities globally:', planData.activities.length);
+                        // Merge with any potentially loaded from monolith (though monolith probably has none if we split)
+                        // Or just override because this is the source of truth for planning now.
+                        // However, monolith might have OLD plans. Let's merge.
+                        const newActivities = planData.activities;
+                        const existing = data.plannedActivities || [];
+                        // merging logic: if ID exists in newActivities, use it. Else keep existing (legacy).
+                        const newIds = new Set(newActivities.map((a: PlannedActivity) => a.id));
+                        const merged = [
+                            ...existing.filter((a: PlannedActivity) => !newIds.has(a.id)),
+                            ...newActivities
+                        ];
+                        data.plannedActivities = merged;
+                    }
+                }
+            } catch (e) {
+                console.error('[DataContext] Failed to fetch planned activities:', e);
+            }
+        }
+
         if (token) {
             try {
                 // Fetch full strength history to ensure YearInReview has data
@@ -520,7 +550,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 injuryLogs,
                 recoveryMetrics,
                 bodyMeasurements
-            }, { skipApi: shouldSkipApi });
+            }, { skipApi: true }); // FIX: Permanently disable Global API Dump. Rely on Granular Sync.
         }
     }, [
         foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities,
@@ -2061,9 +2091,19 @@ export function DataProvider({ children }: DataProviderProps) {
         }, [coachConfig, plannedActivities]),
         deletePlannedActivity: useCallback((id) => {
             setPlannedActivities(prev => prev.filter(a => a.id !== id));
+            skipAutoSave.current = true;
+            storageService.deletePlannedActivity(id).catch(e => console.error("Failed to delete planned activity", e));
         }, []),
         updatePlannedActivity: useCallback((id, updates) => {
-            setPlannedActivities(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
+            setPlannedActivities(prev => {
+                const next = prev.map(a => a.id === id ? { ...a, ...updates } : a);
+                const updated = next.find(a => a.id === id);
+                if (updated) {
+                    skipAutoSave.current = true;
+                    storageService.savePlannedActivity(updated).catch(e => console.error("Failed to update planned activity", e));
+                }
+                return next;
+            });
         }, []),
         savePlannedActivities: useCallback((newActivities: PlannedActivity[]) => {
             setPlannedActivities(prev => {
@@ -2076,62 +2116,76 @@ export function DataProvider({ children }: DataProviderProps) {
                 const ids = new Set(newActivities.map(a => a.id));
                 const filtered = prev.filter(a => !ids.has(a.id));
 
-                // Also, if we are overwriting a "draft" that was previously saved (not likely with new IDs)
+                const next = [...filtered, ...newActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-                return [...filtered, ...newActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                // Sync to API
+                skipAutoSave.current = true;
+                storageService.savePlannedActivities(newActivities).catch(e => console.error("Failed to save planned activities", e));
+
+                return next;
             });
         }, []),
         completePlannedActivity: useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
-            setPlannedActivities(prev => prev.map(a => {
-                if (a.id === activityId) {
-                    const completed: PlannedActivity = {
-                        ...a,
-                        status: 'COMPLETED',
-                        feedback,
-                        completedDate: getISODate(),
-                        actualDistance: actualDist || a.estimatedDistance,
-                        actualTimeSeconds: actualTime
-                    };
+            setPlannedActivities(prev => {
+                const next = prev.map(a => {
+                    if (a.id === activityId) {
+                        return {
+                            ...a,
+                            status: 'COMPLETED' as const,
+                            feedback,
+                            completedDate: getISODate(),
+                            actualDistance: actualDist || a.estimatedDistance,
+                            actualTimeSeconds: actualTime
+                        };
+                    }
+                    return a;
+                });
+                
+                const completed = next.find(a => a.id === activityId);
+                const original = prev.find(a => a.id === activityId);
 
-                    // Automatically add to exercise log
+                if (completed && original?.status !== 'COMPLETED') {
+                     skipAutoSave.current = true;
+                     storageService.savePlannedActivity(completed).catch(e => console.error("Failed to save completed plan", e));
+
+                     // Automatically add to exercise log
                     addExercise({
                         date: completed.completedDate!,
                         type: 'running',
-                        durationMinutes: Math.round((actualTime || (a.estimatedDistance * 300)) / 60), // fallback to 5min/km
+                        durationMinutes: Math.round((actualTime || (completed.estimatedDistance * 300)) / 60), // fallback to 5min/km
                         intensity: feedback === 'HARD' || feedback === 'TOO_HARD' ? 'high' : 'moderate',
-                        caloriesBurned: calculateExerciseCalories('running', (actualTime || (a.estimatedDistance * 300)) / 60, 'moderate'),
-                        distance: actualDist || a.estimatedDistance,
-                        notes: `Coached Session: ${a.title}. Feedback: ${feedback || 'None'}`
+                        caloriesBurned: calculateExerciseCalories('running', (actualTime || (completed.estimatedDistance * 300)) / 60, 'moderate'),
+                        distance: actualDist || completed.estimatedDistance,
+                        notes: `Coached Session: ${completed.title}. Feedback: ${feedback || 'None'}`
                     });
-
-                    return completed;
                 }
-                return a;
-            }));
+                
+                return next;
+            });
         }, [addExercise, calculateExerciseCalories]),
-        addCoachGoal: useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
-            const newGoal: CoachGoal = {
-                ...goalData,
-                id: generateId(),
-                createdAt: new Date().toISOString(),
-                isActive: (coachConfig?.goals?.length || 0) === 0 // First goal is active
+addCoachGoal: useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
+    const newGoal: CoachGoal = {
+        ...goalData,
+        id: generateId(),
+        createdAt: new Date().toISOString(),
+        isActive: (coachConfig?.goals?.length || 0) === 0 // First goal is active
+    };
+    setCoachConfig(prev => prev ? { ...prev, goals: [...(prev.goals || []), newGoal] } : {
+        userProfile: { maxHr: 190, restingHr: 60 },
+        preferences: { weeklyVolumeKm: 30, longRunDay: 'Sunday', intervalDay: 'Tuesday', trainingDays: [2, 4, 0] },
+        goals: [newGoal]
+    });
+}, [coachConfig]),
+    activateCoachGoal: useCallback((goalId: string) => {
+        setCoachConfig(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                goals: prev.goals.map(g => ({ ...g, isActive: g.id === goalId }))
             };
-            setCoachConfig(prev => prev ? { ...prev, goals: [...(prev.goals || []), newGoal] } : {
-                userProfile: { maxHr: 190, restingHr: 60 },
-                preferences: { weeklyVolumeKm: 30, longRunDay: 'Sunday', intervalDay: 'Tuesday', trainingDays: [2, 4, 0] },
-                goals: [newGoal]
-            });
-        }, [coachConfig]),
-        activateCoachGoal: useCallback((goalId: string) => {
-            setCoachConfig(prev => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    goals: prev.goals.map(g => ({ ...g, isActive: g.id === goalId }))
-                };
-            });
-            // Note: Plan regeneration should be triggered by the UI if needed
-        }, []),
+        });
+        // Note: Plan regeneration should be triggered by the UI if needed
+    }, []),
         deleteCoachGoal: useCallback((goalId: string) => {
             setCoachConfig(prev => {
                 if (!prev) return prev;
@@ -2143,61 +2197,61 @@ export function DataProvider({ children }: DataProviderProps) {
         }, []),
 
 
-        strengthSessions,
-        addStrengthSession,
-        updateStrengthSession,
-        deleteStrengthSession,
+            strengthSessions,
+            addStrengthSession,
+            updateStrengthSession,
+            deleteStrengthSession,
 
-        // Phase 8: Data Integration
-        sleepSessions,
-        intakeLogs,
-        universalActivities,
+            // Phase 8: Data Integration
+            sleepSessions,
+            intakeLogs,
+            universalActivities,
 
-        addSleepSession: useCallback((session: SleepSession) => {
-            setSleepSessions(prev => {
-                const filtered = prev.filter(s => s.date !== session.date); // Replace existing/overlap
-                return [...filtered, session].sort((a, b) => b.date.localeCompare(a.date));
-            });
-            // Also update simple VITALS for backward compat
-            if (session.durationSeconds) {
-                updateVitals(session.date, {
-                    sleep: parseFloat((session.durationSeconds / 3600).toFixed(1))
+            addSleepSession: useCallback((session: SleepSession) => {
+                setSleepSessions(prev => {
+                    const filtered = prev.filter(s => s.date !== session.date); // Replace existing/overlap
+                    return [...filtered, session].sort((a, b) => b.date.localeCompare(a.date));
                 });
-            }
+                // Also update simple VITALS for backward compat
+                if (session.durationSeconds) {
+                    updateVitals(session.date, {
+                        sleep: parseFloat((session.durationSeconds / 3600).toFixed(1))
+                    });
+                }
 
-            // Life Stream: Add event
-            const hours = session.durationSeconds ? session.durationSeconds / 3600 : 0;
-            emitFeedEvent(
-                'HEALTH_SLEEP',
-                'Sömn loggad',
-                { type: 'HEALTH_SLEEP', hours, score: session.score },
-                [{ label: 'Tid', value: hours.toFixed(1), unit: 'h', icon: '😴' }]
-            );
-        }, [updateVitals, emitFeedEvent]),
+                // Life Stream: Add event
+                const hours = session.durationSeconds ? session.durationSeconds / 3600 : 0;
+                emitFeedEvent(
+                    'HEALTH_SLEEP',
+                    'Sömn loggad',
+                    { type: 'HEALTH_SLEEP', hours, score: session.score },
+                    [{ label: 'Tid', value: hours.toFixed(1), unit: 'h', icon: '😴' }]
+                );
+            }, [updateVitals, emitFeedEvent]),
 
-        // Phase 7: Physio-AI
-        injuryLogs,
-        recoveryMetrics,
-        addInjuryLog,
-        updateInjuryLog,
-        deleteInjuryLog,
-        addRecoveryMetric,
+                // Phase 7: Physio-AI
+                injuryLogs,
+                recoveryMetrics,
+                addInjuryLog,
+                updateInjuryLog,
+                deleteInjuryLog,
+                addRecoveryMetric,
 
-        // Body Measurements
-        bodyMeasurements,
-        addBodyMeasurement,
-        updateBodyMeasurement,
-        deleteBodyMeasurement,
+                // Body Measurements
+                bodyMeasurements,
+                addBodyMeasurement,
+                updateBodyMeasurement,
+                deleteBodyMeasurement,
 
-        unifiedActivities,
-        refreshData
+                unifiedActivities,
+                refreshData
     };
 
-    return (
-        <DataContext.Provider value={value}>
-            {children}
-        </DataContext.Provider>
-    );
+return (
+    <DataContext.Provider value={value}>
+        {children}
+    </DataContext.Provider>
+);
 }
 
 // ============================================

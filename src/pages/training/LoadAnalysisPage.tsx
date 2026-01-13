@@ -244,12 +244,15 @@ export const LoadAnalysisPage: React.FC = () => {
 
     const compressedTicks = useMemo(() => {
         if (!chartDataWithRolling.length) return undefined;
-        // Select all gaps and every ~20th regular point to ensure gaps are always visible
-        const gaps = chartDataWithRolling.filter(d => d.isGap).map(d => d.date);
-        if (gaps.length === 0) return undefined; // Fallback to automatic if no gaps
-
-        const regulars = chartDataWithRolling.filter((d, i) => !d.isGap && i % 20 === 0).map(d => d.date);
-        return Array.from(new Set([...gaps, ...regulars])).sort();
+        // Selection all gaps and every ~20th regular point to ensure gaps are always visible
+        const ticks: string[] = [];
+        chartDataWithRolling.forEach((d, i) => {
+            // Always include gaps, first point, and regular intervals
+            if (d.isGap || i === 0 || i % 20 === 0) {
+                ticks.push(d.date);
+            }
+        });
+        return Array.from(new Set(ticks));
     }, [chartDataWithRolling]);
 
     // Compute detailed data for selected range
@@ -554,7 +557,10 @@ export const LoadAnalysisPage: React.FC = () => {
                                     📈 Trend
                                 </button>
                                 <div className="flex flex-col items-end gap-1 px-2 border-l border-white/10 ml-1">
-                                    <div className="text-[9px] text-slate-500 font-bold uppercase whitespace-nowrap">Tröskel: {Math.round(intensityThreshold * 100)}%</div>
+                                    <div className="text-[9px] text-slate-400 font-bold uppercase whitespace-nowrap flex items-center gap-1.5">
+                                        <span className="w-2.5 h-2.5 bg-emerald-800 rounded-sm border border-emerald-600"></span>
+                                        Kvalitetsvolym ≥{Math.round(intensityThreshold * 100)}% 1RM
+                                    </div>
                                     <input
                                         type="range"
                                         min="0.5"
@@ -562,12 +568,33 @@ export const LoadAnalysisPage: React.FC = () => {
                                         step="0.05"
                                         value={intensityThreshold}
                                         onChange={(e) => setIntensityThreshold(parseFloat(e.target.value))}
-                                        className="w-20 h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                                        className="w-24 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
                                     />
                                 </div>
                             </div>
                         </div>
-                        <p className="text-xs text-slate-500 mb-6">💡 Klicka på en punkt eller dra i den gröna slidern nedan för tidsval. Streckad linje visar din faktiska högsta vikt.</p>
+
+                        {/* Visual Legend */}
+                        <div className="flex flex-wrap items-center gap-4 mb-4 text-[10px] text-slate-400">
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-3 h-3 bg-emerald-800 rounded-sm"></span>
+                                <span>Tung volym (≥{Math.round(intensityThreshold * 100)}% 1RM)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-3 h-3 bg-emerald-200 rounded-sm"></span>
+                                <span>Lätt volym</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-4 h-0.5 bg-orange-400 rounded"></span>
+                                <span>e1RM (estimerad 1RM)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <span className="w-4 h-0.5 bg-indigo-400 rounded" style={{ borderStyle: 'dashed', borderWidth: 1, backgroundColor: 'transparent', borderColor: '#818cf8' }}></span>
+                                <span>Högsta lyftade vikt</span>
+                            </div>
+                        </div>
+
+                        <p className="text-xs text-slate-500 mb-4">💡 Klicka på en punkt eller dra i den gröna slidern nedan för tidsval.</p>
 
                         {/* Date Range Selector (Relocated) */}
                         <div className="mb-6 pb-6 border-b border-white/5">
@@ -649,7 +676,8 @@ export const LoadAnalysisPage: React.FC = () => {
                                     data={chartDataWithRolling}
                                     margin={{ top: 10, right: 10, left: 0, bottom: 80 }}
                                     onMouseDown={(e) => {
-                                        if (e && e.activeLabel) {
+                                        // Only trigger selection if we are over a valid data point area
+                                        if (e && e.activeLabel && e.activePayload && e.activePayload.length > 0) {
                                             const label = e.activeLabel.toString();
                                             const date = label.includes('gap-') ? label.replace('gap-', '') : label;
                                             setSelectedStartDate(date);
@@ -676,21 +704,23 @@ export const LoadAnalysisPage: React.FC = () => {
                                         stroke="#94a3b8"
                                         tick={<CustomXAxisTick allData={chartDataWithRolling} />}
                                         ticks={compressedTicks}
-                                        minTickGap={10}
+                                        minTickGap={0}
                                         height={50}
                                     />
                                     <YAxis
                                         yAxisId="left"
-                                        stroke="#10b981"
-                                        tick={{ fill: '#10b981', fontSize: 10 }}
+                                        stroke="#22c55e"
+                                        tick={{ fill: '#22c55e', fontSize: 11, fontWeight: 600 }}
                                         tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`}
+                                        width={45}
                                     />
                                     <YAxis
                                         yAxisId="right"
                                         orientation="right"
-                                        stroke="#f59e0b"
-                                        tick={{ fill: '#f59e0b', fontSize: 10 }}
+                                        stroke="#fb923c"
+                                        tick={{ fill: '#fb923c', fontSize: 11, fontWeight: 600 }}
                                         tickFormatter={(val) => `${val}kg`}
+                                        width={50}
                                     />
                                     <Tooltip
                                         contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '12px' }}
@@ -750,7 +780,10 @@ export const LoadAnalysisPage: React.FC = () => {
                                         }}
                                     />
                                     <Legend
-                                        onClick={(e) => toggleMetric(e.dataKey as string)}
+                                        onClick={(e, idx, event: any) => {
+                                            if (event) event.stopPropagation();
+                                            toggleMetric(e.dataKey as string);
+                                        }}
                                         wrapperStyle={{ paddingTop: '20px', cursor: 'pointer' }}
                                     />
                                     <Brush

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PlannedActivity, generateId } from '../../models/types.ts';
-import { X, Zap, Plus, Trophy, AlertTriangle, Clock } from 'lucide-react';
+import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell } from 'lucide-react';
 import { TrainingSuggestion } from '../../utils/trainingSuggestions.ts';
 import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts';
 import { useData } from '../../context/DataContext.tsx';
@@ -35,6 +35,8 @@ export function ActivityModal({
 
     const [formDuration, setFormDuration] = useState('00:45');
     const [formDistance, setFormDistance] = useState('');
+    const [formTonnage, setFormTonnage] = useState(''); // New Strength Input
+    const [formMuscleGroups, setFormMuscleGroups] = useState<string[]>([]); // New Strength Input
     const [formNotes, setFormNotes] = useState('');
     const [formIntensity, setFormIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
     const [isRace, setIsRace] = useState(false);
@@ -123,6 +125,8 @@ export function ActivityModal({
                 }
 
                 setFormDistance(editingActivity.estimatedDistance ? Number(editingActivity.estimatedDistance).toFixed(1) : '');
+                setFormTonnage(editingActivity.tonnage ? editingActivity.tonnage.toString() : '');
+                setFormMuscleGroups(editingActivity.muscleGroups || []);
                 setFormNotes(editingActivity.description || '');
                 setFormIntensity(editingActivity.targetHrZone <= 2 ? 'low' : editingActivity.targetHrZone >= 4 ? 'high' : 'moderate');
                 setIsRace(editingActivity.isRace || false);
@@ -132,6 +136,8 @@ export function ActivityModal({
                 setRunSubCategory('EASY');
                 setFormDuration('00:45');
                 setFormDistance('');
+                setFormTonnage('');
+                setFormMuscleGroups([]);
                 setFormNotes('');
                 setFormIntensity('moderate');
                 setIsRace(false);
@@ -154,6 +160,15 @@ export function ActivityModal({
         } else {
             setFormIntensity('moderate');
         }
+    };
+
+    // Toggle Muscle Group Helper
+    const toggleMuscleGroup = (muscle: string) => {
+        setFormMuscleGroups(prev =>
+            prev.includes(muscle)
+                ? prev.filter(m => m !== muscle)
+                : [...prev, muscle]
+        );
     };
 
     const handleSave = () => {
@@ -179,11 +194,11 @@ export function ActivityModal({
         // Determine Title
         let title = 'Löpning';
         if (formType === 'RUN') {
-             if (isRace) title = 'TÄVLING 🏆';
-             else if (runSubCategory === 'LONG_RUN') title = 'Långpass';
-             else if (runSubCategory === 'INTERVALS') title = 'Intervaller';
-             else if (runSubCategory === 'RECOVERY') title = 'Återhämtning';
-             else title = 'Löpning';
+            if (isRace) title = 'TÄVLING 🏆';
+            else if (runSubCategory === 'LONG_RUN') title = 'Långpass';
+            else if (runSubCategory === 'INTERVALS') title = 'Intervaller';
+            else if (runSubCategory === 'RECOVERY') title = 'Återhämtning';
+            else title = 'Löpning';
         } else if (formType === 'STRENGTH') {
             title = 'Styrka';
         } else if (formType === 'HYROX') {
@@ -202,6 +217,8 @@ export function ActivityModal({
             title: title,
             description: formNotes || `${formType === 'REST' ? 'Vila och återhämtning' : title + ' pass'} (${formDuration})`,
             estimatedDistance: formType === 'RUN' && formDistance ? parseFloat(formDistance) : 0,
+            tonnage: formType === 'STRENGTH' && formTonnage ? parseInt(formTonnage) : undefined,
+            muscleGroups: formType === 'STRENGTH' ? formMuscleGroups as any : undefined,
             targetPace: '',
             targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
             structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
@@ -295,24 +312,31 @@ export function ActivityModal({
                                 <span className="text-xs font-black uppercase tracking-wider text-slate-400">Smarta Förslag</span>
                             </div>
                             <div className="space-y-2">
-                                {smartSuggestions.map(s => {
-                                    const colorClasses = getSuggestionColor(s);
-                                    return (
-                                        <button
-                                            key={s.id}
-                                            onClick={() => handleApplySuggestion(s)}
-                                            className={`w-full p-3 bg-gradient-to-r border rounded-xl flex items-center justify-between group hover:scale-[1.02] transition-transform text-left ${colorClasses}`}
-                                        >
-                                            <div>
-                                                <div className="text-xs font-black mb-0.5">{s.label}</div>
-                                                <div className="text-[10px] opacity-80 font-medium">{s.description}</div>
-                                            </div>
-                                            <div className="p-1.5 bg-white/50 dark:bg-slate-800/50 rounded-full shadow-sm">
-                                                <Plus size={14} />
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                                {smartSuggestions
+                                    .filter(s => {
+                                        if (formType === 'STRENGTH') return s.type === 'STRENGTH';
+                                        if (formType === 'RUN') return s.type === 'RUN' || s.type === 'REST';
+                                        if (formType === 'HYROX') return s.type === 'HYROX' || s.type === 'STRENGTH' || s.type === 'RUN';
+                                        return true;
+                                    })
+                                    .map(s => {
+                                        const colorClasses = getSuggestionColor(s);
+                                        return (
+                                            <button
+                                                key={s.id}
+                                                onClick={() => handleApplySuggestion(s)}
+                                                className={`w-full p-3 bg-gradient-to-r border rounded-xl flex items-center justify-between group hover:scale-[1.02] transition-transform text-left ${colorClasses}`}
+                                            >
+                                                <div>
+                                                    <div className="text-xs font-black mb-0.5">{s.label}</div>
+                                                    <div className="text-[10px] opacity-80 font-medium">{s.description}</div>
+                                                </div>
+                                                <div className="p-1.5 bg-white/50 dark:bg-slate-800/50 rounded-full shadow-sm">
+                                                    <Plus size={14} />
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
                             </div>
                         </div>
                     )}
@@ -378,6 +402,12 @@ export function ActivityModal({
                                 Styrka
                             </button>
                             <button
+                                onClick={() => setFormType('HYROX')}
+                                className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'HYROX' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
+                            >
+                                Hyrox
+                            </button>
+                            <button
                                 onClick={() => setFormType('REST')}
                                 className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'REST' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
                             >
@@ -397,11 +427,10 @@ export function ActivityModal({
                                     <button
                                         key={sub.id}
                                         onClick={() => handleRunSubCategoryClick(sub.id as any)}
-                                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all border ${
-                                            runSubCategory === sub.id
-                                                ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md transform scale-105`
-                                                : `bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-${sub.color}-300`
-                                        }`}
+                                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all border ${runSubCategory === sub.id
+                                            ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md transform scale-105`
+                                            : `bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-${sub.color}-300`
+                                            }`}
                                     >
                                         {sub.label}
                                     </button>
@@ -458,18 +487,36 @@ export function ActivityModal({
                         {formType !== 'REST' && (
                             <>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Distans (km)</label>
-                                        <div className="space-y-2">
-                                            <input
-                                                type="number"
-                                                value={formDistance}
-                                                onChange={(e) => setFormDistance(e.target.value)}
-                                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                                placeholder="0.0"
-                                            />
+                                    {/* Conditional Inputs based on Type */}
+                                    {formType === 'RUN' || formType === 'BIKE' || formType === 'HYROX' ? (
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Distans (km)</label>
+                                            <div className="space-y-2">
+                                                <input
+                                                    type="number"
+                                                    value={formDistance}
+                                                    onChange={(e) => setFormDistance(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                    placeholder="0.0"
+                                                />
+                                            </div>
                                         </div>
-                                    </div>
+                                    ) : formType === 'STRENGTH' ? (
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Måltonnage</label>
+                                            <div className="space-y-2 relative">
+                                                <input
+                                                    type="number"
+                                                    value={formTonnage}
+                                                    onChange={(e) => setFormTonnage(e.target.value)}
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                                    placeholder="0"
+                                                />
+                                                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">kg</span>
+                                            </div>
+                                        </div>
+                                    ) : <div className="hidden md:block"></div>}
+
                                     <div>
                                         <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Intensitet</label>
                                         <select
@@ -483,6 +530,71 @@ export function ActivityModal({
                                         </select>
                                     </div>
                                 </div>
+
+                                {/* Strength Specific Inputs */}
+                                {formType === 'STRENGTH' && (
+                                    <div className="space-y-4 animate-in slide-in-from-top-2">
+
+                                        {/* Presets */}
+                                        <div className="flex gap-2">
+                                            {[
+                                                { label: 'PUSH', muscles: ['chest', 'shoulders', 'arms'] },
+                                                { label: 'PULL', muscles: ['back', 'arms'] },
+                                                { label: 'LEGS', muscles: ['legs'] },
+                                                { label: 'FULL', muscles: ['legs', 'chest', 'back', 'shoulders', 'arms', 'core'] }
+                                            ].map(preset => (
+                                                <button
+                                                    key={preset.label}
+                                                    onClick={() => setFormMuscleGroups(preset.muscles)}
+                                                    className="flex-1 py-1.5 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg text-[10px] font-black text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors"
+                                                >
+                                                    {preset.label}
+                                                </button>
+                                            ))}
+                                        </div>
+
+                                        {/* Muscle Group Selection */}
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Muskelgrupper</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {[
+                                                    { id: 'legs', label: 'Ben' },
+                                                    { id: 'chest', label: 'Bröst' },
+                                                    { id: 'back', label: 'Rygg' },
+                                                    { id: 'arms', label: 'Armar' },
+                                                    { id: 'shoulders', label: 'Axlar' },
+                                                    { id: 'core', label: 'Mage/Core' }
+                                                ].map((group) => (
+                                                    <button
+                                                        key={group.id}
+                                                        onClick={() => toggleMuscleGroup(group.id)}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${formMuscleGroups.includes(group.id)
+                                                            ? 'bg-purple-500 text-white border-purple-500 shadow-sm'
+                                                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-purple-300'
+                                                            }`}
+                                                    >
+                                                        {group.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Tonnage Estimation */}
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Estimerat Tonnage (kg)</label>
+                                            <div className="relative">
+                                                <Dumbbell className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                                <input
+                                                    type="number"
+                                                    value={formTonnage}
+                                                    onChange={e => setFormTonnage(e.target.value)}
+                                                    placeholder="t.ex. 5000"
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Duration Time Picker (HH:MM) */}
                                 <div className="space-y-1">
@@ -518,8 +630,8 @@ export function ActivityModal({
                             {editingActivity ? 'Uppdatera Pass' : (isRace ? 'Spara Tävling' : 'Spara Pass')}
                         </button>
                     </div>
-                </div>
-            </div>
-        </div>
+                </div >
+            </div >
+        </div >
     );
 }
