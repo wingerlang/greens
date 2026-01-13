@@ -240,13 +240,12 @@ export function App() {
                                             </RequireAuth>
                                         } />
                                     </Routes>
-                                </Routes>
-                            </AnalyticsProvider>
-                        </BrowserRouter>
-                    </CookingModeProvider>
-                </SettingsProvider>
-            </DataProvider>
-        </AuthProvider>
+                                </AnalyticsProvider>
+                            </BrowserRouter>
+                        </CookingModeProvider>
+                    </SettingsProvider>
+                </DataProvider>
+            </AuthProvider>
         </QueryClientProvider >
     );
 }

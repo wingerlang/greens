@@ -1,4 +1,4 @@
-import { kv } from '../../db/db.ts';
+import { kv } from '../kv.ts';
 import { PageView, InteractionEvent, AnalyticsStats } from '../../models/types.ts';
 
 /**
