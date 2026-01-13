@@ -35,7 +35,7 @@ const ActivityRow = ({
     const [isExpanded, setIsExpanded] = useState(false);
 
     const universalMatch = universalActivities.find(u => u.id === activity.id);
-    const isMergedActivity = universalMatch?.mergeInfo?.isMerged === true || activity.source === 'merged' || !!(activity as any)._mergeData;
+    const isMergedActivity = (universalMatch?.mergeInfo?.isMerged === true && (universalMatch?.mergeInfo?.originalActivityIds?.length || 0) > 0) || (activity.source === 'merged' && !!(activity as any)._mergeData);
 
     // Get title for merged activities
     let displayTitle = activity.title && activity.title !== '-' ? activity.title : '-';

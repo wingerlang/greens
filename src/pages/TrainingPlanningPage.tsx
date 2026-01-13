@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../context/DataContext.tsx';
+import { analyzeInterference } from '../utils/interferenceEngine.ts';
 import { getTrainingSuggestions, TrainingSuggestion } from '../utils/trainingSuggestions.ts';
 import {
     PlannedActivity,
@@ -22,9 +23,10 @@ import {
     Target,
     TrendingUp,
     Clock,
-    Trophy
+    Trophy,
+    AlertTriangle
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { formatDuration } from '../utils/dateUtils.ts';
 import { TrainingPeriodBanner } from '../components/planning/TrainingPeriodBanner.tsx';
 import { notificationService } from '../services/notificationService.ts';
@@ -164,6 +166,26 @@ export function TrainingPlanningPage() {
         const lastWeekStart = new Date(currentWeekStart);
         lastWeekStart.setDate(lastWeekStart.getDate() - 7);
         return calculateWeeklyStats(getISODate(lastWeekStart));
+    }, [currentWeekStart, unifiedActivities, plannedActivities]);
+
+    // Interference Analysis
+    const weeklyWarnings = useMemo(() => {
+        const startStr = getISODate(new Date(currentWeekStart));
+        const end = new Date(currentWeekStart);
+        end.setDate(end.getDate() + 6);
+        const endStr = getISODate(end);
+
+        // Filter and map to compatible format
+        const relevantHistory = unifiedActivities
+            .filter((a: any) => a.date >= startStr && a.date <= endStr)
+            .map((a: any) => ({ ...a, _source: 'HISTORY', _id: a.id }));
+
+        const relevantPlan = plannedActivities
+            .filter(a => a.date >= startStr && a.date <= endStr && a.status === 'PLANNED')
+            .map(a => ({ ...a, _source: 'PLAN', _id: a.id }));
+
+        const all = [...relevantHistory, ...relevantPlan];
+        return analyzeInterference(all);
     }, [currentWeekStart, unifiedActivities, plannedActivities]);
 
     // Unified Goal Progress Logic
@@ -505,21 +527,29 @@ export function TrainingPlanningPage() {
 
                     const isToday = day.date === getISODate();
                     const isPast = day.date < getISODate();
+                    const warning = weeklyWarnings.find(w => w.date === day.date);
 
                     return (
-                        <div key={day.date} className={`flex flex-col h-[400px] bg-white dark:bg-slate-900 rounded-2xl border ${isToday ? 'border-emerald-500 ring-1 ring-emerald-500/50' : (isPast ? 'border-slate-100 dark:border-slate-800/50 opacity-90' : 'border-slate-200 dark:border-slate-800')} relative group shadow-sm`}>
+                        <div key={day.date} className={`flex flex-col h-[400px] bg-white dark:bg-slate-900 rounded-2xl border ${warning ? 'border-amber-400 ring-1 ring-amber-400/50' : (isToday ? 'border-emerald-500 ring-1 ring-emerald-500/50' : (isPast ? 'border-slate-100 dark:border-slate-800/50 opacity-90' : 'border-slate-200 dark:border-slate-800'))} relative group shadow-sm transition-all`}>
                             {/* Background Date */}
                             <div className="absolute bottom-4 right-4 text-7xl font-black text-slate-100 dark:text-slate-800/20 select-none z-0 pointer-events-none">
                                 {day.date.split('-')[2]}
                             </div>
 
                             {/* Header */}
-                            <div className={`p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-1 ${isToday ? 'bg-emerald-500/10 dark:bg-emerald-500/5' : (isPast ? 'bg-slate-50/20 dark:bg-slate-900/50' : 'bg-slate-50/50 dark:bg-slate-800/50')} rounded-t-2xl z-10 relative pointer-events-none`}>
+                            <div className={`p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-1 ${warning ? 'bg-amber-500/10 dark:bg-amber-900/20' : (isToday ? 'bg-emerald-500/10 dark:bg-emerald-500/5' : (isPast ? 'bg-slate-50/20 dark:bg-slate-900/50' : 'bg-slate-50/50 dark:bg-slate-800/50'))} rounded-t-2xl z-10 relative`}>
                                 <div className="flex justify-between items-center">
                                     <span className="text-xs font-black uppercase tracking-wider text-slate-500">{day.label}</span>
-                                    <span className={`text-xs font-bold ${isToday ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
-                                        {day.date.split('-')[2]}
-                                    </span>
+                                    <div className="flex items-center gap-2">
+                                        {warning && (
+                                            <Link to="/tools/interference" className="pointer-events-auto" title={`${warning.message}: ${warning.suggestion}`}>
+                                                <AlertTriangle size={14} className="text-amber-500 animate-pulse hover:scale-110 transition-transform" />
+                                            </Link>
+                                        )}
+                                        <span className={`text-xs font-bold ${isToday ? 'text-emerald-500' : 'text-slate-400 dark:text-slate-500'}`}>
+                                            {day.date.split('-')[2]}
+                                        </span>
+                                    </div>
                                 </div>
                                 <div className="text-[9px] font-black text-slate-400 flex items-center gap-1.5">
                                     {dayKm > 0 && <span>🏃 {dayKm.toFixed(1)} km</span>}

@@ -1174,7 +1174,7 @@ export interface PlannedActivity {
     goalId?: string; // Link to a specific CoachGoal
     date: string; // ISO Date (YYYY-MM-DD)
     type: 'RUN' | 'STRENGTH' | 'HYROX' | 'BIKE' | 'REST' | 'OTHER';
-    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH' | 'REST';
+    category: 'LONG_RUN' | 'INTERVALS' | 'TEMPO' | 'EASY' | 'RECOVERY' | 'REPETITION' | 'STRENGTH' | 'REST' | 'RACE';
     title: string;
     description: string;
     structure: {
