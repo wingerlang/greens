@@ -11,6 +11,7 @@ import { DatabasePage } from './DatabasePage.tsx';
 import { ApiPage } from './ApiPage.tsx';
 import { DocumentationPage } from '../components/DocumentationPage.tsx';
 import { BackupModule } from '../components/admin/backup/BackupModule.tsx';
+import { AnalyticsDashboard } from './admin/AnalyticsDashboard.tsx';
 
 export const AdminPage: React.FC = () => {
     const { foodItems, recipes, updateFoodItem } = useData();
@@ -109,6 +110,12 @@ export const AdminPage: React.FC = () => {
                     🧬 System DB
                 </button>
             </div>
+
+            {activeTab === 'analytics' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <AnalyticsDashboard />
+                </div>
+            )}
 
             {activeTab === 'health' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">

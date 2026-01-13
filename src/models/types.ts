@@ -1561,3 +1561,47 @@ export interface BodyMeasurementEntry {
     notes?: string;
     createdAt: string;
 }
+
+// ============================================
+// Phase 10: Usage Analytics
+// ============================================
+
+export interface PageView {
+    id: string;
+    userId: string;
+    sessionId: string;
+    path: string;
+    timestamp: string; // ISO
+    durationSeconds?: number; // Calculated on exit
+    userAgent?: string;
+}
+
+export interface InteractionEvent {
+    id: string;
+    userId: string;
+    sessionId: string;
+    type: 'click' | 'submit' | 'change' | 'other';
+    target: string; // e.g., "button", "a", "input"
+    label: string; // e.g., "Save Workout", "Log Out"
+    path: string; // Where it happened
+    timestamp: string;
+    metadata?: Record<string, any>;
+}
+
+export interface AnalyticsSession {
+    id: string;
+    userId: string;
+    startTime: string; // ISO
+    endTime?: string;
+    userAgent: string;
+    screenSize?: string;
+    platform?: string;
+}
+
+export interface AnalyticsStats {
+    totalPageViews: number;
+    totalEvents: number;
+    popularPages: { path: string; count: number; avgTime: number }[];
+    popularInteractions: { label: string; count: number }[];
+    activeUsers24h: number;
+}

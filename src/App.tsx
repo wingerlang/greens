@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DataProvider } from './context/DataContext.tsx';
 import { SettingsProvider } from './context/SettingsContext.tsx';
+import { AnalyticsProvider } from './context/AnalyticsContext.tsx';
 import { CookingModeProvider } from './context/CookingModeProvider.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
 import { Layout } from './components/Layout.tsx';
@@ -20,6 +21,7 @@ import { PlanningPage } from './pages/PlanningPage.tsx';
 import { TrainingPlanningPage } from './pages/TrainingPlanningPage.tsx';
 import { ApiPage } from './pages/ApiPage.tsx';
 import { AdminPage } from './pages/AdminPage.tsx';
+import { AnalyticsDashboard } from './pages/admin/AnalyticsDashboard.tsx';
 import { DocumentationPage } from './components/DocumentationPage.tsx';
 import { HealthPage } from './pages/HealthPage.tsx';
 import { CompetitionPage } from './pages/CompetitionPage.tsx';
@@ -97,151 +99,154 @@ export function App() {
                     <SettingsProvider>
                         <CookingModeProvider>
                             <BrowserRouter>
-                                <DebugBar />
-                                <BugReporter />
-                                <Routes>
-                                    {/* Public Routes */}
-                                    <Route path="/login" element={<LoginPage />} />
-                                    <Route path="/register" element={<RegisterPage />} />
+                                <AnalyticsProvider>
+                                    <DebugBar />
+                                    <BugReporter />
+                                    <Routes>
+                                        {/* Public Routes */}
+                                        <Route path="/login" element={<LoginPage />} />
+                                        <Route path="/register" element={<RegisterPage />} />
 
-                                    {/* Protected Routes */}
-                                    <Route path="/*" element={
-                                        <RequireAuth>
-                                            <Layout>
-                                                <Routes>
-                                                    <Route index element={<DashboardPage />} />
-                                                    <Route path="veckan" element={<WeeklyPage />} />
-                                                    <Route path="weekly" element={<WeeklyPage />} />
-                                                    <Route path="vecka" element={<WeeklyPage />} />
-                                                    <Route path="vecka/recept/:recipeId/*" element={<WeeklyPage />} />
-                                                    <Route path="matplanera" element={<PlanningPage />} />
-                                                    <Route path="planning/training" element={<TrainingPlanningPage />} />
-                                                    <Route path="planera" element={<TrainingPlanningPage />} />
-                                                    <Route path="planera/traning" element={<TrainingPlanningPage />} />
-                                                    <Route path="planner" element={<PlannerPage />} />
-                                                    <Route path="pantry" element={<PantryPage />} />
-                                                    <Route path="recipes" element={<RecipesPage />} />
-                                                    <Route path="database" element={<DatabasePage />} />
-                                                    <Route path="databas" element={<DatabasePage />} />
-                                                    <Route path="calories" element={<CaloriesPage />} />
-                                                    <Route path="training/period/:id?" element={<TrainingPeriodPage />} />
-                                                    <Route path="training" element={<TrainingPage />} />
-                                                    <Route path="profile/:tab?" element={<ProfilePage />} />
-                                                    <Route path="profile" element={<ProfilePage />} />
-                                                    <Route path="health" element={<HealthPage />} />
-                                                    <Route path="health/:metric" element={<HealthPage />} />
-                                                    <Route path="halsa" element={<HealthPage />} />
-                                                    <Route path="halsa/:metric" element={<HealthPage />} />
-                                                    <Route path="hälsa" element={<HealthPage />} />
-                                                    <Route path="hälsa/:metric" element={<HealthPage />} />
-                                                    <Route path="coach" element={<CoachPage />} />
-                                                    <Route path="competition" element={<CompetitionPage />} />
-                                                    <Route path="competition" element={<CompetitionPage />} />
-                                                    <Route path="tävling" element={<CompetitionPage />} />
+                                        {/* Protected Routes */}
+                                        <Route path="/*" element={
+                                            <RequireAuth>
+                                                <Layout>
+                                                    <Routes>
+                                                        <Route index element={<DashboardPage />} />
+                                                        <Route path="veckan" element={<WeeklyPage />} />
+                                                        <Route path="weekly" element={<WeeklyPage />} />
+                                                        <Route path="vecka" element={<WeeklyPage />} />
+                                                        <Route path="vecka/recept/:recipeId/*" element={<WeeklyPage />} />
+                                                        <Route path="matplanera" element={<PlanningPage />} />
+                                                        <Route path="planning/training" element={<TrainingPlanningPage />} />
+                                                        <Route path="planera" element={<TrainingPlanningPage />} />
+                                                        <Route path="planera/traning" element={<TrainingPlanningPage />} />
+                                                        <Route path="planner" element={<PlannerPage />} />
+                                                        <Route path="pantry" element={<PantryPage />} />
+                                                        <Route path="recipes" element={<RecipesPage />} />
+                                                        <Route path="database" element={<DatabasePage />} />
+                                                        <Route path="databas" element={<DatabasePage />} />
+                                                        <Route path="calories" element={<CaloriesPage />} />
+                                                        <Route path="training/period/:id?" element={<TrainingPeriodPage />} />
+                                                        <Route path="training" element={<TrainingPage />} />
+                                                        <Route path="profile/:tab?" element={<ProfilePage />} />
+                                                        <Route path="profile" element={<ProfilePage />} />
+                                                        <Route path="health" element={<HealthPage />} />
+                                                        <Route path="health/:metric" element={<HealthPage />} />
+                                                        <Route path="halsa" element={<HealthPage />} />
+                                                        <Route path="halsa/:metric" element={<HealthPage />} />
+                                                        <Route path="hälsa" element={<HealthPage />} />
+                                                        <Route path="hälsa/:metric" element={<HealthPage />} />
+                                                        <Route path="coach" element={<CoachPage />} />
+                                                        <Route path="competition" element={<CompetitionPage />} />
+                                                        <Route path="competition" element={<CompetitionPage />} />
+                                                        <Route path="tävling" element={<CompetitionPage />} />
 
-                                                    <Route path="admin" element={
-                                                        <RequireRole role="admin">
-                                                            <AdminPage />
-                                                        </RequireRole>
-                                                    } />
-                                                    <Route path="admin/exercises" element={
-                                                        <RequireRole role="admin">
-                                                            <ExerciseDatabasePage />
-                                                        </RequireRole>
-                                                    } />
+                                                        <Route path="admin" element={
+                                                            <RequireRole role="admin">
+                                                                <AdminPage />
+                                                            </RequireRole>
+                                                        } />
+                                                        <Route path="admin/exercises" element={
+                                                            <RequireRole role="admin">
+                                                                <ExerciseDatabasePage />
+                                                            </RequireRole>
+                                                        } />
 
-                                                    {/* Developer Routes */}
-                                                    <Route path="developer" element={
-                                                        <RequireRole role="developer">
-                                                            <DeveloperLayout />
-                                                        </RequireRole>
-                                                    }>
-                                                        <Route index element={<DeveloperDashboard />} />
-                                                        <Route path="todos" element={<DeveloperTodos />} />
-                                                        <Route path="explorer" element={<DeveloperExplorer />} />
-                                                        <Route path="analysis" element={<DeveloperAnalysis />} />
-                                                    </Route>
+                                                        {/* Developer Routes */}
+                                                        <Route path="developer" element={
+                                                            <RequireRole role="developer">
+                                                                <DeveloperLayout />
+                                                            </RequireRole>
+                                                        }>
+                                                            <Route index element={<DeveloperDashboard />} />
+                                                            <Route path="todos" element={<DeveloperTodos />} />
+                                                            <Route path="explorer" element={<DeveloperExplorer />} />
+                                                            <Route path="analysis" element={<DeveloperAnalysis />} />
+                                                        </Route>
 
-                                                    <Route path="api" element={<ApiPage />} />
-                                                    <Route path="docs" element={<DocumentationPage />} />
-                                                    <Route path="regler" element={<DocsPage />} />
-                                                    <Route path="roadmap" element={<RoadmapPage />} />
-                                                    <Route path="community" element={<UsersPage />} />
-                                                    <Route path="u/:handle" element={<PublicProfilePage />} />
-                                                    <Route path="garmin" element={<GarminPage />} />
-                                                    <Route path="settings" element={<Navigate to="/profile" replace />} />
-                                                    <Route path="sync" element={<IntegrationsPage />} />
-                                                    <Route path="installningar" element={<Navigate to="/profile" replace />} />
-                                                    <Route path="activities" element={<ActivitiesPage />} />
-                                                    <Route path="logg" element={<ActivitiesPage />} />
-                                                    <Route path="strength" element={<StrengthPage />} />
-                                                    <Route path="strength/:exerciseName" element={<StrengthPage />} />
-                                                    <Route path="styrka" element={<StrengthPage />} />
-                                                    <Route path="styrka/:exerciseName" element={<StrengthPage />} />
-                                                    <Route path="hyrox" element={<Navigate to="/health/hyrox" replace />} />
+                                                        <Route path="api" element={<ApiPage />} />
+                                                        <Route path="docs" element={<DocumentationPage />} />
+                                                        <Route path="regler" element={<DocsPage />} />
+                                                        <Route path="roadmap" element={<RoadmapPage />} />
+                                                        <Route path="community" element={<UsersPage />} />
+                                                        <Route path="u/:handle" element={<PublicProfilePage />} />
+                                                        <Route path="garmin" element={<GarminPage />} />
+                                                        <Route path="settings" element={<Navigate to="/profile" replace />} />
+                                                        <Route path="sync" element={<IntegrationsPage />} />
+                                                        <Route path="installningar" element={<Navigate to="/profile" replace />} />
+                                                        <Route path="activities" element={<ActivitiesPage />} />
+                                                        <Route path="logg" element={<ActivitiesPage />} />
+                                                        <Route path="strength" element={<StrengthPage />} />
+                                                        <Route path="strength/:exerciseName" element={<StrengthPage />} />
+                                                        <Route path="styrka" element={<StrengthPage />} />
+                                                        <Route path="styrka/:exerciseName" element={<StrengthPage />} />
+                                                        <Route path="hyrox" element={<Navigate to="/health/hyrox" replace />} />
 
-                                                    <Route path="pass" element={<WorkoutsPage />} />
-                                                    <Route path="workouts" element={<WorkoutsPage />} />
-                                                    <Route path="workouts/builder" element={<WorkoutBuilderPage />} />
-                                                    <Route path="workouts/:id" element={<WorkoutDetailPage />} />
-                                                    <Route path="/exercises" element={<ExercisesPage />} />
-                                                    <Route path="/exercises/muscles" element={<MuscleOverviewPage />} />
-                                                    <Route path="/training/load" element={<LoadAnalysisPage />} />
-                                                    <Route path="matchup" element={<MatchupPage />} />
-                                                    <Route path="kamrat" element={<MatchupPage />} />
-                                                    <Route path="feed" element={<LifeStreamPage />} />
-                                                    <Route path="lifestream" element={<LifeStreamPage />} />
-                                                    <Route path="review" element={<YearInReviewPage />} />
-                                                    <Route path="year-in-review" element={<Navigate to="/review" replace />} />
-                                                    <Route path="ars-sammanfattning" element={<Navigate to="/review" replace />} />
-                                                    <Route path="summary" element={<SummaryPage />} />
-                                                    <Route path="sammanfattning" element={<SummaryPage />} />
-                                                    <Route path="goals" element={<GoalsPage />} />
-                                                    <Route path="mal" element={<GoalsPage />} />
-                                                    <Route path="activity/:id" element={<ActivityStandalonePage />} />
-                                                    <Route path="statistics/:tab?" element={<CommunityStatsPage />} />
-                                                    <Route path="statistik/:tab?" element={<CommunityStatsPage />} />
+                                                        <Route path="pass" element={<WorkoutsPage />} />
+                                                        <Route path="workouts" element={<WorkoutsPage />} />
+                                                        <Route path="workouts/builder" element={<WorkoutBuilderPage />} />
+                                                        <Route path="workouts/:id" element={<WorkoutDetailPage />} />
+                                                        <Route path="/exercises" element={<ExercisesPage />} />
+                                                        <Route path="/exercises/muscles" element={<MuscleOverviewPage />} />
+                                                        <Route path="/training/load" element={<LoadAnalysisPage />} />
+                                                        <Route path="matchup" element={<MatchupPage />} />
+                                                        <Route path="kamrat" element={<MatchupPage />} />
+                                                        <Route path="feed" element={<LifeStreamPage />} />
+                                                        <Route path="lifestream" element={<LifeStreamPage />} />
+                                                        <Route path="review" element={<YearInReviewPage />} />
+                                                        <Route path="year-in-review" element={<Navigate to="/review" replace />} />
+                                                        <Route path="ars-sammanfattning" element={<Navigate to="/review" replace />} />
+                                                        <Route path="summary" element={<SummaryPage />} />
+                                                        <Route path="sammanfattning" element={<SummaryPage />} />
+                                                        <Route path="goals" element={<GoalsPage />} />
+                                                        <Route path="mal" element={<GoalsPage />} />
+                                                        <Route path="activity/:id" element={<ActivityStandalonePage />} />
+                                                        <Route path="statistics/:tab?" element={<CommunityStatsPage />} />
+                                                        <Route path="statistik/:tab?" element={<CommunityStatsPage />} />
 
-                                                    <Route path="tools" element={<ToolsPage />} />
-                                                    <Route path="verktyg" element={<ToolsPage />} />
-                                                    <Route path="tools/1rm" element={<ToolsOneRepMaxPage />} />
-                                                    <Route path="tools/1rm/:exerciseName" element={<ToolsOneRepMaxPage />} />
-                                                    <Route path="rm/:exerciseName?" element={<ToolsOneRepMaxPage />} />
-                                                    <Route path="tools/race" element={<ToolsRacePredictorPage />} />
-                                                    <Route path="tools/race-planner" element={<ToolsRacePlannerPage />} />
-                                                    <Route path="tools/race-predictor" element={<ToolsRacePredictorPage />} />
-                                                    <Route path="tools/pace" element={<ToolsPaceConverterPage />} />
-                                                    <Route path="tools/health" element={<ToolsHealthPage />} />
-                                                    <Route path="tools/power" element={<ToolsPowerPage />} />
-                                                    <Route path="tools/macros" element={<ToolsMacroPage />} />
-                                                    <Route path="tools/cooper" element={<ToolsCooperPage />} />
-                                                    <Route path="tools/hr" element={<ToolsHeartRatePage />} />
-                                                    <Route path="tools/standards" element={<ToolsStrengthStandardsPage />} />
-                                                    <Route path="tools/olympic" element={<ToolsOlympicPage />} />
-                                                    <Route path="tools/hyrox" element={<ToolsHyroxPage />} />
-                                                    <Route path="tools/replay" element={<ToolsReplayPage />} />
-                                                    <Route path="tools/interference" element={<ToolsInterferencePage />} />
-                                                </Routes>
-                                            </Layout>
-                                        </RequireAuth>
-                                    } />
+                                                        <Route path="tools" element={<ToolsPage />} />
+                                                        <Route path="verktyg" element={<ToolsPage />} />
+                                                        <Route path="tools/1rm" element={<ToolsOneRepMaxPage />} />
+                                                        <Route path="tools/1rm/:exerciseName" element={<ToolsOneRepMaxPage />} />
+                                                        <Route path="rm/:exerciseName?" element={<ToolsOneRepMaxPage />} />
+                                                        <Route path="tools/race" element={<ToolsRacePredictorPage />} />
+                                                        <Route path="tools/race-planner" element={<ToolsRacePlannerPage />} />
+                                                        <Route path="tools/race-predictor" element={<ToolsRacePredictorPage />} />
+                                                        <Route path="tools/pace" element={<ToolsPaceConverterPage />} />
+                                                        <Route path="tools/health" element={<ToolsHealthPage />} />
+                                                        <Route path="tools/power" element={<ToolsPowerPage />} />
+                                                        <Route path="tools/macros" element={<ToolsMacroPage />} />
+                                                        <Route path="tools/cooper" element={<ToolsCooperPage />} />
+                                                        <Route path="tools/hr" element={<ToolsHeartRatePage />} />
+                                                        <Route path="tools/standards" element={<ToolsStrengthStandardsPage />} />
+                                                        <Route path="tools/olympic" element={<ToolsOlympicPage />} />
+                                                        <Route path="tools/hyrox" element={<ToolsHyroxPage />} />
+                                                        <Route path="tools/replay" element={<ToolsReplayPage />} />
+                                                        <Route path="tools/interference" element={<ToolsInterferencePage />} />
+                                                    </Routes>
+                                                </Layout>
+                                            </RequireAuth>
+                                        } />
 
-                                    {/* Catch-all */}
-                                    <Route path="/*" element={
-                                        <RequireAuth>
-                                            <Layout>
-                                                <Routes>
-                                                    <Route path="*" element={<Navigate to="/" />} />
-                                                </Routes>
-                                            </Layout>
-                                        </RequireAuth>
-                                    } />
+                                        {/* Catch-all */}
+                                        <Route path="/*" element={
+                                            <RequireAuth>
+                                                <Layout>
+                                                    <Routes>
+                                                        <Route path="*" element={<Navigate to="/" />} />
+                                                    </Routes>
+                                                </Layout>
+                                            </RequireAuth>
+                                        } />
+                                    </Routes>
                                 </Routes>
-                            </BrowserRouter>
-                        </CookingModeProvider>
-                    </SettingsProvider>
-                </DataProvider>
-            </AuthProvider>
-        </QueryClientProvider>
+                            </AnalyticsProvider>
+                        </BrowserRouter>
+                    </CookingModeProvider>
+                </SettingsProvider>
+            </DataProvider>
+        </AuthProvider>
+        </QueryClientProvider >
     );
 }

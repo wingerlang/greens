@@ -25,6 +25,7 @@ import { handleMuscleRoutes } from "./handlers/muscles.ts";
 import { handleRecipeRoutes } from "./handlers/recipes.ts";
 import { handleExerciseEntryRoutes } from "./handlers/exerciseEntries.ts";
 import { handlePlannedActivityRoutes } from "./handlers/plannedActivities.ts";
+import { handleAnalyticsRoutes } from "./handlers/analytics.ts";
 import { logError, logMetric } from "./utils/logger.ts";
 import { serveDir } from "./utils/fileServer.ts";
 
@@ -128,6 +129,8 @@ async function internalRouter(req: Request): Promise<Response> {
             response = await handleDeveloperRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/planned-activities")) {
             response = await handlePlannedActivityRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/analytics")) {
+            response = await handleAnalyticsRoutes(req, url, headers);
         } else {
             response = new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });
         }
