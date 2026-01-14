@@ -179,43 +179,58 @@ export function analyzeInterference(activities: any[]): ConflictWarning[] {
         activitiesByDate[date].push(act);
     }
 
-    // Analyze each day
+    // Get sorted list of dates for consecutive day analysis
+    const sortedDates = Object.keys(activitiesByDate).sort();
+
+    // ==========================================
+    // SAME-DAY ANALYSIS
+    // ==========================================
     for (const [date, dailyActs] of Object.entries(activitiesByDate)) {
         if (dailyActs.length < 2) continue; // No conflicts possible with 1 activity
 
-        // Iterate through pairs in the list
-        // Note: Without explicit times, we assume the list order *might* be arbitrary,
-        // OR we check all permutations if time is unknown.
-        // For Planned Activities, users usually don't set time.
-        // So we should flag "Potential Risk" if the combination exists on the same day.
-
-        // Let's gather signals first
+        // Gather signals
         const signals = dailyActs.map(act => ({
             act,
             type: classifyActivity(act),
-            id: act.id
+            id: act.id,
+            startTime: act.startTime, // HH:mm if available
+            title: act.title || ''
         }));
 
-        // Check 1: mTOR + AMPK (Interference)
         const mtorActs = signals.filter(s => s.type === 'MTOR');
         const ampkHighActs = signals.filter(s => s.type === 'AMPK_HIGH' || s.type === 'HYBRID');
         const ampkLowActs = signals.filter(s => s.type === 'AMPK_LOW');
+        const allAmpkActs = [...ampkHighActs, ...ampkLowActs];
 
-        // High-intensity cardio + Strength = HIGH risk
+        // === Check 1: mTOR + AMPK_HIGH (High Risk Interference) ===
         if (mtorActs.length > 0 && ampkHighActs.length > 0) {
+            // Check sequencing if times are available
+            const strengthWithTime = mtorActs.filter(s => s.startTime);
+            const cardioWithTime = ampkHighActs.filter(s => s.startTime);
+
+            let sequenceWarning = '';
+            if (strengthWithTime.length > 0 && cardioWithTime.length > 0) {
+                const strengthTime = strengthWithTime[0].startTime;
+                const cardioTime = cardioWithTime[0].startTime;
+                if (cardioTime < strengthTime) {
+                    // Cardio BEFORE strength - BAD ORDER
+                    sequenceWarning = ' ⚠️ Felaktig ordning upptäckt: Kondition före Styrka minskar styrkeeffekten avsevärt.';
+                }
+            }
+
             warnings.push({
                 id: `warn-${date}-interf-high`,
                 date,
                 type: 'INTERFERENCE_EFFECT',
                 riskLevel: 'HIGH',
-                message: 'Styrka och Kondition samma dag',
-                scientificExplanation: 'Att blanda mTOR-signaler (styrka) med höga AMPK-nivåer (kondition) kan hämma muskeltillväxten. AMPK agerar som en "strömbrytare" som stänger av proteinsyntesen.',
+                message: 'Styrka + Hård kondition samma dag',
+                scientificExplanation: 'Att blanda mTOR-signaler (styrka) med höga AMPK-nivåer (intervaller/tempo/långpass) kan hämma muskeltillväxten. AMPK stänger av proteinsyntesen.' + sequenceWarning,
                 involvedActivityIds: [...mtorActs.map(s => s.id), ...ampkHighActs.map(s => s.id)],
-                suggestion: 'Separera passen med minst 6 timmar. Helst styrka på morgonen och kondition på kvällen, eller tvärtom beroende på prioritering. Om du måste köra direkt efter varandra: Styrka först.'
+                suggestion: 'Separera passen med minst 6 timmar. Styrka på morgonen, kondition på kvällen. Om du måste köra nära: Styrka FÖRST.'
             });
         }
 
-        // Low-intensity cardio + Strength = MODERATE risk (still affects recovery)
+        // === Check 2: mTOR + AMPK_LOW (Moderate Risk) ===
         if (mtorActs.length > 0 && ampkLowActs.length > 0 && ampkHighActs.length === 0) {
             warnings.push({
                 id: `warn-${date}-interf-low`,
@@ -223,28 +238,64 @@ export function analyzeInterference(activities: any[]): ConflictWarning[] {
                 type: 'INTERFERENCE_EFFECT',
                 riskLevel: 'MODERATE',
                 message: 'Styrka + Lugn löpning samma dag',
-                scientificExplanation: 'Även lågintensiv kondition aktiverar AMPK i viss mån. Med kort tid mellan passen kan återhämtningen påverkas negativt.',
+                scientificExplanation: 'Även lågintensiv kondition aktiverar AMPK i viss mån. Med kort tid mellan passen kan återhämtningen påverkas.',
                 involvedActivityIds: [...mtorActs.map(s => s.id), ...ampkLowActs.map(s => s.id)],
-                suggestion: 'Försök att ha minst 4-6 timmar mellan passen. Om du kör cardio direkt efter styrka, håll det kort och lätt.'
+                suggestion: 'Försök att ha minst 4-6 timmar mellan passen. Håll löpningen kort och lätt.'
             });
         }
 
-        // Check 2: Double Strength
+        // === Check 3: Double Strength (CNS Warning) ===
         if (mtorActs.length >= 2) {
+            // Check if same muscle groups
+            const muscleGroups1 = mtorActs[0].act.muscleGroups || [];
+            const muscleGroups2 = mtorActs[1].act.muscleGroups || [];
+            const sameMuscles = muscleGroups1.some((m: string) => muscleGroups2.includes(m));
+
             warnings.push({
                 id: `warn-${date}-double-str`,
                 date,
                 type: 'DOUBLE_STRENGTH',
-                riskLevel: 'MODERATE',
-                message: 'Dubbla styrkepass',
-                scientificExplanation: 'Två styrkepass samma dag kräver noggrann planering för att inte överbelasta CNS eller samma muskelgrupper.',
+                riskLevel: sameMuscles ? 'HIGH' : 'MODERATE',
+                message: sameMuscles ? 'Dubbla styrkepass (samma muskler!)' : 'Dubbla styrkepass',
+                scientificExplanation: sameMuscles
+                    ? 'Två tunga pass på samma muskelgrupp samma dag överbelastar både CNS och musklerna. Hög skaderisk.'
+                    : 'Två styrkepass samma dag kräver att du tränar helt olika muskelgrupper. CNS belastas oavsett.',
                 involvedActivityIds: mtorActs.map(s => s.id),
-                suggestion: 'Se till att det är minst 4 timmar mellan passen, eller att du tränar helt olika muskelgrupper (t.ex. Överkropp fm / Underkropp em).'
+                suggestion: sameMuscles
+                    ? 'Undvik att träna samma muskelgrupp två gånger på en dag. Dela upp på överkropp/underkropp.'
+                    : 'Ha minst 4 timmar mellan passen. Morgon: Överkropp, Kväll: Underkropp (eller tvärtom).'
             });
         }
 
-        // Check 3: Hybrid Analysis
-        // If Hybrid + Heavy Strength
+        // === Check 4: Double HARD Cardio ===
+        if (ampkHighActs.length >= 2) {
+            warnings.push({
+                id: `warn-${date}-double-cardio`,
+                date,
+                type: 'RECOVERY_RISK',
+                riskLevel: 'HIGH',
+                message: 'Dubbla hårda konditionspass',
+                scientificExplanation: 'Två högintensiva konditionspass samma dag (intervaller, tempo, långpass) leder snabbt till överträning, stressfrakturer och hormonstörningar.',
+                involvedActivityIds: ampkHighActs.map(s => s.id),
+                suggestion: 'Kör endast ETT hårt pass per dag. Om du dubbeltränar kondition: Morgon HÅRT, Kväll LUGNT.'
+            });
+        }
+
+        // === Check 5: Triple Sessions ===
+        if (dailyActs.length >= 3) {
+            warnings.push({
+                id: `warn-${date}-triple`,
+                date,
+                type: 'RECOVERY_RISK',
+                riskLevel: 'CRITICAL',
+                message: 'Trippelpass planerat',
+                scientificExplanation: 'Tre träningspass samma dag leder till konstant förhöjda kortisolnivåer, sänkt testosteron och nedsatt immunförsvar. Endast för elitidrottare under mycket specifika förhållanden.',
+                involvedActivityIds: dailyActs.map(a => a.id),
+                suggestion: 'Undvik trippelpass. Risken för nedbrytning är större än chansen till uppbyggnad för de flesta atleter.'
+            });
+        }
+
+        // === Check 6: Hyrox + Strength ===
         const hybridActs = signals.filter(s => s.type === 'HYBRID');
         if (hybridActs.length > 0 && mtorActs.length > 0) {
             warnings.push({
@@ -252,13 +303,57 @@ export function analyzeInterference(activities: any[]): ConflictWarning[] {
                 date,
                 type: 'RECOVERY_RISK',
                 riskLevel: 'HIGH',
-                message: 'Hyrox + Tung Styrka',
-                scientificExplanation: 'Hyrox är extremt energikrävande och skapar både metabol stress och muskelskada. Att kombinera detta med tung styrka samma dag ökar risken för överträning avsevärt.',
+                message: 'Hyrox + Styrka samma dag',
+                scientificExplanation: 'Hyrox aktiverar extrema nivåer av både mTOR (styrkedelen) och AMPK (löpningen). Att lägga till ytterligare styrka samma dag överbelastar kroppen totalt.',
                 involvedActivityIds: [...hybridActs.map(s => s.id), ...mtorActs.map(s => s.id)],
-                suggestion: 'Prioritera återhämtning. Om du måste dubbla, kör styrkan långt ifrån Hyrox-passet och håll volymen låg.'
+                suggestion: 'Prioritera återhämtning dagen efter Hyrox. Om du måste kombinera, håll styrkan mycket lätt.'
+            });
+        }
+    }
+
+    // ==========================================
+    // CONSECUTIVE DAY ANALYSIS
+    // ==========================================
+    for (let i = 0; i < sortedDates.length - 1; i++) {
+        const today = sortedDates[i];
+        const tomorrow = sortedDates[i + 1];
+
+        // Check if actually consecutive days
+        const todayDate = new Date(today);
+        const tomorrowDate = new Date(tomorrow);
+        const dayDiff = (tomorrowDate.getTime() - todayDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (dayDiff !== 1) continue; // Not consecutive
+
+        const todayActs = activitiesByDate[today];
+        const tomorrowActs = activitiesByDate[tomorrow];
+
+        const todaySignals = todayActs.map(act => ({ type: classifyActivity(act), act, id: act.id }));
+        const tomorrowSignals = tomorrowActs.map(act => ({ type: classifyActivity(act), act, id: act.id }));
+
+        // Check: Heavy legs (evening) → Morning run next day
+        const todayLegStrength = todaySignals.filter(s =>
+            s.type === 'MTOR' &&
+            (s.act.muscleGroups?.includes('legs') || s.act.title?.toLowerCase().includes('ben'))
+        );
+        const tomorrowMorningCardio = tomorrowSignals.filter(s =>
+            (s.type === 'AMPK_HIGH' || s.type === 'AMPK_LOW') &&
+            (!s.act.startTime || s.act.startTime < '10:00')
+        );
+
+        if (todayLegStrength.length > 0 && tomorrowMorningCardio.length > 0) {
+            warnings.push({
+                id: `warn-${tomorrow}-legs-run`,
+                date: tomorrow,
+                type: 'RECOVERY_RISK',
+                riskLevel: 'HIGH',
+                message: 'Benträning igår → Löpning idag',
+                scientificExplanation: 'Efter tung benträning behöver musklerna sova för återhämtning. Tidig morgonlöpning dagen efter avbryter reparationsprocessen och ökar skaderisken.',
+                involvedActivityIds: [...todayLegStrength.map(s => s.id), ...tomorrowMorningCardio.map(s => s.id)],
+                suggestion: 'Flytta löpningen till eftermiddag/kväll, eller gör den mycket lätt (återhämtningsjogg max 30 min).'
             });
         }
     }
 
     return warnings;
 }
+
