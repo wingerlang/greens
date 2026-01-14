@@ -7,6 +7,23 @@ import {
 } from '../models/types.ts';
 
 // ==========================================
+// Formatters
+// ==========================================
+
+/**
+ * Formats a duration in minutes to a human-readable string.
+ * e.g., 124.5 → "2h 4m", 45 → "45 min"
+ */
+export function formatDuration(minutes: number | undefined): string {
+    if (!minutes || minutes <= 0) return '-';
+    const rounded = Math.round(minutes);
+    if (rounded < 60) return `${rounded} min`;
+    const h = Math.floor(rounded / 60);
+    const m = rounded % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+// ==========================================
 // Types & Categories
 // ==========================================
 
@@ -46,24 +63,30 @@ export interface ConflictWarning {
  */
 export function classifyActivity(activity: UniversalActivity | PlannedActivity | ExerciseEntry): SignalCategory {
     // Normalization to handle different shapes (Universal vs Planned vs Entry)
-    const type = (activity as any).type || (activity as any).activityType || (activity as any).performance?.activityType;
-    const category = (activity as any).category || (activity as any).plan?.activityCategory; // Planned category
+    const rawType = (activity as any).type || (activity as any).activityType || (activity as any).performance?.activityType || '';
+    const type = rawType.toUpperCase(); // Normalize to uppercase for comparison
+    const category = ((activity as any).category || (activity as any).plan?.activityCategory || '').toUpperCase();
     const intensity = (activity as any).intensity; // 'low' | 'moderate' | 'high'
     const title = ((activity as any).title || (activity as any).name || '').toUpperCase();
 
-    // 1. Check Hybrid Special Case
+    // 1. Check Hybrid Special Case (Hyrox)
+    // Also consider hyroxFocus for strength-focused Hyrox
+    const hyroxFocus = (activity as any).hyroxFocus;
     if (type === 'HYROX' || title.includes('HYROX')) {
-        return 'HYBRID';
+        if (hyroxFocus === 'strength') return 'MTOR';
+        if (hyroxFocus === 'cardio') return 'AMPK_HIGH';
+        return 'HYBRID'; // Default hybrid
     }
 
     // 2. Check Strength (mTOR)
-    if (type === 'STRENGTH' || category === 'STRENGTH' || title.includes('STYRKA') || title.includes('GYM')) {
+    if (type === 'STRENGTH' || category === 'STRENGTH' || title.includes('STYRKA') || title.includes('GYM') || title.includes('WEIGHT')) {
         return 'MTOR';
     }
 
     // 3. Check Cardio (AMPK)
-    const isCardio = ['RUN', 'RUNNING', 'CYCLING', 'BIKE', 'SWIMMING', 'ROWING'].includes(type) ||
-                     ['RUN', 'BIKE'].includes(category);
+    const cardioTypes = ['RUN', 'RUNNING', 'CYCLING', 'BIKE', 'SWIMMING', 'ROWING', 'WALKING', 'OTHER'];
+    const isCardio = cardioTypes.includes(type) ||
+        ['RUN', 'BIKE', 'EASY', 'LONG_RUN', 'INTERVALS', 'TEMPO', 'RECOVERY'].includes(category);
 
     if (isCardio) {
         // High Intensity Indicators
@@ -173,40 +196,42 @@ export function analyzeInterference(activities: any[]): ConflictWarning[] {
             id: act.id
         }));
 
-        // Check 1: mTOR + AMPK_HIGH (Interference)
+        // Check 1: mTOR + AMPK (Interference)
         const mtorActs = signals.filter(s => s.type === 'MTOR');
-        const ampkActs = signals.filter(s => s.type === 'AMPK_HIGH' || s.type === 'HYBRID');
+        const ampkHighActs = signals.filter(s => s.type === 'AMPK_HIGH' || s.type === 'HYBRID');
+        const ampkLowActs = signals.filter(s => s.type === 'AMPK_LOW');
 
-        if (mtorActs.length > 0 && ampkActs.length > 0) {
-            // We have both on same day.
-            // Since we don't know time, we must warn about spacing/order.
-
+        // High-intensity cardio + Strength = HIGH risk
+        if (mtorActs.length > 0 && ampkHighActs.length > 0) {
             warnings.push({
-                id: `warn-${date}-interf`,
+                id: `warn-${date}-interf-high`,
                 date,
                 type: 'INTERFERENCE_EFFECT',
                 riskLevel: 'HIGH',
                 message: 'Styrka och Kondition samma dag',
                 scientificExplanation: 'Att blanda mTOR-signaler (styrka) med höga AMPK-nivåer (kondition) kan hämma muskeltillväxten. AMPK agerar som en "strömbrytare" som stänger av proteinsyntesen.',
-                involvedActivityIds: [...mtorActs.map(s => s.id), ...ampkActs.map(s => s.id)],
+                involvedActivityIds: [...mtorActs.map(s => s.id), ...ampkHighActs.map(s => s.id)],
                 suggestion: 'Separera passen med minst 6 timmar. Helst styrka på morgonen och kondition på kvällen, eller tvärtom beroende på prioritering. Om du måste köra direkt efter varandra: Styrka först.'
             });
+        }
 
-            // Check Sequence specifically (if we had times, we would be more precise)
-            // But biologically: Cardio FIRST is bad for Strength Performance. Strength FIRST is bad for Endurance adaptation (slightly) but better for Hypertrophy.
-            // The prompt says: "Felaktig ordning: Kondition först -> Styrka sist."
-
-            // Since we can't be sure of order without time, we add a specific sequencing tip to the warning above or a separate one?
-            // Let's add a separate specialized warning if we suspect bad order?
-            // Actually, without time, 'Interference' covers the general clash.
-            // 'Bad Sequencing' is a specific sub-case.
-
-            // Let's just output the Interference warning with the suggestion covering the order.
+        // Low-intensity cardio + Strength = MODERATE risk (still affects recovery)
+        if (mtorActs.length > 0 && ampkLowActs.length > 0 && ampkHighActs.length === 0) {
+            warnings.push({
+                id: `warn-${date}-interf-low`,
+                date,
+                type: 'INTERFERENCE_EFFECT',
+                riskLevel: 'MODERATE',
+                message: 'Styrka + Lugn löpning samma dag',
+                scientificExplanation: 'Även lågintensiv kondition aktiverar AMPK i viss mån. Med kort tid mellan passen kan återhämtningen påverkas negativt.',
+                involvedActivityIds: [...mtorActs.map(s => s.id), ...ampkLowActs.map(s => s.id)],
+                suggestion: 'Försök att ha minst 4-6 timmar mellan passen. Om du kör cardio direkt efter styrka, håll det kort och lätt.'
+            });
         }
 
         // Check 2: Double Strength
         if (mtorActs.length >= 2) {
-             warnings.push({
+            warnings.push({
                 id: `warn-${date}-double-str`,
                 date,
                 type: 'DOUBLE_STRENGTH',
@@ -222,7 +247,7 @@ export function analyzeInterference(activities: any[]): ConflictWarning[] {
         // If Hybrid + Heavy Strength
         const hybridActs = signals.filter(s => s.type === 'HYBRID');
         if (hybridActs.length > 0 && mtorActs.length > 0) {
-             warnings.push({
+            warnings.push({
                 id: `warn-${date}-hybrid`,
                 date,
                 type: 'RECOVERY_RISK',

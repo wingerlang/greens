@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PlannedActivity, generateId } from '../../models/types.ts';
-import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell } from 'lucide-react';
+import { X, Zap, Plus, Trophy, AlertTriangle, Clock, Dumbbell, Timer } from 'lucide-react';
 import { TrainingSuggestion } from '../../utils/trainingSuggestions.ts';
 import { useSmartTrainingSuggestions } from '../../hooks/useSmartTrainingSuggestions.ts';
 import { useData } from '../../context/DataContext.tsx';
@@ -44,6 +44,7 @@ export function ActivityModal({
 
     // Hyrox specific
     const [formIncludesRunning, setFormIncludesRunning] = useState(true);
+    const [formHyroxFocus, setFormHyroxFocus] = useState<'hybrid' | 'strength' | 'cardio'>('hybrid');
     const [formStartTime, setFormStartTime] = useState('');
 
     const { exerciseEntries, plannedActivities, currentUser, updateCurrentUser } = useData();
@@ -115,6 +116,7 @@ export function ActivityModal({
                 setFormIntensity(editingActivity.targetHrZone <= 2 ? 'low' : editingActivity.targetHrZone >= 4 ? 'high' : 'moderate');
                 setIsRace(editingActivity.isRace || false);
                 setFormIncludesRunning(editingActivity.includesRunning ?? true);
+                setFormHyroxFocus((editingActivity as any).hyroxFocus || 'hybrid');
                 setFormStartTime(editingActivity.startTime || '');
             } else {
                 // Create mode
@@ -128,6 +130,7 @@ export function ActivityModal({
                 setFormIntensity('moderate');
                 setIsRace(false);
                 setFormIncludesRunning(true); // Default to true for Hyrox
+                setFormHyroxFocus('hybrid');
                 setFormStartTime('');
             }
         }
@@ -174,7 +177,8 @@ export function ActivityModal({
         } else if (formType === 'STRENGTH') {
             finalCategory = 'STRENGTH';
         } else if (formType === 'HYROX') {
-            finalCategory = 'INTERVALS';
+            // If Hyrox is strength-focused, categorize as STRENGTH
+            finalCategory = formHyroxFocus === 'strength' ? 'STRENGTH' : 'INTERVALS';
         } else if (formType === 'REST') {
             finalCategory = 'REST';
         }
@@ -212,7 +216,8 @@ export function ActivityModal({
 
             // Hyrox specific
             includesRunning: formType === 'HYROX' ? formIncludesRunning : undefined,
-            startTime: formType === 'HYROX' ? formStartTime : undefined,
+            hyroxFocus: formType === 'HYROX' ? formHyroxFocus : undefined,
+            startTime: formStartTime || undefined, // Now available for all types
 
             targetPace: '',
             targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
@@ -454,7 +459,8 @@ export function ActivityModal({
                             <>
                                 <div className="grid grid-cols-2 gap-3">
                                     {/* Conditional Inputs based on Type */}
-                                    {formType === 'RUN' || formType === 'BIKE' || formType === 'HYROX' ? (
+                                    {/* DISTANS only for RUN/BIKE - Hyrox has its own distance field inside the Hyrox section */}
+                                    {formType === 'RUN' || formType === 'BIKE' ? (
                                         <div>
                                             <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Distans (km)</label>
                                             <div className="space-y-2">
@@ -547,11 +553,57 @@ export function ActivityModal({
                                     </div>
                                 )}
 
+                                {/* Start Time - Available for all non-REST activity types */}
+                                <div className="space-y-1">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Starttid (frivilligt)</label>
+                                    <div className="relative">
+                                        <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                        <input
+                                            type="time"
+                                            value={formStartTime}
+                                            onChange={e => setFormStartTime(e.target.value)}
+                                            placeholder="08:00"
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                </div>
+
                                 {/* Hyrox Specific Inputs */}
                                 {formType === 'HYROX' && (
                                     <div className="space-y-4 animate-in slide-in-from-top-2 p-3 bg-amber-500/5 rounded-xl border border-amber-500/10">
+                                        {/* Hyrox Focus Toggle */}
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Hyrox-fokus</label>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <button
+                                                    onClick={() => setFormHyroxFocus('hybrid')}
+                                                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formHyroxFocus === 'hybrid' ? 'bg-amber-500 text-white border-amber-500' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-amber-300'}`}
+                                                >
+                                                    Hybrid
+                                                </button>
+                                                <button
+                                                    onClick={() => setFormHyroxFocus('strength')}
+                                                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formHyroxFocus === 'strength' ? 'bg-purple-500 text-white border-purple-500' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-purple-300'}`}
+                                                >
+                                                    💪 Styrka
+                                                </button>
+                                                <button
+                                                    onClick={() => setFormHyroxFocus('cardio')}
+                                                    className={`py-2 rounded-lg text-[10px] font-black uppercase tracking-wide transition-all border ${formHyroxFocus === 'cardio' ? 'bg-blue-500 text-white border-blue-500' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-blue-300'}`}
+                                                >
+                                                    🏃 Cardio
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 italic">
+                                                {formHyroxFocus === 'strength' ? 'Räknas som styrkepass i statistiken' :
+                                                    formHyroxFocus === 'cardio' ? 'Räknas som cardiopass i statistiken' :
+                                                        'Räknas som hybridpass i statistiken'}
+                                            </p>
+                                        </div>
+
+                                        {/* Running Toggle */}
                                         <div className="flex items-center justify-between">
-                                            <span className="text-sm font-bold text-slate-200">Inkluderar löpning?</span>
+                                            <span className="text-sm font-bold text-slate-900 dark:text-slate-200">Inkluderar löpning?</span>
                                             <button
                                                 onClick={() => setFormIncludesRunning(!formIncludesRunning)}
                                                 className={`w-12 h-6 rounded-full transition-colors relative ${formIncludesRunning ? 'bg-amber-500' : 'bg-slate-700'}`}
@@ -560,8 +612,27 @@ export function ActivityModal({
                                             </button>
                                         </div>
 
+                                        {/* Distance - Only shows when running is included */}
+                                        {formIncludesRunning && (
+                                            <div className="space-y-1 animate-in slide-in-from-top-1">
+                                                <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Distans (km)</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="number"
+                                                        step="0.1"
+                                                        value={formDistance}
+                                                        onChange={e => setFormDistance(e.target.value)}
+                                                        placeholder="t.ex. 8"
+                                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                                                    />
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">km</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Tonnage - Inside Hyrox section */}
                                         <div className="space-y-1">
-                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tonnage (frivilligt)</label>
+                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tonnage (kg)</label>
                                             <div className="relative">
                                                 <Dumbbell className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                                 <input
@@ -569,31 +640,35 @@ export function ActivityModal({
                                                     value={formTonnage}
                                                     onChange={e => setFormTonnage(e.target.value)}
                                                     placeholder="t.ex. 5000"
-                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-amber-500 outline-none transition-all"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-1">
-                                            <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Starttid (frivilligt)</label>
-                                            <div className="relative">
-                                                <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                                                <input
-                                                    type="time"
-                                                    value={formStartTime}
-                                                    onChange={e => setFormStartTime(e.target.value)}
-                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-amber-500 outline-none transition-all"
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-purple-500 outline-none transition-all"
                                                 />
                                             </div>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Duration Time Picker (HH:MM) */}
+                                {/* Tonnage - Only for STRENGTH (Hyrox has its own inside the Hyrox section) */}
+                                {formType === 'STRENGTH' && (
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tonnage (kg)</label>
+                                        <div className="relative">
+                                            <Dumbbell className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                            <input
+                                                type="number"
+                                                value={formTonnage}
+                                                onChange={e => setFormTonnage(e.target.value)}
+                                                placeholder="t.ex. 5000"
+                                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl pl-12 pr-4 py-3 text-sm font-bold focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Duration Time Picker */}
                                 <div className="space-y-1">
-                                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Tid (hh:mm)</label>
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">⏱ Varaktighet (t.ex. 1h20m)</label>
                                     <div className="relative">
-                                        <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                        <Timer className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                         <input
                                             type="time"
                                             value={formDuration}

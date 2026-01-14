@@ -70,8 +70,8 @@ export async function getUserData(userId: string): Promise<AppData | null> {
         userData.weightEntries = weightHistory;
     }
 
-    // 3. Merge activities
-    const activities = await activityRepo.getActivitiesByDateRange(userId, "2020-01-01", "2030-12-31");
+    // 3. Merge activities - Use getAllActivities to ensure no activities are missed
+    const activities = await activityRepo.getAllActivities(userId);
     userData.universalActivities = activities;
 
     // 4. Fetch strength workouts

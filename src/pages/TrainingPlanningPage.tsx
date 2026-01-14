@@ -185,7 +185,21 @@ export function TrainingPlanningPage() {
             .map(a => ({ ...a, _source: 'PLAN', _id: a.id }));
 
         const all = [...relevantHistory, ...relevantPlan];
-        return analyzeInterference(all);
+
+        // DEBUG: Log warning computation
+        console.log('[Interference] Analyzing', all.length, 'activities:', all.map(a => ({
+            date: a.date,
+            type: a.type,
+            title: a.title,
+            category: a.category,
+            hyroxFocus: a.hyroxFocus,
+            source: a._source
+        })));
+
+        const warnings = analyzeInterference(all);
+        console.log('[Interference] Generated warnings:', warnings);
+
+        return warnings;
     }, [currentWeekStart, unifiedActivities, plannedActivities]);
 
     // Unified Goal Progress Logic
@@ -511,19 +525,30 @@ export function TrainingPlanningPage() {
                 {weekDates.map((day) => {
                     const dayActivities = plannedActivities.filter(a => a.date === day.date && a.status !== 'COMPLETED');
 
-                    // Filter completed activities from ALL sources
-                    const dayRunningActivities = universalActivities.filter(a =>
+                    // Filter completed cardio activities from ALL sources (Strava, Garmin, etc.)
+                    const CARDIO_TYPES = ['running', 'cycling', 'swimming', 'walking', 'other'];
+                    const dayCardioActivities = universalActivities.filter(a =>
                         a.date === day.date &&
-                        a.performance?.activityType === 'running'
+                        a.performance?.activityType &&
+                        CARDIO_TYPES.includes(a.performance.activityType)
+                    );
+
+                    // Filter Strava/external strength activities (separate from local strengthSessions)
+                    const dayStravaStrengthActivities = universalActivities.filter(a =>
+                        a.date === day.date &&
+                        a.performance?.activityType === 'strength'
                     );
 
                     const dayStrengthSessions = strengthSessions.filter(s => s.date === day.date);
 
-                    // Day summary calculation
-                    const daySessions = dayRunningActivities.length + dayStrengthSessions.length;
-                    const dayKm = dayRunningActivities.reduce((sum, a) => sum + (a.performance?.distanceKm || 0), 0);
-                    const dayTime = (dayRunningActivities.reduce((sum, a) => sum + (a.performance?.durationMinutes || 0), 0) +
-                        dayStrengthSessions.reduce((sum, s) => sum + (s.duration || 0), 0));
+                    // Day summary calculation (include Strava strength activities)
+                    const daySessions = dayCardioActivities.length + dayStrengthSessions.length + dayStravaStrengthActivities.length;
+                    const dayKm = dayCardioActivities.reduce((sum: number, a) => sum + (a.performance?.distanceKm || 0), 0);
+                    const dayTime = (
+                        dayCardioActivities.reduce((sum: number, a) => sum + (a.performance?.durationMinutes || 0), 0) +
+                        dayStrengthSessions.reduce((sum, s) => sum + (s.duration || 0), 0) +
+                        dayStravaStrengthActivities.reduce((sum: number, a) => sum + (a.performance?.durationMinutes || 0), 0)
+                    );
 
                     const isToday = day.date === getISODate();
                     const isPast = day.date < getISODate();
@@ -559,27 +584,41 @@ export function TrainingPlanningPage() {
 
                             {/* Activities */}
                             <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar">
-                                {/* Running / Cardio Activities (from universalActivities) */}
-                                {dayRunningActivities.map((act) => (
-                                    <div
-                                        key={`run-${act.id}`}
-                                        onClick={() => updateUrlParams({ activityId: act.id })}
-                                        className="p-3 bg-emerald-500/10 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl relative cursor-pointer hover:bg-emerald-500/20 transition-colors z-10"
-                                    >
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider flex items-center gap-1">
-                                                <Check size={10} />
-                                                Löpning
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                            {act.performance?.distanceKm ? `${act.performance.distanceKm.toFixed(1)} km` : ''}
-                                            {act.performance?.durationMinutes ? ` ${formatDurationHHMM(act.performance.durationMinutes)}` : ''}
-                                        </p>
-                                    </div>
-                                ))}
+                                {/* Cardio Activities (from universalActivities - Strava, Garmin, etc.) */}
+                                {dayCardioActivities.map((act) => {
+                                    // Map activity type to Swedish label
+                                    const typeLabels: Record<string, string> = {
+                                        running: 'Löpning',
+                                        cycling: 'Cykling',
+                                        swimming: 'Simning',
+                                        walking: 'Promenad',
+                                        other: 'Aktivitet'
+                                    };
+                                    const typeLabel = typeLabels[act.performance?.activityType || 'other'] || 'Aktivitet';
 
-                                {/* Strength Sessions (separate from exerciseEntries) */}
+                                    return (
+                                        <div
+                                            key={`cardio-${act.id}`}
+                                            onClick={() => updateUrlParams({ activityId: act.id })}
+                                            className="p-3 bg-emerald-500/10 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl relative cursor-pointer hover:bg-emerald-500/20 transition-colors z-10"
+                                        >
+                                            <div className="flex justify-between items-start mb-1">
+                                                <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider flex items-center gap-1">
+                                                    <Check size={10} />
+                                                    {typeLabel}
+                                                    {act.performance?.source?.source === 'strava' && (
+                                                        <span className="text-[#FC4C02]" title="Strava">🔥</span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
+                                                {act.performance?.distanceKm ? `${act.performance.distanceKm.toFixed(1)} km` : ''}
+                                                {act.performance?.durationMinutes ? ` ${formatDurationHHMM(act.performance.durationMinutes)}` : ''}
+                                            </p>
+                                        </div>
+                                    );
+                                })}
+
                                 {dayStrengthSessions.map(session => {
                                     // Fallback: If no duration in Strength Session (common for StrengthLog imports),
                                     // try to find a matching Strava activity on the same day to borrow duration from.
@@ -611,6 +650,29 @@ export function TrainingPlanningPage() {
                                         </div>
                                     );
                                 })}
+
+                                {/* Strava Strength Activities (from universalActivities) */}
+                                {dayStravaStrengthActivities.map(act => (
+                                    <div
+                                        key={`strava-str-${act.id}`}
+                                        onClick={() => updateUrlParams({ activityId: act.id })}
+                                        className="p-3 bg-purple-500/10 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl relative cursor-pointer hover:bg-purple-500/20 transition-colors z-10"
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1">
+                                                <Dumbbell size={10} />
+                                                Styrka
+                                                <span className="text-[#FC4C02]" title="Strava">🔥</span>
+                                            </span>
+                                        </div>
+                                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
+                                            {act.performance?.notes || 'Styrkepass'}
+                                        </p>
+                                        <p className="text-[10px] text-slate-500 mt-1">
+                                            {act.performance?.durationMinutes ? formatDurationHHMM(act.performance.durationMinutes) : '-'}
+                                        </p>
+                                    </div>
+                                ))}
 
                                 {/* Planned Activities - Clickable for edit */}
                                 {dayActivities.map(act => {
@@ -647,6 +709,13 @@ export function TrainingPlanningPage() {
                                                 {isRace && act.title && <span className="font-bold block mb-0.5">{act.title}</span>}
                                                 {act.description}
                                             </p>
+                                            {/* Start Time Indicator  */}
+                                            {act.startTime && (
+                                                <div className="flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400 font-bold mt-1">
+                                                    <Clock size={10} />
+                                                    {act.startTime}
+                                                </div>
+                                            )}
                                             <div className="flex flex-col gap-1 mt-1">
                                                 {/* Running Stats */}
                                                 {(act.estimatedDistance || 0) > 0 && (

@@ -13,6 +13,23 @@ export default defineConfig({
     resolve: {
         dedupe: ['react', 'react-dom'],
     },
+    // Custom logger to suppress AbortError spam
+    customLogger: {
+        info: console.info,
+        warn: console.warn,
+        warnOnce: console.warn,
+        error: (msg, options) => {
+            // Suppress AbortError proxy messages
+            if (msg.includes('http proxy error') &&
+                (msg.includes('AbortError') || msg.includes('cancelled') || msg.includes('aborted'))) {
+                return;
+            }
+            console.error(msg, options?.error || '');
+        },
+        clearScreen: () => { },
+        hasErrorLogged: () => false,
+        hasWarned: false,
+    },
     server: {
         port: 3000,
         host: '0.0.0.0',
@@ -21,21 +38,28 @@ export default defineConfig({
             '/api': {
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
+                // Suppress proxy errors in Vite's default handler
                 configure: (proxy, _options) => {
-                    // Remove Vite's default error handler to prevent noisy logs
+                    // Remove ALL event listeners to prevent Vite's default noisy logging
                     proxy.removeAllListeners('error');
+                    proxy.removeAllListeners('proxyReq');
+                    proxy.removeAllListeners('proxyRes');
 
+                    // Silent error handler - only log real errors
                     proxy.on('error', (err, _req, _res) => {
-                        // Suppress AbortError / ECONNRESET which happens on browser reload/cancel
-                        if (err.message.includes('req') && err.message.includes('cancelled')) return;
-                        if (err.message.includes('The request has been cancelled')) return;
-                        console.error('Proxy error:', err);
+                        const errMessage = err?.message || '';
+                        const errName = err?.name || '';
 
-                        // Ensure we close the response if not closed
-                        if (!_res.headersSent) {
-                            _res.writeHead(500, { 'Content-Type': 'application/json' });
-                        }
-                        _res.end(JSON.stringify({ error: 'Proxy Error' }));
+                        // Silently ignore AbortError / cancel / reset errors
+                        if (errName === 'AbortError') return;
+                        if (errMessage.includes('cancelled')) return;
+                        if (errMessage.includes('aborted')) return;
+                        if (errMessage.includes('ECONNRESET')) return;
+                        if (errMessage.includes('socket hang up')) return;
+                        if (errMessage.includes('ECONNREFUSED')) return;
+
+                        // Only log unexpected errors
+                        console.error('[Proxy]', errMessage);
                     });
                 }
             }

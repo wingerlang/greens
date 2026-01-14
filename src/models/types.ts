@@ -1205,6 +1205,7 @@ export interface PlannedActivity {
 
     // Hyrox specific
     includesRunning?: boolean;
+    hyroxFocus?: 'hybrid' | 'strength' | 'cardio';
     startTime?: string; // HH:mm
 }
 
