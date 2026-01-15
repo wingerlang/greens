@@ -42,7 +42,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(view)
-            }).catch(e => console.error("Analytics view log failed", e));
+            }).catch(e => console.debug("Analytics view log failed", e));
         }
 
         // Reset for new page
@@ -83,7 +83,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(event)
-                }).catch(e => console.error("Analytics event log failed", e));
+                }).catch(e => console.debug("Analytics event log failed", e));
             }
         };
 
@@ -113,7 +113,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(event)
-        }).catch(e => console.error("Analytics custom log failed", e));
+        }).catch(e => console.debug("Analytics custom log failed", e));
     };
 
     return (

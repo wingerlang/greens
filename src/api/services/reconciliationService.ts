@@ -1,6 +1,6 @@
 import { UniversalActivity } from '../../models/types.ts';
 import { activityRepo } from '../repositories/activityRepository.ts';
-import { createUniversalFromStrava, mapStravaToPerformance, StravaActivity, getAllStravaActivities } from '../strava.ts';
+import { createUniversalFromStrava, mapStravaToPerformance, StravaActivity, getAllStravaActivities, calculateStravaCalories } from '../strava.ts';
 import { FeedRepository } from '../repositories/feedRepository.ts';
 import { getUserById } from '../db/user.ts';
 
@@ -102,10 +102,10 @@ export class ReconciliationService {
                     const planMatch = this.findBestMatch(stravaActivity, candidates.filter(c => c.status === 'PLANNED'));
 
                     if (planMatch) {
-                        await this.mergeActivity(planMatch, stravaActivity);
+                        await this.mergeActivity(planMatch, stravaActivity, user?.settings);
                         created++; // Count as created/synced
                     } else {
-                        const newActivity = createUniversalFromStrava(stravaActivity, userId);
+                        const newActivity = createUniversalFromStrava(stravaActivity, userId, user?.settings);
                         await activityRepo.saveActivity(newActivity);
                         created++;
                     }
@@ -120,7 +120,7 @@ export class ReconciliationService {
                     // We just update the `performance` section.
 
                     // Update performance data
-                    const freshPerformance = mapStravaToPerformance(stravaActivity);
+                    const freshPerformance = mapStravaToPerformance(stravaActivity, user?.settings);
 
                     // Maintain existing sub-fields if needed? 
                     // Usually fresh mapped data is better.
@@ -186,15 +186,15 @@ export class ReconciliationService {
 
             if (match) {
                 // MERGE
-                await this.mergeActivity(match, stravaActivity);
+                await this.mergeActivity(match, stravaActivity, user?.settings);
                 merged++;
-                await this.emitStravaFeedEvent(userId, stravaActivity, privacy);
+                await this.emitStravaFeedEvent(userId, stravaActivity, user);
             } else {
                 // IMPORT AS NEW
-                const newActivity = createUniversalFromStrava(stravaActivity, userId);
+                const newActivity = createUniversalFromStrava(stravaActivity, userId, user?.settings);
                 await activityRepo.saveActivity(newActivity);
                 imported++;
-                await this.emitStravaFeedEvent(userId, stravaActivity, privacy);
+                await this.emitStravaFeedEvent(userId, stravaActivity, user);
             }
         }
 
@@ -234,9 +234,9 @@ export class ReconciliationService {
     /**
      * Merge logic
      */
-    private async mergeActivity(target: UniversalActivity, source: StravaActivity) {
+    private async mergeActivity(target: UniversalActivity, source: StravaActivity, userSettings?: any) {
         target.status = 'COMPLETED';
-        target.performance = mapStravaToPerformance(source);
+        target.performance = mapStravaToPerformance(source, userSettings);
         target.updatedAt = new Date().toISOString();
         await activityRepo.saveActivity(target);
     }
@@ -244,7 +244,9 @@ export class ReconciliationService {
     /**
      * Helper to emit a feed event for a Strava activity
      */
-    private async emitStravaFeedEvent(userId: string, activity: StravaActivity, privacy: any) {
+    private async emitStravaFeedEvent(userId: string, activity: StravaActivity, user: any) {
+        const privacy = user?.privacy;
+        const userSettings = user?.settings;
         // Only emit if recent (last 3 days)
         const date = new Date(activity.start_date_local);
         const now = new Date();
@@ -281,7 +283,7 @@ export class ReconciliationService {
                 exerciseType: appType,
                 duration: durationMin,
                 distance: distanceKm,
-                calories: activity.calories || (durationMin * 8),
+                calories: calculateStravaCalories(activity, userSettings),
                 intensity: 'moderate'
             },
             visibility: visibility as any,
@@ -289,7 +291,7 @@ export class ReconciliationService {
             metrics: [
                 { label: 'Tid', value: durationMin, unit: 'min', icon: '⏱️' },
                 ...(distanceKm ? [{ label: 'Distans', value: distanceKm.toFixed(1), unit: 'km', icon: '📍' }] : []),
-                { label: 'Energi', value: Math.round(activity.calories || (durationMin * 8)), unit: 'kcal', icon: '🔥' }
+                { label: 'Energi', value: Math.round(calculateStravaCalories(activity, userSettings)), unit: 'kcal', icon: '🔥' }
             ]
         });
     }

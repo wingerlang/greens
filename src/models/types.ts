@@ -572,6 +572,7 @@ export interface ExerciseEntry {
     durationMinutes: number;
     intensity: ExerciseIntensity;
     caloriesBurned: number;
+    calorieBreakdown?: string;
     notes?: string;
     excludeFromStats?: boolean;
     elapsedTimeSeconds?: number;
@@ -1044,6 +1045,7 @@ export interface ActivityPerformanceSection {
     elapsedTimeSeconds?: number;
     distanceKm?: number;
     calories: number;
+    calorieBreakdown?: string;
     excludeFromStats?: boolean;
 
     // Physiological
@@ -1440,6 +1442,7 @@ export interface AppSettings {
         hyrox: boolean;
     };
     longRunThreshold?: number; // km
+    incompleteDays?: Record<string, boolean>; // Map of date (YYYY-MM-DD) -> isIncomplete
 }
 
 /** Category display labels (Swedish, vegan only) */

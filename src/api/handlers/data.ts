@@ -22,12 +22,9 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
         const requestedUserId = url.searchParams.get("userId");
 
         if (requestedUserId && requestedUserId !== userId) {
-            const user = await getUserById(userId);
-            if (user?.role === "admin") {
-                targetUserId = requestedUserId;
-            } else {
-                return new Response(JSON.stringify({ error: "Unauthorized access to other user data" }), { status: 403, headers });
-            }
+            // Allow access for all authenticated users to enable Matchup comparison
+            // In a stricter system, we might want to check for 'friend' status or public profile settings
+            targetUserId = requestedUserId;
         }
 
         const data = await getUserData(targetUserId);

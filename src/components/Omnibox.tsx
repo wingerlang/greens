@@ -205,7 +205,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         addExercise,
         calculateExerciseCalories,
         users,
-        addBodyMeasurement
+        addBodyMeasurement,
+        selectedDate
     } = useData();
 
 
@@ -488,7 +489,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
     const logFoodItem = (item: FoodItem, quantity: number = 100) => {
         // Use draft values (from locked food mode), or parsed intent, or defaults
-        const logDate = draftFoodDate || intent.date || new Date().toISOString().split('T')[0];
+        const logDate = draftFoodDate || intent.date || selectedDate || new Date().toISOString().split('T')[0];
 
         // Use draft mealType, or parsed mealType from intent, or calculate from time
         let mealType: MealType = 'snack';
@@ -580,7 +581,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         const type = draftType || intent.data.exerciseType || 'other';
         const duration = draftDuration || intent.data.duration || 30;
         const intensity = draftIntensity || intent.data.intensity || 'moderate';
-        const date = intent.date || new Date().toISOString().split('T')[0];
+        const date = intent.date || selectedDate || new Date().toISOString().split('T')[0];
 
         const calories = calculateExerciseCalories(type, duration, intensity);
         addExercise({
@@ -604,7 +605,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     const handleVitalsAction = () => {
         if (intent.type !== 'vitals') return;
 
-        const date = intent.date || new Date().toISOString().split('T')[0];
+        const date = intent.date || selectedDate || new Date().toISOString().split('T')[0];
         const amount = draftVitalAmount || intent.data.amount || 0;
         const vType = intent.data.vitalType;
 
@@ -626,7 +627,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
         const type = draftMeasurementType || intent.data.measurementType;
         const value = draftMeasurementValue || intent.data.value;
-        const date = draftMeasurementDate || intent.date || new Date().toISOString().split('T')[0];
+        const date = draftMeasurementDate || intent.date || selectedDate || new Date().toISOString().split('T')[0];
 
         if (!type || !value) return;
 
@@ -679,7 +680,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             navigate(intent.data.path);
             onClose();
         } else if (intent.type === 'weight') {
-            const date = intent.date || new Date().toISOString().split('T')[0];
+            const date = intent.date || selectedDate || new Date().toISOString().split('T')[0];
             addWeightEntry(intent.data.weight, date);
             setShowFeedback(true);
             setInput('');

@@ -47,28 +47,47 @@ export function useDebugInterceptor() {
         const originalFetch = window.fetch;
 
         window.fetch = async (...args) => {
-            const response = await originalFetch(...args);
+            try {
+                const response = await originalFetch(...args);
 
-            const debugId = response.headers.get('X-Debug-Id');
-            if (debugId) {
+                const debugId = response.headers.get('X-Debug-Id');
+                if (debugId) {
+                    const url = args[0] instanceof Request ? args[0].url : String(args[0]);
+                    // Strip host if possible
+                    const path = url.replace(/^https?:\/\/[^\/]+/, '');
+                    const method = args[0] instanceof Request ? args[0].method : (args[1]?.method || 'GET');
+
+                    const summary: RequestSummary = {
+                        id: debugId,
+                        method,
+                        url: path,
+                        status: response.status,
+                        timestamp: Date.now()
+                    };
+
+                    setRequests(prev => [summary, ...prev].slice(0, 50));
+                    setLatestId(debugId);
+                }
+
+                return response;
+            } catch (error) {
+                // Log failed request
                 const url = args[0] instanceof Request ? args[0].url : String(args[0]);
-                // Strip host if possible
                 const path = url.replace(/^https?:\/\/[^\/]+/, '');
                 const method = args[0] instanceof Request ? args[0].method : (args[1]?.method || 'GET');
 
                 const summary: RequestSummary = {
-                    id: debugId,
+                    id: `error-${Date.now()}`,
                     method,
                     url: path,
-                    status: response.status,
+                    status: 0, // 0 usually indicates network error
                     timestamp: Date.now()
                 };
 
                 setRequests(prev => [summary, ...prev].slice(0, 50));
-                setLatestId(debugId);
-            }
 
-            return response;
+                throw error;
+            }
         };
 
         return () => {

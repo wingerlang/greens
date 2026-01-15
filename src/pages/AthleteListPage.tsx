@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useCoachAthlete } from '../../context/CoachAthleteContext.tsx';
-import { CoachAthleteRelation } from '../../models/types.ts';
+import { useCoachAthlete } from '../context/CoachAthleteContext.tsx';
+import { CoachAthleteRelation } from '../models/types.ts';
 
 export function AthleteListPage() {
     const { mode, getMyAthletes, getMyCoach, inviteAthlete, removeAthlete, acceptInvitation, declineInvitation, relations } = useCoachAthlete();

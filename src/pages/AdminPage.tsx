@@ -12,6 +12,7 @@ import { ApiPage } from './ApiPage.tsx';
 import { DocumentationPage } from '../components/DocumentationPage.tsx';
 import { BackupModule } from '../components/admin/backup/BackupModule.tsx';
 import { AnalyticsDashboard } from './admin/AnalyticsDashboard.tsx';
+import { SessionsModule } from '../components/admin/SessionsModule.tsx';
 
 export const AdminPage: React.FC = () => {
     const { foodItems, recipes, updateFoodItem } = useData();
@@ -74,6 +75,12 @@ export const AdminPage: React.FC = () => {
             {/* Tab Navigation */}
             <div className="flex border-b border-slate-800 gap-6 overflow-x-auto no-scrollbar">
                 <button
+                    onClick={() => setActiveTab('sessions')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'sessions' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    📡 Sessions
+                </button>
+                <button
                     onClick={() => setActiveTab('health')}
                     className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'health' ? 'text-emerald-400 border-b-2 border-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
                 >
@@ -114,6 +121,12 @@ export const AdminPage: React.FC = () => {
             {activeTab === 'analytics' && (
                 <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                     <AnalyticsDashboard />
+                </div>
+            )}
+
+            {activeTab === 'sessions' && (
+                <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                    <SessionsModule />
                 </div>
             )}
 

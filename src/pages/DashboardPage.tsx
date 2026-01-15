@@ -34,7 +34,8 @@ import { ActiveGoalsCard } from '../components/dashboard/ActiveGoalsCard.tsx';
 import { DailySummaryCard } from '../components/dashboard/DailySummaryCard.tsx';
 import { StravaActivityImportModal } from '../components/integrations/StravaActivityImportModal.tsx';
 import { RefreshCw } from 'lucide-react';
-import { CaffeineCard, WeightSparkline } from '../components/dashboard';
+import { CaffeineCard } from '../components/dashboard';
+import { WeightTrendChart } from '../components/charts/WeightTrendChart.tsx';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -316,10 +317,12 @@ export function DashboardPage() {
         performanceGoals,
         toggleIncompleteDay,
         toggleCompleteDay,
-        dailyVitals
+        dailyVitals,
+        selectedDate,
+        setSelectedDate
     } = useData();
 
-    const [selectedDate, setSelectedDate] = useState(getISODate());
+    // Removed local state: const [selectedDate, setSelectedDate] = useState(getISODate());
     const health = useHealth(selectedDate);
     const today = getISODate();
 
@@ -342,11 +345,9 @@ export function DashboardPage() {
     const [isHoveringChart, setIsHoveringChart] = useState(false);
 
     const changeDate = (days: number) => {
-        setSelectedDate(prev => {
-            const d = new Date(prev);
-            d.setDate(d.getDate() + days);
-            return d.toISOString().split('T')[0];
-        });
+        const d = new Date(selectedDate);
+        d.setDate(d.getDate() + days);
+        setSelectedDate(d.toISOString().split('T')[0]);
     };
 
     // --- Derived Data: Weight & Measurement Logic (Moved up to avoid TDZ) ---
@@ -1064,7 +1065,7 @@ export function DashboardPage() {
                                     const records = unifiedHistory
                                         .map(h => ({ date: h.date, value: h[type] }))
                                         .filter(r => r.value !== undefined && r.value !== null && r.value !== 0)
-                                        .sort((a, b) => a.date.localeCompare(b.date));
+                                        .sort((a, b) => a.date.localeCompare(b.date)) as { date: string, value: number }[];
 
                                     if (records.length === 0) return null;
 
@@ -1598,7 +1599,7 @@ export function DashboardPage() {
 
                     {/* Health Metrics Card - Expanded */}
 
-                    <div className={`col-span-12 md:col-span-8 lg:col-span-8 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
+                    <div className={`col-span-12 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
                         <div className={`h-full ${density === 'compact' ? 'p-2' : 'p-6'} bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col`}>
                             <div className="relative z-10 flex flex-col h-full">
                                 {/* Header with Title and Range Selector */}
@@ -1654,7 +1655,7 @@ export function DashboardPage() {
 
                                     {/* Waist Detail */}
                                     <div className="cursor-pointer group/stat border-l border-slate-100 dark:border-white/5 pl-3 flex flex-col justify-center" onClick={() => {
-                                        setTempValue((latest3Weights[0]?.weight || "").toString());
+                                        setTempValue((unifiedHistory[0]?.weight || "").toString());
                                         setTempWaist((latestWaist || "").toString());
                                         setTempChest((latestChest || "").toString());
                                         setIsWeightModalOpen(true);
@@ -1698,26 +1699,30 @@ export function DashboardPage() {
 
                                 {/* Sparkline Visual */}
                                 <div className="bg-slate-50 dark:bg-white/[0.02] rounded-3xl p-4 border border-slate-100 dark:border-white/5 relative w-full">
-                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2">Trendkurva</div>
-                                    <div className="h-64 aspect-[4/3]">
-                                        <WeightSparkline
-                                            data={weightTrendEntries}
-                                            dates={weightTrendEntries.map(e => e.date)}
-                                            onPointClick={(idx) => {
-                                                const entry = weightTrendEntries[idx];
-                                                if (entry) {
-                                                    setTempValue(entry.weight > 0 ? entry.weight.toString() : "");
-                                                    setTempWaist((entry.waist || "").toString());
-                                                    setTempChest((entry.chest || "").toString());
-                                                    setSelectedDate(entry.date);
-                                                    setIsWeightModalOpen(true);
-                                                }
+                                    <div className="absolute inset-0 flex items-center justify-center opacity-[0.03] pointer-events-none select-none overflow-hidden">
+                                        <span className="text-[120px] leading-none">⚖️</span>
+                                    </div>
+                                    <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mb-2 relative z-10">Trendkurva</div>
+                                    <div className="h-64 aspect-[3/1] w-full relative z-10">
+                                        <WeightTrendChart
+                                            entries={weightTrendEntries.map((e, i) => ({
+                                                id: `entry-${i}`,
+                                                date: e.date,
+                                                weight: e.weight || 0,
+                                                waist: e.waist,
+                                                chest: e.chest,
+                                                createdAt: e.date
+                                            }))}
+                                            currentWeight={latestWeightVal || 0}
+                                            hideHeader={true}
+                                            onEntryClick={(entry) => {
+                                                setTempValue(entry.weight > 0 ? entry.weight.toString() : "");
+                                                setTempWaist((entry.waist || "").toString());
+                                                setTempChest((entry.chest || "").toString());
+                                                setSelectedDate(entry.date);
+                                                setIsWeightModalOpen(true);
                                             }}
                                         />
-                                    </div>
-                                    <div className="flex justify-between items-end mt-2 px-1">
-                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{weightTrendEntries[0]?.date || ''}</span>
-                                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{weightTrendEntries[weightTrendEntries.length - 1]?.date || ''}</span>
                                     </div>
                                 </div>
 

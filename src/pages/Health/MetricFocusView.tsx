@@ -3,6 +3,7 @@ import { useData } from '../../context/DataContext.tsx';
 import { useSettings } from '../../context/SettingsContext.tsx';
 import { DaySnapshot, HealthStats } from '../../utils/healthAggregator.ts';
 import { WeightEntry, DailyVitals, BodyMeasurementType, BodyMeasurementEntry } from '../../models/types.ts';
+import { HealthHistoryGraph } from '../../components/health/HealthHistoryGraph.tsx';
 
 interface MetricFocusViewProps {
     type: 'sleep' | 'weight' | BodyMeasurementType;
@@ -212,67 +213,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
 
     const themeColor = isWeight ? '#f43f5e' : (isSleep ? '#0ea5e9' : (measurementInfo?.color || '#10b981'));
 
-    // Advanced Graph Calculations
-    const graphMeta = useMemo(() => {
-        const validPoints = snapshots.map((s, i) => {
-            let val = 0;
-            if (isWeight) val = s.weight || 0;
-            else if (isSleep) val = s.vitals.sleep || 0;
-            else {
-                // For measurements, we might need more granular data than snapshots if we want to show multiple per day.
-                // But for the graph, showing the average per day from snapshots (if available) or calculation is fine.
-                // Actually, let's calculate the average for this specific type on this day.
-                const dayEntries = groupedTableData.find(g => g.date === s.date);
-                val = dayEntries?.average || 0;
-            }
-            return { val, date: s.date, i };
-        }).filter(p => p.val !== undefined && p.val > 0) as { val: number, date: string, i: number }[];
 
-        if (validPoints.length === 0) return { min: 0, max: 10, range: 10, points: [], trendPoints: [] };
-
-        let min = Math.min(...validPoints.map(p => p.val));
-        let max = Math.max(...validPoints.map(p => p.val));
-
-        // Add padding
-        const padding = (max - min) * 0.2 || 2;
-        min = Math.floor(min - padding);
-        max = Math.ceil(max + padding);
-
-        // Ensure sleep axis makes sense
-        if (!isWeight) {
-            min = Math.max(0, min);
-            max = Math.max(12, max); // Always show up to 12h at least
-        }
-
-        const range = max - min;
-
-        // Calculate Trend Line (Moving Average - 5 points)
-        // Or simple exponential smoothing for smoother curve
-        const trendPoints = snapshots.map((s, i) => {
-            if (!isWeight) return null; // Only trend for weight for now
-
-            // Get window of past valid weights
-            const windowSize = 7;
-            const pastWeights = snapshots
-                .slice(Math.max(0, i - windowSize + 1), i + 1)
-                .filter(snap => snap.weight !== undefined)
-                .map(snap => snap.weight!);
-
-            if (pastWeights.length === 0) return null;
-
-            const avg = pastWeights.reduce((a, b) => a + b, 0) / pastWeights.length;
-            return { val: avg, i };
-        }).filter(p => p !== null) as { val: number, i: number }[];
-
-
-        return {
-            min,
-            max,
-            range,
-            points: validPoints,
-            trendPoints
-        };
-    }, [snapshots, isWeight]);
 
     // Comparison Stats
     const comparisonStats = useMemo(() => {
@@ -310,18 +251,7 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
     }, [weightEntries, snapshots, isWeight]);
 
 
-    const getY = (val: number) => 100 - ((val - graphMeta.min) / graphMeta.range) * 100;
-    const getX = (index: number) => (index / (snapshots.length - 1)) * 100;
 
-    // Helper for multi-entry lookup
-    const getEntriesForIndex = (index: number) => {
-        const date = snapshots[index]?.date;
-        if (!date) return [];
-        if (isWeight) {
-            return weightEntries.filter(w => w.date === date);
-        }
-        return []; // Sleep is single-entry
-    };
 
     return (
         <div className="metric-focus-view animate-in zoom-in-95 duration-300 flex flex-col gap-6">
@@ -338,205 +268,13 @@ export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusVie
                 </div>
 
                 <div className="p-8 relative">
-                    <div className="h-[400px] md:h-[600px] w-full relative flex gap-6">
-                        {/* Y-Axis Labels - Using absolute positioning for precision */}
-                        <div className="absolute -left-10 top-0 bottom-0 w-8 flex flex-col items-end text-[10px] text-slate-500 font-bold pointer-events-none">
-                            <span className="absolute top-0 transform -translate-y-1/2">{graphMeta.max}</span>
-                            <span className="absolute top-1/2 transform -translate-y-1/2">{Math.round(graphMeta.min + graphMeta.range / 2)}</span>
-                            <span className="absolute bottom-0 transform translate-y-1/2">{graphMeta.min}</span>
-                        </div>
-
-                        {/* Interactive Graph Area */}
-                        <svg
-                            className="w-full h-full z-10 overflow-visible"
-                            preserveAspectRatio="none"
-                            onMouseLeave={() => setHoverIndex(null)}
-                        >
-                            {/* Grid Lines aligned with labels */}
-                            <line x1="0" y1="0%" x2="100%" y2="0%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-                            <line x1="0" y1="50%" x2="100%" y2="50%" stroke="rgba(255,255,255,0.03)" strokeWidth="1" strokeDasharray="4 4" />
-                            <line x1="0" y1="100%" x2="100%" y2="100%" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
-
-                            {/* Goal Line Sömn (8h) */}
-                            {!isWeight && (
-                                <line
-                                    x1="0"
-                                    y1={`${getY(8)}%`}
-                                    x2="100%"
-                                    y2={`${getY(8)}%`}
-                                    stroke="#10b981"
-                                    strokeWidth="1"
-                                    strokeDasharray="4 2"
-                                    opacity="0.5"
-                                />
-                            )}
-
-                            {/* Data Rendering */}
-                            {isWeight ? (
-                                <>
-                                    {/* Trend Line (Solid) */}
-                                    {graphMeta.trendPoints.length > 1 && (
-                                        <path
-                                            d={`M ${graphMeta.trendPoints.map(p => `${getX(p.i)} ${getY(p.val)}`).join(' L ')}`}
-                                            fill="none"
-                                            stroke={themeColor}
-                                            strokeWidth="4"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            className="drop-shadow-lg opacity-90"
-                                        />
-                                    )}
-
-                                    {/* Raw Data Line (Dashed) */}
-                                    <path
-                                        d={graphMeta.points.length > 1 ?
-                                            `M ${graphMeta.points.map(p => `${getX(p.i)} ${getY(p.val)}`).join(' L ')}`
-                                            : ''}
-                                        fill="none"
-                                        stroke={themeColor}
-                                        strokeWidth="2"
-                                        strokeDasharray="4 4"
-                                        strokeOpacity="0.5"
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                    />
-
-                                    {/* Dots for all points */}
-                                    {graphMeta.points.map((p, idx) => (
-                                        <circle
-                                            key={idx}
-                                            cx={`${getX(p.i)}%`}
-                                            cy={`${getY(p.val)}%`}
-                                            r="3"
-                                            fill="#1e293b"
-                                            stroke={themeColor}
-                                            strokeWidth="2"
-                                        />
-                                    ))}
-                                </>
-                            ) : (
-                                // Sleep Bars
-                                snapshots.map((s, i) => {
-                                    const val = s.vitals.sleep || 0;
-                                    if (val === 0) return null;
-                                    return (
-                                        <rect
-                                            key={i}
-                                            x={`${getX(i) - (40 / snapshots.length)}%`} // Center roughly
-                                            y={`${getY(val)}%`}
-                                            width={`${80 / snapshots.length}%`}
-                                            height={`${100 - getY(val)}%`}
-                                            fill={val >= 8 ? themeColor : 'rgba(14,165,233,0.4)'}
-                                            rx="2"
-                                        />
-                                    );
-                                })
-                            )}
-
-                            {/* Hover/Click Overlay Columns */}
-                            {snapshots.map((s, i) => (
-                                <rect
-                                    key={i}
-                                    x={`${getX(i) - (50 / snapshots.length)}%`}
-                                    y="0"
-                                    width={`${100 / snapshots.length}%`}
-                                    height="100%"
-                                    fill="transparent"
-                                    onMouseEnter={() => setHoverIndex(i)}
-                                    // Only allow new entry if no data exists for this day
-                                    onClick={() => (!isWeight || s.weight === undefined) && handleNewEntry(s.date)}
-                                    className={`${(!isWeight || s.weight === undefined) ? 'cursor-pointer hover:bg-white/5' : ''} transition-colors`}
-                                />
-                            ))}
-
-                            {/* Active Hover Tooltip */}
-                            {hoverIndex !== null && snapshots[hoverIndex] && (
-                                <g>
-                                    <line
-                                        x1={`${getX(hoverIndex)}%`}
-                                        y1="0"
-                                        x2={`${getX(hoverIndex)}%`}
-                                        y2="100%"
-                                        stroke="white"
-                                        strokeOpacity="0.1"
-                                    />
-                                </g>
-                            )}
-                        </svg>
-
-                        {/* HTML Tooltip Overlay */}
-                        {hoverIndex !== null && snapshots[hoverIndex] && (
-                            <div
-                                className="absolute pointer-events-none z-50 bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-xl flex flex-col gap-1 min-w-[120px]"
-                                style={{
-                                    left: `${getX(hoverIndex)}%`,
-                                    top: isWeight && snapshots[hoverIndex].weight ? `${getY(snapshots[hoverIndex].weight!)}%` : '50%',
-                                    transform: 'translate(-50%, -120%)'
-                                }}
-                            >
-                                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{snapshots[hoverIndex].date}</span>
-                                {isWeight && getEntriesForIndex(hoverIndex!).length > 1 ? (
-                                    <>
-                                        <div className="flex items-baseline gap-2">
-                                            <span className="text-xl font-black text-white">
-                                                {snapshots[hoverIndex].weight} kg
-                                            </span>
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 font-bold">
-                                                {getEntriesForIndex(hoverIndex!).length} mätningar
-                                            </span>
-                                        </div>
-                                        <div className="text-[10px] text-slate-500">
-                                            Trend: <span className="text-white font-bold">{graphMeta.trendPoints.find(p => p.i === hoverIndex)?.val.toFixed(1) || '--'} kg</span>
-                                        </div>
-                                        <div className="text-[9px] text-slate-600 mt-1 italic">
-                                            Klicka för att se alla
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="flex items-baseline gap-2">
-                                            <span className="text-xl font-black text-white">
-                                                {isWeight ?
-                                                    (snapshots[hoverIndex].weight ? `${snapshots[hoverIndex].weight} kg` : <span className="text-slate-500 text-sm font-normal">Klicka för att logga</span>) :
-                                                    `${snapshots[hoverIndex].vitals.sleep || 0} h`
-                                                }
-                                            </span>
-                                        </div>
-                                    </>
-                                )}
-                                {isWeight && (
-                                    <div className="text-[10px] text-slate-500">
-                                        Trend: <span className="text-white font-bold">
-                                            {graphMeta.trendPoints.find(p => p.i === hoverIndex)?.val.toFixed(1) || '--'} kg
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* X-Axis Labels */}
-                        <div className="absolute w-full -bottom-6 h-6 relative font-bold text-[10px] text-slate-500">
-                            {snapshots.map((s, i) => {
-                                // Show every other label, but ALWAYS ensure the last one is visible
-                                // Hide the second-to-last if it would overlap with the last (i.e. if length-2 is even)
-                                const isLast = i === snapshots.length - 1;
-                                const isSecondToLast = i === snapshots.length - 2;
-                                const show = (i % 2 === 0 && !isSecondToLast) || isLast;
-
-                                if (!show) return null;
-
-                                return (
-                                    <div
-                                        key={i}
-                                        className="absolute transform -translate-x-1/2 whitespace-nowrap"
-                                        style={{ left: `${getX(i)}%` }}
-                                    >
-                                        {s.date.slice(5)}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
+                    <HealthHistoryGraph
+                        snapshots={snapshots}
+                        days={days}
+                        height={isWeight ? 'h-[400px] md:h-[600px]' : 'h-[300px]'}
+                        primaryMetric={isWeight ? 'weight' : 'sleep'}
+                        themeColor={themeColor}
+                    />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-4 border-t border-white/5 bg-slate-950/40">

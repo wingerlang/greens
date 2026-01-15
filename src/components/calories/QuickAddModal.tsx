@@ -60,6 +60,7 @@ interface QuickAddModalProps {
     quickAddServings: number;
     setQuickAddServings: (val: number) => void;
     handleQuickAdd: (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number) => void;
+    selectedDate?: string;
 }
 
 export function QuickAddModal({
@@ -74,6 +75,7 @@ export function QuickAddModal({
     quickAddServings,
     setQuickAddServings,
     handleQuickAdd,
+    selectedDate,
 }: QuickAddModalProps) {
     // Track which items are toggled to "cooked" mode
     const [cookedItems, setCookedItems] = useState<Set<string>>(new Set());
@@ -198,10 +200,47 @@ export function QuickAddModal({
         );
     };
 
+    // Date helpers
+    const today = new Date().toISOString().split('T')[0];
+    const isToday = !selectedDate || selectedDate === today;
+    const getRelativeDateLabel = (dateStr: string) => {
+        if (dateStr === today) return 'Idag';
+        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        if (dateStr === yesterday) return 'Igår';
+        const diff = Math.floor((new Date(today).getTime() - new Date(dateStr).getTime()) / 86400000);
+        if (diff < 7) return `${diff} dgr sen`;
+        return dateStr;
+    };
+
     return (
         <div className="modal-overlay" onClick={onClose}>
             <div className="modal quick-add-modal" onClick={(e) => e.stopPropagation()}>
                 <h2>🔍 Sök och lägg till</h2>
+
+                {/* Date indicator - prominent when not today */}
+                {selectedDate && (
+                    <div className={`mb-4 px-4 py-3 rounded-xl border flex items-center gap-3 ${isToday
+                            ? 'bg-slate-800/50 border-slate-700'
+                            : 'bg-amber-900/20 border-amber-500/30'
+                        }`}>
+                        <div className={`text-xl ${isToday ? 'opacity-50' : ''}`}>
+                            {isToday ? '📅' : '⏮️'}
+                        </div>
+                        <div>
+                            <div className={`text-sm font-bold ${isToday ? 'text-slate-400' : 'text-amber-400'}`}>
+                                {getRelativeDateLabel(selectedDate)}
+                            </div>
+                            <div className="text-[10px] text-slate-500">
+                                {new Date(selectedDate).toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                            </div>
+                        </div>
+                        {!isToday && (
+                            <div className="ml-auto text-[9px] font-bold text-amber-500 uppercase tracking-wider bg-amber-500/20 px-2 py-1 rounded-lg">
+                                Historik
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Meal Type Selector */}
                 <div className="form-group">

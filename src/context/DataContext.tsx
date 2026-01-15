@@ -54,6 +54,7 @@ import { generateTrainingPlan } from '../services/coach/planGenerator.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { slugify } from '../utils/formatters.ts';
 import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
+import { safeFetch } from '../utils/http.ts';
 
 // ============================================
 // Context Types
@@ -70,6 +71,10 @@ interface DataContextType {
     userSettings: AppSettings;
     users: User[];
     currentUser: User | null;
+
+    // Global UI State
+    selectedDate: string;
+    setSelectedDate: (date: string) => void;
 
     // User CRUD
     setCurrentUser: (user: User | null) => void;
@@ -233,6 +238,7 @@ export function DataProvider({ children }: DataProviderProps) {
     });
     const [users, setUsers] = useState<User[]>([]);
     const [currentUser, setCurrentUserState] = useState<User | null>(null);
+    const [selectedDate, setSelectedDate] = useState(getISODate());
     const [dailyVitals, setDailyVitals] = useState<Record<string, DailyVitals>>({});
     const [exerciseEntries, setExerciseEntries] = useState<ExerciseEntry[]>([]);
     const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
@@ -335,37 +341,34 @@ export function DataProvider({ children }: DataProviderProps) {
 
             try {
                 console.log('[DataContext] Fetching /api/users...');
-                const userRes = await fetch('/api/users', {
+                // Use safeFetch
+                const userPayload = await safeFetch<{ users: User[] }>('/api/users', {
                     headers: { 'Authorization': `Bearer ${token}` },
                     signal
                 });
-                if (userRes.ok) {
-                    const userPayload = await userRes.json();
-                    if (userPayload.users && Array.isArray(userPayload.users)) {
-                        console.log('[DataContext] Loaded real users list:', userPayload.users.map((u: User) => u.username));
-                        loadedUsers = userPayload.users;
-                        // Update local cache of users immediately
-                        data.users = loadedUsers;
-                    }
+
+                if (userPayload && userPayload.users && Array.isArray(userPayload.users)) {
+                    console.log('[DataContext] Loaded real users list:', userPayload.users.map(u => u.username));
+                    loadedUsers = userPayload.users;
+                    // Update local cache of users immediately
+                    data.users = loadedUsers;
                 } else {
-                    console.error('[DataContext] Failed to fetch users list:', userRes.status);
+                    console.error('[DataContext] Failed to fetch users list or empty response');
                 }
 
                 // NEW: Also fetch the "me" profile to ensure currentUserId is correct
                 console.log('[DataContext] Fetching /api/auth/me...');
-                const meRes = await fetch('/api/auth/me', {
+                const mePayload = await safeFetch<{ user: User }>('/api/auth/me', {
                     headers: { 'Authorization': `Bearer ${token}` },
                     signal
                 });
-                if (meRes.ok) {
-                    const mePayload = await meRes.json();
-                    if (mePayload.user) {
-                        console.log('[DataContext] Resolved current user:', mePayload.user.username);
-                        data.currentUserId = mePayload.user.id;
-                        // Update the users list with this fresh profile if not already there
-                        if (!loadedUsers.find(u => u.id === mePayload.user.id)) {
-                            loadedUsers.push(mePayload.user);
-                        }
+
+                if (mePayload && mePayload.user) {
+                    console.log('[DataContext] Resolved current user:', mePayload.user.username);
+                    data.currentUserId = mePayload.user.id;
+                    // Update the users list with this fresh profile if not already there
+                    if (!loadedUsers.find(u => u.id === mePayload.user.id)) {
+                        loadedUsers.push(mePayload.user);
                     }
                 }
             } catch (e: unknown) {
@@ -373,6 +376,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 if (e instanceof Error && e.name === 'AbortError') {
                     console.log('[DataContext] Request aborted (expected during re-renders)');
                 } else {
+                    // This will now catch NetworkError from safeFetch
                     console.error('[DataContext] Exception during online sync:', e);
                 }
             }
@@ -385,26 +389,24 @@ export function DataProvider({ children }: DataProviderProps) {
         // EXTRA SYNC: Planned Activities
         if (token) {
             try {
-                const planRes = await fetch('/api/planned-activities', {
+                const planData = await safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (planRes.ok) {
-                    const planData = await planRes.json();
-                    if (planData.activities && Array.isArray(planData.activities)) {
-                        console.log('[DataContext] Loaded planned activities globally:', planData.activities.length);
-                        // Merge with any potentially loaded from monolith (though monolith probably has none if we split)
-                        // Or just override because this is the source of truth for planning now.
-                        // However, monolith might have OLD plans. Let's merge.
-                        const newActivities = planData.activities;
-                        const existing = data.plannedActivities || [];
-                        // merging logic: if ID exists in newActivities, use it. Else keep existing (legacy).
-                        const newIds = new Set(newActivities.map((a: PlannedActivity) => a.id));
-                        const merged = [
-                            ...existing.filter((a: PlannedActivity) => !newIds.has(a.id)),
-                            ...newActivities
-                        ];
-                        data.plannedActivities = merged;
-                    }
+
+                if (planData && planData.activities && Array.isArray(planData.activities)) {
+                    console.log('[DataContext] Loaded planned activities globally:', planData.activities.length);
+                    // Merge with any potentially loaded from monolith (though monolith probably has none if we split)
+                    // Or just override because this is the source of truth for planning now.
+                    // However, monolith might have OLD plans. Let's merge.
+                    const newActivities = planData.activities;
+                    const existing = data.plannedActivities || [];
+                    // merging logic: if ID exists in newActivities, use it. Else keep existing (legacy).
+                    const newIds = new Set(newActivities.map((a: PlannedActivity) => a.id));
+                    const merged = [
+                        ...existing.filter((a: PlannedActivity) => !newIds.has(a.id)),
+                        ...newActivities
+                    ];
+                    data.plannedActivities = merged;
                 }
             } catch (e) {
                 console.error('[DataContext] Failed to fetch planned activities:', e);
@@ -414,22 +416,20 @@ export function DataProvider({ children }: DataProviderProps) {
         if (token) {
             try {
                 // Fetch full strength history to ensure YearInReview has data
-                const strengthRes = await fetch('/api/strength/workouts', {
+                const strengthData = await safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (strengthRes.ok) {
-                    const strengthData = await strengthRes.json();
-                    if (strengthData.workouts && Array.isArray(strengthData.workouts)) {
-                        console.log('[DataContext] Loaded strength workouts globally:', strengthData.workouts.length);
-                        data.strengthSessions = strengthData.workouts;
 
-                        // Update local mirror so next load has it
-                        const stored = localStorage.getItem('greens-app-data');
-                        if (stored) {
-                            const parsed = JSON.parse(stored);
-                            parsed.strengthSessions = strengthData.workouts;
-                            localStorage.setItem('greens-app-data', JSON.stringify(parsed));
-                        }
+                if (strengthData && strengthData.workouts && Array.isArray(strengthData.workouts)) {
+                    console.log('[DataContext] Loaded strength workouts globally:', strengthData.workouts.length);
+                    data.strengthSessions = strengthData.workouts;
+
+                    // Update local mirror so next load has it
+                    const stored = localStorage.getItem('greens-app-data');
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        parsed.strengthSessions = strengthData.workouts;
+                        localStorage.setItem('greens-app-data', JSON.stringify(parsed));
                     }
                 }
             } catch (e) {
@@ -999,6 +999,7 @@ export function DataProvider({ children }: DataProviderProps) {
             ...data,
             id: generateId(),
             createdAt: new Date().toISOString(),
+            calorieBreakdown: data.calorieBreakdown || (data.caloriesBurned > 0 ? `Källhänvisning: Manuellt inlägg\nBeräkning: Baserad på angiven intensitet (${data.intensity}) och längd (${data.durationMinutes} min).` : undefined),
         };
         setExerciseEntries(prev => [...prev, newEntry]);
 
@@ -1037,6 +1038,11 @@ export function DataProvider({ children }: DataProviderProps) {
         if (!existing) return;
 
         const updated = { ...existing, ...updates };
+
+        // If intensity or duration updated and it's a manual entry (or we want to override for manual edits), refresh the breakdown
+        if ((updates.intensity || updates.durationMinutes || updates.caloriesBurned) && !updates.calorieBreakdown) {
+            updated.calorieBreakdown = `Källhänvisning: Manuellt inlägg\nBeräkning: Baserad på angiven intensitet (${updated.intensity}) och längd (${updated.durationMinutes} min).`;
+        }
 
         // Update local exerciseEntries
         setExerciseEntries(prev => prev.map(e => e.id === id ? updated : e));
@@ -1928,6 +1934,8 @@ export function DataProvider({ children }: DataProviderProps) {
         currentUser,
         setCurrentUser,
         updateCurrentUser,
+        selectedDate,
+        setSelectedDate,
         addUser,
         toggleIncompleteDay,
         toggleCompleteDay,
@@ -2140,15 +2148,15 @@ export function DataProvider({ children }: DataProviderProps) {
                     }
                     return a;
                 });
-                
+
                 const completed = next.find(a => a.id === activityId);
                 const original = prev.find(a => a.id === activityId);
 
                 if (completed && original?.status !== 'COMPLETED') {
-                     skipAutoSave.current = true;
-                     storageService.savePlannedActivity(completed).catch(e => console.error("Failed to save completed plan", e));
+                    skipAutoSave.current = true;
+                    storageService.savePlannedActivity(completed).catch(e => console.error("Failed to save completed plan", e));
 
-                     // Automatically add to exercise log
+                    // Automatically add to exercise log
                     addExercise({
                         date: completed.completedDate!,
                         type: 'running',
@@ -2159,33 +2167,33 @@ export function DataProvider({ children }: DataProviderProps) {
                         notes: `Coached Session: ${completed.title}. Feedback: ${feedback || 'None'}`
                     });
                 }
-                
+
                 return next;
             });
         }, [addExercise, calculateExerciseCalories]),
-addCoachGoal: useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
-    const newGoal: CoachGoal = {
-        ...goalData,
-        id: generateId(),
-        createdAt: new Date().toISOString(),
-        isActive: (coachConfig?.goals?.length || 0) === 0 // First goal is active
-    };
-    setCoachConfig(prev => prev ? { ...prev, goals: [...(prev.goals || []), newGoal] } : {
-        userProfile: { maxHr: 190, restingHr: 60 },
-        preferences: { weeklyVolumeKm: 30, longRunDay: 'Sunday', intervalDay: 'Tuesday', trainingDays: [2, 4, 0] },
-        goals: [newGoal]
-    });
-}, [coachConfig]),
-    activateCoachGoal: useCallback((goalId: string) => {
-        setCoachConfig(prev => {
-            if (!prev) return prev;
-            return {
-                ...prev,
-                goals: prev.goals.map(g => ({ ...g, isActive: g.id === goalId }))
+        addCoachGoal: useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
+            const newGoal: CoachGoal = {
+                ...goalData,
+                id: generateId(),
+                createdAt: new Date().toISOString(),
+                isActive: (coachConfig?.goals?.length || 0) === 0 // First goal is active
             };
-        });
-        // Note: Plan regeneration should be triggered by the UI if needed
-    }, []),
+            setCoachConfig(prev => prev ? { ...prev, goals: [...(prev.goals || []), newGoal] } : {
+                userProfile: { maxHr: 190, restingHr: 60 },
+                preferences: { weeklyVolumeKm: 30, longRunDay: 'Sunday', intervalDay: 'Tuesday', trainingDays: [2, 4, 0] },
+                goals: [newGoal]
+            });
+        }, [coachConfig]),
+        activateCoachGoal: useCallback((goalId: string) => {
+            setCoachConfig(prev => {
+                if (!prev) return prev;
+                return {
+                    ...prev,
+                    goals: prev.goals.map(g => ({ ...g, isActive: g.id === goalId }))
+                };
+            });
+            // Note: Plan regeneration should be triggered by the UI if needed
+        }, []),
         deleteCoachGoal: useCallback((goalId: string) => {
             setCoachConfig(prev => {
                 if (!prev) return prev;
@@ -2197,61 +2205,61 @@ addCoachGoal: useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isAct
         }, []),
 
 
-            strengthSessions,
-            addStrengthSession,
-            updateStrengthSession,
-            deleteStrengthSession,
+        strengthSessions,
+        addStrengthSession,
+        updateStrengthSession,
+        deleteStrengthSession,
 
-            // Phase 8: Data Integration
-            sleepSessions,
-            intakeLogs,
-            universalActivities,
+        // Phase 8: Data Integration
+        sleepSessions,
+        intakeLogs,
+        universalActivities,
 
-            addSleepSession: useCallback((session: SleepSession) => {
-                setSleepSessions(prev => {
-                    const filtered = prev.filter(s => s.date !== session.date); // Replace existing/overlap
-                    return [...filtered, session].sort((a, b) => b.date.localeCompare(a.date));
+        addSleepSession: useCallback((session: SleepSession) => {
+            setSleepSessions(prev => {
+                const filtered = prev.filter(s => s.date !== session.date); // Replace existing/overlap
+                return [...filtered, session].sort((a, b) => b.date.localeCompare(a.date));
+            });
+            // Also update simple VITALS for backward compat
+            if (session.durationSeconds) {
+                updateVitals(session.date, {
+                    sleep: parseFloat((session.durationSeconds / 3600).toFixed(1))
                 });
-                // Also update simple VITALS for backward compat
-                if (session.durationSeconds) {
-                    updateVitals(session.date, {
-                        sleep: parseFloat((session.durationSeconds / 3600).toFixed(1))
-                    });
-                }
+            }
 
-                // Life Stream: Add event
-                const hours = session.durationSeconds ? session.durationSeconds / 3600 : 0;
-                emitFeedEvent(
-                    'HEALTH_SLEEP',
-                    'Sömn loggad',
-                    { type: 'HEALTH_SLEEP', hours, score: session.score },
-                    [{ label: 'Tid', value: hours.toFixed(1), unit: 'h', icon: '😴' }]
-                );
-            }, [updateVitals, emitFeedEvent]),
+            // Life Stream: Add event
+            const hours = session.durationSeconds ? session.durationSeconds / 3600 : 0;
+            emitFeedEvent(
+                'HEALTH_SLEEP',
+                'Sömn loggad',
+                { type: 'HEALTH_SLEEP', hours, score: session.score },
+                [{ label: 'Tid', value: hours.toFixed(1), unit: 'h', icon: '😴' }]
+            );
+        }, [updateVitals, emitFeedEvent]),
 
-                // Phase 7: Physio-AI
-                injuryLogs,
-                recoveryMetrics,
-                addInjuryLog,
-                updateInjuryLog,
-                deleteInjuryLog,
-                addRecoveryMetric,
+        // Phase 7: Physio-AI
+        injuryLogs,
+        recoveryMetrics,
+        addInjuryLog,
+        updateInjuryLog,
+        deleteInjuryLog,
+        addRecoveryMetric,
 
-                // Body Measurements
-                bodyMeasurements,
-                addBodyMeasurement,
-                updateBodyMeasurement,
-                deleteBodyMeasurement,
+        // Body Measurements
+        bodyMeasurements,
+        addBodyMeasurement,
+        updateBodyMeasurement,
+        deleteBodyMeasurement,
 
-                unifiedActivities,
-                refreshData
+        unifiedActivities,
+        refreshData
     };
 
-return (
-    <DataContext.Provider value={value}>
-        {children}
-    </DataContext.Provider>
-);
+    return (
+        <DataContext.Provider value={value}>
+            {children}
+        </DataContext.Provider>
+    );
 }
 
 // ============================================

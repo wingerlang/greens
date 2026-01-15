@@ -2,7 +2,8 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import {
     UniversalActivity,
     ActivityPerformanceSection,
-    ActivitySource
+    ActivitySource,
+    UserSettings
 } from '../models/types.ts';
 
 // Environment variables (set these in your deployment)
@@ -367,9 +368,78 @@ export function mapStravaSubType(type: string, workoutType?: number): any {
 }
 
 /**
+ * More accurate calorie estimation based on HR, weight, age, and gender (Keytel et al. 2005)
+ * Returns both the value and a technical breakdown/explanation
+ */
+export function calculateStravaCalories(activity: StravaActivity, userSettings?: UserSettings): { calories: number; breakdown: string } {
+    const durationMin = (activity.moving_time || activity.elapsed_time) / 60;
+    const hr = activity.average_heartrate;
+
+    // 1. Always prioritize Strava's own calorie calculation if available
+    if (activity.calories && activity.calories > 0) {
+        return {
+            calories: activity.calories,
+            breakdown: `Källhänvisning: Strava API\nVärdet beräknat av Strava baserat på deras interna algoritmer.`
+        };
+    }
+
+    // 2. If we have HR and user profile data, use the scientific formula
+    if (hr && userSettings && userSettings.weight && userSettings.birthYear) {
+        const weight = userSettings.weight;
+        const age = new Date().getFullYear() - userSettings.birthYear;
+        const gender = userSettings.gender || 'male';
+
+        let kjPerMin = 0;
+        let formula = "";
+        if (gender === 'male') {
+            kjPerMin = -55.0969 + (0.6309 * hr) + (0.1988 * weight) + (0.2017 * age);
+            formula = "Keytel et al. (Male): -55.0969 + (0.6309 * HR) + (0.1988 * W) + (0.2017 * A)";
+        } else {
+            // Female/Other
+            kjPerMin = -20.4022 + (0.4472 * hr) - (0.1263 * weight) + (0.0740 * age);
+            formula = "Keytel et al. (Female): -20.4022 + (0.4472 * HR) - (0.1263 * W) + (0.0740 * A)";
+        }
+
+        const kcalPerMin = kjPerMin / 4.184;
+        let total = Math.round(kcalPerMin * durationMin);
+
+        let breakdown = `Formel: ${formula}\nIndata:\n- Puls: ${hr.toFixed(0)} bpm\n- Vikt: ${weight} kg\n- Ålder: ${age} år\n- Tid: ${durationMin.toFixed(1)} min\nResultat: ~${(kcalPerMin).toFixed(2)} kcal/min`;
+
+        // Sanity check: don't return ridiculous values (min 4, max 25 kcal/min for gym)
+        const type = mapStravaType(activity.type);
+        if (type === 'strength') {
+            const original = total;
+            total = Math.max(Math.min(total, Math.round(durationMin * 12)), Math.round(durationMin * 3));
+            if (total !== original) {
+                breakdown += `\n\nNotering: Justerat från ${original} kcal till ${total} kcal för att rymmas inom rimliga gränser för styrketräning (3-12 kcal/min).`;
+            }
+        }
+
+        return { calories: Math.max(total, 0), breakdown };
+    }
+
+    // 3. Fallback to basic duration-based estimation
+    const type = mapStravaType(activity.type);
+    let kcalPerMin = 8; // Default
+    let reason = "Standard schablon för blandad träning";
+
+    if (type === 'strength') { kcalPerMin = 5.5; reason = "Schablon för styrketräning (utan pulsdata)"; }
+    else if (type === 'walking') { kcalPerMin = 3.5; reason = "Schablon för rask promenad"; }
+    else if (type === 'running') { kcalPerMin = 10; reason = "Schablon för löpning (utan pulsdata)"; }
+
+    const total = Math.round(durationMin * kcalPerMin);
+    return {
+        calories: total,
+        breakdown: `Källhänvisning: App Schablon\nAnledning: Saknar pulsdata eller användarprofil (vikt/ålder).\nBeräkning: ${durationMin.toFixed(1)} min * ${kcalPerMin} kcal/min (${reason}).`
+    };
+}
+
+/**
  * Convert Strava activity to app exercise entry format
  */
-export function mapStravaActivityToExercise(activity: StravaActivity) {
+export function mapStravaActivityToExercise(activity: StravaActivity, userSettings?: UserSettings) {
+    const calorieData = calculateStravaCalories(activity, userSettings);
+
     return {
         externalId: `strava_${activity.id}`,
         platform: 'strava' as const,
@@ -377,7 +447,8 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
         type: mapStravaType(activity.type),
         durationMinutes: (activity.moving_time || activity.elapsed_time) / 60, // Use moving time, preserve decimal precision
         intensity: estimateIntensity(activity),
-        caloriesBurned: activity.calories || Math.round((activity.moving_time || activity.elapsed_time) / 60 * 8),
+        caloriesBurned: calorieData.calories,
+        calorieBreakdown: calorieData.breakdown,
         distance: activity.distance ? Math.round(activity.distance / 10) / 100 : undefined, // Convert to km
         notes: activity.name,
         heartRateAvg: activity.average_heartrate,
@@ -415,7 +486,9 @@ export function mapStravaActivityToExercise(activity: StravaActivity) {
 //     // ... other properties
 // }
 
-export function mapStravaToPerformance(activity: StravaActivity): ActivityPerformanceSection {
+export function mapStravaToPerformance(activity: StravaActivity, userSettings?: UserSettings): ActivityPerformanceSection {
+    const calorieData = calculateStravaCalories(activity, userSettings);
+
     return {
         source: {
             source: 'strava',
@@ -425,7 +498,8 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
         distanceKm: activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
         durationMinutes: (activity.moving_time || activity.elapsed_time) / 60, // Use moving time, preserve decimal precision
         elapsedTimeSeconds: activity.elapsed_time,
-        calories: activity.calories || Math.round(((activity.moving_time || activity.elapsed_time) / 60) * 8), // Use moving time for fallback
+        calories: calorieData.calories,
+        calorieBreakdown: calorieData.breakdown,
 
         avgHeartRate: activity.average_heartrate,
         maxHeartRate: activity.max_heartrate,
@@ -459,8 +533,8 @@ export function mapStravaToPerformance(activity: StravaActivity): ActivityPerfor
 /**
  * Create a new Universal Activity from a Strava Activity (Unplanned)
  */
-export function createUniversalFromStrava(activity: StravaActivity, userId: string): UniversalActivity {
-    const performance = mapStravaToPerformance(activity);
+export function createUniversalFromStrava(activity: StravaActivity, userId: string, userSettings?: UserSettings): UniversalActivity {
+    const performance = mapStravaToPerformance(activity, userSettings);
 
     return {
         id: crypto.randomUUID(),

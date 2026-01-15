@@ -5,6 +5,31 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Greens - Food Database, Recipes, and Calorie Tracking App" />
     <title>Greens - Food & Nutrition Tracker</title>
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        fetch('/api/debug/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: message,
+            source: source,
+            lineno: lineno,
+            colno: colno,
+            stack: error ? error.stack : null
+          })
+        }).catch(e => console.error('Failed to report error', e));
+      };
+      window.addEventListener('unhandledrejection', function(event) {
+        fetch('/api/debug/client-error', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: 'Unhandled Promise Rejection: ' + event.reason,
+            stack: event.reason ? event.reason.stack : null
+          })
+        }).catch(e => console.error('Failed to report rejection', e));
+      });
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">

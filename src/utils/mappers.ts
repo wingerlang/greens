@@ -9,6 +9,7 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         durationMinutes: a.performance.durationMinutes,
         intensity: 'moderate', // default
         caloriesBurned: a.performance.calories,
+        calorieBreakdown: a.performance.calorieBreakdown,
         distance: a.performance.distanceKm,
         createdAt: a.createdAt,
         externalId: a.performance.source?.externalId,

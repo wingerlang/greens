@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { StrengthWorkout, StrengthWorkoutExercise, StrengthLogImportResult, PersonalBest, StrengthStats, normalizeExerciseName } from '../models/strengthTypes.ts';
+import { StrengthWorkout, StrengthWorkoutExercise, StrengthLogImportResult, PersonalBest, StrengthStats, normalizeExerciseName, type WorkoutCategory } from '../models/strengthTypes.ts';
 import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
 import { useAuth } from '../context/AuthContext.tsx';
 import { PRResearchCenter } from '../components/training/PRResearchCenter.tsx';
@@ -22,6 +22,8 @@ import { StatCard, WorkoutCard, RecordTrendLine } from '../components/training/S
 import { StrengthPageSkeleton } from '../components/training/StrengthSkeletons.tsx';
 import { formatDateFull, slugify } from '../utils/formatters.ts';
 import { ImportWorkoutModal } from '../components/training/ImportWorkoutModal.tsx';
+import { WorkoutCategoryFilter, WorkoutCategoryBadge } from '../components/training/WorkoutCategoryBadge.tsx';
+import { classifyWorkout, getWorkoutCategoryStats } from '../utils/workoutClassifier.ts';
 
 // ============================================
 // Strength Page - Main Component
@@ -42,6 +44,11 @@ export function StrengthPage() {
     // Main tab navigation
     const [mainTab, setMainTab] = useState<'overview' | 'analysis' | 'research'>('overview');
     const [hideJanuaryBests, setHideJanuaryBests] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState<WorkoutCategory | 'all'>('all');
+
+    // Workout table sorting
+    const [workoutSortBy, setWorkoutSortBy] = useState<'date' | 'name' | 'exercises' | 'sets' | 'volume'>('date');
+    const [workoutSortOrder, setWorkoutSortOrder] = useState<'asc' | 'desc'>('desc');
 
     const { exerciseName: exerciseSlug } = useParams();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -221,13 +228,29 @@ export function StrengthPage() {
     const [startDate, setStartDate] = React.useState<string | null>(null);
     const [endDate, setEndDate] = React.useState<string | null>(null);
 
-    // Filter workouts by date range
+    // Filter workouts by date range and category
     const filteredWorkouts = React.useMemo(() => {
         return workouts.filter(w => {
             if (startDate && w.date < startDate) return false;
             if (endDate && w.date > endDate) return false;
+            // Category filter
+            if (categoryFilter !== 'all') {
+                const cat = w.workoutCategory || classifyWorkout(w);
+                if (cat !== categoryFilter) return false;
+            }
             return true;
         });
+    }, [workouts, startDate, endDate, categoryFilter]);
+
+    // Category statistics for filter counts
+    const categoryStats = useMemo(() => {
+        // Calculate stats from date-filtered workouts (before category filter)
+        const dateFiltered = workouts.filter(w => {
+            if (startDate && w.date < startDate) return false;
+            if (endDate && w.date > endDate) return false;
+            return true;
+        });
+        return getWorkoutCategoryStats(dateFiltered);
     }, [workouts, startDate, endDate]);
 
     // Prevent background scroll when Research Center is open
@@ -1017,6 +1040,15 @@ export function StrengthPage() {
                     title="Mest tränade övningar"
                     icon="🔥"
                     className="mb-8"
+                    rightElement={
+                        <div onClick={(e) => e.stopPropagation()}>
+                            <WorkoutCategoryFilter
+                                selectedCategory={categoryFilter}
+                                onChange={setCategoryFilter}
+                                stats={categoryStats}
+                            />
+                        </div>
+                    }
                 >
                     <TopExercisesTable workouts={filteredWorkouts} personalBests={personalBests} onSelectExercise={(name) => navigate(`/styrka/${slugify(name)}`)} onSelectWorkout={handleSelectWorkout} />
                 </CollapsibleSection>
@@ -1030,7 +1062,7 @@ export function StrengthPage() {
                     icon="📋"
                     defaultOpen={true}
                     className="mb-8"
-                    headerContent={
+                    rightElement={
                         <label className="flex items-center gap-2 cursor-pointer bg-slate-800/50 hover:bg-slate-800 px-3 py-1 rounded-lg border border-white/5 hover:border-white/10 transition-colors" onClick={(e) => e.stopPropagation()}>
                             <input
                                 type="checkbox"
@@ -1051,6 +1083,51 @@ export function StrengthPage() {
                         </div>
                     ) : (
                         <div className="space-y-4">
+                            {/* Category Filter */}
+                            <div className="flex flex-col lg:flex-row gap-4">
+                                <div className="flex-1">
+                                    <label className="text-[9px] text-slate-500 uppercase font-bold block mb-2">Filtrera efter kategori</label>
+                                    <WorkoutCategoryFilter
+                                        selectedCategory={categoryFilter}
+                                        onChange={setCategoryFilter}
+                                        stats={categoryStats}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Category Summary Stats */}
+                            <div className="flex gap-3 flex-wrap">
+                                {(['push', 'pull', 'legs', 'mixed'] as const).map(cat => {
+                                    const count = categoryStats[cat] || 0;
+                                    if (count === 0) return null;
+                                    const colors: Record<string, string> = {
+                                        push: 'text-orange-400 border-orange-500/30 bg-orange-500/10',
+                                        pull: 'text-blue-400 border-blue-500/30 bg-blue-500/10',
+                                        legs: 'text-rose-400 border-rose-500/30 bg-rose-500/10',
+                                        mixed: 'text-violet-400 border-violet-500/30 bg-violet-500/10'
+                                    };
+                                    const labels: Record<string, string> = {
+                                        push: 'PUSH',
+                                        pull: 'PULL',
+                                        legs: 'BEN',
+                                        mixed: 'MIX'
+                                    };
+                                    return (
+                                        <div
+                                            key={cat}
+                                            className={`px-3 py-2 rounded-lg border font-bold ${colors[cat]} ${categoryFilter === cat ? 'ring-1 ring-white/20' : ''}`}
+                                        >
+                                            <span className="text-[10px] uppercase tracking-wider">{labels[cat]}</span>
+                                            <span className="ml-2 text-lg">{count}</span>
+                                        </div>
+                                    );
+                                })}
+                                <div className="px-3 py-2 rounded-lg border border-white/10 bg-slate-800/50 text-slate-400 font-bold">
+                                    <span className="text-[10px] uppercase tracking-wider">Totalt</span>
+                                    <span className="ml-2 text-lg text-white">{Object.values(categoryStats).reduce((a, b) => a + b, 0)}</span>
+                                </div>
+                            </div>
+
                             {/* Search Bar */}
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔍</span>
@@ -1073,16 +1150,106 @@ export function StrengthPage() {
                                     <p>Inga pass matchar din sökning.</p>
                                 </div>
                             ) : (
-                                <div className="space-y-3">
-                                    {visibleWorkouts.map(workout => (
-                                        <WorkoutCard
-                                            key={workout.id}
-                                            workout={workout}
-                                            isAnnualBest={annualBestWorkoutIds.has(workout.id)}
-                                            isPR={allTimePBWorkoutIds.has(workout.id)}
-                                            onClick={() => handleSelectWorkout(workout)}
-                                        />
-                                    ))}
+                                <div className="border border-white/5 rounded-xl overflow-hidden bg-slate-950/50">
+                                    <table className="w-full text-xs">
+                                        <thead className="text-slate-500 font-bold bg-slate-900/90 sticky top-0 z-10">
+                                            <tr>
+                                                <th
+                                                    className="px-4 py-3 text-left cursor-pointer hover:text-white transition-colors"
+                                                    onClick={() => {
+                                                        if (workoutSortBy === 'date') setWorkoutSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+                                                        else { setWorkoutSortBy('date'); setWorkoutSortOrder('desc'); }
+                                                    }}
+                                                >
+                                                    Datum {workoutSortBy === 'date' && (workoutSortOrder === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th
+                                                    className="px-4 py-3 text-left cursor-pointer hover:text-white transition-colors"
+                                                    onClick={() => {
+                                                        if (workoutSortBy === 'name') setWorkoutSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+                                                        else { setWorkoutSortBy('name'); setWorkoutSortOrder('asc'); }
+                                                    }}
+                                                >
+                                                    Pass {workoutSortBy === 'name' && (workoutSortOrder === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th
+                                                    className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors"
+                                                    onClick={() => {
+                                                        if (workoutSortBy === 'exercises') setWorkoutSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+                                                        else { setWorkoutSortBy('exercises'); setWorkoutSortOrder('desc'); }
+                                                    }}
+                                                >
+                                                    Övningar {workoutSortBy === 'exercises' && (workoutSortOrder === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th
+                                                    className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors"
+                                                    onClick={() => {
+                                                        if (workoutSortBy === 'sets') setWorkoutSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+                                                        else { setWorkoutSortBy('sets'); setWorkoutSortOrder('desc'); }
+                                                    }}
+                                                >
+                                                    Set {workoutSortBy === 'sets' && (workoutSortOrder === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th
+                                                    className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors"
+                                                    onClick={() => {
+                                                        if (workoutSortBy === 'volume') setWorkoutSortOrder(o => o === 'asc' ? 'desc' : 'asc');
+                                                        else { setWorkoutSortBy('volume'); setWorkoutSortOrder('desc'); }
+                                                    }}
+                                                >
+                                                    Volym {workoutSortBy === 'volume' && (workoutSortOrder === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-white/5">
+                                            {[...visibleWorkouts].sort((a, b) => {
+                                                const mult = workoutSortOrder === 'asc' ? 1 : -1;
+                                                if (workoutSortBy === 'date') return mult * a.date.localeCompare(b.date);
+                                                if (workoutSortBy === 'name') return mult * a.name.localeCompare(b.name);
+                                                if (workoutSortBy === 'exercises') return mult * (a.uniqueExercises - b.uniqueExercises);
+                                                if (workoutSortBy === 'sets') return mult * (a.totalSets - b.totalSets);
+                                                if (workoutSortBy === 'volume') return mult * (a.totalVolume - b.totalVolume);
+                                                return 0;
+                                            }).map(workout => {
+                                                const category = workout.workoutCategory || classifyWorkout(workout);
+                                                const isPR = allTimePBWorkoutIds.has(workout.id);
+                                                const isAnnualBest = annualBestWorkoutIds.has(workout.id);
+
+                                                return (
+                                                    <tr
+                                                        key={workout.id}
+                                                        className={`hover:bg-slate-800/30 cursor-pointer transition-colors ${isPR ? 'bg-amber-500/5' : isAnnualBest ? 'bg-yellow-500/5' : ''}`}
+                                                        onClick={() => handleSelectWorkout(workout)}
+                                                    >
+                                                        <td className="px-4 py-2.5 text-slate-400 font-mono whitespace-nowrap">
+                                                            {workout.date}
+                                                        </td>
+                                                        <td className="px-4 py-2.5">
+                                                            <div className="flex items-center gap-2">
+                                                                <WorkoutCategoryBadge category={category} size="sm" />
+                                                                <span className="text-white font-bold">{workout.name}</span>
+                                                                {isPR && (
+                                                                    <span className="text-[7px] text-amber-400 border border-amber-500/30 bg-amber-500/10 px-1 py-0.5 rounded font-black">PR</span>
+                                                                )}
+                                                                {isAnnualBest && !isPR && (
+                                                                    <span className="text-[7px] text-yellow-400 border border-yellow-500/30 bg-yellow-500/10 px-1 py-0.5 rounded font-black">ÅB</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-right text-slate-300 font-mono">
+                                                            {workout.uniqueExercises}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-right text-slate-300 font-mono">
+                                                            {workout.totalSets}
+                                                        </td>
+                                                        <td className="px-4 py-2.5 text-right text-emerald-400 font-bold whitespace-nowrap">
+                                                            {Math.round(workout.totalVolume / 1000)}t
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                             )}
 

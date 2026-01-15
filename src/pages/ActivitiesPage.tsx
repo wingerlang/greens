@@ -142,15 +142,17 @@ const ActivityRow = ({
                     <div className="flex items-center gap-1.5">
                         <span className="capitalize text-white font-bold text-xs">{activity.type}</span>
                         {/* Score badge inline */}
-                        <span
-                            className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-                                score >= 60 ? 'bg-indigo-500/20 text-indigo-400' :
-                                    'bg-slate-500/20 text-slate-400'
-                                }`}
-                            title={`Poäng: ${score}`}
-                        >
-                            {score}
-                        </span>
+                        {score > 0 && (
+                            <span
+                                className={`w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black ${score >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
+                                    score >= 60 ? 'bg-indigo-500/20 text-indigo-400' :
+                                        'bg-slate-500/20 text-slate-400'
+                                    }`}
+                                title={`Poäng: ${score}`}
+                            >
+                                {score}
+                            </span>
+                        )}
                         {activity.subType === 'interval' && (
                             <span className="text-[8px] uppercase font-bold bg-red-500/20 text-red-400 px-1 rounded" title="Intervallpass">⚡</span>
                         )}

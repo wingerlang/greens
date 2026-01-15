@@ -168,6 +168,18 @@ export function MealTimeline({
                         >
                             <Info size={14} />
                         </button>
+                        {entry.mealType === 'snack' && (
+                            <button
+                                className={`p-1.5 rounded-lg transition-colors ${totalNutrition.calories > 400 ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-400 hover:text-emerald-400 hover:bg-emerald-500/10'}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateMealEntry(entry.id, { mealType: 'lunch' });
+                                }}
+                                title="Flytta till lunch"
+                            >
+                                <ArrowRightLeft size={14} className="-rotate-45" />
+                            </button>
+                        )}
                         {onReplaceItem && firstItem && (
                             <button
                                 className="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-amber-500/10"

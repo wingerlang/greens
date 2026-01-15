@@ -107,10 +107,9 @@ export const MeasurementEntryModal: React.FC<MeasurementEntryModalProps> = ({
             <div className="flex min-h-full items-center justify-center p-4" onClick={onClose}>
                 <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-md overflow-hidden shadow-2xl border border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
                     <div className="p-8">
-                        <div className="flex justify-between items-center mb-6">
+                        <div className="flex justify-between items-center mb-4">
                             <div>
                                 <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">Vägning & mätning</h2>
-                                <p className="text-xs font-medium text-slate-500">Logga {getRelativeDateLabel(selectedDate).toLowerCase()}s form</p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <button
@@ -128,6 +127,30 @@ export const MeasurementEntryModal: React.FC<MeasurementEntryModalProps> = ({
                                 </button>
                             </div>
                         </div>
+
+                        {/* Date indicator - prominent when not today */}
+                        <div className={`mb-6 px-4 py-3 rounded-2xl border flex items-center gap-3 ${isToday
+                                ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-700'
+                                : 'bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/30'
+                            }`}>
+                            <div className={`text-2xl ${isToday ? 'opacity-50' : ''}`}>
+                                {isToday ? '📅' : '⏮️'}
+                            </div>
+                            <div>
+                                <div className={`text-sm font-black ${isToday ? 'text-slate-600 dark:text-slate-400' : 'text-amber-700 dark:text-amber-400'}`}>
+                                    {getRelativeDateLabel(selectedDate)}
+                                </div>
+                                <div className="text-[10px] text-slate-400">
+                                    {new Date(selectedDate).toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                                </div>
+                            </div>
+                            {!isToday && (
+                                <div className="ml-auto text-[9px] font-bold text-amber-600 dark:text-amber-500 uppercase tracking-wider bg-amber-100 dark:bg-amber-500/20 px-2 py-1 rounded-lg">
+                                    Historik
+                                </div>
+                            )}
+                        </div>
+
 
                         {showBulkImport ? (
                             <div className="space-y-4">

@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import {
     ResponsiveContainer,
-    LineChart,
+    ComposedChart,
+    Area,
     Line,
     XAxis,
     YAxis,
@@ -14,6 +15,7 @@ interface WeightTrendChartProps {
     entries: WeightEntry[];
     currentWeight: number;
     onEntryClick?: (entry: WeightEntry) => void;
+    hideHeader?: boolean;
 }
 
 interface TrendSegment {
@@ -122,7 +124,7 @@ const TREND_COLORS = {
     stable: '#3b82f6', // Blue
 };
 
-export function WeightTrendChart({ entries, currentWeight, onEntryClick }: WeightTrendChartProps) {
+export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHeader = false }: WeightTrendChartProps) {
     // 1. Process entries: Sort and Unique by Date (taking the latest entry for a day if multiple)
     const sortedUniqueEntries = useMemo(() => {
         const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -148,9 +150,9 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
             const point: any = {
                 ...e,
                 displayDate: e.date.slice(5),
-                weight: hasWeight ? e.weight : null,
-                waist: e.waist || null,
-                chest: e.chest || null,
+                weight: hasWeight ? Number(e.weight) : null,
+                waist: e.waist ? Number(e.waist) : null,
+                chest: e.chest ? Number(e.chest) : null,
             };
 
             // Populate trend-specific fields
@@ -174,9 +176,9 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
         );
     }
 
-    const weights = sortedUniqueEntries.map(d => d.weight);
-    const minW = Math.floor(Math.min(...weights) - 1);
-    const maxW = Math.ceil(Math.max(...weights) + 1);
+    const weights = sortedUniqueEntries.map(d => d.weight).filter(w => w > 0);
+    const minW = weights.length > 0 ? Math.floor(Math.min(...weights) - 1) : 0;
+    const maxW = weights.length > 0 ? Math.ceil(Math.max(...weights) + 1) : 100;
     const weightChange = currentWeight - weights[0];
 
     // Calculate CM axis range
@@ -191,32 +193,58 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
     return (
         <div className="flex flex-col h-full w-full">
             {/* Header */}
-            <div className="flex justify-between items-center mb-4 px-1">
-                <div>
-                    <div className="text-2xl font-black text-white">
-                        {currentWeight.toFixed(1)} <span className="text-xs text-slate-500 font-bold">kg</span>
-                        {latestWaist && (
-                            <span className="ml-3 text-lg text-purple-400">
-                                {latestWaist} <span className="text-xs text-slate-500 font-bold">cm (midja)</span>
+            {!hideHeader && (
+                <div className="flex justify-between items-center mb-4 px-1">
+                    <div>
+                        <div className="text-2xl font-black text-white">
+                            {currentWeight.toFixed(1)} <span className="text-xs text-slate-500 font-bold">kg</span>
+                            {latestWaist && (
+                                <span className="ml-3 text-lg text-purple-400">
+                                    {latestWaist} <span className="text-xs text-slate-500 font-bold">cm (midja)</span>
+                                </span>
+                            )}
+                            {latestChest && (
+                                <span className="ml-3 text-lg text-indigo-400">
+                                    {latestChest} <span className="text-xs text-slate-500 font-bold">cm (bröst)</span>
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${weightChange > 0 ? 'bg-rose-500/10 text-rose-400' : weightChange < 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
+                                {weightChange > 0 ? '+' : ''}{weightChange.toFixed(1)} kg
                             </span>
-                        )}
-                        {latestChest && (
-                            <span className="ml-3 text-lg text-indigo-400">
-                                {latestChest} <span className="text-xs text-slate-500 font-bold">cm (bröst)</span>
+                            <span className="text-[9px] uppercase text-slate-500 tracking-wide">
+                                sedan {sortedUniqueEntries[0].date}
                             </span>
-                        )}
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${weightChange > 0 ? 'bg-rose-500/10 text-rose-400' : weightChange < 0 ? 'bg-emerald-500/10 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>
-                            {weightChange > 0 ? '+' : ''}{weightChange.toFixed(1)} kg
+
+                    <div className="flex gap-3 text-[8px] uppercase font-bold text-slate-500 flex-wrap justify-end">
+                        <span className="flex items-center gap-1">
+                            <div className="flex -space-x-1">
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 z-30" />
+                                <span className="w-2 h-2 rounded-full bg-blue-500 z-20" />
+                                <span className="w-2 h-2 rounded-full bg-rose-500 z-10" />
+                            </div>
+                            Vikt
                         </span>
-                        <span className="text-[9px] uppercase text-slate-500 tracking-wide">
-                            sedan {sortedUniqueEntries[0].date}
-                        </span>
+                        {hasMeasurements && (
+                            <>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-full bg-purple-500" /> Midja
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2 h-2 rounded-full bg-indigo-400" /> Bröst
+                                </span>
+                            </>
+                        )}
                     </div>
                 </div>
+            )}
 
-                <div className="flex gap-3 text-[8px] uppercase font-bold text-slate-500 flex-wrap justify-end">
+            {/* Legend for dashboard mode (if header is hidden) */}
+            {hideHeader && hasMeasurements && (
+                <div className="absolute top-2 right-2 flex gap-3 text-[8px] uppercase font-bold text-slate-500 z-10">
                     <span className="flex items-center gap-1">
                         <div className="flex -space-x-1">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 z-30" />
@@ -225,65 +253,72 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                         </div>
                         Vikt
                     </span>
-                    {hasMeasurements && (
-                        <>
-                            <span className="flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-purple-500" /> Midja
-                            </span>
-                            <span className="flex items-center gap-1">
-                                <span className="w-2 h-2 rounded-full bg-indigo-400" /> Bröst
-                            </span>
-                        </>
-                    )}
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-purple-500" /> Midja
+                    </span>
+                    <span className="flex items-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-indigo-400" /> Bröst
+                    </span>
                 </div>
-            </div>
+            )}
 
             {/* Chart */}
             <div className="flex-1 w-full min-h-0" style={{ height: 'calc(100% - 60px)' }}>
                 <ResponsiveContainer width="100%" height="100%">
-                    <LineChart
+                    <ComposedChart
                         data={chartData}
                         margin={{ top: 5, right: hasMeasurements ? 50 : 15, left: 5, bottom: 5 }}
                     >
+                        <defs>
+                            <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                            </linearGradient>
+                        </defs>
                         <CartesianGrid
                             strokeDasharray="3 3"
-                            stroke="rgba(255,255,255,0.05)"
+                            stroke="#1e293b"
                             vertical={false}
                         />
 
                         <XAxis
-                            dataKey="displayDate"
-                            axisLine={false}
+                            dataKey="date"
+                            tickFormatter={(date) => {
+                                const d = new Date(date);
+                                return `${d.getDate()}/${d.getMonth() + 1}`;
+                            }}
+                            stroke="#475569"
+                            tick={{ fill: '#475569', fontSize: 10 }}
                             tickLine={false}
-                            tick={{ fill: '#64748b', fontSize: 10 }}
-                            dy={5}
-                            minTickGap={20}
+                            axisLine={false}
+                            minTickGap={30}
                         />
 
                         {/* Left Y-Axis: Weight (kg) */}
                         <YAxis
                             yAxisId="weight"
                             domain={[minW, maxW]}
-                            axisLine={false}
+                            orientation="left"
+                            stroke="#475569"
+                            tick={{ fill: '#475569', fontSize: 10 }}
                             tickLine={false}
-                            tick={{ fill: '#64748b', fontSize: 10 }}
-                            width={35}
+                            axisLine={false}
                             tickFormatter={(v) => `${v} kg`}
+                            width={35}
                         />
 
-                        {/* Right Y-Axis: Measurements (cm) */}
-                        {hasMeasurements && (
-                            <YAxis
-                                yAxisId="cm"
-                                orientation="right"
-                                domain={[minCm, maxCm]}
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fill: '#64748b', fontSize: 10 }}
-                                width={40}
-                                tickFormatter={(v) => `${v} cm`}
-                            />
-                        )}
+                        {/* Right Y-Axis: Measurements (cm) - Always render for Lines to work */}
+                        <YAxis
+                            yAxisId="cm"
+                            orientation="right"
+                            domain={[minCm, maxCm]}
+                            stroke="#475569"
+                            tick={{ fill: '#475569', fontSize: 10 }}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(v) => `${v} cm`}
+                            width={40}
+                        />
 
                         <Tooltip
                             content={({ active, payload }) => {
@@ -314,6 +349,19 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                                 }
                                 return null;
                             }}
+                        />
+
+                        {/* Weight Area */}
+                        <Area
+                            yAxisId="weight"
+                            type="monotone"
+                            dataKey="weight"
+                            stroke="#3b82f6"
+                            fillOpacity={1}
+                            fill="url(#weightGradient)"
+                            strokeWidth={3}
+                            connectNulls={true}
+                            activeDot={{ r: 6, strokeWidth: 0 }}
                         />
 
                         {/* Weight Trend Lines (Left Axis) */}
@@ -348,35 +396,29 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                             isAnimationActive={false}
                         />
 
-                        {/* Measurement Lines (Right Axis) */}
-                        {hasMeasurements && (
-                            <>
-                                <Line
-                                    yAxisId="cm"
-                                    type="monotone"
-                                    dataKey="waist"
-                                    stroke="#a855f7"
-                                    strokeWidth={2}
-                                    strokeDasharray="4 2"
-                                    dot={{ r: 3, fill: '#a855f7' }}
-                                    activeDot={{ r: 5, fill: '#a855f7' }}
-                                    isAnimationActive={false}
-                                    connectNulls={true}
-                                />
-                                <Line
-                                    yAxisId="cm"
-                                    type="monotone"
-                                    dataKey="chest"
-                                    stroke="#818cf8"
-                                    strokeWidth={2}
-                                    strokeDasharray="4 2"
-                                    dot={{ r: 3, fill: '#818cf8' }}
-                                    activeDot={{ r: 5, fill: '#818cf8' }}
-                                    isAnimationActive={false}
-                                    connectNulls={true}
-                                />
-                            </>
-                        )}
+                        {/* Measurement Lines (Right Axis) - Always render, they'll just be empty if no data */}
+                        <Line
+                            yAxisId="cm"
+                            type="linear"
+                            dataKey="waist"
+                            stroke="#a855f7"
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: '#a855f7', strokeWidth: 0 }}
+                            activeDot={{ r: 6, fill: '#a855f7' }}
+                            isAnimationActive={true}
+                            connectNulls={true}
+                        />
+                        <Line
+                            yAxisId="cm"
+                            type="linear"
+                            dataKey="chest"
+                            stroke="#818cf8"
+                            strokeWidth={3}
+                            dot={{ r: 4, fill: '#818cf8', strokeWidth: 0 }}
+                            activeDot={{ r: 6, fill: '#818cf8' }}
+                            isAnimationActive={true}
+                            connectNulls={true}
+                        />
 
                         {/* Invisible dot layer for click interactions everywhere */}
                         <Line
@@ -393,7 +435,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick }: Weigh
                             activeDot={false}
                         />
 
-                    </LineChart>
+                    </ComposedChart>
                 </ResponsiveContainer>
             </div>
         </div >

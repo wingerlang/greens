@@ -92,6 +92,12 @@ export interface StrengthWorkoutExercise {
     notes?: string;
 }
 
+// ============================================
+// Workout Categories (Push/Pull/Legs)
+// ============================================
+
+export type WorkoutCategory = 'push' | 'pull' | 'legs' | 'mixed' | 'other';
+
 export interface StrengthWorkout {
     id: string;
     userId: string;
@@ -112,6 +118,9 @@ export interface StrengthWorkout {
     totalSets: number;
     totalReps: number;
     uniqueExercises: number;
+
+    // Category (Push/Pull/Legs/Mixed)
+    workoutCategory?: WorkoutCategory;
 
     // Metadata
     duration?: number;               // minutes

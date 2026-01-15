@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useData } from '../../context/DataContext.tsx';
+import { useSettings } from '../../context/SettingsContext.tsx';
 import { Activity, Zap, TrendingUp, BarChart3, AlertCircle, CheckCircle2, XCircle, Info } from 'lucide-react';
 import { formatDuration } from '../../utils/dateUtils.ts';
 
@@ -11,8 +12,10 @@ export function WeeklyStatsAnalysis({
     weeklyStats: any
 }) {
     const { exerciseEntries, plannedActivities, unifiedActivities } = useData();
+    const { settings } = useSettings();
 
     // 1. Calculate Intensity Distribution (HR Zones)
+    // Uses explicit intensity if set, otherwise calculates from heart rate
     const intensityStats = useMemo(() => {
         const start = new Date(weekStart);
         const end = new Date(start);
@@ -24,6 +27,11 @@ export function WeeklyStatsAnalysis({
             (e.type === 'running' || e.type === 'cycling')
         );
 
+        // Calculate max HR from age (220 - age formula)
+        const currentYear = new Date().getFullYear();
+        const age = settings.birthYear ? currentYear - settings.birthYear : 30;
+        const maxHr = 220 - age;
+
         let z1_2 = 0;
         let z3 = 0;
         let z4_5 = 0;
@@ -32,11 +40,24 @@ export function WeeklyStatsAnalysis({
         weekActivities.forEach(a => {
             const duration = a.durationMinutes || 0;
             total += duration;
-            // Assuming simplified zone mapping if explicit zones aren't stored
-            // This logic should ideally use actual HR data if available
-            if (a.intensity === 'low') z1_2 += duration;
-            else if (a.intensity === 'moderate') z3 += duration;
-            else if (a.intensity === 'high' || a.intensity === 'ultra') z4_5 += duration;
+
+            // Priority: Use explicit intensity if set
+            if (a.intensity) {
+                if (a.intensity === 'low') z1_2 += duration;
+                else if (a.intensity === 'moderate') z3 += duration;
+                else if (a.intensity === 'high' || a.intensity === 'ultra') z4_5 += duration;
+            }
+            // Fallback: Calculate from average heart rate
+            else if (a.heartRateAvg && maxHr > 0) {
+                const hrPct = a.heartRateAvg / maxHr;
+                if (hrPct < 0.70) z1_2 += duration;
+                else if (hrPct < 0.80) z3 += duration;
+                else z4_5 += duration;
+            }
+            // No data: default to moderate zone
+            else {
+                z3 += duration;
+            }
         });
 
         return {
@@ -45,7 +66,7 @@ export function WeeklyStatsAnalysis({
             z4_5: total > 0 ? (z4_5 / total) * 100 : 0,
             totalTime: total
         };
-    }, [exerciseEntries, weekStart]);
+    }, [exerciseEntries, weekStart, settings.birthYear]);
 
     // 2. Volume Comparison (vs 4-week Average)
     const volumeAnalysis = useMemo(() => {
@@ -216,7 +237,7 @@ export function WeeklyStatsAnalysis({
                     <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                         <div
                             className={`h-full rounded-full ${volumeAnalysis.pctDiff > 10 ? 'bg-amber-500' :
-                                    volumeAnalysis.pctDiff < -10 ? 'bg-blue-400' : 'bg-emerald-500'
+                                volumeAnalysis.pctDiff < -10 ? 'bg-blue-400' : 'bg-emerald-500'
                                 }`}
                             style={{ width: '100%' }} // Simplified visual for now
                         />

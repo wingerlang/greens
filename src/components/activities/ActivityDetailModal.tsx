@@ -880,7 +880,10 @@ export function ActivityDetailModal({
                                                             {a.performance?.calories ? `${a.performance.calories} kcal` : '-'}
                                                         </td>
                                                     ))}
-                                                    <td className="px-6 py-4 text-right font-bold text-emerald-400 font-mono">
+                                                    <td
+                                                        className={`px-6 py-4 text-right font-bold text-emerald-400 font-mono ${activity.calorieBreakdown ? 'cursor-help border-b border-emerald-400/20 md:border-b-0' : ''}`}
+                                                        title={activity.calorieBreakdown}
+                                                    >
                                                         {activity.caloriesBurned ? `${activity.caloriesBurned} kcal` : '-'}
                                                     </td>
                                                 </tr>
@@ -983,7 +986,12 @@ export function ActivityDetailModal({
                                                 <div className="flex flex-col">
                                                     <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Energi</span>
                                                     <div className="flex items-baseline gap-1">
-                                                        <span className="text-xl font-black text-white">{activity.caloriesBurned || perf?.calories || '-'}</span>
+                                                        <span
+                                                            className={`text-xl font-black text-white ${activity.calorieBreakdown ? 'cursor-help border-b border-white/20 md:border-b-0' : ''}`}
+                                                            title={activity.calorieBreakdown}
+                                                        >
+                                                            {activity.caloriesBurned || perf?.calories || '-'}
+                                                        </span>
                                                         <span className="text-[10px] uppercase text-slate-500">kcal</span>
                                                         {perf?.kilojoules && <span className="text-[9px] text-[#FC4C02] font-black ml-2">{perf.kilojoules} KJ</span>}
                                                     </div>
@@ -1059,16 +1067,18 @@ export function ActivityDetailModal({
                                         {/* Additional non-Strava Metrics (Greens Score, Tonnage) */}
                                         <div className="grid grid-cols-2 gap-4">
                                             {/* Greens Score Tile */}
-                                            <div
-                                                className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
-                                                onClick={() => setShowScoreInfo(!showScoreInfo)}
-                                            >
-                                                <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore || '-'}</p>
-                                                <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
-                                                    Greens Score
-                                                    <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
-                                                </p>
-                                            </div>
+                                            {perfBreakdown.totalScore > 0 && (
+                                                <div
+                                                    className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
+                                                    onClick={() => setShowScoreInfo(!showScoreInfo)}
+                                                >
+                                                    <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore}</p>
+                                                    <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
+                                                        Greens Score
+                                                        <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
+                                                    </p>
+                                                </div>
+                                            )}
 
                                             {/* Tonnage (if existing) */}
                                             {(activity.tonnage && activity.tonnage > 0) && (
@@ -1116,95 +1126,96 @@ export function ActivityDetailModal({
                                             </div>
                                         ) : null}
 
-                                        <div
-                                            className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
-                                            onClick={() => setShowScoreInfo(!showScoreInfo)}
-                                        >
-                                            <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore || '-'}</p>
-                                            <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
-                                                Greens Score
-                                                <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
-                                            </p>
-                                        </div>
+                                        {perfBreakdown.totalScore > 0 && (
+                                            <div
+                                                className="bg-indigo-500/20 border border-indigo-500/30 rounded-xl p-4 text-center cursor-pointer hover:bg-indigo-500/30 transition-all active:scale-95 shadow-lg shadow-indigo-500/10"
+                                                onClick={() => setShowScoreInfo(!showScoreInfo)}
+                                            >
+                                                <p className="text-2xl font-black text-indigo-400">{perfBreakdown.totalScore}</p>
+                                                <p className="text-xs text-slate-500 uppercase flex items-center justify-center gap-1">
+                                                    Greens Score
+                                                    <span className="text-[10px] opacity-50">{showScoreInfo ? '▼' : '▲'}</span>
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 
                                 {/* Greens Score Visual Breakdown */}
-                                {showScoreInfo && (
-                                    <div className="bg-slate-800/40 border border-white/5 rounded-2xl p-5 space-y-4 animate-in slide-in-from-top-4 duration-300">
-                                        <div className="flex items-center justify-between">
-                                            <h4 className="font-black text-white uppercase text-xs tracking-widest flex items-center gap-2">
-                                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                                                Resultatanalys
-                                            </h4>
-                                            <span className="text-[10px] font-mono text-slate-500 uppercase">{perfBreakdown.summary}</span>
-                                        </div>
+                                {showScoreInfo && activity.type?.toLowerCase() !== 'strength' && perfBreakdown.totalScore > 0 && (
+                                    <div className="bg-slate-900/50 rounded-3xl p-6 border border-white/5 space-y-6">
+                                        <div>
+                                            <div className="flex justify-between items-baseline mb-2">
+                                                <h4 className="text-xl font-black text-indigo-400 italic uppercase">
+                                                    Resultatanalys
+                                                </h4>
+                                                <span className="text-[10px] font-mono text-slate-500 uppercase">{perfBreakdown.summary}</span>
+                                            </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {/* Big Score Gauge (CSS Simple) */}
-                                            <div className="flex flex-col items-center justify-center py-2">
-                                                <div className="relative w-28 h-28 flex items-center justify-center">
-                                                    {perfBreakdown.isPersonalBest && (
-                                                        <div className="absolute -top-1 -right-1 bg-yellow-500 text-black text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center shadow-lg animate-bounce z-10 border-2 border-slate-900">
-                                                            🏆
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                {/* Big Score Gauge (CSS Simple) */}
+                                                <div className="flex flex-col items-center justify-center py-2">
+                                                    <div className="relative w-28 h-28 flex items-center justify-center">
+                                                        {perfBreakdown.isPersonalBest && (
+                                                            <div className="absolute -top-1 -right-1 bg-yellow-500 text-black text-[10px] font-black w-6 h-6 rounded-full flex items-center justify-center shadow-lg animate-bounce z-10 border-2 border-slate-900">
+                                                                🏆
+                                                            </div>
+                                                        )}
+                                                        <svg className="w-full h-full -rotate-90">
+                                                            <circle cx="56" cy="56" r="50" fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
+                                                            <circle
+                                                                cx="56" cy="56" r="50" fill="transparent"
+                                                                stroke="currentColor" strokeWidth="8"
+                                                                strokeDasharray={314}
+                                                                strokeDashoffset={314 - (314 * perfBreakdown.totalScore) / 100}
+                                                                strokeLinecap="round"
+                                                                className="text-indigo-500 transition-all duration-1000 ease-out"
+                                                            />
+                                                        </svg>
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                            <span className="text-3xl font-black text-white">{perfBreakdown.totalScore || '-'}</span>
+                                                            <span className="text-[8px] text-slate-500 uppercase font-bold">Poäng</span>
                                                         </div>
-                                                    )}
-                                                    <svg className="w-full h-full -rotate-90">
-                                                        <circle cx="56" cy="56" r="50" fill="transparent" stroke="rgba(255,255,255,0.05)" strokeWidth="8" />
-                                                        <circle
-                                                            cx="56" cy="56" r="50" fill="transparent"
-                                                            stroke="currentColor" strokeWidth="8"
-                                                            strokeDasharray={314}
-                                                            strokeDashoffset={314 - (314 * perfBreakdown.totalScore) / 100}
-                                                            strokeLinecap="round"
-                                                            className="text-indigo-500 transition-all duration-1000 ease-out"
-                                                        />
-                                                    </svg>
-                                                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                                        <span className="text-3xl font-black text-white">{perfBreakdown.totalScore || '-'}</span>
-                                                        <span className="text-[8px] text-slate-500 uppercase font-bold">Poäng</span>
                                                     </div>
+                                                </div>
+
+                                                {/* Component Bars */}
+                                                <div className="flex flex-col justify-center space-y-4">
+                                                    {perfBreakdown.components.map((comp, idx) => (
+                                                        <div key={idx} className="space-y-1.5">
+                                                            <div className="flex justify-between items-end">
+                                                                <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
+                                                                    <span>{comp.icon}</span> {comp.label}
+                                                                    {comp.isPersonalBest && <span className="text-[8px] bg-yellow-500/10 text-yellow-500 px-1 rounded border border-yellow-500/20">PB</span>}
+                                                                </span>
+                                                                <span className={`text-xs font-mono font-bold ${comp.color}`}>{comp.value}</span>
+                                                            </div>
+                                                            <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                                                                <div
+                                                                    className={`h-full rounded-full transition-all duration-1000 delay-300 ${comp.color.replace('text-', 'bg-')}`}
+                                                                    style={{ width: `${Math.max(5, (comp.score / comp.max) * 100)}%` }}
+                                                                />
+                                                            </div>
+                                                            <p className={`text-[9px] italic leading-tight ${comp.isPersonalBest ? 'text-yellow-500/70' : 'text-slate-500'}`}>
+                                                                {comp.description}
+                                                            </p>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
 
-                                            {/* Component Bars */}
-                                            <div className="flex flex-col justify-center space-y-4">
-                                                {perfBreakdown.components.map((comp, idx) => (
-                                                    <div key={idx} className="space-y-1.5">
-                                                        <div className="flex justify-between items-end">
-                                                            <span className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1.5">
-                                                                <span>{comp.icon}</span> {comp.label}
-                                                                {comp.isPersonalBest && <span className="text-[8px] bg-yellow-500/10 text-yellow-500 px-1 rounded border border-yellow-500/20">PB</span>}
-                                                            </span>
-                                                            <span className={`text-xs font-mono font-bold ${comp.color}`}>{comp.value}</span>
-                                                        </div>
-                                                        <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                                                            <div
-                                                                className={`h-full rounded-full transition-all duration-1000 delay-300 ${comp.color.replace('text-', 'bg-')}`}
-                                                                style={{ width: `${Math.max(5, (comp.score / comp.max) * 100)}%` }}
-                                                            />
-                                                        </div>
-                                                        <p className={`text-[9px] italic leading-tight ${comp.isPersonalBest ? 'text-yellow-500/70' : 'text-slate-500'}`}>
-                                                            {comp.description}
-                                                        </p>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        <div className="pt-2 border-t border-white/5">
-                                            <div className="bg-indigo-500/5 rounded-lg p-3 border border-indigo-500/10 text-[10px] text-slate-400 leading-relaxed">
-                                                <strong className="text-indigo-400 block mb-1">💡 Tips för detta pass:</strong>
-                                                {perfBreakdown.type === 'cardio' ?
-                                                    "För att höja din Greens Score, försök sänka din ansträngning (puls) vid bibehållen hastighet, eller öka hastigheten vid samma puls genom förbättrad löpekonomi." :
-                                                    "Din score speglar arbetstakten (kg/min). Kör du färre och längre vilar sänks poängen, medan ett högre tempo med bibehållen vikt höjer den."
-                                                }
+                                            <div className="pt-2 border-t border-white/5">
+                                                <div className="bg-indigo-500/5 rounded-lg p-3 border border-indigo-500/10 text-[10px] text-slate-400 leading-relaxed">
+                                                    <strong className="text-indigo-400 block mb-1">💡 Tips för detta pass:</strong>
+                                                    {perfBreakdown.type === 'cardio' ?
+                                                        "För att höja din Greens Score, försök sänka din ansträngning (puls) vid bibehållen hastighet, eller öka hastigheten vid samma puls genom förbättrad löpekonomi." :
+                                                        "Din score speglar arbetstakten (kg/min). Kör du färre och längre vilar sänks poängen, medan ett högre tempo med bibehållen vikt höjer den."
+                                                    }
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                )}
-
-                                {/* Heart Rate Zone Visualization (for cardio with HR data) */}
+                                )}    {/* Heart Rate Zone Visualization (for cardio with HR data) */}
                                 {(perf?.avgHeartRate || activity.avgHeartRate) && activity.type?.toLowerCase() !== 'strength' && (
                                     <HeartRateZones
                                         avgHeartRate={Math.round(perf?.avgHeartRate || activity.avgHeartRate || 0)}

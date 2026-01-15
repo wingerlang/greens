@@ -16,6 +16,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+import { safeFetch } from '../utils/http.ts';
+
+// ... (keep interface)
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
@@ -30,16 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = localStorage.getItem('auth_token');
 
         if (token) {
-            fetch('/api/auth/me', {
+            safeFetch<{ user: User }>('/api/auth/me', {
                 headers: { 'Authorization': `Bearer ${token}` },
                 signal
             })
-                .then(res => {
-                    if (res.ok) return res.json();
-                    throw new Error('Failed to fetch user');
-                })
                 .then(data => {
-                    if (mounted) setUser(data.user);
+                    if (mounted && data) setUser(data.user);
                 })
                 .catch((e) => {
                     if (e instanceof Error && e.name === 'AbortError') return;
@@ -65,18 +65,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const login = async (username: string, password: string) => {
         setError(null);
         try {
-            const res = await fetch('/api/auth/login', {
+            const data = await safeFetch<{ token: string; user: User }>('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password })
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Login failed');
+
+            if (!data) throw new Error('No response from server');
 
             localStorage.setItem('auth_token', data.token);
             setUser(data.user);
         } catch (e: any) {
-            setError(e.message);
+            const msg = e.body ? JSON.parse(e.body).error : e.message;
+            setError(msg || 'Login failed');
             throw e;
         }
     };
@@ -84,18 +85,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const register = async (username: string, password: string, email?: string) => {
         setError(null);
         try {
-            const res = await fetch('/api/auth/register', {
+            const data = await safeFetch<{ token: string; user: User }>('/api/auth/register', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, password, email })
             });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+            if (!data) throw new Error('No response from server');
 
             localStorage.setItem('auth_token', data.token);
             setUser(data.user);
         } catch (e: any) {
-            setError(e.message);
+            const msg = e.body ? JSON.parse(e.body).error : e.message;
+            setError(msg || 'Registration failed');
             throw e;
         }
     };
@@ -110,11 +112,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const token = localStorage.getItem('auth_token');
         if (!token) return [];
         try {
-            const res = await fetch('/api/auth/stats', {
+            const data = await safeFetch<{ stats: LoginStat[] }>('/api/auth/stats', {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (res.ok) {
-                const data = await res.json();
+            if (data) {
                 return data.stats;
             }
         } catch (e) {

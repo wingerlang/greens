@@ -27,19 +27,26 @@ import { handleExerciseEntryRoutes } from "./handlers/exerciseEntries.ts";
 import { handlePlannedActivityRoutes } from "./handlers/plannedActivities.ts";
 import { handleAnalyticsRoutes } from "./handlers/analytics.ts";
 import { logError, logMetric } from "./utils/logger.ts";
-import { serveDir } from "./utils/fileServer.ts";
+import { sessionTracker } from "./utils/sessionTracker.ts";
+import { handleAdminSessionRoutes } from "./handlers/adminSessions.ts";
 
-export async function router(req: Request): Promise<Response> {
+export async function router(req: Request, remoteAddr: Deno.NetAddr): Promise<Response> {
     // Wrap with debug middleware
     return await debugMiddleware(req, async (req) => {
-        return await internalRouter(req);
+        return await internalRouter(req, remoteAddr);
     });
 }
 
-async function internalRouter(req: Request): Promise<Response> {
+async function internalRouter(req: Request, remoteAddr: Deno.NetAddr): Promise<Response> {
     const start = performance.now();
     const url = new URL(req.url);
     const method = req.method;
+    const clientIp = remoteAddr.hostname;
+
+    // Track Session (excluding internal APIs if desired, but good to track all)
+    if (!url.pathname.startsWith("/api/debug/client-error")) {
+        sessionTracker.track(req, clientIp);
+    }
 
     // CORS / Headers
     const headers = new Headers({
@@ -91,6 +98,8 @@ async function internalRouter(req: Request): Promise<Response> {
             response = await handleActivityRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/admin/kv")) {
             response = await handleAdminKvRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/admin/sessions")) {
+            response = await handleAdminSessionRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/admin")) {
             response = await handleAdminRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/strength")) {
@@ -121,6 +130,8 @@ async function internalRouter(req: Request): Promise<Response> {
             response = await handleUploadRoutes(req, url, headers);
         } else if (url.pathname === "/api/stats/community") {
             response = await handleGetCommunityStats(req);
+        } else if (url.pathname.startsWith("/api/debug/client-error")) {
+            response = await handleAdminSessionRoutes(req, url, headers, clientIp);
         } else if (url.pathname.startsWith("/api/debug")) {
             response = await handleDebugRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/backup")) {

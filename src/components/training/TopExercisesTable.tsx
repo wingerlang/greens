@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { StrengthWorkout, PersonalBest, isBodyweightExercise, isTimeBasedExercise, getTimePBValue, isHyroxExercise, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
+import { StrengthWorkout, PersonalBest, isBodyweightExercise, isTimeBasedExercise, getTimePBValue, isHyroxExercise, isWeightedDistanceExercise, isDistanceBasedExercise, type WorkoutCategory } from '../../models/strengthTypes.ts';
 import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
+import { WorkoutCategoryBadge } from './WorkoutCategoryBadge.tsx';
+import { getExerciseMuscleGroup, MUSCLE_TO_CATEGORY } from '../../utils/workoutClassifier.ts';
 
 interface TopExercisesTableProps {
     workouts: StrengthWorkout[];
@@ -10,9 +12,10 @@ interface TopExercisesTableProps {
 }
 
 export function TopExercisesTable({ workouts, personalBests = [], onSelectExercise, onSelectWorkout }: TopExercisesTableProps) {
-    const [sortBy, setSortBy] = useState<'name' | 'count' | 'sets' | 'reps' | 'volume' | 'pb' | 'last' | 'freq'>('volume');
+    const [sortBy, setSortBy] = useState<'name' | 'count' | 'sets' | 'reps' | 'volume' | 'pb' | 'last' | 'freq' | 'category'>('volume');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [filter, setFilter] = useState<'all' | 'bw' | 'weighted' | 'cardio' | 'hyrox'>('all');
+    const [categoryFilter, setCategoryFilter] = useState<WorkoutCategory | 'all'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [page, setPage] = useState(1);
     const pageSize = 100;
@@ -69,6 +72,7 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
             isDistanceBased: boolean;
             maxDistance: number;
             maxDistanceUnit: string;
+            category: WorkoutCategory | null;
         }> = {};
 
         workouts.forEach(w => {
@@ -99,7 +103,11 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                         isWeightedDistance: isWeightedDistanceExercise(ex.exerciseName),
                         isDistanceBased: isDistanceBasedExercise(ex.exerciseName),
                         maxDistance: pb?.distance || 0,
-                        maxDistanceUnit: pb?.distanceUnit || 'm'
+                        maxDistanceUnit: pb?.distanceUnit || 'm',
+                        category: (() => {
+                            const muscle = getExerciseMuscleGroup(ex.exerciseName);
+                            return muscle ? MUSCLE_TO_CATEGORY[muscle] : null;
+                        })()
                     };
                 }
 
@@ -186,6 +194,11 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
             result = result.filter(ex => ex.isHyrox);
         }
 
+        // Apply workout category filter
+        if (categoryFilter !== 'all') {
+            result = result.filter(ex => ex.category === categoryFilter);
+        }
+
         // Apply search
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
@@ -205,11 +218,16 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
             if (sortBy === 'freq') {
                 return mult * ((a as any).recurrence - (b as any).recurrence);
             }
+            if (sortBy === 'category') {
+                const catA = a.category || 'zzz';
+                const catB = b.category || 'zzz';
+                return mult * catA.localeCompare(catB);
+            }
             // For other numeric fields
             // @ts-ignore - dynamic access to properties we know exist
             return mult * (a[sortBy] - b[sortBy]);
         });
-    }, [workouts, sortBy, sortOrder, filter, searchTerm, pbMap]);
+    }, [workouts, sortBy, sortOrder, filter, categoryFilter, searchTerm, pbMap]);
 
     const paginatedStats = useMemo(() => {
         const start = (page - 1) * pageSize;
@@ -279,30 +297,58 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                 </div>
             </div>
 
+            {/* Category Filter Row */}
+            <div className="flex gap-2 flex-wrap items-center">
+                <span className="text-[9px] text-slate-600 uppercase font-bold">Kategori:</span>
+                {[
+                    { id: 'all', label: 'Alla', icon: '' },
+                    { id: 'push', label: 'Push', icon: '💪' },
+                    { id: 'pull', label: 'Pull', icon: '🔙' },
+                    { id: 'legs', label: 'Ben', icon: '🦵' },
+                    { id: 'mixed', label: 'Mix', icon: '🔄' },
+                    { id: 'other', label: 'Övrigt', icon: '❓' }
+                ].map(f => (
+                    <button
+                        key={f.id}
+                        onClick={() => {
+                            setCategoryFilter(f.id as any);
+                            setPage(1);
+                        }}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1 ${categoryFilter === f.id
+                            ? 'bg-slate-700 text-white border border-white/20'
+                            : 'bg-slate-800/50 text-slate-500 hover:bg-slate-800 border border-transparent'
+                            }`}
+                    >
+                        {f.icon && <span>{f.icon}</span>}
+                        {f.label}
+                    </button>
+                ))}
+            </div>
+
             <div className="max-h-[600px] overflow-y-auto custom-scrollbar border border-white/5 rounded-xl bg-slate-950/50">
                 <table className="w-full text-xs">
                     <thead className="text-slate-500 font-bold bg-slate-900/90 sticky top-0 z-10 backdrop-blur-sm">
                         <tr>
-                            <th className="px-4 py-4 text-left cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
+                            <th className="px-4 py-3 text-left cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
                                 Övning {sortBy === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('pb')}>
+                            <th className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('pb')}>
                                 1eRM {sortBy === 'pb' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors">
+                            <th className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors">
                                 Max
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('sets')}>
-                                Set & Reps {sortBy === 'sets' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            <th className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('sets')}>
+                                Set/Reps {sortBy === 'sets' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('last')}>
+                            <th className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('last')}>
                                 Senast {sortBy === 'last' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('freq')}>
-                                Frekvens {sortBy === 'freq' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            <th className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('freq')}>
+                                Frekv. {sortBy === 'freq' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
-                            <th className="px-4 py-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('volume')}>
-                                Total volym {sortBy === 'volume' && (sortOrder === 'asc' ? '↑' : '↓')}
+                            <th className="px-4 py-3 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('volume')}>
+                                Volym {sortBy === 'volume' && (sortOrder === 'asc' ? '↑' : '↓')}
                             </th>
                         </tr>
                     </thead>
@@ -313,12 +359,13 @@ export function TopExercisesTable({ workouts, personalBests = [], onSelectExerci
                                 className={`hover:bg-slate-800/30 ${onSelectExercise ? 'cursor-pointer' : ''}`}
                                 onClick={() => onSelectExercise?.(ex.name)}
                             >
-                                <td className="px-4 py-4 text-white font-black group">
-                                    <span className="group-hover:text-blue-400 group-hover:underline transition-colors">{ex.name}</span>
-                                    {ex.isBW && <span className="ml-2 text-[9px] text-slate-500 border border-white/10 px-1.5 py-0.5 rounded bg-slate-800">KV</span>}
-                                    {(ex.isTimeBased || ex.isDistanceBased) && <span className="ml-2 text-[9px] text-cyan-500 border border-cyan-500/20 px-1.5 py-0.5 rounded bg-cyan-500/10">CARDIO</span>}
-                                    {ex.isHyrox && <span className="ml-2 text-[9px] text-amber-500 border border-amber-500/20 px-1.5 py-0.5 rounded bg-amber-500/10 tracking-wider">HYROX</span>}
-                                    {ex.isWeightedDistance && <span className="ml-2 text-[9px] text-emerald-500 border border-emerald-500/20 px-1.5 py-0.5 rounded bg-emerald-500/10">DIST</span>}
+                                <td className="px-4 py-2.5 text-white font-bold group">
+                                    <div className="flex items-center gap-2">
+                                        <span className="group-hover:text-blue-400 group-hover:underline transition-colors">{ex.name}</span>
+                                        {ex.category && <WorkoutCategoryBadge category={ex.category} size="sm" />}
+                                        {ex.isBW && <span className="text-[8px] text-slate-500 border border-white/10 px-1 py-0.5 rounded bg-slate-800">KV</span>}
+                                        {ex.isHyrox && <span className="text-[8px] text-amber-500 border border-amber-500/20 px-1 py-0.5 rounded bg-amber-500/10">HX</span>}
+                                    </div>
                                 </td>
                                 <td className="px-4 py-4 text-right font-mono">
                                     {(ex.isTimeBased || ex.isDistanceBased || ex.isWeightedDistance) ? (

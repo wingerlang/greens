@@ -3,6 +3,8 @@
  */
 import React from 'react';
 import { StrengthWorkout, PersonalBest } from '../../models/strengthTypes.ts';
+import { WorkoutCategoryBadge } from './WorkoutCategoryBadge.tsx';
+import { classifyWorkout } from '../../utils/workoutClassifier.ts';
 
 // ============================================
 // Stat Card
@@ -35,6 +37,7 @@ interface WorkoutCardProps {
 
 export function WorkoutCard({ workout, isAnnualBest, isPR, onClick }: WorkoutCardProps) {
     const topExercises = workout.exercises.slice(0, 3).map(e => e.exerciseName).join(', ');
+    const category = workout.workoutCategory || classifyWorkout(workout);
 
     return (
         <div
@@ -51,9 +54,8 @@ export function WorkoutCard({ workout, isAnnualBest, isPR, onClick }: WorkoutCar
             )}
             <div className="flex items-center justify-between relative z-10">
                 <div className="flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1 text-purple-400 font-bold text-[10px] uppercase tracking-wider bg-purple-500/10 px-2 py-1 rounded">
-                        💪 StrengthLog
-                    </span>
+                    {/* Category Badge */}
+                    <WorkoutCategoryBadge category={category} size="sm" showLabel={true} />
                     {isPR && (
                         <span className="inline-flex items-center gap-1 text-amber-400 font-bold text-[10px] uppercase tracking-wider bg-amber-500/20 px-2 py-1 rounded border border-amber-500/30">
                             ⭐ All-Time PR

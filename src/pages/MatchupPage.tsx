@@ -249,7 +249,7 @@ export function MatchupPage() {
     const get1RM = (sessions: any[], patterns: string[]) => getExerciseStats(sessions, patterns).max1RM;
 
     // --- EXACT Match Exercise Stats (for Head-to-Head) ---
-    const getExactExerciseStats = (sessions: any[], exactName: string) => {
+    const getExactExerciseStats = (sessions: any[] = [], exactName: string) => {
         let heaviestWeight = 0; // Heaviest weight touched (any reps)
         let estimated1RM = 0; // Calculated from weight x reps formula
         let totalVolume = 0;
@@ -357,8 +357,67 @@ export function MatchupPage() {
         const weightA = userA?.settings?.weight || (userAId === currentUser?.id ? (myWeightEntries[0]?.weight || 80) : 80);
         const weightB = userB?.settings?.weight || 85;
 
-        const totalA = get1RM(sessionsA, ['squat']) + get1RM(sessionsA, ['bench']) + get1RM(sessionsA, ['deadlift']);
-        const totalB = get1RM(sessionsB, ['squat']) + get1RM(sessionsB, ['bench']) + get1RM(sessionsB, ['deadlift']);
+        // Enhanced 1RM getter that returns details
+        const getBestSetForPatterns = (sessions: any[], patterns: string[], excludePatterns: string[] = []) => {
+            let maxEstimated1RM = 0;
+            let maxWeight = 0;
+            let bestEstimatedSet: any = null;
+            let heaviestSet: any = null;
+            let exactNameEstimated = '';
+            let exactNameHeaviest = '';
+
+            const normalizedPatterns = patterns.map(p => p.toLowerCase());
+            const normalizedExcludes = excludePatterns.map(p => p.toLowerCase());
+
+            sessions.forEach(session => {
+                if (!session.exercises) return;
+                session.exercises.forEach((ex: any) => {
+                    const name = (ex.name || ex.exerciseName || '').toLowerCase();
+
+                    const matchesPattern = normalizedPatterns.some(p => name.includes(p));
+                    const matchesExclude = normalizedExcludes.some(p => name.includes(p));
+
+                    if (matchesPattern && !matchesExclude) {
+                        if (ex.sets && Array.isArray(ex.sets)) {
+                            ex.sets.forEach((set: any) => {
+                                const weight = Number(set.weight) || 0;
+                                const reps = Number(set.reps) || 0;
+                                if (weight === 0 || reps === 0) return;
+
+                                // Track Estimated 1RM
+                                const estimated = calculateEstimated1RM(weight, reps);
+                                if (estimated > maxEstimated1RM) {
+                                    maxEstimated1RM = estimated;
+                                    bestEstimatedSet = { ...set, date: session.date, sessionId: session.id };
+                                    exactNameEstimated = ex.name || ex.exerciseName;
+                                }
+
+                                // Track Heaviest Weight (Actual 1RM context)
+                                if (weight > maxWeight) {
+                                    maxWeight = weight;
+                                    heaviestSet = { ...set, date: session.date, sessionId: session.id };
+                                    exactNameHeaviest = ex.name || ex.exerciseName;
+                                }
+                            });
+                        }
+                    }
+                });
+            });
+
+            return { maxEstimated1RM, maxWeight, bestEstimatedSet, heaviestSet, exactNameEstimated, exactNameHeaviest };
+        };
+
+        const squatA = getBestSetForPatterns(sessionsA, ['knäböj', 'squat', 'böj'], ['air', 'bodyweight', 'goblet', 'split', 'lunges', 'utfall', 'hack', 'front', 'zercher', 'overhead', 'box', 'pistol', 'bulgarian', 'smith', 'maskin', 'machine', 'one leg', 'enben', 'jump']);
+        const benchA = getBestSetForPatterns(sessionsA, ['bänkpress', 'bench', 'bänk'], ['dips', 'dip', 'hantel', 'dumbbell', 'flyes', 'row', 'rodd', 'incline', 'decline', 'sne', 'lutande', 'smal', 'narrow', 'close', 'floor', 'smith', 'maskin', 'machine', 'push up', 'armhävning']);
+        const deadA = getBestSetForPatterns(sessionsA, ['marklyft', 'deadlift', 'mark'], ['rumänska', 'stiff', 'raka', 'roman', 'hantel', 'dumbbell', 'trap', 'hex', 'rack', 'block', 'kron', 'deficit']);
+
+        const squatB = getBestSetForPatterns(sessionsB, ['knäböj', 'squat', 'böj'], ['air', 'bodyweight', 'goblet', 'split', 'lunges', 'utfall', 'hack', 'front', 'zercher', 'overhead', 'box', 'pistol', 'bulgarian', 'smith', 'maskin', 'machine', 'one leg', 'enben', 'jump']);
+        const benchB = getBestSetForPatterns(sessionsB, ['bänkpress', 'bench', 'bänk'], ['dips', 'dip', 'hantel', 'dumbbell', 'flyes', 'row', 'rodd', 'incline', 'decline', 'sne', 'lutande', 'smal', 'narrow', 'close', 'floor', 'smith', 'maskin', 'machine', 'push up', 'armhävning']);
+        const deadB = getBestSetForPatterns(sessionsB, ['marklyft', 'deadlift', 'mark'], ['rumänska', 'stiff', 'raka', 'roman', 'hantel', 'dumbbell', 'trap', 'hex', 'rack', 'block', 'kron', 'deficit']);
+
+        // Use Estimated 1RM for the Total score (standard practice)
+        const totalA = squatA.maxEstimated1RM + benchA.maxEstimated1RM + deadA.maxEstimated1RM;
+        const totalB = squatB.maxEstimated1RM + benchB.maxEstimated1RM + deadB.maxEstimated1RM;
 
         const genderA = (userA?.settings?.gender === 'female' ? 'female' : 'male') as 'male' | 'female';
         const genderB = (userB?.settings?.gender === 'female' ? 'female' : 'male') as 'male' | 'female';
@@ -381,7 +440,12 @@ export function MatchupPage() {
             totalA, totalB,
             pointsA: isNaN(pointsA) ? 0 : Math.round(pointsA * (viewMode === 'relative' ? 100 : 10)) / (viewMode === 'relative' ? 100 : 10),
             pointsB: isNaN(pointsB) ? 0 : Math.round(pointsB * (viewMode === 'relative' ? 100 : 10)) / (viewMode === 'relative' ? 100 : 10),
-            weightA, weightB
+            weightA, weightB,
+            breakdown: [
+                { id: 'squat', label: 'Knäböj', a: squatA, b: squatB },
+                { id: 'bench', label: 'Bänkpress', a: benchA, b: benchB },
+                { id: 'deadlift', label: 'Marklyft', a: deadA, b: deadB },
+            ]
         };
     }, [sessionsA, sessionsB, userA, userB, viewMode, currentUser?.id, myWeightEntries]);
 
@@ -923,6 +987,75 @@ export function MatchupPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Detailed Breakdown Table */}
+                        <div className="mt-4 pt-4 border-t border-white/5">
+                            <div className="flex flex-col gap-2">
+                                {powerStats.breakdown.map(item => {
+                                    // Helper to render stats for a user (A or B)
+                                    const renderUserStats = (stats: any, color: string) => {
+                                        if (!stats.bestEstimatedSet && !stats.heaviestSet) return <span className="text-[10px] text-slate-600">-</span>;
+
+                                        // Check if heaviest and best estimated are the same performance (same weight and reps)
+                                        const isSame = stats.bestEstimatedSet && stats.heaviestSet &&
+                                            stats.bestEstimatedSet.weight === stats.heaviestSet.weight &&
+                                            stats.bestEstimatedSet.reps === stats.heaviestSet.reps;
+
+                                        const renderSet = (set: any, exactName: string, label: string, val: number, isEst: boolean) => (
+                                            <div className="mb-1 last:mb-0">
+                                                <div className={`flex items-baseline gap-1 ${color === 'emerald' ? 'justify-end' : 'justify-start'}`}>
+                                                    <span className="text-[9px] text-slate-500 uppercase font-bold tracking-wider">{label}</span>
+                                                    <span className={`text-xs font-bold text-${color}-400 font-mono`}>
+                                                        {set.weight}kg <span className="opacity-50 text-[10px]">x{set.reps}</span>
+                                                    </span>
+                                                </div>
+                                                <div className={`flex flex-col ${color === 'emerald' ? 'items-end' : 'items-start'}`}>
+                                                    <span className="text-[9px] text-slate-500 font-medium truncate max-w-[120px]" title={exactName}>
+                                                        {exactName}
+                                                    </span>
+                                                    <span className="text-[9px] font-black text-slate-600 bg-slate-900/50 px-1 rounded">
+                                                        {isEst ? 'e1RM' : '1RM'}: {Math.round(val)}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        );
+
+                                        if (isSame) {
+                                            return renderSet(stats.bestEstimatedSet, stats.exactNameEstimated, "BÄSTA SET", stats.maxEstimated1RM, true);
+                                        }
+
+                                        return (
+                                            <div className="flex flex-col gap-1">
+                                                {stats.heaviestSet && renderSet(stats.heaviestSet, stats.exactNameHeaviest, "TYNGSTA (1RM)", stats.maxWeight, false)}
+                                                {stats.bestEstimatedSet && renderSet(stats.bestEstimatedSet, stats.exactNameEstimated, "BÄSTA (e1RM)", stats.maxEstimated1RM, true)}
+                                            </div>
+                                        );
+                                    };
+
+                                    return (
+                                        <div key={item.id} className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 p-2 rounded-lg bg-white/[0.02] hover:bg-white/[0.04] transition-colors group">
+
+                                            {/* User A Side */}
+                                            <div className="flex flex-col items-start sm:items-end flex-1 order-2 sm:order-1 text-right">
+                                                {renderUserStats(item.a, 'emerald')}
+                                            </div>
+
+                                            {/* Center Label */}
+                                            <div className="flex items-center gap-2 justify-center min-w-[100px] order-1 sm:order-2 py-2">
+                                                <div className="h-px bg-white/10 flex-1 hidden sm:block"></div>
+                                                <span className="text-[10px] font-black text-white uppercase tracking-wider">{item.label}</span>
+                                                <div className="h-px bg-white/10 flex-1 hidden sm:block"></div>
+                                            </div>
+
+                                            {/* User B Side */}
+                                            <div className="flex flex-col items-end sm:items-start flex-1 order-3 text-left">
+                                                {renderUserStats(item.b, 'indigo')}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -1340,45 +1473,59 @@ export function MatchupPage() {
                                             {/* 1RM Comparison */}
                                             <div className="space-y-2">
                                                 <div className="flex justify-between text-[10px] font-black text-slate-500 uppercase">
-                                                    <Link to={`/strength/${encodeURIComponent(exName)}?sessionId=${statsA.bestSet.sessionId}`} className="hover:text-emerald-400 transition-colors">
-                                                        {statsA.max1RM} kg
-                                                        {statsA.bestSet && (
-                                                            <span className="block text-[8px] font-normal lowercase text-emerald-400/60">
-                                                                {statsA.bestSet.weight}kg x {statsA.bestSet.reps}
-                                                                <span className="text-slate-600 ml-1">{statsA.bestSet.date}</span>
-                                                            </span>
-                                                        )}
-                                                        {/* Show alternative value */}
-                                                        {rmMode === 'actual' && statsA.actual1RM === 0 && statsA.estimated1RM > 0 && (
-                                                            <span className="block text-[7px] text-slate-600 italic">inga singelyft - visar e1RM</span>
-                                                        )}
-                                                        {rmMode === 'actual' && statsA.actual1RM > 0 && statsA.estimated1RM !== statsA.actual1RM && (
-                                                            <span className="block text-[7px] text-slate-600">e1RM: {statsA.estimated1RM}kg</span>
-                                                        )}
-                                                        {rmMode === 'estimated' && statsA.actual1RM > 0 && (
-                                                            <span className="block text-[7px] text-slate-600">1RM: {statsA.actual1RM}kg</span>
-                                                        )}
-                                                    </Link>
-                                                    <span className="text-[9px]">{rmMode === 'actual' ? '1RM' : 'e1RM'}</span>
-                                                    <Link to={`/strength/${encodeURIComponent(exName)}?sessionId=${statsB.bestSet.sessionId}`} className="hover:text-indigo-400 transition-colors text-right">
-                                                        {statsB.max1RM} kg
-                                                        {statsB.bestSet && (
-                                                            <span className="block text-[8px] font-normal lowercase text-indigo-400/60">
-                                                                {statsB.bestSet.weight}kg x {statsB.bestSet.reps}
-                                                                <span className="text-slate-600 ml-1">{statsB.bestSet.date}</span>
-                                                            </span>
-                                                        )}
-                                                        {/* Show alternative value */}
-                                                        {rmMode === 'actual' && statsB.actual1RM === 0 && statsB.estimated1RM > 0 && (
-                                                            <span className="block text-[7px] text-slate-600 italic">inga singelyft - visar e1RM</span>
-                                                        )}
-                                                        {rmMode === 'actual' && statsB.actual1RM > 0 && statsB.estimated1RM !== statsB.actual1RM && (
-                                                            <span className="block text-[7px] text-slate-600">e1RM: {statsB.estimated1RM}kg</span>
-                                                        )}
-                                                        {rmMode === 'estimated' && statsB.actual1RM > 0 && (
-                                                            <span className="block text-[7px] text-slate-600">1RM: {statsB.actual1RM}kg</span>
-                                                        )}
-                                                    </Link>
+                                                    {(() => {
+                                                        const urlA = statsA.bestSet && statsA.bestSet.sessionId
+                                                            ? `/strength/${encodeURIComponent(exName)}?sessionId=${statsA.bestSet.sessionId}`
+                                                            : `/strength/${encodeURIComponent(exName)}`;
+
+                                                        const urlB = statsB.bestSet && statsB.bestSet.sessionId
+                                                            ? `/strength/${encodeURIComponent(exName)}?sessionId=${statsB.bestSet.sessionId}`
+                                                            : `/strength/${encodeURIComponent(exName)}`;
+
+                                                        return (
+                                                            <>
+                                                                <Link to={urlA} className="hover:text-emerald-400 transition-colors">
+                                                                    {statsA.max1RM} kg
+                                                                    {statsA.bestSet && (
+                                                                        <span className="block text-[8px] font-normal lowercase text-emerald-400/60">
+                                                                            {statsA.bestSet.weight}kg x {statsA.bestSet.reps}
+                                                                            <span className="text-slate-600 ml-1">{statsA.bestSet.date}</span>
+                                                                        </span>
+                                                                    )}
+                                                                    {/* Show alternative value */}
+                                                                    {rmMode === 'actual' && statsA.actual1RM === 0 && statsA.estimated1RM > 0 && (
+                                                                        <span className="block text-[7px] text-slate-600 italic">inga singelyft - visar e1RM</span>
+                                                                    )}
+                                                                    {rmMode === 'actual' && statsA.actual1RM > 0 && statsA.estimated1RM !== statsA.actual1RM && (
+                                                                        <span className="block text-[7px] text-slate-600">e1RM: {statsA.estimated1RM}kg</span>
+                                                                    )}
+                                                                    {rmMode === 'estimated' && statsA.actual1RM > 0 && (
+                                                                        <span className="block text-[7px] text-slate-600">1RM: {statsA.actual1RM}kg</span>
+                                                                    )}
+                                                                </Link>
+                                                                <span className="text-[9px]">{rmMode === 'actual' ? '1RM' : 'e1RM'}</span>
+                                                                <Link to={urlB} className="hover:text-indigo-400 transition-colors text-right">
+                                                                    {statsB.max1RM} kg
+                                                                    {statsB.bestSet && (
+                                                                        <span className="block text-[8px] font-normal lowercase text-indigo-400/60">
+                                                                            {statsB.bestSet.weight}kg x {statsB.bestSet.reps}
+                                                                            <span className="text-slate-600 ml-1">{statsB.bestSet.date}</span>
+                                                                        </span>
+                                                                    )}
+                                                                    {/* Show alternative value */}
+                                                                    {rmMode === 'actual' && statsB.actual1RM === 0 && statsB.estimated1RM > 0 && (
+                                                                        <span className="block text-[7px] text-slate-600 italic">inga singelyft - visar e1RM</span>
+                                                                    )}
+                                                                    {rmMode === 'actual' && statsB.actual1RM > 0 && statsB.estimated1RM !== statsB.actual1RM && (
+                                                                        <span className="block text-[7px] text-slate-600">e1RM: {statsB.estimated1RM}kg</span>
+                                                                    )}
+                                                                    {rmMode === 'estimated' && statsB.actual1RM > 0 && (
+                                                                        <span className="block text-[7px] text-slate-600">1RM: {statsB.actual1RM}kg</span>
+                                                                    )}
+                                                                </Link>
+                                                            </>
+                                                        );
+                                                    })()}
                                                 </div>
                                                 <div className="h-1 bg-slate-900 rounded-full overflow-hidden flex">
                                                     <div style={{ width: `${(statsA.max1RM / (statsA.max1RM + statsB.max1RM || 1)) * 100}%` }} className="h-full bg-emerald-500" />

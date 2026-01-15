@@ -690,7 +690,12 @@ export function CaloriesPage() {
                                             </div>
                                         </div>
                                     </div>
-                                    <span className="text-rose-400 font-black">-{ex.caloriesBurned} kcal</span>
+                                    <span
+                                        className={`font-black ${ex.caloriesBurned > 0 ? 'text-rose-400' : 'text-slate-400'} ${ex.calorieBreakdown ? 'cursor-help border-b border-rose-400/20 md:border-b-0' : ''}`}
+                                        title={ex.calorieBreakdown}
+                                    >
+                                        -{ex.caloriesBurned} kcal
+                                    </span>
                                 </Link>
 
                                 {((ex as any).source === 'manual' || (ex as any).source === 'strength') && (
@@ -726,6 +731,7 @@ export function CaloriesPage() {
                 quickAddServings={quickAddServings}
                 setQuickAddServings={setQuickAddServings}
                 handleQuickAdd={handleQuickAdd}
+                selectedDate={selectedDate}
             />
 
             <NutritionBreakdownModal

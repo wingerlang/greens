@@ -355,11 +355,10 @@ export class LocalStorageService implements StorageService {
                     },
                     body: JSON.stringify(meal)
                 });
-                if (res.ok) {
-                    notificationService.notify('success', 'Måltid sparad');
-                } else {
+                if (!res.ok) {
                     throw new Error('API sync failed');
                 }
+                // Silently succeed - no notification needed for frequent meal logging
             } catch (e) {
                 console.error('[Storage] Meal sync error:', e);
                 notificationService.notify('error', 'Kunde inte spara måltid');

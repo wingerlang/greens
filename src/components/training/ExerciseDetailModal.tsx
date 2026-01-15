@@ -2,6 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { StrengthWorkout, PersonalBest, StrengthStats, normalizeExerciseName, isWeightedDistanceExercise, isDistanceBasedExercise } from '../../models/strengthTypes.ts';
 import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { WorkoutCategoryBadge } from './WorkoutCategoryBadge.tsx';
+import { getExerciseMuscleGroup, MUSCLE_TO_CATEGORY } from '../../utils/workoutClassifier.ts';
 
 interface ExerciseDetailModalProps {
     exerciseName: string;
@@ -512,6 +514,12 @@ export function ExerciseDetailModal({
                     <div>
                         <div className="flex items-baseline gap-3">
                             <h2 className="text-2xl font-black text-white">{exerciseName}</h2>
+                            {/* Category Badge */}
+                            {(() => {
+                                const muscle = getExerciseMuscleGroup(exerciseName);
+                                const category = muscle ? MUSCLE_TO_CATEGORY[muscle] : null;
+                                return category ? <WorkoutCategoryBadge category={category} size="sm" showLabel={true} /> : null;
+                            })()}
                             <p className="text-slate-500 text-xs font-medium translate-y-[-2px]">{exerciseHistory.length} pass med denna övning</p>
                         </div>
                     </div>

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { WorkoutDefinition, WorkoutSection, WorkoutExercise } from '../models/workout.ts';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
+import { generateId } from '../models/types.ts';
 import { ExerciseSelector } from '../components/workouts/ExerciseSelector.tsx';
 import { WorkoutAnalyzer } from '../components/workouts/WorkoutAnalyzer.tsx';
 import { WorkoutComparisonView } from '../components/workouts/WorkoutComparisonView.tsx';
@@ -19,7 +20,7 @@ const SUBCATEGORIES: Record<string, string[]> = {
 
 // Initial Empty State (Swedish)
 const INITIAL_WORKOUT: WorkoutDefinition = {
-    id: crypto.randomUUID(),
+    id: generateId(),
     title: "Nytt Träningspass",
     category: 'STRENGTH',
     difficulty: 'Intermediate',
@@ -28,8 +29,8 @@ const INITIAL_WORKOUT: WorkoutDefinition = {
     source: 'USER_CUSTOM',
     description: "",
     exercises: [
-        { id: crypto.randomUUID(), title: "Uppvärmning", exercises: [] },
-        { id: crypto.randomUUID(), title: "Huvuddel", exercises: [] },
+        { id: generateId(), title: "Uppvärmning", exercises: [] },
+        { id: generateId(), title: "Huvuddel", exercises: [] },
     ]
 };
 
@@ -79,19 +80,19 @@ export function WorkoutBuilderPage() {
 
                 const imported: WorkoutDefinition = {
                     ...INITIAL_WORKOUT,
-                    id: crypto.randomUUID(),
+                    id: generateId(),
                     title: title,
                     durationMin: activity.durationMinutes || 60,
                     category: isRun ? 'RUNNING' : 'CROSSFIT',
                     subCategory: isRun && activity.subType && activity.subType !== 'default' ? (activity.subType.charAt(0).toUpperCase() + activity.subType.slice(1)) : undefined,
                     description: activity.notes || `Importerat från aktivitet den ${activity.date}`,
                     exercises: isRun ? [
-                        { id: crypto.randomUUID(), title: "Uppvärmning", exercises: [] },
+                        { id: generateId(), title: "Uppvärmning", exercises: [] },
                         {
-                            id: crypto.randomUUID(),
+                            id: generateId(),
                             title: "Löpning",
                             exercises: [{
-                                id: crypto.randomUUID(),
+                                id: generateId(),
                                 exerciseId: 'run',
                                 name: activity.subType === 'interval' ? 'Intervaller' : 'Löpning',
                                 sets: 1,
@@ -100,7 +101,7 @@ export function WorkoutBuilderPage() {
                                 rest: 0
                             }]
                         },
-                        { id: crypto.randomUUID(), title: "Nedjogg", exercises: [] },
+                        { id: generateId(), title: "Nedjogg", exercises: [] },
                     ] : INITIAL_WORKOUT.exercises
                 };
                 setWorkout(imported);
@@ -114,13 +115,13 @@ export function WorkoutBuilderPage() {
                 const muscles = new Set<string>();
                 if (strengthSession.exercises && strengthSession.exercises.length > 0) {
                     const mainSection: WorkoutSection = {
-                        id: crypto.randomUUID(),
+                        id: generateId(),
                         title: "Huvuddel",
                         exercises: strengthSession.exercises.map(ex => {
                             const map = MUSCLE_MAP[ex.name];
                             if (map) { muscles.add(map.primary); map.secondary.forEach(m => muscles.add(m)); }
                             return {
-                                id: crypto.randomUUID(),
+                                id: generateId(),
                                 exerciseId: ex.name,
                                 name: ex.name,
                                 sets: ex.sets || 3,
@@ -132,12 +133,12 @@ export function WorkoutBuilderPage() {
                     };
                     sections.push(mainSection);
                 } else {
-                    sections.push({ id: crypto.randomUUID(), title: "Styrka", exercises: [] });
+                    sections.push({ id: generateId(), title: "Styrka", exercises: [] });
                 }
 
                 const imported: WorkoutDefinition = {
                     ...INITIAL_WORKOUT,
-                    id: crypto.randomUUID(),
+                    id: generateId(),
                     title: strengthSession.title || "Styrkepass",
                     category: 'STRENGTH',
                     subCategory: strengthSession.title?.toLowerCase().includes('push') ? 'Push' :
@@ -165,16 +166,16 @@ export function WorkoutBuilderPage() {
                 const warmupKm = needsKm ? "2 km" : "-";
                 updatedWorkout.exercises = [
                     {
-                        id: crypto.randomUUID(), title: "Uppvärmning",
-                        exercises: [{ id: crypto.randomUUID(), exerciseId: 'run-wu', name: 'Löpning (Uppvärmning)', sets: 1, reps: warmupKm, weight: 'Lugnt', rest: 0 }]
+                        id: generateId(), title: "Uppvärmning",
+                        exercises: [{ id: generateId(), exerciseId: 'run-wu', name: 'Löpning (Uppvärmning)', sets: 1, reps: warmupKm, weight: 'Lugnt', rest: 0 }]
                     },
                     {
-                        id: crypto.randomUUID(), title: sub === 'Intervall' ? "Intervaller" : "Huvuddel",
-                        exercises: [{ id: crypto.randomUUID(), exerciseId: 'run-main', name: sub === 'Intervall' ? 'Intervaller' : 'Löpning', sets: 1, reps: sub === 'Långpass' ? '15-20 km' : '5-10 km', weight: sub === 'Tempo' ? 'Progressiv' : 'RPE 5', rest: 0 }]
+                        id: generateId(), title: sub === 'Intervall' ? "Intervaller" : "Huvuddel",
+                        exercises: [{ id: generateId(), exerciseId: 'run-main', name: sub === 'Intervall' ? 'Intervaller' : 'Löpning', sets: 1, reps: sub === 'Långpass' ? '15-20 km' : '5-10 km', weight: sub === 'Tempo' ? 'Progressiv' : 'RPE 5', rest: 0 }]
                     },
                     {
-                        id: crypto.randomUUID(), title: "Nedjogg",
-                        exercises: [{ id: crypto.randomUUID(), exerciseId: 'run-cd', name: 'Nerjogg', sets: 1, reps: warmupKm, weight: 'Lugnt', rest: 0 }]
+                        id: generateId(), title: "Nedjogg",
+                        exercises: [{ id: generateId(), exerciseId: 'run-cd', name: 'Nerjogg', sets: 1, reps: warmupKm, weight: 'Lugnt', rest: 0 }]
                     },
                 ];
             }
@@ -188,7 +189,7 @@ export function WorkoutBuilderPage() {
 
     const addExercise = (name: string) => {
         if (!activeSectionId) return;
-        const newExercise: WorkoutExercise = { id: crypto.randomUUID(), exerciseId: name, name: name, sets: 3, reps: "10", weight: "RPE 7", rest: 60 };
+        const newExercise: WorkoutExercise = { id: generateId(), exerciseId: name, name: name, sets: 3, reps: "10", weight: "RPE 7", rest: 60 };
         const newSections = (workout.exercises || []).map(section => {
             if (section.id === activeSectionId) return { ...section, exercises: [...section.exercises, newExercise] };
             return section;
@@ -514,7 +515,7 @@ export function WorkoutBuilderPage() {
                         </div>
 
                         <button
-                            onClick={() => update('exercises', [...(workout.exercises || []), { id: crypto.randomUUID(), title: "Ny Sektion", exercises: [] }])}
+                            onClick={() => update('exercises', [...(workout.exercises || []), { id: generateId(), title: "Ny Sektion", exercises: [] }])}
                             className="w-full py-8 border-2 border-dashed border-white/5 hover:border-white/10 hover:bg-white/5 rounded-[2.5rem] text-slate-500 hover:text-white transition-all font-black uppercase tracking-[0.2em] text-xs"
                         >
                             + Lägg till sektion
