@@ -27,6 +27,18 @@ export default function DebugBar() {
     const [currentRoute, setCurrentRoute] = useState(window.location.pathname);
     const [activeModals, setActiveModals] = useState<string[]>([]);
 
+    const [hostIps, setHostIps] = useState<string[]>([]);
+
+    useEffect(() => {
+        // Fetch host info
+        fetch('/api/debug/host-info')
+            .then(res => res.json())
+            .then(data => {
+                if (data.ips) setHostIps(data.ips);
+            })
+            .catch(console.error);
+    }, []);
+
     useEffect(() => {
         if (selectedId) {
             fetchDebugProfile(selectedId);
@@ -151,6 +163,11 @@ export default function DebugBar() {
                 <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
                         <span className="bg-orange-600 text-white px-1.5 py-0.5 rounded font-bold">DEV MODE</span>
+                        {hostIps.length > 0 && (
+                            <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-slate-700 font-mono">
+                                {hostIps[0]}
+                            </span>
+                        )}
                     </div>
 
                     {/* Inspector Toggle */}

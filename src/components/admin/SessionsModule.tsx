@@ -28,14 +28,25 @@ export function SessionsModule() {
     const [errors, setErrors] = useState<ClientError[]>([]);
     const [loading, setLoading] = useState(true);
 
+    const [error, setError] = useState<string | null>(null);
+
     const fetchData = async () => {
         try {
-            const res = await fetch('/api/admin/sessions');
+            setError(null);
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout
+
+            const res = await fetch('/api/admin/sessions', { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+
             const data = await res.json();
             setSessions(data.sessions);
             setErrors(data.errors);
         } catch (e) {
             console.error("Failed to fetch sessions", e);
+            setError(e instanceof Error ? e.message : String(e));
         } finally {
             setLoading(false);
         }
@@ -58,6 +69,16 @@ export function SessionsModule() {
     };
 
     if (loading && sessions.length === 0) return <div className="p-8 text-center text-gray-500">Laddar sessioner...</div>;
+
+    if (error && sessions.length === 0) {
+        return (
+            <div className="p-8 text-center">
+                <div className="text-red-400 mb-2">Ett fel inträffade vid laddning av sessioner</div>
+                <div className="text-xs font-mono bg-slate-900 inline-block px-2 py-1 rounded text-red-300">{error}</div>
+                <button onClick={fetchData} className="block mx-auto mt-4 text-blue-400 hover:text-blue-300 text-sm">Försök igen</button>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">

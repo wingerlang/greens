@@ -33,6 +33,41 @@ function subsequenceScore(query: string, target: string): number {
 }
 
 // Remove accents (diacritics)
+// Levenshtein distance for typo tolerance
+function levenshtein(a: string, b: string): number {
+    if (a.length === 0) return b.length;
+    if (b.length === 0) return a.length;
+
+    const matrix = [];
+
+    // increment along the first column of each row
+    let i;
+    for (i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+
+    // increment each column in the first row
+    let j;
+    for (j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+    }
+
+    // Fill in the rest of the matrix
+    for (i = 1; i <= b.length; i++) {
+        for (j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) == a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, // substitution
+                    Math.min(matrix[i][j - 1] + 1, // insertion
+                        matrix[i - 1][j] + 1)); // deletion
+            }
+        }
+    }
+
+    return matrix[b.length][a.length];
+}
+
 function normalizeStr(str: string): string {
     return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
@@ -59,6 +94,9 @@ export function performSmartSearch<T>(
     const normQuery = normalizeStr(rawQuery);
     const useNormalization = rawQuery !== normQuery;
 
+    // Split query into tokens for word-level checks
+    const queryTokens = rawQuery.split(/\s+/).filter(t => t.length > 0);
+
     const ranked: RankedItem<T>[] = items.map(item => {
         const text = options.textFn(item);
         const lowerText = text.toLowerCase();
@@ -78,7 +116,7 @@ export function performSmartSearch<T>(
             score = 80;
             matchType = 'prefix';
         } else if (lowerText.includes(' ' + rawQuery)) {
-             // Word boundary match (e.g. "Svensk Öl")
+            // Word boundary match (e.g. "Svensk Öl")
             score = 75;
             matchType = 'contains'; // High value contains
         } else if (lowerText.endsWith(rawQuery)) {
@@ -95,6 +133,48 @@ export function performSmartSearch<T>(
                 else if (normText.includes(' ' + normQuery)) score = 65;
                 else if (normText.endsWith(normQuery)) score = 60;
                 else if (normText.includes(normQuery)) score = 35;
+            }
+        }
+
+        // 1.5 Token Logic (Order agnostic)
+        // If exact/prefix/suffix failed, check if ALL tokens imply a match (e.g. "tofu rökt" -> "Rökt Tofu")
+        if (score === 0 && queryTokens.length > 1) {
+            const allTokensMatch = queryTokens.every(t => lowerText.includes(t));
+            if (allTokensMatch) {
+                score = 60; // Better than generic "contains" (40), worse than ordered "contains" (75)
+                matchType = 'contains';
+            } else if (useNormalization) {
+                const normTokens = normQuery.split(/\s+/).filter(t => t.length > 0);
+                const allNormTokensMatch = normTokens.every(t => normText.includes(t));
+                if (allNormTokensMatch) {
+                    score = 50;
+                    matchType = 'contains';
+                }
+            }
+        }
+
+        // 1.8 Typos / Levenshtein on Words (New: Fixes "jasminr" -> "jasmin")
+        // Check if the query is very close to ANY individual word in the target
+        if (score === 0 && rawQuery.length > 3) {
+            const targetWords = lowerText.split(/[\s,().-]+/).filter(w => w.length > 0);
+            for (const word of targetWords) {
+                // Skip short words to avoid noise
+                if (word.length < 3) continue;
+
+                // If query is "jasminr" (7) and word is "jasmin" (6) -> dist 1
+                // Allow 1 edit for length 4-7, 2 edits for length 8+
+                const maxEdits = rawQuery.length > 7 ? 2 : 1;
+
+                // Optimization: length diff check first
+                if (Math.abs(word.length - rawQuery.length) > maxEdits) continue;
+
+                const dist = levenshtein(rawQuery, word);
+                if (dist <= maxEdits) {
+                    score = 55 - (dist * 10); // Dist 1 = 45, Dist 2 = 35. 
+                    // This is better than random subsequence (usually <20), but worse than exact contains.
+                    matchType = 'fuzzy';
+                    break; // Found a good word match, stop checking other words
+                }
             }
         }
 

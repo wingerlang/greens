@@ -36,6 +36,9 @@ import { StravaActivityImportModal } from '../components/integrations/StravaActi
 import { RefreshCw } from 'lucide-react';
 import { CaffeineCard } from '../components/dashboard';
 import { WeightTrendChart } from '../components/charts/WeightTrendChart.tsx';
+import { DashboardActionFAB } from '../components/dashboard/DashboardActionFAB.tsx';
+import { ImportWorkoutModal } from '../components/training/ImportWorkoutModal.tsx';
+import { useAuth } from '../context/AuthContext.tsx';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -319,8 +322,10 @@ export function DashboardPage() {
         toggleCompleteDay,
         dailyVitals,
         selectedDate,
-        setSelectedDate
+        setSelectedDate,
+        refreshData
     } = useData();
+    const { token } = useAuth();
 
     // Removed local state: const [selectedDate, setSelectedDate] = useState(getISODate());
     const health = useHealth(selectedDate);
@@ -343,6 +348,44 @@ export function DashboardPage() {
     const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
     const [isHoveringChart, setIsHoveringChart] = useState(false);
+
+    // Import State
+    const [showImportModal, setShowImportModal] = useState(false);
+    const [importing, setImporting] = useState(false);
+    const [importResult, setImportResult] = useState<any | null>(null);
+
+    // Handle file import
+    const handleImport = async (file: File, source: 'strengthlog' | 'hevy') => {
+        if (!file || !token) return;
+
+        setImporting(true);
+        setImportResult(null);
+
+        try {
+            const text = await file.text();
+            const res = await fetch('/api/strength/import', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ csv: text, source })
+            });
+
+            const result = await res.json();
+            setImportResult(result);
+
+            if (result.success) {
+                await refreshData();
+                setShowImportModal(false);
+            }
+        } catch (e) {
+            console.error('Import failed:', e);
+            setImportResult({ success: false, errors: ['Import failed'] });
+        } finally {
+            setImporting(false);
+        }
+    };
 
     const changeDate = (days: number) => {
         const d = new Date(selectedDate);
@@ -1940,7 +1983,8 @@ export function DashboardPage() {
                                         </div>
 
                                         {/* Stats Row - Classic Layout (Reverted) */}
-                                        <div className="flex items-center justify-between px-2 mt-4">
+                                        {/* Stats Row - Responsive Grid */}
+                                        <div className="grid grid-cols-2 gap-y-6 md:flex md:items-center md:justify-between px-2 mt-4">
                                             {/* Total Tid */}
                                             <div className="space-y-1">
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Tid</div>
@@ -1949,21 +1993,21 @@ export function DashboardPage() {
                                             </div>
 
                                             {/* Volym */}
-                                            <div className="space-y-1 border-l border-slate-800 pl-8">
+                                            <div className="space-y-1 md:border-l md:border-slate-800 md:pl-8">
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Volym</div>
                                                 <div className="text-2xl md:text-3xl font-black text-emerald-400">{totalTonnage.toFixed(1)} <span className="text-sm text-slate-500">Ton</span></div>
                                                 <div className="text-[10px] text-slate-500">Styrketräning</div>
                                             </div>
 
                                             {/* Distans */}
-                                            <div className="space-y-1 border-l border-slate-800 pl-8">
+                                            <div className="space-y-1 md:border-l md:border-slate-800 md:pl-8">
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Distans</div>
                                                 <div className="text-2xl md:text-3xl font-black text-indigo-400">{totalDistance.toFixed(1)} <span className="text-sm text-slate-500">Km</span></div>
                                                 <div className="text-[10px] text-slate-500">Löpning / Gång</div>
                                             </div>
 
                                             {/* NEW: Streak Split */}
-                                            <div className="space-y-1 border-l border-slate-800 pl-8">
+                                            <div className="space-y-1 md:border-l md:border-slate-800 md:pl-8">
                                                 <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Träningsstreak</div>
                                                 <div className="flex flex-col gap-0.5 mt-0.5">
                                                     <div className="flex items-center gap-2">
@@ -2036,7 +2080,7 @@ export function DashboardPage() {
                             </div>
 
                             {/* Stats Grid */}
-                            <div className="flex-[1.5] grid grid-cols-3 gap-4">
+                            <div className="flex-[1.5] grid grid-cols-1 sm:grid-cols-3 gap-4">
                                 {/* Training Daily */}
                                 <div
                                     className="p-3 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-900/20 transition-all"
@@ -2086,6 +2130,18 @@ export function DashboardPage() {
                 isOpen={isStravaModalOpen}
                 onClose={() => setIsStravaModalOpen(false)}
                 initialRange="7days"
+            />
+
+            <DashboardActionFAB
+                onLogMeasurements={() => setIsWeightModalOpen(true)}
+                onImportWorkout={() => setShowImportModal(true)}
+            />
+
+            <ImportWorkoutModal
+                isOpen={showImportModal}
+                onClose={() => setShowImportModal(false)}
+                onImport={handleImport}
+                isImporting={importing}
             />
         </div >
     );

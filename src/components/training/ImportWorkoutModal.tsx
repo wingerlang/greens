@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 type ImportSource = 'strengthlog' | 'hevy';
 
@@ -15,6 +15,14 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting }: I
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
     if (!isOpen) return null;
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
     const handleSubmit = async () => {
         if (!selectedFile) return;
