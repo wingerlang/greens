@@ -1,69 +1,59 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Moon } from 'lucide-react';
+import { analyzeSleep } from '../../utils/vitalsUtils.ts';
 
 interface SleepCardProps {
-    vitals: { sleep?: number };
-    editing: string | null;
+    density: string;
+    sleepHours: number;
+    isEditing: boolean;
     tempValue: string;
-    setTempValue: (val: string) => void;
-    setVitals: React.Dispatch<React.SetStateAction<any>>;
-    updateVitals: (date: string, updates: any) => void;
-    selectedDate: string;
-    debouncedSave: (field: string, value: any) => void;
-    handleCardClick: (cardId: string, value: any) => void;
-    density: 'compact' | 'slim' | 'normal';
+    onCardClick: () => void;
+    onValueChange: (val: string) => void;
+    onSave: (val: number) => void;
+    onClear: () => void;
+    onCancel: () => void; // Used implicitly by clicking outside or not capturing click? Actually just for consistency if needed.
+    // Dashboard handles click outside for closing edit mode.
 }
 
-export const SleepCard: React.FC<SleepCardProps> = ({
-    vitals,
-    editing,
+export const SleepCard = ({
+    density,
+    sleepHours,
+    isEditing,
     tempValue,
-    setTempValue,
-    setVitals,
-    updateVitals,
-    selectedDate,
-    debouncedSave,
-    handleCardClick,
-    density
-}) => {
-    const sleepVal = vitals?.sleep || 0;
+    onCardClick,
+    onValueChange,
+    onSave,
+    onClear
+}: SleepCardProps) => {
 
-    // Calculate sleep status/info locally or pass it in if complex logic relies on other state
-    // For now, simple logic based on value
-    const getSleepStatus = (hours: number) => {
-        if (hours < 5) return { status: 'Dålig sömn', color: 'text-rose-500' };
-        if (hours < 7) return { status: 'Ok sömn', color: 'text-amber-500' };
-        if (hours <= 10) return { status: 'Bra sömn', color: 'text-emerald-500' };
-        return { status: 'Lång sömn', color: 'text-blue-500' };
+    const sleepInfo = analyzeSleep(sleepHours);
+    const sleepColorMap: Record<string, { text: string, accent: string }> = {
+        rose: { text: 'text-rose-500', accent: 'accent-rose-500' },
+        amber: { text: 'text-amber-500', accent: 'accent-amber-500' },
+        emerald: { text: 'text-emerald-500', accent: 'accent-emerald-500' },
+        slate: { text: 'text-slate-900 dark:text-white', accent: 'accent-slate-500' }
     };
-
-    const sleepInfo = getSleepStatus(sleepVal);
-
-    const sleepClasses = {
-        bg: sleepVal > 0 && sleepVal < 5 ? 'bg-rose-50 dark:bg-rose-900/10' :
-            sleepVal >= 5 && sleepVal < 7 ? 'bg-amber-50 dark:bg-amber-900/10' :
-                sleepVal >= 7 && sleepVal <= 10 ? 'bg-emerald-50 dark:bg-emerald-900/20' :
-                    'bg-white dark:bg-slate-900',
-        text: sleepVal > 0 && sleepVal < 5 ? 'text-rose-600' :
-            sleepVal >= 5 && sleepVal < 7 ? 'text-amber-600' :
-                sleepVal >= 7 && sleepVal <= 10 ? 'text-emerald-600' :
-                    'text-slate-900 dark:text-white',
-        accent: sleepVal > 0 && sleepVal < 5 ? 'accent-rose-500' :
-            sleepVal >= 5 && sleepVal < 7 ? 'accent-amber-500' :
-                'accent-emerald-500'
-    };
+    const sleepClasses = sleepHours > 0 ? (sleepColorMap[sleepInfo.color] || sleepColorMap.slate) : sleepColorMap.slate;
+    const sleepColorClass = sleepClasses.text;
 
     return (
         <div
-            data-editing-card={editing === 'sleep' ? true : undefined}
-            onClick={() => handleCardClick('sleep', sleepVal)}
-            className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-between hover:scale-[1.01] transition-transform cursor-pointer group relative overflow-hidden h-full ${sleepClasses.bg}`}
+            data-editing-card={isEditing ? true : undefined}
+            onClick={onCardClick}
+            className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 hover:scale-[1.01] transition-transform cursor-pointer group relative overflow-hidden ${sleepHours > 0 && sleepHours < 5
+                ? 'bg-rose-50 dark:bg-rose-900/10'
+                : sleepHours >= 5 && sleepHours < 7
+                    ? 'bg-amber-50 dark:bg-amber-900/10'
+                    : sleepHours >= 7 && sleepHours <= 10
+                        ? 'bg-emerald-50 dark:bg-emerald-900/20'
+                        : 'bg-white dark:bg-slate-900'
+                }`}
         >
             <Moon className="absolute -bottom-4 -right-4 w-24 h-24 text-indigo-500/5 dark:text-indigo-400/10 pointer-events-none transform -rotate-12 transition-all group-hover:scale-110" />
             <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'} relative z-10`}>
-                <div className={`p-1.5 rounded-full ${sleepVal > 0 && sleepVal < 5
+                <div className={`p-1.5 rounded-full ${sleepHours > 0 && sleepHours < 5
                     ? 'bg-rose-100 text-rose-600'
-                    : sleepVal >= 5 && sleepVal < 7
+                    : sleepHours >= 5 && sleepHours < 7
                         ? 'bg-amber-100 text-amber-600'
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
                     }`}>
@@ -72,17 +62,15 @@ export const SleepCard: React.FC<SleepCardProps> = ({
                 <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Sömn</span>
             </div>
             <div className="flex-1">
-                {editing === 'sleep' ? (
+                {isEditing ? (
                     <div className="flex flex-col gap-2 pt-1" onClick={e => e.stopPropagation()}>
                         <div className="flex justify-between items-center bg-slate-100/50 dark:bg-slate-800/50 px-2 py-1 rounded-lg">
-                            <span className={`text-xs font-black ${sleepClasses.text}`}>{parseFloat(tempValue).toFixed(1)}h</span>
+                            <span className={`text-xs font-black ${sleepColorClass}`}>{parseFloat(tempValue).toFixed(1)}h</span>
                             {parseFloat(tempValue) > 0 && (
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        setTempValue('0');
-                                        setVitals(prev => ({ ...prev, sleep: 0 }));
-                                        updateVitals(selectedDate, { sleep: 0 });
+                                        onClear();
                                     }}
                                     className="w-5 h-5 flex items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-500 hover:bg-rose-200 dark:hover:bg-rose-800/50 text-xs font-bold transition-colors"
                                     title="Rensa sömnvärde"
@@ -99,12 +87,10 @@ export const SleepCard: React.FC<SleepCardProps> = ({
                             step="0.5"
                             value={tempValue}
                             onChange={(e) => {
-                                const val = e.target.value;
-                                setTempValue(val);
-                                const num = parseFloat(val);
+                                onValueChange(e.target.value);
+                                const num = parseFloat(e.target.value);
                                 if (!isNaN(num)) {
-                                    setVitals(prev => ({ ...prev, sleep: num }));
-                                    debouncedSave('sleep', num);
+                                    onSave(num);
                                 }
                             }}
                             className={`w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer ${sleepClasses.accent} transition-all`}
@@ -113,10 +99,10 @@ export const SleepCard: React.FC<SleepCardProps> = ({
                 ) : (
                     <>
                         <div className="flex items-baseline gap-1">
-                            <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${sleepClasses.text}`}>{sleepVal}</span>
+                            <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${sleepColorClass}`}>{sleepHours}</span>
                             <span className="text-[9px] font-bold text-slate-400 uppercase">H</span>
                         </div>
-                        {density !== 'compact' && sleepVal > 0 && (
+                        {density !== 'compact' && sleepHours > 0 && (
                             <div className="mt-1 text-[8px] font-black uppercase tracking-tight opacity-60">
                                 {sleepInfo.status}
                             </div>

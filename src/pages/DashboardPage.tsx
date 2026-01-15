@@ -42,6 +42,9 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { DoubleCircularProgress } from '../components/dashboard/DoubleCircularProgress.tsx';
 import { DayHoverCard } from '../components/dashboard/DayHoverCard.tsx';
 import { WeeklySummary } from '../components/dashboard/WeeklySummary.tsx';
+import { SleepCard } from '../components/dashboard/SleepCard.tsx';
+import { WaterCard } from '../components/dashboard/WaterCard.tsx';
+import { AlcoholCard } from '../components/dashboard/AlcoholCard.tsx';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -1084,84 +1087,24 @@ export function DashboardPage() {
                         if (card.id === 'sleep') {
                             return (
                                 <Wrapper key="sleep" className="md:col-span-6 lg:col-span-3">
-                                    <div
-                                        data-editing-card={editing === 'sleep' ? true : undefined}
-                                        onClick={() => handleCardClick('sleep', vitals.sleep || 0)}
-                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex flex-col justify-between hover:scale-[1.01] transition-transform cursor-pointer group relative overflow-hidden h-full ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
-                                            ? 'bg-rose-50 dark:bg-rose-900/10'
-                                            : (vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7
-                                                ? 'bg-amber-50 dark:bg-amber-900/10'
-                                                : (vitals.sleep || 0) >= 7 && (vitals.sleep || 0) <= 10
-                                                    ? 'bg-emerald-50 dark:bg-emerald-900/20'
-                                                    : 'bg-white dark:bg-slate-900'
-                                            }`}
-                                    >
-                                        <Moon className="absolute -bottom-4 -right-4 w-24 h-24 text-indigo-500/5 dark:text-indigo-400/10 pointer-events-none transform -rotate-12 transition-all group-hover:scale-110" />
-                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'} relative z-10`}>
-                                            <div className={`p-1.5 rounded-full ${(vitals.sleep || 0) > 0 && (vitals.sleep || 0) < 5
-                                                ? 'bg-rose-100 text-rose-600'
-                                                : (vitals.sleep || 0) >= 5 && (vitals.sleep || 0) < 7
-                                                    ? 'bg-amber-100 text-amber-600'
-                                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-                                                }`}>
-                                                <Moon className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
-                                            </div>
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Sömn</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            {editing === 'sleep' ? (
-                                                <div className="flex flex-col gap-2 pt-1" onClick={e => e.stopPropagation()}>
-                                                    <div className="flex justify-between items-center bg-slate-100/50 dark:bg-slate-800/50 px-2 py-1 rounded-lg">
-                                                        <span className={`text-xs font-black ${sleepColorClass}`}>{parseFloat(tempValue).toFixed(1)}h</span>
-                                                        {parseFloat(tempValue) > 0 && (
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setTempValue('0');
-                                                                    setVitals(prev => ({ ...prev, sleep: 0 }));
-                                                                    updateVitals(selectedDate, { sleep: 0 });
-                                                                }}
-                                                                className="w-5 h-5 flex items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-500 hover:bg-rose-200 dark:hover:bg-rose-800/50 text-xs font-bold transition-colors"
-                                                                title="Rensa sömnvärde"
-                                                            >
-                                                                ×
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                    <input
-                                                        autoFocus
-                                                        type="range"
-                                                        min="0"
-                                                        max="12"
-                                                        step="0.5"
-                                                        value={tempValue}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value;
-                                                            setTempValue(val);
-                                                            const num = parseFloat(val);
-                                                            if (!isNaN(num)) {
-                                                                setVitals(prev => ({ ...prev, sleep: num }));
-                                                                debouncedSave('sleep', num);
-                                                            }
-                                                        }}
-                                                        className={`w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer ${sleepClasses.accent} transition-all`}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${sleepColorClass}`}>{vitals.sleep || 0}</span>
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">H</span>
-                                                    </div>
-                                                    {density !== 'compact' && (vitals.sleep || 0) > 0 && (
-                                                        <div className="mt-1 text-[8px] font-black uppercase tracking-tight opacity-60">
-                                                            {sleepInfo.status}
-                                                        </div>
-                                                    )}
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <SleepCard
+                                        density={density}
+                                        sleepHours={vitals.sleep || 0}
+                                        isEditing={editing === 'sleep'}
+                                        tempValue={tempValue}
+                                        onCardClick={() => handleCardClick('sleep', vitals.sleep || 0)}
+                                        onValueChange={setTempValue}
+                                        onSave={(val: number) => {
+                                            setVitals(prev => ({ ...prev, sleep: val }));
+                                            debouncedSave('sleep', val);
+                                        }}
+                                        onClear={() => {
+                                            setTempValue('0');
+                                            setVitals(prev => ({ ...prev, sleep: 0 }));
+                                            updateVitals(selectedDate, { sleep: 0 });
+                                        }}
+                                        onCancel={() => setEditing(null)}
+                                    />
                                 </Wrapper>
                             );
                         }
@@ -1176,65 +1119,27 @@ export function DashboardPage() {
 
                             return (
                                 <Wrapper key="alcohol" className="md:col-span-6 lg:col-span-3">
-                                    <div
-                                        onClick={() => handleCardClick('alcohol', alc)}
-                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm flex flex-col justify-between hover:scale-[1.01] transition-all cursor-pointer relative overflow-hidden h-full ${isAlcHigh
-                                            ? 'bg-rose-50 dark:bg-rose-900/10 border-rose-100 dark:border-rose-900/30'
-                                            : isAlcWarning
-                                                ? 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30'
-                                                : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'
-                                            }`}
-                                    >
-                                        <Wine className="absolute -bottom-4 -right-4 w-24 h-24 text-rose-500/5 dark:text-rose-400/10 pointer-events-none transform rotate-12 transition-all group-hover:scale-110" />
-                                        <div className={`flex items-center justify-between ${density === 'compact' ? 'mb-1' : 'mb-2'} relative z-10`}>
-                                            <div className="flex items-center gap-1.5">
-                                                <div className={`p-1.5 rounded-full ${isAlcHigh ? 'bg-rose-100 text-rose-600' : isAlcWarning ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
-                                                    <Wine className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />
-                                                </div>
-                                                <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Alk</span>
-                                            </div>
-                                            {density !== 'compact' && alcLimit !== undefined && alcLimit > 0 && (
-                                                <div className="text-[8px] font-bold text-slate-400 tracking-tighter">Max: {alcLimit}</div>
-                                            )}
-                                        </div>
-                                        <div className="flex-1">
-                                            {editing === 'alcohol' ? (
-                                                <div className="flex gap-1 items-baseline" onClick={e => e.stopPropagation()}>
-                                                    <input
-                                                        autoFocus
-                                                        type="number"
-                                                        value={tempValue}
-                                                        onChange={(e) => setTempValue(e.target.value)}
-                                                        onBlur={() => handleSave('alcohol')}
-                                                        onKeyDown={(e) => handleKeyDown(e, 'alcohol')}
-                                                        className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-lg font-bold text-slate-900 dark:text-white p-1 w-16 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                    />
-                                                    <span className="text-[9px] font-bold text-slate-400 uppercase">E</span>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${isAlcHigh ? 'text-rose-600' : isAlcWarning ? 'text-amber-600' : 'text-slate-900 dark:text-white'}`}>{alc}</span>
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">E</span>
-                                                    </div>
-                                                    <div className={`flex gap-0.5 mt-2 ${density === 'compact' ? 'h-1' : 'h-2'}`}>
-                                                        {Array.from({ length: Math.max(alc, 4) }).map((_, i) => (
-                                                            <div
-                                                                key={i}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const newVal = (alc === i + 1) ? i : i + 1;
-                                                                    updateVitals(selectedDate, { alcohol: newVal });
-                                                                    setVitals(p => ({ ...p, alcohol: newVal }));
-                                                                }}
-                                                                className={`flex-1 rounded-full cursor-pointer transition-colors ${i < alc ? (isAlcHigh ? 'bg-rose-500' : 'bg-amber-400 shadow-sm') : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200'} `}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <AlcoholCard
+                                        density={density}
+                                        alcoholCount={alc}
+                                        alcoholLimit={alcLimit}
+                                        isEditing={editing === 'alcohol'}
+                                        tempValue={tempValue}
+                                        onCardClick={() => handleCardClick('alcohol', alc)}
+                                        onValueChange={setTempValue}
+                                        onSave={() => handleSave('alcohol')}
+                                        onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, 'alcohol')}
+                                        onAlcoholClick={(count: number) => {
+                                            const newVal = (alc === count) ? count - 1 : count;
+                                            // Ensure we don't go below 0 (though count from map is i+1 so min is 1, unless we handle 0 toggle logic here)
+                                            // The original logic: (alc === i + 1) ? i : i + 1;
+                                            // So if I click the 3rd dot (count=3) and I have 3, it sets new val to 2.
+                                            // If I have 2 and click 3rd dot, it sets new val to 3.
+                                            // Passing logic here to match original
+                                            updateVitals(selectedDate, { alcohol: newVal });
+                                            setVitals(p => ({ ...p, alcohol: newVal }));
+                                        }}
+                                    />
                                 </Wrapper>
                             );
                         }
@@ -1244,46 +1149,18 @@ export function DashboardPage() {
                             const isWaterMet = (vitals.water || 0) >= waterGoal;
                             return (
                                 <Wrapper key="water" className="md:col-span-6 lg:col-span-3">
-                                    <div
-                                        onClick={() => handleCardClick('water', vitals.water || 0)}
-                                        className={`${density === 'compact' ? 'p-2.5 rounded-2xl' : 'p-4 rounded-3xl'} border shadow-sm flex flex-col justify-between hover:scale-[1.02] transition-all cursor-pointer relative overflow-hidden h-full ${isWaterMet ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/50' : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800'}`}
-                                    >
-                                        <Droplets className="absolute -bottom-4 -right-4 w-24 h-24 text-blue-500/5 dark:text-blue-400/10 pointer-events-none transform -rotate-6 transition-all group-hover:scale-110" />
-                                        <div className={`flex items-center ${density === 'compact' ? 'gap-1.5 mb-1' : 'gap-2 mb-2'} relative z-10`}>
-                                            <div className={`p-1.5 rounded-full ${isWaterMet ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-600' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-500'}`}>
-                                                {isWaterMet ? <Check className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} /> : <Droplets className={density === 'compact' ? 'w-3 h-3' : 'w-4 h-4'} />}
-                                            </div>
-                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Vatten</span>
-                                        </div>
-                                        <div className="flex-1">
-                                            {editing === 'water' ? (
-                                                <div className="flex items-baseline gap-1" onClick={e => e.stopPropagation()}>
-                                                    <input
-                                                        autoFocus
-                                                        type="number"
-                                                        value={tempValue}
-                                                        onChange={(e) => setTempValue(e.target.value)}
-                                                        onBlur={() => handleSave('water')}
-                                                        onKeyDown={(e) => handleKeyDown(e, 'water')}
-                                                        className="bg-slate-100 dark:bg-slate-800 border-none rounded-lg text-lg font-bold text-slate-900 dark:text-white p-1 w-16 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                                    />
-                                                    <span className="text-[9px] font-bold text-slate-400 uppercase">Glas</span>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className={`${density === 'compact' ? 'text-xl' : 'text-3xl'} font-bold ${isWaterMet ? 'text-emerald-600' : 'text-slate-900 dark:text-white'}`}>{vitals.water || 0}</span>
-                                                        <span className="text-[9px] font-bold text-slate-400 uppercase">Glas</span>
-                                                    </div>
-                                                    <div className={`flex gap-0.5 mt-2 ${density === 'compact' ? 'h-4' : 'h-6'}`}>
-                                                        {Array.from({ length: 8 }).map((_, i) => (
-                                                            <div key={i} onClick={(e) => { e.stopPropagation(); handleWaterClick(i + 1); }} className={`flex-1 rounded-sm cursor-pointer transition-all border border-transparent ${i < (vitals.water || 0) ? (isWaterMet ? 'bg-emerald-500' : 'bg-blue-400 shadow-sm') : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700'}`} />
-                                                        ))}
-                                                    </div>
-                                                </>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <WaterCard
+                                        density={density}
+                                        waterCount={vitals.water || 0}
+                                        waterGoal={waterGoal}
+                                        isEditing={editing === 'water'}
+                                        tempValue={tempValue}
+                                        onCardClick={() => handleCardClick('water', vitals.water || 0)}
+                                        onValueChange={setTempValue}
+                                        onSave={() => handleSave('water')}
+                                        onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, 'water')}
+                                        onWaterClick={handleWaterClick}
+                                    />
                                 </Wrapper>
                             );
                         }
@@ -1316,7 +1193,7 @@ export function DashboardPage() {
 
                     {/* Health Metrics Card - Expanded */}
 
-                    <div className={`col-span-12 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
+                    <div className={`col-span-1 md:col-span-12 ${density === 'compact' ? 'p-1' : 'p-0'} rounded-3xl`}>
                         <div className={`h-full ${density === 'compact' ? 'p-2' : 'p-6'} bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 shadow-sm flex flex-col`}>
                             <div className="relative z-10 flex flex-col h-full">
                                 {/* Header with Title and Range Selector */}
@@ -1502,7 +1379,7 @@ export function DashboardPage() {
 
                     {/* 7-Day Performance Summary - Horizontal Timeline */}
                     <div
-                        className="col-span-12 md:col-span-12 relative z-[60]"
+                        className="col-span-1 md:col-span-12 relative z-[60]"
                         onMouseEnter={() => setIsHoveringChart(true)}
                         onMouseLeave={() => setIsHoveringChart(false)}
                     >
