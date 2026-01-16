@@ -719,7 +719,7 @@ export function DashboardPage() {
     });
 
     return (
-        <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-12 font-sans text-slate-900 dark:text-white animate-in fade-in duration-500 transition-colors relative">
+        <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-12 font-sans text-slate-900 dark:text-white animate-in fade-in duration-500 transition-colors relative overflow-x-hidden">
             {isHoveringChart && (
                 <div className="fixed inset-0 bg-white/60 dark:bg-slate-950/60 backdrop-blur-sm z-[50] transition-all duration-500 pointer-events-none" />
             )}
@@ -752,7 +752,7 @@ export function DashboardPage() {
                 </div>
             </div>
 
-            <div className="max-w-5xl mx-auto pt-12">
+            <div className="w-full max-w-5xl mx-auto pt-12">
                 <header className={`${density === 'compact' ? 'mb-4' : 'mb-10'} flex flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-4">
@@ -885,7 +885,7 @@ export function DashboardPage() {
                                     id="intake"
                                     isDone={card.isDone}
                                     onToggle={toggleCardCompletion}
-                                    className="md:col-span-12 lg:col-span-6 h-full flex"
+                                    className="md:col-span-12 xl:col-span-6 h-full flex"
                                 >
                                     <div
                                         onClick={() => navigate(`/calories?date=${selectedDate}`)}
@@ -1059,7 +1059,7 @@ export function DashboardPage() {
                                     id="training"
                                     isDone={card.isDone}
                                     onToggle={toggleCardCompletion}
-                                    className="md:col-span-12 lg:col-span-6 h-full"
+                                    className="md:col-span-12 xl:col-span-6 h-full"
                                 >
                                     <div
                                         onClick={() => navigate('/training')}
@@ -1087,7 +1087,7 @@ export function DashboardPage() {
                                     id="sleep"
                                     isDone={card.isDone}
                                     onToggle={toggleCardCompletion}
-                                    className="md:col-span-6 lg:col-span-3"
+                                    className="md:col-span-6 xl:col-span-3"
                                 >
                                     <SleepCard
                                         density={density}
@@ -1125,7 +1125,7 @@ export function DashboardPage() {
                                     id="alcohol"
                                     isDone={card.isDone}
                                     onToggle={toggleCardCompletion}
-                                    className="md:col-span-6 lg:col-span-3"
+                                    className="md:col-span-6 xl:col-span-3"
                                 >
                                     <AlcoholCard
                                         density={density}
@@ -1161,7 +1161,7 @@ export function DashboardPage() {
                                     id="water"
                                     isDone={card.isDone}
                                     onToggle={toggleCardCompletion}
-                                    className="md:col-span-6 lg:col-span-3"
+                                    className="md:col-span-6 xl:col-span-3"
                                 >
                                     <WaterCard
                                         density={density}
@@ -1187,7 +1187,7 @@ export function DashboardPage() {
                                     id="caffeine"
                                     isDone={card.isDone}
                                     onToggle={toggleCardCompletion}
-                                    className="md:col-span-6 lg:col-span-3"
+                                    className="md:col-span-6 xl:col-span-3"
                                 >
                                     <CaffeineCard
                                         density={density}
