@@ -160,7 +160,7 @@ async function internalRouter(req: Request, remoteAddr: Deno.NetAddr): Promise<R
             response = await handleDeveloperRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/planned-activities")) {
             response = await handlePlannedActivityRoutes(req, url, headers);
-        } else if (url.pathname.startsWith("/api/analytics")) {
+        } else if (url.pathname.startsWith("/api/usage")) {
             response = await handleAnalyticsRoutes(req, url, headers);
         } else {
             response = new Response(JSON.stringify({ error: "Not Found" }), { status: 404, headers });

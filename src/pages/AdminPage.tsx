@@ -116,6 +116,12 @@ export const AdminPage: React.FC = () => {
                 >
                     🧬 System DB
                 </button>
+                <button
+                    onClick={() => setActiveTab('analytics')}
+                    className={`pb-4 text-[10px] uppercase tracking-widest font-black transition-all px-2 whitespace-nowrap ${activeTab === 'analytics' ? 'text-pink-400 border-b-2 border-pink-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                    📊 Analytics
+                </button>
             </div>
 
             {activeTab === 'analytics' && (

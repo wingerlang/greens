@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
+import { useAnalytics } from '../context/AnalyticsContext.tsx';
 import { parseOmniboxInput } from '../utils/nlpParser.ts';
 import { performSmartSearch } from '../utils/searchUtils.ts';
 import {
@@ -208,6 +209,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         addBodyMeasurement,
         selectedDate
     } = useData();
+    const { logEvent } = useAnalytics();
 
 
     const intent = parseOmniboxInput(input);
@@ -487,6 +489,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         return () => globalThis.removeEventListener('keydown', handleKeyDown);
     }, [onClose, selectableItems.length]);
 
+    // Analytics: Track search queries (debounced)
+    useEffect(() => {
+        if (!input || input.length < 3 || input.startsWith('/')) return;
+
+        const timer = setTimeout(() => {
+            logEvent('omnibox_search', input.substring(0, 50), 'search', {
+                query: input.substring(0, 50),
+                resultsCount: selectableItems.length
+            });
+        }, 1500); // Wait 1.5s after stop typing
+
+        return () => clearTimeout(timer);
+    }, [input, selectableItems.length, logEvent]);
+
     const logFoodItem = (item: FoodItem, quantity: number = 100) => {
         // Use draft values (from locked food mode), or parsed intent, or defaults
         const logDate = draftFoodDate || intent.date || selectedDate || new Date().toISOString().split('T')[0];
@@ -518,6 +534,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                 ...(isLoggingAsCooked && { loggedAsCooked: true }),
                 ...(isLoggingAsCooked && { effectiveYieldFactor }),
             }]
+        });
+
+        // Analytics: Track food log
+        logEvent('omnibox_log', item.name, 'food', {
+            food: item.name,
+            grams: quantity,
+            mealType,
+            isCooked: isLoggingAsCooked
         });
 
         // Calculate displayed calories (adjust for cooked if needed)

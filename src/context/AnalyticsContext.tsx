@@ -38,7 +38,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             };
 
             // Send to API (fire and forget)
-            fetch('/api/analytics/view', {
+            fetch('/api/usage/view', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(view)
@@ -79,7 +79,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                     timestamp: new Date().toISOString()
                 };
 
-                fetch('/api/analytics/event', {
+                fetch('/api/usage/event', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(event)
@@ -109,7 +109,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             metadata
         };
 
-        fetch('/api/analytics/event', {
+        fetch('/api/usage/event', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(event)

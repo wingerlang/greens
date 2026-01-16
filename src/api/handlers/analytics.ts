@@ -6,7 +6,7 @@ import { PageView, InteractionEvent } from '../../models/types.ts';
  * Dispatches requests to specific repository methods based on path and method.
  */
 export async function handleAnalyticsRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
-    const path = url.pathname.replace("/api/analytics", "");
+    const path = url.pathname.replace("/api/usage", "");
     const method = req.method;
 
     // Helper to return JSON Response
@@ -36,6 +36,38 @@ export async function handleAnalyticsRoutes(req: Request, url: URL, headers: Hea
         if (path === "/stats" && method === "GET") {
             const stats = await analyticsRepository.getStats(30);
             return json(stats);
+        }
+
+        // GET /events - Get filtered raw events
+        if (path === "/events" && method === "GET") {
+            const userId = url.searchParams.get('userId') || undefined;
+            const type = url.searchParams.get('type') || undefined;
+            const daysBack = parseInt(url.searchParams.get('days') || '7');
+            const limit = parseInt(url.searchParams.get('limit') || '100');
+
+            const data = await analyticsRepository.getEventsFiltered({ userId, type, daysBack, limit });
+            return json(data);
+        }
+
+        // GET /users - Get per-user activity stats
+        if (path === "/users" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const users = await analyticsRepository.getUserActivityStats(daysBack);
+            return json({ users });
+        }
+
+        // GET /omnibox - Get Omnibox-specific analytics
+        if (path === "/omnibox" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const stats = await analyticsRepository.getOmniboxStats(daysBack);
+            return json(stats);
+        }
+
+        // GET /daily - Get daily activity for charts
+        if (path === "/daily" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const daily = await analyticsRepository.getDailyActivity(daysBack);
+            return json({ daily });
         }
 
         return json({ error: "Not Found" }, 404);
