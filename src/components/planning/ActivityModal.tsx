@@ -41,13 +41,14 @@ export function ActivityModal({
     const [formNotes, setFormNotes] = useState('');
     const [formIntensity, setFormIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
     const [isRace, setIsRace] = useState(false);
+    const [formPace, setFormPace] = useState('05:30'); // Tempo in mm:ss per km
 
     // Hyrox specific
     const [formIncludesRunning, setFormIncludesRunning] = useState(true);
     const [formHyroxFocus, setFormHyroxFocus] = useState<'hybrid' | 'strength' | 'cardio'>('hybrid');
     const [formStartTime, setFormStartTime] = useState('');
 
-    const { exerciseEntries, plannedActivities, currentUser, updateCurrentUser } = useData();
+    const { exerciseEntries, plannedActivities, currentUser, updateCurrentUser, universalActivities } = useData();
     const { settings } = useSettings();
 
     const hasExistingActivity = React.useMemo(() => {
@@ -84,6 +85,27 @@ export function ActivityModal({
             }
         }
     }, [formDistance]);
+
+    // Auto-calculate duration from distance and pace (for RUN type)
+    useEffect(() => {
+        if (formType === 'RUN' && formDistance && formPace) {
+            const distKm = parseFloat(formDistance);
+            if (isNaN(distKm) || distKm <= 0) return;
+
+            // Parse pace mm:ss into minutes
+            const paceParts = formPace.split(':');
+            if (paceParts.length !== 2) return;
+            const paceMinutes = parseInt(paceParts[0]) + parseInt(paceParts[1]) / 60;
+
+            // Calculate total duration
+            const totalMinutes = Math.round(distKm * paceMinutes);
+            const hours = Math.floor(totalMinutes / 60);
+            const mins = totalMinutes % 60;
+            const newDuration = `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+
+            setFormDuration(newDuration);
+        }
+    }, [formDistance, formPace, formType]);
 
     // Initialize Form on Open
     useEffect(() => {
@@ -275,7 +297,7 @@ export function ActivityModal({
 
     return (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[150] flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
                 {/* Header */}
                 <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50 dark:bg-slate-900 shrink-0">
                     <div>
@@ -341,44 +363,191 @@ export function ActivityModal({
                         </div>
                     )}
 
-                    {/* Smart Average Preset */}
-                    {formType === 'RUN' && !editingActivity && (
+                    {/* Smart Distance Presets - Always visible */}
+                    {formType === 'RUN' && (
                         <div className="mb-6">
                             {(() => {
-                                const history = exerciseEntries || [];
                                 const now = new Date();
+                                const sixMonthsAgo = new Date();
+                                sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+                                // Combine running activities from BOTH sources:
+                                // 1. exerciseEntries (manual entries)
+                                // 2. universalActivities (Strava imports via performance.distanceKm)
+
+                                // From exerciseEntries
+                                const exerciseRuns = exerciseEntries
+                                    .filter(e =>
+                                        (e.type === 'running') &&
+                                        new Date(e.date) >= sixMonthsAgo &&
+                                        new Date(e.date) <= now &&
+                                        e.distance && e.distance > 0 &&
+                                        !e.excludeFromStats
+                                    )
+                                    .map(e => ({
+                                        date: new Date(e.date),
+                                        distance: e.distance || 0,
+                                        durationMinutes: e.durationMinutes || 0
+                                    }));
+
+                                // From universalActivities (Strava)
+                                const stravaRuns = (universalActivities || [])
+                                    .filter(ua => {
+                                        const actType = (ua.performance?.activityType as string || '').toLowerCase();
+                                        return (
+                                            (actType === 'running' || actType === 'run') &&
+                                            new Date(ua.date) >= sixMonthsAgo &&
+                                            new Date(ua.date) <= now &&
+                                            (ua.performance?.distanceKm || 0) > 0
+                                        );
+                                    })
+                                    .map(ua => ({
+                                        date: new Date(ua.date),
+                                        distance: ua.performance?.distanceKm || 0,
+                                        // Use durationMinutes directly - it's the correct property name
+                                        durationMinutes: ua.performance?.durationMinutes || 0
+                                    }));
+
+                                // Combine and deduplicate by date (prefer the one with more distance data)
+                                const allRunsMap = new Map<string, { date: Date, distance: number, durationMinutes: number }>();
+                                [...exerciseRuns, ...stravaRuns].forEach(run => {
+                                    const key = run.date.toISOString().split('T')[0];
+                                    const existing = allRunsMap.get(key);
+                                    if (!existing || run.distance > existing.distance) {
+                                        allRunsMap.set(key, run);
+                                    }
+                                });
+                                const allRuns = Array.from(allRunsMap.values());
+
+                                // Calculate average for recent 5 weeks
                                 const fiveWeeksAgo = new Date();
                                 fiveWeeksAgo.setDate(now.getDate() - 35);
+                                const recentRuns = allRuns.filter(r => r.date >= fiveWeeksAgo);
+                                const avgDistance = recentRuns.length >= 3
+                                    ? recentRuns.reduce((sum, r) => sum + r.distance, 0) / recentRuns.length
+                                    : null;
 
-                                const recentRuns = exerciseEntries.filter(e =>
-                                    (e.type === 'running') &&
-                                    new Date(e.date) >= fiveWeeksAgo &&
-                                    new Date(e.date) <= now &&
-                                    !e.excludeFromStats
-                                );
+                                // Calculate frequent distances using bucketing
+                                // Track: count (total runs), paceCount (runs with valid pace), totalPace
+                                const distanceBuckets: Record<string, { count: number, paceCount: number, totalPace: number }> = {};
+                                allRuns.forEach(run => {
+                                    const rounded = (Math.round(run.distance * 2) / 2).toFixed(1);
+                                    if (!distanceBuckets[rounded]) {
+                                        distanceBuckets[rounded] = { count: 0, paceCount: 0, totalPace: 0 };
+                                    }
+                                    distanceBuckets[rounded].count += 1;
+                                    // Calculate pace in min/km - only if we have valid duration
+                                    if (run.durationMinutes && run.durationMinutes > 0 && run.distance > 0) {
+                                        const pace = run.durationMinutes / run.distance;
+                                        // Sanity check: pace should be between 3 min/km (very fast) and 12 min/km (walking)
+                                        if (pace >= 3 && pace <= 12) {
+                                            distanceBuckets[rounded].totalPace += pace;
+                                            distanceBuckets[rounded].paceCount += 1;
+                                        }
+                                    }
+                                });
 
-                                if (recentRuns.length < 3) return null;
+                                // Sort by frequency and get top distances with minimum 1km spacing
+                                const sortedDistances = Object.entries(distanceBuckets)
+                                    .filter(([d, data]) => parseFloat(d) >= 2 && data.count >= 2)
+                                    .sort((a, b) => b[1].count - a[1].count);
 
-                                const avgDistance = recentRuns.reduce((sum, r) => sum + (r.distance || 0), 0) / recentRuns.length;
-                                const formattedAvg = avgDistance.toFixed(1);
+                                // Apply 1km spacing filter
+                                const spacedDistances: typeof sortedDistances = [];
+                                sortedDistances.forEach(([d, data]) => {
+                                    const dist = parseFloat(d);
+                                    const tooClose = spacedDistances.some(([existingD]) =>
+                                        Math.abs(parseFloat(existingD) - dist) < 1
+                                    );
+                                    if (!tooClose && spacedDistances.length < 5) {
+                                        spacedDistances.push([d, data]);
+                                    }
+                                });
+
+                                // Create presets from user data or use defaults
+                                const frequentPresets = spacedDistances.length >= 2
+                                    ? spacedDistances.map(([d, data]) => ({
+                                        distance: parseFloat(d),
+                                        count: data.count,
+                                        // Use paceCount for accurate average - fallback to 5.5 min/km if no valid pace data
+                                        avgPace: data.paceCount > 0 ? data.totalPace / data.paceCount : 5.5,
+                                        label: `${d} km`,
+                                        isDefault: false
+                                    }))
+                                    : [
+                                        { distance: 5, count: 0, avgPace: 5.5, label: '5 km', isDefault: true },
+                                        { distance: 7, count: 0, avgPace: 5.5, label: '7 km', isDefault: true },
+                                        { distance: 10, count: 0, avgPace: 5.5, label: '10 km', isDefault: true },
+                                        { distance: 15, count: 0, avgPace: 5.75, label: '15 km', isDefault: true },
+                                        { distance: 21.1, count: 0, avgPace: 6.0, label: 'Halvmaraton', isDefault: true },
+                                    ];
+
+                                // Handler to set distance AND tempo (and auto-calculate duration)
+                                const handlePresetClick = (preset: typeof frequentPresets[0]) => {
+                                    setFormDistance(preset.distance.toFixed(1));
+
+                                    // Convert avgPace (min/km as decimal) to mm:ss format
+                                    const paceMinutes = Math.floor(preset.avgPace);
+                                    const paceSeconds = Math.round((preset.avgPace - paceMinutes) * 60);
+                                    setFormPace(`${paceMinutes.toString().padStart(2, '0')}:${paceSeconds.toString().padStart(2, '0')}`);
+
+                                    // Calculate duration and round UP to nearest 5 minutes
+                                    const totalMinutes = preset.distance * preset.avgPace;
+                                    const roundedUp = Math.ceil(totalMinutes / 5) * 5;
+                                    const hours = Math.floor(roundedUp / 60);
+                                    const mins = roundedUp % 60;
+                                    setFormDuration(`${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`);
+                                };
 
                                 return (
-                                    <div
-                                        onClick={() => setFormDistance(formattedAvg)}
-                                        className="group cursor-pointer p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                                    >
-                                        <div className="flex justify-between items-center mb-1">
-                                            <div className="flex items-center gap-2">
-                                                <Trophy size={14} className="text-blue-500" />
-                                                <span className="text-xs font-black uppercase text-blue-600 dark:text-blue-400">Din snittdistans</span>
+                                    <div className="space-y-3">
+                                        {/* Average Distance Card - Only show if we have data */}
+                                        {avgDistance && !editingActivity && (
+                                            <div
+                                                onClick={() => setFormDistance(avgDistance.toFixed(1))}
+                                                className="group cursor-pointer p-3 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                            >
+                                                <div className="flex justify-between items-center mb-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <Trophy size={14} className="text-blue-500" />
+                                                        <span className="text-xs font-black uppercase text-blue-600 dark:text-blue-400">Din snittdistans</span>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded shadow-sm group-hover:scale-110 transition-transform">
+                                                        {avgDistance.toFixed(1)} km
+                                                    </span>
+                                                </div>
+                                                <p className="text-[10px] text-blue-600/80 dark:text-blue-400/80 font-medium">
+                                                    Baserat på senaste 5 veckor. <span className="italic underline decoration-blue-300">Sträva efter att slå detta!</span> 🚀
+                                                </p>
                                             </div>
-                                            <span className="text-xs font-bold text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800 px-2 py-0.5 rounded shadow-sm group-hover:scale-110 transition-transform">
-                                                {formattedAvg} km
-                                            </span>
+                                        )}
+
+                                        {/* Quick Distance Presets - Always visible */}
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <Zap size={12} className="text-amber-500" />
+                                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                                                    {frequentPresets[0]?.isDefault ? 'Populära distanser' : 'Dina vanliga distanser'}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {frequentPresets.map(preset => (
+                                                    <button
+                                                        key={preset.distance}
+                                                        onClick={() => handlePresetClick(preset)}
+                                                        className={`px-2.5 py-1.5 rounded-xl border text-sm font-bold transition-all hover:scale-105 ${formDistance === preset.distance.toFixed(1)
+                                                            ? 'bg-emerald-500 text-white border-emerald-500 shadow-md'
+                                                            : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-emerald-400'
+                                                            }`}
+                                                    >
+                                                        {preset.label}
+                                                        {preset.count > 0 && (
+                                                            <span className="ml-1.5 text-[10px] opacity-60">({preset.count}x)</span>
+                                                        )}
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
-                                        <p className="text-[10px] text-blue-600/80 dark:text-blue-400/80 font-medium">
-                                            Baserat på dina senaste 5 veckor. <span className="italic underline decoration-blue-300">Sträva efter att slå detta!</span> 🚀
-                                        </p>
                                     </div>
                                 );
                             })()}
@@ -388,17 +557,17 @@ export function ActivityModal({
                     {/* Form */}
                     <div className="space-y-4">
                         {/* Type Selector */}
-                        <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                        <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
                             <button
                                 onClick={() => setFormType('RUN')}
-                                className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'RUN' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'RUN' ? 'bg-white dark:bg-slate-700 shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
                             >
                                 Löpning
                             </button>
                             {(settings.trainingInterests?.strength ?? true) && (
                                 <button
                                     onClick={() => setFormType('STRENGTH')}
-                                    className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'STRENGTH' ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'STRENGTH' ? 'bg-white dark:bg-slate-700 shadow-sm text-purple-600' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
                                     Styrka
                                 </button>
@@ -406,14 +575,14 @@ export function ActivityModal({
                             {(settings.trainingInterests?.hyrox ?? true) && (
                                 <button
                                     onClick={() => setFormType('HYROX')}
-                                    className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'HYROX' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                    className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'HYROX' ? 'bg-white dark:bg-slate-700 shadow-sm text-amber-600' : 'text-slate-400 hover:text-slate-600'}`}
                                 >
                                     Hyrox
                                 </button>
                             )}
                             <button
                                 onClick={() => setFormType('REST')}
-                                className={`py-2 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'REST' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
+                                className={`flex-1 py-1.5 rounded-lg text-xs font-black uppercase tracking-wide transition-all ${formType === 'REST' ? 'bg-white dark:bg-slate-700 shadow-sm text-slate-600' : 'text-slate-400 hover:text-slate-600'}`}
                             >
                                 Vila
                             </button>
@@ -421,7 +590,7 @@ export function ActivityModal({
 
                         {/* Run Sub-Category Selector */}
                         {formType === 'RUN' && (
-                            <div className="flex flex-wrap gap-2 pb-1">
+                            <div className="flex gap-1.5 pb-1">
                                 {[
                                     { id: 'EASY', label: 'Distans', color: 'blue' },
                                     { id: 'LONG_RUN', label: 'Långpass', color: 'indigo' },
@@ -431,7 +600,7 @@ export function ActivityModal({
                                     <button
                                         key={sub.id}
                                         onClick={() => handleRunSubCategoryClick(sub.id as any)}
-                                        className={`px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all border ${runSubCategory === sub.id
+                                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide whitespace-nowrap transition-all border ${runSubCategory === sub.id
                                             ? `bg-${sub.color}-500 text-white border-${sub.color}-500 shadow-md transform scale-105`
                                             : `bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-${sub.color}-300`
                                             }`}
@@ -459,15 +628,27 @@ export function ActivityModal({
                             <>
                                 <div className="grid grid-cols-2 gap-3">
                                     {/* Conditional Inputs based on Type */}
-                                    {/* DISTANS only for RUN/BIKE - Hyrox has its own distance field inside the Hyrox section */}
+                                    {/* DISTANS + TEMPO for RUN/BIKE */}
                                     {formType === 'RUN' || formType === 'BIKE' ? (
                                         <div>
                                             <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Distans (km)</label>
                                             <div className="space-y-2">
                                                 <input
                                                     type="number"
+                                                    step="0.5"
                                                     value={formDistance}
                                                     onChange={(e) => setFormDistance(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        const step = 0.5;
+                                                        const current = parseFloat(formDistance) || 0;
+                                                        if (e.key === 'ArrowUp') {
+                                                            e.preventDefault();
+                                                            setFormDistance((current + step).toFixed(1));
+                                                        } else if (e.key === 'ArrowDown' && current >= step) {
+                                                            e.preventDefault();
+                                                            setFormDistance((current - step).toFixed(1));
+                                                        }
+                                                    }}
                                                     className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                                                     placeholder="0.0"
                                                 />
@@ -489,6 +670,68 @@ export function ActivityModal({
                                         </div>
                                     ) : <div className="hidden md:block"></div>}
 
+                                    {/* TEMPO for RUN/BIKE - calculates duration automatically */}
+                                    {(formType === 'RUN' || formType === 'BIKE') ? (
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Tempo (min/km)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={formPace}
+                                                    onChange={(e) => setFormPace(e.target.value)}
+                                                    onKeyDown={(e) => {
+                                                        // Parse mm:ss into total seconds
+                                                        const parts = formPace.split(':');
+                                                        const totalSeconds = parts.length === 2
+                                                            ? parseInt(parts[0]) * 60 + parseInt(parts[1])
+                                                            : 330; // Default 5:30
+                                                        const step = 5; // 5 second increments
+
+                                                        let newSeconds = totalSeconds;
+                                                        if (e.key === 'ArrowUp') {
+                                                            e.preventDefault();
+                                                            newSeconds = totalSeconds - step; // Faster pace
+                                                            if (newSeconds < 60) newSeconds = 60; // Min 1:00 min/km
+                                                        } else if (e.key === 'ArrowDown') {
+                                                            e.preventDefault();
+                                                            newSeconds = totalSeconds + step; // Slower pace
+                                                            if (newSeconds > 900) newSeconds = 900; // Max 15:00 min/km
+                                                        }
+
+                                                        if (newSeconds !== totalSeconds) {
+                                                            const mins = Math.floor(newSeconds / 60);
+                                                            const secs = newSeconds % 60;
+                                                            setFormPace(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+                                                        }
+                                                    }}
+                                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                                    placeholder="05:30"
+                                                />
+                                                {formDistance && formPace && (
+                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-emerald-500">
+                                                        → {formDuration}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Intensitet</label>
+                                            <select
+                                                value={formIntensity}
+                                                onChange={(e) => setFormIntensity(e.target.value as any)}
+                                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all appearance-none"
+                                            >
+                                                <option value="low">Låg (Zon 1-2)</option>
+                                                <option value="moderate">Medel (Zon 3)</option>
+                                                <option value="high">Hög (Zon 4-5)</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Intensity Selector for RUN/BIKE - moved to separate row */}
+                                {(formType === 'RUN' || formType === 'BIKE') && (
                                     <div>
                                         <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Intensitet</label>
                                         <select
@@ -501,7 +744,7 @@ export function ActivityModal({
                                             <option value="high">Hög (Zon 4-5)</option>
                                         </select>
                                     </div>
-                                </div>
+                                )}
 
                                 {/* Strength Specific Inputs */}
                                 {formType === 'STRENGTH' && (
