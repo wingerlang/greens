@@ -429,7 +429,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             const initialQty = foodData?.quantity || stats?.avgGrams || 100;
             setDraftFoodQuantity(initialQty);
             setDraftFoodMealType(foodData?.mealType || null);
-            setDraftFoodDate(intent.date || null);
+            setDraftFoodDate(intent.date || selectedDate || new Date().toISOString().split('T')[0]);
             return;
         }
 
@@ -565,7 +565,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
         setDraftFoodQuantity(initialQty);
         setDraftFoodMealType(intent.type === 'food' && intent.data.mealType ? intent.data.mealType : null);
-        setDraftFoodDate(intent.date || null);
+        setDraftFoodDate(intent.date || selectedDate || new Date().toISOString().split('T')[0]);
     };
 
     // Handle logging the locked food
@@ -915,9 +915,15 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                         onChange={(e) => setDraftFoodDate(e.target.value || null)}
                                         className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
                                     >
-                                        <option value="">📅 Idag</option>
+                                        <option value={new Date().toISOString().split('T')[0]}>📅 Idag</option>
                                         <option value={new Date(Date.now() - 86400000).toISOString().split('T')[0]}>⏪ Igår</option>
                                         <option value={new Date(Date.now() + 86400000).toISOString().split('T')[0]}>⏩ Imorgon</option>
+                                        {draftFoodDate &&
+                                            draftFoodDate !== new Date().toISOString().split('T')[0] &&
+                                            draftFoodDate !== new Date(Date.now() - 86400000).toISOString().split('T')[0] &&
+                                            draftFoodDate !== new Date(Date.now() + 86400000).toISOString().split('T')[0] && (
+                                                <option value={draftFoodDate}>📅 {draftFoodDate}</option>
+                                            )}
                                     </select>
                                 </div>
                             </div>

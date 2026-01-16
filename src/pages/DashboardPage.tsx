@@ -45,6 +45,7 @@ import { WeeklySummary } from '../components/dashboard/WeeklySummary.tsx';
 import { SleepCard } from '../components/dashboard/SleepCard.tsx';
 import { WaterCard } from '../components/dashboard/WaterCard.tsx';
 import { AlcoholCard } from '../components/dashboard/AlcoholCard.tsx';
+import { DashboardCardWrapper } from '../components/dashboard/DashboardCardWrapper.tsx';
 
 // --- Sub-Components (Defined outside to prevent re-mounting) ---
 
@@ -181,11 +182,11 @@ export function DashboardPage() {
         }
     };
 
-    const changeDate = (days: number) => {
+    const changeDate = useCallback((days: number) => {
         const d = new Date(selectedDate);
-        d.setDate(d.getDate() + days);
+        d.setUTCDate(d.getUTCDate() + days);
         setSelectedDate(d.toISOString().split('T')[0]);
-    };
+    }, [selectedDate, setSelectedDate]);
 
     // --- Derived Data: Weight & Measurement Logic (Moved up to avoid TDZ) ---
     const getRangeDays = (range: typeof weightRange) => {
@@ -329,7 +330,7 @@ export function DashboardPage() {
 
         window.addEventListener('keydown', handleNavKeyDown);
         return () => window.removeEventListener('keydown', handleNavKeyDown);
-    }, []);
+    }, [changeDate]);
 
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -875,28 +876,17 @@ export function DashboardPage() {
                     {cardOrder.map((card) => {
                         const isDone = card.isDone;
                         // Visual state: "Done" = slightly transparent, checkmark badge, grayscale
-                        const opacityClass = isDone
-                            ? 'opacity-60 grayscale-[0.8] hover:opacity-100 hover:grayscale-0 transition-all duration-500'
-                            : '';
 
-                        const Wrapper = ({ children, className = '' }: { children: React.ReactNode, className?: string }) => (
-                            <div className={`${className} ${opacityClass} relative group/card`}>
-                                {/* Manual Completion Toggle */}
-                                <button
-                                    onClick={(e) => toggleCardCompletion(card.id, e)}
-                                    className={`absolute -top-3 -right-3 z-30 p-2 rounded-full shadow-lg transition-all transform hover:scale-110 ${isDone ? 'bg-emerald-500 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-400 opacity-0 group-hover/card:opacity-100'}`}
-                                    title={isDone ? "Markera som ej klar" : "Markera som klar"}
-                                >
-                                    <Check size={14} strokeWidth={3} />
-                                </button>
-
-                                {children}
-                            </div>
-                        );
 
                         if (card.id === 'intake') {
                             return (
-                                <Wrapper key="intake" className="md:col-span-12 lg:col-span-6 h-full flex">
+                                <DashboardCardWrapper
+                                    key="intake"
+                                    id="intake"
+                                    isDone={card.isDone}
+                                    onToggle={toggleCardCompletion}
+                                    className="md:col-span-12 lg:col-span-6 h-full flex"
+                                >
                                     <div
                                         onClick={() => navigate(`/calories?date=${selectedDate}`)}
                                         className={`flex-1 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full relative cursor-pointer hover:scale-[1.01] transition-transform`}>
@@ -1058,13 +1048,19 @@ export function DashboardPage() {
                                             </button>
                                         </div>
                                     </div>
-                                </Wrapper>
+                                </DashboardCardWrapper>
                             );
                         }
 
                         if (card.id === 'training') {
                             return (
-                                <Wrapper key="training" className="md:col-span-12 lg:col-span-6 h-full">
+                                <DashboardCardWrapper
+                                    key="training"
+                                    id="training"
+                                    isDone={card.isDone}
+                                    onToggle={toggleCardCompletion}
+                                    className="md:col-span-12 lg:col-span-6 h-full"
+                                >
                                     <div
                                         onClick={() => navigate('/training')}
                                         className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full relative overflow-hidden`}
@@ -1080,13 +1076,19 @@ export function DashboardPage() {
                                             <div className="w-full">{trainingContent}</div>
                                         </div>
                                     </div>
-                                </Wrapper>
+                                </DashboardCardWrapper>
                             );
                         }
 
                         if (card.id === 'sleep') {
                             return (
-                                <Wrapper key="sleep" className="md:col-span-6 lg:col-span-3">
+                                <DashboardCardWrapper
+                                    key="sleep"
+                                    id="sleep"
+                                    isDone={card.isDone}
+                                    onToggle={toggleCardCompletion}
+                                    className="md:col-span-6 lg:col-span-3"
+                                >
                                     <SleepCard
                                         density={density}
                                         sleepHours={vitals.sleep || 0}
@@ -1105,7 +1107,7 @@ export function DashboardPage() {
                                         }}
                                         onCancel={() => setEditing(null)}
                                     />
-                                </Wrapper>
+                                </DashboardCardWrapper>
                             );
                         }
 
@@ -1118,7 +1120,13 @@ export function DashboardPage() {
                             const isAlcWarning = alcLimit !== undefined && !isAlcHigh && alc > 0 && alc === alcLimit;
 
                             return (
-                                <Wrapper key="alcohol" className="md:col-span-6 lg:col-span-3">
+                                <DashboardCardWrapper
+                                    key="alcohol"
+                                    id="alcohol"
+                                    isDone={card.isDone}
+                                    onToggle={toggleCardCompletion}
+                                    className="md:col-span-6 lg:col-span-3"
+                                >
                                     <AlcoholCard
                                         density={density}
                                         alcoholCount={alc}
@@ -1140,7 +1148,7 @@ export function DashboardPage() {
                                             setVitals(p => ({ ...p, alcohol: newVal }));
                                         }}
                                     />
-                                </Wrapper>
+                                </DashboardCardWrapper>
                             );
                         }
 
@@ -1148,7 +1156,13 @@ export function DashboardPage() {
                             const waterGoal = settings.dailyWaterGoal || 8;
                             const isWaterMet = (vitals.water || 0) >= waterGoal;
                             return (
-                                <Wrapper key="water" className="md:col-span-6 lg:col-span-3">
+                                <DashboardCardWrapper
+                                    key="water"
+                                    id="water"
+                                    isDone={card.isDone}
+                                    onToggle={toggleCardCompletion}
+                                    className="md:col-span-6 lg:col-span-3"
+                                >
                                     <WaterCard
                                         density={density}
                                         waterCount={vitals.water || 0}
@@ -1161,14 +1175,20 @@ export function DashboardPage() {
                                         onKeyDown={(e: React.KeyboardEvent) => handleKeyDown(e, 'water')}
                                         onWaterClick={handleWaterClick}
                                     />
-                                </Wrapper>
+                                </DashboardCardWrapper>
                             );
                         }
 
                         if (card.id === 'caffeine') {
                             const caffeineLimit = settings.dailyCaffeineLimit || 400;
                             return (
-                                <Wrapper key="caffeine" className="md:col-span-6 lg:col-span-3">
+                                <DashboardCardWrapper
+                                    key="caffeine"
+                                    id="caffeine"
+                                    isDone={card.isDone}
+                                    onToggle={toggleCardCompletion}
+                                    className="md:col-span-6 lg:col-span-3"
+                                >
                                     <CaffeineCard
                                         density={density}
                                         caffeineLimit={caffeineLimit}
@@ -1182,7 +1202,7 @@ export function DashboardPage() {
                                         onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
                                         onQuickAdd={handleCaffeineAdd}
                                     />
-                                </Wrapper>
+                                </DashboardCardWrapper>
                             );
                         }
                     })}

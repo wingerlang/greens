@@ -16,6 +16,8 @@ interface Session {
     id: string;
     ip: string;
     userAgent: string;
+    username?: string;
+    userId?: string;
     firstSeen: string;
     lastSeen: string;
     path: string;
@@ -98,6 +100,7 @@ export function SessionsModule() {
                         <thead className="text-gray-500 border-b border-slate-800">
                             <tr>
                                 <th className="px-4 py-3 font-semibold text-[10px] uppercase">Senast Aktiv</th>
+                                <th className="px-4 py-3 font-semibold text-[10px] uppercase">Användare</th>
                                 <th className="px-4 py-3 font-semibold text-[10px] uppercase">IP Address</th>
                                 <th className="px-4 py-3 font-semibold text-[10px] uppercase">Enhet / Webbläsare</th>
                                 <th className="px-4 py-3 font-semibold text-[10px] uppercase">Sista Väg</th>
@@ -114,6 +117,13 @@ export function SessionsModule() {
                                                 <div className={`w-2 h-2 rounded-full ${isFresh ? 'bg-emerald-500 animate-pulse' : 'bg-gray-600'}`} />
                                                 {timeAgo(s.lastSeen)}
                                             </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-xs">
+                                            {s.username ? (
+                                                <span className="font-bold text-white bg-blue-500/20 px-2 py-0.5 rounded-full">{s.username}</span>
+                                            ) : (
+                                                <span className="text-gray-500 italic">Gäst</span>
+                                            )}
                                         </td>
                                         <td className="px-4 py-3 font-mono text-gray-400 text-xs">{s.ip}</td>
                                         <td className="px-4 py-3 text-gray-400 text-xs max-w-[200px] truncate" title={s.userAgent}>

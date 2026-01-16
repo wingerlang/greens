@@ -327,7 +327,7 @@ export function WeightTrendChart({ entries, currentWeight, onEntryClick, hideHea
                                     return (
                                         <div className="bg-slate-900/95 border border-white/10 rounded-lg px-3 py-2 shadow-xl backdrop-blur">
                                             <div className="text-lg font-bold text-white">
-                                                {data.weight.toFixed(1)} kg
+                                                {typeof data.weight === 'number' ? data.weight.toFixed(1) : '-'} kg
                                             </div>
                                             {data.waist && (
                                                 <div className="text-sm font-bold text-purple-400">

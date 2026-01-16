@@ -29,6 +29,8 @@ import { handleAnalyticsRoutes } from "./handlers/analytics.ts";
 import { logError, logMetric } from "./utils/logger.ts";
 import { sessionTracker } from "./utils/sessionTracker.ts";
 import { handleAdminSessionRoutes } from "./handlers/adminSessions.ts";
+import { getSession } from "./db/session.ts";
+import { getUserById } from "./db/user.ts";
 
 export async function router(req: Request, remoteAddr: Deno.NetAddr): Promise<Response> {
     // Wrap with debug middleware
@@ -45,7 +47,25 @@ async function internalRouter(req: Request, remoteAddr: Deno.NetAddr): Promise<R
 
     // Track Session (excluding internal APIs if desired, but good to track all)
     if (!url.pathname.startsWith("/api/debug/client-error")) {
-        sessionTracker.track(req, clientIp);
+        // Try to resolve user if auth header exists
+        let userForTracking = undefined;
+        const authHeader = req.headers.get("Authorization");
+        if (authHeader) {
+            const token = authHeader.replace("Bearer ", "");
+            try {
+                // Determine user without touching session (avoid write overhead)
+                const session = await getSession(token);
+                if (session) {
+                    const user = await getUserById(session.userId);
+                    if (user) {
+                        userForTracking = { id: user.id, username: user.username };
+                    }
+                }
+            } catch (e) {
+                // Ignore tracking errors
+            }
+        }
+        sessionTracker.track(req, clientIp, userForTracking);
     }
 
     // CORS / Headers
