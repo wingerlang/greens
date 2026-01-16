@@ -333,74 +333,45 @@ export function DataProvider({ children }: DataProviderProps) {
         let loadedUsers = data.users || [];
 
         // If we are online, try to fetch the real user list for Community/Social features
+        // If we are online, try to fetch the real user list for Community/Social features
         const token = localStorage.getItem('auth_token');
         if (token) {
-            // Create AbortController for this refresh cycle - allows cancellation if component re-renders
+            // Create AbortController for this refresh cycle
             const abortController = new AbortController();
             const signal = abortController.signal;
 
             try {
-                console.log('[DataContext] Fetching /api/users...');
-                // Use safeFetch
-                const userPayload = await safeFetch<{ users: User[] }>('/api/users', {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    signal
-                });
+                console.log('[DataContext] Starting parallel sync...');
 
+                // execute all independent fetches in parallel
+                const [userPayload, mePayload, planData, strengthData] = await Promise.all([
+                    safeFetch<{ users: User[] }>('/api/users', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
+                    safeFetch<{ user: User }>('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
+                    safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
+
+                // 1. Handle Users
                 if (userPayload && userPayload.users && Array.isArray(userPayload.users)) {
                     console.log('[DataContext] Loaded real users list:', userPayload.users.map(u => u.username));
                     loadedUsers = userPayload.users;
-                    // Update local cache of users immediately
                     data.users = loadedUsers;
-                } else {
-                    console.error('[DataContext] Failed to fetch users list or empty response');
                 }
 
-                // NEW: Also fetch the "me" profile to ensure currentUserId is correct
-                console.log('[DataContext] Fetching /api/auth/me...');
-                const mePayload = await safeFetch<{ user: User }>('/api/auth/me', {
-                    headers: { 'Authorization': `Bearer ${token}` },
-                    signal
-                });
-
+                // 2. Handle Me (Current User)
                 if (mePayload && mePayload.user) {
                     console.log('[DataContext] Resolved current user:', mePayload.user.username);
                     data.currentUserId = mePayload.user.id;
-                    // Update the users list with this fresh profile if not already there
                     if (!loadedUsers.find(u => u.id === mePayload.user.id)) {
                         loadedUsers.push(mePayload.user);
                     }
                 }
-            } catch (e: unknown) {
-                // Ignore AbortError - this is expected when requests are cancelled during re-renders
-                if (e instanceof Error && e.name === 'AbortError') {
-                    console.log('[DataContext] Request aborted (expected during re-renders)');
-                } else {
-                    // This will now catch NetworkError from safeFetch
-                    console.error('[DataContext] Exception during online sync:', e);
-                }
-            }
-        } else {
-            console.log('[DataContext] No token found, skipping online sync.');
-        }
 
-        // EXTRA SYNC: Strength Workouts
-
-        // EXTRA SYNC: Planned Activities
-        if (token) {
-            try {
-                const planData = await safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
+                // 3. Handle Planned Activities
                 if (planData && planData.activities && Array.isArray(planData.activities)) {
                     console.log('[DataContext] Loaded planned activities globally:', planData.activities.length);
-                    // Merge with any potentially loaded from monolith (though monolith probably has none if we split)
-                    // Or just override because this is the source of truth for planning now.
-                    // However, monolith might have OLD plans. Let's merge.
                     const newActivities = planData.activities;
                     const existing = data.plannedActivities || [];
-                    // merging logic: if ID exists in newActivities, use it. Else keep existing (legacy).
                     const newIds = new Set(newActivities.map((a: PlannedActivity) => a.id));
                     const merged = [
                         ...existing.filter((a: PlannedActivity) => !newIds.has(a.id)),
@@ -408,18 +379,8 @@ export function DataProvider({ children }: DataProviderProps) {
                     ];
                     data.plannedActivities = merged;
                 }
-            } catch (e) {
-                console.error('[DataContext] Failed to fetch planned activities:', e);
-            }
-        }
 
-        if (token) {
-            try {
-                // Fetch full strength history to ensure YearInReview has data
-                const strengthData = await safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
+                // 4. Handle Strength Workouts
                 if (strengthData && strengthData.workouts && Array.isArray(strengthData.workouts)) {
                     console.log('[DataContext] Loaded strength workouts globally:', strengthData.workouts.length);
                     data.strengthSessions = strengthData.workouts;
@@ -432,9 +393,16 @@ export function DataProvider({ children }: DataProviderProps) {
                         localStorage.setItem('greens-app-data', JSON.stringify(parsed));
                     }
                 }
-            } catch (e) {
-                console.error('[DataContext] Failed to fetch strength workouts:', e);
+
+            } catch (e: unknown) {
+                if (e instanceof Error && e.name === 'AbortError') {
+                    console.log('[DataContext] Request aborted (expected during re-renders)');
+                } else {
+                    console.error('[DataContext] Exception during parallel sync:', e);
+                }
             }
+        } else {
+            console.log('[DataContext] No token found, skipping online sync.');
         }
 
         setUsers(loadedUsers);

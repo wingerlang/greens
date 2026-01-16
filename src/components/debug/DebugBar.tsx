@@ -133,7 +133,7 @@ export default function DebugBar() {
     const currentRequest = requests[0];
 
     return (
-        <div id="debug-bar-root" className="fixed bottom-0 left-0 right-0 z-[9999] font-mono text-xs">
+        <div id="debug-bar-root" className="fixed bottom-0 left-0 right-0 z-[9999] font-mono text-xs hidden md:block">
             {/* Inspector Overlay */}
             {isInspectMode && hoveredRect && (
                 <div

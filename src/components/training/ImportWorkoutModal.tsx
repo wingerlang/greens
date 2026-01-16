@@ -13,6 +13,7 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting }: I
     const [source, setSource] = useState<ImportSource>('strengthlog');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [pastedText, setPastedText] = useState('');
 
     useEffect(() => {
         if (!isOpen) return;
@@ -24,9 +25,18 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting }: I
     }, [isOpen, onClose]);
 
     const handleSubmit = async () => {
-        if (!selectedFile) return;
-        await onImport(selectedFile, source);
+        let fileToUpload = selectedFile;
+
+        if (!fileToUpload && pastedText) {
+            // Create a file from the pasted text
+            const blob = new Blob([pastedText], { type: 'text/csv' });
+            fileToUpload = new File([blob], `pasted-${source}.csv`, { type: 'text/csv' });
+        }
+
+        if (!fileToUpload) return;
+        await onImport(fileToUpload, source);
         setSelectedFile(null);
+        setPastedText('');
     };
 
     // Early return AFTER all hooks
@@ -66,34 +76,61 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting }: I
                     </button>
                 </div>
 
-                <div className="space-y-2">
-                    <label className="text-xs font-bold uppercase text-slate-500">CSV Fil</label>
-                    <div
-                        onClick={() => fileInputRef.current?.click()}
-                        className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer transition-all ${selectedFile
-                            ? 'border-emerald-500/50 bg-emerald-500/5'
-                            : 'border-white/10 hover:border-white/20 hover:bg-white/5'
-                            }`}
-                    >
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept=".csv"
-                            onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                            className="hidden"
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Alternativ 1: Ladda upp CSV-fil</label>
+                        <div
+                            onClick={() => fileInputRef.current?.click()}
+                            className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition-all ${selectedFile
+                                ? 'border-emerald-500/50 bg-emerald-500/5'
+                                : 'border-white/10 hover:border-white/20 hover:bg-white/5'
+                                }`}
+                        >
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept=".csv"
+                                onChange={(e) => {
+                                    setSelectedFile(e.target.files?.[0] || null);
+                                    if (e.target.files?.[0]) setPastedText('');
+                                }}
+                                className="hidden"
+                            />
+                            {selectedFile ? (
+                                <>
+                                    <span className="text-2xl mb-2">📄</span>
+                                    <span className="text-sm font-bold text-emerald-400">{selectedFile.name}</span>
+                                    <span className="text-xs text-slate-500">{(selectedFile.size / 1024).toFixed(1)} KB</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span className="text-2xl mb-2">📥</span>
+                                    <span className="text-sm font-bold text-slate-400">Klicka för att välja fil</span>
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="relative">
+                        <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-slate-800" />
+                        </div>
+                        <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-slate-900 px-2 text-slate-500 font-bold">Eller</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold uppercase text-slate-500 mb-1 block">Alternativ 2: Klistra in text</label>
+                        <textarea
+                            value={pastedText}
+                            onChange={(e) => {
+                                setPastedText(e.target.value);
+                                if (e.target.value) setSelectedFile(null);
+                            }}
+                            placeholder="Klistra in innehållet från din CSV-fil här..."
+                            className="w-full h-32 bg-slate-950 border border-white/10 rounded-xl p-3 text-xs text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-purple-500 resize-none font-mono"
                         />
-                        {selectedFile ? (
-                            <>
-                                <span className="text-2xl mb-2">📄</span>
-                                <span className="text-sm font-bold text-emerald-400">{selectedFile.name}</span>
-                                <span className="text-xs text-slate-500">{(selectedFile.size / 1024).toFixed(1)} KB</span>
-                            </>
-                        ) : (
-                            <>
-                                <span className="text-2xl mb-2">📥</span>
-                                <span className="text-sm font-bold text-slate-400">Klicka för att välja fil</span>
-                            </>
-                        )}
                     </div>
                 </div>
 
@@ -106,7 +143,7 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting }: I
                     </button>
                     <button
                         onClick={handleSubmit}
-                        disabled={!selectedFile || isImporting}
+                        disabled={(!selectedFile && !pastedText) || isImporting}
                         className="flex-1 py-3 rounded-xl font-bold bg-emerald-500 hover:bg-emerald-400 text-slate-950 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isImporting ? 'Importerar...' : 'Importera'}
