@@ -14,21 +14,23 @@ export function ImportWorkoutModal({ isOpen, onClose, onImport, isImporting }: I
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-    if (!isOpen) return null;
-
     useEffect(() => {
+        if (!isOpen) return;
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [onClose]);
+    }, [isOpen, onClose]);
 
     const handleSubmit = async () => {
         if (!selectedFile) return;
         await onImport(selectedFile, source);
         setSelectedFile(null);
     };
+
+    // Early return AFTER all hooks
+    if (!isOpen) return null;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
