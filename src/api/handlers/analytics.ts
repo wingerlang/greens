@@ -70,6 +70,22 @@ export async function handleAnalyticsRoutes(req: Request, url: URL, headers: Hea
             return json({ daily });
         }
 
+        // GET /sessions - Get aggregated sessions
+        if (path === "/sessions" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '7');
+            const sessions = await analyticsRepository.getSessions(daysBack);
+            return json({ sessions });
+        }
+
+        // GET /session - Get aggregated sessions
+        if (path === "/session" && method === "GET") {
+            const id = url.searchParams.get('id');
+            if (!id) return json({ error: "Missing id" }, 400);
+
+            const events = await analyticsRepository.getSessionEvents(id);
+            return json({ events });
+        }
+
         return json({ error: "Not Found" }, 404);
 
     } catch (error) {

@@ -12,7 +12,32 @@ const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefin
 export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     const location = useLocation();
     const { user } = useAuth();
-    const sessionId = useRef(generateId()); // Persist for session duration (page refresh)
+
+    // Session Management
+    const [sessionId] = useState(() => {
+        const stored = sessionStorage.getItem('analytics_session_id');
+        const timestamp = sessionStorage.getItem('analytics_session_ts');
+        const now = Date.now();
+
+        // Reset session if > 30 mins inactivity or missing
+        if (stored && timestamp && (now - parseInt(timestamp) < 30 * 60 * 1000)) {
+            sessionStorage.setItem('analytics_session_ts', now.toString());
+            return stored;
+        }
+
+        const newId = generateId();
+        sessionStorage.setItem('analytics_session_id', newId);
+        sessionStorage.setItem('analytics_session_ts', now.toString());
+        return newId;
+    });
+
+    const sessionIdRef = useRef(sessionId); // Keep ref for closures
+
+    // Update timestamp on activity
+    useEffect(() => {
+        sessionStorage.setItem('analytics_session_ts', Date.now().toString());
+    }, [location.pathname]);
+
     const startTimeRef = useRef(Date.now());
     const currentPathRef = useRef(location.pathname);
 
@@ -30,7 +55,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             const view: PageView = {
                 id: generateId(),
                 userId: user.id,
-                sessionId: sessionId.current,
+                sessionId: sessionIdRef.current,
                 path: prevPath,
                 timestamp: new Date(startTimeRef.current).toISOString(),
                 durationSeconds: parseFloat(duration.toFixed(1)),
@@ -71,7 +96,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 const event: InteractionEvent = {
                     id: generateId(),
                     userId: user.id,
-                    sessionId: sessionId.current,
+                    sessionId: sessionIdRef.current,
                     type: 'click',
                     target: element.tagName.toLowerCase(),
                     label: label,
@@ -94,13 +119,62 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
         };
     }, [user, location.pathname]);
 
+    // 3. Global Error Tracking
+    useEffect(() => {
+        if (!user) return;
+
+        const handleError = (event: ErrorEvent) => {
+            fetch('/api/usage/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: generateId(),
+                    userId: user.id,
+                    sessionId: sessionIdRef.current,
+                    type: 'error',
+                    target: 'window',
+                    label: event.message,
+                    path: location.pathname,
+                    timestamp: new Date().toISOString(),
+                    metadata: { stack: event.error?.stack, filename: event.filename, lineno: event.lineno }
+                })
+            }).catch(e => console.debug("Analytics error log failed", e));
+        };
+
+        const handleRejection = (event: PromiseRejectionEvent) => {
+            fetch('/api/usage/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    id: generateId(),
+                    userId: user.id,
+                    sessionId: sessionIdRef.current,
+                    type: 'error',
+                    target: 'promise',
+                    label: event.reason?.message || String(event.reason),
+                    path: location.pathname,
+                    timestamp: new Date().toISOString(),
+                    metadata: { reason: event.reason }
+                })
+            }).catch(e => console.debug("Analytics rejection log failed", e));
+        };
+
+        window.addEventListener('error', handleError);
+        window.addEventListener('unhandledrejection', handleRejection);
+
+        return () => {
+            window.removeEventListener('error', handleError);
+            window.removeEventListener('unhandledrejection', handleRejection);
+        };
+    }, [user, location.pathname]);
+
     const logEvent = (type: InteractionEvent['type'], label: string, target = 'custom', metadata?: any) => {
         if (!user) return;
 
         const event: InteractionEvent = {
             id: generateId(),
             userId: user.id,
-            sessionId: sessionId.current,
+            sessionId: sessionIdRef.current,
             type,
             target,
             label,

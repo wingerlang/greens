@@ -491,7 +491,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
     // Analytics: Track search queries (debounced)
     useEffect(() => {
-        if (!input || input.length < 3 || input.startsWith('/')) return;
+        if (!input || input.length < 3) return;
 
         const timer = setTimeout(() => {
             logEvent('omnibox_search', input.substring(0, 50), 'search', {

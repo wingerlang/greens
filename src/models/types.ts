@@ -1584,7 +1584,7 @@ export interface InteractionEvent {
     id: string;
     userId: string;
     sessionId: string;
-    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log';
+    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'error';
     target: string; // e.g., "button", "a", "input"
     label: string; // e.g., "Save Workout", "Log Out"
     path: string; // Where it happened

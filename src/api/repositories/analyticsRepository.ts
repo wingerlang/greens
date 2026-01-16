@@ -28,8 +28,6 @@ export const analyticsRepository = {
 
     /**
      * Get aggregated stats for the dashboard
-     * NOTE: In a real production app at scale, we would pre-aggregate these.
-     * For this scale, scanning the last X days is fine.
      */
     async getStats(daysBack = 30): Promise<AnalyticsStats> {
         const cutoff = new Date();
@@ -107,54 +105,120 @@ export const analyticsRepository = {
     /**
      * Get filtered events for raw event log
      */
-    async getEventsFiltered(filters: {
-        userId?: string;
-        type?: string;
-        daysBack?: number;
-        limit?: number;
-    }): Promise<{ events: InteractionEvent[]; pageViews: PageView[]; total: number }> {
-        const { userId, type, daysBack = 7, limit = 100 } = filters;
+    async getEventsFiltered({ userId, type, daysBack = 7, limit = 100 }: { userId?: string, type?: string, daysBack?: number, limit?: number }) {
+        const events: InteractionEvent[] = [];
+        const pageViews: PageView[] = [];
 
         const cutoff = new Date();
         cutoff.setDate(cutoff.getDate() - daysBack);
         const cutoffStr = cutoff.toISOString();
 
-        const events: InteractionEvent[] = [];
-        const pageViews: PageView[] = [];
+        // Simplified scan (in real app, use secondary indexes or more precise key ranges)
+        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] }, { reverse: true })) {
+            const e = entry.value;
+            if (e.timestamp < cutoffStr) break;
+            if (userId && e.userId !== userId) continue;
+            if (type && e.type !== type) continue;
+            events.push(e);
+            if (events.length >= limit) break;
+        }
 
-        // Fetch Events
+        for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] }, { reverse: true })) {
+            const p = entry.value;
+            if (p.timestamp < cutoffStr) break;
+            if (userId && p.userId !== userId) continue;
+            pageViews.push(p);
+            if (pageViews.length >= limit) break;
+        }
+
+        return { events: events.slice(0, limit), pageViews: pageViews.slice(0, limit) };
+    },
+
+    /**
+     * Get sessions grouped by ID
+     */
+    async getSessions(daysBack = 7): Promise<any[]> {
+        const sessions = new Map<string, any>();
+        const cutoff = new Date(Date.now() - daysBack * 86400000).getTime();
+        const cutoffStr = new Date(cutoff).toISOString();
+
+        // 1. Collect all PageViews
+        for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] }, { reverse: true })) {
+            const view = entry.value;
+            if (view.timestamp < cutoffStr) break;
+
+            if (!sessions.has(view.sessionId)) {
+                sessions.set(view.sessionId, {
+                    sessionId: view.sessionId,
+                    userId: view.userId,
+                    startTime: view.timestamp,
+                    endTime: view.timestamp,
+                    eventCount: 0,
+                    viewCount: 0,
+                    pathFlow: [],
+                    userAgent: view.userAgent
+                });
+            }
+
+            const session = sessions.get(view.sessionId);
+            session.viewCount++;
+            session.pathFlow.push(view.path);
+            if (view.timestamp < session.startTime) session.startTime = view.timestamp;
+            if (view.timestamp > session.endTime) session.endTime = view.timestamp;
+        }
+
+        // 2. Collect all Events
+        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] }, { reverse: true })) {
+            const event = entry.value;
+            if (event.timestamp < cutoffStr) break;
+
+            if (!sessions.has(event.sessionId)) {
+                // If we have an event but no page view, create session anyway
+                sessions.set(event.sessionId, {
+                    sessionId: event.sessionId,
+                    userId: event.userId,
+                    startTime: event.timestamp,
+                    endTime: event.timestamp,
+                    eventCount: 0,
+                    viewCount: 0,
+                    pathFlow: [],
+                    userAgent: 'Unknown'
+                });
+            }
+            const session = sessions.get(event.sessionId);
+            session.eventCount++;
+            if (event.timestamp < session.startTime) session.startTime = event.timestamp;
+            if (event.timestamp > session.endTime) session.endTime = event.timestamp;
+        }
+
+        return Array.from(sessions.values())
+            .sort((a, b) => new Date(b.endTime).getTime() - new Date(a.endTime).getTime())
+            .map(s => ({
+                ...s,
+                durationSeconds: (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 1000,
+                pathFlow: [...new Set(s.pathFlow)].slice(0, 5) // Unique paths, max 5 for preview
+            }));
+    },
+
+    /**
+     * Get all events for a specific session
+     */
+    async getSessionEvents(sessionId: string) {
+        const events: any[] = [];
+
+        // Fetch Views
+        for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] })) {
+            const view = entry.value;
+            if (view.sessionId === sessionId) events.push({ ...view, _type: 'view' });
+        }
+
+        // Fetch Interactions
         for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
-            if (entry.value.timestamp >= cutoffStr) {
-                if (userId && entry.value.userId !== userId) continue;
-                if (type && entry.value.type !== type) continue;
-                events.push(entry.value);
-            }
+            const event = entry.value;
+            if (event.sessionId === sessionId) events.push({ ...event, _type: 'event' });
         }
 
-        // Fetch Page Views (if no type filter or type is 'pageview')
-        if (!type || type === 'pageview') {
-            for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] })) {
-                if (entry.value.timestamp >= cutoffStr) {
-                    if (userId && entry.value.userId !== userId) continue;
-                    pageViews.push(entry.value);
-                }
-            }
-        }
-
-        // Sort by timestamp descending and limit
-        const allEvents = [...events].sort((a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        ).slice(0, limit);
-
-        const allPageViews = [...pageViews].sort((a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        ).slice(0, limit);
-
-        return {
-            events: allEvents,
-            pageViews: allPageViews,
-            total: events.length + pageViews.length
-        };
+        return events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
     },
 
     /**
