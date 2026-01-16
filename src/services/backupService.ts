@@ -54,7 +54,7 @@ async function apiRequest<T>(
     }
 
     try {
-        const res = await fetch(`http://localhost:8000${path}`, {
+        const res = await fetch(`${path}`, {
             ...options,
             headers: {
                 'Content-Type': 'application/json',

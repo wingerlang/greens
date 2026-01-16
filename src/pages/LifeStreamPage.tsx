@@ -37,7 +37,7 @@ export function LifeStreamPage() {
         try {
             const token = localStorage.getItem('auth_token');
             const catParam = activeCategories.join(',');
-            const res = await fetch(`http://localhost:8000/api/feed?limit=50&categories=${catParam}`, {
+            const res = await fetch(`/api/feed?limit=50&categories=${catParam}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
@@ -58,7 +58,7 @@ export function LifeStreamPage() {
     const fetchStats = async () => {
         try {
             const token = localStorage.getItem('auth_token');
-            const res = await fetch(`http://localhost:8000/api/feed/stats`, {
+            const res = await fetch(`/api/feed/stats`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {

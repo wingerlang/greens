@@ -23,7 +23,7 @@ export function PublicProfilePage() {
         setFeedLoading(true);
         try {
             const token = localStorage.getItem('auth_token');
-            const res = await fetch(`http://localhost:8000/api/feed/user/${userId}?limit=10`, {
+            const res = await fetch(`/api/feed/user/${userId}?limit=10`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {

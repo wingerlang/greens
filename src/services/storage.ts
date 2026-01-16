@@ -92,7 +92,7 @@ export class LocalStorageService implements StorageService {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
-                const res = await fetch('http://localhost:8000/api/data', {
+                const res = await fetch('/api/data', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 if (res.ok) {
@@ -218,7 +218,7 @@ export class LocalStorageService implements StorageService {
             if (token && ENABLE_CLOUD_SYNC) {
                 // Critical: Strict wait for "Save Profile"
                 try {
-                    const res = await fetch('http://localhost:8000/api/data', {
+                    const res = await fetch('/api/data', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

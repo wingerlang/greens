@@ -36,7 +36,7 @@ export function ProfileFeedSection({ userId, compact = true }: ProfileFeedSectio
             const token = localStorage.getItem('auth_token');
             const catParam = activeCategories.join(',');
             // Fetch feed filtered to this user only
-            const res = await fetch(`http://localhost:8000/api/feed?limit=50&categories=${catParam}&userId=${targetUserId}`, {
+            const res = await fetch(`/api/feed?limit=50&categories=${catParam}&userId=${targetUserId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 

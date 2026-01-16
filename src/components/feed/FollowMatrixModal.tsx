@@ -49,7 +49,7 @@ export function FollowMatrixModal({ isOpen, onClose, targetUserId, targetUserNam
         setLoading(true);
         try {
             const token = localStorage.getItem('auth_token');
-            const res = await fetch(`http://localhost:8000/api/feed/preferences/${targetUserId}`, {
+            const res = await fetch(`/api/feed/preferences/${targetUserId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -69,7 +69,7 @@ export function FollowMatrixModal({ isOpen, onClose, targetUserId, targetUserNam
         setSaving(true);
         try {
             const token = localStorage.getItem('auth_token');
-            const res = await fetch(`http://localhost:8000/api/feed/preferences/${targetUserId}`, {
+            const res = await fetch(`/api/feed/preferences/${targetUserId}`, {
                 method: 'PUT',
                 headers: {
                     'Authorization': `Bearer ${token}`,

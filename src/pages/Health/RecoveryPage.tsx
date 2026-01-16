@@ -10,7 +10,7 @@ import { StrengthWorkout } from '../../models/strengthTypes.ts';
 import { calculateAcuteLoad, analyzeInjuryRisk } from '../../utils/loadCalculator.ts';
 import { REHAB_ROUTINES } from '../../data/rehabRoutines.ts';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = '';
 
 export function RecoveryPage() {
     const { injuryLogs, recoveryMetrics } = useData();
@@ -112,8 +112,8 @@ export function RecoveryPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-top-4">
                     {risks.map((risk, i) => (
                         <div key={i} className={`p-4 rounded-xl border flex items-start gap-3 ${risk.level === 'critical' ? 'bg-rose-500/10 border-rose-500/30 text-rose-200' :
-                                risk.level === 'high' ? 'bg-orange-500/10 border-orange-500/30 text-orange-200' :
-                                    'bg-amber-500/10 border-amber-500/30 text-amber-200'
+                            risk.level === 'high' ? 'bg-orange-500/10 border-orange-500/30 text-orange-200' :
+                                'bg-amber-500/10 border-amber-500/30 text-amber-200'
                             }`}>
                             <span className="text-2xl mt-0.5">{risk.level === 'critical' ? '🛑' : '⚠️'}</span>
                             <div>

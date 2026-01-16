@@ -21,7 +21,7 @@ export function StyrkaView({ days }: StyrkaViewProps) {
             return;
         }
 
-        const API_BASE = 'http://localhost:8000';
+        const API_BASE = '';
 
         const fetchData = async () => {
             try {

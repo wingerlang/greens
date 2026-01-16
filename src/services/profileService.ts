@@ -1,6 +1,6 @@
 // Profile API Service - Frontend client for profile endpoints
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 function getHeaders() {
     const token = localStorage.getItem('auth_token');

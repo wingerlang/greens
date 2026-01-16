@@ -169,7 +169,7 @@ export function FeedEventCard({
                                                     setUpdating(true);
                                                     try {
                                                         const token = localStorage.getItem('auth_token');
-                                                        const res = await fetch(`http://localhost:8000/api/feed/events/${event.id}/visibility`, {
+                                                        const res = await fetch(`/api/feed/events/${event.id}/visibility`, {
                                                             method: 'PATCH',
                                                             headers: {
                                                                 'Content-Type': 'application/json',

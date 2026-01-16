@@ -18,7 +18,7 @@ import './HealthPage.css';
 
 type TimeFrame = '7d' | '30d' | '3m' | '6m' | '9m' | 'year' | 'all' | '2024' | '2025';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = '';
 
 export function HealthPage() {
     const { metric } = useParams<{ metric?: string }>();

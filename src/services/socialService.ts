@@ -1,6 +1,6 @@
 import { User } from '../models/types.ts';
 
-const API_BASE = 'http://localhost:8000/api';
+const API_BASE = '/api';
 
 async function getHeaders() {
     const token = localStorage.getItem('auth_token');
