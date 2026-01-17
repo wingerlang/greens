@@ -71,6 +71,7 @@ import { DeveloperDashboard } from './pages/developer/DeveloperDashboard.tsx';
 import { DeveloperLayout } from './pages/developer/DeveloperLayout.tsx';
 import { DeveloperExplorer } from './pages/developer/DeveloperExplorer.tsx';
 import { DeveloperAnalysis } from './pages/developer/DeveloperAnalysis.tsx';
+import { DeveloperDeepAnalysis } from './pages/developer/DeveloperDeepAnalysis.tsx';
 import { DeveloperTodos } from './pages/developer/DeveloperTodos.tsx';
 import { DeveloperHealth } from './pages/developer/DeveloperHealth.tsx';
 import { DeveloperManagement } from './pages/developer/DeveloperManagement.tsx';
@@ -165,6 +166,7 @@ export function App() {
                                                             <Route path="todos" element={<DeveloperTodos />} />
                                                             <Route path="explorer" element={<DeveloperExplorer />} />
                                                             <Route path="analysis" element={<DeveloperAnalysis />} />
+                                                            <Route path="deep" element={<DeveloperDeepAnalysis />} />
                                                             <Route path="health" element={<DeveloperHealth />} />
                                                             <Route path="management" element={<DeveloperManagement />} />
                                                         </Route>

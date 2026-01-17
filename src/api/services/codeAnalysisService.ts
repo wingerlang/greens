@@ -1,12 +1,26 @@
 
 /// <reference lib="deno.ns" />
-import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
+import { join } from "node:path";
+
+export interface GitStats {
+    topChurnFiles: { file: string; changes: number }[];
+    newFilesHistory: { date: string; count: number }[];
+}
+
+export interface ComplexityStats {
+    mostComplexFiles: { file: string; maxDepth: number }[];
+    averageDepth: number;
+}
 
 export interface ProjectStats {
     totalFiles: number;
     totalLines: number;
     filesByExtension: Record<string, number>;
     linesByExtension: Record<string, number>;
+    gitStats?: GitStats;
+    complexityStats?: ComplexityStats;
+    dependencyCount?: number;
+    excludedRules?: string[];
 }
 
 export interface FileNode {
@@ -98,14 +112,29 @@ export class CodeAnalysisService {
             totalFiles: 0,
             totalLines: 0,
             filesByExtension: {},
-            linesByExtension: {}
+            linesByExtension: {},
+            complexityStats: { mostComplexFiles: [], averageDepth: 0 },
+            dependencyCount: 0,
+            excludedRules: excludedPaths
         };
 
-        await this.walkAndCount(this.rootDir, stats, excludedPaths);
+        const complexityData: { file: string, maxDepth: number }[] = [];
+        await this.walkAndCount(this.rootDir, stats, excludedPaths, complexityData);
+
+        if (complexityData.length > 0) {
+            stats.complexityStats = {
+                mostComplexFiles: complexityData.sort((a, b) => b.maxDepth - a.maxDepth).slice(0, 20),
+                averageDepth: complexityData.reduce((acc, curr) => acc + curr.maxDepth, 0) / complexityData.length
+            };
+        }
+
+        stats.gitStats = await this.getGitStats(excludedPaths);
+        stats.dependencyCount = await this.getDependencyCount();
+
         return stats;
     }
 
-    private async walkAndCount(path: string, stats: ProjectStats, excludedPaths: string[]) {
+    private async walkAndCount(path: string, stats: ProjectStats, excludedPaths: string[], complexityData: { file: string, maxDepth: number }[]) {
         try {
             for await (const entry of Deno.readDir(path)) {
                 const fullPath = `${path}/${entry.name}`;
@@ -113,7 +142,7 @@ export class CodeAnalysisService {
                 if (this.isExcluded(fullPath, excludedPaths)) continue;
 
                 if (entry.isDirectory) {
-                    await this.walkAndCount(fullPath, stats, excludedPaths);
+                    await this.walkAndCount(fullPath, stats, excludedPaths, complexityData);
                 } else if (entry.isFile) {
                     const ext = entry.name.split('.').pop() || 'unknown';
                     if (['png', 'jpg', 'jpeg', 'ico', 'svg', 'woff', 'woff2', 'ttf', 'eot', 'map'].includes(ext)) continue;
@@ -123,15 +152,122 @@ export class CodeAnalysisService {
 
                     try {
                         const content = await Deno.readTextFile(fullPath);
-                        const lines = content.split('\n').length;
-                        stats.totalLines += lines;
-                        stats.linesByExtension[ext] = (stats.linesByExtension[ext] || 0) + lines;
+                        const lines = content.split('\n');
+                        const lineCount = lines.length;
+
+                        stats.totalLines += lineCount;
+                        stats.linesByExtension[ext] = (stats.linesByExtension[ext] || 0) + lineCount;
+
+                        // Complexity Analysis (Max Indentation)
+                        if (['ts', 'tsx', 'js', 'jsx'].includes(ext)) {
+                            let maxDepth = 0;
+                            for (const line of lines) {
+                                const trim = line.trim();
+                                if (!trim || trim.startsWith('//') || trim.startsWith('/*') || trim.startsWith('*')) continue;
+                                const match = line.match(/^(\s*)/);
+                                if (match) {
+                                    // 2 spaces = 1 depth (approx)
+                                    const depth = Math.floor(match[1].length / 2);
+                                    if (depth > maxDepth) maxDepth = depth;
+                                }
+                            }
+                            complexityData.push({ file: fullPath, maxDepth });
+                        }
+
                     } catch (e) { }
                 }
             }
         } catch (e) {
             console.error(`Error walking ${path}:`, e);
         }
+    }
+
+    async getGitStats(excludedPaths: string[] = []): Promise<GitStats> {
+        const stats: GitStats = {
+            topChurnFiles: [],
+            newFilesHistory: []
+        };
+
+        try {
+            // Churn: git log --pretty=format: --name-only
+            // We use Deno.Command to invoke git
+            const cmdChurn = new Deno.Command("git", {
+                args: ["log", "--pretty=format:", "--name-only"],
+                stdout: "piped",
+                stderr: "piped"
+            });
+            const outputChurn = await cmdChurn.output();
+            if (outputChurn.code === 0) {
+                const text = new TextDecoder().decode(outputChurn.stdout);
+                const fileCounts: Record<string, number> = {};
+                const lines = text.split('\n');
+                for (const line of lines) {
+                    const cleanLine = line.trim();
+                    if (!cleanLine) continue;
+                    // Check exclusion
+                    if (this.isExcluded(cleanLine, excludedPaths)) continue;
+
+                    // Simple filter to keep it relevant
+                    fileCounts[cleanLine] = (fileCounts[cleanLine] || 0) + 1;
+                }
+                stats.topChurnFiles = Object.entries(fileCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 20)
+                    .map(([file, changes]) => ({ file, changes }));
+            }
+
+            // New Files History
+            const cmdNew = new Deno.Command("git", {
+                args: ["log", "--diff-filter=A", "--name-only", "--format=DATE:%ad", "--date=short"],
+                stdout: "piped",
+                stderr: "piped"
+            });
+            const outputNew = await cmdNew.output();
+            if (outputNew.code === 0) {
+                const text = new TextDecoder().decode(outputNew.stdout);
+                const lines = text.split('\n');
+                let currentDate = '';
+                const dateCounts: Record<string, number> = {};
+
+                for (const line of lines) {
+                    const clean = line.trim();
+                    if (!clean) continue;
+                    if (clean.startsWith('DATE:')) {
+                        currentDate = clean.substring(5);
+                    } else {
+                        // It's a file
+                        if (this.isExcluded(clean, excludedPaths)) continue;
+                        if (currentDate) {
+                            dateCounts[currentDate] = (dateCounts[currentDate] || 0) + 1;
+                        }
+                    }
+                }
+
+                stats.newFilesHistory = Object.entries(dateCounts)
+                    .sort((a, b) => a[0].localeCompare(b[0]))
+                    .map(([date, count]) => ({ date, count }));
+            }
+
+        } catch (e) {
+            console.error("Git stats failed (Git might not be available):", e);
+        }
+        return stats;
+    }
+
+    async getDependencyCount(): Promise<number> {
+        let count = 0;
+        try {
+            const pkgRaw = await Deno.readTextFile('package.json');
+            const pkg = JSON.parse(pkgRaw);
+            count += Object.keys(pkg.dependencies || {}).length;
+            count += Object.keys(pkg.devDependencies || {}).length;
+        } catch {}
+        try {
+            const denoRaw = await Deno.readTextFile('deno.json');
+            const deno = JSON.parse(denoRaw);
+            count += Object.keys(deno.imports || {}).length;
+        } catch {}
+        return count;
     }
 
     async getFileStructure(): Promise<FileNode> {

@@ -2,6 +2,7 @@ import * as fs from "node:fs/promises";
 import * as http from "node:http";
 import * as path from "node:path";
 import * as os from "node:os";
+import * as child_process from "node:child_process";
 import { openKv } from "@deno/kv";
 
 // Ensure globalThis.Deno exists
@@ -87,6 +88,86 @@ Deno.stat = async (path: string) => {
         isFile: stats.isFile(),
         isSymlink: stats.isSymbolicLink(),
     };
+};
+
+Deno.readDir = async function* (dirPath: string) {
+    try {
+        const dir = await fs.opendir(dirPath);
+        for await (const dirent of dir) {
+            yield {
+                name: dirent.name,
+                isFile: dirent.isFile(),
+                isDirectory: dirent.isDirectory(),
+                isSymlink: dirent.isSymbolicLink(),
+            };
+        }
+    } catch (e: any) {
+        if (e.code === 'ENOENT') {
+             throw new Deno.errors.NotFound(`No such file or directory: ${dirPath}`);
+        }
+        throw e;
+    }
+};
+
+Deno.Command = class Command {
+    command: string;
+    options: any;
+
+    constructor(command: string, options: any) {
+        this.command = command;
+        this.options = options || {};
+    }
+
+    output() {
+        return new Promise((resolve, reject) => {
+            const args = this.options.args || [];
+            // Handle piped stdout/stderr options if needed, but for now we default to capturing
+
+            const proc = child_process.spawn(this.command, args, {
+                cwd: this.options.cwd,
+                env: { ...process.env, ...(this.options.env || {}) },
+                stdio: ['ignore', 'pipe', 'pipe']
+            });
+
+            const stdoutChunks: Buffer[] = [];
+            const stderrChunks: Buffer[] = [];
+
+            if (proc.stdout) {
+                proc.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
+            }
+            if (proc.stderr) {
+                proc.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+            }
+
+            proc.on('close', (code: number | null) => {
+                resolve({
+                    code: code || 0,
+                    stdout: new Uint8Array(Buffer.concat(stdoutChunks)),
+                    stderr: new Uint8Array(Buffer.concat(stderrChunks)),
+                    success: code === 0,
+                    signal: null
+                });
+            });
+
+            proc.on('error', (err: any) => {
+                if (err.code === 'ENOENT') {
+                    // Deno throws NotFound if command not found? Or rejects?
+                    // To match Deno.Command behavior closer, we might just return a failed result
+                    // or let the validation above handle it.
+                    // For now, resolving with failure is safer than crashing.
+                    resolve({
+                         code: 1,
+                         stdout: new Uint8Array(),
+                         stderr: new Uint8Array(Buffer.from(err.message)),
+                         success: false,
+                         signal: null
+                    });
+                } else {
+                    reject(err);
+                }
+            });
+        });
+    }
 };
 
 Deno.errors = {
