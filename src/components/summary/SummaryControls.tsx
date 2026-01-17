@@ -5,6 +5,8 @@ interface SummaryControlsProps {
     endDate: string;
     onDateChange: (start: string, end: string) => void;
     onDownload: () => void;
+    showPrs: boolean;
+    onTogglePrs: (show: boolean) => void;
     isDownloading: boolean;
 }
 
@@ -13,6 +15,8 @@ export const SummaryControls: React.FC<SummaryControlsProps> = ({
     endDate,
     onDateChange,
     onDownload,
+    showPrs,
+    onTogglePrs,
     isDownloading
 }) => {
 
@@ -26,8 +30,8 @@ export const SummaryControls: React.FC<SummaryControlsProps> = ({
             start.setMonth(0, 1);
             start.setDate(1); // Jan 1st this year
         } else if (days === 'last_year') {
-             start.setFullYear(start.getFullYear() - 1, 0, 1);
-             end.setFullYear(end.getFullYear() - 1, 11, 31);
+            start.setFullYear(start.getFullYear() - 1, 0, 1);
+            end.setFullYear(end.getFullYear() - 1, 11, 31);
         }
 
         onDateChange(start.toISOString().split('T')[0], end.toISOString().split('T')[0]);
@@ -64,6 +68,19 @@ export const SummaryControls: React.FC<SummaryControlsProps> = ({
                         />
                     </div>
                 </div>
+            </div>
+
+            <div className="pt-4 border-t border-white/10">
+                <h3 className="text-lg font-bold text-white mb-2">Innehåll</h3>
+                <label className="flex items-center gap-3 cursor-pointer p-3 bg-slate-800/50 rounded-xl hover:bg-slate-800 transition-colors">
+                    <input
+                        type="checkbox"
+                        checked={showPrs}
+                        onChange={(e) => onTogglePrs(e.target.checked)}
+                        className="w-5 h-5 rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500/50"
+                    />
+                    <span className="text-sm font-bold text-slate-200">Visa PR & Tävlingar</span>
+                </label>
             </div>
 
             <div className="pt-4 border-t border-white/10">

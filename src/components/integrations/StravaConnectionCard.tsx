@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
+import { useSettings } from '../../context/SettingsContext.tsx';
 
 import { StravaActivityImportModal } from './StravaActivityImportModal.tsx';
 
@@ -31,6 +32,7 @@ interface StravaStatus {
 export function StravaConnectionCard() {
     const { token } = useAuth();
     const { refreshData } = useData();
+    const { settings, updateSettings } = useSettings();
     const [status, setStatus] = useState<StravaStatus | null>(null);
     const [loading, setLoading] = useState(true);
     const [connecting, setConnecting] = useState(false);
@@ -200,6 +202,38 @@ export function StravaConnectionCard() {
                             Senast synkad: {new Date(status.lastSync).toLocaleString('sv-SE')}
                         </div>
                     )}
+
+                    {/* Time Preference Toggle */}
+                    <div className="bg-slate-950/30 rounded-xl p-4 border border-white/5">
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tidstyp</label>
+                            <div className="flex bg-slate-900 p-1 rounded-lg border border-white/5">
+                                <button
+                                    onClick={() => updateSettings({ stravaTimePreference: 'moving' })}
+                                    className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${(settings.stravaTimePreference || 'moving') === 'moving'
+                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                            : 'text-slate-500 hover:text-slate-300'
+                                        }`}
+                                >
+                                    Rörelsetid
+                                </button>
+                                <button
+                                    onClick={() => updateSettings({ stravaTimePreference: 'elapsed' })}
+                                    className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${settings.stravaTimePreference === 'elapsed'
+                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                            : 'text-slate-500 hover:text-slate-300'
+                                        }`}
+                                >
+                                    Total Tid
+                                </button>
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                            {(settings.stravaTimePreference || 'moving') === 'moving'
+                                ? 'Använder effektiv tid i rörelse för dina pass (pauser borträknade).'
+                                : 'Använder total tid från start till mål inklusive alla pauser.'}
+                        </p>
+                    </div>
 
                     {/* Actions */}
                     <div className="flex gap-3 pt-2">

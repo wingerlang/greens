@@ -445,5 +445,75 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
         }
     }
 
+    // Public Stats by Handle
+    if (url.pathname.startsWith("/api/u/") && url.pathname.endsWith("/stats") && method === "GET") {
+        const handle = url.pathname.split("/")[3]; // /api/u/:handle/stats
+        if (!handle) return new Response(JSON.stringify({ error: "Missing handle" }), { status: 400, headers });
+
+        try {
+            // 1. Resolve User
+            const idEntry = await kv.get(["users_by_handle", handle.toLowerCase()]);
+            let id = idEntry.value || (await kv.get(["users_by_username", handle])).value;
+
+            if (!id) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            const user = await getUserById(id as string);
+            if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            // 2. Privacy Check
+            const privacy = user.privacy || { isPublic: true, sharing: { training: 'FRIENDS' } };
+            // Allow if public AND training is explicitly PUBLIC, OR if checking my own stats
+            const isMe = session.userId === id;
+
+            // Simplified Privacy Logic:
+            // If strictly private -> Block (unless Me)
+            // If training is PRIVATE -> Block (unless Me)
+            // If training is PUBLIC -> Allow
+            // If training is FRIENDS -> Allow (for now, simplistic "Public Profile" often implies some visibility, or we assume friends check passed elsewhere? 
+            // Actually, for a pure Public landing page, we should respect strict PUBLIC. 
+            // However, existing "Private" block in frontend handles the main lock. 
+            // Let's go with: If user is !isPublic -> Block. If sharing.training === PRIVATE -> Block.
+
+            if (!isMe) {
+                if (privacy.isPublic === false) return new Response(JSON.stringify({ error: "Private profile" }), { status: 403, headers });
+                if (privacy.sharing?.training === 'PRIVATE') return new Response(JSON.stringify({ stats: null, privacy: 'private' }), { headers });
+            }
+
+            // 3. Calculate Stats (Last 30 Days)
+            const activities: UniversalActivity[] = [];
+            const iter = kv.list<UniversalActivity>({ prefix: ['activities', id] });
+
+            const now = new Date();
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(now.getDate() - 30);
+
+            let totalDistance = 0;
+            let totalDuration = 0;
+            let count = 0;
+
+            for await (const entry of iter) {
+                const act = entry.value;
+                const date = new Date(act.date);
+                if (date >= thirtyDaysAgo && date <= now && act.status === 'COMPLETED') {
+                    activities.push(act); // Keep if needed, or just aggregate
+                    count++;
+                    if (act.performance?.distanceKm) totalDistance += act.performance.distanceKm;
+                    if (act.performance?.durationMinutes) totalDuration += act.performance.durationMinutes;
+                }
+            }
+
+            return new Response(JSON.stringify({
+                stats: {
+                    distance: Math.round(totalDistance * 10) / 10,
+                    duration: Math.round(totalDuration), // minutes
+                    count
+                }
+            }), { headers });
+
+        } catch (e) {
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 }

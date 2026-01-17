@@ -93,6 +93,8 @@ export interface UserSettings {
         hyrox: boolean;
     };
     longRunThreshold?: number; // km
+    pinnedPaths?: string[]; // Custom navbar pins
+    stravaTimePreference?: 'moving' | 'elapsed';
 }
 
 /** Weekly Stats Interface */
@@ -229,7 +231,8 @@ export const DEFAULT_USER_SETTINGS: UserSettings = {
         strength: true,
         hyrox: true
     },
-    longRunThreshold: 20
+    longRunThreshold: 20,
+    pinnedPaths: []
 };
 
 // ============================================
@@ -1012,6 +1015,7 @@ export interface ActivityPlanSection {
     description?: string;
     activityType: ExerciseType; // 'running', 'cycling', etc.
     activityCategory?: PlannedActivity['category']; // 'LONG_RUN', 'INTERVALS' etc.
+    source?: string;
 
     // Usage in Coach Logic
     templateId?: string; // If this came from a reusable plan template
@@ -1041,6 +1045,7 @@ export interface ActivityPerformanceSection {
 
     // Core Metrics
     activityType?: ExerciseType; // Captures actual performed type (e.g. walked instead of ran)
+    startTimeLocal?: string; // Full ISO timestamp for time-of-day analysis
     durationMinutes: number;
     elapsedTimeSeconds?: number;
     distanceKm?: number;
@@ -1443,6 +1448,7 @@ export interface AppSettings {
     };
     longRunThreshold?: number; // km
     incompleteDays?: Record<string, boolean>; // Map of date (YYYY-MM-DD) -> isIncomplete
+    stravaTimePreference?: 'moving' | 'elapsed';
 }
 
 /** Category display labels (Swedish, vegan only) */

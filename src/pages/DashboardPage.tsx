@@ -168,15 +168,30 @@ export function DashboardPage() {
             });
 
             const result = await res.json();
+
+            // Normalize generic API error response
+            if (!res.ok && result.error) {
+                setImportResult({
+                    success: false,
+                    errors: [result.error],
+                    workoutsImported: 0,
+                    workoutsUpdated: 0,
+                    workoutsSkipped: 0,
+                    exercisesDiscovered: 0,
+                    personalBestsFound: 0
+                });
+                return;
+            }
+
             setImportResult(result);
 
             if (result.success) {
                 await refreshData();
-                setShowImportModal(false);
+                // setShowImportModal(false); // Keep open to show success result
             }
         } catch (e) {
             console.error('Import failed:', e);
-            setImportResult({ success: false, errors: ['Import failed'] });
+            setImportResult({ success: false, errors: ['Import failed: ' + (e instanceof Error ? e.message : String(e))], workoutsImported: 0, workoutsUpdated: 0, workoutsSkipped: 0, exercisesDiscovered: 0, personalBestsFound: 0 });
         } finally {
             setImporting(false);
         }
@@ -523,8 +538,8 @@ export function DashboardPage() {
     };
 
     // 4. Training Analysis
-    const todaysPlan = plannedActivities.find(p => p.date === selectedDate);
-    const completedTraining = unifiedActivities.filter(e => e.date === selectedDate);
+    const todaysPlan = plannedActivities.find(p => p.date.split('T')[0] === selectedDate);
+    const completedTraining = unifiedActivities.filter(e => e.date.split('T')[0] === selectedDate);
 
     // Determine Training Card Content
     let trainingContent;
@@ -1713,6 +1728,7 @@ export function DashboardPage() {
                 onClose={() => setShowImportModal(false)}
                 onImport={handleImport}
                 isImporting={importing}
+                importResult={importResult}
             />
         </div >
     );

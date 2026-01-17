@@ -12,6 +12,7 @@ export function SummaryPage() {
         return d.toISOString().split('T')[0];
     });
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
+    const [showPrs, setShowPrs] = useState(true);
     const [isDownloading, setIsDownloading] = useState(false);
 
     const { stats } = useTrainingSummary(startDate, endDate);
@@ -44,7 +45,7 @@ export function SummaryPage() {
 
     return (
         <div className="min-h-screen bg-slate-950 text-white p-4 md:p-8 animate-in fade-in duration-700">
-             <header className="mb-8">
+            <header className="mb-8">
                 <h1 className="text-3xl md:text-5xl font-black bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent mb-2">
                     Dina Höjdpunkter
                 </h1>
@@ -63,6 +64,8 @@ export function SummaryPage() {
                             setStartDate(s);
                             setEndDate(e);
                         }}
+                        showPrs={showPrs}
+                        onTogglePrs={setShowPrs}
                         onDownload={handleDownload}
                         isDownloading={isDownloading}
                     />
@@ -79,6 +82,7 @@ export function SummaryPage() {
                                 stats={stats}
                                 startDate={startDate}
                                 endDate={endDate}
+                                showPrs={showPrs}
                             />
                         </div>
                     </div>

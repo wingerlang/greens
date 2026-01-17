@@ -194,15 +194,30 @@ export function StrengthPage() {
             });
 
             const result = await res.json();
+
+            // Normalize generic API error response
+            if (!res.ok && result.error) {
+                setImportResult({
+                    success: false,
+                    errors: [result.error],
+                    workoutsImported: 0,
+                    workoutsUpdated: 0,
+                    workoutsSkipped: 0,
+                    exercisesDiscovered: 0,
+                    personalBestsFound: 0
+                });
+                return;
+            }
+
             setImportResult(result);
 
             if (result.success) {
                 await fetchData();
-                setShowImportModal(false);
+                // setShowImportModal(false); // Keep open to show success result
             }
         } catch (e) {
             console.error('Import failed:', e);
-            setImportResult({ success: false, errors: ['Import failed'], workoutsImported: 0, workoutsUpdated: 0, workoutsSkipped: 0, exercisesDiscovered: 0, personalBestsFound: 0 });
+            setImportResult({ success: false, errors: ['Import failed: ' + (e instanceof Error ? e.message : String(e))], workoutsImported: 0, workoutsUpdated: 0, workoutsSkipped: 0, exercisesDiscovered: 0, personalBestsFound: 0 });
         } finally {
             setImporting(false);
         }
@@ -472,7 +487,7 @@ export function StrengthPage() {
                     <div className="flex gap-3 items-center">
                         <button
                             onClick={() => setShowImportModal(true)}
-                            className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-all ${importing
+                            className={`px-5 py-2.5 rounded-xl font-bold cursor-pointer transition-all active:scale-95 ${importing
                                 ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
                                 : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'
                                 }`}
@@ -488,6 +503,7 @@ export function StrengthPage() {
                     onClose={() => setShowImportModal(false)}
                     onImport={handleImport}
                     isImporting={importing}
+                    importResult={importResult}
                 />
 
                 {/* Main Tab Navigation */}

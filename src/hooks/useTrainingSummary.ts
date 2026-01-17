@@ -23,12 +23,14 @@ export interface SummaryStats {
     totalSets: number;
     totalReps: number;
     mostTrainedExercise: string;
+    mostTrainedExerciseStats?: { name: string; count: number; sets: number; reps: number };
     types: { name: string; count: number; time: number; dist: number }[];
     longestRuns: UniversalActivity[];
     fastestRuns: UniversalActivity[];
     maxScores: { activity: UniversalActivity; score: number }[];
     topVolumeSessions: any[];
-    topLifts: { weight: number; exercise: string; date: string; id: string }[];
+    topLifts: { weight: number; reps: number; distance?: number; sets: number; exercise: string; date: string; id: string }[];
+    totalDays: number;
 }
 
 export function useTrainingSummary(startDate: string, endDate: string) {
@@ -86,6 +88,11 @@ export function useTrainingSummary(startDate: string, endDate: string) {
     }, [strengthSessions, startDate, endDate]);
 
     const stats = useMemo((): SummaryStats => {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const totalDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // Inclusive
+
         let totalDist = 0;
         let totalTime = 0;
         let totalCals = 0;
@@ -105,10 +112,10 @@ export function useTrainingSummary(startDate: string, endDate: string) {
 
         const filteredStrengthPBs = strengthPBs.filter(pb => {
             const d = new Date(pb.date);
-            const start = new Date(startDate);
-            const end = new Date(endDate);
-            end.setHours(23, 59, 59, 999);
-            return d >= start && d <= end;
+            const startStr = new Date(startDate);
+            const endStr = new Date(endDate);
+            endStr.setHours(23, 59, 59, 999);
+            return d >= startStr && d <= endStr;
         });
         strengthPRs = filteredStrengthPBs.length;
 
@@ -177,17 +184,23 @@ export function useTrainingSummary(startDate: string, endDate: string) {
         let maxVolumeSession: any = null;
         let totalSets = 0;
         let totalReps = 0;
-        const exerciseCountMap = new Map<string, number>();
+        const exerciseStatsMap = new Map<string, { count: number; sets: number; reps: number }>();
         const uniqueExercisesSet = new Set<string>();
 
         filteredStrengthSessions.forEach(s => {
             totalTonnage += (s.totalVolume || 0);
             s.exercises.forEach(e => {
                 uniqueExercisesSet.add(e.exerciseName.toLowerCase());
-                exerciseCountMap.set(e.exerciseName, (exerciseCountMap.get(e.exerciseName) || 0) + 1);
+
+                const stats = exerciseStatsMap.get(e.exerciseName) || { count: 0, sets: 0, reps: 0 };
+                stats.count++;
+
                 e.sets.forEach(set => {
                     totalSets++;
                     totalReps += (set.reps || 0);
+                    stats.sets++;
+                    stats.reps += (set.reps || 0);
+
                     const weight = set.weight || 0;
                     if (weight > bestLift.weight) {
                         bestLift = {
@@ -202,6 +215,7 @@ export function useTrainingSummary(startDate: string, endDate: string) {
                         };
                     }
                 });
+                exerciseStatsMap.set(e.exerciseName, stats);
             });
 
             if (!maxVolumeSession || (s.totalVolume || 0) > (maxVolumeSession.totalVolume || 0)) {
@@ -211,10 +225,11 @@ export function useTrainingSummary(startDate: string, endDate: string) {
 
         // Find most trained exercise
         let mostTrainedExercise = '';
-        let maxCount = 0;
-        exerciseCountMap.forEach((count, exercise) => {
-            if (count > maxCount) {
-                maxCount = count;
+        let mostTrainedStats = { count: 0, sets: 0, reps: 0 };
+
+        exerciseStatsMap.forEach((stats, exercise) => {
+            if (stats.count > mostTrainedStats.count) {
+                mostTrainedStats = stats;
                 mostTrainedExercise = exercise;
             }
         });
@@ -257,15 +272,32 @@ export function useTrainingSummary(startDate: string, endDate: string) {
             .sort((a, b) => (b.totalVolume || 0) - (a.totalVolume || 0))
             .slice(0, 3);
 
-        const allLifts: { weight: number, exercise: string, date: string, id: string }[] = [];
+        const allLifts: { weight: number, reps: number, distance?: number, sets: number, exercise: string, date: string, id: string }[] = [];
         filteredStrengthSessions.forEach(s => {
             s.exercises.forEach(e => {
+                // Group sets by exercise to get total sets/distance per exercise in session
+                let maxWeight = 0;
+                let totalReps = 0;
+                let totalDistance = 0;
+                let setCount = 0;
                 e.sets.forEach(set => {
                     const weight = set.weight || 0;
-                    if (weight > 0) {
-                        allLifts.push({ weight, exercise: e.exerciseName, date: s.date, id: s.id });
-                    }
+                    if (weight > maxWeight) maxWeight = weight;
+                    totalReps += (set.reps || 0);
+                    totalDistance += (set.distance || 0);
+                    setCount++;
                 });
+                if (maxWeight > 0) {
+                    allLifts.push({
+                        weight: maxWeight,
+                        reps: totalReps,
+                        distance: totalDistance > 0 ? totalDistance : undefined,
+                        sets: setCount,
+                        exercise: e.exerciseName,
+                        date: s.date,
+                        id: s.id
+                    });
+                }
             });
         });
         const topLifts = allLifts.sort((a, b) => b.weight - a.weight).slice(0, 3);
@@ -281,6 +313,7 @@ export function useTrainingSummary(startDate: string, endDate: string) {
             raceCount,
             avgScore: scoreCount > 0 ? Math.round(totalScore / scoreCount) : 0,
             activeDays: activeDays.size,
+            totalDays,
             types: Array.from(typeMap.entries()).map(([k, v]) => ({ name: k, ...v })),
             longestGap,
             totalTonnage,
@@ -288,6 +321,10 @@ export function useTrainingSummary(startDate: string, endDate: string) {
             totalSets,
             totalReps,
             mostTrainedExercise,
+            mostTrainedExerciseStats: {
+                name: mostTrainedExercise,
+                ...mostTrainedStats
+            },
             longestRuns,
             fastestRuns,
             maxScores,

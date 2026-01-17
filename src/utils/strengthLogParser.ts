@@ -52,8 +52,16 @@ export function parseStrengthLogCSV(csvContent: string, userId: string, source: 
     const isNewFormat = firstLine.startsWith('workout,start,end');
     const isHevyFormat = source === 'hevy' || (firstLine.includes('"title"') && firstLine.includes('"start_time"')) || (firstLine.includes('title,') && firstLine.includes('start_time,'));
 
+    // Detect text format: "MM-DD-YYYY HH:mm - HH:mm"
+    // Regex: \d{2}-\d{2}-\d{4} \d{2}:\d{2} - \d{2}:\d{2}
+    const isTextFormat = /^\d{2}-\d{2}-\d{4}\s+\d{2}:\d{2}\s+-\s+\d{2}:\d{2}/.test(lines[0]);
+
     if (isNewFormat) {
         return parseNewStrengthLogFormat(lines, userId);
+    }
+
+    if (isTextFormat) {
+        return parseStrengthLogTextExport(lines, userId);
     }
 
     if (isHevyFormat) {
@@ -61,6 +69,123 @@ export function parseStrengthLogCSV(csvContent: string, userId: string, source: 
     }
 
     return parseLegacyStrengthLogCSV(lines, userId);
+}
+
+function parseStrengthLogTextExport(lines: string[], userId: string): ParsedCSV {
+    const ctx: ParserContext = {
+        userId,
+        currentWorkout: null,
+        currentExercise: null,
+        exercises: new Map(),
+        workouts: [],
+        personalBests: new Map(),
+        errors: []
+    };
+
+    // 1. Parse Header
+    // Line 0: "01-15-2026 06:26 - 07:22"
+    const dateLine = lines[0];
+    const durationLine = lines[1]?.startsWith('Duration:') ? lines[1] : null;
+
+    // Parse Date
+    // Format: MM-DD-YYYY
+    const datePart = dateLine.split(' ')[0]; // 01-15-2026
+    const [month, day, year] = datePart.split('-');
+    const isoDate = `${year}-${month}-${day}`; // YYYY-MM-DD
+
+    // Create Workout
+    // If user provides just one workout in text, we treat it as one. 
+    // Usually "Copy as Text" is single workout.
+    const workoutId = generateStrengthId();
+    ctx.currentWorkout = {
+        id: workoutId,
+        userId,
+        date: isoDate,
+        name: `Workout ${isoDate}`, // Default name, maybe parse time or day?
+        source: 'strengthlog',
+        exercises: [],
+        totalVolume: 0,
+        totalSets: 0,
+        totalReps: 0,
+        uniqueExercises: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+    };
+
+    // Parse exercises (Line 2+)
+    // Skip duration line if present
+    const startIdx = durationLine ? 2 : 1;
+
+    for (let i = startIdx; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.includes(':')) continue;
+        if (line.startsWith('Sets:') || line.startsWith('Reps:') || line.startsWith('Volume:') || line.startsWith('Average weight:') || line.startsWith('#')) continue;
+
+        // "Bench Press: 15 x 20 (YR!), ..."
+        const pivot = line.indexOf(':');
+        const exerciseName = line.substring(0, pivot).trim();
+        const setsStr = line.substring(pivot + 1).trim();
+
+        const normalizedName = normalizeExerciseName(exerciseName);
+        if (!ctx.exercises.has(normalizedName)) {
+            ctx.exercises.set(normalizedName, {
+                id: `ex-${normalizedName.replace(/\s/g, '-')}`,
+                name: exerciseName,
+                normalizedName,
+                category: guessExerciseCategory(exerciseName),
+                primaryMuscle: 'full_body',
+                isCompound: guessIsCompound(exerciseName)
+            });
+        }
+        const exerciseDef = ctx.exercises.get(normalizedName)!;
+
+        const workoutExercise: StrengthWorkoutExercise = {
+            exerciseId: exerciseDef.id,
+            exerciseName: exerciseName,
+            sets: []
+        };
+
+        // Parse sets: "15 x 20 (YR!), 15 x 50, ..."
+        // Split by comma, but be careful of commas inside parenthesis? (StrengthLog doesn't usually put commas in tags)
+        const diffSets = setsStr.split(',').map(s => s.trim());
+
+        diffSets.forEach((s, idx) => {
+            // "15 x 20 (YR!)"
+            // "15 x 20"
+            // "5 x 70"
+            const match = s.match(/^(\d+)\s*x\s*([\d\.]+)/);
+            if (match) {
+                const reps = parseInt(match[1]);
+                const weight = parseFloat(match[2]);
+                const isPR = s.includes('(PR!)'); // Basic tag detection
+
+                const set: StrengthSet = {
+                    setNumber: idx + 1,
+                    reps,
+                    weight
+                };
+                workoutExercise.sets.push(set);
+
+                // Track PB
+                trackPersonalBest(ctx, exerciseDef, set);
+            }
+        });
+
+        if (workoutExercise.sets.length > 0) {
+            ctx.currentWorkout.exercises.push(workoutExercise);
+        }
+    }
+
+    if (ctx.currentWorkout) {
+        finalizeWorkout(ctx);
+    }
+
+    return {
+        userInfo: { name: 'User', email: '' },
+        workouts: ctx.workouts,
+        exercises: ctx.exercises,
+        personalBests: Array.from(ctx.personalBests.values())
+    };
 }
 
 function parseLegacyStrengthLogCSV(lines: string[], userId: string): ParsedCSV {

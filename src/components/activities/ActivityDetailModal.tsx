@@ -92,6 +92,7 @@ export function ActivityDetailModal({
 
     // Edit Form State
     const [editForm, setEditForm] = useState({
+        title: universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.title || activity.notes || '',
         type: activity.type,
         duration: (activity.durationMinutes || 0).toString(),
         intensity: activity.intensity || 'moderate',
@@ -105,13 +106,13 @@ export function ActivityDetailModal({
     const { token } = useAuth();
 
     // Local title state for immediate optimistic updates
-    const [displayTitle, setDisplayTitle] = useState(universalActivity?.plan?.title || activity.title || activity.type || 'Activity');
+    const [displayTitle, setDisplayTitle] = useState(universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.title || activity.notes || activity.type || 'Aktivitet');
 
     // Sync display title if prop changes (e.g. on load)
     useEffect(() => {
-        const t = universalActivity?.plan?.title || activity.title || activity.type;
+        const t = universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.title || activity.notes || activity.type;
         if (t) setDisplayTitle(t);
-    }, [universalActivity?.plan?.title, activity.title, activity.type]);
+    }, [universalActivity?.plan?.title, activity._mergeData?.universalActivity?.plan?.title, activity.title, activity.notes, activity.type]);
 
     // Check if this is a manually merged activity (using our new merge system)
     const isMergedActivity = universalActivity?.mergeInfo?.isMerged === true;
@@ -131,8 +132,8 @@ export function ActivityDetailModal({
 
     // Parse workout for analysis & categorization
     const parsedWorkout = React.useMemo(() => {
-        const title = universalActivity?.plan?.title || activity.type || 'Workout';
-        const desc = universalActivity?.plan?.description || activity.notes || '';
+        const title = universalActivity?.plan?.title || activity._mergeData?.universalActivity?.plan?.title || activity.type || 'Workout';
+        const desc = universalActivity?.plan?.description || activity._mergeData?.universalActivity?.plan?.description || activity.notes || '';
         return parseWorkout(title, desc);
     }, [universalActivity, activity]);
 
@@ -148,6 +149,64 @@ export function ActivityDetailModal({
     const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure;
 
     // Auto-populate subtype in edit form if detected
+    const handleRecategorize = async (newType: ExerciseType) => {
+        if (activity.type === newType) return;
+
+        console.log(`🔄 Omkategoriserar aktivitet ${activity.id} till ${newType}...`);
+
+        // Update local state immediately (optimistic)
+        updateExercise(activity.id, { type: newType });
+
+        // Persist to backend
+        if (token) {
+            try {
+                const dateParam = activity.date.split('T')[0];
+                const res = await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ type: newType })
+                });
+
+                if (res.ok) {
+                    console.log(`✅ Aktivitet omkategoriserad till ${newType}`);
+                    // Close modal on success for fundamental changes to ensure the UI refreshes
+                    onClose();
+                } else if (res.status === 404 && universalActivity) {
+                    // Fallback to upsert if PATCH fails with 404
+                    console.log('⚠️ PATCH 404 (omkategorisering), försöker POST...');
+                    const { userId: _u, ...activityData } = universalActivity;
+                    const updatedActivity = {
+                        ...activityData,
+                        performance: {
+                            ...universalActivity.performance,
+                            activityType: newType
+                        },
+                        plan: {
+                            title: universalActivity.plan?.title || activity.title || activity.notes || 'Aktivitet',
+                            ...universalActivity.plan,
+                            activityType: newType
+                        }
+                    };
+                    const postRes = await fetch('/api/activities', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(updatedActivity)
+                    });
+                    if (postRes.ok) {
+                        onClose();
+                    }
+                }
+            } catch (e) {
+                console.error('❌ Error persisting recategorization:', e);
+            }
+        }
+    };
     useEffect(() => {
         if (isEditing && editForm.subType === 'default' && parsedWorkout?.suggestedSubType &&
             parsedWorkout.suggestedSubType !== 'default' && parsedWorkout.suggestedSubType !== 'tempo') {
@@ -295,6 +354,7 @@ export function ActivityDetailModal({
         const calories = calculateExerciseCalories(editForm.type, duration, editForm.intensity);
 
         const commonData = {
+            title: editForm.title,
             type: editForm.type,
             durationMinutes: duration,
             intensity: editForm.intensity,
@@ -473,6 +533,17 @@ export function ActivityDetailModal({
                             <button type="button" onClick={() => setIsEditing(false)} className="text-slate-500 hover:text-white">✕</button>
                         </div>
 
+                        <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-500 uppercase">Titel</label>
+                            <input
+                                type="text"
+                                value={editForm.title}
+                                onChange={e => setEditForm({ ...editForm, title: e.target.value })}
+                                placeholder="Passets namn..."
+                                className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white font-bold focus:outline-none focus:border-emerald-500/50"
+                            />
+                        </div>
+
                         {/* Type Selection */}
                         <div className="grid grid-cols-4 gap-2">
                             {EXERCISE_TYPES.map(t => (
@@ -616,6 +687,16 @@ export function ActivityDetailModal({
                             <div>
                                 <div className="flex items-center gap-3">
                                     <h2 className="text-2xl font-black text-white capitalize flex items-center gap-3">
+                                        {/* Type Label Badge */}
+                                        {(() => {
+                                            const typeInfo = EXERCISE_TYPES.find(t => t.type === activity.type) || EXERCISE_TYPES.find(t => t.type === 'other');
+                                            return (
+                                                <div className="inline-flex items-center gap-1 bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded border border-white/5 text-[9px] font-black uppercase tracking-tight leading-none h-5 shrink-0">
+                                                    <span>{typeInfo?.icon}</span>
+                                                    {typeInfo?.label}
+                                                </div>
+                                            );
+                                        })()}
                                         {displayTitle}
                                         {/* Edit Button */}
                                         {!isMerged && (
@@ -775,7 +856,99 @@ export function ActivityDetailModal({
                                     <span>🦅</span> Ultra
                                 </div>
                             )}
+
+                            {/* Race Toggle Button - Quick access to mark as race */}
+                            {(activity.type === 'running' || activity.type === 'cycling' || activity.type === 'swimming') && (
+                                <button
+                                    onClick={async () => {
+                                        const newSubType = activity.subType === 'race' ? 'default' : 'race';
+                                        // Update local state immediately
+                                        updateExercise(activity.id, { subType: newSubType });
+
+                                        // Persist to backend
+                                        if (token && universalActivity) {
+                                            try {
+                                                const dateParam = activity.date.split('T')[0];
+                                                console.log(`🔄 Sparar subType=${newSubType} för aktivitet ${activity.id}...`);
+                                                const res = await fetch(`/api/activities/${activity.id}?date=${dateParam}`, {
+                                                    method: 'PATCH',
+                                                    headers: {
+                                                        'Content-Type': 'application/json',
+                                                        'Authorization': `Bearer ${token}`
+                                                    },
+                                                    body: JSON.stringify({ subType: newSubType })
+                                                });
+
+                                                if (res.ok) {
+                                                    console.log(`✅ Aktivitet markerad som ${newSubType === 'race' ? 'tävling' : 'träning'} - sparad i KV`);
+                                                } else if (res.status === 404) {
+                                                    // Fallback to upsert
+                                                    console.log('⚠️ PATCH 404, försöker POST...');
+                                                    const { userId: _u, ...activityData } = universalActivity;
+                                                    const updatedActivity = {
+                                                        ...activityData,
+                                                        performance: {
+                                                            ...universalActivity.performance,
+                                                            subType: newSubType
+                                                        }
+                                                    };
+                                                    const postRes = await fetch('/api/activities', {
+                                                        method: 'POST',
+                                                        headers: {
+                                                            'Content-Type': 'application/json',
+                                                            'Authorization': `Bearer ${token}`
+                                                        },
+                                                        body: JSON.stringify(updatedActivity)
+                                                    });
+                                                    if (postRes.ok) {
+                                                        console.log(`✅ Aktivitet markerad som ${newSubType === 'race' ? 'tävling' : 'träning'} - sparad via POST`);
+                                                    } else {
+                                                        console.error('❌ POST misslyckades:', postRes.status);
+                                                    }
+                                                } else {
+                                                    console.error('❌ PATCH misslyckades:', res.status);
+                                                }
+                                            } catch (e) {
+                                                console.error('❌ Failed to persist race toggle:', e);
+                                            }
+                                        }
+                                    }}
+                                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all ${activity.subType === 'race'
+                                        ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                                        : 'bg-rose-500/10 text-rose-400 border border-rose-500/30 hover:bg-rose-500/20'
+                                        }`}
+                                    title={activity.subType === 'race' ? 'Avmarkera som tävling' : 'Markera som tävling'}
+                                >
+                                    <span>🏅</span> {activity.subType === 'race' ? 'Tävling ✓' : 'Markera tävling'}
+                                </button>
+                            )}
                         </div>
+
+                        {/* Recategorization Section - Only visible in EDIT mode */}
+                        {isEditing && (
+                            <div className="bg-slate-800/20 rounded-2xl p-4 border border-white/5 space-y-3 mt-4">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Kategorisera om</p>
+                                    <span className="text-[10px] text-slate-600 italic">Ändra vid felaktig import</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                    {EXERCISE_TYPES.map(t => (
+                                        <button
+                                            key={t.type}
+                                            type="button"
+                                            onClick={() => handleRecategorize(t.type)}
+                                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all border ${activity.type === t.type
+                                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                                                : 'bg-slate-800/40 text-slate-400 border-white/5 hover:bg-slate-700/50 hover:text-slate-300'
+                                                }`}
+                                        >
+                                            <span>{t.icon}</span> {t.label}
+                                            {activity.type === t.type && <span className="ml-1 opacity-50">✓</span>}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* DIFF VIEW */}
                         {/* MERGE TAB CONTENT - DIFF TABLE */}
@@ -1700,6 +1873,6 @@ export function ActivityDetailModal({
                     </>
                 )}
             </div>
-        </div>
+        </div >
     );
 }

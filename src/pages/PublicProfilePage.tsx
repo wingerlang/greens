@@ -13,6 +13,7 @@ export function PublicProfilePage() {
     const { user: currentUser } = useAuth(); // We need to know who is viewing
     const [profile, setProfile] = useState<User | null>(null);
     const [events, setEvents] = useState<FeedEvent[]>([]);
+    const [stats, setStats] = useState<{ distance: number; duration: number; count: number } | null>(null);
     const [loading, setLoading] = useState(true);
     const [feedLoading, setFeedLoading] = useState(false);
     const [following, setFollowing] = useState(false);
@@ -45,6 +46,7 @@ export function PublicProfilePage() {
                 setProfile(user);
                 if (user) {
                     fetchFeed(user.id);
+                    socialService.getPublicStats(user.handle!).then(setStats);
                     if (currentUser) {
                         // Check if I follow them
                         const isFollowing = await socialService.checkIsFollowing(currentUser.id, user.id);
@@ -164,21 +166,26 @@ export function PublicProfilePage() {
                 <div className="space-y-6">
                     <div className="content-card">
                         <h3 className="section-title text-sm mb-4">Senaste 30 dagarna</h3>
-                        {/* Mock Stats */}
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-400 text-xs">Distans</span>
-                                <span className="text-white font-bold">142 km</span>
+                        {stats ? (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-400 text-xs">Distans</span>
+                                    <span className="text-white font-bold">{stats.distance} km</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-400 text-xs">Tid</span>
+                                    <span className="text-white font-bold">{Math.round(stats.duration / 60)}h {stats.duration % 60}m</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-slate-400 text-xs">Pass</span>
+                                    <span className="text-white font-bold">{stats.count} st</span>
+                                </div>
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-400 text-xs">Tid</span>
-                                <span className="text-white font-bold">12h 30m</span>
+                        ) : (
+                            <div className="text-center py-4 text-slate-500 text-xs opacity-50">
+                                Ingen träningsdata tillgänglig
                             </div>
-                            <div className="flex justify-between items-center">
-                                <span className="text-slate-400 text-xs">Pass</span>
-                                <span className="text-white font-bold">18 st</span>
-                            </div>
-                        </div>
+                        )}
                     </div>
 
                     {privacy.showWeight && (

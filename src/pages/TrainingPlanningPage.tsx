@@ -52,6 +52,7 @@ export function TrainingPlanningPage() {
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingActivity, setEditingActivity] = useState<PlannedActivity | null>(null);
+    const [draggedOverDate, setDraggedOverDate] = useState<string | null>(null);
 
     // Keyboard Navigation & ESC handler
     React.useEffect(() => {
@@ -523,36 +524,20 @@ export function TrainingPlanningPage() {
             {/* Calendar Grid */}
             <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-7 gap-4">
                 {weekDates.map((day) => {
-                    const dayActivities = plannedActivities.filter(a => a.date === day.date && a.status !== 'COMPLETED');
+                    const dayActivities = plannedActivities.filter(a => a.date.split('T')[0] === day.date && a.status !== 'COMPLETED');
+                    const dayCompleted = unifiedActivities.filter(a => a.date.split('T')[0] === day.date);
 
-                    // Filter completed cardio activities from ALL sources (Strava, Garmin, etc.)
-                    const CARDIO_TYPES = ['running', 'cycling', 'swimming', 'walking', 'other'];
-                    const dayCardioActivities = universalActivities.filter(a =>
-                        a.date === day.date &&
-                        a.performance?.activityType &&
-                        CARDIO_TYPES.includes(a.performance.activityType)
-                    );
+                    const dayCardio = dayCompleted.filter(a => a.type !== 'strength');
+                    const dayStrength = dayCompleted.filter(a => a.type === 'strength');
 
-                    // Filter Strava/external strength activities (separate from local strengthSessions)
-                    const dayStravaStrengthActivities = universalActivities.filter(a =>
-                        a.date === day.date &&
-                        a.performance?.activityType === 'strength'
-                    );
-
-                    const dayStrengthSessions = strengthSessions.filter(s => s.date === day.date);
-
-                    // Day summary calculation (include Strava strength activities)
-                    const daySessions = dayCardioActivities.length + dayStrengthSessions.length + dayStravaStrengthActivities.length;
-                    const dayKm = dayCardioActivities.reduce((sum: number, a) => sum + (a.performance?.distanceKm || 0), 0);
-                    const dayTime = (
-                        dayCardioActivities.reduce((sum: number, a) => sum + (a.performance?.durationMinutes || 0), 0) +
-                        dayStrengthSessions.reduce((sum, s) => sum + (s.duration || 0), 0) +
-                        dayStravaStrengthActivities.reduce((sum: number, a) => sum + (a.performance?.durationMinutes || 0), 0)
-                    );
+                    // Day summary calculation
+                    const daySessions = dayCompleted.length;
+                    const dayKm = dayCompleted.reduce((sum, a) => sum + (a.distance || 0), 0);
+                    const dayTime = dayCompleted.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
 
                     const isToday = day.date === getISODate();
                     const isPast = day.date < getISODate();
-                    const warning = weeklyWarnings.find(w => w.date === day.date);
+                    const warning = weeklyWarnings.find(w => w.date.split('T')[0] === day.date);
 
                     return (
                         <div key={day.date} className={`flex flex-col h-[400px] bg-white dark:bg-slate-900 rounded-2xl border ${warning ? 'border-amber-400 ring-1 ring-amber-400/50' : (isToday ? 'border-emerald-500 ring-1 ring-emerald-500/50' : (isPast ? 'border-slate-100 dark:border-slate-800/50 opacity-90' : 'border-slate-200 dark:border-slate-800'))} relative group shadow-sm transition-all`}>
@@ -583,10 +568,25 @@ export function TrainingPlanningPage() {
                             </div>
 
                             {/* Activities */}
-                            <div className="flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar">
-                                {/* Cardio Activities (from universalActivities - Strava, Garmin, etc.) */}
-                                {dayCardioActivities.map((act) => {
-                                    // Map activity type to Swedish label
+                            <div
+                                className={`flex-1 p-2 space-y-2 overflow-y-auto custom-scrollbar transition-colors ${draggedOverDate === day.date ? 'bg-blue-500/5 ring-2 ring-blue-500/20 rounded-b-2xl' : ''}`}
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    setDraggedOverDate(day.date);
+                                }}
+                                onDragLeave={() => setDraggedOverDate(null)}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    setDraggedOverDate(null);
+                                    const activityId = e.dataTransfer.getData('activityId');
+                                    if (activityId) {
+                                        updatePlannedActivity(activityId, { date: day.date });
+                                        notificationService.notify('success', `Passet flyttat till ${day.date}`);
+                                    }
+                                }}
+                            >
+                                {/* Cardio Activities */}
+                                {dayCardio.map((act) => {
                                     const typeLabels: Record<string, string> = {
                                         running: 'Löpning',
                                         cycling: 'Cykling',
@@ -594,7 +594,7 @@ export function TrainingPlanningPage() {
                                         walking: 'Promenad',
                                         other: 'Aktivitet'
                                     };
-                                    const typeLabel = typeLabels[act.performance?.activityType || 'other'] || 'Aktivitet';
+                                    const typeLabel = typeLabels[act.type || 'other'] || 'Aktivitet';
 
                                     return (
                                         <div
@@ -606,73 +606,46 @@ export function TrainingPlanningPage() {
                                                 <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider flex items-center gap-1">
                                                     <Check size={10} />
                                                     {typeLabel}
-                                                    {act.performance?.source?.source === 'strava' && (
+                                                    {(act.source === 'strava' || act.source === 'merged') && (
                                                         <span className="text-[#FC4C02]" title="Strava">🔥</span>
                                                     )}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                                {act.performance?.distanceKm ? `${act.performance.distanceKm.toFixed(1)} km` : ''}
-                                                {act.performance?.durationMinutes ? ` ${formatDurationHHMM(act.performance.durationMinutes)}` : ''}
+                                                {act.distance ? `${act.distance.toFixed(1)} km` : ''}
+                                                {act.durationMinutes ? ` ${formatDurationHHMM(act.durationMinutes)}` : ''}
                                             </p>
                                         </div>
                                     );
                                 })}
 
-                                {dayStrengthSessions.map(session => {
-                                    // Fallback: If no duration in Strength Session (common for StrengthLog imports),
-                                    // try to find a matching Strava activity on the same day to borrow duration from.
-                                    const linkedActivity = !session.duration ? universalActivities.find(a =>
-                                        a.date === day.date &&
-                                        (a.performance?.activityType === 'strength')
-                                    ) : undefined;
-
-                                    const displayDuration = session.duration || linkedActivity?.performance?.durationMinutes || 0;
+                                {/* Strength Activities */}
+                                {dayStrength.map(act => {
+                                    const isStrava = act.source === 'strava' || act.source === 'merged';
 
                                     return (
                                         <div
-                                            key={`str-${session.id}`}
-                                            onClick={() => updateUrlParams({ activityId: session.id })}
+                                            key={`str-${act.id}`}
+                                            onClick={() => updateUrlParams({ activityId: act.id })}
                                             className="p-3 bg-purple-500/10 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl relative cursor-pointer hover:bg-purple-500/20 transition-colors z-10"
                                         >
                                             <div className="flex justify-between items-start mb-1">
                                                 <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1">
                                                     <Dumbbell size={10} />
                                                     Styrka
+                                                    {isStrava && <span className="text-[#FC4C02]" title="Strava">🔥</span>}
                                                 </span>
                                             </div>
                                             <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                                {session.name || `${session.uniqueExercises} övningar`}
+                                                {act.title || (act._mergeData?.strengthWorkout?.name) || 'Styrkepass'}
                                             </p>
                                             <p className="text-[10px] text-slate-500 mt-1">
-                                                {(session.totalVolume / 1000).toFixed(1)}t • {formatDurationHHMM(displayDuration)}
+                                                {act.tonnage ? `${(act.tonnage / 1000).toFixed(1)}t • ` : ''}
+                                                {formatDurationHHMM(act.durationMinutes || 0)}
                                             </p>
                                         </div>
                                     );
                                 })}
-
-                                {/* Strava Strength Activities (from universalActivities) */}
-                                {dayStravaStrengthActivities.map(act => (
-                                    <div
-                                        key={`strava-str-${act.id}`}
-                                        onClick={() => updateUrlParams({ activityId: act.id })}
-                                        className="p-3 bg-purple-500/10 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl relative cursor-pointer hover:bg-purple-500/20 transition-colors z-10"
-                                    >
-                                        <div className="flex justify-between items-start mb-1">
-                                            <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1">
-                                                <Dumbbell size={10} />
-                                                Styrka
-                                                <span className="text-[#FC4C02]" title="Strava">🔥</span>
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                            {act.performance?.notes || 'Styrkepass'}
-                                        </p>
-                                        <p className="text-[10px] text-slate-500 mt-1">
-                                            {act.performance?.durationMinutes ? formatDurationHHMM(act.performance.durationMinutes) : '-'}
-                                        </p>
-                                    </div>
-                                ))}
 
                                 {/* Planned Activities - Clickable for edit */}
                                 {dayActivities.map(act => {
@@ -681,8 +654,13 @@ export function TrainingPlanningPage() {
                                     return (
                                         <div
                                             key={act.id}
+                                            draggable={true}
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('activityId', act.id);
+                                                e.dataTransfer.effectAllowed = 'move';
+                                            }}
                                             onClick={() => handleOpenModal(day.date, act)}
-                                            className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 ${isRace
+                                            className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 active:opacity-50 ${isRace
                                                 ? 'bg-amber-500/10 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700/50 hover:border-amber-500 dark:hover:border-amber-500'
                                                 : act.type === 'REST' || act.category === 'REST'
                                                     ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
@@ -698,12 +676,43 @@ export function TrainingPlanningPage() {
                                                         act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
                                                             (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
                                                 </span>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
-                                                    className="text-slate-400 hover:text-rose-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
-                                                >
-                                                    <X size={12} />
-                                                </button>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const d = new Date(day.date + 'T00:00:00');
+                                                            d.setDate(d.getDate() - 1);
+                                                            const prevDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                                            updatePlannedActivity(act.id, { date: prevDateStr });
+                                                            notificationService.notify('success', `Passet flyttat till igår (${prevDateStr})`);
+                                                        }}
+                                                        className="text-slate-400 hover:text-blue-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                        title="Flytta till igår"
+                                                    >
+                                                        <ChevronLeft size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const d = new Date(day.date + 'T00:00:00');
+                                                            d.setDate(d.getDate() + 1);
+                                                            const nextDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                                            updatePlannedActivity(act.id, { date: nextDateStr });
+                                                            notificationService.notify('success', `Passet flyttat till imorgon (${nextDateStr})`);
+                                                        }}
+                                                        className="text-slate-400 hover:text-blue-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                        title="Flytta till imorgon"
+                                                    >
+                                                        <ChevronRight size={12} />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
+                                                        className="text-slate-400 hover:text-rose-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                        title="Ta bort"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </div>
                                             </div>
                                             <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
                                                 {isRace && act.title && <span className="font-bold block mb-0.5">{act.title}</span>}

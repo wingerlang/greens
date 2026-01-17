@@ -47,6 +47,7 @@ export function ActivityModal({
     const [formIncludesRunning, setFormIncludesRunning] = useState(true);
     const [formHyroxFocus, setFormHyroxFocus] = useState<'hybrid' | 'strength' | 'cardio'>('hybrid');
     const [formStartTime, setFormStartTime] = useState('');
+    const [formDate, setFormDate] = useState(selectedDate || '');
 
     const { exerciseEntries, plannedActivities, currentUser, updateCurrentUser, universalActivities } = useData();
     const { settings } = useSettings();
@@ -140,6 +141,7 @@ export function ActivityModal({
                 setFormIncludesRunning(editingActivity.includesRunning ?? true);
                 setFormHyroxFocus((editingActivity as any).hyroxFocus || 'hybrid');
                 setFormStartTime(editingActivity.startTime || '');
+                setFormDate(editingActivity.date || selectedDate || '');
             } else {
                 // Create mode
                 setFormType('RUN');
@@ -154,6 +156,7 @@ export function ActivityModal({
                 setFormIncludesRunning(true); // Default to true for Hyrox
                 setFormHyroxFocus('hybrid');
                 setFormStartTime('');
+                setFormDate(selectedDate || '');
             }
         }
     }, [isOpen, selectedDate, editingActivity]);
@@ -185,7 +188,7 @@ export function ActivityModal({
     };
 
     const handleSave = () => {
-        if (!selectedDate) return;
+        if (!formDate) return;
 
         // Parse hh:mm to minutes for internal logic/description if needed
         const [hours, minutes] = formDuration.split(':').map(Number);
@@ -225,7 +228,7 @@ export function ActivityModal({
 
         const activityData: PlannedActivity = {
             id: editingActivity?.id || generateId(),
-            date: selectedDate,
+            date: formDate,
             type: (formType === 'REST' ? 'REST' : 'RUN') as PlannedActivity['type'],
             category: finalCategory as PlannedActivity['category'],
             title: title,
@@ -253,7 +256,7 @@ export function ActivityModal({
     };
 
     const handleApplySuggestion = (s: TrainingSuggestion) => {
-        if (!selectedDate) return;
+        if (!formDate) return;
 
         // Map suggestion type to form category
         let category = 'EASY';
@@ -266,7 +269,7 @@ export function ActivityModal({
 
         const newActivity: PlannedActivity = {
             id: generateId(),
-            date: selectedDate,
+            date: formDate,
             type: (s.type === 'STRENGTH' ? 'STRENGTH' : s.type === 'REST' ? 'REST' : 'RUN') as PlannedActivity['type'],
             category: category as PlannedActivity['category'],
             title: s.label,
@@ -304,7 +307,7 @@ export function ActivityModal({
                         <h2 className="text-lg font-black uppercase tracking-tight flex items-center gap-2">
                             {editingActivity ? '✏️ Redigera' : `📅 Planera`}
                             <span className="text-slate-400">|</span>
-                            <span className="text-blue-500">{selectedDate}</span>
+                            <span className="text-blue-500">{formDate}</span>
                         </h2>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-full transition-colors">
@@ -613,7 +616,18 @@ export function ActivityModal({
 
                         {/* Race Toggle */}
                         {formType === 'RUN' && (
-                            <div className="flex justify-end mb-2">
+                            <div className="flex justify-between items-center mb-2">
+                                {editingActivity && (
+                                    <div className="flex-1 mr-4">
+                                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Flytta pass</label>
+                                        <input
+                                            type="date"
+                                            value={formDate}
+                                            onChange={(e) => setFormDate(e.target.value)}
+                                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                        />
+                                    </div>
+                                )}
                                 <button
                                     onClick={() => setIsRace(!isRace)}
                                     className={`px-4 py-2 rounded-xl border flex items-center gap-2 transition-all ${isRace ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-400 text-yellow-600 dark:text-yellow-400' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-400'}`}
@@ -621,6 +635,18 @@ export function ActivityModal({
                                     <Trophy size={16} className={isRace ? 'fill-yellow-500' : ''} />
                                     <span className="text-xs font-black uppercase">Tävling</span>
                                 </button>
+                            </div>
+                        )}
+
+                        {formType !== 'RUN' && editingActivity && (
+                            <div className="mb-2">
+                                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1 ml-1">Flytta pass</label>
+                                <input
+                                    type="date"
+                                    value={formDate}
+                                    onChange={(e) => setFormDate(e.target.value)}
+                                    className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                />
                             </div>
                         )}
 

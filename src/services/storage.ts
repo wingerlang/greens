@@ -355,6 +355,7 @@ export class LocalStorageService implements StorageService {
                     },
                     body: JSON.stringify(meal)
                 });
+                console.log('[StorageService] addMealEntry sent payload', meal);
                 if (!res.ok) {
                     throw new Error('API sync failed');
                 }

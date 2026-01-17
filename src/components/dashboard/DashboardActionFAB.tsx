@@ -39,7 +39,7 @@ export function DashboardActionFAB({ onLogMeasurements, onImportWorkout }: Dashb
                         onLogMeasurements();
                         setIsOpen(false);
                     }}
-                    className="flex items-center gap-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2 rounded-full shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors group border border-slate-200 dark:border-slate-700"
+                    className="flex items-center gap-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2 rounded-full shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-all active:scale-95 group border border-slate-200 dark:border-slate-700"
                 >
                     <span className="text-xs font-bold uppercase tracking-wider">Logga Mått</span>
                     <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:bg-emerald-500 group-hover:text-white transition-colors">

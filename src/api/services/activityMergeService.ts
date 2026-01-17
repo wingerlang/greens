@@ -258,9 +258,22 @@ export function mergeStrengthWorkouts(
 
     // Determine Name: Prioritize Strava Name if available
     const stravaSource = workouts.find(w => w.source === 'strava');
-    const baseName = stravaSource
-        ? (stravaSource.name || stravaSource.sourceWorkoutName || 'Strava Activity')
-        : `Sammanslagen (${workouts.length} pass)`;
+    const hevySource = workouts.find(w => w.source === 'hevy');
+
+    let baseName = `Sammanslagen (${workouts.length} pass)`;
+
+    // Logic: Strava > Hevy > Non-Generic > Generic
+    const isGeneric = (n?: string) => !n || n.startsWith('Workout 20') || n === 'Styrkepass';
+
+    if (stravaSource?.name && !isGeneric(stravaSource.name)) {
+        baseName = stravaSource.name;
+    } else if (hevySource?.name && !isGeneric(hevySource.name)) {
+        baseName = hevySource.name;
+    } else {
+        // Try to find any existing name that is not generic
+        const betterName = workouts.find(w => !isGeneric(w.name))?.name;
+        if (betterName) baseName = betterName;
+    }
 
     // Create merged workout
     const now = new Date().toISOString();

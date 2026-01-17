@@ -445,7 +445,7 @@ export function mapStravaActivityToExercise(activity: StravaActivity, userSettin
         platform: 'strava' as const,
         date: activity.start_date_local.split('T')[0],
         type: mapStravaType(activity.type),
-        durationMinutes: (activity.moving_time || activity.elapsed_time) / 60, // Use moving time, preserve decimal precision
+        durationMinutes: (userSettings?.stravaTimePreference === 'elapsed' ? activity.elapsed_time : (activity.moving_time || activity.elapsed_time)) / 60,
         intensity: estimateIntensity(activity),
         caloriesBurned: calorieData.calories,
         calorieBreakdown: calorieData.breakdown,
@@ -496,7 +496,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
             importedAt: new Date().toISOString()
         },
         distanceKm: activity.distance ? Math.round(activity.distance / 10) / 100 : 0,
-        durationMinutes: (activity.moving_time || activity.elapsed_time) / 60, // Use moving time, preserve decimal precision
+        durationMinutes: (userSettings?.stravaTimePreference === 'elapsed' ? activity.elapsed_time : (activity.moving_time || activity.elapsed_time)) / 60,
         elapsedTimeSeconds: activity.elapsed_time,
         calories: calorieData.calories,
         calorieBreakdown: calorieData.breakdown,
@@ -515,6 +515,7 @@ export function mapStravaToPerformance(activity: StravaActivity, userSettings?: 
         achievementCount: activity.achievement_count,
 
         activityType: mapStravaType(activity.type),
+        startTimeLocal: activity.start_date_local, // Full ISO for time-of-day analysis
         notes: activity.name,
         subType: mapStravaSubType(activity.type, activity.workout_type),
         excludeFromStats: activity.excludeFromStats,

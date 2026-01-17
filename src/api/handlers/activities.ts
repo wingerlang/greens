@@ -1,4 +1,5 @@
 import { activityRepo } from "../repositories/activityRepository.ts";
+import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { getSession } from "../db/session.ts";
 import { UniversalActivity } from "../../models/types.ts";
 import { createMergedActivity, validateMerge } from "../services/activityMergeService.ts";
@@ -22,7 +23,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
 
             const activities = await activityRepo.getActivitiesByDateRange(session.userId, startDate, endDate);
             return new Response(JSON.stringify({ activities }), { headers });
-        } catch (e) {
+        } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
         }
     }
@@ -36,7 +37,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
 
             await activityRepo.saveActivity(activity);
             return new Response(JSON.stringify({ success: true, id: activity.id }), { status: 200, headers });
-        } catch (e) {
+        } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
         }
     }
@@ -169,6 +170,24 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             }
 
             if (!activity) {
+                // 3. Fallback to Strength Repo: Maybe this is a merged activity using a strength ID
+                const workout = await strengthRepo.getWorkout(session.userId, activityId);
+                if (workout) {
+                    console.log(`[PATCH /api/activities] Found strength workout for ID ${activityId}, applying updates...`);
+
+                    if (updates.title !== undefined) workout.name = updates.title;
+                    if (updates.notes !== undefined) workout.notes = updates.notes;
+                    if (updates.durationMinutes !== undefined) workout.duration = updates.durationMinutes;
+                    if (updates.intensity !== undefined) {
+                        // Strength sessions don't have intensity yet, but we can store it in notes or ignore
+                    }
+
+                    workout.updatedAt = new Date().toISOString();
+                    await strengthRepo.saveWorkout(workout);
+
+                    return new Response(JSON.stringify({ success: true, message: "Strength workout updated" }), { status: 200, headers });
+                }
+
                 return new Response(JSON.stringify({ error: "Activity not found" }), { status: 404, headers });
             }
 
@@ -185,12 +204,12 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 };
                 // Ensure date is preserved if moving
             }
-            if (!activity.plan && (legacy.title || legacy.type)) {
+            if (!activity.plan && (legacy.title || legacy.type || activity.performance?.notes)) {
                 activity.plan = {
-                    title: legacy.title || 'Untitled',
-                    activityType: legacy.type || 'other',
-                    distanceKm: legacy.distance || legacy.distanceKm || 0,
-                    durationMinutes: legacy.durationMinutes
+                    title: legacy.title || activity.performance?.notes || 'Aktivitet',
+                    activityType: legacy.type || activity.performance?.activityType || 'other',
+                    distanceKm: legacy.distance || legacy.distanceKm || activity.performance?.distanceKm || 0,
+                    durationMinutes: legacy.durationMinutes || activity.performance?.durationMinutes
                 };
             }
 
@@ -226,6 +245,61 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 if (activity.plan) activity.plan.description = updates.notes;
             }
 
+            // Handle performance object updates (e.g., subType for race marking)
+            if (updates.performance !== undefined) {
+                if (!activity.performance) {
+                    activity.performance = {
+                        durationMinutes: 0,
+                        calories: 0,
+                        ...updates.performance
+                    };
+                } else {
+                    // Merge performance updates
+                    activity.performance = {
+                        ...activity.performance,
+                        ...updates.performance
+                    };
+                }
+            }
+
+            // Handle direct subType update (shorthand)
+            if (updates.subType !== undefined) {
+                if (!activity.performance) {
+                    activity.performance = {
+                        durationMinutes: 0,
+                        calories: 0,
+                        subType: updates.subType
+                    };
+                } else {
+                    activity.performance.subType = updates.subType;
+                }
+            }
+
+            // Handle direct activity type update (Recategorization)
+            if (updates.type !== undefined || updates.activityType !== undefined) {
+                const newType = updates.type || updates.activityType;
+
+                if (!activity.performance) {
+                    activity.performance = {
+                        durationMinutes: 0,
+                        calories: 0,
+                        activityType: newType
+                    };
+                } else {
+                    activity.performance.activityType = newType;
+                }
+
+                if (!activity.plan) {
+                    activity.plan = {
+                        title: legacy.title || activity.performance?.notes || 'Aktivitet',
+                        activityType: newType,
+                        distanceKm: activity.performance?.distanceKm || 0
+                    };
+                } else {
+                    activity.plan.activityType = newType;
+                }
+            }
+
             activity.updatedAt = new Date().toISOString();
             await activityRepo.saveActivity(activity);
 
@@ -251,7 +325,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
 
             await activityRepo.deleteActivity(activity);
             return new Response(JSON.stringify({ success: true }), { status: 200, headers });
-        } catch (e) {
+        } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
         }
     }

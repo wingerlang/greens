@@ -622,11 +622,11 @@ function parseFood(input: string): OmniboxIntent | null {
         else mealType = 'snack';
     }
 
-    // 7. Default quantity to 100g if parsing food but no quantity given
-    // This can be overridden by the user's typical amount in the Omnibox
-    if (!quantity && query) {
-        quantity = 100;
-    }
+    // 7. Default quantity logic removed - let consumer handle defaults
+    // If !quantity and query exists, we return quantity as undefined so Omnibox can use defaultPortionGrams
+    // if (!quantity && query) {
+    //    quantity = 100;
+    // }
 
     return {
         type: 'food',

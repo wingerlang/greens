@@ -428,7 +428,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             });
             const stats = foodUsageStats[item.id];
             const foodData = intent.type === 'food' ? intent.data : null;
-            const initialQty = foodData?.quantity || stats?.avgGrams || 100;
+            const initialQty = foodData?.quantity || item.defaultPortionGrams || stats?.avgGrams || 100;
             setDraftFoodQuantity(initialQty);
             setDraftFoodMealType(foodData?.mealType || null);
             setDraftFoodDate(intent.date || selectedDate || new Date().toISOString().split('T')[0]);
@@ -535,6 +535,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                 ...(isLoggingAsCooked && { effectiveYieldFactor }),
             }]
         });
+        console.log('[Omnibox] logFoodItem', {
+            name: item.name,
+            quantity,
+            isLoggingAsCooked,
+            effectiveYieldFactor
+        });
 
         // Analytics: Track food log
         logEvent('omnibox_log', item.name, 'food', {
@@ -583,8 +589,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                 initialQty = intent.data.quantity;
             }
         } else {
-            // Fallback: Default portion -> Average logged amount -> 100g
-            initialQty = item.defaultPortionGrams || stats?.avgGrams || 100;
+            // Fallback: Default portion > Average logged amount > 100g
+            if (item.defaultPortionGrams) {
+                initialQty = item.defaultPortionGrams;
+            } else if (stats?.avgGrams) {
+                initialQty = stats.avgGrams;
+            } else {
+                initialQty = 100;
+            }
         }
 
         setDraftFoodQuantity(initialQty);
@@ -596,6 +608,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     const handleLockedFoodAction = () => {
         if (!lockedFood) return;
         const quantity = draftFoodQuantity || lockedFood.usageStats?.avgGrams || 100;
+        console.log('[Omnibox] handleLockedFoodAction', {
+            draftFoodQuantity,
+            avgGrams: lockedFood.usageStats?.avgGrams,
+            resultQuantity: quantity,
+            lockedFoodName: lockedFood.name
+        });
         logFoodItem(lockedFood, quantity);
     };
 

@@ -1,49 +1,203 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { useHealth } from '../hooks/useHealth.ts';
-import logo from '../assets/logo_icon.png';
 import './Navigation.css';
 import { Logo } from './Logo.tsx';
+import { Star, MoreHorizontal, Edit2, X, ChevronDown, ChevronRight, Pin } from 'lucide-react';
 
 interface NavigationProps {
     onOpenOmnibox?: () => void;
 }
 
+type NavSection = 'health' | 'food' | 'training' | 'community' | 'tools' | 'admin';
+
+interface NavItem {
+    path: string;
+    label: string;
+    icon: string;
+    section: NavSection;
+    description?: string;
+    adminOnly?: boolean;
+    devOnly?: boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
+    // Health
+    { path: '/health', label: 'Översikt', icon: '📊', section: 'health', description: 'Trender & Insikter' },
+    { path: '/health/body', label: 'Kropp', icon: '🧬', section: 'health', description: 'Mått & Vikt' },
+    { path: '/health/recovery', label: 'Recovery', icon: '🩹', section: 'health', description: 'Återhämtning' },
+
+    // Food
+    { path: '/veckan', label: 'Veckan', icon: '📅', section: 'food', description: 'Veckoöversikt' },
+    { path: '/planera', label: 'Planera', icon: '✨', section: 'food', description: 'Måltider & Pass' },
+    { path: '/pantry', label: 'Skafferi', icon: '🏠', section: 'food', description: 'Hantera ingredienser' },
+    { path: '/recipes', label: 'Recept', icon: '📖', section: 'food', description: 'Hitta & skapa' },
+    { path: '/database', label: 'Databas', icon: '🗄️', section: 'food', description: 'Matdatabas' },
+    { path: '/calories', label: 'Kalorier', icon: '🔥', section: 'food', description: 'Logga mat' },
+
+    // Training
+    { path: '/training', label: 'Översikt', icon: '📈', section: 'training', description: 'Träningsöversikt' },
+    { path: '/planera/traning', label: 'Planera', icon: '🗓️', section: 'training', description: 'Planera pass' },
+    { path: '/pass', label: 'Passbank', icon: '📚', section: 'training', description: 'Sparade pass' },
+    { path: '/logg', label: 'Logg', icon: '📜', section: 'training', description: 'Aktivitetslogg' },
+    { path: '/styrka', label: 'Styrka', icon: '💪', section: 'training', description: 'Styrketräning' },
+    { path: '/training/load', label: 'Belastning', icon: '🏋️', section: 'training', description: 'Training Load' },
+    { path: '/exercises', label: 'Övningar', icon: '📚', section: 'training', description: 'Övningsbibliotek' },
+    { path: '/coach', label: 'Coach', icon: '🧠', section: 'training', description: 'Smart Coach' },
+    { path: '/review', label: 'Årsöversikt', icon: '📅', section: 'training', description: 'Summering' },
+    { path: '/goals', label: 'Mål', icon: '🎯', section: 'training', description: 'Sätt & nå mål' },
+
+    // Community
+    { path: '/feed', label: 'Feed', icon: '📡', section: 'community', description: 'Life Stream' },
+    { path: '/matchup', label: 'Matchup', icon: '🥊', section: 'community', description: 'Jämför stats' },
+    { path: '/tävling', label: 'Tävling', icon: '🏆', section: 'community', description: 'Utmana vänner' },
+    { path: '/statistik', label: 'Statistik', icon: '📊', section: 'community', description: 'Global stats' },
+    { path: '/community', label: 'Hitta', icon: '👥', section: 'community', description: 'Sök användare' },
+
+    // Tools
+    { path: '/tools', label: 'Översikt', icon: '🧰', section: 'tools', description: 'Alla verktyg' },
+    { path: '/tools/1rm', label: '1RM & Last', icon: '💪', section: 'tools' },
+    { path: '/tools/race', label: 'Race', icon: '🏃', section: 'tools' },
+    { path: '/tools/pace', label: 'Pace', icon: '⏱️', section: 'tools' },
+    { path: '/tools/health', label: 'Hälsa', icon: '🩺', section: 'tools' },
+
+    // Admin (Simplified)
+    { path: '/admin?tab=health', label: 'Dashboard', icon: '⚙️', section: 'admin', adminOnly: true },
+    { path: '/admin?tab=database', label: 'MatDB', icon: '📦', section: 'admin', adminOnly: true },
+    { path: '/admin/exercises', label: 'ÖvningDB', icon: '💪', section: 'admin', adminOnly: true },
+    { path: '/admin?tab=users', label: 'Användare', icon: '👥', section: 'admin', adminOnly: true },
+    { path: '/developer', label: 'Dev Tools', icon: '🛠️', section: 'admin', devOnly: true },
+];
+
 export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
     const location = useLocation();
     const { user, logout } = useAuth();
-    const { theme, toggleTheme } = useSettings();
+    const { settings, updateSettings } = useSettings();
     const { cycleProgress, currentGoal, dailyCaloriesConsumed, targetCalories, activeCycle } = useHealth();
+
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
 
-    const isAdminRoute = ['/admin', '/api', '/documentation'].some(path => location.pathname.startsWith(path));
-    const isFoodRoute = ['/planera', '/pantry', '/recipes', '/calories', '/database', '/veckan'].some(path => location.pathname.startsWith(path));
-    const isHealthRoute = ['/health', '/halsa', '/recovery', '/body'].some(path => location.pathname.startsWith(path));
-    const isTrainingRoute = ['/training', '/traning', '/pass', '/logg', '/styrka', '/coach'].some(path => location.pathname.startsWith(path));
-    const isCommunityRoute = ['/community', '/feed', '/matchup', '/tävling'].some(path => location.pathname.startsWith(path));
-    const isToolsRoute = ['/tools', '/verktyg'].some(path => location.pathname.startsWith(path));
-    const isDeveloperRoute = location.pathname.startsWith('/developer');
+    // Filter items based on role and permissions
+    const visibleItems = useMemo(() => {
+        return NAV_ITEMS.filter(item => {
+            if (item.adminOnly && user?.role !== 'admin' && user?.role !== 'developer') return false;
+            if (item.devOnly && user?.role !== 'developer') return false;
+            return true;
+        });
+    }, [user?.role]);
 
+    // Split into pinned and unpinned
+    const { pinnedItems, sections } = useMemo(() => {
+        const pinnedPaths = new Set(settings.pinnedPaths || []);
+
+        const pinned = visibleItems.filter(item => pinnedPaths.has(item.path));
+
+        // Group remaining items by section
+        const grouped = visibleItems.reduce((acc, item) => {
+            // Don't show in sections if pinned (unless in edit mode where we might want to see duplicates or indication)
+            // Actually, for the mobile "More" menu, reasonable to show unpinned ones. 
+            // Let's show ALL in sections, but standard mobile view puts pins at top.
+            if (!acc[item.section]) acc[item.section] = [];
+            acc[item.section].push(item);
+            return acc;
+        }, {} as Record<NavSection, NavItem[]>);
+
+        return { pinnedItems: pinned, sections: grouped };
+    }, [visibleItems, settings.pinnedPaths]);
+
+    const togglePin = (path: string, e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const currentPins = settings.pinnedPaths || [];
+        const isPinned = currentPins.includes(path);
+
+        let newPins: string[];
+        if (isPinned) {
+            newPins = currentPins.filter(p => p !== path);
+        } else {
+            newPins = [...currentPins, path];
+        }
+
+        updateSettings({ ...settings, pinnedPaths: newPins });
+    };
+
+    // Helper: Check if a nav item path matches current location (including query params)
+    const isPathActive = (itemPath: string): boolean => {
+        const currentPath = location.pathname;
+        const currentSearch = location.search;
+
+        // Parse the item path for query params
+        const [itemPathname, itemSearch] = itemPath.split('?');
+
+        // For paths with query params (like /admin?tab=health)
+        if (itemSearch) {
+            // Must match both pathname and query params
+            return currentPath === itemPathname && currentSearch === `?${itemSearch}`;
+        }
+
+        // For paths without query params, use startsWith logic for nested routes
+        // but with special handling for admin to avoid /admin matching /admin/exercises
+        if (itemPathname === '/admin') {
+            return currentPath === '/admin' && !currentSearch;
+        }
+
+        return currentPath.startsWith(itemPathname);
+    };
+
+    // Helper classes
     const linkClasses = ({ isActive }: { isActive: boolean }) =>
         `flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
             ? 'text-emerald-400 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20'
             : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
         }`;
 
-    // Parent button style for dropdowns
-    const groupClasses = (isActive: boolean) =>
-        `flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${isActive
+    // Custom link classes using path comparison (for admin items with query params)
+    const getLinkClasses = (itemPath: string) => {
+        const active = isPathActive(itemPath);
+        return `flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${active
             ? 'text-emerald-400 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20'
             : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
-        }`;
+            }`;
+    };
+
+    // Parent button style for dropdowns (Desktop)
+    const getGroupClasses = (section: NavSection) => {
+        const isInSection = visibleItems
+            .filter(i => i.section === section)
+            .some(i => {
+                // Precise match for /planera (Food) vs /planera/traning (Training)
+                if (i.path === '/planera' && location.pathname === '/planera/traning') return false;
+
+                // Keep 'Planera' (Food) active only for its specific sub-paths or exact match, not conflicts
+                if (i.path === '/planera' && location.pathname.startsWith('/planera/traning')) return false;
+
+                return location.pathname.startsWith(i.path);
+            });
+
+        return `flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${isInSection
+            ? 'text-emerald-400 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20'
+            : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
+            }`;
+    };
 
     const mobileLinkClasses = ({ isActive }: { isActive: boolean }) =>
-        `flex items-center gap-4 px-3 py-3 rounded-2xl transition-all duration-200 ${isActive
+        `relative flex items-center gap-4 px-3 py-3 rounded-2xl transition-all duration-200 ${isActive
             ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/25 shadow-lg shadow-emerald-500/10'
             : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
         }`;
+
+    // Custom mobile link classes using path comparison (for admin items with query params)
+    const getMobileLinkClasses = (itemPath: string) => {
+        const active = isPathActive(itemPath);
+        return `relative flex items-center gap-4 px-3 py-3 rounded-2xl transition-all duration-200 ${active
+            ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/25 shadow-lg shadow-emerald-500/10'
+            : 'text-slate-400 hover:bg-white/5 hover:text-slate-100'
+            }`;
+    };
 
     return (
         <nav className="sticky top-0 z-[100] w-full bg-slate-950/80 backdrop-blur-xl border-b border-white/5">
@@ -56,24 +210,18 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         </NavLink>
                     </div>
 
-                    {/* Desktop Navigation */}
+                    {/* Desktop Navigation (Traditional Dropdowns) */}
                     <div className="hidden lg:flex items-center gap-1">
-                        {/* Cycle Status Widget */}
+                        {/* Status Widgets */}
                         {(activeCycle && cycleProgress) && (
                             <div className="mr-4 px-3 py-1.5 rounded-full bg-white/5 border border-white/5 flex items-center gap-2 text-xs font-medium">
                                 <span className={{
                                     'deff': 'text-rose-400',
                                     'bulk': 'text-emerald-400',
                                     'neutral': 'text-blue-400'
-                                }[currentGoal]}>
-                                    ●
-                                </span>
+                                }[currentGoal]}>●</span>
                                 <span className="text-slate-300">{activeCycle.name}</span>
-                                {cycleProgress.daysLeft !== undefined && (
-                                    <span className="text-slate-500 border-l border-white/10 pl-2 ml-1">
-                                        {cycleProgress.daysLeft} dagar kvar
-                                    </span>
-                                )}
+                                <span className="text-slate-500 border-l border-white/10 pl-2 ml-1">{cycleProgress.daysLeft} dagar kvar</span>
                             </div>
                         )}
 
@@ -95,275 +243,40 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             </div>
                         )}
 
-                        {/* Hälsa Dropdown */}
-                        <div className="relative group">
-                            <button className={groupClasses(isHealthRoute)}>
-                                <span>💙</span>
-                                <span className="hidden xl:inline">Hälsa</span>
-                                <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
-                            </button>
-                            <div className="absolute top-full left-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
-                                <div className="grid gap-1">
-                                    <NavLink to="/health" className={linkClasses}>
-                                        <span className="w-5 text-center">📊</span>
-                                        <span>Översikt</span>
-                                    </NavLink>
-                                    <NavLink to="/health/body" className={linkClasses}>
-                                        <span className="w-5 text-center">🧬</span>
-                                        <span>Kropp</span>
-                                    </NavLink>
-                                    <NavLink to="/health/recovery" className={linkClasses}>
-                                        <span className="w-5 text-center">🩹</span>
-                                        <span>Recovery</span>
-                                    </NavLink>
-                                </div>
-                            </div>
-                        </div>
+                        {/* Sections */}
+                        {(['health', 'food', 'training', 'community', 'tools', 'admin'] as NavSection[]).map(section => {
+                            const sectionItems = sections[section];
+                            if (!sectionItems?.length) return null;
 
-                        {/* Mat Dropdown */}
-                        <div className="relative group">
-                            <button className={groupClasses(isFoodRoute)}>
-                                <span>🍽️</span>
-                                <span className="hidden xl:inline">Mat</span>
-                                <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
-                            </button>
-                            <div className="absolute top-full left-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
-                                <div className="grid gap-1">
-                                    <NavLink to="/veckan" className={linkClasses}>
-                                        <span className="w-5 text-center">📅</span>
-                                        <span>Veckan</span>
-                                    </NavLink>
-                                    <div className="border-t border-white/5 my-1" />
-                                    <NavLink to="/planera" className={linkClasses}>
-                                        <span className="w-5 text-center">✨</span>
-                                        <span>Planera</span>
-                                    </NavLink>
-                                    <NavLink to="/pantry" className={linkClasses}>
-                                        <span className="w-5 text-center">🏠</span>
-                                        <span>Skafferi</span>
-                                    </NavLink>
-                                    <NavLink to="/recipes" className={linkClasses}>
-                                        <span className="w-5 text-center">📖</span>
-                                        <span>Recept</span>
-                                    </NavLink>
-                                    <NavLink to="/database" className={linkClasses}>
-                                        <span className="w-5 text-center">🗄️</span>
-                                        <span>Databas</span>
-                                    </NavLink>
-                                    <div className="border-t border-white/5 my-1" />
-                                    <NavLink to="/calories" className={linkClasses}>
-                                        <span className="w-5 text-center">🔥</span>
-                                        <span>Kalorier</span>
-                                    </NavLink>
+                            return (
+                                <div key={section} className="relative group">
+                                    <button className={getGroupClasses(section)}>
+                                        <span className="capitalize">{sectionItems[0].icon}</span>
+                                        <span className="hidden xl:inline capitalize">{section === 'food' ? 'Mat' : section === 'health' ? 'Hälsa' : section === 'training' ? 'Träning' : section === 'tools' ? 'Verktyg' : section}</span>
+                                        <ChevronDown size={10} className="opacity-50 ml-1 group-hover:rotate-180 transition-transform" />
+                                    </button>
+                                    <div className="absolute top-full left-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
+                                        <div className="grid gap-1">
+                                            {sectionItems.map(item => (
+                                                <NavLink
+                                                    key={item.path}
+                                                    to={item.path}
+                                                    className={item.path.includes('?') ? getLinkClasses(item.path) : linkClasses}
+                                                >
+                                                    <span className="w-5 text-center">{item.icon}</span>
+                                                    <span>{item.label}</span>
+                                                </NavLink>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
+                            );
+                        })}
 
-                        {/* Träning Dropdown */}
-                        <div className="relative group">
-                            <button className={groupClasses(isTrainingRoute)}>
-                                <span>⚡</span>
-                                <span className="hidden xl:inline">Träning</span>
-                                <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
-                            </button>
-                            <div className="absolute top-full left-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
-                                <div className="grid gap-1">
-                                    <NavLink to="/training" className={linkClasses}>
-                                        <span className="w-5 text-center">📈</span>
-                                        <span>Översikt</span>
-                                    </NavLink>
-                                    <NavLink to="/planera/traning" className={linkClasses}>
-                                        <span className="w-5 text-center">🗓️</span>
-                                        <span>Planera</span>
-                                    </NavLink>
-                                    <NavLink to="/pass" className={linkClasses}>
-                                        <span className="w-5 text-center">📚</span>
-                                        <span>Passbank</span>
-                                    </NavLink>
-                                    <NavLink to="/logg" className={linkClasses}>
-                                        <span className="w-5 text-center">📜</span>
-                                        <span>Aktivitetslogg</span>
-                                    </NavLink>
-                                    <NavLink to="/styrka" className={linkClasses}>
-                                        <span className="w-5 text-center">💪</span>
-                                        <span>Styrketräning</span>
-                                    </NavLink>
-                                    <NavLink to="/training/load" className={linkClasses}>
-                                        <span className="w-5 text-center">🏋️</span>
-                                        <span>Belastning</span>
-                                    </NavLink>
-                                    <NavLink to="/exercises" className={linkClasses}>
-                                        <span className="w-5 text-center">📚</span>
-                                        <span>Övningsbibliotek</span>
-                                    </NavLink>
-                                    <NavLink to="/coach" className={linkClasses}>
-                                        <span className="w-5 text-center">🧠</span>
-                                        <span>Smart Coach</span>
-                                    </NavLink>
-                                    <div className="border-t border-white/5 my-1" />
-                                    <NavLink to="/review" className={linkClasses}>
-                                        <span className="w-5 text-center">📅</span>
-                                        <span>Årsöversikt</span>
-                                    </NavLink>
-                                    <NavLink to="/goals" className={linkClasses}>
-                                        <span className="w-5 text-center">🎯</span>
-                                        <span>Mål</span>
-                                    </NavLink>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Community Dropdown */}
-                        <div className="relative group">
-                            <button className={groupClasses(isCommunityRoute)}>
-                                <span>👥</span>
-                                <span className="hidden xl:inline">Community</span>
-                                <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
-                            </button>
-                            <div className="absolute top-full left-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
-                                <div className="grid gap-1">
-                                    <NavLink to="/feed" className={linkClasses}>
-                                        <span className="w-5 text-center">📡</span>
-                                        <span>Feed</span>
-                                    </NavLink>
-                                    <NavLink to="/matchup" className={linkClasses}>
-                                        <span className="w-5 text-center">🥊</span>
-                                        <span>Matchup</span>
-                                    </NavLink>
-                                    <NavLink to="/tävling" className={linkClasses}>
-                                        <span className="w-5 text-center">🏆</span>
-                                        <span>Tävling</span>
-                                    </NavLink>
-                                    <div className="border-t border-white/5 my-1" />
-                                    <NavLink to="/statistik" className={linkClasses}>
-                                        <span className="w-5 text-center">📊</span>
-                                        <span>Statistik</span>
-                                    </NavLink>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Tools Dropdown */}
-                        <div className="relative group">
-                            <button className={groupClasses(isToolsRoute)}>
-                                <span>🛠️</span>
-                                <span className="hidden xl:inline">Verktyg</span>
-                                <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
-                            </button>
-                            <div className="absolute top-full left-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
-                                <div className="grid gap-1">
-                                    <NavLink to="/tools" className={linkClasses} end>
-                                        <span className="w-5 text-center">🧰</span>
-                                        <span>Översikt</span>
-                                    </NavLink>
-                                    <div className="border-t border-white/5 my-1" />
-                                    <NavLink to="/tools/1rm" className={linkClasses}>
-                                        <span className="w-5 text-center">💪</span>
-                                        <span>1RM & Last</span>
-                                    </NavLink>
-                                    <NavLink to="/tools/race" className={linkClasses}>
-                                        <span className="w-5 text-center">🏃</span>
-                                        <span>Race Predictor</span>
-                                    </NavLink>
-                                    <NavLink to="/tools/pace" className={linkClasses}>
-                                        <span className="w-5 text-center">⏱️</span>
-                                        <span>Pace Calc</span>
-                                    </NavLink>
-                                    <NavLink to="/tools/health" className={linkClasses}>
-                                        <span className="w-5 text-center">🩺</span>
-                                        <span>Hälsokalkylator</span>
-                                    </NavLink>
-                                </div>
-                            </div>
-                        </div>
-
+                        {/* User Profile */}
                         <div className="h-6 w-px bg-white/10 mx-2" />
-
-                        {/* Admin Dropdown */}
                         <div className="relative group">
-                            <button className={`${linkClasses({ isActive: isAdminRoute })} flex items-center gap-1`}>
-                                <span>🛠️</span>
-                                <span className="hidden xl:inline">Admin</span>
-                                <span className="text-[10px] opacity-50 ml-1 group-hover:rotate-180 transition-transform">▼</span>
-                            </button>
-
-                            <div className="absolute top-full right-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
-                                <div className="grid gap-1">
-                                    <NavLink
-                                        to="/admin?tab=health"
-                                        className={({ isActive }) => {
-                                            const searchParams = new URLSearchParams(location.search);
-                                            const active = isActive && searchParams.get('tab') === 'health';
-                                            return linkClasses({ isActive: active });
-                                        }}
-                                    >
-                                        <span className="w-5 text-center">⚙️</span>
-                                        <span>Dashboard</span>
-                                    </NavLink>
-                                    <NavLink
-                                        to="/admin?tab=database"
-                                        className={({ isActive }) => {
-                                            const searchParams = new URLSearchParams(location.search);
-                                            const active = isActive && searchParams.get('tab') === 'database';
-                                            return linkClasses({ isActive: active });
-                                        }}
-                                    >
-                                        <span className="w-5 text-center">📦</span>
-                                        <span>Matdatabas</span>
-                                    </NavLink>
-                                    <NavLink
-                                        to="/admin/exercises"
-                                        className={({ isActive }) => linkClasses({ isActive })}
-                                    >
-                                        <span className="w-5 text-center">💪</span>
-                                        <span>Övningsdatabas</span>
-                                    </NavLink>
-                                    <NavLink
-                                        to="/admin?tab=api"
-                                        className={({ isActive }) => {
-                                            const searchParams = new URLSearchParams(location.search);
-                                            const active = isActive && searchParams.get('tab') === 'api';
-                                            return linkClasses({ isActive: active });
-                                        }}
-                                    >
-                                        <span className="w-5 text-center">⚡</span>
-                                        <span>API</span>
-                                    </NavLink>
-                                    <div className="border-t border-white/5 my-1" />
-                                    <NavLink
-                                        to="/admin?tab=users"
-                                        className={({ isActive }) => {
-                                            const searchParams = new URLSearchParams(location.search);
-                                            const active = isActive && searchParams.get('tab') === 'users';
-                                            return linkClasses({ isActive: active });
-                                        }}
-                                    >
-                                        <span className="w-5 text-center">👥</span>
-                                        <span>Användare</span>
-                                    </NavLink>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Developer Tools Link (Only visible to developers) */}
-                        {user?.role === 'developer' && (
-                            <NavLink
-                                to="/developer"
-                                className={`${linkClasses({ isActive: isDeveloperRoute })} flex items-center gap-2`}
-                                title="Developer Tools"
-                            >
-                                <span className="text-emerald-400">⚡</span>
-                            </NavLink>
-                        )}
-
-                        {/* User Profile & Logout */}
-                        <div className="h-6 w-px bg-white/10 mx-2" />
-
-                        <div className="relative group">
-                            <Link
-                                to="/profile"
-                                className={`${linkClasses({ isActive: location.pathname === '/profile' })} flex items-center gap-2 !px-3 !py-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border border-white/5`}
-                            >
+                            <Link to="/profile" className={`${linkClasses({ isActive: location.pathname === '/profile' })} flex items-center gap-2 !px-3 !py-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border border-white/5`}>
                                 <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-emerald-500/20">
                                     {user?.username?.substring(0, 1).toUpperCase() || 'U'}
                                 </div>
@@ -373,25 +286,16 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             </Link>
 
                             <div className="absolute top-full right-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
-                                <NavLink
-                                    to="/settings"
-                                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all w-full text-left ${isActive ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                                >
+                                <NavLink to="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
                                     <span className="w-5 text-center">⚙️</span>
                                     <span>Inställningar</span>
                                 </NavLink>
-                                <NavLink
-                                    to="/sync"
-                                    className={({ isActive }) => `flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold transition-all w-full text-left ${isActive ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
-                                >
+                                <NavLink to="/sync" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
                                     <span className="w-5 text-center">🔄</span>
                                     <span>Synkningar</span>
                                 </NavLink>
                                 <div className="h-px bg-white/5 my-1" />
-                                <button
-                                    onClick={logout}
-                                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 font-bold text-xs hover:text-rose-400 hover:bg-rose-500/10 transition-all w-full text-left"
-                                >
+                                <button onClick={logout} className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 font-bold text-xs hover:text-rose-400 hover:bg-rose-500/10 transition-all w-full text-left">
                                     <span className="w-5 text-center">🚪</span>
                                     <span>Logga ut</span>
                                 </button>
@@ -399,171 +303,149 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         </div>
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={onOpenOmnibox}
-                            className="hidden md:flex w-9 h-9 items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:border-emerald-500/50 hover:bg-emerald-500/10 transition-all font-medium group"
-                            title="Öppna sök / Cmd+K"
-                        >
-                            <span className="text-sm group-hover:scale-110 transition-transform">🔍</span>
+                    {/* Mobile/Tablet Actions */}
+                    <div className="flex items-center gap-2 lg:hidden">
+                        <button onClick={onOpenOmnibox} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
+                            🔍
                         </button>
-
-                        {/* Mobile Menu Button */}
-                        <button
-                            className="lg:hidden w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
-                            onClick={() => setIsMenuOpen(!isMenuOpen)}
-                        >
-                            ☰
+                        <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
+                            {isMenuOpen ? <X size={20} /> : '☰'}
+                        </button>
+                    </div>
+                    <div className="hidden lg:flex items-center gap-2">
+                        <button onClick={onOpenOmnibox} className="w-9 h-9 flex items-center justify-center rounded-lg bg-slate-900 border border-slate-800 text-slate-400 hover:text-white transition-colors">
+                            🔍
                         </button>
                     </div>
                 </div>
             </div>
 
-            {/* Mobile Menu */}
-            {
-                isMenuOpen && (
-                    <div className="lg:hidden border-t border-white/5 bg-slate-950 px-4 py-4 space-y-4 max-h-[80vh] overflow-y-auto">
-                        <NavLink to="/" end className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                            <span className="text-xl">📅</span>
-                            <div className="flex flex-col">
-                                <span className="font-bold text-slate-100">Veckan</span>
-                                <span className="text-[10px] text-slate-500 font-medium">Översikt</span>
+            {/* Mobile Menu Overlay */}
+            {isMenuOpen && (
+                <div className="lg:hidden absolute top-16 left-0 right-0 bottom-[-100vh] h-[calc(100vh-64px)] bg-slate-950/95 backdrop-blur-3xl overflow-y-auto pb-safe">
+                    <div className="p-4 space-y-6">
+
+                        {/* Edit Mode Toggle */}
+                        <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                            <span className="text-xs font-bold uppercase text-slate-500 tracking-wider">Meny</span>
+                            <button
+                                onClick={() => setIsEditMode(!isEditMode)}
+                                className={`flex items-center gap-2 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${isEditMode ? 'bg-emerald-500/20 text-emerald-400' : 'bg-white/5 text-slate-400'}`}
+                            >
+                                <Edit2 size={12} />
+                                {isEditMode ? 'Klar' : 'Anpassa'}
+                            </button>
+                        </div>
+
+                        {/* PINNED ITEMS (Always Top) */}
+                        {pinnedItems.length > 0 && (
+                            <div className="space-y-2">
+                                <div className="text-[10px] text-amber-500 uppercase tracking-widest font-bold px-3 flex items-center gap-2">
+                                    <Star size={10} fill="currentColor" /> Favoriter
+                                </div>
+                                {pinnedItems.map(item => (
+                                    <div key={item.path} className="relative group">
+                                        <NavLink
+                                            to={item.path}
+                                            className={item.path.includes('?') ? getMobileLinkClasses(item.path) : mobileLinkClasses}
+                                            onClick={() => !isEditMode && setIsMenuOpen(false)}
+                                        >
+                                            <span className="text-xl">{item.icon}</span>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-slate-100">{item.label}</span>
+                                                {item.description && <span className="text-[10px] text-slate-500 font-medium">{item.description}</span>}
+                                            </div>
+                                        </NavLink>
+
+                                        {/* Unpin Button */}
+                                        {isEditMode && (
+                                            <button
+                                                onClick={(e) => togglePin(item.path, e)}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-slate-900 border border-slate-700 rounded-full text-amber-500 z-10"
+                                            >
+                                                <Star size={14} fill="currentColor" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
-                        </NavLink>
+                        )}
 
-                        {/* Mobile Mat */}
-                        <div className="space-y-1">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Mat</div>
-                            <NavLink to="/planera" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">✨</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Planera</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Måltider & Pass</span>
-                                </div>
-                            </NavLink>
-                            {user && (
-                                <div className="px-4 py-2">
-                                    <div className="text-[10px] text-slate-500 font-bold mb-1 flex justify-between">
-                                        <span>ENERGIBALANS</span>
-                                        <span>{Math.round(dailyCaloriesConsumed)} / {targetCalories} kcal</span>
+                        {/* ALL SECTIONS */}
+                        {(['food', 'health', 'training', 'community', 'tools', 'admin'] as NavSection[]).map(section => {
+                            // In normal mode, we might want to hide pinned items from their sections to avoid dupes?
+                            // Or keep them for structure. Let's keep them but maybe dim them if we wanted.
+                            // For now, simple list.
+
+                            const items = sections[section];
+                            if (!items?.length) return null;
+
+                            return (
+                                <div key={section} className="space-y-2">
+                                    <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold px-3 pt-2">
+                                        {section === 'food' ? 'Mat & Recept' :
+                                            section === 'health' ? 'Hälsa & Kropp' :
+                                                section === 'training' ? 'Träning & Pass' :
+                                                    section === 'community' ? 'Community' :
+                                                        section === 'tools' ? 'Verktyg' : 'Admin'}
                                     </div>
-                                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full ${dailyCaloriesConsumed > targetCalories ? 'bg-amber-500' : 'bg-emerald-500'}`}
-                                            style={{ width: `${Math.min(100, (dailyCaloriesConsumed / targetCalories) * 100)}%` }}
-                                        />
-                                    </div>
+
+                                    {items.map(item => {
+                                        const isPinned = (settings.pinnedPaths || []).includes(item.path);
+                                        // If pinned, maybe hide from here to reduce clutter? 
+                                        // User asked to "reduce links that might not be relevant".
+                                        // Let's HIDE pinned items from the general list IF they are pinned
+                                        if (isPinned) return null;
+
+                                        return (
+                                            <div key={item.path} className="relative">
+                                                <NavLink
+                                                    to={item.path}
+                                                    className={item.path.includes('?') ? getMobileLinkClasses(item.path) : mobileLinkClasses}
+                                                    onClick={() => !isEditMode && setIsMenuOpen(false)}
+                                                >
+                                                    <span className="text-xl opacity-70 group-hover:opacity-100">{item.icon}</span>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-bold text-slate-200">{item.label}</span>
+                                                        <span className="text-[10px] text-slate-600 font-medium">{item.description}</span>
+                                                    </div>
+                                                </NavLink>
+
+                                                {/* Pin Button */}
+                                                {isEditMode && (
+                                                    <button
+                                                        onClick={(e) => togglePin(item.path, e)}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-slate-900 border border-slate-700 rounded-full text-slate-600 hover:text-amber-500 hover:border-amber-500/50 transition-colors z-10"
+                                                    >
+                                                        <Star size={14} />
+                                                    </button>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                            )}
-                            <NavLink to="/pantry" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">🏠</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Skafferi</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Hantera ingredienser</span>
+                            );
+                        })}
+
+                        {/* Account Bottom Section */}
+                        <div className="pt-6 border-t border-white/5 space-y-2">
+                            <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold px-3">Konto</div>
+                            <NavLink to="/profile" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-emerald-500/20">
+                                    {user?.username?.substring(0, 1).toUpperCase() || 'U'}
                                 </div>
+                                <span className="font-bold text-slate-200">Min Profil</span>
                             </NavLink>
-                            <NavLink to="/recipes" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">📖</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Recept</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Hitta & skapa</span>
-                                </div>
-                            </NavLink>
+                            <button onClick={logout} className="flex items-center gap-4 px-3 py-3 rounded-2xl w-full text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors">
+                                <span className="text-xl">🚪</span>
+                                <span className="font-bold">Logga ut</span>
+                            </button>
                         </div>
 
-                        {/* Mobile Hälsa */}
-                        <div className="space-y-1">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Hälsa & Träning</div>
-                            <NavLink to="/health" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">📊</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Översikt</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Trender & Insikter</span>
-                                </div>
-                            </NavLink>
-                            <NavLink to="/training" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">🏋️</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Träning</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Logga pass</span>
-                                </div>
-                            </NavLink>
-                            <NavLink to="/coach" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">🧠</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Smart Coach</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Planera & Analysera</span>
-                                </div>
-                            </NavLink>
-                            <NavLink to="/calories" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">🔥</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Kalorier</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Logga mat</span>
-                                </div>
-                            </NavLink>
-                            <NavLink to="/goals" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">🎯</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Mål</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Spåra framsteg</span>
-                                </div>
-                            </NavLink>
-                        </div>
-
-                        {/* Mobile Community */}
-                        <div className="space-y-1">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Gemenskap</div>
-                            <NavLink to="/community" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">👥</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Community</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Hitta vänner</span>
-                                </div>
-                            </NavLink>
-                            <NavLink to="/feed" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">⛲</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">The Stream</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Life Stream Feed</span>
-                                </div>
-                            </NavLink>
-                        </div>
-
-                        {/* Mobile Tävling */}
-                        <div className="space-y-1">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Utmaningar</div>
-                            <NavLink to="/tävling" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">🏆</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Tävling</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Utmana & Vinn</span>
-                                </div>
-                            </NavLink>
-                        </div>
-
-                        <div className="space-y-1">
-                            <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-2 px-3">Admin</div>
-                            <NavLink to="/admin?tab=health" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
-                                <span className="w-5 text-center">⚙️</span>
-                                <span>Dashboard</span>
-                            </NavLink>
-                            <NavLink to="/admin?tab=database" className={linkClasses({ isActive: false })} onClick={() => setIsMenuOpen(false)}>
-                                <span className="w-5 text-center">📦</span>
-                                <span>Databas</span>
-                            </NavLink>
-                            <NavLink to="/tools" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">🛠️</span>
-                                <div className="flex flex-col">
-                                    <span className="font-bold text-slate-100">Verktyg</span>
-                                    <span className="text-[10px] text-slate-500 font-medium">Kalkylatorer</span>
-                                </div>
-                            </NavLink>
-                        </div>
-                    </div >
-                )
-            }
-        </nav >
+                        <div className="h-20" /> {/* Spacer for bottom scroll */}
+                    </div>
+                </div>
+            )}
+        </nav>
     );
-}
+};

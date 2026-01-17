@@ -63,5 +63,14 @@ export const socialService = {
         if (!res.ok) throw new Error('Failed to fetch following list');
         const data = await res.json();
         return data.followingIds || [];
+    },
+
+    async getPublicStats(handle: string): Promise<{ distance: number; duration: number; count: number } | null> {
+        const res = await fetch(`${API_BASE}/u/${handle}/stats`, {
+            headers: await getHeaders()
+        });
+        if (!res.ok) return null; // Analytics is optional, fail silently-ish
+        const data = await res.json();
+        return data.stats;
     }
 };

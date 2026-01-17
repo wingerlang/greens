@@ -190,5 +190,78 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
         }
     }
 
+    // NEW: Migrate start times for existing activities
+    if (url.pathname === "/api/strava/migrate-start-times" && method === "POST") {
+        try {
+            const stravaTokens = await getStravaTokens(session.userId);
+            if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
+
+            let accessToken = stravaTokens.accessToken;
+            if (Date.now() > stravaTokens.expiresAt) {
+                const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
+                if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
+                accessToken = refreshed.accessToken;
+                await saveStravaTokens(session.userId, { ...stravaTokens, ...refreshed });
+            }
+
+            // Fetch ALL Strava activities
+            const stravaActivities = await strava.getAllStravaActivities(accessToken);
+
+            // Build a map of strava id -> start_date_local
+            const stravaTimeMap = new Map<number, string>();
+            stravaActivities.forEach(a => {
+                stravaTimeMap.set(a.id, a.start_date_local);
+            });
+
+            // Iterate all universal activities for this user and update
+            const { activityRepo } = await import("../repositories/activityRepository.ts");
+            const allActivities = await activityRepo.getAllActivities(session.userId);
+
+            let updated = 0;
+            let skipped = 0;
+            let notFound = 0;
+
+            for (const activity of allActivities) {
+                // Check if already has startTimeLocal
+                if (activity.performance?.startTimeLocal) {
+                    skipped++;
+                    continue;
+                }
+
+                // Find matching Strava activity by external ID
+                const externalId = activity.performance?.source?.externalId;
+                if (!externalId) {
+                    notFound++;
+                    continue;
+                }
+
+                const stravaId = parseInt(externalId, 10);
+                const startTimeLocal = stravaTimeMap.get(stravaId);
+
+                if (startTimeLocal && activity.performance) {
+                    // Update the activity with startTimeLocal
+                    activity.performance.startTimeLocal = startTimeLocal;
+                    activity.updatedAt = new Date().toISOString();
+                    await activityRepo.saveActivity(activity);
+                    updated++;
+                } else {
+                    notFound++;
+                }
+            }
+
+            return new Response(JSON.stringify({
+                success: true,
+                stravaActivitiesFound: stravaActivities.length,
+                updated,
+                skipped,
+                notFound
+            }), { headers });
+
+        } catch (e) {
+            console.error("Migrate start times failed", e);
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), { status: 500, headers });
+        }
+    }
+
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 }

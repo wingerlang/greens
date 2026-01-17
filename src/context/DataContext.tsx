@@ -205,7 +205,7 @@ interface DataContextType {
     updateBodyMeasurement: (id: string, updates: Partial<BodyMeasurementEntry>) => void;
     deleteBodyMeasurement: (id: string) => void;
 
-    unifiedActivities: (ExerciseEntry & { source: string })[];
+    unifiedActivities: (ExerciseEntry & { source: string; _mergeData?: any })[];
     calculateStreak: (referenceDate?: string) => number;
     calculateTrainingStreak: (referenceDate?: string, type?: 'strength' | 'running' | 'other') => number;
     calculateWeeklyTrainingStreak: (referenceDate?: string) => number;
@@ -213,6 +213,7 @@ interface DataContextType {
 
     // System
     refreshData: () => Promise<void>;
+    isLoading: boolean;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -833,6 +834,7 @@ export function DataProvider({ children }: DataProviderProps) {
             id: generateId(),
             createdAt: new Date().toISOString(),
         };
+        console.log('[DataContext] addMealEntry', newEntry);
         setMealEntries((prev: MealEntry[]) => [...prev, newEntry]);
 
         // Optimistic update done, now fire granular API call
@@ -959,6 +961,72 @@ export function DataProvider({ children }: DataProviderProps) {
     }, []);
 
     // ============================================
+    // Strength Session CRUD (Phase 12)
+    // ============================================
+
+    const addStrengthSession = useCallback((session: Omit<StrengthWorkout, 'id'>): StrengthWorkout => {
+        const newSession: StrengthWorkout = {
+            ...session as any, // Cast for simplicity during migration
+            id: generateId(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+        setStrengthSessions(prev => [...prev, newSession]);
+
+        // Life Stream: Add event
+        const totalVol = newSession.totalVolume || 0;
+
+        emitFeedEvent(
+            'WORKOUT_STRENGTH',
+            newSession.name || 'Styrkepass slutfört',
+            {
+                type: 'WORKOUT_STRENGTH',
+                sessionId: newSession.id,
+                exerciseCount: (newSession.exercises || []).length,
+                setCount: (newSession.exercises || []).reduce((sum, ex) => sum + (ex.sets || []).length, 0),
+                totalVolume: totalVol,
+            },
+            [
+                { label: 'Volym', value: Math.round(totalVol / 1000), unit: 't', icon: '🏋️' },
+                { label: 'Övningar', value: (newSession.exercises || []).length, icon: '📋' }
+            ],
+            `${(newSession.exercises || []).length} övningar • ${Math.round(totalVol / 1000)}t total volym`
+        );
+
+        return newSession;
+    }, [emitFeedEvent]);
+
+    const updateStrengthSession = useCallback((id: string, updates: Partial<StrengthWorkout>): void => {
+        setStrengthSessions(prev => {
+            const next = prev.map(s => s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s);
+            const updated = next.find(s => s.id === id);
+            if (updated) {
+                // Persist via Universal Activities logic fallback or via a dedicated Strength endpoint if we had one.
+                // Our backend PATCH /api/activities/:id handles Strength fallbacks!
+                const dateParam = updated.date.split('T')[0];
+                fetch(`/api/activities/${id}?date=${dateParam}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                    },
+                    body: JSON.stringify({
+                        title: updated.name,
+                        notes: updated.notes,
+                        durationMinutes: updated.duration
+                    })
+                }).catch(e => console.error("Failed to persist strength session update:", e));
+            }
+            return next;
+        });
+    }, []);
+
+    const deleteStrengthSession = useCallback((id: string): void => {
+        setStrengthSessions(prev => prev.filter(s => s.id !== id));
+    }, []);
+
+
+    // ============================================
     // Exercise & Weight Management
     // ============================================
 
@@ -1003,7 +1071,70 @@ export function DataProvider({ children }: DataProviderProps) {
 
     const updateExercise = useCallback((id: string, updates: Partial<ExerciseEntry>) => {
         const existing = exerciseEntries.find(e => e.id === id);
-        if (!existing) return;
+
+        if (!existing) {
+            // Fallback 1: Check strengthSessions
+            const strSession = strengthSessions.find(s => s.id === id);
+            if (strSession) {
+                updateStrengthSession(id, {
+                    name: updates.title || strSession.name,
+                    notes: updates.notes || strSession.notes,
+                    duration: updates.durationMinutes || strSession.duration
+                });
+                return;
+            }
+
+            // Fallback 2: Check universalActivities (Strava/Virtual)
+            // This allows editing Strava activities (Type, Duration, Title, Notes)
+            const uniActivity = universalActivities.find(a => a.id === id);
+            if (uniActivity) {
+                // Optimistic Update
+                setUniversalActivities(prev => prev.map(ua => {
+                    if (ua.id === id) {
+                        return {
+                            ...ua,
+                            plan: {
+                                ...ua.plan,
+                                title: updates.title || ua.plan?.title,
+                                activityType: updates.type || ua.plan?.activityType || ua.performance?.activityType || 'other',
+                                distanceKm: updates.distance !== undefined ? updates.distance : (ua.plan?.distanceKm || 0)
+                            },
+                            performance: {
+                                ...ua.performance,
+                                activityType: updates.type || ua.performance?.activityType,
+                                durationMinutes: updates.durationMinutes !== undefined ? updates.durationMinutes : ua.performance?.durationMinutes,
+                                notes: updates.notes || ua.performance?.notes,
+                                subType: updates.subType || ua.performance?.subType,
+                                // Also update distance in performance if changed
+                                distanceKm: updates.distance !== undefined ? updates.distance : ua.performance?.distanceKm
+                            }
+                        } as UniversalActivity;
+                    }
+                    return ua;
+                }));
+
+                // Persist to Backend
+                const dateParam = uniActivity.date.split('T')[0];
+                fetch(`/api/activities/${id}?date=${dateParam}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+                    },
+                    body: JSON.stringify({
+                        title: updates.title,
+                        notes: updates.notes,
+                        durationMinutes: updates.durationMinutes,
+                        type: updates.type,
+                        distance: updates.distance,
+                        intensity: updates.intensity
+                    })
+                }).catch(e => console.error("Failed to persist virtual activity update:", e));
+                return;
+            }
+
+            return;
+        }
 
         const updated = { ...existing, ...updates };
 
@@ -1037,6 +1168,7 @@ export function DataProvider({ children }: DataProviderProps) {
         }));
 
         skipAutoSave.current = true;
+
         if (existing.date && updated.date && existing.date !== updated.date) {
             // Date changed: Delete old, Save new
             storageService.deleteExerciseEntry(id, existing.date).catch(e => console.error("Failed to delete old exercise", e));
@@ -1044,7 +1176,7 @@ export function DataProvider({ children }: DataProviderProps) {
         } else {
             storageService.saveExerciseEntry(updated).catch(e => console.error("Failed to update exercise", e));
         }
-    }, [exerciseEntries]);
+    }, [exerciseEntries, strengthSessions, universalActivities, updateStrengthSession, storageService]);
 
     const deleteExercise = useCallback((id: string) => {
         setExerciseEntries(prev => {
@@ -1206,7 +1338,7 @@ export function DataProvider({ children }: DataProviderProps) {
         const normalizedLocal = exerciseEntries.map(e => ({ ...e, source: 'manual' }));
 
         // Convert strength workouts to ExerciseEntry format
-        const strengthEntries = (strengthSessions as any[]).map(w => ({
+        const rawStrengthEntries = (strengthSessions as any[]).map(w => ({
             id: w.id,
             date: w.date,
             type: 'strength' as const,
@@ -1224,59 +1356,129 @@ export function DataProvider({ children }: DataProviderProps) {
             movingTime: (w.duration || w.durationMinutes || 60) * 60
         }));
 
-        // Smart Merge: Combine StrengthLog with Strava data
-        const stravaWeightByDate = new Map<string, typeof normalizedServer[0]>();
-        normalizedServer.forEach(e => {
-            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
-                e.type?.toLowerCase().includes('styrka') ||
-                e.type?.toLowerCase().includes('strength');
-            if (isWeightTraining) {
-                stravaWeightByDate.set(e.date.split('T')[0], e);
+        // Content-based deduplication (Defense in Depth against near-identical duplicates with different IDs)
+        const strengthEntries: typeof rawStrengthEntries = [];
+        const seenCombined = new Set<string>();
+
+        rawStrengthEntries.forEach(se => {
+            const dateKey = se.date.split('T')[0];
+            // Key: date-tonnage-approxDuration (10 min buckets)
+            const durationBucket = Math.round(se.durationMinutes / 10) * 10;
+            const contentKey = `${dateKey}-${se.tonnage}-${durationBucket}`;
+
+            if (!seenCombined.has(contentKey)) {
+                strengthEntries.push(se);
+                seenCombined.add(contentKey);
+            } else {
+                console.log(`🔍 Combined duplicate strength session detected: ${se.title} (${se.tonnage}kg, ${se.durationMinutes}min)`);
             }
         });
 
-        const mergedStrengthEntries = strengthEntries.map(se => {
-            const dateKey = se.date.split('T')[0];
-            const stravaMatch = stravaWeightByDate.get(dateKey);
+        // Smart Merge: Combine StrengthLog with Strava data
+        const mergedStravaIds = new Set<string>();
 
-            if (stravaMatch) {
-                const universalMatch = universalActivities.find(u => u.id === stravaMatch.id);
+        // Group strength sessions by date for better matching
+        const strengthByDate = new Map<string, typeof strengthEntries[0][]>();
+        strengthEntries.forEach(se => {
+            const d = se.date.split('T')[0];
+            if (!strengthByDate.has(d)) strengthByDate.set(d, []);
+            strengthByDate.get(d)!.push(se);
+        });
+
+        // Group strava strength by date
+        const stravaStrengthByDate = new Map<string, typeof normalizedServer[0][]>();
+        normalizedServer.forEach(e => {
+            const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
+                e.type?.toLowerCase().includes('styrka') ||
+                e.type?.toLowerCase().includes('strength') ||
+                e.type?.toLowerCase() === 'other'; // Be aggressive, let the merge logic decide
+            if (isWeightTraining) {
+                const d = e.date.split('T')[0];
+                if (!stravaStrengthByDate.has(d)) stravaStrengthByDate.set(d, []);
+                stravaStrengthByDate.get(d)!.push(e);
+            }
+        });
+
+        const mergedStrengthEntries: any[] = [];
+
+        // Iterate through all local strength entries and try to find a match
+        strengthEntries.forEach(se => {
+            const dateKey = se.date.split('T')[0];
+            const candidates = stravaStrengthByDate.get(dateKey) || [];
+
+            // Filter out already merged ones
+            const availableCandidates = candidates.filter(c => !mergedStravaIds.has(c.id));
+
+            // Find best match among available candidates
+            // 1. By approximate duration (within 10 mins)
+            let match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 10);
+
+            // 2. If no match, just take the first available one if there's only one candidate left for this day
+            if (!match && availableCandidates.length === 1) {
+                match = availableCandidates[0];
+            }
+
+            if (match) {
+                mergedStravaIds.add(match.id);
+                const universalMatch = universalActivities.find(u => u.id === match!.id);
                 const perf = universalMatch?.performance;
                 const sw = (strengthSessions as any[]).find(s => s.id === se.id);
-                return {
+
+                mergedStrengthEntries.push({
                     ...se,
                     source: 'merged' as const,
-                    caloriesBurned: stravaMatch.caloriesBurned || se.caloriesBurned,
-                    durationMinutes: stravaMatch.durationMinutes || se.durationMinutes,
+                    caloriesBurned: match.caloriesBurned || se.caloriesBurned,
+                    durationMinutes: match.durationMinutes || se.durationMinutes,
                     avgHeartRate: perf?.avgHeartRate,
                     maxHeartRate: perf?.maxHeartRate,
-                    subType: stravaMatch.subType,
+                    subType: match.subType,
                     _mergeData: {
-                        strava: stravaMatch,
+                        strava: match,
                         strength: se,
                         strengthWorkout: sw,
                         universalActivity: universalMatch,
                     }
-                };
+                });
+            } else {
+                mergedStrengthEntries.push(se);
             }
-            return se;
         });
 
+        // Any Strava weight activities NOT merged should still be included as 'strava' source
         const deduplicatedServer = normalizedServer.filter(e => {
             const isWeightTraining = e.type?.toLowerCase().includes('weight') ||
                 e.type?.toLowerCase().includes('styrka') ||
-                e.type?.toLowerCase().includes('strength');
+                e.type?.toLowerCase().includes('strength') ||
+                e.type?.toLowerCase() === 'other'; // Be aggressive, let the merge logic decide
+
             if (isWeightTraining) {
-                const dateKey = e.date.split('T')[0];
-                if (strengthEntries.some(se => se.date.split('T')[0] === dateKey)) {
-                    return false;
-                }
+                return !mergedStravaIds.has(e.id);
             }
             return true;
         });
 
-        const result = [...deduplicatedServer, ...normalizedLocal, ...mergedStrengthEntries];
-        return result.sort((a, b) => b.date.localeCompare(a.date));
+        const initialResult = [...deduplicatedServer, ...normalizedLocal, ...mergedStrengthEntries];
+
+        // Final De-duplication: Ensure only one entry per unique ID (Defense in Depth)
+        const finalMap = new Map<string, typeof initialResult[0]>();
+        initialResult.forEach(item => {
+            const existing = finalMap.get(item.id);
+            if (!existing) {
+                finalMap.set(item.id, item);
+            } else {
+                // Priority: merged > strava/strength > manual
+                const getPriority = (source: string) => {
+                    if (source === 'merged') return 3;
+                    if (source === 'strava' || source === 'strength') return 2;
+                    return 1;
+                };
+                if (getPriority(item.source) > getPriority(existing.source)) {
+                    finalMap.set(item.id, item);
+                }
+            }
+        });
+
+        return Array.from(finalMap.values()).sort((a, b) => b.date.localeCompare(a.date));
     }, [universalActivities, exerciseEntries, strengthSessions]);
 
     // ============================================
@@ -1293,7 +1495,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
             // Find matching activity on same date with matching type
             const match = unifiedActivities.find(actual => {
-                const sameDate = actual.date.startsWith(planned.date);
+                const sameDate = actual.date.split('T')[0] === planned.date.split('T')[0];
                 if (!sameDate) return false;
 
                 // Type mapping for reconciliation
@@ -1336,49 +1538,6 @@ export function DataProvider({ children }: DataProviderProps) {
         return unifiedActivities.filter(e => e.date.startsWith(date));
     }, [unifiedActivities]);
 
-    // ============================================
-    // Strength Session CRUD (Phase 12)
-    // ============================================
-
-    const addStrengthSession = useCallback((session: Omit<StrengthWorkout, 'id'>): StrengthWorkout => {
-        const newSession: StrengthWorkout = {
-            ...session as any, // Cast for simplicity during migration
-            id: generateId(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-        };
-        setStrengthSessions(prev => [...prev, newSession]);
-
-        // Life Stream: Add event
-        const totalVol = newSession.totalVolume || 0;
-
-        emitFeedEvent(
-            'WORKOUT_STRENGTH',
-            newSession.name || 'Styrkepass slutfört',
-            {
-                type: 'WORKOUT_STRENGTH',
-                sessionId: newSession.id,
-                exerciseCount: (newSession.exercises || []).length,
-                setCount: (newSession.exercises || []).reduce((sum, ex) => sum + (ex.sets || []).length, 0),
-                totalVolume: totalVol,
-            },
-            [
-                { label: 'Volym', value: Math.round(totalVol / 1000), unit: 't', icon: '🏋️' },
-                { label: 'Övningar', value: (newSession.exercises || []).length, icon: '📋' }
-            ],
-            `${(newSession.exercises || []).length} övningar • ${Math.round(totalVol / 1000)}t total volym`
-        );
-
-        return newSession;
-    }, [emitFeedEvent]);
-
-    const updateStrengthSession = useCallback((id: string, updates: Partial<StrengthWorkout>): void => {
-        setStrengthSessions(prev => prev.map(s => s.id === id ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s));
-    }, []);
-
-    const deleteStrengthSession = useCallback((id: string): void => {
-        setStrengthSessions(prev => prev.filter(s => s.id !== id));
-    }, []);
 
     const calculateBMR = useCallback((): number => {
         if (!currentUser?.settings) return 2000;
@@ -1404,7 +1563,7 @@ export function DataProvider({ children }: DataProviderProps) {
         const METS: Record<ExerciseType, Record<ExerciseIntensity, number>> = {
             running: { low: 6, moderate: 8, high: 11, ultra: 14 },
             cycling: { low: 4, moderate: 6, high: 10, ultra: 12 },
-            strength: { low: 3, moderate: 4, high: 6, ultra: 8 },
+            strength: { low: 2.5, moderate: 3.5, high: 5.0, ultra: 7.0 }, // Adjusted downwards to align better with Strava
             walking: { low: 2.5, moderate: 3.5, high: 4.5, ultra: 5.5 },
             swimming: { low: 5, moderate: 7, high: 10, ultra: 12 },
             yoga: { low: 2, moderate: 2.5, high: 3.5, ultra: 4 },
@@ -2220,7 +2379,8 @@ export function DataProvider({ children }: DataProviderProps) {
         deleteBodyMeasurement,
 
         unifiedActivities,
-        refreshData
+        refreshData,
+        isLoading: !isLoaded
     };
 
     return (

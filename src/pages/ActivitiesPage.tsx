@@ -133,7 +133,7 @@ const ActivityRow = ({
                         </div>
                         {isMergedActivity && (
                             <span className="text-[9px] text-slate-500 italic">
-                                ⚡ {universalMatch?.mergeInfo?.originalActivityIds?.length || 0} källor
+                                {/* Source count hidden as per request */}
                             </span>
                         )}
                     </div>
