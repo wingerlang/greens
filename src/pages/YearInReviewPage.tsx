@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
-import { formatDuration, formatSwedishDate, formatPace } from '../utils/dateUtils.ts';
+import { formatDuration, formatSwedishDate, formatPace, getRelativeTime } from '../utils/dateUtils.ts';
 import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area, CartesianGrid, Legend } from 'recharts';
 import { Dumbbell, Loader2 } from 'lucide-react';
@@ -1430,8 +1430,11 @@ export function YearInReviewPage() {
                                                         <span className="text-[10px] text-slate-500 font-bold uppercase">• {formatSwedishDate(a.date)}</span>
                                                         {a.performance?.durationMinutes && a.performance?.distanceKm && (
                                                             <span className="text-[10px] text-rose-400 font-bold">
-                                                                • {formatPace((a.performance.durationMinutes * 60) / a.performance.distanceKm)} min/km
+                                                                • {formatPace((a.performance.durationMinutes * 60) / a.performance.distanceKm).replace('/km', '')} min/km
                                                             </span>
+                                                        )}
+                                                        {new Date(a.date).getFullYear() === new Date().getFullYear() && (
+                                                            <span className="ml-1 text-[10px] text-rose-300 animate-pulse bg-rose-500/10 px-1 rounded border border-rose-500/20">✨ I år</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -1483,8 +1486,11 @@ export function YearInReviewPage() {
                                                     <span className="text-[10px] text-slate-500 font-bold uppercase">• {formatSwedishDate(a.date)}</span>
                                                     {a.performance?.durationMinutes && a.performance?.distanceKm && (
                                                         <span className="text-[10px] text-emerald-400 font-bold">
-                                                            • {formatPace((a.performance.durationMinutes * 60) / a.performance.distanceKm)} min/km
+                                                            • {formatPace((a.performance.durationMinutes * 60) / a.performance.distanceKm).replace('/km', '')} min/km
                                                         </span>
+                                                    )}
+                                                    {new Date(a.date).getFullYear() === new Date().getFullYear() && (
+                                                        <span className="ml-1 text-[10px] text-emerald-300 animate-pulse bg-emerald-500/10 px-1 rounded border border-emerald-500/20">✨ I år</span>
                                                     )}
                                                 </div>
                                             </div>
@@ -1530,12 +1536,15 @@ export function YearInReviewPage() {
                                                 </div>
                                                 <div className="flex items-baseline gap-2 mt-0.5">
                                                     <span className={`font-black ${i === 0 ? 'text-2xl text-white' : 'text-base text-slate-300'}`}>
-                                                        {formatPace((a.performance?.durationMinutes! * 60) / a.performance?.distanceKm!)} <span className="text-xs text-slate-500">min/km</span>
+                                                        {formatPace((a.performance?.durationMinutes! * 60) / a.performance?.distanceKm!).replace('/km', '')} <span className="text-xs text-slate-500">min/km</span>
                                                     </span>
                                                     <span className={`text-[10px] font-bold ${i === 0 ? 'text-cyan-300' : 'text-cyan-400'}`}>
                                                         • {a.performance?.distanceKm?.toFixed(1)} km
                                                     </span>
                                                     <span className="text-[10px] text-slate-500 font-bold uppercase">• {formatSwedishDate(a.date)}</span>
+                                                    {new Date(a.date).getFullYear() === new Date().getFullYear() && (
+                                                        <span className="ml-1 text-[10px] text-cyan-300 animate-pulse bg-cyan-500/10 px-1 rounded border border-cyan-500/20">✨ I år</span>
+                                                    )}
                                                 </div>
                                             </div>
                                             <span className={`text-xs font-black p-2 rounded-full ${i === 0 ? 'bg-cyan-500/20 text-cyan-400' : 'text-slate-600'}`}>#{i + 1}</span>
@@ -1573,9 +1582,15 @@ export function YearInReviewPage() {
                                                         × {l.distance && (l.reps <= 1) ? `${l.distance}m` : l.reps}
                                                         {l.setsAtMaxWeight > 1 && ` [${l.setsAtMaxWeight} set]`}
                                                     </span>
-                                                    {l.isPB && <span className="ml-2 text-[10px] bg-amber-500 text-slate-900 px-1 rounded font-black align-middle">PB</span>}
+                                                    {l.isPB && <span className="ml-2 text-[10px] bg-amber-500 text-slate-900 px-1 rounded font-black align-middle shadow-sm shadow-amber-500/50">🏆 PB</span>}
                                                 </span>
-                                                <span className="text-[10px] text-slate-600 font-bold uppercase">{formatSwedishDate(l.date)}</span>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className="text-[10px] text-slate-600 font-bold uppercase">{formatSwedishDate(l.date)}</span>
+                                                    <span className="text-[10px] text-slate-400/60 font-medium italic truncate">({getRelativeTime(l.date)})</span>
+                                                    {new Date(l.date).getFullYear() === new Date().getFullYear() && (
+                                                        <span className="text-[10px] text-purple-300 animate-pulse">✨ I år</span>
+                                                    )}
+                                                </div>
                                             </div>
                                             <span className={`text-xs font-black p-2 rounded-full ${i === 0 ? 'bg-purple-500/20 text-purple-400' : 'text-slate-600'}`}>#{i + 1}</span>
                                         </div>
@@ -1613,7 +1628,13 @@ export function YearInReviewPage() {
                                                     ))}
                                                     {s.exercises.length > 3 && <span className="text-[9px] text-slate-600">+{s.exercises.length - 3} till</span>}
                                                 </div>
-                                                <span className="text-[10px] text-slate-500 font-bold uppercase">{formatSwedishDate(s.date)}</span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-[10px] text-slate-500 font-bold uppercase">{formatSwedishDate(s.date)}</span>
+                                                    <span className="text-[10px] text-slate-400/60 font-medium italic">({getRelativeTime(s.date)})</span>
+                                                    {new Date(s.date).getFullYear() === new Date().getFullYear() && (
+                                                        <span className="text-[10px] text-fuchsia-300 animate-pulse">✨ I år</span>
+                                                    )}
+                                                </div>
                                             </div>
                                             <span className={`text-xs font-black p-2 rounded-full ${i === 0 ? 'bg-fuchsia-500/20 text-fuchsia-400' : 'text-slate-600'}`}>#{i + 1}</span>
                                         </div>
@@ -1634,110 +1655,190 @@ export function YearInReviewPage() {
                     </div>
 
                     {/* Biggest Training Days - Full Width */}
-                    {stats.biggestTrainingDays.length > 0 && (
-                        <div className="mt-8 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-amber-950/20 border border-amber-500/20 rounded-3xl p-8 flex flex-col space-y-6 shadow-2xl shadow-amber-500/5">
-                            {/* Elegant Centered Header */}
-                            <div className="flex items-center justify-center gap-4">
-                                <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-500/30 to-amber-500/50" />
-                                <h3 className="text-amber-400 text-xl font-black uppercase tracking-[0.3em] whitespace-nowrap flex items-center gap-3">
-                                    <span className="text-2xl">🏆</span>
-                                    Största Träningsdagar
-                                </h3>
-                                <div className="h-px flex-1 bg-gradient-to-l from-transparent via-amber-500/30 to-amber-500/50" />
-                            </div>
+                    {stats.biggestTrainingDays.length > 0 && (() => {
+                        // Calculate totals for the displayed days
+                        const displayedDays = stats.biggestTrainingDays.slice(0, expandedCards['days'] ? 15 : 6);
+                        const totals = displayedDays.reduce((acc: { running: number, cycling: number, time: number }, day: any) => {
+                            day.activities.forEach((act: any) => {
+                                if (act.type === 'running') acc.running += act.distance || 0;
+                                if (act.type === 'cycling') acc.cycling += act.distance || 0;
+                                acc.time += act.minutes || 0;
+                            });
+                            return acc;
+                        }, { running: 0, cycling: 0, time: 0 });
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {stats.biggestTrainingDays.slice(0, expandedCards['days'] ? 15 : 6).map((day: any, i: number) => {
-                                    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
-                                    const isTop3 = i < 3;
-                                    const bgClass = i === 0
-                                        ? 'bg-gradient-to-br from-amber-500/20 via-amber-500/10 to-transparent border-amber-500/30 shadow-lg shadow-amber-500/10'
-                                        : i === 1
-                                            ? 'bg-gradient-to-br from-slate-400/15 via-slate-400/5 to-transparent border-slate-400/20'
-                                            : i === 2
-                                                ? 'bg-gradient-to-br from-orange-700/15 via-orange-700/5 to-transparent border-orange-700/20'
-                                                : 'bg-slate-900/50 border-white/5';
+                        return (
+                            <div className="mt-6 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-amber-950/20 border border-amber-500/20 rounded-2xl p-5 flex flex-col space-y-4 shadow-2xl shadow-amber-500/5">
+                                {/* Elegant Centered Header */}
+                                <div className="flex items-center justify-center gap-3">
+                                    <div className="h-px flex-1 bg-gradient-to-r from-transparent via-amber-500/30 to-amber-500/50" />
+                                    <h3 className="text-amber-400 text-lg font-black uppercase tracking-[0.25em] whitespace-nowrap flex items-center gap-2">
+                                        <span className="text-xl">🏆</span>
+                                        Största Träningsdagar
+                                    </h3>
+                                    <div className="h-px flex-1 bg-gradient-to-l from-transparent via-amber-500/30 to-amber-500/50" />
+                                </div>
 
-                                    return (
-                                        <div
-                                            key={day.date}
-                                            className={`p-5 rounded-2xl border transition-all hover:scale-[1.02] ${bgClass}`}
-                                        >
-                                            <div className="flex items-start justify-between mb-3">
-                                                <div className="flex flex-col gap-1">
-                                                    <div className="flex items-center gap-2">
-                                                        {medal && <span className="text-2xl">{medal}</span>}
-                                                        <span className={`font-black ${isTop3 ? 'text-2xl text-white' : 'text-lg text-slate-300'}`}>
-                                                            {Math.floor(day.totalMinutes / 60)}h {Math.round(day.totalMinutes % 60)}m
-                                                        </span>
-                                                    </div>
-                                                    <span className={`text-xs font-bold uppercase tracking-wider ${isTop3 ? 'text-amber-400/80' : 'text-slate-500'}`}>
-                                                        {formatSwedishDate(day.date)}
+                                {/* Summary Stats */}
+                                <div className="flex items-center justify-center gap-6 text-xs">
+                                    {totals.running > 0 && (
+                                        <div className="flex items-center gap-1.5 text-emerald-400">
+                                            <span>🏃</span>
+                                            <span className="font-black text-sm">{totals.running.toFixed(0)}km</span>
+                                            <span className="text-emerald-500/60">löpning</span>
+                                        </div>
+                                    )}
+                                    {totals.cycling > 0 && (
+                                        <div className="flex items-center gap-1.5 text-cyan-400">
+                                            <span>🚴</span>
+                                            <span className="font-black text-sm">{totals.cycling.toFixed(0)}km</span>
+                                            <span className="text-cyan-500/60">cykel</span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-1.5 text-amber-400/80">
+                                        <span>⏱️</span>
+                                        <span className="font-black text-sm">{Math.floor(totals.time / 60)}h {Math.round(totals.time % 60)}m</span>
+                                        <span className="text-amber-500/50">totalt</span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                    {displayedDays.map((day: any, i: number) => {
+                                        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
+                                        const isTop3 = i < 3;
+                                        const bgClass = i === 0
+                                            ? 'bg-gradient-to-br from-amber-500/20 via-amber-500/10 to-transparent border-amber-500/30 shadow-lg shadow-amber-500/10'
+                                            : i === 1
+                                                ? 'bg-gradient-to-br from-slate-400/15 via-slate-400/5 to-transparent border-slate-400/20'
+                                                : i === 2
+                                                    ? 'bg-gradient-to-br from-orange-700/15 via-orange-700/5 to-transparent border-orange-700/20'
+                                                    : 'bg-slate-900/50 border-white/5';
+
+                                        // Pass count label
+                                        const passCount = day.activities.length;
+                                        const passLabel = passCount === 1 ? 'singel' : passCount === 2 ? 'dubbel' : passCount === 3 ? 'trippel' : passCount === 4 ? 'quad' : passCount >= 5 ? 'multi' : null;
+
+                                        // Day-specific totals
+                                        const dayTotals = day.activities.reduce((acc: { running: number, cycling: number, time: number }, act: any) => {
+                                            if (act.type === 'running') acc.running += act.distance || 0;
+                                            if (act.type === 'cycling') acc.cycling += act.distance || 0;
+                                            acc.time += act.minutes || 0;
+                                            return acc;
+                                        }, { running: 0, cycling: 0, time: 0 });
+
+                                        return (
+                                            <div
+                                                key={day.date}
+                                                className={`relative p-3 rounded-xl border transition-all hover:scale-[1.01] ${bgClass}`}
+                                            >
+                                                {/* Subtle pass count label */}
+                                                {passLabel && passCount > 1 && (
+                                                    <span className="absolute top-2 right-2 text-[8px] font-bold uppercase tracking-widest text-slate-600/60 rotate-0">
+                                                        {passLabel}
                                                     </span>
-                                                </div>
-                                                <span className={`text-xs font-black px-3 py-1.5 rounded-full ${isTop3 ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-600'}`}>
-                                                    #{i + 1}
-                                                </span>
-                                            </div>
+                                                )}
 
-                                            <div className="space-y-1.5 border-t border-white/5 pt-3">
-                                                {day.activities.map((act: any, idx: number) => {
-                                                    const hours = Math.floor(act.minutes / 60);
-                                                    const mins = Math.round(act.minutes % 60);
-                                                    const duration = hours > 0 ? `${hours}h ${mins}m` : `${mins}min`;
-                                                    const typeInfo = EXERCISE_TYPES.find(t => t.type === act.type) || EXERCISE_TYPES.find(t => t.type === 'other');
-                                                    const colorMap: Record<string, string> = {
-                                                        running: 'text-emerald-400 bg-emerald-500/10',
-                                                        cycling: 'text-cyan-400 bg-cyan-500/10',
-                                                        strength: 'text-purple-400 bg-purple-500/10',
-                                                        walking: 'text-amber-300 bg-amber-500/10',
-                                                        swimming: 'text-blue-400 bg-blue-500/10',
-                                                        other: 'text-slate-400 bg-slate-500/10'
-                                                    };
-                                                    const colorClass = colorMap[act.type] || colorMap.other;
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <div className="flex flex-col gap-0.5">
+                                                        <div className="flex items-center gap-2">
+                                                            {medal && <span className="text-xl">{medal}</span>}
+                                                            <div className="flex items-baseline gap-2">
+                                                                <span className={`font-black ${isTop3 ? 'text-2xl text-white' : 'text-lg text-slate-300'}`}>
+                                                                    {Math.floor(day.totalMinutes / 60)}h {Math.round(day.totalMinutes % 60)}m
+                                                                </span>
 
-                                                    return (
-                                                        <div
-                                                            key={idx}
-                                                            onClick={() => {
-                                                                const fullAct = unifiedActivities.find(u => u.id === act.id) || yearlyActivities.find(ya => ya.id === act.id);
-                                                                if (fullAct) setSelectedActivity(fullAct as UniversalActivity);
-                                                            }}
-                                                            className="flex items-center gap-2 text-sm cursor-pointer group hover:bg-white/5 p-1.5 -mx-1.5 rounded-lg transition-all"
-                                                        >
-                                                            <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${colorClass}`}>
-                                                                {act.time || '—'}
-                                                            </span>
-                                                            <span className="text-base shrink-0">{typeInfo?.icon}</span>
-                                                            <div className="flex-1 min-w-0 flex items-baseline gap-2">
-                                                                <span className="font-bold text-slate-200 truncate group-hover:text-amber-400 transition-colors">
-                                                                    {act.name}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-500 shrink-0">
-                                                                    {act.distance > 0 && `${act.distance.toFixed(1)}km • `}
-                                                                    {duration}
-                                                                </span>
+                                                                {/* Inline Summary Stats */}
+                                                                <div className="flex items-center gap-2 ml-2">
+                                                                    {dayTotals.running > 0 && (
+                                                                        <span className="text-[11px] font-black text-emerald-400 flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg shadow-sm shadow-emerald-500/5">
+                                                                            <span className="text-[14px]">🏃</span> {dayTotals.running.toFixed(1)}
+                                                                        </span>
+                                                                    )}
+                                                                    {dayTotals.cycling > 0 && (
+                                                                        <span className="text-[11px] font-black text-cyan-400 flex items-center gap-1.5 bg-cyan-500/10 border border-cyan-500/20 px-2 py-0.5 rounded-lg shadow-sm shadow-cyan-500/5">
+                                                                            <span className="text-[14px]">🚴</span> {dayTotals.cycling.toFixed(1)}
+                                                                        </span>
+                                                                    )}
+                                                                    {new Date(day.date).getFullYear() === new Date().getFullYear() && (
+                                                                        <span className="text-[9px] font-black text-amber-400 flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded-md animate-pulse">
+                                                                            ✨ I ÅR
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
+                                                        <span className={`text-[10px] font-bold uppercase tracking-wider ${isTop3 ? 'text-amber-400/70' : 'text-slate-500'}`}>
+                                                            {formatSwedishDate(day.date)}
+                                                        </span>
+                                                    </div>
+                                                    <span className={`text-[10px] font-black px-2 py-1 rounded-full ${isTop3 ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-800 text-slate-600'}`}>
+                                                        #{i + 1}
+                                                    </span>
+                                                </div>
 
-                            {stats.biggestTrainingDays.length > 6 && (
-                                <button
-                                    onClick={() => setExpandedCards(prev => ({ ...prev, days: !prev['days'] }))}
-                                    className="text-sm text-amber-400 hover:text-amber-300 font-bold uppercase tracking-wider flex items-center gap-2 justify-center transition-colors pt-2 group"
-                                >
-                                    <span className={`transition-transform ${expandedCards['days'] ? 'rotate-180' : ''}`}>▼</span>
-                                    {expandedCards['days'] ? 'Visa färre' : `Visa ${Math.min(9, stats.biggestTrainingDays.length - 6)} till`}
-                                </button>
-                            )}
-                        </div>
-                    )}
+                                                <div className="space-y-0.5 border-t border-white/5 pt-2">
+                                                    {day.activities.map((act: any, idx: number) => {
+                                                        const hours = Math.floor(act.minutes / 60);
+                                                        const mins = Math.round(act.minutes % 60);
+                                                        const duration = hours > 0 ? `${hours}h${mins}m` : `${mins}m`;
+                                                        const typeInfo = EXERCISE_TYPES.find(t => t.type === act.type) || EXERCISE_TYPES.find(t => t.type === 'other');
+                                                        const colorMap: Record<string, { text: string, bg: string }> = {
+                                                            running: { text: 'text-emerald-400', bg: 'bg-emerald-500/15' },
+                                                            cycling: { text: 'text-cyan-400', bg: 'bg-cyan-500/15' },
+                                                            strength: { text: 'text-purple-400', bg: 'bg-purple-500/15' },
+                                                            walking: { text: 'text-amber-300', bg: 'bg-amber-500/15' },
+                                                            swimming: { text: 'text-blue-400', bg: 'bg-blue-500/15' },
+                                                            other: { text: 'text-slate-400', bg: 'bg-slate-500/15' }
+                                                        };
+                                                        const colors = colorMap[act.type] || colorMap.other;
+
+                                                        return (
+                                                            <div
+                                                                key={idx}
+                                                                onClick={() => {
+                                                                    const fullAct = unifiedActivities.find(u => u.id === act.id) || yearlyActivities.find(ya => ya.id === act.id);
+                                                                    if (fullAct) setSelectedActivity(fullAct as UniversalActivity);
+                                                                }}
+                                                                className="flex items-center gap-1.5 text-sm cursor-pointer group hover:bg-white/5 py-1 px-1 -mx-1 rounded transition-all"
+                                                            >
+                                                                <span className={`text-xs font-mono px-1.5 py-0.5 rounded ${colors.text} ${colors.bg}`}>
+                                                                    {act.time || '—'}
+                                                                </span>
+                                                                <span className="text-base shrink-0">{typeInfo?.icon}</span>
+                                                                <span className="font-semibold text-slate-300 truncate group-hover:text-amber-400 transition-colors flex-1 min-w-0">
+                                                                    {act.name}
+                                                                </span>
+                                                                <div className="flex items-center gap-1.5 shrink-0">
+                                                                    {act.distance > 0 && (
+                                                                        <span className={`text-xs font-black px-1.5 py-0.5 rounded ${colors.bg} ${colors.text}`}>
+                                                                            {act.distance.toFixed(1)}km
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="text-xs text-slate-400 font-bold">
+                                                                        {duration}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+
+                                {stats.biggestTrainingDays.length > 6 && (
+                                    <button
+                                        onClick={() => setExpandedCards(prev => ({ ...prev, days: !prev['days'] }))}
+                                        className="text-xs text-amber-400 hover:text-amber-300 font-bold uppercase tracking-wider flex items-center gap-2 justify-center transition-colors pt-1 group"
+                                    >
+                                        <span className={`transition-transform ${expandedCards['days'] ? 'rotate-180' : ''}`}>▼</span>
+                                        {expandedCards['days'] ? 'Visa färre' : `Visa ${Math.min(9, stats.biggestTrainingDays.length - 6)} till`}
+                                    </button>
+                                )}
+                            </div>
+                        );
+                    })()}
 
 
                     {/* HEATMAP / CONTRIBUTION GRID */}
