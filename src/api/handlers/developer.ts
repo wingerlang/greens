@@ -102,7 +102,19 @@ export async function handleDeveloperRoutes(req: Request, url: URL, headers: Hea
         // --- Persistence Endpoints ---
 
         if (url.pathname === "/api/developer/snapshot" && req.method === "POST") {
-            const stats = await service.getProjectStats(getExcluded(url));
+            let excluded = getExcluded(url);
+            try {
+                // Try to read body for excluded params (array of strings)
+                // Note: Clone request if we needed to read it multiple times, but here we are the only consumer
+                const body = await req.json();
+                if (body && Array.isArray(body.excluded)) {
+                    excluded = body.excluded;
+                }
+            } catch (e) {
+                // Ignore json parse error (e.g. empty body)
+            }
+
+            const stats = await service.getProjectStats(excluded);
             await persistence.saveSnapshot(stats);
             return new Response(JSON.stringify({ success: true, stats }), { headers });
         }
