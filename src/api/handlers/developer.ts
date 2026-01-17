@@ -94,6 +94,11 @@ export async function handleDeveloperRoutes(req: Request, url: URL, headers: Hea
             return new Response(JSON.stringify({ report }), { headers });
         }
 
+        if (url.pathname === "/api/developer/docs") {
+            const docs = await service.getDocumentationFiles();
+            return new Response(JSON.stringify({ docs }), { headers });
+        }
+
         // --- Persistence Endpoints ---
 
         if (url.pathname === "/api/developer/snapshot" && req.method === "POST") {

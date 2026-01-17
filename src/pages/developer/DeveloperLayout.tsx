@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Terminal, FolderTree, Activity, FileCode, Settings, ListTodo } from 'lucide-react';
+import { Terminal, FolderTree, Activity, FileCode, Settings, ListTodo, HeartPulse, CheckSquare } from 'lucide-react';
 import { DeveloperProvider, useDeveloper } from './DeveloperContext.tsx';
 import { Modal } from '../../components/common/Modal.tsx';
 
@@ -98,19 +98,6 @@ function DevLayoutContent() {
                         </NavLink>
 
                         <NavLink
-                            to="/developer/todos"
-                            className={({ isActive }) =>
-                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
-                                }`
-                            }
-                        >
-                            <div className="flex items-center gap-2">
-                                <ListTodo size={16} />
-                                Refactor Plan
-                            </div>
-                        </NavLink>
-
-                        <NavLink
                             to="/developer/explorer"
                             className={({ isActive }) =>
                                 `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
@@ -124,6 +111,45 @@ function DevLayoutContent() {
                         </NavLink>
 
                         <NavLink
+                            to="/developer/health"
+                            className={({ isActive }) =>
+                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
+                                }`
+                            }
+                        >
+                            <div className="flex items-center gap-2">
+                                <HeartPulse size={16} />
+                                Health
+                            </div>
+                        </NavLink>
+
+                        <NavLink
+                            to="/developer/management"
+                            className={({ isActive }) =>
+                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
+                                }`
+                            }
+                        >
+                            <div className="flex items-center gap-2">
+                                <CheckSquare size={16} />
+                                Management
+                            </div>
+                        </NavLink>
+
+                        <NavLink
+                            to="/developer/todos"
+                            className={({ isActive }) =>
+                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
+                                }`
+                            }
+                        >
+                            <div className="flex items-center gap-2">
+                                <ListTodo size={16} />
+                                Planner
+                            </div>
+                        </NavLink>
+
+                        <NavLink
                             to="/developer/analysis"
                             className={({ isActive }) =>
                                 `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
@@ -132,7 +158,7 @@ function DevLayoutContent() {
                         >
                             <div className="flex items-center gap-2">
                                 <FileCode size={16} />
-                                Code Quality
+                                Analysis
                             </div>
                         </NavLink>
                     </nav>

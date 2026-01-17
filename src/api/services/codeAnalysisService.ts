@@ -54,11 +54,43 @@ export interface SearchResult {
     matches: { line: number, content: string }[];
 }
 
+const DEFAULT_EXCLUDES = [
+    'node_modules', '.git', 'dist', 'build', 'coverage',
+    '.vscode', '.idea', '.deno', 'artifacts', 'debug', 'npm:'
+];
+
 export class CodeAnalysisService {
     private rootDir: string;
 
     constructor(rootDir: string = "./src") {
         this.rootDir = rootDir;
+    }
+
+    async getDocumentationFiles(): Promise<{ name: string, path: string, content: string }[]> {
+        const files: { name: string, path: string, content: string }[] = [];
+        const docs = ['BUGS.MD', 'TODO.md', 'AGENT_MANIFEST.md', 'ARCHITECTURE.md', 'README.md', 'CONTRIBUTING.md', 'REFACTORING_PLAN.md'];
+
+        for (const doc of docs) {
+            try {
+                // Check root directory (./)
+                const path = `./${doc}`;
+                const content = await Deno.readTextFile(path);
+                files.push({ name: doc, path, content });
+            } catch (e) {
+                // Ignore missing files
+            }
+        }
+        return files;
+    }
+
+    private isExcluded(path: string, userExcludes: string[]): boolean {
+        // Normalize path
+        const normalized = path.replace(/^\.\//, '');
+        // Check default excludes
+        if (DEFAULT_EXCLUDES.some(ex => normalized.includes(ex) || normalized.split('/').includes(ex))) return true;
+        // Check user excludes
+        if (userExcludes.some(ex => normalized.includes(ex))) return true;
+        return false;
     }
 
     async getProjectStats(excludedPaths: string[] = []): Promise<ProjectStats> {
@@ -78,8 +110,7 @@ export class CodeAnalysisService {
             for await (const entry of Deno.readDir(path)) {
                 const fullPath = `${path}/${entry.name}`;
 
-                // Check exclusion
-                if (excludedPaths.some(ex => fullPath.includes(ex))) continue;
+                if (this.isExcluded(fullPath, excludedPaths)) continue;
 
                 if (entry.isDirectory) {
                     await this.walkAndCount(fullPath, stats, excludedPaths);
@@ -124,6 +155,8 @@ export class CodeAnalysisService {
             const entries: FileNode[] = [];
             for await (const entry of Deno.readDir(path)) {
                 const fullPath = `${path}/${entry.name}`;
+                if (this.isExcluded(fullPath, [])) continue;
+
                 if (entry.isDirectory) {
                     entries.push(await this.buildTree(fullPath));
                 } else {
@@ -154,6 +187,8 @@ export class CodeAnalysisService {
             const entries: FileNode[] = [];
             for await (const entry of Deno.readDir(path)) {
                 const fullPath = `${path}/${entry.name}`;
+                if (this.isExcluded(fullPath, [])) continue;
+
                 if (entry.isDirectory) {
                     const childDir = await this.buildExtendedTree(fullPath);
                     entries.push(childDir);
@@ -226,7 +261,7 @@ export class CodeAnalysisService {
             for await (const entry of Deno.readDir(path)) {
                 const fullPath = `${path}/${entry.name}`;
 
-                if (excludedPaths.some(ex => fullPath.includes(ex))) continue;
+                if (this.isExcluded(fullPath, excludedPaths)) continue;
 
                 if (entry.isDirectory) {
                     await this.gatherFiles(fullPath, list, excludedPaths);
@@ -366,9 +401,15 @@ export class CodeAnalysisService {
     }
 
     async getFileContent(path: string): Promise<string> {
-        // Security check: Ensure path is within rootDir
-        if (!path.startsWith(this.rootDir) && !path.startsWith('./' + this.rootDir) && !path.startsWith('src/')) {
-            throw new Error("Access denied: Invalid path");
+        // Security check: Ensure path is within allowed dirs
+        // Allow reading root MD files and src
+        const allowed = [this.rootDir, './' + this.rootDir, 'src/', ...['BUGS.MD', 'TODO.md', 'AGENT_MANIFEST.md', 'ARCHITECTURE.md', 'README.md', 'CONTRIBUTING.md', 'REFACTORING_PLAN.md'].map(f => `./${f}`)];
+
+        if (!allowed.some(p => path.startsWith(p)) && !path.endsWith('.md')) { // Relaxed check for MD files in root
+             if (!path.startsWith('src/') && !path.startsWith('./src')) {
+                  // Fallback stricter check if not MD
+                  throw new Error("Access denied: Invalid path");
+             }
         }
         try {
             return await Deno.readTextFile(path);

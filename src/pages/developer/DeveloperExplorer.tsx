@@ -1,8 +1,8 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useDeveloper } from './DeveloperContext.tsx';
-import { Folder, File, ChevronRight, ChevronDown, Search, BarChart2, AlertCircle } from 'lucide-react';
+import { Folder, File, ChevronRight, ChevronDown, Search, BarChart2, AlertCircle, LayoutList, LayoutGrid, Filter, ArrowUp, ArrowDown } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
@@ -13,6 +13,7 @@ interface FileNode {
     children?: FileNode[];
     lines?: number;
     fileCount?: number;
+    size?: number;
 }
 
 interface SearchResult {
@@ -20,15 +21,24 @@ interface SearchResult {
     matches: { line: number, content: string }[];
 }
 
+type ViewMode = 'tree' | 'list';
+type SortField = 'name' | 'lines' | 'size' | 'ext';
+type SortDirection = 'asc' | 'desc';
+
 export function DeveloperExplorer() {
     const { token } = useAuth();
-    const { excludedFolders, refreshTrigger } = useDeveloper();
+    const { excludedFolders, setExcludedFolders, refreshTrigger } = useDeveloper();
     const [structure, setStructure] = useState<FileNode | null>(null);
     const [loading, setLoading] = useState(true);
-    const [showStats, setShowStats] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<SearchResult[] | null>(null);
     const [isSearching, setIsSearching] = useState(false);
+
+    // View Settings
+    const [viewMode, setViewMode] = useState<ViewMode>('tree');
+    const [showExcludes, setShowExcludes] = useState(false);
+    const [sortField, setSortField] = useState<SortField>('lines');
+    const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
     // File Viewer State
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
@@ -38,19 +48,20 @@ export function DeveloperExplorer() {
 
     const query = new URLSearchParams({ excluded: excludedFolders.join(',') }).toString();
 
-    // Fetch structure when 'showStats' changes
+    // Fetch structure
     useEffect(() => {
         setLoading(true);
-        fetch(`/api/developer/structure?stats=${showStats}&${query}`, {
+        // Always fetch stats now for the list view
+        fetch(`/api/developer/structure?stats=true&${query}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         })
         .then(res => res.json())
         .then(data => setStructure(data.structure))
         .catch(console.error)
         .finally(() => setLoading(false));
-    }, [token, showStats, refreshTrigger, query]);
+    }, [token, refreshTrigger, query]);
 
-    // Fetch file content when selectedFile changes
+    // Fetch file content
     useEffect(() => {
         if (!selectedFile) {
             setFileContent('');
@@ -102,38 +113,128 @@ export function DeveloperExplorer() {
         return 'text';
     };
 
+    // Flatten structure for list view
+    const flatFiles = useMemo(() => {
+        if (!structure) return [];
+        const files: FileNode[] = [];
+        const traverse = (node: FileNode) => {
+            if (node.type === 'file') {
+                files.push(node);
+            } else if (node.children) {
+                node.children.forEach(traverse);
+            }
+        };
+        traverse(structure);
+        return files.sort((a, b) => {
+            let valA: any = a[sortField];
+            let valB: any = b[sortField];
+
+            if (sortField === 'ext') {
+                valA = a.name.split('.').pop() || '';
+                valB = b.name.split('.').pop() || '';
+            }
+
+            if (valA === undefined) valA = 0;
+            if (valB === undefined) valB = 0;
+
+            if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
+            if (valA > valB) return sortDirection === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }, [structure, sortField, sortDirection]);
+
+    const toggleSort = (field: SortField) => {
+        if (sortField === field) {
+            setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortDirection('desc');
+        }
+    };
+
+    const SortIcon = ({ field }: { field: SortField }) => {
+        if (sortField !== field) return <div className="w-4 h-4" />;
+        return sortDirection === 'asc' ? <ArrowUp size={14} /> : <ArrowDown size={14} />;
+    };
+
     return (
         <div className="space-y-4 h-full flex flex-col">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <h1 className="text-2xl font-bold text-white">Code Explorer</h1>
-                <div className="flex items-center gap-4">
+                <div className="flex flex-wrap items-center gap-2">
                     <form onSubmit={handleSearch} className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                         <input
                             type="text"
-                            placeholder="Search codebase..."
-                            className="bg-slate-800 border border-slate-700 rounded-full pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 w-64 transition-all focus:w-80"
+                            placeholder="Search content..."
+                            className="bg-slate-800 border border-slate-700 rounded-full pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 w-48 transition-all focus:w-64"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
                     </form>
-                    <button
-                        onClick={() => setShowStats(!showStats)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${showStats ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
-                    >
-                        <BarChart2 size={16} />
-                        {showStats ? 'Hide Stats' : 'Show Stats'}
-                    </button>
+
+                    <div className="h-8 w-px bg-slate-700 mx-2" />
+
+                    <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                        <button
+                            onClick={() => setViewMode('tree')}
+                            className={`p-2 rounded-md transition-colors ${viewMode === 'tree' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+                            title="Tree View"
+                        >
+                            <LayoutList size={16} />
+                        </button>
+                        <button
+                            onClick={() => setViewMode('list')}
+                            className={`p-2 rounded-md transition-colors ${viewMode === 'list' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:text-white'}`}
+                            title="List View"
+                        >
+                            <LayoutGrid size={16} />
+                        </button>
+                    </div>
+
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowExcludes(!showExcludes)}
+                            className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${showExcludes ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+                        >
+                            <Filter size={16} />
+                            <span>Filters</span>
+                        </button>
+                        {showExcludes && (
+                            <div className="absolute right-0 top-full mt-2 w-64 bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-4 z-20">
+                                <h3 className="text-sm font-semibold text-white mb-2">Excluded Folders</h3>
+                                <div className="space-y-2">
+                                    {['tests', 'public', 'scripts'].map(folder => (
+                                        <label key={folder} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={excludedFolders.includes(folder)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) setExcludedFolders([...excludedFolders, folder]);
+                                                    else setExcludedFolders(excludedFolders.filter(f => f !== folder));
+                                                }}
+                                                className="rounded border-slate-600 bg-slate-700 text-emerald-500 focus:ring-emerald-500"
+                                            />
+                                            {folder}
+                                        </label>
+                                    ))}
+                                </div>
+                                <div className="mt-3 pt-3 border-t border-slate-700 text-xs text-slate-500">
+                                    System folders (node_modules, .git) are always excluded.
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
             <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left: Tree / Search Results */}
-                <div className="bg-slate-900 rounded-lg border border-slate-700 p-4 font-mono text-sm overflow-auto lg:col-span-1">
-                    {isSearching ? (
-                        <div className="text-slate-400 animate-pulse">Searching...</div>
+                {/* Left: Tree / List / Search Results */}
+                <div className="bg-slate-900 rounded-lg border border-slate-700 p-0 font-mono text-sm overflow-hidden flex flex-col lg:col-span-1">
+                     {isSearching ? (
+                        <div className="p-4 text-slate-400 animate-pulse">Searching...</div>
                     ) : searchResults ? (
-                         <div className="space-y-4">
+                         <div className="p-4 overflow-auto flex-1 space-y-4">
                             <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
                                 <span>Found {searchResults.length} files</span>
                                 <button onClick={() => { setSearchResults(null); setSearchQuery(''); }} className="text-emerald-400 hover:underline">Clear</button>
@@ -155,17 +256,54 @@ export function DeveloperExplorer() {
                                             L{m.line}: {m.content}
                                         </div>
                                     ))}
-                                    {res.matches.length > 3 && <div className="text-xs text-slate-600 pl-4 italic">+{res.matches.length - 3} more</div>}
                                 </div>
                             ))}
                             {searchResults.length === 0 && <div className="text-slate-500 italic">No matches found.</div>}
                         </div>
                     ) : loading ? (
-                        <div className="text-slate-400 animate-pulse">Mapping file system...</div>
+                        <div className="p-4 text-slate-400 animate-pulse">Mapping file system...</div>
                     ) : structure ? (
-                        <FileTree node={structure} depth={0} showStats={showStats} onSelect={setSelectedFile} selectedPath={selectedFile} />
+                        viewMode === 'tree' ? (
+                            <div className="p-4 overflow-auto flex-1">
+                                <FileTree node={structure} depth={0} onSelect={setSelectedFile} selectedPath={selectedFile} />
+                            </div>
+                        ) : (
+                            <div className="flex flex-col h-full">
+                                <div className="flex items-center bg-slate-800 border-b border-slate-700 p-2 text-xs font-semibold text-slate-300 sticky top-0">
+                                    <div className="flex-1 px-2 cursor-pointer hover:text-white flex items-center gap-1" onClick={() => toggleSort('name')}>
+                                        File <SortIcon field="name" />
+                                    </div>
+                                    <div className="w-16 px-2 text-right cursor-pointer hover:text-white flex items-center justify-end gap-1" onClick={() => toggleSort('lines')}>
+                                        Lines <SortIcon field="lines" />
+                                    </div>
+                                    <div className="w-16 px-2 text-right cursor-pointer hover:text-white flex items-center justify-end gap-1" onClick={() => toggleSort('size')}>
+                                        Size <SortIcon field="size" />
+                                    </div>
+                                </div>
+                                <div className="overflow-auto flex-1 p-0">
+                                    {flatFiles.map(file => (
+                                        <div
+                                            key={file.path}
+                                            onClick={() => setSelectedFile(file.path)}
+                                            className={`flex items-center p-2 border-b border-slate-800 cursor-pointer hover:bg-slate-800 ${selectedFile === file.path ? 'bg-indigo-900/30 text-indigo-200' : 'text-slate-400'}`}
+                                        >
+                                            <div className="flex-1 px-2 truncate">
+                                                <div className="text-slate-200 truncate">{file.name}</div>
+                                                <div className="text-xs text-slate-600 truncate">{file.path}</div>
+                                            </div>
+                                            <div className="w-16 px-2 text-right text-xs font-mono text-emerald-500/80">
+                                                {file.lines?.toLocaleString() || '-'}
+                                            </div>
+                                            <div className="w-16 px-2 text-right text-xs font-mono text-blue-500/80">
+                                                {file.size ? (file.size / 1024).toFixed(1) + 'k' : '-'}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )
                     ) : (
-                        <div className="text-red-400">Failed to load structure.</div>
+                        <div className="p-4 text-red-400">Failed to load structure.</div>
                     )}
                 </div>
 
@@ -175,6 +313,11 @@ export function DeveloperExplorer() {
                         <span className="font-mono text-sm text-slate-300">
                             {selectedFile || 'No file selected'}
                         </span>
+                        {selectedFile && (
+                            <span className="text-xs text-slate-500">
+                                {flatFiles.find(f => f.path === selectedFile)?.lines} lines
+                            </span>
+                        )}
                    </div>
                    <div className="flex-1 overflow-auto bg-slate-950 text-slate-300 font-mono text-sm relative">
                        {loadingFile ? (
@@ -207,7 +350,7 @@ export function DeveloperExplorer() {
     );
 }
 
-function FileTree({ node, depth, showStats, onSelect, selectedPath }: { node: FileNode; depth: number, showStats: boolean, onSelect: (path: string) => void, selectedPath: string | null }) {
+function FileTree({ node, depth, onSelect, selectedPath }: { node: FileNode; depth: number, onSelect: (path: string) => void, selectedPath: string | null }) {
     const [expanded, setExpanded] = useState(depth < 1);
     const isDir = node.type === 'dir';
 
@@ -222,9 +365,7 @@ function FileTree({ node, depth, showStats, onSelect, selectedPath }: { node: Fi
                     <File size={14} className={selectedPath === node.path ? "text-indigo-400" : "text-slate-600 group-hover:text-slate-500"} />
                     <span className="truncate">{node.name}</span>
                 </div>
-                {showStats && node.lines !== undefined && (
-                    <span className="text-xs text-slate-600 ml-2 whitespace-nowrap">{node.lines} L</span>
-                )}
+                <span className="text-xs text-slate-600 ml-2 whitespace-nowrap">{node.lines} L</span>
             </div>
         );
     }
@@ -241,17 +382,14 @@ function FileTree({ node, depth, showStats, onSelect, selectedPath }: { node: Fi
                     <Folder size={14} className="text-amber-500" />
                     <span className="font-semibold truncate">{node.name}</span>
                 </div>
-                {showStats && (
-                    <div className="flex items-center gap-3 text-xs text-slate-500 ml-2 whitespace-nowrap">
-                        {node.fileCount !== undefined && <span>{node.fileCount} files</span>}
-                        {node.lines !== undefined && <span className="text-emerald-500/70">{node.lines.toLocaleString()} L</span>}
-                    </div>
-                )}
+                <div className="flex items-center gap-3 text-xs text-slate-500 ml-2 whitespace-nowrap">
+                    {node.lines !== undefined && <span className="text-emerald-500/70">{node.lines.toLocaleString()} L</span>}
+                </div>
             </div>
             {expanded && node.children && (
                 <div>
                     {node.children.map((child) => (
-                        <FileTree key={child.path} node={child} depth={depth + 1} showStats={showStats} onSelect={onSelect} selectedPath={selectedPath} />
+                        <FileTree key={child.path} node={child} depth={depth + 1} onSelect={onSelect} selectedPath={selectedPath} />
                     ))}
                 </div>
             )}
