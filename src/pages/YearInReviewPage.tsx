@@ -142,6 +142,7 @@ export function YearInReviewPage() {
     };
 
     // Load Strength PBs
+    const [focusedYear, setFocusedYear] = useState<number | null>(null);
     useEffect(() => {
         if (!token) return;
         fetch('/api/strength/pbs', {
@@ -285,6 +286,20 @@ export function YearInReviewPage() {
             }
             lastDate = currentDate;
         });
+
+        // Calculate total days in the selected period
+        let totalDaysInPeriod = 0;
+        selectedYears.forEach(y => {
+            const start = new Date(y, 0, 1);
+            const end = new Date(y, 11, 31);
+            const now = new Date();
+            // If the year is the current year, we only count up to today
+            const effectiveEnd = (y === now.getFullYear()) ? now : end;
+            const diff = effectiveEnd.getTime() - start.getTime();
+            totalDaysInPeriod += Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+        });
+
+        const activePercentage = totalDaysInPeriod > 0 ? (activeDays.size / totalDaysInPeriod) * 100 : 0;
 
         // Strength Specifics (using strengthSessions)
         let bestLift = { weight: 0, exercise: '', activity: null as UniversalActivity | null };
@@ -498,13 +513,18 @@ export function YearInReviewPage() {
             longestRaces,
             longestTrainingRuns,
             fastestRuns,
+            maxScores,
             topVolumeSessions,
-            topLifts,
-            longestGap,
+            maxVolumeSession,
             totalTonnage,
-            biggestTrainingDays
+            typeMap,
+            totalDaysInPeriod,
+            activePercentage,
+            longestGap,
+            biggestTrainingDays,
+            topLifts
         };
-    }, [yearlyActivities, yearlyStrengthSessions, strengthPBs, selectedYears]);
+    }, [yearlyActivities, strengthPBs, selectedYears, yearlyStrengthSessions]);
 
     // 3. Monthly Breakdown Data
     const monthlyData = useMemo(() => {
@@ -1873,61 +1893,130 @@ export function YearInReviewPage() {
                                     </button>
                                 </div>
                             </div>
-                            <div className="flex gap-4 text-sm text-slate-400">
-                                <div className="flex items-center gap-2" title="Längsta paus mellan två träningspass under perioden">
-                                    <span>🔥</span> <span>Längsta utan träning: <span className="text-white font-bold">{stats.longestGap} dagar</span></span>
+                            <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-400">
+                                <div className="flex items-center gap-2">
+                                    <span>🗓️</span> <span>Totalt: <span className="text-white font-bold">{stats.totalDaysInPeriod} dagar</span></span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span>📅</span> <span>Aktiva dagar: <span className="text-white font-bold">{stats.activeDays}</span></span>
+                                    <span>📅</span> <span>Pass: <span className="text-white font-bold">{stats.totalSessions}</span></span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span>🏅</span> <span>Aktiva: <span className="text-white font-bold">{stats.activeDays}</span></span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span>📈</span> <span>Frekvens: <span className="text-white font-bold">{stats.activePercentage.toFixed(1)}%</span></span>
+                                </div>
+                                <div className="flex items-center gap-2" title="Längsta paus mellan två träningspass under perioden">
+                                    <span>🔥</span> <span>Paus: <span className="text-white font-bold">{stats.longestGap} d</span></span>
                                 </div>
                             </div>
                         </div>
 
                         {isFlowMode ? (
-                            <div className="bg-slate-900/40 border border-white/10 rounded-3xl overflow-hidden relative">
-                                <div className="flex flex-wrap gap-0 select-none">
-                                    {[...selectedYears].sort((a, b) => a - b).map((year, yearIdx) => {
+                            <div className="bg-slate-900/40 border border-white/10 rounded-3xl overflow-hidden relative w-full mb-8">
+                                <div className="flex flex-wrap justify-center gap-0 select-none">
+                                    {[...selectedYears].sort((a, b) => b - a).map((year, yearIdx) => {
                                         const isEven = yearIdx % 2 === 0;
+                                        // Calculate year info for focus mode
+                                        const yearActivities = yearlyActivities.filter(a => new Date(a.date).getFullYear() === year);
+                                        const yearStrength = yearlyStrengthSessions.filter(s => new Date(s.date).getFullYear() === year);
+                                        const sessionsInYear = yearActivities.length + yearStrength.length;
+
+                                        const yearGrid = yearlyGrids[year] || [];
+                                        const activeInYear = yearGrid.filter(d => d.minutes > 0).length;
+
+                                        // Current year logic
+                                        const isThisYear = year === new Date().getFullYear();
+                                        const totalInYear = yearGrid.length;
+                                        let elapsedInYear = totalInYear;
+                                        if (isThisYear) {
+                                            const start = new Date(year, 0, 1);
+                                            const now = new Date();
+                                            elapsedInYear = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                                        }
+
+                                        const percInYear = elapsedInYear > 0 ? (activeInYear / elapsedInYear) * 100 : 0;
+                                        const isFocused = focusedYear === year;
+
+                                        // Longest gap in specific year
+                                        let longestGapYear = 0;
+                                        let lastDateYear: Date | null = null;
+                                        yearGrid.filter(d => d.minutes > 0).forEach(d => {
+                                            const curr = new Date(d.date);
+                                            if (lastDateYear) {
+                                                const diff = Math.ceil((curr.getTime() - lastDateYear.getTime()) / (1000 * 60 * 60 * 24));
+                                                if (diff > longestGapYear) longestGapYear = diff;
+                                            }
+                                            lastDateYear = curr;
+                                        });
+
                                         return (
-                                            <div key={year} className={`flex-1 min-w-[300px] md:min-w-0 md:basis-1/2 flex items-stretch border-white/5 ${isEven ? 'md:border-r' : ''} ${yearIdx >= 2 ? 'border-t' : ''} group`}>
+                                            <div
+                                                key={year}
+                                                onClick={() => setFocusedYear(isFocused ? null : year)}
+                                                className={`flex-1 min-w-[300px] md:min-w-0 md:basis-1/2 flex items-stretch border-white/5 cursor-pointer transition-all duration-300 ${isEven ? 'md:border-r justify-end' : 'justify-start'} ${yearIdx >= 2 ? 'border-t' : ''} ${isFocused ? 'bg-amber-500/5 ring-inset ring-1 ring-amber-500/30' : 'hover:bg-white/[0.02]'} group`}
+                                            >
                                                 {/* Left Label (Column 1) */}
                                                 {isEven && (
-                                                    <div className="flex flex-col items-center justify-center py-1 px-1.5 bg-white/[0.03] border-r border-white/5 group-hover:bg-amber-500/10 transition-colors shrink-0">
-                                                        <span className="text-[9px] font-black text-slate-500 group-hover:text-amber-500/50 [writing-mode:vertical-lr] rotate-180 py-2">{year}</span>
+                                                    <div className={`flex flex-col items-center justify-center py-1 px-2 border-r border-white/5 transition-colors shrink-0 ${isFocused ? 'bg-amber-500/20' : 'bg-white/[0.03] group-hover:bg-amber-500/10'}`}>
+                                                        <span className={`text-[10px] font-black [writing-mode:vertical-lr] rotate-180 py-2 ${isFocused ? 'text-amber-400' : 'text-slate-500 group-hover:text-amber-500/50'}`}>{year}</span>
                                                     </div>
                                                 )}
 
                                                 {/* Weekly Grid for Year */}
-                                                <div className="flex-1 flex gap-[1px] p-2 overflow-hidden bg-white/[0.01]">
-                                                    {Array.from({ length: 53 }).map((_, weekIndex) => (
-                                                        <div key={weekIndex} className="flex flex-col gap-[1px] shrink-0">
-                                                            {Array.from({ length: 7 }).map((_, dayIndex) => {
-                                                                const dayData = yearlyGrids[year]?.[weekIndex * 7 + dayIndex];
-                                                                if (!dayData) return <div key={dayIndex} className="w-[8px] h-[8px] rounded-[1px] bg-transparent" />;
+                                                <div className="flex flex-col p-1 gap-1">
+                                                    <div className="flex gap-[1px] bg-white/[0.01]">
+                                                        {Array.from({ length: 53 }).reverse().map((_, weekIndexOrigin) => {
+                                                            const weekIndex = 52 - weekIndexOrigin;
+                                                            return (
+                                                                <div key={weekIndexOrigin} className="flex flex-col gap-[1px] shrink-0">
+                                                                    {Array.from({ length: 7 }).map((_, dayIndex) => {
+                                                                        const dayData = yearlyGrids[year]?.[weekIndex * 7 + dayIndex];
+                                                                        if (!dayData) return <div key={dayIndex} className="w-[11px] h-[11px] rounded-[1px] bg-transparent" />;
 
-                                                                const intensityClass =
-                                                                    dayData.minutes === 0 ? 'bg-slate-800/20' :
-                                                                        dayData.minutes < 30 ? 'bg-emerald-900/60' :
-                                                                            dayData.minutes < 60 ? 'bg-emerald-700/70' :
-                                                                                dayData.minutes < 90 ? 'bg-emerald-500/80' :
-                                                                                    'bg-emerald-400';
+                                                                        const intensityClass =
+                                                                            dayData.minutes === 0 ? 'bg-slate-800/20' :
+                                                                                dayData.minutes < 30 ? 'bg-emerald-900/60' :
+                                                                                    dayData.minutes < 60 ? 'bg-emerald-700/70' :
+                                                                                        dayData.minutes < 90 ? 'bg-emerald-500/80' :
+                                                                                            'bg-emerald-400';
 
-                                                                return (
-                                                                    <div
-                                                                        key={dayIndex}
-                                                                        className={`w-[8px] h-[8px] rounded-[1px] ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all cursor-pointer`}
-                                                                        title={`${dayData.date}: ${dayData.minutes} min`}
-                                                                    />
-                                                                );
-                                                            })}
+                                                                        return (
+                                                                            <div
+                                                                                key={dayIndex}
+                                                                                className={`w-[11px] h-[11px] rounded-[1px] ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all cursor-pointer`}
+                                                                                title={`${dayData.date}: ${dayData.minutes} min`}
+                                                                            />
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    {/* Year specific info when focused or on hover */}
+                                                    <div className={`flex justify-between items-center px-2 transition-all duration-300 ${isFocused ? 'opacity-100 max-h-11 py-1' : 'opacity-0 max-h-0 overflow-hidden'}`}>
+                                                        <div className="flex gap-4">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-[10px] font-bold text-white uppercase tracking-tighter">
+                                                                    {activeInYear} / {elapsedInYear} {isThisYear ? `(av ${totalInYear})` : ''} aktiva
+                                                                </span>
+                                                                <span className="text-[8px] text-slate-500 uppercase font-black">{sessionsInYear} pass totalt</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter self-center">
+                                                                🔥 {longestGapYear}d paus
+                                                            </span>
                                                         </div>
-                                                    ))}
+                                                        <span className="text-[10px] font-black text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded-sm h-fit">
+                                                            {percInYear.toFixed(1)}%
+                                                        </span>
+                                                    </div>
                                                 </div>
 
                                                 {/* Right Label (Column 2) */}
                                                 {!isEven && (
-                                                    <div className="flex flex-col items-center justify-center py-1 px-1.5 bg-white/[0.03] border-l border-white/5 group-hover:bg-amber-500/10 transition-colors shrink-0">
-                                                        <span className="text-[9px] font-black text-slate-500 group-hover:text-amber-500/50 [writing-mode:vertical-lr] rotate-180 py-2">{year}</span>
+                                                    <div className={`flex flex-col items-center justify-center py-1 px-2 border-l border-white/5 transition-colors shrink-0 ${isFocused ? 'bg-amber-500/20' : 'bg-white/[0.03] group-hover:bg-amber-500/10'}`}>
+                                                        <span className={`text-[10px] font-black [writing-mode:vertical-lr] rotate-180 py-2 ${isFocused ? 'text-amber-400' : 'text-slate-500 group-hover:text-amber-500/50'}`}>{year}</span>
                                                     </div>
                                                 )}
                                             </div>
