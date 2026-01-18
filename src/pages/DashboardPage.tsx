@@ -1077,7 +1077,7 @@ export function DashboardPage() {
                                     className="md:col-span-12 xl:col-span-6 h-full"
                                 >
                                     <div
-                                        onClick={() => navigate('/training')}
+                                        onClick={() => navigate('/planera')}
                                         className={`w-full ${density === 'compact' ? 'p-1.5 gap-2 rounded-xl' : density === 'slim' ? 'p-3 gap-3 rounded-2xl' : 'p-6 gap-4 rounded-3xl'} shadow-sm border border-slate-100 dark:border-slate-800 flex items-start hover:scale-[1.01] transition-transform cursor-pointer group bg-white dark:bg-slate-900 h-full relative overflow-hidden`}
                                     >
                                         {/* Background Icon */}

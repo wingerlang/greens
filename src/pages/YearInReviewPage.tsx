@@ -79,6 +79,7 @@ export function YearInReviewPage() {
 
     // Expand state for highlight cards (show 5, expand to show more)
     const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+    const [isFlowMode, setIsFlowMode] = useState(false);
 
     // Dynamically calculate available years from data
     const availableYears = useMemo(() => {
@@ -471,6 +472,15 @@ export function YearInReviewPage() {
         });
 
         const biggestTrainingDays = Array.from(dayTotals.values())
+            .map(day => {
+                // Sort activities by time (HH:mm)
+                day.activities.sort((a, b) => {
+                    if (!a.time) return 1;
+                    if (!b.time) return -1;
+                    return a.time.localeCompare(b.time);
+                });
+                return day;
+            })
             .sort((a, b) => b.totalMinutes - a.totalMinutes)
             .slice(0, 14);
 
@@ -1844,9 +1854,25 @@ export function YearInReviewPage() {
                     {/* HEATMAP / CONTRIBUTION GRID */}
                     < div className="space-y-8" >
                         <div className="flex flex-col md:flex-row justify-between items-end mb-2 gap-4">
-                            <h3 className="text-xl font-bold flex items-center gap-2">
-                                <span>🗓️</span> Aktivitetshistorik
-                            </h3>
+                            <div className="flex flex-col gap-1">
+                                <h3 className="text-xl font-bold flex items-center gap-2">
+                                    <span>🗓️</span> Aktivitetshistorik
+                                </h3>
+                                <div className="flex items-center gap-1 p-0.5 bg-slate-900 rounded-lg border border-white/5 w-fit">
+                                    <button
+                                        onClick={() => setIsFlowMode(false)}
+                                        className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${!isFlowMode ? 'bg-amber-500 text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        Årsvis
+                                    </button>
+                                    <button
+                                        onClick={() => setIsFlowMode(true)}
+                                        className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-md transition-all ${isFlowMode ? 'bg-amber-500 text-slate-950 shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                    >
+                                        Flytande
+                                    </button>
+                                </div>
+                            </div>
                             <div className="flex gap-4 text-sm text-slate-400">
                                 <div className="flex items-center gap-2" title="Längsta paus mellan två träningspass under perioden">
                                     <span>🔥</span> <span>Längsta utan träning: <span className="text-white font-bold">{stats.longestGap} dagar</span></span>
@@ -1857,7 +1883,59 @@ export function YearInReviewPage() {
                             </div>
                         </div>
 
-                        {
+                        {isFlowMode ? (
+                            <div className="bg-slate-900/40 border border-white/10 rounded-3xl overflow-hidden relative">
+                                <div className="flex flex-wrap gap-0 select-none">
+                                    {[...selectedYears].sort((a, b) => a - b).map((year, yearIdx) => {
+                                        const isEven = yearIdx % 2 === 0;
+                                        return (
+                                            <div key={year} className={`flex-1 min-w-[300px] md:min-w-0 md:basis-1/2 flex items-stretch border-white/5 ${isEven ? 'md:border-r' : ''} ${yearIdx >= 2 ? 'border-t' : ''} group`}>
+                                                {/* Left Label (Column 1) */}
+                                                {isEven && (
+                                                    <div className="flex flex-col items-center justify-center py-1 px-1.5 bg-white/[0.03] border-r border-white/5 group-hover:bg-amber-500/10 transition-colors shrink-0">
+                                                        <span className="text-[9px] font-black text-slate-500 group-hover:text-amber-500/50 [writing-mode:vertical-lr] rotate-180 py-2">{year}</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Weekly Grid for Year */}
+                                                <div className="flex-1 flex gap-[1px] p-2 overflow-hidden bg-white/[0.01]">
+                                                    {Array.from({ length: 53 }).map((_, weekIndex) => (
+                                                        <div key={weekIndex} className="flex flex-col gap-[1px] shrink-0">
+                                                            {Array.from({ length: 7 }).map((_, dayIndex) => {
+                                                                const dayData = yearlyGrids[year]?.[weekIndex * 7 + dayIndex];
+                                                                if (!dayData) return <div key={dayIndex} className="w-[8px] h-[8px] rounded-[1px] bg-transparent" />;
+
+                                                                const intensityClass =
+                                                                    dayData.minutes === 0 ? 'bg-slate-800/20' :
+                                                                        dayData.minutes < 30 ? 'bg-emerald-900/60' :
+                                                                            dayData.minutes < 60 ? 'bg-emerald-700/70' :
+                                                                                dayData.minutes < 90 ? 'bg-emerald-500/80' :
+                                                                                    'bg-emerald-400';
+
+                                                                return (
+                                                                    <div
+                                                                        key={dayIndex}
+                                                                        className={`w-[8px] h-[8px] rounded-[1px] ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all cursor-pointer`}
+                                                                        title={`${dayData.date}: ${dayData.minutes} min`}
+                                                                    />
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {/* Right Label (Column 2) */}
+                                                {!isEven && (
+                                                    <div className="flex flex-col items-center justify-center py-1 px-1.5 bg-white/[0.03] border-l border-white/5 group-hover:bg-amber-500/10 transition-colors shrink-0">
+                                                        <span className="text-[9px] font-black text-slate-500 group-hover:text-amber-500/50 [writing-mode:vertical-lr] rotate-180 py-2">{year}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ) : (
                             [...selectedYears].sort((a, b) => b - a).map(year => (
                                 <div key={year} className="bg-slate-900/30 border border-white/5 p-6 rounded-3xl overflow-hidden">
                                     <div className="flex justify-between items-center mb-4">
@@ -1891,7 +1969,7 @@ export function YearInReviewPage() {
                                     </div>
                                 </div>
                             ))
-                        }
+                        )}
                     </div >
                 </div >
 

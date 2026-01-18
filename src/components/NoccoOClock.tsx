@@ -32,7 +32,7 @@ export function NoccoOClock() {
             m.items.some(i => {
                 if (i.type === 'foodItem') {
                     const item = foodItems.find(f => f.id === i.referenceId);
-                    return item?.name.toLowerCase().includes('nocco') && (item?.name.toLowerCase().includes('nocco') || item?.name.toLowerCase().includes('kaffe'));
+                    return item?.name.toLowerCase().includes('nocco') || item?.name.toLowerCase().includes('kaffe');
                 }
                 return false;
             })
@@ -143,7 +143,18 @@ export function NoccoOClock() {
     const handleDismiss = (e?: React.MouseEvent) => {
         e?.stopPropagation();
         setIsDismissed(true);
+        // Persist dismissal for the day
+        const today = getISODate(now);
+        localStorage.setItem(`nocco_dismissed_${today}`, 'true');
     };
+
+    // Check for persisted dismissal
+    useEffect(() => {
+        const today = getISODate(now);
+        if (localStorage.getItem(`nocco_dismissed_${today}`)) {
+            setIsDismissed(true);
+        }
+    }, [now]);
 
     if (isCountdownPhase) {
         // Calculate time until 08:00
