@@ -4,6 +4,12 @@ import { calculateWilks, calculateIPFPoints, calculateEstimated1RM } from '../..
 import { slugify } from '../../utils/formatters.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { ExerciseEntry } from '../../models/types.ts';
+import {
+    MATCH_PATTERNS as GLOBAL_MATCH,
+    EXCLUDE_PATTERNS as GLOBAL_EXCLUDE,
+    MIN_WEIGHT_THRESHOLD as GLOBAL_MIN,
+    normalizeStrengthName
+} from '../../utils/strengthConstants.ts';
 
 // Standard multipliers for levels (Male Reference roughly)
 // Beginner, Novice, Intermediate, Advanced, Elite
@@ -43,30 +49,12 @@ const LEVEL_COLORS = [
     'from-rose-600 to-rose-500' // World Class
 ];
 
-// Helper to normalize text for matching
-const normalize = (str: string) => str.toLowerCase().replace(/[^a-zåäö0-9]/g, '');
+// Helper to normalize text for matching - Now using global helper
+const normalize = normalizeStrengthName;
 
-const MATCH_PATTERNS = {
-    squat: ['squat', 'knäböj', 'böj'],
-    bench: ['bench', 'bänk', 'chestpress'],
-    deadlift: ['deadlift', 'marklyft'],
-    ohp: ['overhead', 'militär', 'axelpress', 'military', 'ohp']
-};
-
-const EXCLUDE_PATTERNS = {
-    squat: ['split', 'goblet', 'hack', 'one', 'utfall', 'bulgarian', 'front', 'smith', 'air', 'luft', 'hopp', 'jump', 'bodyweight', 'kroppsvikt', 'pistol', 'sissy', 'zercher'],
-    bench: ['hantel', 'dumbbell', 'incline', 'sned', 'smith', 'dip', 'fly', 'flyes', 'cable', 'kabel', 'pushup', 'push up', 'armhävning'],
-    deadlift: ['stiff', 'rumänsk', 'rdl', 'raka', 'rak', 'deficit', 'block', 'trap bar', 'hex'],
-    ohp: ['hantel', 'dumbbell', 'sittande', 'sitting', 'lateral', 'lyft', 'raise', 'arnold', 'push press', 'behind']
-};
-
-// Minimum weight thresholds to filter out bodyweight-only exercises
-const MIN_WEIGHT_THRESHOLD = {
-    squat: 40,    // Must be at least 40kg to count as main squat
-    bench: 30,    // 30kg minimum
-    deadlift: 50, // 50kg minimum  
-    ohp: 15       // 15kg minimum
-};
+const MATCH_PATTERNS = GLOBAL_MATCH;
+const EXCLUDE_PATTERNS = GLOBAL_EXCLUDE;
+const MIN_WEIGHT_THRESHOLD = GLOBAL_MIN;
 
 export function ToolsStrengthStandardsPage() {
     const { getLatestWeight, strengthSessions, userSettings } = useData();

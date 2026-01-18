@@ -1,7 +1,27 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext.tsx';
 import { UniversalActivity, StrengthSession } from '../../models/types.ts';
-import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
+import {
+    calculateEstimated1RM,
+    calculateIPFPoints
+} from '../../utils/strengthCalculators.ts';
+import {
+    MATCH_PATTERNS,
+    EXCLUDE_PATTERNS,
+    MIN_WEIGHT_THRESHOLD,
+    normalizeStrengthName
+} from '../../utils/strengthConstants.ts';
+import {
+    getBestSetForPatterns,
+    SourceInfo
+} from '../../utils/strengthAnalysis.ts';
+import {
+    detectRunningPBs,
+    formatTime,
+    isCompetition
+} from '../../utils/activityUtils.ts';
+import { slugify } from '../../utils/formatters.ts';
+import { Link } from 'react-router-dom';
 import {
     Activity,
     Calendar,
@@ -14,7 +34,9 @@ import {
     ChevronDown,
     ChevronUp,
     Zap,
-    Award
+    Award,
+    Trophy,
+    ExternalLink
 } from 'lucide-react';
 
 // --- Types & Interfaces ---
@@ -36,13 +58,25 @@ interface TrainingStats {
 }
 
 interface StrengthProfile {
-    squat: number;
-    bench: number;
-    deadlift: number;
-    ohp: number;
+    squat: { val: number; erm: number; source?: SourceInfo };
+    bench: { val: number; erm: number; source?: SourceInfo };
+    deadlift: { val: number; erm: number; source?: SourceInfo };
+    ohp: { val: number; erm: number; source?: SourceInfo };
+    swings: { val: number; erm: number; source?: SourceInfo };
+    biceps: { val: number; erm: number; source?: SourceInfo };
     total: number;
     bwRatio: number;
     level: string;
+    ipfPoints: number;
+}
+
+interface RunningProfile {
+    best5k: { time: string; date: string; id?: string };
+    best10k: { time: string; date: string; id?: string };
+    bestHalf: { time: string; date: string; id?: string };
+    bestFull: { time: string; date: string; id?: string };
+    longestRun: { dist: number; time: string; date: string; id?: string };
+    competitions: number;
 }
 
 // --- Helpers ---
@@ -65,7 +99,7 @@ function getWeekKey(date: Date) {
 // --- Component ---
 
 export function ToolsTrainingReportPage() {
-    const { universalActivities, strengthSessions, getLatestWeight } = useData();
+    const { universalActivities, strengthSessions, getLatestWeight, userSettings } = useData();
     const [promptCopied, setPromptCopied] = useState(false);
     const [isPromptOpen, setIsPromptOpen] = useState(false);
 
@@ -121,7 +155,7 @@ export function ToolsTrainingReportPage() {
         // Gap Analysis
         let maxGap = 0;
         for (let i = 1; i < allActivities.length; i++) {
-            const d1 = new Date(allActivities[i-1].date);
+            const d1 = new Date(allActivities[i - 1].date);
             const d2 = new Date(allActivities[i].date);
             const diffDays = (d2.getTime() - d1.getTime()) / (1000 * 3600 * 24);
             if (diffDays > maxGap) maxGap = diffDays;
@@ -150,42 +184,42 @@ export function ToolsTrainingReportPage() {
 
     // 2. Process Strength Profile
     const strengthProfile: StrengthProfile = useMemo(() => {
-        const bests = { squat: 0, bench: 0, deadlift: 0, ohp: 0 };
-        const bw = getLatestWeight() || 80; // Fallback to 80kg
+        const squat = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.squat, EXCLUDE_PATTERNS.squat);
+        const bench = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.bench, EXCLUDE_PATTERNS.bench);
+        const deadlift = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.deadlift, EXCLUDE_PATTERNS.deadlift);
+        const ohp = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.ohp, EXCLUDE_PATTERNS.ohp);
+        const swings = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.swings);
+        const biceps = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.biceps);
 
-        strengthSessions.forEach((s: StrengthSession) => {
-            s.exercises.forEach(e => {
-                const name = e.exerciseName.toLowerCase();
-                let type: keyof typeof bests | null = null;
-
-                if (name.includes('knäböj') || name.includes('squat')) type = 'squat';
-                else if (name.includes('bänk') || name.includes('bench')) type = 'bench';
-                else if (name.includes('marklyft') || name.includes('deadlift')) type = 'deadlift';
-                else if (name.includes('militär') || name.includes('overhead') || name.includes('ohp')) type = 'ohp';
-
-                if (type) {
-                    e.sets.forEach(set => {
-                        if (set.weight && set.reps) {
-                            const e1rm = calculateEstimated1RM(set.weight, set.reps);
-                            if (e1rm > bests[type!]) bests[type!] = e1rm;
-                        }
-                    });
-                }
-            });
-        });
-
-        const total = bests.squat + bests.bench + bests.deadlift;
+        const bw = getLatestWeight() || 80;
+        const total = Math.round(squat.maxEstimated1RM + bench.maxEstimated1RM + deadlift.maxEstimated1RM);
         const ratio = total / bw;
+        const ipfPoints = calculateIPFPoints(bw, total, (userSettings as any)?.gender || 'male');
 
-        // Simple Level Logic
         let level = 'Nybörjare';
         if (ratio > 2.5) level = 'Motionär';
         if (ratio > 3.5) level = 'Atlet';
         if (ratio > 4.5) level = 'Avancerad';
         if (ratio > 5.5) level = 'Elit';
 
-        return { ...bests, total, bwRatio: ratio, level };
-    }, [strengthSessions, getLatestWeight]);
+        return {
+            squat: { val: squat.maxWeight, erm: squat.maxEstimated1RM, source: squat.heaviestSet || undefined },
+            bench: { val: bench.maxWeight, erm: bench.maxEstimated1RM, source: bench.heaviestSet || undefined },
+            deadlift: { val: deadlift.maxWeight, erm: deadlift.maxEstimated1RM, source: deadlift.heaviestSet || undefined },
+            ohp: { val: ohp.maxWeight, erm: ohp.maxEstimated1RM, source: ohp.heaviestSet || undefined },
+            swings: { val: swings.maxWeight, erm: swings.maxEstimated1RM, source: swings.heaviestSet || undefined },
+            biceps: { val: biceps.maxWeight, erm: biceps.maxEstimated1RM, source: biceps.heaviestSet || undefined },
+            total,
+            bwRatio: ratio,
+            level,
+            ipfPoints
+        };
+    }, [strengthSessions, getLatestWeight, userSettings]);
+
+    // 2.2 Process Running Profile
+    const runningProfile: RunningProfile = useMemo(() => {
+        return detectRunningPBs(universalActivities);
+    }, [universalActivities]);
 
     // 3. Generate AI Prompt
     const generateAiPrompt = () => {
@@ -201,20 +235,30 @@ export function ToolsTrainingReportPage() {
                 calendar_years: stats.calendarYears.toFixed(2),
                 consistency_score: `${stats.consistencyScore}%`,
                 active_weeks: stats.activeWeeks,
-                longest_break_days: stats.longestGapDays
+                longest_break_days: stats.longestGapDays,
+                competitions: runningProfile.competitions
             },
             athlete_type: {
                 cardio_hours: Math.round(stats.cardioMinutes / 60),
                 strength_hours: Math.round(stats.strengthMinutes / 60),
                 classification: stats.hybridRatio > 0.7 ? "Runner/Endurance" : stats.hybridRatio < 0.3 ? "Lifter/Strength" : "Hybrid Athlete"
             },
+            running_performance: {
+                best_5k: runningProfile.best5k.time,
+                best_10k: runningProfile.best10k.time,
+                best_half_marathon: runningProfile.bestHalf.time,
+                longest_run_km: runningProfile.longestRun.dist.toFixed(1)
+            },
             strength_performance: {
-                squat_1rm: Math.round(strengthProfile.squat),
-                bench_1rm: Math.round(strengthProfile.bench),
-                deadlift_1rm: Math.round(strengthProfile.deadlift),
-                ohp_1rm: Math.round(strengthProfile.ohp),
-                total: Math.round(strengthProfile.total),
+                squat: { heaviest_weight: Math.round(strengthProfile.squat.val), estimated_1rm: Math.round(strengthProfile.squat.erm) },
+                bench: { heaviest_weight: Math.round(strengthProfile.bench.val), estimated_1rm: Math.round(strengthProfile.bench.erm) },
+                deadlift: { heaviest_weight: Math.round(strengthProfile.deadlift.val), estimated_1rm: Math.round(strengthProfile.deadlift.erm) },
+                ohp_erm: Math.round(strengthProfile.ohp.erm),
+                kettlebell_swings_erm: Math.round(strengthProfile.swings.erm),
+                bicep_curl_erm: Math.round(strengthProfile.biceps.erm),
+                total_sbd_erm: Math.round(strengthProfile.total),
                 relative_strength: strengthProfile.bwRatio.toFixed(2),
+                ipf_points: strengthProfile.ipfPoints.toFixed(1),
                 level: strengthProfile.level
             }
         };
@@ -322,8 +366,8 @@ Svara på Svenska. Håll det koncist, motiverande men ärligt.
                         {/* Hybrid Bar */}
                         <div className="space-y-4">
                             <div className="flex justify-between text-sm font-bold text-slate-400">
-                                <span>Styrka ({Math.round(stats.strengthMinutes/60)}h)</span>
-                                <span>Cardio ({Math.round(stats.cardioMinutes/60)}h)</span>
+                                <span>Styrka ({Math.round(stats.strengthMinutes / 60)}h)</span>
+                                <span>Cardio ({Math.round(stats.cardioMinutes / 60)}h)</span>
                             </div>
                             <div className="h-4 bg-slate-800 rounded-full overflow-hidden flex">
                                 <div
@@ -400,18 +444,100 @@ Svara på Svenska. Håll det koncist, motiverande men ärligt.
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 mb-8">
-                        <StrengthCard label="Knäböj" value={Math.round(strengthProfile.squat)} />
-                        <StrengthCard label="Bänkpress" value={Math.round(strengthProfile.bench)} />
-                        <StrengthCard label="Marklyft" value={Math.round(strengthProfile.deadlift)} />
-                        <StrengthCard label="Militärpress" value={Math.round(strengthProfile.ohp)} />
+                        <StrengthCard label="Knäböj" data={strengthProfile.squat} />
+                        <StrengthCard label="Bänkpress" data={strengthProfile.bench} />
+                        <StrengthCard label="Marklyft" data={strengthProfile.deadlift} />
+                        <StrengthCard label="Militärpress" data={strengthProfile.ohp} />
                     </div>
 
-                    <div className="p-6 bg-slate-950 rounded-2xl border border-white/5 text-center">
-                        <div className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-2">Total (SBD)</div>
-                        <div className="text-4xl font-black text-white mb-1">{Math.round(strengthProfile.total)} kg</div>
-                        <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-bold border border-emerald-500/20 mt-2">
-                            <Award className="w-3 h-3" />
-                            Nivå: {strengthProfile.level} ({strengthProfile.bwRatio.toFixed(1)}x BW)
+                    <div className="p-6 bg-slate-950 rounded-2xl border border-white/5 mb-8">
+                        <div className="text-center mb-6">
+                            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total (SBD)</div>
+                            <div className="text-5xl font-black text-white mb-2">{strengthProfile.total} <span className="text-lg text-slate-600">kg</span></div>
+                            <div className="flex flex-col gap-2 items-center">
+                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase border border-emerald-500/20">
+                                    <Award className="w-3 h-3" />
+                                    Nivå: {strengthProfile.level} ({strengthProfile.bwRatio.toFixed(1)}x BW)
+                                </div>
+                                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
+                                    {strengthProfile.ipfPoints.toFixed(1)} IPF GL Points
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* SBD Breakdown - Similar to Matchup Page */}
+                        <div className="space-y-3 pt-6 border-t border-white/5">
+                            {[
+                                { label: 'Knäböj', data: strengthProfile.squat },
+                                { label: 'Bänkpress', data: strengthProfile.bench },
+                                { label: 'Marklyft', data: strengthProfile.deadlift }
+                            ].map((item, idx) => (
+                                <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-colors group">
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{item.label}</span>
+                                        <span className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">
+                                            {item.data.source?.exerciseName || '-'}
+                                        </span>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="flex items-baseline justify-end gap-1">
+                                            <span className="text-sm font-black text-white">{Math.round(item.data.val > 0 ? item.data.val : item.data.erm)}</span>
+                                            <span className="text-[10px] text-slate-600">kg</span>
+                                        </div>
+                                        <div className="text-[9px] font-mono text-slate-500">
+                                            {item.data.val > 0 ? 'Faktisk' : 'e1RM'}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right: Running Stats & Other Exercises */}
+                <div className="flex flex-col gap-8">
+                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-8 h-fit">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                                <Trophy className="w-5 h-5 text-blue-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-bold text-white">Löparprofil</h2>
+                                <p className="text-xs text-slate-500">Dina snabbaste tider och uthållighet</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 mb-8">
+                            <RunningCard label="5 KM" data={runningProfile.best5k} />
+                            <RunningCard label="10 KM" data={runningProfile.best10k} />
+                            <RunningCard label="Halvmaraton" data={runningProfile.bestHalf} />
+                            <RunningCard label="Maraton" data={runningProfile.bestFull} />
+                            <RunningCard label="Längsta" value={`${runningProfile.longestRun.dist.toFixed(1)}km`} sub={runningProfile.longestRun.time} date={runningProfile.longestRun.date} />
+                        </div>
+
+                        <div className="p-6 bg-slate-950 rounded-2xl border border-white/5 text-center">
+                            <div className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-2">Tävlingar</div>
+                            <div className="text-4xl font-black text-white mb-1">{runningProfile.competitions} st</div>
+                            <div className="text-[10px] text-slate-500 mt-2">
+                                Baserat på ord som "tävling" eller "lopp" i titeln
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-8 h-fit">
+                        <div className="flex items-center gap-3 mb-6">
+                            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                                <Dumbbell className="w-5 h-5 text-emerald-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-bold text-white">Andra Övningar</h2>
+                                <p className="text-xs text-slate-500">Kettlebell, Biceps och mer</p>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <StrengthCard label="KB Swings" data={strengthProfile.swings} />
+                            <StrengthCard label="Bicepscurl" data={strengthProfile.biceps} />
                         </div>
                     </div>
                 </div>
@@ -422,7 +548,7 @@ Svara på Svenska. Håll det koncist, motiverande men ärligt.
 
 function StatCard({ label, value, sub, icon }: { label: string, value: string, sub: string, icon: React.ReactNode }) {
     return (
-        <div className="bg-slate-900 border border-white/5 rounded-2xl p-6 flex flex-col items-center text-center hover:border-white/10 transition-colors">
+        <div className="bg-slate-900 border border-white/5 rounded-2xl p-6 flex flex-col items-center text-center hover:border-white/10 transition-colors shadow-sm">
             <div className="mb-4 p-3 bg-slate-950 rounded-xl border border-white/5">
                 {icon}
             </div>
@@ -432,18 +558,72 @@ function StatCard({ label, value, sub, icon }: { label: string, value: string, s
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
                 {label}
             </div>
-            <div className="text-[10px] text-slate-600 font-medium">
+            <div className="text-[10px] text-slate-600 font-medium leading-tight">
                 {sub}
             </div>
         </div>
     );
 }
 
-function StrengthCard({ label, value }: { label: string, value: number }) {
+function StrengthCard({ label, data }: { label: string, data: { val: number, erm: number, source?: SourceInfo } }) {
+    const diff = data.erm - data.val;
+    const hasSource = !!data.source;
+    // Show Actual Weight (val) if > 0, otherwise show e1RM
+    const displayVal = data.val > 0 ? data.val : data.erm;
+
     return (
-        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 flex flex-col justify-between">
-            <span className="text-xs text-slate-500 font-bold uppercase">{label}</span>
-            <span className="text-xl font-bold text-white mt-1">{value} <span className="text-xs text-slate-600 font-normal">kg</span></span>
+        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 flex flex-col gap-2 group hover:border-emerald-500/30 transition-colors">
+            <div className="flex justify-between items-start">
+                <span className="text-xs text-slate-500 font-bold uppercase">{label}</span>
+                {hasSource && (
+                    <div className="flex gap-1">
+                        {data.val > 0 ? (
+                            <div className="text-[9px] bg-blue-500/10 text-blue-500 px-1 py-0.5 rounded font-mono">FAKTISK</div>
+                        ) : (
+                            <div className="text-[9px] bg-emerald-500/10 text-emerald-500 px-1 py-0.5 rounded font-mono">e1RM</div>
+                        )}
+                    </div>
+                )}
+            </div>
+            <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-black text-white">{Math.round(displayVal)} <span className="text-xs text-slate-600 font-normal">kg</span></span>
+                {diff > 0.5 && data.val > 0 && (
+                    <span className="text-[10px] text-amber-500 font-bold">-{Math.round(diff)}kg mot e1RM</span>
+                )}
+            </div>
+            {data.source && (
+                <div className="text-[9px] text-slate-600 font-mono leading-tight mt-1 pt-2 border-t border-white/5">
+                    <div>{data.source.exerciseName}</div>
+                    <div className="flex justify-between mt-0.5">
+                        <span>{data.source.weight}kg x {data.source.reps}</span>
+                        <span>{data.source.date}</span>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function RunningCard({ label, data, value, sub, date }: { label: string, data?: { time: string, date: string, id?: string }, value?: string, sub?: string, date?: string }) {
+    const displayValue = value || data?.time || '-';
+    const displaySub = sub || (data?.time === '-' ? '' : 'PB-Tid');
+    const displayDate = date || data?.date || '';
+
+    return (
+        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 flex flex-col gap-2 group hover:border-blue-500/30 transition-colors">
+            <div className="flex justify-between items-start">
+                <span className="text-xs text-slate-500 font-bold uppercase">{label}</span>
+                <Trophy className="w-3 h-3 text-blue-500/30 group-hover:text-blue-500 transition-colors" />
+            </div>
+            <div>
+                <div className="text-2xl font-black text-white">{displayValue}</div>
+                <div className="text-[10px] text-blue-400 font-bold uppercase">{displaySub}</div>
+            </div>
+            {displayDate && displayDate !== '-' && (
+                <div className="text-[9px] text-slate-600 font-mono mt-1 pt-2 border-t border-white/5">
+                    Förevigat {displayDate}
+                </div>
+            )}
         </div>
     );
 }
