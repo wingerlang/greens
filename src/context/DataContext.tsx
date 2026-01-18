@@ -55,6 +55,7 @@ import { mapUniversalToLegacyEntry } from '../utils/mappers.ts';
 import { slugify } from '../utils/formatters.ts';
 import { calculatePerformanceScore } from '../utils/performanceEngine.ts';
 import { safeFetch } from '../utils/http.ts';
+import { calculateItemNutrition, calculateRecipeNutrition as calculateRecipeNutritionUtil, calculateMealItemNutrition } from '../utils/nutrition/calculations.ts';
 
 // ============================================
 // Context Types
@@ -735,73 +736,7 @@ export function DataProvider({ children }: DataProviderProps) {
     // ============================================
 
     const calculateRecipeNutrition = useCallback((recipe: Recipe): NutritionSummary => {
-        // Use ingredientsText if available (new UI), otherwise use ingredients array
-        if (recipe.ingredientsText && recipe.ingredientsText.trim()) {
-            const estimate = calculateRecipeEstimate(recipe.ingredientsText, foodItems);
-            return {
-                calories: Math.round(estimate.calories),
-                protein: Math.round(estimate.protein * 10) / 10,
-                carbs: Math.round(estimate.carbs * 10) / 10,
-                fat: Math.round(estimate.fat * 10) / 10,
-                fiber: Math.round(estimate.fiber * 10) / 10,
-                iron: estimate.iron,
-                calcium: estimate.calcium,
-                zinc: estimate.zinc,
-                vitaminB12: estimate.vitaminB12,
-                vitaminC: estimate.vitaminC,
-                vitaminA: estimate.vitaminA,
-                proteinCategories: estimate.proteinCategories,
-            };
-        }
-
-        // Fallback to ingredients array
-        const summary: NutritionSummary = {
-            calories: 0,
-            protein: 0,
-            carbs: 0,
-            fat: 0,
-            fiber: 0,
-        };
-
-        for (const ingredient of recipe.ingredients) {
-            const foodItem = foodItems.find(f => f.id === ingredient.foodItemId);
-            if (foodItem) {
-                // All values in FoodItem are per 100g/100ml
-                const multiplier = ingredient.quantity / 100;
-                summary.calories += foodItem.calories * multiplier;
-                summary.protein += foodItem.protein * multiplier;
-                summary.carbs += foodItem.carbs * multiplier;
-                summary.fat += foodItem.fat * multiplier;
-                summary.fiber += (foodItem.fiber || 0) * multiplier;
-                summary.iron = (summary.iron || 0) + (foodItem.iron || 0) * multiplier;
-                summary.calcium = (summary.calcium || 0) + (foodItem.calcium || 0) * multiplier;
-                summary.zinc = (summary.zinc || 0) + (foodItem.zinc || 0) * multiplier;
-                summary.vitaminB12 = (summary.vitaminB12 || 0) + (foodItem.vitaminB12 || 0) * multiplier;
-                summary.vitaminC = (summary.vitaminC || 0) + (foodItem.vitaminC || 0) * multiplier;
-                summary.vitaminA = (summary.vitaminA || 0) + (foodItem.vitaminA || 0) * multiplier;
-                if (foodItem.proteinCategory) {
-                    summary.proteinCategories = summary.proteinCategories || [];
-                    if (!summary.proteinCategories.includes(foodItem.proteinCategory)) {
-                        summary.proteinCategories.push(foodItem.proteinCategory);
-                    }
-                }
-            }
-        }
-
-        return {
-            calories: Math.round(summary.calories),
-            protein: Math.round(summary.protein * 10) / 10,
-            carbs: Math.round(summary.carbs * 10) / 10,
-            fat: Math.round(summary.fat * 10) / 10,
-            fiber: Math.round(summary.fiber * 10) / 10,
-            iron: Math.round((summary.iron || 0) * 10) / 10,
-            calcium: Math.round(summary.calcium || 0),
-            zinc: Math.round((summary.zinc || 0) * 10) / 10,
-            vitaminB12: Math.round((summary.vitaminB12 || 0) * 100) / 100,
-            vitaminC: Math.round(summary.vitaminC || 0),
-            vitaminA: Math.round(summary.vitaminA || 0),
-            proteinCategories: summary.proteinCategories || [],
-        };
+        return calculateRecipeNutritionUtil(recipe, foodItems);
     }, [foodItems]);
 
     const getRecipeWithNutrition = useCallback((id: string): RecipeWithNutrition | undefined => {
@@ -850,70 +785,40 @@ export function DataProvider({ children }: DataProviderProps) {
         let totalCarbs = 0;
         let totalFat = 0;
         let totalAlcoholUnits = 0; // Track alcohol units
-
-        // Helper to extract alcohol percentage from food name (e.g., "vol. % 5,4" or "vol. % 14")
-        const extractAlcoholPercent = (name: string): number | null => {
-            const match = name.match(/vol\.?\s*%\s*(\d+(?:[,.]?\d*)?)/i);
-            if (match) {
-                return parseFloat(match[1].replace(',', '.'));
-            }
-            return null;
-        };
-
-        // Calculate alcohol units: (volume in ml × ABV%) / 1000
-        // Standard unit = 10ml pure alcohol = ~0.79g
-        const calculateAlcoholUnits = (grams: number, alcoholPercent: number): number => {
-            // Assume beverages: grams ≈ ml (density ~1)
-            // Units = (ml × ABV%) / 1000
-            return (grams * alcoholPercent) / 1000;
-        };
+        let totalCaffeine = 0; // Track caffeine
 
         newEntry.items.forEach(item => {
-            if (item.type === 'foodItem') {
-                const food = foodItems.find(f => f.id === item.referenceId);
-                if (food) {
-                    const mult = item.servings / 100;
-                    totalCals += food.calories * mult;
-                    totalProtein += food.protein * mult;
-                    totalCarbs += food.carbs * mult;
-                    totalFat += food.fat * mult;
+            const { nutrition, caffeine, alcoholUnits } = calculateMealItemNutrition(item, recipes, foodItems);
 
-                    // Check for alcohol content
-                    const alcoholPercent = extractAlcoholPercent(food.name);
-                    if (alcoholPercent && alcoholPercent > 0) {
-                        const units = calculateAlcoholUnits(item.servings, alcoholPercent);
-                        totalAlcoholUnits += units;
-                    }
-                }
-            } else if (item.type === 'recipe') {
-                const recipe = recipes.find(r => r.id === item.referenceId);
-                if (recipe) {
-                    const nutrition = calculateRecipeNutrition(recipe);
-                    const perServing = recipe.servings || 1;
-                    const mult = item.servings / perServing;
-                    totalCals += nutrition.calories * mult;
-                    totalProtein += nutrition.protein * mult;
-                    totalCarbs += nutrition.carbs * mult;
-                    totalFat += nutrition.fat * mult;
-                }
-            }
+            totalCals += nutrition.calories;
+            totalProtein += nutrition.protein;
+            totalCarbs += nutrition.carbs;
+            totalFat += nutrition.fat;
+
+            if (caffeine) totalCaffeine += caffeine;
+            if (alcoholUnits) totalAlcoholUnits += alcoholUnits;
         });
 
-        // Update daily vitals with alcohol units if any were consumed
-        if (totalAlcoholUnits > 0) {
+        // Update daily vitals with alcohol units/caffeine if any were consumed
+        if (totalAlcoholUnits > 0 || totalCaffeine > 0) {
             const date = newEntry.date;
             setDailyVitals(prev => {
                 const existing = prev[date] || { water: 0, sleep: 0, updatedAt: new Date().toISOString() };
+
+                const newAlcohol = (existing.alcohol || 0) + Math.round(totalAlcoholUnits * 10) / 10;
+                const newCaffeine = (existing.caffeine || 0) + Math.round(totalCaffeine);
+
                 return {
                     ...prev,
                     [date]: {
                         ...existing,
-                        alcohol: (existing.alcohol || 0) + Math.round(totalAlcoholUnits * 10) / 10,
+                        alcohol: totalAlcoholUnits > 0 ? newAlcohol : existing.alcohol,
+                        caffeine: totalCaffeine > 0 ? newCaffeine : existing.caffeine,
                         updatedAt: new Date().toISOString()
                     }
                 };
             });
-            console.log(`[Alcohol] Added ${totalAlcoholUnits.toFixed(1)} units for ${date}`);
+            console.log(`[Vitals] Added ${totalAlcoholUnits.toFixed(1)} units alcohol and ${totalCaffeine}mg caffeine for ${date}`);
         }
 
         emitFeedEvent(
@@ -1591,54 +1496,29 @@ export function DataProvider({ children }: DataProviderProps) {
 
         for (const entry of entries) {
             for (const item of entry.items) {
-                if (item.type === 'recipe') {
-                    const recipe = recipes.find(r => r.id === item.referenceId);
-                    if (recipe) {
-                        const nutrition = calculateRecipeNutrition(recipe);
-                        const perServing = recipe.servings || 1;
-                        const multiplier = item.servings / perServing;
-                        summary.calories += nutrition.calories * multiplier;
-                        summary.protein += nutrition.protein * multiplier;
-                        summary.carbs += nutrition.carbs * multiplier;
-                        summary.fat += nutrition.fat * multiplier;
-                        summary.fiber += (nutrition.fiber || 0) * multiplier;
-                        summary.iron = (summary.iron || 0) + (nutrition.iron || 0) * multiplier;
-                        summary.calcium = (summary.calcium || 0) + (nutrition.calcium || 0) * multiplier;
-                        summary.zinc = (summary.zinc || 0) + (nutrition.zinc || 0) * multiplier;
-                        summary.vitaminB12 = (summary.vitaminB12 || 0) + (nutrition.vitaminB12 || 0) * multiplier;
-                        summary.vitaminC = (summary.vitaminC || 0) + (nutrition.vitaminC || 0) * multiplier;
-                        summary.vitaminA = (summary.vitaminA || 0) + (nutrition.vitaminA || 0) * multiplier;
-                        if (nutrition.proteinCategories) {
-                            summary.proteinCategories = summary.proteinCategories || [];
-                            nutrition.proteinCategories.forEach(cat => {
-                                if (!summary.proteinCategories?.includes(cat)) {
-                                    summary.proteinCategories?.push(cat);
-                                }
-                            });
+                const { nutrition } = calculateMealItemNutrition(item, recipes, foodItems);
+
+                summary.calories += nutrition.calories;
+                summary.protein += nutrition.protein;
+                summary.carbs += nutrition.carbs;
+                summary.fat += nutrition.fat;
+                summary.fiber += nutrition.fiber;
+
+                // Accumulate Micros
+                summary.iron = (summary.iron || 0) + (nutrition.iron || 0);
+                summary.calcium = (summary.calcium || 0) + (nutrition.calcium || 0);
+                summary.zinc = (summary.zinc || 0) + (nutrition.zinc || 0);
+                summary.vitaminB12 = (summary.vitaminB12 || 0) + (nutrition.vitaminB12 || 0);
+                summary.vitaminC = (summary.vitaminC || 0) + (nutrition.vitaminC || 0);
+                summary.vitaminA = (summary.vitaminA || 0) + (nutrition.vitaminA || 0);
+
+                if (nutrition.proteinCategories) {
+                    summary.proteinCategories = summary.proteinCategories || [];
+                    nutrition.proteinCategories.forEach(cat => {
+                        if (!summary.proteinCategories?.includes(cat)) {
+                            summary.proteinCategories?.push(cat);
                         }
-                    }
-                } else {
-                    const foodItem = foodItems.find(f => f.id === item.referenceId);
-                    if (foodItem) {
-                        const multiplier = item.servings / 100; // servings in grams
-                        summary.calories += foodItem.calories * multiplier;
-                        summary.protein += foodItem.protein * multiplier;
-                        summary.carbs += foodItem.carbs * multiplier;
-                        summary.fat += foodItem.fat * multiplier;
-                        summary.fiber += (foodItem.fiber || 0) * multiplier;
-                        summary.iron = (summary.iron || 0) + (foodItem.iron || 0) * multiplier;
-                        summary.calcium = (summary.calcium || 0) + (foodItem.calcium || 0) * multiplier;
-                        summary.zinc = (summary.zinc || 0) + (foodItem.zinc || 0) * multiplier;
-                        summary.vitaminB12 = (summary.vitaminB12 || 0) + (foodItem.vitaminB12 || 0) * multiplier;
-                        summary.vitaminC = (summary.vitaminC || 0) + (foodItem.vitaminC || 0) * multiplier;
-                        summary.vitaminA = (summary.vitaminA || 0) + (foodItem.vitaminA || 0) * multiplier;
-                        if (foodItem.proteinCategory) {
-                            summary.proteinCategories = summary.proteinCategories || [];
-                            if (!summary.proteinCategories.includes(foodItem.proteinCategory)) {
-                                summary.proteinCategories.push(foodItem.proteinCategory);
-                            }
-                        }
-                    }
+                    });
                 }
             }
         }
@@ -1657,7 +1537,7 @@ export function DataProvider({ children }: DataProviderProps) {
             vitaminA: Math.round(summary.vitaminA || 0),
             proteinCategories: summary.proteinCategories || [],
         };
-    }, [getMealEntriesForDate, recipes, foodItems, calculateRecipeNutrition, getExercisesForDate]);
+    }, [getMealEntriesForDate, recipes, foodItems, getExercisesForDate]);
 
     // ============================================
     // Weekly Plan CRUD

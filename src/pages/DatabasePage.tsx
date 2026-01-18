@@ -48,6 +48,7 @@ const EMPTY_FORM: FoodItemFormData = {
     proteinCategory: undefined,
     seasons: [],
     ingredients: '',
+    // Variants handled separately in state, but part of final submission
 };
 
 type ViewMode = 'grid' | 'list';
@@ -60,6 +61,9 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const [detailItem, setDetailItem] = useState<FoodItem | null>(null);
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
     const [formData, setFormData] = useState<FoodItemFormData>(EMPTY_FORM);
+    // Variants local state for editing
+    const [variants, setVariants] = useState<any[]>([]); // Use any[] temporarily for simplicity in this file, or cast to FoodVariant[]
+
     const [isParsing, setIsParsing] = useState(false);
     const [parseError, setParseError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -203,11 +207,17 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 proteinCategory: item.proteinCategory,
                 seasons: item.seasons || [],
                 ingredients: item.ingredients || '',
-
+                extendedDetails: {
+                    ...item.extendedDetails,
+                    caffeine: item.extendedDetails?.caffeine || 0,
+                    alcohol: item.extendedDetails?.alcohol || 0
+                }
             });
+            setVariants(item.variants || []);
         } else {
             setEditingItem(null);
             setFormData(EMPTY_FORM);
+            setVariants([]);
         }
         setIsFormOpen(true);
     };
@@ -220,12 +230,27 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+        const submission = { ...formData, variants };
         if (editingItem) {
-            updateFoodItem(editingItem.id, formData);
+            updateFoodItem(editingItem.id, submission);
         } else {
-            addFoodItem(formData);
+            addFoodItem(submission);
         }
         handleCloseForm();
+    };
+
+    // Variant Helper
+    const addVariant = () => {
+        const id = Math.random().toString(36).substring(2, 9);
+        setVariants([...variants, { id, name: '', nutrition: {} }]);
+    };
+
+    const updateVariant = (id: string, updates: any) => {
+        setVariants(prev => prev.map(v => v.id === id ? { ...v, ...updates } : v));
+    };
+
+    const removeVariant = (id: string) => {
+        setVariants(prev => prev.filter(v => v.id !== id));
     };
 
     // --- SMART PARSING LOGIC ---
@@ -1091,12 +1116,12 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                         </div>
                                     </div>
 
-                                    {/* Vitamins & Minerals */}
+                                    {/* Vitamins & Minerals & Drugs */}
                                     <div>
                                         <h4 className="text-xs font-bold text-indigo-400 mb-3 flex items-center gap-2">
-                                            <span>🧬</span> Vitaminer & Mineraler
+                                            <span>🧬</span> Mikronutrienter & Ämnen
                                         </h4>
-                                        <div className="grid grid-cols-4 gap-3">
+                                        <div className="grid grid-cols-4 gap-3 mb-3">
                                             <div>
                                                 <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Järn (mg)</label>
                                                 <input
@@ -1138,6 +1163,36 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                                     value={formData.vitaminB12 || 0}
                                                     onChange={(e) => setFormData({ ...formData, vitaminB12: Number(e.target.value) })}
                                                     className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-4 gap-3">
+                                            <div>
+                                                <label className="block text-[10px] font-bold uppercase tracking-wider text-rose-400 mb-1">Koffein (mg)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={formData.extendedDetails?.caffeine || 0}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        extendedDetails: { ...formData.extendedDetails, caffeine: Number(e.target.value) }
+                                                    })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-rose-500/50"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-[10px] font-bold uppercase tracking-wider text-violet-400 mb-1">Alkohol (%)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.1"
+                                                    value={formData.extendedDetails?.alcohol || 0}
+                                                    onChange={(e) => setFormData({
+                                                        ...formData,
+                                                        extendedDetails: { ...formData.extendedDetails, alcohol: Number(e.target.value) }
+                                                    })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/50"
                                                 />
                                             </div>
                                         </div>
@@ -1190,6 +1245,88 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                             />
                                             <span className="text-sm text-slate-300">Innehåller gluten</span>
                                         </label>
+                                    </div>
+
+                                    {/* Variants Management */}
+                                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h4 className="text-xs font-bold text-amber-400 flex items-center gap-2">
+                                                <span>🏷️</span> Varianter / Smaker
+                                            </h4>
+                                            <button
+                                                type="button"
+                                                onClick={addVariant}
+                                                className="text-[10px] bg-slate-800 hover:bg-slate-700 text-slate-300 px-2 py-1 rounded border border-slate-600 transition-colors"
+                                            >
+                                                + Lägg till variant
+                                            </button>
+                                        </div>
+
+                                        {variants.length === 0 ? (
+                                            <p className="text-xs text-slate-600 italic">Inga varianter (t.ex. smaker) definierade.</p>
+                                        ) : (
+                                            <div className="space-y-3">
+                                                {variants.map((variant, index) => (
+                                                    <div key={variant.id} className="bg-slate-800 p-3 rounded-lg border border-slate-700 relative">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeVariant(variant.id)}
+                                                            className="absolute top-2 right-2 text-slate-500 hover:text-red-400 text-xs"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                        <div className="grid grid-cols-2 gap-2 mb-2">
+                                                            <div>
+                                                                <label className="text-[9px] text-slate-500 uppercase font-bold">Namn</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={variant.name}
+                                                                    onChange={(e) => updateVariant(variant.id, { name: e.target.value })}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                                                                    placeholder="t.ex. Päron"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-[9px] text-slate-500 uppercase font-bold">Koffein (mg)</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={variant.caffeine ?? ''}
+                                                                    onChange={(e) => updateVariant(variant.id, { caffeine: e.target.value ? Number(e.target.value) : undefined })}
+                                                                    className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-white"
+                                                                    placeholder="Override base"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Optional Nutrition Overrides */}
+                                                        <details>
+                                                            <summary className="text-[10px] text-slate-400 cursor-pointer hover:text-white transition-colors">
+                                                                Visa närings-overrides (om olika från bas)
+                                                            </summary>
+                                                            <div className="grid grid-cols-4 gap-2 mt-2">
+                                                                {['calories', 'protein', 'carbs', 'fat'].map(field => (
+                                                                    <div key={field}>
+                                                                        <label className="text-[9px] text-slate-500 uppercase font-bold block mb-0.5">{field.slice(0,4)}</label>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={variant.nutrition?.[field] ?? ''}
+                                                                            onChange={(e) => updateVariant(variant.id, {
+                                                                                nutrition: {
+                                                                                    ...variant.nutrition,
+                                                                                    [field]: e.target.value ? Number(e.target.value) : undefined
+                                                                                }
+                                                                            })}
+                                                                            className="w-full bg-slate-900 border border-slate-700 rounded px-1.5 py-1 text-xs text-white"
+                                                                            placeholder="-"
+                                                                        />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </details>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Seasons - Custom Checkboxes */}
@@ -1331,6 +1468,49 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                     <h3 className="detail-title text-amber-200">🥗 Ingredienser</h3>
                                     <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
                                         {detailItem.ingredients}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Variant Stats */}
+                            {(detailItem.variants && detailItem.variants.length > 0) && (
+                                <div className="detail-section full-width">
+                                    <h3 className="detail-title text-violet-400">🏷️ Smakfördelning</h3>
+                                    <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50">
+                                        <div className="space-y-2">
+                                            {/* Calculate stats on the fly */}
+                                            {(() => {
+                                                const counts: Record<string, number> = {};
+                                                let total = 0;
+                                                mealEntries.forEach(entry => {
+                                                    entry.items.forEach(item => {
+                                                        if (item.referenceId === detailItem.id) {
+                                                            const key = item.variantId || 'unspecified';
+                                                            counts[key] = (counts[key] || 0) + 1;
+                                                            total++;
+                                                        }
+                                                    });
+                                                });
+
+                                                const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+
+                                                if (total === 0) return <p className="text-sm text-slate-500 italic">Ingen data än.</p>;
+
+                                                return sorted.map(([key, count]) => {
+                                                    const name = key === 'unspecified' ? 'Ospecificerad' : detailItem.variants?.find(v => v.id === key)?.name || 'Okänd';
+                                                    const percent = Math.round((count / total) * 100);
+                                                    return (
+                                                        <div key={key} className="flex items-center gap-3">
+                                                            <div className="w-24 text-xs font-bold text-slate-300 truncate" title={name}>{name}</div>
+                                                            <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-violet-500 rounded-full" style={{ width: `${percent}%` }} />
+                                                            </div>
+                                                            <div className="w-12 text-xs text-right text-slate-400">{count} st</div>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
+                                        </div>
                                     </div>
                                 </div>
                             )}
