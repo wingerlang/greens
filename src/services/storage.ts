@@ -35,6 +35,8 @@ export interface StorageService {
     // Exercise Granular
     saveExerciseEntry(entry: any): Promise<any>;
     deleteExerciseEntry(id: string, date: string): Promise<void>;
+    deleteUniversalActivity(id: string, date: string): Promise<void>;
+    deleteStrengthSession(id: string): Promise<void>;
     // Granular updates
     updateMealEntry(meal: any): Promise<void>;
     deleteMealEntry(id: string, date: string): Promise<void>;
@@ -723,6 +725,48 @@ export class LocalStorageService implements StorageService {
             } catch (e) {
                 console.error('[Storage] Exercise delete failed:', e);
                 notificationService.notify('error', 'Kunde inte ta bort träning');
+            }
+        }
+    }
+
+    async deleteUniversalActivity(id: string, date: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/activities/${id}?date=${date}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    notificationService.notify('success', 'Aktivitet borttagen');
+                } else {
+                    const err = await res.json();
+                    throw new Error(err.error || 'API Error');
+                }
+            } catch (e) {
+                console.error('[Storage] Universal activity delete failed:', e);
+                notificationService.notify('error', 'Kunde inte ta bort aktivitet');
+            }
+        }
+    }
+
+    async deleteStrengthSession(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/strength/workout/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    notificationService.notify('success', 'Styrkepass borttaget');
+                } else {
+                    const err = await res.json();
+                    throw new Error(err.error || 'API Error');
+                }
+            } catch (e) {
+                console.error('[Storage] Strength session delete failed:', e);
+                notificationService.notify('error', 'Kunde inte ta bort styrkepass');
             }
         }
     }

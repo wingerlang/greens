@@ -90,15 +90,20 @@ const OverviewTab: React.FC = () => {
         if (!data?.history) return [];
         return data.history.map((h: any) => ({
             date: h.date,
-            keys: h.stats.totalKeys,
-            size: h.stats.totalSize
+            keys: h.stats?.totalKeys || 0,
+            size: h.stats?.totalSize || 0
         }));
     }, [data]);
 
     if (loading) return <div className="p-8 text-center text-gray-500 animate-pulse">Laddar statistik...</div>;
-    if (!data) return <div className="p-8 text-center text-red-500">Kunde inte hämta data.</div>;
+    if (!data || data.error) return (
+        <div className="p-8 text-center">
+            <div className="text-red-500 font-bold mb-2">Kunde inte hämta data.</div>
+            <div className="text-gray-500 text-xs font-mono">{data?.error || "Statistik saknas"}</div>
+        </div>
+    );
 
-    const { totalKeys, totalSize } = data.stats;
+    const { totalKeys = 0, totalSize = 0 } = data.stats || {};
 
     return (
         <div className="space-y-8 animate-in fade-in duration-300">
@@ -108,7 +113,7 @@ const OverviewTab: React.FC = () => {
                     <div className="text-gray-500 text-xs font-bold uppercase tracking-wider mb-1">Totala Nycklar</div>
                     <div className="text-3xl font-black text-white">{totalKeys.toLocaleString()}</div>
                     <div className="text-emerald-400 text-xs mt-2 font-mono flex items-center gap-1">
-                        <span>↑</span> +{data.history?.length > 1 ? (totalKeys - data.history[data.history.length - 2].stats.totalKeys) : 0} sen igår
+                        <span>↑</span> +{data.history?.length > 1 && data.history[data.history.length - 2]?.stats ? (totalKeys - data.history[data.history.length - 2].stats.totalKeys) : 0} sen igår
                     </div>
                 </div>
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl">
