@@ -44,7 +44,8 @@ import {
     type StrengthExercise,
     type UserPrivacy,
     type BodyMeasurementEntry, // Phase Legacy+
-    type TrainingPeriod
+    type TrainingPeriod,
+    type QuickMeal
 } from '../models/types.ts';
 import { type StrengthWorkout } from '../models/strengthTypes.ts';
 import { storageService } from '../services/storage.ts';
@@ -205,6 +206,13 @@ interface DataContextType {
     updateBodyMeasurement: (id: string, updates: Partial<BodyMeasurementEntry>) => void;
     deleteBodyMeasurement: (id: string) => void;
 
+    // Quick Meals & Aliases
+    quickMeals: QuickMeal[];
+    addQuickMeal: (name: string, items: MealItem[]) => void;
+    deleteQuickMeal: (id: string) => void;
+    foodAliases: Record<string, string>;
+    updateFoodAlias: (foodId: string, alias: string) => void;
+
     unifiedActivities: (ExerciseEntry & { source: string; _mergeData?: any })[];
     calculateStreak: (referenceDate?: string) => number;
     calculateTrainingStreak: (referenceDate?: string, type?: 'strength' | 'running' | 'other') => number;
@@ -260,6 +268,10 @@ export function DataProvider({ children }: DataProviderProps) {
     const [injuryLogs, setInjuryLogs] = useState<InjuryLog[]>([]);
     const [recoveryMetrics, setRecoveryMetrics] = useState<RecoveryMetric[]>([]);
     const [bodyMeasurements, setBodyMeasurements] = useState<BodyMeasurementEntry[]>([]);
+
+    // Quick Meals & Aliases
+    const [quickMeals, setQuickMeals] = useState<QuickMeal[]>([]);
+    const [foodAliases, setFoodAliases] = useState<Record<string, string>>({});
 
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -475,6 +487,8 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.injuryLogs) setInjuryLogs(data.injuryLogs);
         if (data.recoveryMetrics) setRecoveryMetrics(data.recoveryMetrics);
         if (data.bodyMeasurements) setBodyMeasurements(data.bodyMeasurements || []);
+        if (data.quickMeals) setQuickMeals(data.quickMeals);
+        if (data.foodAliases) setFoodAliases(data.foodAliases || {});
 
         setIsLoaded(true);
     }, []);
@@ -518,7 +532,9 @@ export function DataProvider({ children }: DataProviderProps) {
                 universalActivities,
                 injuryLogs,
                 recoveryMetrics,
-                bodyMeasurements
+                bodyMeasurements,
+                quickMeals,
+                foodAliases
             }, { skipApi: true }); // FIX: Permanently disable Global API Dump. Rely on Granular Sync.
         }
     }, [
@@ -531,7 +547,8 @@ export function DataProvider({ children }: DataProviderProps) {
         // Phase 7
         injuryLogs, recoveryMetrics,
         // Phase 13
-        bodyMeasurements
+        bodyMeasurements,
+        quickMeals, foodAliases
     ]);
 
     // ============================================
@@ -2064,6 +2081,38 @@ export function DataProvider({ children }: DataProviderProps) {
     }, []);
 
     // ============================================
+    // Quick Meals & Aliases
+    // ============================================
+
+    const addQuickMeal = useCallback((name: string, items: MealItem[]) => {
+        const newMeal: QuickMeal = {
+            id: generateId(),
+            userId: currentUser?.id || 'unknown',
+            name,
+            items,
+            createdAt: new Date().toISOString()
+        };
+        setQuickMeals(prev => [...prev, newMeal]);
+        skipAutoSave.current = true;
+        storageService.saveQuickMeal(newMeal).catch(console.error);
+    }, [currentUser]);
+
+    const deleteQuickMeal = useCallback((id: string) => {
+        setQuickMeals(prev => prev.filter(m => m.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteQuickMeal(id).catch(console.error);
+    }, []);
+
+    const updateFoodAlias = useCallback((foodId: string, alias: string) => {
+        setFoodAliases(prev => {
+            const next = { ...prev };
+            if (alias && alias.trim()) next[foodId] = alias.trim();
+            else delete next[foodId];
+            return next;
+        });
+    }, []);
+
+    // ============================================
     // Derived: Unified Activities (Manual + Strava + Strength)
     // ============================================
 
@@ -2419,6 +2468,13 @@ export function DataProvider({ children }: DataProviderProps) {
         addBodyMeasurement,
         updateBodyMeasurement,
         deleteBodyMeasurement,
+
+        // Quick Meals
+        quickMeals,
+        addQuickMeal,
+        deleteQuickMeal,
+        foodAliases,
+        updateFoodAlias,
 
         unifiedActivities,
         refreshData,

@@ -12,6 +12,7 @@ import { FoodItem } from "../../models/types.ts";
 import { weeklyPlanRepo } from "../repositories/weeklyPlanRepository.ts";
 import { recipeRepo } from "../repositories/recipeRepository.ts";
 import { exerciseEntryRepo } from "../repositories/exerciseEntryRepository.ts";
+import { quickMealRepo } from "../repositories/quickMealRepository.ts";
 
 export async function getUserData(userId: string): Promise<AppData | null> {
     const res = await kv.get(["user_profiles", userId]);
@@ -56,6 +57,12 @@ export async function getUserData(userId: string): Promise<AppData | null> {
     const repoExercises = await exerciseEntryRepo.getEntriesInRange(userId, "2000-01-01", "2099-12-31");
     if (repoExercises.length > 0) {
         userData.exerciseEntries = repoExercises;
+    }
+
+    // Fetch quick meals
+    const repoQuickMeals = await quickMealRepo.getQuickMeals(userId);
+    if (repoQuickMeals.length > 0) {
+        userData.quickMeals = repoQuickMeals;
     }
 
     // 1. Fetch meals (Source of truth is now mealRepo)
@@ -138,6 +145,12 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         }
     }
 
+    if (data.quickMeals && data.quickMeals.length > 0) {
+        for (const qm of data.quickMeals) {
+            await quickMealRepo.saveQuickMeal(userId, qm);
+        }
+    }
+
     const {
         universalActivities,
         mealEntries,
@@ -146,6 +159,7 @@ export async function saveUserData(userId: string, data: AppData): Promise<void>
         strengthSessions,
         performanceGoals, // Exclude from blob
         weeklyPlans,      // Exclude from blob
+        quickMeals,       // Exclude from blob
         ...userSpecificData
     } = data;
 

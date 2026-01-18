@@ -366,6 +366,15 @@ export interface MealEntry {
     date: string;  // ISO date string (YYYY-MM-DD)
     mealType: MealType;
     items: MealItem[];
+    title?: string; // Optional title for the meal (e.g. "Breakfast Sandwich")
+    createdAt: string;
+}
+
+export interface QuickMeal {
+    id: string;
+    userId: string;
+    name: string;
+    items: MealItem[];
     createdAt: string;
 }
 
@@ -1346,6 +1355,10 @@ export interface AppData {
     bodyMeasurements?: BodyMeasurementEntry[];
     // Phase 12: Strength Sessions
     strengthSessions?: StrengthWorkout[];
+
+    // Quick Meals & Aliases
+    quickMeals?: QuickMeal[];
+    foodAliases?: Record<string, string>; // foodId -> alias
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */
