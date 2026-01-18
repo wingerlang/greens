@@ -7,6 +7,7 @@ import {
     type MealItem,
     type MealEntry,
     type PlannedMeal,
+    type QuickMeal,
     getISODate,
 } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
@@ -44,7 +45,10 @@ export function CaloriesPage() {
         performanceGoals,
         toggleIncompleteDay,
         userSettings,
-        deleteExercise
+        deleteExercise,
+        quickMeals,
+        addQuickMeal,
+        foodAliases
     } = useData();
 
     const { settings } = useSettings();
@@ -154,20 +158,27 @@ export function CaloriesPage() {
             .map(r => ({ type: 'recipe' as const, id: r.id, name: r.name, subtitle: `${r.servings} portioner` }));
 
         const foodResults = foodItems
-            .filter(f => normalizeText(f.name).includes(query))
+            .filter(f => {
+                const alias = foodAliases[f.id];
+                if (alias && normalizeText(alias).includes(query)) return true;
+                return normalizeText(f.name).includes(query);
+            })
             .slice(0, 5)
-            .map(f => ({
-                type: 'foodItem' as const,
-                id: f.id,
-                name: f.name,
-                subtitle: `${f.calories} kcal/100g`,
-                defaultPortion: f.defaultPortionGrams,
-                yieldFactor: f.yieldFactor,
-                isCooked: f.isCooked
-            }));
+            .map(f => {
+                const alias = foodAliases[f.id];
+                return {
+                    type: 'foodItem' as const,
+                    id: f.id,
+                    name: alias ? `${alias} (${f.name})` : f.name,
+                    subtitle: `${f.calories} kcal/100g`,
+                    defaultPortion: f.defaultPortionGrams,
+                    yieldFactor: f.yieldFactor,
+                    isCooked: f.isCooked
+                };
+            });
 
         return [...recipeResults, ...foodResults].slice(0, 8);
-    }, [searchQuery, recipes, foodItems]);
+    }, [searchQuery, recipes, foodItems, foodAliases]);
 
     const proposals = useMemo(() => {
         const counts: Record<string, { type: 'recipe' | 'foodItem'; id: string; count: number; lastUsed: number }> = {};
@@ -283,6 +294,8 @@ export function CaloriesPage() {
             return recipe?.name || 'Okänt recept';
         } else {
             const food = foodItems.find(f => f.id === item.referenceId);
+            const alias = foodAliases[item.referenceId];
+            if (alias && food) return `${alias} (${food.name})`;
             return food?.name || 'Okänd råvara';
         }
     };
@@ -390,6 +403,33 @@ export function CaloriesPage() {
         unloggedPlannedMeals.forEach((pm: { mealType: MealType, meal: PlannedMeal }) => {
             handleLogPlannedMeal(pm.mealType, pm.meal.recipeId!);
         });
+    };
+
+    const handleCreateQuickMeal = () => {
+        if (selectedIds.size === 0) return;
+        const name = prompt("Namn på snabbval (t.ex. 'Frukostmacka'):");
+        if (!name) return;
+
+        const itemsToSave: MealItem[] = [];
+        // Preserve order based on dailyEntries
+        dailyEntries.forEach(entry => {
+            if (selectedIds.has(entry.id)) {
+                itemsToSave.push(...entry.items);
+            }
+        });
+
+        addQuickMeal(name, itemsToSave);
+        setSelectedIds(new Set());
+    };
+
+    const handleLogQuickMeal = (qm: QuickMeal) => {
+        addMealEntry({
+            date: selectedDate,
+            mealType,
+            items: qm.items,
+            title: qm.name
+        });
+        setIsFormOpen(false);
     };
 
     const goals = useMemo(() => {
@@ -653,6 +693,7 @@ export function CaloriesPage() {
                 onToggleSelect={handleToggleSelect}
                 onSelectAll={handleSelectAll}
                 onDeleteSelected={handleDeleteSelected}
+                onCreateQuickMeal={handleCreateQuickMeal}
             />
 
             {dailyExercises.length > 0 && (
@@ -732,6 +773,8 @@ export function CaloriesPage() {
                 setQuickAddServings={setQuickAddServings}
                 handleQuickAdd={handleQuickAdd}
                 selectedDate={selectedDate}
+                quickMeals={quickMeals}
+                onLogQuickMeal={handleLogQuickMeal}
             />
 
             <NutritionBreakdownModal

@@ -27,6 +27,7 @@ interface MealTimelineProps {
     onToggleSelect: (id: string) => void;
     onSelectAll: () => void;
     onDeleteSelected: () => void;
+    onCreateQuickMeal?: () => void;
 }
 
 export function MealTimeline({
@@ -47,6 +48,7 @@ export function MealTimeline({
     onToggleSelect,
     onSelectAll,
     onDeleteSelected,
+    onCreateQuickMeal,
 }: MealTimelineProps) {
     const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; entryId: string | null }>({ isOpen: false, entryId: null });
 
@@ -109,7 +111,12 @@ export function MealTimeline({
                         </div>
                     )}
                     <div className="flex flex-col min-w-0">
-                        <span className="text-sm font-bold text-slate-200 truncate">
+                        {entry.title && (
+                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider block leading-none mb-0.5">
+                                {entry.title}
+                            </span>
+                        )}
+                        <span className={`text-sm ${entry.title ? 'text-slate-400 font-medium' : 'text-slate-200 font-bold'} truncate`}>
                             {entry.items.map((item) => getItemName(item)).join(', ')}
                         </span>
                         {firstItem && getItemBrand?.(firstItem) && (
@@ -235,14 +242,24 @@ export function MealTimeline({
                                         {selectedIds.size > 0 ? `${selectedIds.size} markerade` : 'Markera alla'}
                                     </span>
                                 </label>
-                                {selectedIds.size > 0 && (
-                                    <button
-                                        onClick={onDeleteSelected}
-                                        className="text-xs px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors font-bold"
-                                    >
-                                        Ta bort ({selectedIds.size})
-                                    </button>
-                                )}
+                                <div className="flex items-center gap-2">
+                                    {selectedIds.size > 0 && onCreateQuickMeal && (
+                                        <button
+                                            onClick={onCreateQuickMeal}
+                                            className="text-xs px-3 py-1.5 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded-lg transition-colors font-bold flex items-center gap-1"
+                                        >
+                                            <span>⚡</span> Spara som Snabbval
+                                        </button>
+                                    )}
+                                    {selectedIds.size > 0 && (
+                                        <button
+                                            onClick={onDeleteSelected}
+                                            className="text-xs px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors font-bold"
+                                        >
+                                            Ta bort ({selectedIds.size})
+                                        </button>
+                                    )}
+                                </div>
                             </div>
 
                             {dailyEntries.map(entry => renderEntryRow(entry, true))}
