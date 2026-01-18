@@ -53,13 +53,14 @@ const EMPTY_FORM: FoodItemFormData = {
 type ViewMode = 'grid' | 'list';
 
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
-    const { foodItems, recipes, mealEntries, addFoodItem, updateFoodItem, deleteFoodItem } = useData();
+    const { foodItems, recipes, mealEntries, addFoodItem, updateFoodItem, deleteFoodItem, foodAliases, updateFoodAlias } = useData();
     const [searchParams, setSearchParams] = useSearchParams();
     const hasAutoOpened = useRef(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [detailItem, setDetailItem] = useState<FoodItem | null>(null);
     const [editingItem, setEditingItem] = useState<FoodItem | null>(null);
     const [formData, setFormData] = useState<FoodItemFormData>(EMPTY_FORM);
+    const [alias, setAlias] = useState('');
     const [isParsing, setIsParsing] = useState(false);
     const [parseError, setParseError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
@@ -175,6 +176,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const handleOpenForm = (item?: FoodItem) => {
         if (item) {
             setEditingItem(item);
+            setAlias(foodAliases[item.id] || '');
             setFormData({
                 name: item.name,
                 brand: item.brand || '',
@@ -207,6 +209,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             });
         } else {
             setEditingItem(null);
+            setAlias('');
             setFormData(EMPTY_FORM);
         }
         setIsFormOpen(true);
@@ -215,6 +218,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const handleCloseForm = () => {
         setIsFormOpen(false);
         setEditingItem(null);
+        setAlias('');
         setFormData(EMPTY_FORM);
     };
 
@@ -222,8 +226,13 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         e.preventDefault();
         if (editingItem) {
             updateFoodItem(editingItem.id, formData);
+            if (alias !== (foodAliases[editingItem.id] || '')) {
+                updateFoodAlias(editingItem.id, alias);
+            }
         } else {
             addFoodItem(formData);
+            // New item ID is not available here synchronously to set alias immediately
+            // But we typically edit to add alias anyway.
         }
         handleCloseForm();
     };
@@ -850,6 +859,26 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                         required
                                     />
                                 </div>
+
+                                {/* Alias Input */}
+                                {editingItem && (
+                                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">
+                                            Personligt Alias
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={alias}
+                                            onChange={(e) => setAlias(e.target.value)}
+                                            placeholder={`t.ex. "Shake" (istället för ${formData.name})`}
+                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
+                                        />
+                                        <p className="text-[10px] text-slate-500 mt-2">
+                                            Detta namn visas i din logg och sökning istället för originalnamnet.
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
