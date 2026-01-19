@@ -277,6 +277,9 @@ export interface FoodItem {
     // Extended Details (Full Macro/Micro Breakdown)
     extendedDetails?: ExtendedFoodDetails;
 
+    // Variants (Flavors/Types)
+    variants?: FoodVariant[];
+
     // Protein Quality
     isCompleteProtein?: boolean;
     missingAminoAcids?: string[]; // e.g., ['lysine', 'methionine']
@@ -305,7 +308,21 @@ export interface ExtendedFoodDetails {
     // Extra Vitamins
     vitaminD?: number;           // µg
     caffeine?: number;           // mg
+    alcohol?: number;            // % vol
     // Add others if present in DB
+}
+
+/**
+ * FoodVariant - A specific variant/flavor of a food item
+ */
+export interface FoodVariant {
+    id: string;
+    name: string; // e.g. "Päron", "Carnival", "Original"
+
+    // Optional overrides
+    nutrition?: Partial<NutritionSummary>; // Overrides for Kcal, Protein, etc.
+    caffeine?: number; // mg
+    alcohol?: number; // % vol
 }
 
 /**
@@ -356,6 +373,7 @@ export interface MealItem {
     componentLabel?: string;         // "Gryta", "Ris", etc.
     loggedAsCooked?: boolean;        // If true, divide kcal by yieldFactor (raw→cooked conversion)
     effectiveYieldFactor?: number;   // The yield factor used for calorie calculation when loggedAsCooked
+    variantId?: string;              // Specific variant ID if applicable
 }
 
 /**
