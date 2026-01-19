@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { Search, Trophy, TrendingUp, Users, Target, Zap, ArrowRight, ChevronDown, ChevronRight, Scale, Sparkles, LayoutPanelLeft, Calendar, Timer, Dumbbell, User as UserIcon, HelpCircle } from 'lucide-react';
 import { calculateWilks, calculateIPFPoints, calculateEstimated1RM } from '../utils/strengthCalculators.ts';
+import { getBestSetForPatterns } from '../utils/strengthAnalysis.ts';
 import './MatchupPage.css';
 
 const MAIN_EXERCISES = [
@@ -358,62 +359,25 @@ export function MatchupPage() {
         const weightB = userB?.settings?.weight || 85;
 
         // Enhanced 1RM getter that returns details
-        const getBestSetForPatterns = (sessions: any[], patterns: string[], excludePatterns: string[] = []) => {
-            let maxEstimated1RM = 0;
-            let maxWeight = 0;
-            let bestEstimatedSet: any = null;
-            let heaviestSet: any = null;
-            let exactNameEstimated = '';
-            let exactNameHeaviest = '';
-
-            const normalizedPatterns = patterns.map(p => p.toLowerCase());
-            const normalizedExcludes = excludePatterns.map(p => p.toLowerCase());
-
-            sessions.forEach(session => {
-                if (!session.exercises) return;
-                session.exercises.forEach((ex: any) => {
-                    const name = (ex.name || ex.exerciseName || '').toLowerCase();
-
-                    const matchesPattern = normalizedPatterns.some(p => name.includes(p));
-                    const matchesExclude = normalizedExcludes.some(p => name.includes(p));
-
-                    if (matchesPattern && !matchesExclude) {
-                        if (ex.sets && Array.isArray(ex.sets)) {
-                            ex.sets.forEach((set: any) => {
-                                const weight = Number(set.weight) || 0;
-                                const reps = Number(set.reps) || 0;
-                                if (weight === 0 || reps === 0) return;
-
-                                // Track Estimated 1RM
-                                const estimated = calculateEstimated1RM(weight, reps);
-                                if (estimated > maxEstimated1RM) {
-                                    maxEstimated1RM = estimated;
-                                    bestEstimatedSet = { ...set, date: session.date, sessionId: session.id };
-                                    exactNameEstimated = ex.name || ex.exerciseName;
-                                }
-
-                                // Track Heaviest Weight (Actual 1RM context)
-                                if (weight > maxWeight) {
-                                    maxWeight = weight;
-                                    heaviestSet = { ...set, date: session.date, sessionId: session.id };
-                                    exactNameHeaviest = ex.name || ex.exerciseName;
-                                }
-                            });
-                        }
-                    }
-                });
-            });
-
-            return { maxEstimated1RM, maxWeight, bestEstimatedSet, heaviestSet, exactNameEstimated, exactNameHeaviest };
+        const getBestSetForPatternsLocal = (sessions: any[], patterns: string[], excludePatterns: string[] = []) => {
+            const res = getBestSetForPatterns(sessions, patterns, excludePatterns);
+            return {
+                maxEstimated1RM: res.maxEstimated1RM,
+                maxWeight: res.maxWeight,
+                bestEstimatedSet: res.bestEstimatedSet,
+                heaviestSet: res.heaviestSet,
+                exactNameEstimated: res.exactNameEstimated,
+                exactNameHeaviest: res.exactNameHeaviest
+            };
         };
 
-        const squatA = getBestSetForPatterns(sessionsA, ['knäböj', 'squat', 'böj'], ['air', 'bodyweight', 'goblet', 'split', 'lunges', 'utfall', 'hack', 'front', 'zercher', 'overhead', 'box', 'pistol', 'bulgarian', 'smith', 'maskin', 'machine', 'one leg', 'enben', 'jump']);
-        const benchA = getBestSetForPatterns(sessionsA, ['bänkpress', 'bench', 'bänk'], ['dips', 'dip', 'hantel', 'dumbbell', 'flyes', 'row', 'rodd', 'incline', 'decline', 'sne', 'lutande', 'smal', 'narrow', 'close', 'floor', 'smith', 'maskin', 'machine', 'push up', 'armhävning']);
-        const deadA = getBestSetForPatterns(sessionsA, ['marklyft', 'deadlift', 'mark'], ['rumänska', 'stiff', 'raka', 'roman', 'hantel', 'dumbbell', 'trap', 'hex', 'rack', 'block', 'kron', 'deficit']);
+        const squatA = getBestSetForPatternsLocal(sessionsA, ['knäböj', 'squat', 'böj'], ['air', 'bodyweight', 'goblet', 'split', 'lunges', 'utfall', 'hack', 'front', 'zercher', 'overhead', 'box', 'pistol', 'bulgarian', 'smith', 'maskin', 'machine', 'one leg', 'enben', 'jump']);
+        const benchA = getBestSetForPatternsLocal(sessionsA, ['bänkpress', 'bench', 'bänk'], ['dips', 'dip', 'hantel', 'dumbbell', 'flyes', 'row', 'rodd', 'incline', 'decline', 'sne', 'lutande', 'smal', 'narrow', 'close', 'floor', 'smith', 'maskin', 'machine', 'push up', 'armhävning']);
+        const deadA = getBestSetForPatternsLocal(sessionsA, ['marklyft', 'deadlift', 'mark'], ['rumänska', 'stiff', 'raka', 'roman', 'hantel', 'dumbbell', 'trap', 'hex', 'rack', 'block', 'kron', 'deficit']);
 
-        const squatB = getBestSetForPatterns(sessionsB, ['knäböj', 'squat', 'böj'], ['air', 'bodyweight', 'goblet', 'split', 'lunges', 'utfall', 'hack', 'front', 'zercher', 'overhead', 'box', 'pistol', 'bulgarian', 'smith', 'maskin', 'machine', 'one leg', 'enben', 'jump']);
-        const benchB = getBestSetForPatterns(sessionsB, ['bänkpress', 'bench', 'bänk'], ['dips', 'dip', 'hantel', 'dumbbell', 'flyes', 'row', 'rodd', 'incline', 'decline', 'sne', 'lutande', 'smal', 'narrow', 'close', 'floor', 'smith', 'maskin', 'machine', 'push up', 'armhävning']);
-        const deadB = getBestSetForPatterns(sessionsB, ['marklyft', 'deadlift', 'mark'], ['rumänska', 'stiff', 'raka', 'roman', 'hantel', 'dumbbell', 'trap', 'hex', 'rack', 'block', 'kron', 'deficit']);
+        const squatB = getBestSetForPatternsLocal(sessionsB, ['knäböj', 'squat', 'böj'], ['air', 'bodyweight', 'goblet', 'split', 'lunges', 'utfall', 'hack', 'front', 'zercher', 'overhead', 'box', 'pistol', 'bulgarian', 'smith', 'maskin', 'machine', 'one leg', 'enben', 'jump']);
+        const benchB = getBestSetForPatternsLocal(sessionsB, ['bänkpress', 'bench', 'bänk'], ['dips', 'dip', 'hantel', 'dumbbell', 'flyes', 'row', 'rodd', 'incline', 'decline', 'sne', 'lutande', 'smal', 'narrow', 'close', 'floor', 'smith', 'maskin', 'machine', 'push up', 'armhävning']);
+        const deadB = getBestSetForPatternsLocal(sessionsB, ['marklyft', 'deadlift', 'mark'], ['rumänska', 'stiff', 'raka', 'roman', 'hantel', 'dumbbell', 'trap', 'hex', 'rack', 'block', 'kron', 'deficit']);
 
         // Use Estimated 1RM for the Total score (standard practice)
         const totalA = squatA.maxEstimated1RM + benchA.maxEstimated1RM + deadA.maxEstimated1RM;

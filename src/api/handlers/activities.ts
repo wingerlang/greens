@@ -323,6 +323,22 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             const activity = await activityRepo.getActivity(session.userId, date, activityId);
             if (!activity) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 
+            // If it's a merged activity, we must restore original activities
+            if (activity.mergeInfo?.isMerged && activity.mergeInfo.originalActivityIds) {
+                // We need all activities to find the originals efficiently if we don't know their dates
+                // Actually we can just scan for them or assume they are on the same date (usually they are)
+                // But for safety, let's scan all for user (performance is fine for individual delete)
+                const all = await activityRepo.getAllActivities(session.userId);
+                const originalIds = activity.mergeInfo.originalActivityIds;
+                const originals = all.filter(a => originalIds.includes(a.id));
+
+                for (const original of originals) {
+                    delete original.mergedIntoId;
+                    original.updatedAt = new Date().toISOString();
+                    await activityRepo.saveActivity(original);
+                }
+            }
+
             await activityRepo.deleteActivity(activity);
             return new Response(JSON.stringify({ success: true }), { status: 200, headers });
         } catch (e: any) {

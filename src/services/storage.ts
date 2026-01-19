@@ -4,7 +4,7 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry, type PlannedActivity } from '../models/types.ts';
+import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry, type PlannedActivity, type QuickMeal } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 import { notificationService } from './notificationService.ts';
 
@@ -35,6 +35,8 @@ export interface StorageService {
     // Exercise Granular
     saveExerciseEntry(entry: any): Promise<any>;
     deleteExerciseEntry(id: string, date: string): Promise<void>;
+    deleteUniversalActivity(id: string, date: string): Promise<void>;
+    deleteStrengthSession(id: string): Promise<void>;
     // Granular updates
     updateMealEntry(meal: any): Promise<void>;
     deleteMealEntry(id: string, date: string): Promise<void>;
@@ -46,6 +48,9 @@ export interface StorageService {
     savePlannedActivity(activity: PlannedActivity): Promise<void>;
     savePlannedActivities(activities: PlannedActivity[]): Promise<void>;
     deletePlannedActivity(id: string): Promise<void>;
+    // Quick Meals Granular
+    saveQuickMeal(meal: QuickMeal): Promise<void>;
+    deleteQuickMeal(id: string): Promise<void>;
     // Clear specific data from local cache
     clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
 }
@@ -76,7 +81,9 @@ const getDefaultData = (): AppData => ({
     sleepSessions: [],
     intakeLogs: [],
     universalActivities: [],
-    bodyMeasurements: []
+    bodyMeasurements: [],
+    quickMeals: [],
+    foodAliases: {}
 });
 
 // Helper to get token (if any)
@@ -200,6 +207,8 @@ export class LocalStorageService implements StorageService {
             // Phase 8
             if (!data.intakeLogs) data.intakeLogs = [];
             if (!data.universalActivities) data.universalActivities = [];
+            if (!data.quickMeals) data.quickMeals = [];
+            if (!data.foodAliases) data.foodAliases = {};
         }
 
         return data;
@@ -727,6 +736,48 @@ export class LocalStorageService implements StorageService {
         }
     }
 
+    async deleteUniversalActivity(id: string, date: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/activities/${id}?date=${date}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    notificationService.notify('success', 'Aktivitet borttagen');
+                } else {
+                    const err = await res.json();
+                    throw new Error(err.error || 'API Error');
+                }
+            } catch (e) {
+                console.error('[Storage] Universal activity delete failed:', e);
+                notificationService.notify('error', 'Kunde inte ta bort aktivitet');
+            }
+        }
+    }
+
+    async deleteStrengthSession(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch(`/api/strength/workout/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    notificationService.notify('success', 'Styrkepass borttaget');
+                } else {
+                    const err = await res.json();
+                    throw new Error(err.error || 'API Error');
+                }
+            } catch (e) {
+                console.error('[Storage] Strength session delete failed:', e);
+                notificationService.notify('error', 'Kunde inte ta bort styrkepass');
+            }
+        }
+    }
+
     /**
      * Clear specific data from localStorage cache
      * This MUST be called after server reset to prevent data resurrection
@@ -918,6 +969,55 @@ export class LocalStorageService implements StorageService {
                 }
             } catch (e) {
                 console.error('[Storage] Planned activity delete failed:', e);
+            }
+        }
+    }
+
+    async saveQuickMeal(meal: QuickMeal): Promise<void> {
+        // Local Optimistic
+        const data = await this.load();
+        if (!data.quickMeals) data.quickMeals = [];
+        const idx = data.quickMeals.findIndex(m => m.id === meal.id);
+        if (idx >= 0) data.quickMeals[idx] = meal;
+        else data.quickMeals.push(meal);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+        // API
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('/api/quick-meals', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(meal)
+                });
+                if (res.ok) notificationService.notify('success', 'Snabbval sparat');
+            } catch (e) {
+                console.error('[Storage] QuickMeal sync failed:', e);
+            }
+        }
+    }
+
+    async deleteQuickMeal(id: string): Promise<void> {
+        // Local
+        const data = await this.load();
+        data.quickMeals = data.quickMeals?.filter(m => m.id !== id) || [];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+        // API
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`/api/quick-meals?id=${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                notificationService.notify('success', 'Snabbval borttaget');
+            } catch (e) {
+                console.error('[Storage] QuickMeal delete failed:', e);
             }
         }
     }

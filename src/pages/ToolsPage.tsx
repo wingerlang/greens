@@ -114,6 +114,12 @@ export function ToolsPage() {
                     desc: "Återupplev dina framsteg med en animerad tidslinje.",
                     path: "/tools/replay",
                     color: "from-amber-500 to-orange-500"
+                },
+                {
+                    name: "Djupanalys & Rapport",
+                    desc: "Generera en detaljerad rapport om din träningskarriär, styrka och konsistens för AI-analys.",
+                    path: "/tools/report",
+                    color: "from-indigo-500 to-purple-500"
                 }
             ]
         }

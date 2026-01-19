@@ -44,7 +44,8 @@ import {
     type StrengthExercise,
     type UserPrivacy,
     type BodyMeasurementEntry, // Phase Legacy+
-    type TrainingPeriod
+    type TrainingPeriod,
+    type QuickMeal
 } from '../models/types.ts';
 import { type StrengthWorkout } from '../models/strengthTypes.ts';
 import { storageService } from '../services/storage.ts';
@@ -206,6 +207,13 @@ interface DataContextType {
     updateBodyMeasurement: (id: string, updates: Partial<BodyMeasurementEntry>) => void;
     deleteBodyMeasurement: (id: string) => void;
 
+    // Quick Meals & Aliases
+    quickMeals: QuickMeal[];
+    addQuickMeal: (name: string, items: MealItem[]) => void;
+    deleteQuickMeal: (id: string) => void;
+    foodAliases: Record<string, string>;
+    updateFoodAlias: (foodId: string, alias: string) => void;
+
     unifiedActivities: (ExerciseEntry & { source: string; _mergeData?: any })[];
     calculateStreak: (referenceDate?: string) => number;
     calculateTrainingStreak: (referenceDate?: string, type?: 'strength' | 'running' | 'other') => number;
@@ -261,6 +269,10 @@ export function DataProvider({ children }: DataProviderProps) {
     const [injuryLogs, setInjuryLogs] = useState<InjuryLog[]>([]);
     const [recoveryMetrics, setRecoveryMetrics] = useState<RecoveryMetric[]>([]);
     const [bodyMeasurements, setBodyMeasurements] = useState<BodyMeasurementEntry[]>([]);
+
+    // Quick Meals & Aliases
+    const [quickMeals, setQuickMeals] = useState<QuickMeal[]>([]);
+    const [foodAliases, setFoodAliases] = useState<Record<string, string>>({});
 
     const [isLoaded, setIsLoaded] = useState(false);
 
@@ -476,6 +488,8 @@ export function DataProvider({ children }: DataProviderProps) {
         if (data.injuryLogs) setInjuryLogs(data.injuryLogs);
         if (data.recoveryMetrics) setRecoveryMetrics(data.recoveryMetrics);
         if (data.bodyMeasurements) setBodyMeasurements(data.bodyMeasurements || []);
+        if (data.quickMeals) setQuickMeals(data.quickMeals);
+        if (data.foodAliases) setFoodAliases(data.foodAliases || {});
 
         setIsLoaded(true);
     }, []);
@@ -519,7 +533,9 @@ export function DataProvider({ children }: DataProviderProps) {
                 universalActivities,
                 injuryLogs,
                 recoveryMetrics,
-                bodyMeasurements
+                bodyMeasurements,
+                quickMeals,
+                foodAliases
             }, { skipApi: true }); // FIX: Permanently disable Global API Dump. Rely on Granular Sync.
         }
     }, [
@@ -532,7 +548,8 @@ export function DataProvider({ children }: DataProviderProps) {
         // Phase 7
         injuryLogs, recoveryMetrics,
         // Phase 13
-        bodyMeasurements
+        bodyMeasurements,
+        quickMeals, foodAliases
     ]);
 
     // ============================================
@@ -927,7 +944,16 @@ export function DataProvider({ children }: DataProviderProps) {
     }, []);
 
     const deleteStrengthSession = useCallback((id: string): void => {
-        setStrengthSessions(prev => prev.filter(s => s.id !== id));
+        setStrengthSessions(prev => {
+            const session = prev.find(s => s.id === id);
+            if (session) {
+                storageService.deleteStrengthSession(id).catch(e => console.error("Failed to delete strength session", e));
+            }
+            return prev.filter(s => s.id !== id);
+        });
+
+        // Also remove from universalActivities if it's there
+        setUniversalActivities(prev => prev.filter(a => a.id !== id));
     }, []);
 
 
@@ -1084,13 +1110,46 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [exerciseEntries, strengthSessions, universalActivities, updateStrengthSession, storageService]);
 
     const deleteExercise = useCallback((id: string) => {
+        // 1. Legacy Entries
         setExerciseEntries(prev => {
             const entry = prev.find(e => e.id === id);
             if (entry) {
-                skipAutoSave.current = true;
                 storageService.deleteExerciseEntry(id, entry.date).catch(e => console.error("Failed to delete exercise", e));
             }
             return prev.filter(e => e.id !== id);
+        });
+
+        // 2. Strength Sessions
+        setStrengthSessions(prev => {
+            const session = prev.find(s => s.id === id);
+            if (session) {
+                storageService.deleteStrengthSession(id).catch(e => console.error("Failed to delete strength session", e));
+            }
+            return prev.filter(s => s.id !== id);
+        });
+
+        // 3. Universal Activities (Strava/Merged etc)
+        setUniversalActivities(prev => {
+            const activity = prev.find(a => a.id === id);
+            if (activity) {
+                storageService.deleteUniversalActivity(id, activity.date).catch(e => console.error("Failed to delete universal activity", e));
+
+                // If this was a merged activity, we should restore visibility of original activities
+                if (activity.mergeInfo?.isMerged && activity.mergeInfo.originalActivityIds) {
+                    const originalIds = activity.mergeInfo.originalActivityIds;
+                    return prev
+                        .filter(a => a.id !== id)
+                        .map(a => {
+                            if (originalIds.includes(a.id)) {
+                                const updated = { ...a };
+                                delete updated.mergedIntoId;
+                                return updated;
+                            }
+                            return a;
+                        });
+                }
+            }
+            return prev.filter(a => a.id !== id);
         });
     }, []);
 
@@ -1902,6 +1961,38 @@ export function DataProvider({ children }: DataProviderProps) {
     }, []);
 
     // ============================================
+    // Quick Meals & Aliases
+    // ============================================
+
+    const addQuickMeal = useCallback((name: string, items: MealItem[]) => {
+        const newMeal: QuickMeal = {
+            id: generateId(),
+            userId: currentUser?.id || 'unknown',
+            name,
+            items,
+            createdAt: new Date().toISOString()
+        };
+        setQuickMeals(prev => [...prev, newMeal]);
+        skipAutoSave.current = true;
+        storageService.saveQuickMeal(newMeal).catch(console.error);
+    }, [currentUser]);
+
+    const deleteQuickMeal = useCallback((id: string) => {
+        setQuickMeals(prev => prev.filter(m => m.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteQuickMeal(id).catch(console.error);
+    }, []);
+
+    const updateFoodAlias = useCallback((foodId: string, alias: string) => {
+        setFoodAliases(prev => {
+            const next = { ...prev };
+            if (alias && alias.trim()) next[foodId] = alias.trim();
+            else delete next[foodId];
+            return next;
+        });
+    }, []);
+
+    // ============================================
     // Derived: Unified Activities (Manual + Strava + Strength)
     // ============================================
 
@@ -2257,6 +2348,13 @@ export function DataProvider({ children }: DataProviderProps) {
         addBodyMeasurement,
         updateBodyMeasurement,
         deleteBodyMeasurement,
+
+        // Quick Meals
+        quickMeals,
+        addQuickMeal,
+        deleteQuickMeal,
+        foodAliases,
+        updateFoodAlias,
 
         unifiedActivities,
         refreshData,

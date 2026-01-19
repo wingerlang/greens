@@ -13,6 +13,7 @@ import {
     CartesianGrid
 } from 'recharts';
 import { Calendar, Plus, Trophy, Clock, X } from 'lucide-react';
+import { isCompetition } from '../../utils/activityUtils.ts';
 
 interface RaceListProps {
     exerciseEntries: ExerciseEntry[];
@@ -36,7 +37,7 @@ export function RaceList({
     // --- Planned Races ---
     const upcomingRaces = useMemo(() => {
         return plannedActivities
-            .filter(a => (a.isRace || a.category === 'RACE' || (a.title && a.title.toLowerCase().includes('tävling'))) && a.status !== 'COMPLETED')
+            .filter(a => isCompetition({ plan: a }) && a.status !== 'COMPLETED')
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [plannedActivities]);
 
@@ -47,7 +48,7 @@ export function RaceList({
 
     // --- History Races ---
     const races = useMemo(() => {
-        let items = exerciseEntries.filter(e => e.subType === 'race');
+        let items = exerciseEntries.filter(e => isCompetition(e));
 
         // Apply Global Filter
         if (filterStartDate) items = items.filter(r => r.date >= filterStartDate);

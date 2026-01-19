@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { type MealType, type FoodCategory, MEAL_TYPE_LABELS } from '../../models/types.ts';
+import React, { useEffect, useState, useMemo } from 'react';
+import { type MealType, type FoodCategory, type QuickMeal, MEAL_TYPE_LABELS } from '../../models/types.ts';
 
 interface SearchResult {
     type: 'recipe' | 'foodItem';
@@ -68,6 +68,8 @@ interface QuickAddModalProps {
     setQuickAddServings: (val: number) => void;
     handleQuickAdd: (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number, variantId?: string) => void;
     selectedDate?: string;
+    quickMeals?: QuickMeal[];
+    onLogQuickMeal?: (qm: QuickMeal) => void;
 }
 
 export function QuickAddModal({
@@ -83,6 +85,8 @@ export function QuickAddModal({
     setQuickAddServings,
     handleQuickAdd,
     selectedDate,
+    quickMeals,
+    onLogQuickMeal,
 }: QuickAddModalProps) {
     // Track which items are toggled to "cooked" mode
     const [cookedItems, setCookedItems] = useState<Set<string>>(new Set());
@@ -147,6 +151,12 @@ export function QuickAddModal({
             setCookedItems(new Set());
         }
     }, [isOpen]);
+
+    const filteredQuickMeals = useMemo(() => {
+        if (!quickMeals) return [];
+        if (!searchQuery) return quickMeals;
+        return quickMeals.filter(qm => qm.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    }, [quickMeals, searchQuery]);
 
     if (!isOpen) return null;
 
@@ -310,6 +320,34 @@ export function QuickAddModal({
                         autoFocus
                     />
                 </div>
+
+                {/* Quick Meals Section */}
+                {filteredQuickMeals.length > 0 && (
+                    <div className="search-results proposals-results mb-4">
+                        <p className="text-[10px] text-emerald-500 uppercase font-bold mb-2 tracking-wider">
+                            {searchQuery ? '⚡ Snabbval Träffar' : '⚡ Mina Snabbval'}
+                        </p>
+                        {filteredQuickMeals.map(qm => (
+                            <div key={qm.id} className="search-result-item">
+                                <div className="result-info">
+                                    <span className="result-type">⚡</span>
+                                    <div>
+                                        <strong>{qm.name}</strong>
+                                        <small>{qm.items.length} ingredienser</small>
+                                    </div>
+                                </div>
+                                <div className="result-actions">
+                                    <button
+                                        className="btn btn-primary btn-sm"
+                                        onClick={() => onLogQuickMeal?.(qm)}
+                                    >
+                                        + Logga
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
 
                 {/* Proposals (Most/Recently Used) */}
                 {!searchQuery && proposals.length > 0 && (
