@@ -1031,7 +1031,8 @@ export function ProfilePage() {
                                         const itemDetails = qm.items.map((item, idx) => {
                                             if (item.type === 'recipe') {
                                                 const recipe = recipes.find(r => r.id === item.referenceId);
-                                                const caloriesPer100 = (recipe as any)?.nutritionEstimate?.calories || (recipe as any)?.calories || 0;
+                                                // Try to get calories from various possible locations (legacy or enriched)
+                                                const caloriesPer100 = (recipe as any)?.nutritionPerServing?.calories || (recipe as any)?.calories || 0;
                                                 return {
                                                     idx,
                                                     name: recipe?.name || 'Okänt recept',

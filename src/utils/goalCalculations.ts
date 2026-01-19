@@ -132,7 +132,8 @@ export function calculateFrequencyProgress(
         let totalCurrent = 0;
         goal.targets.forEach(target => {
             const matchingEntries = exerciseEntries.filter(e => {
-                if (e.date < start || e.date > end) return false;
+                const activityDate = e.date.split('T')[0];
+                if (activityDate < start || activityDate > end) return false;
                 if (target.exerciseType && e.type !== target.exerciseType) return false;
                 return true;
             });
@@ -143,7 +144,8 @@ export function calculateFrequencyProgress(
 
     const target = goal.targets[0];
     const matchingEntries = exerciseEntries.filter(e => {
-        if (e.date < start || e.date > end) return false;
+        const activityDate = e.date.split('T')[0];
+        if (activityDate < start || activityDate > end) return false;
         if (target?.exerciseType && e.type !== target.exerciseType) return false;
         return true;
     });
@@ -173,10 +175,9 @@ export function calculateSpeedProgress(
     if (!target?.distanceKm) return { value: 0 };
 
     const validEntries = exerciseEntries.filter(e => {
-        if (e.date < start || e.date > end) return false;
-        if (target.exerciseType === 'running' && e.type !== 'running') return false; // Default to running for speed for now
-        // Must be at least the target distance to counting "PB" style speed record?
-        // Or should we allow 4.9km? Let's be strict: >= target distance.
+        const activityDate = e.date.split('T')[0];
+        if (activityDate < start || activityDate > end) return false;
+        if (target.exerciseType === 'running' && e.type !== 'running') return false;
         return (e.distance || 0) >= target.distanceKm!;
     });
 
@@ -217,7 +218,8 @@ export function calculateDistanceProgress(
     const target = goal.targets[0];
 
     const matchingEntries = exerciseEntries.filter(e => {
-        if (e.date < start || e.date > end) return false;
+        const activityDate = e.date.split('T')[0];
+        if (activityDate < start || activityDate > end) return false;
         if (target?.exerciseType && e.type !== target.exerciseType) return false;
         return true;
     });
@@ -235,7 +237,10 @@ export function calculateTonnageProgress(
     const { start, end } = getGoalPeriodDates(goal);
 
     const totalKg = exerciseEntries
-        .filter(e => e.date >= start && e.date <= end)
+        .filter(e => {
+            const activityDate = e.date.split('T')[0];
+            return activityDate >= start && activityDate <= end;
+        })
         .reduce((sum, e) => sum + (e.tonnage || 0), 0);
 
     return totalKg / 1000; // Convert to tons
@@ -251,7 +256,10 @@ export function calculateCaloriesProgress(
     const { start, end } = getGoalPeriodDates(goal);
 
     return exerciseEntries
-        .filter(e => e.date >= start && e.date <= end)
+        .filter(e => {
+            const activityDate = e.date.split('T')[0];
+            return activityDate >= start && activityDate <= end;
+        })
         .reduce((sum, e) => sum + (e.caloriesBurned || 0), 0);
 }
 
@@ -271,7 +279,7 @@ export function calculateStreak(
     const activeDates = [...new Set(
         exerciseEntries
             .filter(e => !exerciseType || e.type === exerciseType)
-            .map(e => e.date)
+            .map(e => e.date.split('T')[0])
     )].sort().reverse();
 
     if (activeDates.length === 0) {
@@ -378,7 +386,10 @@ export function calculateNutritionProgress(
     let total = 0;
 
     mealEntries
-        .filter(e => e.date >= start && e.date <= end)
+        .filter(e => {
+            const entryDate = e.date.split('T')[0];
+            return entryDate >= start && entryDate <= end;
+        })
         .forEach(entry => {
             entry.items.forEach(item => {
                 if (item.type === 'foodItem') {

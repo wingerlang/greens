@@ -367,6 +367,7 @@ export interface MealEntry {
     mealType: MealType;
     items: MealItem[];
     title?: string; // Optional title for the meal (e.g. "Breakfast Sandwich")
+    snabbvalId?: string; // ID of the quick meal used to create this entry
     createdAt: string;
 }
 

@@ -589,6 +589,43 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         // Removed onClose() to allow multiple logging as requested
     };
 
+    const logQuickMeal = (meal: QuickMeal) => {
+        const logDate = intent.date || selectedDate || new Date().toISOString().split('T')[0];
+
+        // Determine meal type
+        let mealType: MealType = 'snack';
+        if (intent.type === 'food' && intent.data.mealType) {
+            mealType = intent.data.mealType;
+        } else {
+            const hour = new Date().getHours();
+            if (hour >= 5 && hour < 10) mealType = 'breakfast';
+            else if (hour >= 10 && hour < 14) mealType = 'lunch';
+            else if (hour >= 17 && hour < 21) mealType = 'dinner';
+        }
+
+        addMealEntry({
+            date: logDate,
+            mealType,
+            items: meal.items,
+            title: meal.name,
+            snabbvalId: meal.id // This is important for grouping on the Calories page
+        });
+
+        // Analytics
+        logEvent('omnibox_log', meal.name, 'food', {
+            type: 'quick_meal',
+            mealId: meal.id,
+            itemCount: meal.items.length,
+            logDate,
+            mealType
+        });
+
+        setShowFeedback(true);
+        setInput('');
+        // onClose()? Usually better to keep open if user wants to log more, but for quick meals maybe close?
+        // Let's follow the food item pattern: stay open but clear input.
+    };
+
     // Lock a food item for detailed editing
     const lockFood = (item: FoodItem & { usageStats?: { count: number; lastUsed: string; avgGrams: number } | null }) => {
         setLockedFood({
@@ -722,6 +759,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             const selectedUser = selectableItems[selectedIndex];
             navigate(`/u/${selectedUser.handle || selectedUser.username}`);
             onClose();
+            return;
+        }
+
+        // Handle quick meal selection
+        if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'quickMeal') {
+            const selectedMeal = selectableItems[selectedIndex] as QuickMeal;
+            logQuickMeal(selectedMeal);
             return;
         }
 
@@ -1291,6 +1335,41 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                             <div>
                                                 <div className="font-medium">{user.name}</div>
                                                 <div className="text-[10px] text-slate-500">@{user.handle || user.username}</div>
+                                            </div>
+                                        </div>
+                                        <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Quick Meal Results */}
+                    {!isSlashMode && !lockedFood && quickMealResults.length > 0 && (
+                        <div className="px-2 py-2">
+                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                <span>⚡</span> Snabbval ({quickMealResults.length})
+                            </div>
+                            {quickMealResults.map((meal, idx) => {
+                                const globalIdx = selectableItems.findIndex(i => i.itemType === 'quickMeal' && i.id === meal.id);
+                                return (
+                                    <div
+                                        key={meal.id}
+                                        onClick={() => logQuickMeal(meal)}
+                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                            ? 'bg-amber-500/20 text-amber-400'
+                                            : 'hover:bg-white/5 text-white'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-sm font-bold text-amber-400">
+                                                ⚡
+                                            </div>
+                                            <div>
+                                                <div className="font-medium">{meal.name}</div>
+                                                <div className="text-[10px] text-slate-500">
+                                                    {meal.items.length} objekt
+                                                </div>
                                             </div>
                                         </div>
                                         <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
