@@ -10,6 +10,13 @@ interface SearchResult {
     yieldFactor?: number;
     isCooked?: boolean;
     category?: FoodCategory;
+    // Variant Logic
+    variantId?: string;
+    variantName?: string;
+    // Variants for selector
+    variants?: { id: string; name: string }[];
+    // Parent item info if this is a variant result
+    parentId?: string;
 }
 
 // Default yield factors for common cookable categories
@@ -59,7 +66,7 @@ interface QuickAddModalProps {
     proposals: SearchResult[];
     quickAddServings: number;
     setQuickAddServings: (val: number) => void;
-    handleQuickAdd: (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number) => void;
+    handleQuickAdd: (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number, variantId?: string) => void;
     selectedDate?: string;
     quickMeals?: QuickMeal[];
     onLogQuickMeal?: (qm: QuickMeal) => void;
@@ -83,6 +90,8 @@ export function QuickAddModal({
 }: QuickAddModalProps) {
     // Track which items are toggled to "cooked" mode
     const [cookedItems, setCookedItems] = useState<Set<string>>(new Set());
+    // Track selected variant for base items
+    const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({}); // itemId -> variantId
 
     const toggleCooked = (id: string) => {
         setCookedItems(prev => {
@@ -155,9 +164,16 @@ export function QuickAddModal({
         const isCooked = cookedItems.has(result.id);
         const { canCook: showCookedToggle, effectiveYieldFactor } = canLogAsCooked(result);
 
+        // Variant Selection Logic
+        const hasVariants = result.variants && result.variants.length > 0;
+        const currentVariantId = selectedVariants[result.id];
+
+        // If this result IS a variant (from direct search), it acts as pre-selected
+        const effectiveVariantId = result.variantId || currentVariantId;
+
         return (
             <div
-                key={`${keyPrefix}-${result.type}-${result.id}`}
+                key={`${keyPrefix}-${result.type}-${result.id}-${result.variantId || 'base'}`}
                 className="search-result-item"
             >
                 <div className="result-info">
@@ -170,6 +186,23 @@ export function QuickAddModal({
                                 <span className="ml-2 text-emerald-400">→ kokt (×{effectiveYieldFactor})</span>
                             )}
                         </small>
+
+                        {/* Variant Selector (Dropdown) */}
+                        {hasVariants && !result.variantId && (
+                            <div className="mt-1">
+                                <select
+                                    className="text-[10px] bg-slate-800 border border-slate-700 rounded px-1 py-0.5 text-slate-300 outline-none focus:border-emerald-500 max-w-[150px]"
+                                    value={currentVariantId || ''}
+                                    onChange={(e) => setSelectedVariants(prev => ({ ...prev, [result.id]: e.target.value }))}
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <option value="">(Ospecificerad smak)</option>
+                                    {result.variants?.map(v => (
+                                        <option key={v.id} value={v.id}>{v.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                     </div>
                 </div>
                 <div className="result-actions">
@@ -201,7 +234,14 @@ export function QuickAddModal({
                     </div>
                     <button
                         className="btn btn-primary btn-sm"
-                        onClick={() => handleQuickAdd(result.type, result.id, result.defaultPortion, isCooked, isCooked ? effectiveYieldFactor : undefined)}
+                        onClick={() => handleQuickAdd(
+                            result.type,
+                            result.parentId || result.id,
+                            result.defaultPortion,
+                            isCooked,
+                            isCooked ? effectiveYieldFactor : undefined,
+                            effectiveVariantId
+                        )}
                     >
                         + Lägg till
                     </button>
