@@ -357,12 +357,14 @@ export function DataProvider({ children }: DataProviderProps) {
                 console.log('[DataContext] Starting parallel sync...');
 
                 // execute all independent fetches in parallel
-                const [userPayload, mePayload, planData, strengthData] = await Promise.all([
+                const [userPayload, mePayload, planData, strengthData, quickMealsData] = await Promise.all([
                     safeFetch<{ users: User[] }>('/api/users', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
                     safeFetch<{ user: User }>('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
                     safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', { headers: { 'Authorization': `Bearer ${token}` } }),
-                    safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } })
+                    safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    safeFetch<QuickMeal[]>('/api/quick-meals', { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
+
 
                 // 1. Handle Users
                 if (userPayload && userPayload.users && Array.isArray(userPayload.users)) {
@@ -403,6 +405,21 @@ export function DataProvider({ children }: DataProviderProps) {
                     if (stored) {
                         const parsed = JSON.parse(stored);
                         parsed.strengthSessions = strengthData.workouts;
+                        localStorage.setItem('greens-app-data', JSON.stringify(parsed));
+                    }
+                }
+
+                // 5. Handle Quick Meals
+                if (quickMealsData && Array.isArray(quickMealsData)) {
+                    console.log('[DataContext] Loaded quick meals:', quickMealsData.length);
+                    data.quickMeals = quickMealsData;
+                    setQuickMeals(quickMealsData);
+
+                    // Update local mirror
+                    const stored = localStorage.getItem('greens-app-data');
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        parsed.quickMeals = quickMealsData;
                         localStorage.setItem('greens-app-data', JSON.stringify(parsed));
                     }
                 }

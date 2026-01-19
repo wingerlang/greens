@@ -422,15 +422,17 @@ export function CaloriesPage() {
         setSelectedIds(new Set());
     };
 
-    const handleLogQuickMeal = (qm: QuickMeal) => {
+    const handleLogQuickMeal = (qm: QuickMeal, pieceCount?: number) => {
         addMealEntry({
             date: selectedDate,
             mealType,
-            items: qm.items,
-            title: qm.name
-        });
+            items: qm.items, // Items already multiplied by QuickMealRow
+            title: pieceCount && pieceCount > 1 ? `${qm.name} ×${pieceCount}` : qm.name,
+            snabbvalId: qm.id // Track which snabbval this came from
+        } as any);
         setIsFormOpen(false);
     };
+
 
     const goals = useMemo(() => {
         const periodTarget = getActiveCalories(

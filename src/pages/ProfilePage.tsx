@@ -50,7 +50,9 @@ export function ProfilePage() {
         weightEntries,
         getLatestWeight,
         trainingPeriods, // To check for active plans
-        performanceGoals // To get targetWeight from active weight goals
+        performanceGoals, // To get targetWeight from active weight goals
+        quickMeals,
+        deleteQuickMeal
     } = useData();
     const navigate = useNavigate();
 
@@ -584,8 +586,8 @@ export function ProfilePage() {
                                                 });
                                             }}
                                             className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${isActive
-                                                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                                                    : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'
+                                                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
+                                                : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'
                                                 }`}
                                         >
                                             <span className="text-3xl filter drop-shadow-lg">{type.icon}</span>
@@ -997,6 +999,53 @@ export function ProfilePage() {
                                     { value: 'imperial', label: '📐 Imperial (lbs, mi)' },
                                 ]} onChange={(v: any) => updateProfile('preferredUnits', v)} />
                             </div>
+                        </section>
+
+                        {/* Quick Meals Management */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    <span>⚡</span> Mina Snabbval
+                                </h3>
+                                <span className="text-xs text-slate-500">{quickMeals.length} sparade</span>
+                            </div>
+
+                            {quickMeals.length === 0 ? (
+                                <div className="text-center py-8 text-slate-500">
+                                    <div className="text-4xl mb-2">📭</div>
+                                    <p className="text-sm">Inga snabbval sparade ännu.</p>
+                                    <p className="text-xs mt-1">Spara en måltid som snabbval genom att svepa på den i /kalorier.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2 max-h-80 overflow-y-auto">
+                                    {quickMeals.map(qm => (
+                                        <div key={qm.id} className="bg-slate-800/50 rounded-xl p-4 border border-white/5 hover:border-emerald-500/30 transition-all group">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="font-bold text-white truncate">{qm.name}</div>
+                                                    <div className="text-xs text-slate-500 mt-1">
+                                                        {qm.items.length} objekt •
+                                                        {Math.round(qm.items.reduce((sum, i) => sum + (i.calories || 0) * (i.servings || 1), 0))} kcal totalt
+                                                    </div>
+                                                    <div className="text-[10px] text-slate-600 mt-1 truncate">
+                                                        {qm.items.map(i => i.name).join(', ')}
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        if (confirm(`Ta bort snabbval "${qm.name}"?`)) {
+                                                            deleteQuickMeal(qm.id);
+                                                        }
+                                                    }}
+                                                    className="ml-4 px-3 py-2 text-rose-400 hover:bg-rose-500/20 rounded-lg opacity-0 group-hover:opacity-100 transition-all text-xs font-bold"
+                                                >
+                                                    🗑️ Ta bort
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </section>
 
                         {/* Sessions */}

@@ -27,6 +27,7 @@ import { handleExerciseEntryRoutes } from "./handlers/exerciseEntries.ts";
 import { handlePlannedActivityRoutes } from "./handlers/plannedActivities.ts";
 import { handleAnalyticsRoutes } from "./handlers/analytics.ts";
 import { handleQuickMealRoutes } from "./handlers/quickMeals.ts";
+import { handleRecalculateCaloriesRoutes } from "./handlers/recalculateCalories.ts";
 import { logError, logMetric } from "./utils/logger.ts";
 import { sessionTracker } from "./utils/sessionTracker.ts";
 import { handleAdminSessionRoutes } from "./handlers/adminSessions.ts";
@@ -163,6 +164,8 @@ async function internalRouter(req: Request, remoteAddr: Deno.NetAddr): Promise<R
             response = await handlePlannedActivityRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/quick-meals")) {
             response = await handleQuickMealRoutes(req, url, headers);
+        } else if (url.pathname.startsWith("/api/recalculate-calories")) {
+            response = await handleRecalculateCaloriesRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/usage")) {
             response = await handleAnalyticsRoutes(req, url, headers);
         } else {

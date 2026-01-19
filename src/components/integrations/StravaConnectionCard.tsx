@@ -37,6 +37,10 @@ export function StravaConnectionCard() {
     const [loading, setLoading] = useState(true);
     const [connecting, setConnecting] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [showAdvanced, setShowAdvanced] = useState(false);
+    const [recalculating, setRecalculating] = useState(false);
+    const [recalcResult, setRecalcResult] = useState<string | null>(null);
+
 
     // Check connection status on mount
     useEffect(() => {
@@ -112,6 +116,36 @@ export function StravaConnectionCard() {
             console.error('Disconnect failed:', err);
         }
     };
+
+    const handleRecalculateCalories = async () => {
+        if (!confirm('Detta omberäknar kalorier för ALLA aktiviteter baserat på den nya formeln. Fortsätta?')) return;
+
+        setRecalculating(true);
+        setRecalcResult(null);
+
+        try {
+            const res = await fetch('/api/recalculate-calories', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const data = await res.json();
+
+            if (res.ok) {
+                setRecalcResult(`✓ ${data.updated} aktiviteter uppdaterade`);
+                // Refresh data to get new calorie values
+                await refreshData();
+            } else {
+                setRecalcResult(`✗ Fel: ${data.error}`);
+            }
+        } catch (err) {
+            setRecalcResult('✗ Nätverksfel vid omberäkning');
+            console.error('Recalculate failed:', err);
+        } finally {
+            setRecalculating(false);
+        }
+    };
+
 
     if (loading) {
         return (
@@ -211,8 +245,8 @@ export function StravaConnectionCard() {
                                 <button
                                     onClick={() => updateSettings({ stravaTimePreference: 'moving' })}
                                     className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${(settings.stravaTimePreference || 'moving') === 'moving'
-                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                            : 'text-slate-500 hover:text-slate-300'
+                                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                        : 'text-slate-500 hover:text-slate-300'
                                         }`}
                                 >
                                     Rörelsetid
@@ -220,8 +254,8 @@ export function StravaConnectionCard() {
                                 <button
                                     onClick={() => updateSettings({ stravaTimePreference: 'elapsed' })}
                                     className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-widest transition-all ${settings.stravaTimePreference === 'elapsed'
-                                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
-                                            : 'text-slate-500 hover:text-slate-300'
+                                        ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                        : 'text-slate-500 hover:text-slate-300'
                                         }`}
                                 >
                                     Total Tid
@@ -233,6 +267,45 @@ export function StravaConnectionCard() {
                                 ? 'Använder effektiv tid i rörelse för dina pass (pauser borträknade).'
                                 : 'Använder total tid från start till mål inklusive alla pauser.'}
                         </p>
+                    </div>
+
+                    {/* Advanced Section */}
+                    <div className="border-t border-white/5 pt-3">
+                        <button
+                            onClick={() => setShowAdvanced(!showAdvanced)}
+                            className="flex items-center gap-2 text-[10px] font-bold text-slate-500 hover:text-slate-400 uppercase tracking-wider transition-colors"
+                        >
+                            <span className={`transform transition-transform ${showAdvanced ? 'rotate-90' : ''}`}>▶</span>
+                            Avancerat
+                        </button>
+
+                        {showAdvanced && (
+                            <div className="mt-3 space-y-3">
+                                {/* Recalculate Calories */}
+                                <div className="bg-slate-950/50 rounded-xl p-3 border border-white/5">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1">
+                                            <div className="text-xs font-bold text-slate-300">Omberäkna kalorier</div>
+                                            <p className="text-[9px] text-slate-500 mt-1 leading-relaxed">
+                                                Applicerar den senaste kalori-formeln på alla befintliga aktiviteter. Bevarar merges och all annan data.
+                                            </p>
+                                        </div>
+                                        <button
+                                            onClick={handleRecalculateCalories}
+                                            disabled={recalculating}
+                                            className="px-3 py-2 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 text-[10px] font-bold uppercase tracking-wider transition-all border border-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                        >
+                                            {recalculating ? '⏳ Beräknar...' : '🔄 Beräkna'}
+                                        </button>
+                                    </div>
+                                    {recalcResult && (
+                                        <div className={`mt-2 text-[10px] font-bold ${recalcResult.startsWith('✓') ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {recalcResult}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* Actions */}
@@ -250,6 +323,7 @@ export function StravaConnectionCard() {
                             Synka Nu
                         </button>
                     </div>
+
                 </div>
             )}
 

@@ -48,6 +48,59 @@ function getDefaultYieldFactor(name: string): number | undefined {
     return undefined;
 }
 
+// QuickMealRow with piece counter
+function QuickMealRow({ qm, onLogQuickMeal }: { qm: QuickMeal; onLogQuickMeal?: (qm: QuickMeal, pieceCount?: number) => void }) {
+    const [pieces, setPieces] = useState(1);
+
+    const handleLog = () => {
+        if (pieces === 1) {
+            onLogQuickMeal?.(qm);
+        } else {
+            // Create a new QuickMeal with multiplied servings
+            const multipliedQm: QuickMeal = {
+                ...qm,
+                items: qm.items.map(item => ({
+                    ...item,
+                    servings: item.servings * pieces
+                }))
+            };
+            onLogQuickMeal?.(multipliedQm, pieces);
+        }
+    };
+
+    return (
+        <div className="search-result-item">
+            <div className="result-info">
+                <span className="result-type">⚡</span>
+                <div>
+                    <strong>{qm.name}</strong>
+                    <small>{qm.items.length} ingredienser {pieces > 1 && <span className="text-emerald-400 font-bold">× {pieces}</span>}</small>
+                </div>
+            </div>
+            <div className="result-actions">
+                {/* Piece counter */}
+                <div className="portion-control mr-2">
+                    <button
+                        className="btn-portion"
+                        onClick={() => setPieces(Math.max(1, pieces - 1))}
+                    >−</button>
+                    <span className="portion-value">{pieces}st</span>
+                    <button
+                        className="btn-portion"
+                        onClick={() => setPieces(pieces + 1)}
+                    >+</button>
+                </div>
+                <button
+                    className="btn btn-primary btn-sm"
+                    onClick={handleLog}
+                >
+                    + Logga
+                </button>
+            </div>
+        </div>
+    );
+}
+
 interface QuickAddModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -62,8 +115,9 @@ interface QuickAddModalProps {
     handleQuickAdd: (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number) => void;
     selectedDate?: string;
     quickMeals?: QuickMeal[];
-    onLogQuickMeal?: (qm: QuickMeal) => void;
+    onLogQuickMeal?: (qm: QuickMeal, pieceCount?: number) => void;
 }
+
 
 export function QuickAddModal({
     isOpen,
@@ -230,8 +284,8 @@ export function QuickAddModal({
                 {/* Date indicator - prominent when not today */}
                 {selectedDate && (
                     <div className={`mb-4 px-4 py-3 rounded-xl border flex items-center gap-3 ${isToday
-                            ? 'bg-slate-800/50 border-slate-700'
-                            : 'bg-amber-900/20 border-amber-500/30'
+                        ? 'bg-slate-800/50 border-slate-700'
+                        : 'bg-amber-900/20 border-amber-500/30'
                         }`}>
                         <div className={`text-xl ${isToday ? 'opacity-50' : ''}`}>
                             {isToday ? '📅' : '⏮️'}
@@ -288,26 +342,15 @@ export function QuickAddModal({
                             {searchQuery ? '⚡ Snabbval Träffar' : '⚡ Mina Snabbval'}
                         </p>
                         {filteredQuickMeals.map(qm => (
-                            <div key={qm.id} className="search-result-item">
-                                <div className="result-info">
-                                    <span className="result-type">⚡</span>
-                                    <div>
-                                        <strong>{qm.name}</strong>
-                                        <small>{qm.items.length} ingredienser</small>
-                                    </div>
-                                </div>
-                                <div className="result-actions">
-                                    <button
-                                        className="btn btn-primary btn-sm"
-                                        onClick={() => onLogQuickMeal?.(qm)}
-                                    >
-                                        + Logga
-                                    </button>
-                                </div>
-                            </div>
+                            <QuickMealRow
+                                key={qm.id}
+                                qm={qm}
+                                onLogQuickMeal={onLogQuickMeal}
+                            />
                         ))}
                     </div>
                 )}
+
 
                 {/* Proposals (Most/Recently Used) */}
                 {!searchQuery && proposals.length > 0 && (

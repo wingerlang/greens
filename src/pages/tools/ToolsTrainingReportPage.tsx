@@ -58,13 +58,16 @@ interface TrainingStats {
 }
 
 interface StrengthProfile {
-    squat: { val: number; erm: number; source?: SourceInfo };
-    bench: { val: number; erm: number; source?: SourceInfo };
-    deadlift: { val: number; erm: number; source?: SourceInfo };
-    ohp: { val: number; erm: number; source?: SourceInfo };
-    swings: { val: number; erm: number; source?: SourceInfo };
-    biceps: { val: number; erm: number; source?: SourceInfo };
-    total: number;
+    squat: { val: number; erm: number; sourceVal?: SourceInfo; sourceErm?: SourceInfo };
+    bench: { val: number; erm: number; sourceVal?: SourceInfo; sourceErm?: SourceInfo };
+    deadlift: { val: number; erm: number; sourceVal?: SourceInfo; sourceErm?: SourceInfo };
+    ohp: { val: number; erm: number; sourceVal?: SourceInfo; sourceErm?: SourceInfo };
+    swings: { val: number; erm: number; sourceVal?: SourceInfo; sourceErm?: SourceInfo };
+    biceps: { val: number; erm: number; sourceVal?: SourceInfo; sourceErm?: SourceInfo };
+    pullups: { val: number; erm: number; maxReps: number; sourceVal?: SourceInfo; sourceErm?: SourceInfo; sourceMax?: SourceInfo };
+    row: { val: number; erm: number; sourceVal?: SourceInfo; sourceErm?: SourceInfo };
+    totalActual: number;
+    totalEstimated: number;
     bwRatio: number;
     level: string;
     ipfPoints: number;
@@ -99,13 +102,14 @@ function getWeekKey(date: Date) {
 // --- Component ---
 
 export function ToolsTrainingReportPage() {
-    const { universalActivities, strengthSessions, getLatestWeight, userSettings } = useData();
+    const { universalActivities, exerciseEntries, strengthSessions, getLatestWeight, userSettings, unifiedActivities } = useData();
     const [promptCopied, setPromptCopied] = useState(false);
     const [isPromptOpen, setIsPromptOpen] = useState(false);
+    const [totalMode, setTotalMode] = useState<'actual' | 'estimated'>('actual');
 
     // 1. Process Timeline & Consistency
     const stats: TrainingStats = useMemo(() => {
-        const allActivities = [...universalActivities].sort((a, b) =>
+        const allActivities = [...unifiedActivities].sort((a, b) =>
             new Date(a.date).getTime() - new Date(b.date).getTime()
         );
 
@@ -132,12 +136,12 @@ export function ToolsTrainingReportPage() {
             const k = getWeekKey(d);
             weeks[k] = (weeks[k] || 0) + 1;
 
-            const type = a.performance?.activityType || 'other';
-            const dur = a.performance?.durationMinutes || 0;
+            const type = (((a as any).performance?.activityType || (a as any).type || 'other') as string).toLowerCase();
+            const dur = (a as any).performance?.durationMinutes || (a as any).durationMinutes || (a as any).duration || 0;
 
-            if (['running', 'cycling', 'swimming', 'cardio'].includes(type)) {
+            if (['running', 'cycling', 'swimming', 'cardio', 'löpning', 'cykling', 'simning'].includes(type)) {
                 cardioMins += dur;
-            } else if (['strength', 'weightlifting'].includes(type)) {
+            } else if (['strength', 'weightlifting', 'styrketräning'].includes(type)) {
                 strengthMins += dur;
             } else {
                 // Default split if unknown
@@ -190,11 +194,16 @@ export function ToolsTrainingReportPage() {
         const ohp = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.ohp, EXCLUDE_PATTERNS.ohp);
         const swings = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.swings);
         const biceps = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.biceps);
+        const pullups = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.pullups, EXCLUDE_PATTERNS.pullups);
+        const row = getBestSetForPatterns(strengthSessions, MATCH_PATTERNS.row, EXCLUDE_PATTERNS.row);
 
         const bw = getLatestWeight() || 80;
-        const total = Math.round(squat.maxEstimated1RM + bench.maxEstimated1RM + deadlift.maxEstimated1RM);
-        const ratio = total / bw;
-        const ipfPoints = calculateIPFPoints(bw, total, (userSettings as any)?.gender || 'male');
+        const totalActual = Math.round(squat.maxWeight + bench.maxWeight + deadlift.maxWeight);
+        const totalEstimated = Math.round(squat.maxEstimated1RM + bench.maxEstimated1RM + deadlift.maxEstimated1RM);
+
+        const displayTotal = totalMode === 'actual' ? totalActual : totalEstimated;
+        const ratio = displayTotal / bw;
+        const ipfPoints = calculateIPFPoints(bw, displayTotal, (userSettings as any)?.gender || 'male');
 
         let level = 'Nybörjare';
         if (ratio > 2.5) level = 'Motionär';
@@ -202,24 +211,36 @@ export function ToolsTrainingReportPage() {
         if (ratio > 4.5) level = 'Avancerad';
         if (ratio > 5.5) level = 'Elit';
 
+        const mapResult = (res: any) => ({
+            val: res.maxWeight,
+            erm: res.maxEstimated1RM,
+            maxReps: res.maxReps || 0,
+            sourceVal: res.heaviestSet || undefined,
+            sourceErm: res.bestEstimatedSet || undefined,
+            sourceMax: res.maxRepsSet || undefined
+        });
+
         return {
-            squat: { val: squat.maxWeight, erm: squat.maxEstimated1RM, source: squat.heaviestSet || undefined },
-            bench: { val: bench.maxWeight, erm: bench.maxEstimated1RM, source: bench.heaviestSet || undefined },
-            deadlift: { val: deadlift.maxWeight, erm: deadlift.maxEstimated1RM, source: deadlift.heaviestSet || undefined },
-            ohp: { val: ohp.maxWeight, erm: ohp.maxEstimated1RM, source: ohp.heaviestSet || undefined },
-            swings: { val: swings.maxWeight, erm: swings.maxEstimated1RM, source: swings.heaviestSet || undefined },
-            biceps: { val: biceps.maxWeight, erm: biceps.maxEstimated1RM, source: biceps.heaviestSet || undefined },
-            total,
+            squat: mapResult(squat),
+            bench: mapResult(bench),
+            deadlift: mapResult(deadlift),
+            ohp: mapResult(ohp),
+            swings: mapResult(swings),
+            biceps: mapResult(biceps),
+            pullups: mapResult(pullups),
+            row: mapResult(row),
+            totalActual,
+            totalEstimated,
             bwRatio: ratio,
             level,
             ipfPoints
         };
-    }, [strengthSessions, getLatestWeight, userSettings]);
+    }, [strengthSessions, getLatestWeight, userSettings, totalMode]);
 
     // 2.2 Process Running Profile
     const runningProfile: RunningProfile = useMemo(() => {
-        return detectRunningPBs(universalActivities);
-    }, [universalActivities]);
+        return detectRunningPBs(unifiedActivities);
+    }, [unifiedActivities]);
 
     // 3. Generate AI Prompt
     const generateAiPrompt = () => {
@@ -247,16 +268,21 @@ export function ToolsTrainingReportPage() {
                 best_5k: runningProfile.best5k.time,
                 best_10k: runningProfile.best10k.time,
                 best_half_marathon: runningProfile.bestHalf.time,
+                best_marathon: runningProfile.bestFull.time,
                 longest_run_km: runningProfile.longestRun.dist.toFixed(1)
             },
             strength_performance: {
-                squat: { heaviest_weight: Math.round(strengthProfile.squat.val), estimated_1rm: Math.round(strengthProfile.squat.erm) },
-                bench: { heaviest_weight: Math.round(strengthProfile.bench.val), estimated_1rm: Math.round(strengthProfile.bench.erm) },
-                deadlift: { heaviest_weight: Math.round(strengthProfile.deadlift.val), estimated_1rm: Math.round(strengthProfile.deadlift.erm) },
+                squat: { heaviest_weight: Math.round(strengthProfile.squat.val), estimated_1rm: Math.round(strengthProfile.squat.erm), best_set: strengthProfile.squat.sourceErm ? `${strengthProfile.squat.sourceErm.reps}x${strengthProfile.squat.sourceErm.weight}kg` : '-' },
+                bench: { heaviest_weight: Math.round(strengthProfile.bench.val), estimated_1rm: Math.round(strengthProfile.bench.erm), best_set: strengthProfile.bench.sourceErm ? `${strengthProfile.bench.sourceErm.reps}x${strengthProfile.bench.sourceErm.weight}kg` : '-' },
+                deadlift: { heaviest_weight: Math.round(strengthProfile.deadlift.val), estimated_1rm: Math.round(strengthProfile.deadlift.erm), best_set: strengthProfile.deadlift.sourceErm ? `${strengthProfile.deadlift.sourceErm.reps}x${strengthProfile.deadlift.sourceErm.weight}kg` : '-' },
                 ohp_erm: Math.round(strengthProfile.ohp.erm),
+                pullups_max_reps: strengthProfile.pullups.maxReps,
+                rows_erm: Math.round(strengthProfile.row.erm),
                 kettlebell_swings_erm: Math.round(strengthProfile.swings.erm),
                 bicep_curl_erm: Math.round(strengthProfile.biceps.erm),
-                total_sbd_erm: Math.round(strengthProfile.total),
+                total_sbd_base: totalMode === 'actual' ? 'Actual 1RM' : 'Estimated 1RM (e1RM)',
+                total_sbd: strengthProfile.totalActual,
+                total_sbd_erm: strengthProfile.totalEstimated,
                 relative_strength: strengthProfile.bwRatio.toFixed(2),
                 ipf_points: strengthProfile.ipfPoints.toFixed(1),
                 level: strengthProfile.level
@@ -391,7 +417,7 @@ Svara på Svenska. Håll det koncist, motiverande men ärligt.
                     </div>
 
                     {/* AI Prompt Section */}
-                    <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border border-indigo-500/30 rounded-3xl p-8 relative overflow-hidden">
+                    <div className="bg-gradient-to-br from-indigo-900/20 to-purple-900/20 border border-indigo-500/30 rounded-3xl p-8 relative overflow-hidden h-fit">
                         <div className="flex items-center justify-between mb-6 relative z-10">
                             <div className="flex items-center gap-3">
                                 <div className="p-2 bg-indigo-500/20 rounded-xl border border-indigo-500/30">
@@ -431,114 +457,144 @@ Svara på Svenska. Håll det koncist, motiverande men ärligt.
                     </div>
                 </div>
 
-                {/* Right: Strength Stats */}
+                {/* Right: Strength Stats (Main Lifts) */}
                 <div className="bg-slate-900 border border-white/5 rounded-3xl p-8 h-fit">
-                    <div className="flex items-center gap-3 mb-6">
+                    <div className="flex items-center gap-3 mb-8">
                         <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
                             <Dumbbell className="w-5 h-5 text-emerald-400" />
                         </div>
                         <div>
                             <h2 className="text-2xl font-bold text-white">Styrkeprofil</h2>
-                            <p className="text-xs text-slate-500">Baserat på dina bästa e1RM</p>
+                            <p className="text-xs text-slate-500">De tre stora & press</p>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4 mb-8">
+                    <div className="grid grid-cols-2 gap-4">
                         <StrengthCard label="Knäböj" data={strengthProfile.squat} />
                         <StrengthCard label="Bänkpress" data={strengthProfile.bench} />
                         <StrengthCard label="Marklyft" data={strengthProfile.deadlift} />
                         <StrengthCard label="Militärpress" data={strengthProfile.ohp} />
                     </div>
+                </div>
+            </div>
 
-                    <div className="p-6 bg-slate-950 rounded-2xl border border-white/5 mb-8">
-                        <div className="text-center mb-6">
-                            <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total (SBD)</div>
-                            <div className="text-5xl font-black text-white mb-2">{strengthProfile.total} <span className="text-lg text-slate-600">kg</span></div>
-                            <div className="flex flex-col gap-2 items-center">
-                                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-black uppercase border border-emerald-500/20">
-                                    <Award className="w-3 h-3" />
-                                    Nivå: {strengthProfile.level} ({strengthProfile.bwRatio.toFixed(1)}x BW)
-                                </div>
-                                <div className="text-[10px] font-mono text-slate-500 uppercase tracking-wider">
-                                    {strengthProfile.ipfPoints.toFixed(1)} IPF GL Points
-                                </div>
-                            </div>
-                        </div>
+            {/* SBD Total Box - Standalone */}
+            <div className="bg-slate-900 border border-indigo-500/20 rounded-3xl p-8 relative overflow-hidden group hover:border-indigo-500/40 transition-all">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 blur-[100px] pointer-events-none" />
 
-                        {/* SBD Breakdown - Similar to Matchup Page */}
-                        <div className="space-y-3 pt-6 border-t border-white/5">
-                            {[
-                                { label: 'Knäböj', data: strengthProfile.squat },
-                                { label: 'Bänkpress', data: strengthProfile.bench },
-                                { label: 'Marklyft', data: strengthProfile.deadlift }
-                            ].map((item, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.04] transition-colors group">
+                <div className="flex justify-between items-start mb-8 relative z-10">
+                    <div>
+                        <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Total (SBD)</div>
+                        <div className="text-6xl font-black text-white">{totalMode === 'actual' ? strengthProfile.totalActual : strengthProfile.totalEstimated} <span className="text-xl text-slate-600">kg</span></div>
+                    </div>
+
+                    <div className="flex bg-slate-950 p-1 rounded-xl border border-white/5">
+                        <button
+                            onClick={() => setTotalMode('actual')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${totalMode === 'actual' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-400'}`}
+                        >
+                            Faktisk
+                        </button>
+                        <button
+                            onClick={() => setTotalMode('estimated')}
+                            className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all ${totalMode === 'estimated' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-400'}`}
+                        >
+                            e1RM
+                        </button>
+                    </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-8 items-center relative z-10">
+                    <div className="space-y-4">
+                        {[
+                            { label: 'Knäböj', data: strengthProfile.squat },
+                            { label: 'Bänkpress', data: strengthProfile.bench },
+                            { label: 'Marklyft', data: strengthProfile.deadlift }
+                        ].map((item, idx) => {
+                            const source = totalMode === 'actual' ? item.data.sourceVal : item.data.sourceErm;
+                            return (
+                                <Link
+                                    key={idx}
+                                    to={source ? `/activity/${source.sessionId}` : '#'}
+                                    className="flex items-center justify-between p-3 rounded-xl bg-white/[0.02] hover:bg-white/[0.08] border border-transparent hover:border-white/10 transition-all group"
+                                >
                                     <div className="flex flex-col">
-                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{item.label}</span>
-                                        <span className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">
-                                            {item.data.source?.exerciseName || '-'}
+                                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider group-hover:text-emerald-400/80 transition-colors">{item.label}</span>
+                                        <span className="text-xs font-bold text-white">
+                                            {source?.exerciseName || '-'}
                                         </span>
                                     </div>
                                     <div className="text-right">
-                                        <div className="flex items-baseline justify-end gap-1">
-                                            <span className="text-sm font-black text-white">{Math.round(item.data.val > 0 ? item.data.val : item.data.erm)}</span>
+                                        <div className="flex items-baseline gap-1">
+                                            <span className="text-sm font-black text-white">{Math.round(totalMode === 'actual' ? item.data.val : item.data.erm)}</span>
                                             <span className="text-[10px] text-slate-600">kg</span>
                                         </div>
-                                        <div className="text-[9px] font-mono text-slate-500">
-                                            {item.data.val > 0 ? 'Faktisk' : 'e1RM'}
+                                        <div className="text-[9px] text-slate-400 font-bold uppercase opacity-80 group-hover:opacity-100">
+                                            {source?.date}
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                </Link>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex flex-col gap-3 items-center md:items-end justify-center">
+                        <div className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-black uppercase border border-emerald-500/20 shadow-lg shadow-emerald-500/5 transition-transform hover:scale-105">
+                            <Award className="w-4 h-4" />
+                            Nivå: {strengthProfile.level} ({strengthProfile.bwRatio.toFixed(1)}x BW)
+                        </div>
+                        <div className="text-xs font-mono text-slate-500 uppercase tracking-wider bg-slate-950 px-3 py-1 rounded-lg border border-white/5">
+                            {strengthProfile.ipfPoints.toFixed(1)} IPF GL Points
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Section: Running & Others (Wider Side by Side) */}
+            <div className="grid lg:grid-cols-3 gap-8">
+                {/* Löparprofil (2/3 width) */}
+                <div className="lg:col-span-2 bg-slate-900 border border-white/5 rounded-3xl p-8 h-fit">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                            <Trophy className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-white">Löparprofil</h2>
+                            <p className="text-xs text-slate-500">Dina snabbaste tider och uthållighet</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                        <RunningCard label="5 KM" data={runningProfile.best5k} />
+                        <RunningCard label="10 KM" data={runningProfile.best10k} />
+                        <RunningCard label="Halvmaraton" data={runningProfile.bestHalf} />
+                        <RunningCard label="Maraton" data={runningProfile.bestFull} />
+                        <RunningCard label="Längsta" value={`${runningProfile.longestRun.dist.toFixed(1)}km`} sub={runningProfile.longestRun.time} date={runningProfile.longestRun.date} />
+
+                        <div className="p-4 bg-slate-950/50 rounded-xl border border-white/5 flex flex-col items-center justify-center text-center">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Tävlingar</div>
+                            <div className="text-3xl font-black text-white">{runningProfile.competitions} <span className="text-xs text-slate-600">st</span></div>
                         </div>
                     </div>
                 </div>
 
-                {/* Right: Running Stats & Other Exercises */}
-                <div className="flex flex-col gap-8">
-                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-8 h-fit">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                                <Trophy className="w-5 h-5 text-blue-400" />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-bold text-white">Löparprofil</h2>
-                                <p className="text-xs text-slate-500">Dina snabbaste tider och uthållighet</p>
-                            </div>
+                {/* Andra Övningar (1/3 width) */}
+                <div className="bg-slate-900 border border-white/5 rounded-3xl p-8 h-fit">
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                            <Zap className="w-5 h-5 text-emerald-400" />
                         </div>
-
-                        <div className="grid grid-cols-2 gap-4 mb-8">
-                            <RunningCard label="5 KM" data={runningProfile.best5k} />
-                            <RunningCard label="10 KM" data={runningProfile.best10k} />
-                            <RunningCard label="Halvmaraton" data={runningProfile.bestHalf} />
-                            <RunningCard label="Maraton" data={runningProfile.bestFull} />
-                            <RunningCard label="Längsta" value={`${runningProfile.longestRun.dist.toFixed(1)}km`} sub={runningProfile.longestRun.time} date={runningProfile.longestRun.date} />
-                        </div>
-
-                        <div className="p-6 bg-slate-950 rounded-2xl border border-white/5 text-center">
-                            <div className="text-sm font-bold text-slate-500 uppercase tracking-widest mb-2">Tävlingar</div>
-                            <div className="text-4xl font-black text-white mb-1">{runningProfile.competitions} st</div>
-                            <div className="text-[10px] text-slate-500 mt-2">
-                                Baserat på ord som "tävling" eller "lopp" i titeln
-                            </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-white">Andra Övningar</h2>
+                            <p className="text-xs text-slate-500">Kettlebell, Biceps, Chins & Rodd</p>
                         </div>
                     </div>
 
-                    <div className="bg-slate-900 border border-white/5 rounded-3xl p-8 h-fit">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="p-2 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
-                                <Dumbbell className="w-5 h-5 text-emerald-400" />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-bold text-white">Andra Övningar</h2>
-                                <p className="text-xs text-slate-500">Kettlebell, Biceps och mer</p>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <StrengthCard label="KB Swings" data={strengthProfile.swings} />
-                            <StrengthCard label="Bicepscurl" data={strengthProfile.biceps} />
-                        </div>
+                    <div className="grid grid-cols-1 gap-4">
+                        <StrengthCard label="Pullups" data={strengthProfile.pullups} />
+                        <StrengthCard label="Rodd" data={strengthProfile.row} />
+                        <StrengthCard label="KB Swings" data={strengthProfile.swings} />
+                        <StrengthCard label="Bicepscurl" data={strengthProfile.biceps} />
                     </div>
                 </div>
             </div>
@@ -565,41 +621,52 @@ function StatCard({ label, value, sub, icon }: { label: string, value: string, s
     );
 }
 
-function StrengthCard({ label, data }: { label: string, data: { val: number, erm: number, source?: SourceInfo } }) {
-    const diff = data.erm - data.val;
-    const hasSource = !!data.source;
-    // Show Actual Weight (val) if > 0, otherwise show e1RM
-    const displayVal = data.val > 0 ? data.val : data.erm;
+function StrengthCard({ label, data }: { label: string, data: { val: number, erm: number, maxReps?: number, sourceVal?: SourceInfo, sourceErm?: SourceInfo } }) {
+    const isPullups = label.toLowerCase().includes('pullup') || label.toLowerCase().includes('chins');
 
     return (
-        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 flex flex-col gap-2 group hover:border-emerald-500/30 transition-colors">
-            <div className="flex justify-between items-start">
-                <span className="text-xs text-slate-500 font-bold uppercase">{label}</span>
-                {hasSource && (
-                    <div className="flex gap-1">
-                        {data.val > 0 ? (
-                            <div className="text-[9px] bg-blue-500/10 text-blue-500 px-1 py-0.5 rounded font-mono">FAKTISK</div>
-                        ) : (
-                            <div className="text-[9px] bg-emerald-500/10 text-emerald-500 px-1 py-0.5 rounded font-mono">e1RM</div>
-                        )}
-                    </div>
-                )}
+        <div className="bg-slate-950/50 p-4 rounded-2xl border border-white/5 flex flex-col gap-3 group hover:border-emerald-500/20 transition-all">
+            <div className="flex justify-between items-center">
+                <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{label}</span>
             </div>
-            <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-white">{Math.round(displayVal)} <span className="text-xs text-slate-600 font-normal">kg</span></span>
-                {diff > 0.5 && data.val > 0 && (
-                    <span className="text-[10px] text-amber-500 font-bold">-{Math.round(diff)}kg mot e1RM</span>
-                )}
-            </div>
-            {data.source && (
-                <div className="text-[9px] text-slate-600 font-mono leading-tight mt-1 pt-2 border-t border-white/5">
-                    <div>{data.source.exerciseName}</div>
-                    <div className="flex justify-between mt-0.5">
-                        <span>{data.source.weight}kg x {data.source.reps}</span>
-                        <span>{data.source.date}</span>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-0.5">
+                    <div className="text-[9px] font-bold text-slate-600 uppercase">{isPullups ? 'Max Reps' : 'Faktisk'}</div>
+                    <div className="text-xl font-black text-white">
+                        {isPullups ? (data.maxReps || '-') : (data.val || '-')}
+                        <span className="text-[10px] text-slate-600 font-normal ml-1">{isPullups ? 'st' : 'kg'}</span>
                     </div>
                 </div>
-            )}
+                <div className="space-y-0.5 text-right">
+                    <div className="text-[9px] font-bold text-indigo-500/70 uppercase">e1RM</div>
+                    <div className="text-xl font-black text-indigo-400">{data.erm || '-'} <span className="text-[10px] text-slate-600 font-normal ml-1">kg</span></div>
+                </div>
+            </div>
+
+            <div className="pt-2 border-t border-white/5 space-y-2">
+                {data.sourceVal && (
+                    <Link
+                        to={`/activity/${data.sourceVal.sessionId}`}
+                        className="block text-[10px] text-slate-400 hover:text-white leading-tight bg-white/[0.03] p-2 rounded-lg border border-transparent hover:border-white/10 transition-all group/link"
+                    >
+                        <div className="font-black text-slate-300 group-hover/link:text-emerald-400 transition-colors">Tyngsta: {data.sourceVal.reps}x{data.sourceVal.weight}kg</div>
+                        <div className="truncate opacity-70 group-hover/link:opacity-100">{data.sourceVal.exerciseName} • {data.sourceVal.date}</div>
+                    </Link>
+                )}
+                {data.sourceErm && data.sourceErm.sessionId !== data.sourceVal?.sessionId && (
+                    <Link
+                        to={`/activity/${data.sourceErm.sessionId}`}
+                        className="block text-[10px] text-indigo-300 hover:text-white leading-tight bg-indigo-500/[0.05] p-2 rounded-lg border border-transparent hover:border-indigo-500/20 transition-all group/link"
+                    >
+                        <div className="font-black text-indigo-400 group-hover/link:text-indigo-300 transition-colors">Bästa e1RM: {data.sourceErm.reps}x{data.sourceErm.weight}kg</div>
+                        <div className="truncate opacity-70 group-hover/link:opacity-100">{data.sourceErm.exerciseName} • {data.sourceErm.date}</div>
+                    </Link>
+                )}
+                {!data.sourceVal && !data.sourceErm && (
+                    <div className="text-[9px] text-slate-700 italic px-2">Ingen data</div>
+                )}
+            </div>
         </div>
     );
 }
@@ -608,22 +675,33 @@ function RunningCard({ label, data, value, sub, date }: { label: string, data?: 
     const displayValue = value || data?.time || '-';
     const displaySub = sub || (data?.time === '-' ? '' : 'PB-Tid');
     const displayDate = date || data?.date || '';
+    const sessionId = data?.id;
 
-    return (
-        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 flex flex-col gap-2 group hover:border-blue-500/30 transition-colors">
+    const content = (
+        <div className="bg-slate-950/50 p-4 rounded-xl border border-white/5 flex flex-col gap-2 group hover:border-blue-500/30 transition-all w-full h-full">
             <div className="flex justify-between items-start">
                 <span className="text-xs text-slate-500 font-bold uppercase">{label}</span>
                 <Trophy className="w-3 h-3 text-blue-500/30 group-hover:text-blue-500 transition-colors" />
             </div>
             <div>
-                <div className="text-2xl font-black text-white">{displayValue}</div>
+                <div className="text-2xl font-black text-white group-hover:text-blue-400 transition-colors">{displayValue}</div>
                 <div className="text-[10px] text-blue-400 font-bold uppercase">{displaySub}</div>
             </div>
             {displayDate && displayDate !== '-' && (
-                <div className="text-[9px] text-slate-600 font-mono mt-1 pt-2 border-t border-white/5">
+                <div className="text-[9px] text-slate-400 font-mono mt-1 pt-2 border-t border-white/5 opacity-60 group-hover:opacity-100">
                     Förevigat {displayDate}
                 </div>
             )}
         </div>
     );
+
+    if (sessionId) {
+        return (
+            <Link to={`/activity/${sessionId}`} className="block">
+                {content}
+            </Link>
+        );
+    }
+
+    return content;
 }

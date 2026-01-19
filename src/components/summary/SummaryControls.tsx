@@ -8,6 +8,8 @@ interface SummaryControlsProps {
     showPrs: boolean;
     onTogglePrs: (show: boolean) => void;
     isDownloading: boolean;
+    viewMode: 'single' | 'vs';
+    onViewModeChange: (mode: 'single' | 'vs') => void;
 }
 
 export const SummaryControls: React.FC<SummaryControlsProps> = ({
@@ -17,7 +19,9 @@ export const SummaryControls: React.FC<SummaryControlsProps> = ({
     onDownload,
     showPrs,
     onTogglePrs,
-    isDownloading
+    isDownloading,
+    viewMode,
+    onViewModeChange
 }) => {
 
     const setPreset = (days: number | 'year' | 'last_year') => {
@@ -40,6 +44,22 @@ export const SummaryControls: React.FC<SummaryControlsProps> = ({
     return (
         <div className="bg-slate-900 border border-white/10 p-6 rounded-2xl space-y-6">
             <div>
+                <h3 className="text-lg font-bold text-white mb-4">Vy</h3>
+                <div className="flex bg-slate-950 p-1 rounded-xl border border-white/5 mb-6">
+                    <button
+                        onClick={() => onViewModeChange('single')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-tight transition-all ${viewMode === 'single' ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20' : 'text-slate-500 hover:text-slate-400'}`}
+                    >
+                        Enskild
+                    </button>
+                    <button
+                        onClick={() => onViewModeChange('vs')}
+                        className={`flex-1 py-2 rounded-lg text-xs font-black uppercase tracking-tight transition-all ${viewMode === 'vs' ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-500 hover:text-slate-400'}`}
+                    >
+                        Jämför (vs)
+                    </button>
+                </div>
+
                 <h3 className="text-lg font-bold text-white mb-4">Period</h3>
                 <div className="grid grid-cols-2 gap-2 mb-4">
                     <button onClick={() => setPreset(30)} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-bold transition-colors">Senaste 30 dagarna</button>

@@ -79,7 +79,11 @@ export function MealTimeline({
         return (
             <div
                 key={entry.id}
-                className={`group relative flex items-center justify-between p-3 bg-slate-900/40 border border-white/5 rounded-2xl hover:border-white/10 transition-all gap-4 ${isCompact ? '' : 'mb-2'} cursor-move`}
+                className={`group relative flex items-center justify-between p-3 bg-slate-900/40 border rounded-2xl hover:border-white/10 transition-all gap-4 ${isCompact ? '' : 'mb-2'} cursor-move ${(entry as any).snabbvalId || entry.title?.includes('⚡') || entry.title?.startsWith('×') || (entry.title && entry.items.length > 1)
+                    ? 'border-emerald-500/30 bg-emerald-500/5'
+                    : 'border-white/5'
+                    }`}
+
                 draggable
                 onDragStart={(e) => {
                     e.dataTransfer.setData('entryId', entry.id);
@@ -113,9 +117,10 @@ export function MealTimeline({
                     <div className="flex flex-col min-w-0">
                         {entry.title && (
                             <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider block leading-none mb-0.5">
-                                {entry.title}
+                                {(entry as any).snabbvalId && '⚡ '}{entry.title}
                             </span>
                         )}
+
                         <span className={`text-sm ${entry.title ? 'text-slate-400 font-medium' : 'text-slate-200 font-bold'} truncate`}>
                             {entry.items.map((item) => getItemName(item)).join(', ')}
                         </span>
