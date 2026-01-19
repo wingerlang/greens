@@ -45,7 +45,8 @@ import {
     type UserPrivacy,
     type BodyMeasurementEntry, // Phase Legacy+
     type TrainingPeriod,
-    type QuickMeal
+    type QuickMeal,
+    type MealItem
 } from '../models/types.ts';
 import { type StrengthWorkout } from '../models/strengthTypes.ts';
 import { storageService } from '../services/storage.ts';
@@ -209,6 +210,7 @@ interface DataContextType {
     // Quick Meals & Aliases
     quickMeals: QuickMeal[];
     addQuickMeal: (name: string, items: MealItem[]) => void;
+    updateQuickMeal: (id: string, updates: Partial<Omit<QuickMeal, 'id' | 'userId' | 'createdAt'>>) => void;
     deleteQuickMeal: (id: string) => void;
     foodAliases: Record<string, string>;
     updateFoodAlias: (foodId: string, alias: string) => void;
@@ -2120,6 +2122,17 @@ export function DataProvider({ children }: DataProviderProps) {
         storageService.deleteQuickMeal(id).catch(console.error);
     }, []);
 
+    const updateQuickMeal = useCallback((id: string, updates: Partial<Omit<QuickMeal, 'id' | 'userId' | 'createdAt'>>) => {
+        setQuickMeals(prev => prev.map(m => {
+            if (m.id !== id) return m;
+            const updated = { ...m, ...updates };
+            // Save to storage
+            storageService.saveQuickMeal(updated).catch(console.error);
+            return updated;
+        }));
+        skipAutoSave.current = true;
+    }, []);
+
     const updateFoodAlias = useCallback((foodId: string, alias: string) => {
         setFoodAliases(prev => {
             const next = { ...prev };
@@ -2489,6 +2502,7 @@ export function DataProvider({ children }: DataProviderProps) {
         // Quick Meals
         quickMeals,
         addQuickMeal,
+        updateQuickMeal,
         deleteQuickMeal,
         foodAliases,
         updateFoodAlias,

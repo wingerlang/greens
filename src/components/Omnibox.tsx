@@ -11,6 +11,7 @@ import {
     FoodItem,
     MealType,
     BodyMeasurementType,
+    QuickMeal,
 } from '../models/types.ts';
 import {
     Search,
@@ -201,13 +202,15 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         updateVitals,
         getVitalsForDate,
         foodItems,
+        recipes,
         addMealEntry,
         mealEntries,
         addExercise,
         calculateExerciseCalories,
         users,
         addBodyMeasurement,
-        selectedDate
+        selectedDate,
+        quickMeals
     } = useData();
     const { logEvent } = useAnalytics();
 
@@ -408,6 +411,21 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         ).slice(0, 4);
     }, [input, users, isSlashMode, intent]);
 
+    // Quick Meal results
+    const quickMealResults = useMemo(() => {
+        if (isSlashMode) return [];
+        if (!input.trim() || input.length < 2) return [];
+        if (['exercise', 'vitals', 'weight', 'user'].includes(intent.type)) return [];
+
+        return performSmartSearch(input, quickMeals, {
+            textFn: (item) => item.name,
+            limit: 4
+        }).map(item => ({
+            ...item,
+            itemType: 'quickMeal' as const
+        }));
+    }, [input, quickMeals, isSlashMode, intent]);
+
 
     // Auto-lock: Only when there's exactly ONE matching result
     // Don't auto-lock if there are multiple items that could match (e.g., "bulgur" and "bulgur kokt")
@@ -445,12 +463,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         if (isSlashMode) return navSuggestions.map(r => ({ itemType: 'nav' as const, ...r }));
 
         const items: any[] = [];
+        if (quickMealResults.length > 0) items.push(...quickMealResults);
         if (userResults.length > 0) items.push(...userResults.map(u => ({ itemType: 'user' as const, ...u })));
         if (foodResults.length > 0) items.push(...foodResults.map(f => ({ itemType: 'food' as const, ...f })));
         if (!input && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
 
         return items;
-    }, [isSlashMode, navSuggestions, foodResults, userResults, input, recentFoods, lockedFood]);
+    }, [isSlashMode, navSuggestions, foodResults, userResults, quickMealResults, input, recentFoods, lockedFood]);
 
 
     // Reset selection when results change
