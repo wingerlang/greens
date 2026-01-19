@@ -4,6 +4,7 @@ import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
     ResponsiveContainer, BarChart, Bar, Cell, AreaChart, Area
 } from 'recharts';
+import { PRTimeline } from './PRTimeline';
 
 interface PRResearchCenterProps {
     workouts: StrengthWorkout[];
@@ -624,6 +625,9 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
                                 </table>
                             </div>
                         </section>
+
+                        {/* PB Timeline Visualization */}
+                        <PRTimeline workouts={workouts} exerciseName={selectedExercise} />
                     </div>
                 )}
             </div>
