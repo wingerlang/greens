@@ -550,9 +550,9 @@ function parseFood(input: string): OmniboxIntent | null {
         /([\d.,]+)\s*(kg|kilo)\b/i,
         /([\d.,]+)\s*(ml|milliliter)\b/i,
         /([\d.,]+)\s*(l|liter)\b/i,
-        /([\d.,]+)\s*(st|stycken?|pcs)\b/i,
+        /([\d.,]+)\s*(st|stycken?|stk|pcs)\b/i, // Added stk
         /([\d.,]+)\s*(port|portion(?:er)?)\b/i,
-        /([\d.,]+)(port)\b/i,  // Shorthand: "2port" without space
+        /([\d.,]+)(port|st)\b/i,  // Shorthand: "2port", "2st" without space
         /([\d.,]+)\s*(dl|deciliter)\b/i,
         /([\d.,]+)\s*(msk|matsked(?:ar)?)\b/i,
         /([\d.,]+)\s*(tsk|tesked(?:ar)?)\b/i,
@@ -577,7 +577,7 @@ function parseFood(input: string): OmniboxIntent | null {
             } else if (rawUnit.startsWith('dl')) {
                 quantity = rawNum * 100;
                 unit = 'ml';
-            } else if (rawUnit.startsWith('st') || rawUnit.startsWith('pcs')) {
+            } else if (rawUnit.startsWith('st') || rawUnit.startsWith('pcs') || rawUnit.startsWith('stk')) {
                 quantity = rawNum;
                 unit = 'st';
             } else if (rawUnit.startsWith('port')) {
@@ -596,6 +596,26 @@ function parseFood(input: string): OmniboxIntent | null {
 
             working = working.replace(match[0], '').trim();
             break;
+        }
+    }
+
+    // 2.5 Support "naked numbers" at start or end (e.g., "2 taco" or "taco 2")
+    // Only if we haven't found a quantity yet
+    if (quantity === undefined) {
+        // Match number at start: "^2 taco"
+        const startNumberMatch = working.match(/^(\d+(?:[.,]\d+)?)\s+(?!\d)/);
+        if (startNumberMatch) {
+            quantity = parseFloat(startNumberMatch[1].replace(',', '.'));
+            unit = 'st'; // Default to pieces for naked numbers
+            working = working.replace(startNumberMatch[0], '').trim();
+        } else {
+            // Match number at end: "taco 2"
+            const endNumberMatch = working.match(/\s+(\d+(?:[.,]\d+)?)$/);
+            if (endNumberMatch) {
+                quantity = parseFloat(endNumberMatch[1].replace(',', '.'));
+                unit = 'st';
+                working = working.replace(endNumberMatch[0], '').trim();
+            }
         }
     }
 

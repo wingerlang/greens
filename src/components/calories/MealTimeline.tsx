@@ -50,7 +50,11 @@ export function MealTimeline({
     onDeleteSelected,
     onCreateQuickMeal,
 }: MealTimelineProps) {
-    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; entryId: string | null }>({ isOpen: false, entryId: null });
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; entryId: string | null }>({
+        isOpen: false,
+        entryId: null
+    });
+    const [activeItemKey, setActiveItemKey] = useState<string | null>(null); // entryId-itemIndex
 
     const handleDelete = (id: string) => {
         setDeleteConfirm({ isOpen: true, entryId: id });
@@ -64,13 +68,14 @@ export function MealTimeline({
     };
 
     const renderEntryRow = (entry: MealEntry, isCompact: boolean) => {
+        const multiplier = entry.pieces ?? 1;
         const totalNutrition = entry.items.reduce((acc, item) => {
             const n = getItemNutrition?.(item) || { calories: getItemCalories(item), protein: 0, carbs: 0, fat: 0 };
             return {
-                calories: acc.calories + n.calories,
-                protein: acc.protein + n.protein,
-                carbs: acc.carbs + n.carbs,
-                fat: acc.fat + (n.fat || 0)
+                calories: acc.calories + (n.calories * multiplier),
+                protein: acc.protein + (n.protein * multiplier),
+                carbs: acc.carbs + (n.carbs * multiplier),
+                fat: acc.fat + ((n.fat || 0) * multiplier)
             };
         }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
@@ -121,9 +126,20 @@ export function MealTimeline({
                             </span>
                         )}
 
-                        <span className={`text-sm ${entry.title ? 'text-slate-400 font-medium' : 'text-slate-200 font-bold'} truncate`}>
-                            {entry.items.map((item) => getItemName(item)).join(', ')}
-                        </span>
+                        <div className={`text-sm flex flex-wrap gap-x-1 ${entry.title ? 'text-slate-400 font-medium' : 'text-slate-200 font-bold'} truncate`}>
+                            {entry.items.map((item, idx) => {
+                                const name = getItemName(item);
+                                const isLast = idx === entry.items.length - 1;
+                                return (
+                                    <span
+                                        key={idx}
+                                        className={`transition-colors cursor-help px-0.5 rounded ${activeItemKey === `${entry.id}-${idx}` ? 'text-emerald-400 font-bold bg-emerald-500/20' : 'hover:text-emerald-400 hover:bg-emerald-500/10'}`}
+                                    >
+                                        {name}{!isLast && ','}
+                                    </span>
+                                );
+                            })}
+                        </div>
                         {firstItem && getItemBrand?.(firstItem) && (
                             <span className="text-[10px] text-slate-500 font-medium tracking-tight">
                                 {getItemBrand(firstItem)}
@@ -146,6 +162,30 @@ export function MealTimeline({
 
                 {/* Right: Controls, Kcal, Info, X */}
                 <div className="flex items-center gap-3 shrink-0" style={{ flex: '0 0 35%', justifyContent: 'flex-end' }}>
+
+                    {/* Pieces Stepper for Snabbvals - Show if snabbvalId exists or pieces > 0 */}
+                    {(entry.snabbvalId || (entry.pieces && entry.pieces > 0)) && (
+                        <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-2 py-1">
+                            <button
+                                className="w-5 h-5 flex items-center justify-center rounded-sm bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateMealEntry(entry.id, { pieces: Math.max(1, (entry.pieces || 1) - 1) });
+                                }}
+                            >−</button>
+                            <span className="text-[10px] font-black text-emerald-400 whitespace-nowrap">
+                                {entry.pieces || 1}st
+                            </span>
+                            <button
+                                className="w-5 h-5 flex items-center justify-center rounded-sm bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/40 transition-colors"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateMealEntry(entry.id, { pieces: (entry.pieces || 1) + 1 });
+                                }}
+                            >+</button>
+                        </div>
+                    )}
+
                     <div className="flex items-center gap-2 scale-90 origin-right">
                         {entry.items.map((item, idx) => (
                             <PortionControls
@@ -158,6 +198,7 @@ export function MealTimeline({
                                         )
                                     });
                                 }}
+                                onActive={(active) => setActiveItemKey(active ? `${entry.id}-${idx}` : null)}
                                 isCompact
                             />
                         ))}
@@ -322,10 +363,16 @@ export function MealTimeline({
                                     <div className="h-4 w-[1px] bg-slate-800" />
                                     <div className="flex items-center gap-3 text-[10px] font-black uppercase tracking-tighter">
                                         <span className="text-emerald-500">
-                                            {Math.round(entries.reduce((sum, e) => sum + e.items.reduce((acc, it) => acc + getItemCalories(it), 0), 0))} kcal
+                                            {Math.round(entries.reduce((sum, e) => {
+                                                const mult = e.pieces || 1;
+                                                return sum + e.items.reduce((acc, it) => acc + (getItemCalories(it) * mult), 0);
+                                            }, 0))} kcal
                                         </span>
                                         <span className="text-rose-400">
-                                            🌱 {Math.round(entries.reduce((sum, e) => sum + e.items.reduce((acc, it) => acc + (getItemNutrition?.(it).protein || 0), 0), 0))}g
+                                            🌱 {Math.round(entries.reduce((sum, e) => {
+                                                const mult = e.pieces || 1;
+                                                return sum + e.items.reduce((acc, it) => acc + ((getItemNutrition?.(it).protein || 0) * mult), 0);
+                                            }, 0))}g
                                         </span>
                                     </div>
                                 </div>
@@ -370,10 +417,12 @@ export function MealTimeline({
 function PortionControls({
     item,
     onUpdate,
+    onActive,
     isCompact = false
 }: {
     item: MealItem,
     onUpdate: (val: number) => void,
+    onActive?: (active: boolean) => void,
     isCompact?: boolean
 }) {
     const [isEditing, setIsEditing] = useState(false);
@@ -387,6 +436,7 @@ function PortionControls({
             onUpdate(val);
         }
         setIsEditing(false);
+        onActive?.(false);
     };
 
     if (isEditing) {
@@ -397,6 +447,9 @@ function PortionControls({
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onBlur={handleInputSubmit}
+                onMouseEnter={() => onActive?.(true)}
+                onMouseLeave={() => !isEditing && onActive?.(false)}
+                onFocus={() => onActive?.(true)}
                 onKeyDown={(e) => {
                     if (e.key === 'Enter') handleInputSubmit();
                     if (e.key === 'Escape') setIsEditing(false);
@@ -408,7 +461,11 @@ function PortionControls({
     }
 
     return (
-        <div className={`flex items-center ${isCompact ? 'gap-1' : 'gap-2'}`}>
+        <div
+            className={`flex items-center ${isCompact ? 'gap-1' : 'gap-2'}`}
+            onMouseEnter={() => onActive?.(true)}
+            onMouseLeave={() => !isEditing && onActive?.(false)}
+        >
             <button
                 className={`${isCompact ? 'w-5 h-5 text-sm' : 'w-6 h-6 text-sm'} flex items-center justify-center rounded bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200 transition-colors cursor-pointer`}
                 onClick={(e) => { e.stopPropagation(); onUpdate(Math.max(step, item.servings - step)); }}
@@ -421,6 +478,7 @@ function PortionControls({
                     e.stopPropagation();
                     setInputValue(String(item.servings));
                     setIsEditing(true);
+                    onActive?.(true);
                 }}
             >
                 <span className={`${isCompact ? 'text-[10px]' : 'text-xs'} text-slate-200 font-bold`}>

@@ -55,9 +55,43 @@ function getDefaultYieldFactor(name: string): number | undefined {
     return undefined;
 }
 
-// QuickMealRow with piece counter
-function QuickMealRow({ qm, onLogQuickMeal }: { qm: QuickMeal; onLogQuickMeal?: (qm: QuickMeal, pieceCount?: number) => void }) {
+// QuickMealRow with piece counter and detailed summary
+function QuickMealRow({
+    qm,
+    onLogQuickMeal,
+    getItemName,
+    getItemNutrition,
+    highlightedIndex,
+    onHoverIngredient
+}: {
+    qm: QuickMeal;
+    onLogQuickMeal?: (qm: QuickMeal, pieceCount?: number) => void;
+    getItemName: (item: any) => string;
+    getItemNutrition: (item: any) => { calories: number; protein: number; carbs: number; fat?: number };
+    highlightedIndex?: number | null;
+    onHoverIngredient?: (index: number | null) => void;
+}) {
     const [pieces, setPieces] = useState(1);
+
+    const totals = useMemo(() => {
+        return qm.items.reduce((acc, item) => {
+            const n = getItemNutrition(item);
+            return {
+                calories: acc.calories + n.calories,
+                protein: acc.protein + n.protein,
+                carbs: acc.carbs + n.carbs,
+                fat: acc.fat + (n.fat || 0)
+            };
+        }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    }, [qm.items, getItemNutrition]);
+
+    const itemsSummary = useMemo(() => {
+        return qm.items.map(item => {
+            const name = getItemName(item);
+            const servings = item.type === 'recipe' ? `${item.servings}p` : `${item.servings}g`;
+            return `${servings} ${name}`;
+        }).join(', ');
+    }, [qm.items, getItemName]);
 
     const handleLog = () => {
         if (pieces === 1) {
@@ -76,12 +110,35 @@ function QuickMealRow({ qm, onLogQuickMeal }: { qm: QuickMeal; onLogQuickMeal?: 
     };
 
     return (
-        <div className="search-result-item">
+        <div className="search-result-item snabbval-result">
             <div className="result-info">
                 <span className="result-type">⚡</span>
-                <div>
-                    <strong>{qm.name}</strong>
-                    <small>{qm.items.length} ingredienser {pieces > 1 && <span className="text-emerald-400 font-bold">× {pieces}</span>}</small>
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-0.5">
+                        <strong className="text-sm">{qm.name}</strong>
+                        <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-tight">
+                            <span className="text-emerald-500">{Math.round(totals.calories * pieces)} kcal</span>
+                            <span className="text-rose-400">{Math.round(totals.protein * pieces)}g P</span>
+                        </div>
+                    </div>
+                    {/* Ingredient summary with hover triggers */}
+                    <div className="text-[10px] text-slate-500 leading-tight flex flex-wrap gap-x-1">
+                        {qm.items.map((item, idx) => {
+                            const name = getItemName(item);
+                            const servings = item.type === 'recipe' ? `${item.servings}p` : `${item.servings}g`;
+                            const isLast = idx === qm.items.length - 1;
+                            return (
+                                <span
+                                    key={idx}
+                                    className={`cursor-help transition-colors ${highlightedIndex === idx ? 'text-emerald-400 font-bold bg-emerald-500/10 rounded px-0.5' : 'hover:text-slate-300'}`}
+                                    onMouseEnter={() => onHoverIngredient?.(idx)}
+                                    onMouseLeave={() => onHoverIngredient?.(null)}
+                                >
+                                    {servings} {name}{!isLast && ','}
+                                </span>
+                            );
+                        })}
+                    </div>
                 </div>
             </div>
             <div className="result-actions">
@@ -104,7 +161,7 @@ function QuickMealRow({ qm, onLogQuickMeal }: { qm: QuickMeal; onLogQuickMeal?: 
                     + Logga
                 </button>
             </div>
-        </div>
+        </div >
     );
 }
 
@@ -123,6 +180,8 @@ interface QuickAddModalProps {
     selectedDate?: string;
     quickMeals?: QuickMeal[];
     onLogQuickMeal?: (qm: QuickMeal, pieceCount?: number) => void;
+    getItemName: (item: any) => string;
+    getItemNutrition: (item: any) => { calories: number; protein: number; carbs: number; fat?: number };
 }
 
 
@@ -141,11 +200,16 @@ export function QuickAddModal({
     selectedDate,
     quickMeals,
     onLogQuickMeal,
+    getItemName,
+    getItemNutrition,
 }: QuickAddModalProps) {
     // Track which items are toggled to "cooked" mode
     const [cookedItems, setCookedItems] = useState<Set<string>>(new Set());
     // Track selected variant for base items
     const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({}); // itemId -> variantId
+    // Track hover highlighting for Snabbval
+    const [hoveredSnabbvalId, setHoveredSnabbvalId] = useState<string | null>(null);
+    const [hoveredIngredientIndex, setHoveredIngredientIndex] = useState<number | null>(null);
 
     const toggleCooked = (id: string) => {
         setCookedItems(prev => {
@@ -386,6 +450,13 @@ export function QuickAddModal({
                                 key={qm.id}
                                 qm={qm}
                                 onLogQuickMeal={onLogQuickMeal}
+                                getItemName={getItemName}
+                                getItemNutrition={getItemNutrition}
+                                highlightedIndex={hoveredSnabbvalId === qm.id ? hoveredIngredientIndex : null}
+                                onHoverIngredient={(idx) => {
+                                    setHoveredSnabbvalId(idx === null ? null : qm.id);
+                                    setHoveredIngredientIndex(idx);
+                                }}
                             />
                         ))}
                     </div>

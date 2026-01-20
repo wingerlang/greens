@@ -185,9 +185,9 @@ export function App() {
                                                         <Route path="activities" element={<ActivitiesPage />} />
                                                         <Route path="logg" element={<ActivitiesPage />} />
                                                         <Route path="strength" element={<StrengthPage />} />
-                                                        <Route path="strength/:exerciseName" element={<StrengthPage />} />
+                                                        <Route path="strength/:tab" element={<StrengthPage />} />
                                                         <Route path="styrka" element={<StrengthPage />} />
-                                                        <Route path="styrka/:exerciseName" element={<StrengthPage />} />
+                                                        <Route path="styrka/:tab" element={<StrengthPage />} />
                                                         <Route path="hyrox" element={<Navigate to="/health/hyrox" replace />} />
 
                                                         <Route path="pass" element={<WorkoutsPage />} />
@@ -195,6 +195,7 @@ export function App() {
                                                         <Route path="workouts/builder" element={<WorkoutBuilderPage />} />
                                                         <Route path="workouts/:id" element={<WorkoutDetailPage />} />
                                                         <Route path="/exercises" element={<ExercisesPage />} />
+                                                        <Route path="/övning" element={<ExercisesPage />} />
                                                         <Route path="/exercises/muscles" element={<MuscleOverviewPage />} />
                                                         <Route path="/training/load" element={<LoadAnalysisPage />} />
                                                         <Route path="matchup" element={<MatchupPage />} />

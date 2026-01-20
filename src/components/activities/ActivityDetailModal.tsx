@@ -765,7 +765,10 @@ export function ActivityDetailModal({
                                         ) : null;
                                     })()}
                                 </div>
-                                <p className="text-slate-400 font-mono text-sm">{activity.date}</p>
+                                <p className="text-slate-400 font-mono text-sm">
+                                    {activity.date}
+                                    {activity.startTime && <span className="ml-2 text-slate-500">kl {activity.startTime}</span>}
+                                </p>
                             </div>
                             <button onClick={onClose} className="text-slate-500 hover:text-white text-2xl">×</button>
                         </div>

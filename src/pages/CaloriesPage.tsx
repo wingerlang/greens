@@ -426,9 +426,10 @@ export function CaloriesPage() {
         addMealEntry({
             date: selectedDate,
             mealType,
-            items: qm.items, // Items already multiplied by QuickMealRow
-            title: pieceCount && pieceCount > 1 ? `${qm.name} ×${pieceCount}` : qm.name,
-            snabbvalId: qm.id // Track which snabbval this came from
+            items: qm.items, // Keep original item quantities
+            title: qm.name,
+            snabbvalId: qm.id, // Track which snabbval this came from
+            pieces: pieceCount || 1 // Store the count
         } as any);
         setIsFormOpen(false);
     };
@@ -777,6 +778,8 @@ export function CaloriesPage() {
                 selectedDate={selectedDate}
                 quickMeals={quickMeals}
                 onLogQuickMeal={handleLogQuickMeal}
+                getItemName={getItemName}
+                getItemNutrition={getItemNutrition}
             />
 
             <NutritionBreakdownModal

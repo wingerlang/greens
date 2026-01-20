@@ -560,16 +560,16 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
                                 <h3 className="text-[9px] font-black text-slate-500 uppercase tracking-[0.3em] italic">Historiskt Belastningsarkiv {isWeightPRMode && "(ENBART VIKT-REKORD)"}</h3>
                                 <div className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter italic">Totalt {exerciseAnalysis?.history.length} rekord noterade</div>
                             </div>
-                            <div className="bg-slate-900 border border-white/5 rounded-[2rem] overflow-hidden shadow-2xl backdrop-blur-xl">
-                                <table className="w-full text-left border-collapse">
+                            <div className="bg-slate-900 border border-white/5 rounded-[2rem] overflow-x-auto shadow-2xl backdrop-blur-xl">
+                                <table className="w-full min-w-[700px] text-left border-collapse">
                                     <thead>
                                         <tr className="bg-white/5 text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                                            <th className="px-10 py-6">Date</th>
-                                            <th className="px-10 py-6">Load Data</th>
-                                            <th className="px-10 py-6 text-right">e1RM Output</th>
-                                            <th className="px-10 py-6 text-right">Delta</th>
-                                            <th className="px-10 py-6 text-right bg-black/20">Preparatory Fuel (Acc.)</th>
-                                            <th className="px-10 py-6 text-center">Audit</th>
+                                            <th className="px-4 py-4">Date</th>
+                                            <th className="px-4 py-4">Load Data</th>
+                                            <th className="px-4 py-4 text-right">e1RM Output</th>
+                                            <th className="px-4 py-4 text-right">Delta</th>
+                                            <th className="px-4 py-4 text-right bg-black/20">Preparatory Fuel (Acc.)</th>
+                                            <th className="px-4 py-4 text-center">Audit</th>
                                         </tr>
                                     </thead>
                                     <tbody className="text-[10px] divide-y divide-white/10">
@@ -579,11 +579,11 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
                                             const pct = prev ? (diff / prev.value) * 100 : 0;
                                             return (
                                                 <tr key={item.id} className="hover:bg-white/[0.03] transition-colors group">
-                                                    <td className="px-10 py-5">
+                                                    <td className="px-4 py-3">
                                                         <p className="font-black text-white text-base tracking-tighter mb-0.5">{item.date}</p>
                                                         <p className="text-[8px] text-slate-600 font-black uppercase truncate max-w-[140px] tracking-tight">{item.workoutName}</p>
                                                     </td>
-                                                    <td className="px-10 py-5">
+                                                    <td className="px-4 py-3">
                                                         <p className="font-extrabold text-slate-300 text-sm mb-1">{item.reps || 0} × {item.weight}kg</p>
                                                         <div className="flex flex-wrap gap-1">
                                                             <span className="text-[7px] text-slate-700 font-extrabold uppercase border border-slate-800 px-1.5 py-0.5 rounded italic whitespace-nowrap">Rekord #{idx + 1}</span>
@@ -593,7 +593,7 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
                                                         </div>
                                                     </td>
                                                     <td className="px-10 py-5 text-right font-black text-amber-500 text-xl italic">{item.value}<span className="text-[8px] not-italic ml-0.5 opacity-50 uppercase tracking-tighter">kg</span></td>
-                                                    <td className="px-10 py-5 text-right">
+                                                    <td className="px-4 py-3 text-right">
                                                         {prev ? (
                                                             <div className="flex flex-col items-end">
                                                                 <span className="text-emerald-500 font-black text-sm">+{pct.toFixed(1)}%</span>
@@ -601,7 +601,7 @@ export function PRResearchCenter({ workouts, personalBests, onClose, onSelectWor
                                                             </div>
                                                         ) : <span className="text-slate-800 font-black uppercase text-[8px] border-b border-slate-900 pb-0.5">Grunddata</span>}
                                                     </td>
-                                                    <td className="px-10 py-5 text-right bg-black/10">
+                                                    <td className="px-4 py-3 text-right bg-black/10">
                                                         <div className="flex flex-col items-end space-y-1">
                                                             <span className="font-black text-slate-300 text-sm italic">{item.interstitial.tonnage.toLocaleString()} kg Total</span>
                                                             <div className="flex items-center gap-2">
