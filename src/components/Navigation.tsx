@@ -57,6 +57,7 @@ const NAV_ITEMS: NavItem[] = [
     { path: '/community', label: 'Hitta', icon: '👥', section: 'community', description: 'Sök användare' },
 
     // Tools
+    { path: '/beast', label: 'The Beast', icon: '🦍', section: 'tools', description: 'Totalprofil' },
     { path: '/tools', label: 'Översikt', icon: '🧰', section: 'tools', description: 'Alla verktyg' },
     { path: '/tools/1rm', label: '1RM & Last', icon: '💪', section: 'tools' },
     { path: '/tools/race', label: 'Race', icon: '🏃', section: 'tools' },

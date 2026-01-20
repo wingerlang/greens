@@ -221,7 +221,14 @@ Deno.serve = (options: any, handler: any) => {
             });
 
             // Handle
-            const response = await handler(request);
+            const info = {
+                remoteAddr: {
+                    transport: "tcp",
+                    hostname: req.socket.remoteAddress || "127.0.0.1",
+                    port: req.socket.remotePort || 0
+                }
+            };
+            const response = await handler(request, info);
 
             // Send Response
             res.statusCode = response.status;

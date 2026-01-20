@@ -63,6 +63,7 @@ import { ToolsRacePlannerPage } from './pages/tools/ToolsRacePlannerPage.tsx';
 import { ToolsReplayPage } from './pages/tools/ToolsReplayPage.tsx';
 import { ToolsInterferencePage } from './pages/tools/ToolsInterferencePage.tsx';
 import { ToolsTrainingReportPage } from './pages/tools/ToolsTrainingReportPage.tsx';
+import { BeastModePage } from './pages/BeastModePage.tsx';
 import { PlannerPage } from './components/planner/PlannerPage.tsx';
 import { RoadmapPage } from './pages/RoadmapPage.tsx';
 import { DocsPage } from './pages/DocsPage.tsx';
@@ -232,6 +233,7 @@ export function App() {
                                                         <Route path="tools/replay" element={<ToolsReplayPage />} />
                                                         <Route path="tools/interference" element={<ToolsInterferencePage />} />
                                                         <Route path="tools/report" element={<ToolsTrainingReportPage />} />
+                                                        <Route path="beast" element={<BeastModePage />} />
                                                     </Routes>
                                                 </Layout>
                                             </RequireAuth>
