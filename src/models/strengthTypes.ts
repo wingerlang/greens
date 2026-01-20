@@ -127,6 +127,7 @@ export interface StrengthWorkout {
     notes?: string;
     source: 'strengthlog' | 'manual' | 'garmin' | 'strava' | 'hevy';
     sourceWorkoutName?: string;      // Original name from import
+    rawSource?: string;              // Original raw text/CSV for re-parsing
     excludeFromStats?: boolean;
 
     createdAt: string;
@@ -137,7 +138,7 @@ export interface StrengthWorkout {
 // Personal Bests
 // ============================================
 
-export type PBType = '1rm' | '3rm' | '5rm' | '10rm' | 'volume' | 'reps' | 'time' | 'distance';
+export type PBType = '1rm' | '3rm' | '5rm' | '10rm' | 'volume' | 'reps' | 'time' | 'distance' | 'calories';
 
 export interface PersonalBest {
     id: string;
@@ -153,6 +154,7 @@ export interface PersonalBest {
     reps?: number;                   // Reps achieved
     distance?: number;               // Distance covered (meters)
     distanceUnit?: 'm' | 'km';
+    calories?: number;               // Calories burned (cardio)
     time?: number;
     tempo?: string;
     date: string;

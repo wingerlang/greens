@@ -97,12 +97,14 @@ function parseStrengthLogTextExport(lines: string[], userId: string): ParsedCSV 
     // If user provides just one workout in text, we treat it as one. 
     // Usually "Copy as Text" is single workout.
     const workoutId = generateStrengthId();
+    const rawSourceText = lines.join('\n'); // Store original raw text for re-parsing
     ctx.currentWorkout = {
         id: workoutId,
         userId,
         date: isoDate,
         name: `Workout ${isoDate}`, // Default name, maybe parse time or day?
         source: 'strengthlog',
+        rawSource: rawSourceText,
         exercises: [],
         totalVolume: 0,
         totalSets: 0,
@@ -151,8 +153,77 @@ function parseStrengthLogTextExport(lines: string[], userId: string): ParsedCSV 
 
         diffSets.forEach((s, idx) => {
             // "15 x 20 (YR!)"
-            // "15 x 20"
-            // "5 x 70"
+            // "4.5 x 283 x 00:20:00"
+
+            // Clean up any trailing notes/comments in quotes
+            let cleanS = s;
+            const noteMatch = s.match(/"([^"]+)"$/);
+            if (noteMatch) {
+                cleanS = s.substring(0, s.lastIndexOf('"')).trim();
+                // We could potentially store noteMatch[1] somewhere, but StrengthSet doesn't support per-set notes efficiently yet
+            }
+
+            const parts = cleanS.split(/\s*x\s*/i);
+            const isCardioPattern = parts.length >= 3 && parts[parts.length - 1].includes(':');
+
+            if (isCardioPattern || (exerciseName.toLowerCase().includes('rowing') && parts.length >= 2)) {
+                // Cardio Parsing Mode
+                const set: StrengthSet = {
+                    setNumber: idx + 1,
+                    reps: 0,
+                    weight: 0,
+                    distanceUnit: 'm'
+                };
+
+                // Helper to parse duration
+                const parseDuration = (str: string) => {
+                    if (str.includes(':')) {
+                        set.time = str;
+                        set.timeSeconds = parseTimeToSeconds(str);
+                    }
+                };
+
+                const lowerName = exerciseName.toLowerCase();
+
+                if (lowerName.includes('stair climber') || lowerName.includes('trappmaskin')) {
+                    // Rule: "våningar / 10 x kcal x tid"
+                    // Part 0: Floors / 10 -> Map to REPS (floors)
+                    if (parts[0]) set.reps = Math.round(parseFloat(parts[0]) * 10);
+                    // Part 1: Calories
+                    if (parts[1]) set.calories = parseFloat(parts[1]);
+                    // Part 2: Time
+                    if (parts[2]) parseDuration(parts[2]);
+
+                } else if (lowerName.includes('rowing') || lowerName.includes('rodd')) {
+                    // Rule: "2 x 0 x 0 x 0 x 00:08:15" 
+                    // Assuming Part 0 is Distance in km
+                    // Part 4 is Time
+                    if (parts[0]) set.distance = parseFloat(parts[0]) * 1000;
+                    const timePart = parts.find(p => p.includes(':'));
+                    if (timePart) parseDuration(timePart);
+
+                    // Set reps to 1 for completeness if distance exists
+                    if (set.distance && set.distance > 0) set.reps = 1;
+
+                } else {
+                    // Default Cardio Rule (Cross Trainer, Assault Bike, etc)
+                    // Rule: "km x kalorier x tid"
+                    // Part 0: Distance (km)
+                    if (parts[0]) set.distance = parseFloat(parts[0]) * 1000;
+                    // Part 1: Calories
+                    if (parts[1]) set.calories = parseFloat(parts[1]);
+                    // Part 2: Time
+                    if (parts[2]) parseDuration(parts[2]);
+
+                    if (set.distance && set.distance > 0) set.reps = 1;
+                }
+
+                workoutExercise.sets.push(set);
+                trackPersonalBest(ctx, exerciseDef, set);
+                return;
+            }
+
+            // Standard Strength Parsing
             const match = s.match(/^(\d+)\s*x\s*([\d\.]+)/);
             if (match) {
                 const reps = parseInt(match[1]);
@@ -691,6 +762,35 @@ function trackPersonalBest(ctx: ParserContext, exercise: StrengthExercise, set: 
         return;
     }
 
+    // 0.4. Track Calories-based PBs for cardio machines (Assault Bike, Cross Trainer, etc.)
+    if (isDistanceBasedExercise(exercise.name) && set.calories && set.calories > 0) {
+        const caloriesPbKey = `${exercise.id}-calories`;
+        const existingCaloriesPB = ctx.personalBests.get(caloriesPbKey);
+
+        if (!existingCaloriesPB || set.calories > existingCaloriesPB.value) {
+            ctx.personalBests.set(caloriesPbKey, {
+                id: generateStrengthId(),
+                exerciseId: exercise.id,
+                exerciseName: exercise.name,
+                userId: ctx.userId,
+                type: 'calories',
+                value: set.calories,
+                weight: 0,
+                reps: 0,
+                distance: set.distance,
+                distanceUnit: set.distanceUnit,
+                calories: set.calories,
+                time: set.timeSeconds,
+                date: ctx.currentWorkout!.date,
+                workoutId: ctx.currentWorkout!.id,
+                workoutName: ctx.currentWorkout!.name,
+                estimated1RM: 0,
+                createdAt: new Date().toISOString(),
+                previousBest: existingCaloriesPB?.value
+            });
+        }
+    }
+
     // 0.5. Track Distance-based PBs (Running, Rowing, Ski Erg)
     // Note: Weighted Distance is handled above. This is for pure cardio/distance.
     if (isDistanceBasedExercise(exercise.name) && set.distance && set.distance > 0) {
@@ -719,6 +819,8 @@ function trackPersonalBest(ctx: ParserContext, exercise: StrengthExercise, set: 
                 previousBest: existing?.value
             });
         }
+        // Early return for distance-based exercises - don't track weight-based PBs
+        return;
     }
 
     // 1. Track time-based PBs (for plank, dead hang, etc.)

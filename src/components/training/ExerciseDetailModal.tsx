@@ -105,6 +105,9 @@ export function ExerciseDetailModal({
             totalDistance?: number;
             maxTime?: number;
             maxTimeFormatted?: string;
+            totalTime?: number;
+            totalTimeFormatted?: string;
+            totalCalories?: number;
             bestTempo?: string;
             bestSetString?: string;
 
@@ -162,7 +165,22 @@ export function ExerciseDetailModal({
 
                 const times = allSets.map(s => s.timeSeconds || 0);
                 const maxTime = Math.max(...times);
+                const totalTime = times.reduce((sum, t) => sum + t, 0);
                 const maxTimeFormatted = allSets.find(s => s.timeSeconds === maxTime)?.time || '';
+
+                // Format total time as HH:MM:SS
+                const formatSeconds = (sec: number) => {
+                    const h = Math.floor(sec / 3600);
+                    const m = Math.floor((sec % 3600) / 60);
+                    const s = sec % 60;
+                    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                    return `${m}:${s.toString().padStart(2, '0')}`;
+                };
+                const totalTimeFormatted = formatSeconds(totalTime);
+
+                // Calculate total calories for cardio
+                const totalCalories = allSets.reduce((sum, s) => sum + (s.calories || 0), 0);
+
                 const bestTempo = allSets.find(s => (s.distance === maxDistance && maxDistance > 0) || (s.timeSeconds === maxTime && maxTime > 0))?.tempo;
 
                 // Derive Body Weight
@@ -187,6 +205,9 @@ export function ExerciseDetailModal({
                     totalDistance,
                     maxTime,
                     maxTimeFormatted,
+                    totalTime,
+                    totalTimeFormatted,
+                    totalCalories,
                     bestTempo,
                     bestSetString,
 
