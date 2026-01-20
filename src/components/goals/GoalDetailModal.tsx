@@ -376,13 +376,13 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                     value = 1;
                     break;
                 case 'distance':
-                    value = perf?.distanceKm || 0;
+                    value = activity.distance || perf?.distanceKm || 0;
                     break;
                 case 'tonnage':
-                    value = (perf?.tonnage || perf?.totalKg || 0) / 1000; // Convert to tons
+                    value = (activity.tonnage || perf?.tonnage || perf?.totalKg || 0) / 1000; // Convert to tons
                     break;
                 case 'calories':
-                    value = perf?.caloriesBurned || perf?.calories || 0;
+                    value = activity.caloriesBurned || perf?.caloriesBurned || perf?.calories || 0;
                     break;
             }
 

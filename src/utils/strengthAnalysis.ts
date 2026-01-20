@@ -8,6 +8,7 @@ export interface SourceInfo {
     exerciseName: string;
     weight: number;
     reps: number;
+    volume?: number;
     date: string;
     sessionId: string;
 }
@@ -15,10 +16,13 @@ export interface SourceInfo {
 export interface BestSetResult {
     maxEstimated1RM: number;
     maxWeight: number;
+    maxReps: number;
     bestEstimatedSet: SourceInfo | null;
     heaviestSet: SourceInfo | null;
+    maxRepsSet: SourceInfo | null;
     exactNameEstimated: string;
     exactNameHeaviest: string;
+    exactNameMaxReps: string;
 }
 
 /**
@@ -32,10 +36,14 @@ export function getBestSetForPatterns(
 ): BestSetResult {
     let maxEstimated1RM = 0;
     let maxWeight = 0;
+    let maxReps = 0;
     let bestEstimatedSet: SourceInfo | null = null;
     let heaviestSet: SourceInfo | null = null;
+    let maxRepsSet: SourceInfo | null = null;
     let exactNameEstimated = '';
+    let heaviestSetReps = 0;
     let exactNameHeaviest = '';
+    let exactNameMaxReps = '';
 
     const normalizedPatterns = patterns.map(p => p.toLowerCase());
     const normalizedExcludes = excludePatterns.map(p => p.toLowerCase());
@@ -53,7 +61,7 @@ export function getBestSetForPatterns(
                     ex.sets.forEach((set: any) => {
                         const weight = Number(set.weight) || 0;
                         const reps = Number(set.reps) || 0;
-                        if (weight === 0 || reps === 0) return;
+                        if (weight === 0 && reps === 0) return;
 
                         // Track Estimated 1RM
                         const estimated = calculateEstimated1RM(weight, reps);
@@ -62,6 +70,7 @@ export function getBestSetForPatterns(
                             bestEstimatedSet = {
                                 weight,
                                 reps,
+                                volume: weight * reps,
                                 date: session.date,
                                 sessionId: session.id,
                                 exerciseName: ex.name || ex.exerciseName || ''
@@ -69,17 +78,33 @@ export function getBestSetForPatterns(
                             exactNameEstimated = ex.name || ex.exerciseName || '';
                         }
 
-                        // Track Heaviest Weight (Actual 1RM context)
-                        if (weight > maxWeight) {
+                        // Track Heaviest Weight (Favor higher reps if same weight)
+                        if (weight > maxWeight || (weight === maxWeight && reps > heaviestSetReps)) {
                             maxWeight = weight;
+                            heaviestSetReps = reps;
                             heaviestSet = {
                                 weight,
                                 reps,
+                                volume: weight * reps,
                                 date: session.date,
                                 sessionId: session.id,
                                 exerciseName: ex.name || ex.exerciseName || ''
                             };
                             exactNameHeaviest = ex.name || ex.exerciseName || '';
+                        }
+
+                        // Track Max Reps (Total reps in one set)
+                        if (reps > maxReps) {
+                            maxReps = reps;
+                            maxRepsSet = {
+                                weight,
+                                reps,
+                                volume: weight * reps,
+                                date: session.date,
+                                sessionId: session.id,
+                                exerciseName: ex.name || ex.exerciseName || ''
+                            };
+                            exactNameMaxReps = ex.name || ex.exerciseName || '';
                         }
                     });
                 }
@@ -90,9 +115,12 @@ export function getBestSetForPatterns(
     return {
         maxEstimated1RM: Math.round(maxEstimated1RM),
         maxWeight: Math.round(maxWeight),
+        maxReps,
         bestEstimatedSet,
         heaviestSet,
+        maxRepsSet,
         exactNameEstimated,
-        exactNameHeaviest
+        exactNameHeaviest,
+        exactNameMaxReps
     };
 }

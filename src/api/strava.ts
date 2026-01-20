@@ -370,20 +370,39 @@ export function mapStravaSubType(type: string, workoutType?: number): any {
 /**
  * More accurate calorie estimation based on HR, weight, age, and gender (Keytel et al. 2005)
  * Returns both the value and a technical breakdown/explanation
+ * 
+ * Priority order:
+ * 1. Strava's own calories (most accurate - uses their algorithms and power data)
+ * 2. Keytel formula with HR data (with sanity caps)
+ * 3. Conservative fallback schablons
  */
 export function calculateStravaCalories(activity: StravaActivity, userSettings?: UserSettings): { calories: number; breakdown: string } {
     const durationMin = (activity.moving_time || activity.elapsed_time) / 60;
     const hr = activity.average_heartrate;
+    const type = mapStravaType(activity.type);
 
-    // 1. Always prioritize Strava's own calorie calculation if available
+    // Sanity limits per activity type (kcal/min) - based on research and Strava comparisons
+    const KCAL_LIMITS: Record<string, { min: number; max: number }> = {
+        running: { min: 6, max: 12 },      // Elite marathon ~12, easy jog ~6
+        cycling: { min: 4, max: 14 },      // Includes power-based riding
+        swimming: { min: 5, max: 12 },
+        strength: { min: 3, max: 8 },      // Weight training
+        walking: { min: 2, max: 5 },
+        yoga: { min: 1.5, max: 4 },
+        other: { min: 3, max: 10 }
+    };
+
+    const limits = KCAL_LIMITS[type] || KCAL_LIMITS.other;
+
+    // 1. ALWAYS prioritize Strava's own calorie calculation if available
     if (activity.calories && activity.calories > 0) {
         return {
             calories: activity.calories,
-            breakdown: `Källhänvisning: Strava API\nVärdet beräknat av Strava baserat på deras interna algoritmer.`
+            breakdown: `Källhänvisning: Strava API\nVärdet beräknat av Strava baserat på deras interna algoritmer (puls, kraft, etc).`
         };
     }
 
-    // 2. If we have HR and user profile data, use the scientific formula
+    // 2. If we have HR and user profile data, use the scientific formula WITH sanity check
     if (hr && userSettings && userSettings.weight && userSettings.birthYear) {
         const weight = userSettings.weight;
         const age = new Date().getFullYear() - userSettings.birthYear;
@@ -395,44 +414,45 @@ export function calculateStravaCalories(activity: StravaActivity, userSettings?:
             kjPerMin = -55.0969 + (0.6309 * hr) + (0.1988 * weight) + (0.2017 * age);
             formula = "Keytel et al. (Male): -55.0969 + (0.6309 * HR) + (0.1988 * W) + (0.2017 * A)";
         } else {
-            // Female/Other
             kjPerMin = -20.4022 + (0.4472 * hr) - (0.1263 * weight) + (0.0740 * age);
             formula = "Keytel et al. (Female): -20.4022 + (0.4472 * HR) - (0.1263 * W) + (0.0740 * A)";
         }
 
-        const kcalPerMin = kjPerMin / 4.184;
+        let kcalPerMin = kjPerMin / 4.184;
+        const originalKcalPerMin = kcalPerMin;
+
+        // Apply sanity limits
+        kcalPerMin = Math.max(limits.min, Math.min(limits.max, kcalPerMin));
+
         let total = Math.round(kcalPerMin * durationMin);
 
-        let breakdown = `Formel: ${formula}\nIndata:\n- Puls: ${hr.toFixed(0)} bpm\n- Vikt: ${weight} kg\n- Ålder: ${age} år\n- Tid: ${durationMin.toFixed(1)} min\nResultat: ~${(kcalPerMin).toFixed(2)} kcal/min`;
+        let breakdown = `Formel: ${formula}\nIndata:\n- Puls: ${hr.toFixed(0)} bpm\n- Vikt: ${weight} kg\n- Ålder: ${age} år\n- Tid: ${durationMin.toFixed(1)} min\nResultat: ~${kcalPerMin.toFixed(2)} kcal/min`;
 
-        // Sanity check: don't return ridiculous values (min 4, max 25 kcal/min for gym)
-        const type = mapStravaType(activity.type);
-        if (type === 'strength') {
-            const original = total;
-            total = Math.max(Math.min(total, Math.round(durationMin * 12)), Math.round(durationMin * 3));
-            if (total !== original) {
-                breakdown += `\n\nNotering: Justerat från ${original} kcal till ${total} kcal för att rymmas inom rimliga gränser för styrketräning (3-12 kcal/min).`;
-            }
+        if (Math.abs(originalKcalPerMin - kcalPerMin) > 0.1) {
+            breakdown += `\n\nNotering: Begränsat från ${originalKcalPerMin.toFixed(1)} till ${kcalPerMin.toFixed(1)} kcal/min (rimliga gränser för ${type}: ${limits.min}-${limits.max} kcal/min).`;
         }
 
         return { calories: Math.max(total, 0), breakdown };
     }
 
-    // 3. Fallback to basic duration-based estimation
-    const type = mapStravaType(activity.type);
-    let kcalPerMin = 8; // Default
-    let reason = "Standard schablon för blandad träning";
+    // 3. CONSERVATIVE fallback - lower values aligned with Strava estimates
+    let kcalPerMin = 5; // Default - conservative
+    let reason = "Konservativ schablon för blandad träning";
 
-    if (type === 'strength') { kcalPerMin = 5.5; reason = "Schablon för styrketräning (utan pulsdata)"; }
-    else if (type === 'walking') { kcalPerMin = 3.5; reason = "Schablon för rask promenad"; }
-    else if (type === 'running') { kcalPerMin = 10; reason = "Schablon för löpning (utan pulsdata)"; }
+    if (type === 'strength') { kcalPerMin = 4; reason = "Schablon för styrketräning (utan pulsdata)"; }
+    else if (type === 'walking') { kcalPerMin = 3; reason = "Schablon för rask promenad"; }
+    else if (type === 'running') { kcalPerMin = 8; reason = "Konservativ schablon för löpning (utan pulsdata)"; }
+    else if (type === 'cycling') { kcalPerMin = 6; reason = "Schablon för cykling (utan pulsdata)"; }
+    else if (type === 'swimming') { kcalPerMin = 7; reason = "Schablon för simning"; }
+    else if (type === 'yoga') { kcalPerMin = 2.5; reason = "Schablon för yoga"; }
 
     const total = Math.round(durationMin * kcalPerMin);
     return {
         calories: total,
-        breakdown: `Källhänvisning: App Schablon\nAnledning: Saknar pulsdata eller användarprofil (vikt/ålder).\nBeräkning: ${durationMin.toFixed(1)} min * ${kcalPerMin} kcal/min (${reason}).`
+        breakdown: `Källhänvisning: App Schablon (Konservativ)\nAnledning: Saknar Strava-kalorier och pulsdata.\nBeräkning: ${durationMin.toFixed(1)} min × ${kcalPerMin} kcal/min (${reason}).`
     };
 }
+
 
 /**
  * Convert Strava activity to app exercise entry format

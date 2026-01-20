@@ -64,6 +64,7 @@ import { ToolsReplayPage } from './pages/tools/ToolsReplayPage.tsx';
 import { ToolsInterferencePage } from './pages/tools/ToolsInterferencePage.tsx';
 import { ToolsTrainingReportPage } from './pages/tools/ToolsTrainingReportPage.tsx';
 import { ToolsCyclingPage } from './pages/tools/ToolsCyclingPage.tsx';
+import { BeastModePage } from './pages/BeastModePage.tsx';
 import { PlannerPage } from './components/planner/PlannerPage.tsx';
 import { RoadmapPage } from './pages/RoadmapPage.tsx';
 import { DocsPage } from './pages/DocsPage.tsx';
@@ -186,9 +187,9 @@ export function App() {
                                                         <Route path="activities" element={<ActivitiesPage />} />
                                                         <Route path="logg" element={<ActivitiesPage />} />
                                                         <Route path="strength" element={<StrengthPage />} />
-                                                        <Route path="strength/:exerciseName" element={<StrengthPage />} />
+                                                        <Route path="strength/:tab" element={<StrengthPage />} />
                                                         <Route path="styrka" element={<StrengthPage />} />
-                                                        <Route path="styrka/:exerciseName" element={<StrengthPage />} />
+                                                        <Route path="styrka/:tab" element={<StrengthPage />} />
                                                         <Route path="hyrox" element={<Navigate to="/health/hyrox" replace />} />
 
                                                         <Route path="pass" element={<WorkoutsPage />} />
@@ -196,6 +197,7 @@ export function App() {
                                                         <Route path="workouts/builder" element={<WorkoutBuilderPage />} />
                                                         <Route path="workouts/:id" element={<WorkoutDetailPage />} />
                                                         <Route path="/exercises" element={<ExercisesPage />} />
+                                                        <Route path="/övning" element={<ExercisesPage />} />
                                                         <Route path="/exercises/muscles" element={<MuscleOverviewPage />} />
                                                         <Route path="/training/load" element={<LoadAnalysisPage />} />
                                                         <Route path="matchup" element={<MatchupPage />} />
@@ -234,6 +236,7 @@ export function App() {
                                                         <Route path="tools/interference" element={<ToolsInterferencePage />} />
                                                         <Route path="tools/report" element={<ToolsTrainingReportPage />} />
                                                         <Route path="tools/cycling" element={<ToolsCyclingPage />} />
+                                                        <Route path="tools/beast" element={<BeastModePage />} />
                                                     </Routes>
                                                 </Layout>
                                             </RequireAuth>

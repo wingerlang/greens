@@ -50,7 +50,12 @@ export function ProfilePage() {
         weightEntries,
         getLatestWeight,
         trainingPeriods, // To check for active plans
-        performanceGoals // To get targetWeight from active weight goals
+        performanceGoals, // To get targetWeight from active weight goals
+        quickMeals,
+        deleteQuickMeal,
+        updateQuickMeal,
+        foodItems,
+        recipes
     } = useData();
     const navigate = useNavigate();
 
@@ -78,6 +83,8 @@ export function ProfilePage() {
     const [showAddOverride, setShowAddOverride] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState<string>('');
     const [isPreviewMode, setIsPreviewMode] = useState(false);
+    const [expandedQuickMeal, setExpandedQuickMeal] = useState<string | null>(null);
+    const [editingQuickMeal, setEditingQuickMeal] = useState<string | null>(null);
 
     // Load profile on mount
     useEffect(() => {
@@ -584,8 +591,8 @@ export function ProfilePage() {
                                                 });
                                             }}
                                             className={`p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-3 ${isActive
-                                                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
-                                                    : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'
+                                                ? 'bg-emerald-500/10 border-emerald-500 text-emerald-400'
+                                                : 'bg-white/5 border-transparent text-slate-500 hover:bg-white/10'
                                                 }`}
                                         >
                                             <span className="text-3xl filter drop-shadow-lg">{type.icon}</span>
@@ -998,6 +1005,170 @@ export function ProfilePage() {
                                 ]} onChange={(v: any) => updateProfile('preferredUnits', v)} />
                             </div>
                         </section>
+
+                        {/* Quick Meals Management */}
+                        <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    <span>⚡</span> Mina Snabbval
+                                </h3>
+                                <span className="text-xs text-slate-500">{quickMeals.length} sparade</span>
+                            </div>
+
+                            {quickMeals.length === 0 ? (
+                                <div className="text-center py-8 text-slate-500">
+                                    <div className="text-4xl mb-2">📭</div>
+                                    <p className="text-sm">Inga snabbval sparade ännu.</p>
+                                    <p className="text-xs mt-1">Spara en måltid som snabbval via /kalorier.</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                                    {quickMeals.map(qm => {
+                                        const isExpanded = expandedQuickMeal === qm.id;
+                                        const isEditing = editingQuickMeal === qm.id;
+
+                                        // Lookup item details
+                                        const itemDetails = qm.items.map((item, idx) => {
+                                            if (item.type === 'recipe') {
+                                                const recipe = recipes.find(r => r.id === item.referenceId);
+                                                // Try to get calories from various possible locations (legacy or enriched)
+                                                const caloriesPer100 = (recipe as any)?.nutritionPerServing?.calories || (recipe as any)?.calories || 0;
+                                                return {
+                                                    idx,
+                                                    name: recipe?.name || 'Okänt recept',
+                                                    caloriesPer100,
+                                                    servings: item.servings, // NOTE: For recipes, 'servings' is actual portions
+                                                    calculatedCalories: Math.round(caloriesPer100 * item.servings),
+                                                    icon: '🍳',
+                                                    unit: 'port'
+                                                };
+                                            } else {
+                                                const food = foodItems.find(f => f.id === item.referenceId);
+                                                const caloriesPer100 = food?.calories || 0;
+                                                return {
+                                                    idx,
+                                                    name: food?.name || 'Okänt livsmedel',
+                                                    caloriesPer100,
+                                                    servings: item.servings, // NOTE: For food items, 'servings' is grams
+                                                    calculatedCalories: Math.round(caloriesPer100 * item.servings / 100),
+                                                    icon: '🥕',
+                                                    unit: 'g'
+                                                };
+                                            }
+                                        });
+
+                                        const totalCalories = itemDetails.reduce((sum, i) => sum + i.calculatedCalories, 0);
+
+                                        return (
+                                            <div key={qm.id} className="bg-slate-800/50 rounded-xl border border-white/5 hover:border-emerald-500/30 transition-all overflow-hidden">
+                                                {/* Header - clickable to expand */}
+                                                <div
+                                                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-white/5 transition-colors"
+                                                    onClick={() => setExpandedQuickMeal(isExpanded ? null : qm.id)}
+                                                >
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="font-bold text-white truncate flex items-center gap-2">
+                                                            <span className={`transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
+                                                            {qm.name}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 mt-1 ml-5">
+                                                            {qm.items.length} objekt • {totalCalories} kcal
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingQuickMeal(isEditing ? null : qm.id);
+                                                                if (!isExpanded) setExpandedQuickMeal(qm.id);
+                                                            }}
+                                                            className={`px-3 py-2 ${isEditing ? 'text-emerald-400 bg-emerald-500/20' : 'text-slate-400 hover:bg-white/10'} rounded-lg transition-all text-xs font-bold`}
+                                                        >
+                                                            ✏️
+                                                        </button>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (confirm(`Ta bort snabbval "${qm.name}"?`)) {
+                                                                    deleteQuickMeal(qm.id);
+                                                                }
+                                                            }}
+                                                            className="px-3 py-2 text-rose-400 hover:bg-rose-500/20 rounded-lg transition-all text-xs font-bold"
+                                                        >
+                                                            🗑️
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Expanded content */}
+                                                {isExpanded && (
+                                                    <div className="border-t border-white/5 bg-slate-950/50 p-4 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                                        {isEditing && (
+                                                            <div className="mb-3 p-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-xs text-amber-400">
+                                                                ✏️ Redigeringsläge - ändra gram/portioner direkt. Klicka ✏️ igen för att avsluta.
+                                                            </div>
+                                                        )}
+                                                        {itemDetails.map((item) => (
+                                                            <div key={item.idx} className="flex items-center justify-between text-sm gap-2">
+                                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                    <span>{item.icon}</span>
+                                                                    <span className="text-slate-300 truncate">{item.name}</span>
+                                                                </div>
+                                                                {isEditing ? (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <input
+                                                                            type="number"
+                                                                            value={item.servings}
+                                                                            onChange={(e) => {
+                                                                                const newValue = parseFloat(e.target.value) || 0;
+                                                                                // Update the quick meal
+                                                                                const updatedItems = [...qm.items];
+                                                                                updatedItems[item.idx].servings = newValue;
+                                                                                updateQuickMeal?.(qm.id, { items: updatedItems });
+                                                                            }}
+                                                                            className="w-16 bg-slate-800 border border-white/10 rounded px-2 py-1 text-white text-xs text-right"
+                                                                        />
+                                                                        <span className="text-slate-500 text-xs w-6">{item.unit}</span>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                const updatedItems = qm.items.filter((_, i) => i !== item.idx);
+                                                                                if (updatedItems.length === 0) {
+                                                                                    if (confirm('Ta bort hela snabbvalet?')) {
+                                                                                        deleteQuickMeal(qm.id);
+                                                                                    }
+                                                                                } else {
+                                                                                    updateQuickMeal?.(qm.id, { items: updatedItems });
+                                                                                }
+                                                                            }}
+                                                                            className="text-rose-400 hover:bg-rose-500/20 rounded p-1 text-xs"
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="text-emerald-400 text-xs">{item.servings}{item.unit}</span>
+                                                                        <span className="text-slate-500 text-xs">
+                                                                            {item.calculatedCalories} kcal
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                        <div className="pt-2 border-t border-white/5 flex justify-between font-bold text-sm">
+                                                            <span className="text-slate-400">Totalt</span>
+                                                            <span className="text-emerald-400">{totalCalories} kcal</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </section>
+
+
 
                         {/* Sessions */}
                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">

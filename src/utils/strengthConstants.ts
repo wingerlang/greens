@@ -9,7 +9,9 @@ export const MATCH_PATTERNS = {
     deadlift: ['deadlift', 'marklyft'],
     ohp: ['overhead', 'militär', 'axelpress', 'military', 'ohp', 'hantelpress axlar'],
     swings: ['swing', 'swings', 'kettlebell swing'],
-    biceps: ['biceps curl', 'bicep curl', 'bicepscurl', 'hammer curl']
+    biceps: ['biceps curl', 'bicep curl', 'bicepscurl', 'hammer curl', 'barbell curl', 'stångcurl', 'dumbbell curl', 'hantelcurl'],
+    pullups: ['pullup', 'pull up', 'chin', 'chins', 'pull-up'],
+    row: ['row', 'rodd', 'barbell row', 'stångrodd', 'pendlay', 'seated row', 'sittande rodd']
 };
 
 export const EXCLUDE_PATTERNS = {
@@ -18,7 +20,9 @@ export const EXCLUDE_PATTERNS = {
     deadlift: ['stiff', 'rumänsk', 'rdl', 'raka', 'rak', 'deficit', 'block', 'trap bar', 'hex'],
     ohp: ['lateral', 'lyft', 'raise', 'arnold', 'push press', 'behind'],
     swings: [],
-    biceps: []
+    biceps: [],
+    pullups: ['lat pulldown', 'latsdrag', 'assisted', 'hjälpt', 'band', 'machine', 'maskin'],
+    row: ['upright', 'facepull']
 };
 
 // Minimum weight thresholds to filter out bodyweight or accidental light data
@@ -28,7 +32,9 @@ export const MIN_WEIGHT_THRESHOLD = {
     deadlift: 40,
     ohp: 15,
     swings: 8,
-    biceps: 5
+    biceps: 5,
+    pullups: 0,
+    row: 15
 };
 
 /** Helper to normalize text for matching */

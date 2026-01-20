@@ -28,6 +28,7 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         averageWatts: a.performance.averageWatts,
         maxWatts: a.performance.maxWatts,
         averageSpeed: a.performance.averageSpeed,
+        startTime: a.performance.startTimeLocal ? a.performance.startTimeLocal.split('T')[1]?.substring(0, 5) : undefined,
         notes: a.performance.notes !== a.plan?.title ? a.performance.notes : undefined,
     };
 }

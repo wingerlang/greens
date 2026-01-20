@@ -410,6 +410,26 @@
     background: rgba(255, 255, 255, 0.05);
 }
 
+.snabbval-result {
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.snabbval-result:hover {
+    background: rgba(16, 185, 129, 0.15) !important;
+    border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.snabbval-result strong {
+    color: #34d399 !important;
+}
+
+.snabbval-result .result-info span.cursor-help:hover {
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.1);
+    border-radius: 4px;
+}
+
 .result-info {
     display: flex;
     align-items: center;

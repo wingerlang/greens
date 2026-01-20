@@ -285,6 +285,7 @@ export function RaceList({
                                     >
                                         <td className="px-4 py-3 font-mono text-slate-300">
                                             {race.date.split('T')[0]}
+                                            {race.startTime && <span className="block text-[10px] text-slate-500">kl {race.startTime}</span>}
                                         </td>
                                         <td className="px-4 py-3 font-bold text-white group-hover:text-amber-400 transition-colors">
                                             {race.notes || race.type}

@@ -42,7 +42,17 @@ export function StrengthPage() {
     const [isResearchCenterOpen, setIsResearchCenterOpen] = useState(false);
 
     // Main tab navigation
-    const [mainTab, setMainTab] = useState<'overview' | 'analysis' | 'research'>('overview');
+    const { tab: tabOrExercise } = useParams();
+    const isSpecialTab = tabOrExercise === 'research' || tabOrExercise === 'analys' || tabOrExercise === 'analysis';
+
+    const mainTab = isSpecialTab
+        ? (tabOrExercise === 'analys' ? 'analysis' : tabOrExercise) as 'overview' | 'analysis' | 'research'
+        : 'overview';
+
+    const setMainTab = (tab: string) => {
+        if (tab === 'overview') navigate('/styrka');
+        else navigate(`/styrka/${tab}`);
+    };
     const [hideJanuaryBests, setHideJanuaryBests] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState<WorkoutCategory | 'all'>('all');
 
@@ -50,7 +60,7 @@ export function StrengthPage() {
     const [workoutSortBy, setWorkoutSortBy] = useState<'date' | 'name' | 'exercises' | 'sets' | 'volume'>('date');
     const [workoutSortOrder, setWorkoutSortOrder] = useState<'asc' | 'desc'>('desc');
 
-    const { exerciseName: exerciseSlug } = useParams();
+    const exerciseSlug = !isSpecialTab ? tabOrExercise : null;
     const [searchParams, setSearchParams] = useSearchParams();
 
     const exerciseName = exerciseSlug ? decodeURIComponent(exerciseSlug) : null;

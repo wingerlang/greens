@@ -422,15 +422,18 @@ export function CaloriesPage() {
         setSelectedIds(new Set());
     };
 
-    const handleLogQuickMeal = (qm: QuickMeal) => {
+    const handleLogQuickMeal = (qm: QuickMeal, pieceCount?: number) => {
         addMealEntry({
             date: selectedDate,
             mealType,
-            items: qm.items,
-            title: qm.name
-        });
+            items: qm.items, // Keep original item quantities
+            title: qm.name,
+            snabbvalId: qm.id, // Track which snabbval this came from
+            pieces: pieceCount || 1 // Store the count
+        } as any);
         setIsFormOpen(false);
     };
+
 
     const goals = useMemo(() => {
         const periodTarget = getActiveCalories(
@@ -775,6 +778,8 @@ export function CaloriesPage() {
                 selectedDate={selectedDate}
                 quickMeals={quickMeals}
                 onLogQuickMeal={handleLogQuickMeal}
+                getItemName={getItemName}
+                getItemNutrition={getItemNutrition}
             />
 
             <NutritionBreakdownModal

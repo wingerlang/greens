@@ -385,6 +385,8 @@ export interface MealEntry {
     mealType: MealType;
     items: MealItem[];
     title?: string; // Optional title for the meal (e.g. "Breakfast Sandwich")
+    snabbvalId?: string; // ID of the quick meal used to create this entry
+    pieces?: number; // How many of this snabbval were consumed (default 1)
     createdAt: string;
 }
 
@@ -614,6 +616,7 @@ export interface ExerciseEntry {
     maxWatts?: number;
     averageSpeed?: number; // km/h
     distance?: number;  // km
+    startTime?: string; // HH:mm format local start time
     createdAt: string;
     source?: string;
     // Integration fields (Strava/Garmin)
@@ -1337,6 +1340,8 @@ export interface Competition {
     rules: CompetitionRule[];
     isDraft?: boolean;
     isPublic?: boolean;
+    snabbvalId?: string;
+    pieces?: number; // How many of this snabbval were consumed (default 1)
     creatorId?: string;
     createdAt: string;
 }

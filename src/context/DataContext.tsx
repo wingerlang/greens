@@ -45,7 +45,8 @@ import {
     type UserPrivacy,
     type BodyMeasurementEntry, // Phase Legacy+
     type TrainingPeriod,
-    type QuickMeal
+    type QuickMeal,
+    type MealItem
 } from '../models/types.ts';
 import { type StrengthWorkout } from '../models/strengthTypes.ts';
 import { storageService } from '../services/storage.ts';
@@ -210,13 +211,14 @@ interface DataContextType {
     // Quick Meals & Aliases
     quickMeals: QuickMeal[];
     addQuickMeal: (name: string, items: MealItem[]) => void;
+    updateQuickMeal: (id: string, updates: Partial<Omit<QuickMeal, 'id' | 'userId' | 'createdAt'>>) => void;
     deleteQuickMeal: (id: string) => void;
     foodAliases: Record<string, string>;
     updateFoodAlias: (foodId: string, alias: string) => void;
 
     unifiedActivities: (ExerciseEntry & { source: string; _mergeData?: any })[];
     calculateStreak: (referenceDate?: string) => number;
-    calculateTrainingStreak: (referenceDate?: string, type?: 'strength' | 'running' | 'other') => number;
+    calculateTrainingStreak: (referenceDate?: string, type?: string) => number;
     calculateWeeklyTrainingStreak: (referenceDate?: string) => number;
     calculateCalorieGoalStreak: (referenceDate?: string) => number;
 
@@ -358,12 +360,14 @@ export function DataProvider({ children }: DataProviderProps) {
                 console.log('[DataContext] Starting parallel sync...');
 
                 // execute all independent fetches in parallel
-                const [userPayload, mePayload, planData, strengthData] = await Promise.all([
+                const [userPayload, mePayload, planData, strengthData, quickMealsData] = await Promise.all([
                     safeFetch<{ users: User[] }>('/api/users', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
                     safeFetch<{ user: User }>('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
                     safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', { headers: { 'Authorization': `Bearer ${token}` } }),
-                    safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } })
+                    safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    safeFetch<QuickMeal[]>('/api/quick-meals', { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
+
 
                 // 1. Handle Users
                 if (userPayload && userPayload.users && Array.isArray(userPayload.users)) {
@@ -404,6 +408,21 @@ export function DataProvider({ children }: DataProviderProps) {
                     if (stored) {
                         const parsed = JSON.parse(stored);
                         parsed.strengthSessions = strengthData.workouts;
+                        localStorage.setItem('greens-app-data', JSON.stringify(parsed));
+                    }
+                }
+
+                // 5. Handle Quick Meals
+                if (quickMealsData && Array.isArray(quickMealsData)) {
+                    console.log('[DataContext] Loaded quick meals:', quickMealsData.length);
+                    data.quickMeals = quickMealsData;
+                    setQuickMeals(quickMealsData);
+
+                    // Update local mirror
+                    const stored = localStorage.getItem('greens-app-data');
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        parsed.quickMeals = quickMealsData;
                         localStorage.setItem('greens-app-data', JSON.stringify(parsed));
                     }
                 }
@@ -855,32 +874,44 @@ export function DataProvider({ children }: DataProviderProps) {
         return newEntry;
     }, [foodItems, recipes, calculateRecipeNutrition, emitFeedEvent]);
 
-    const updateMealEntry = useCallback((id: string, data: Partial<MealEntryFormData>): void => {
-        setMealEntries((prev: MealEntry[]) => {
-            const next = prev.map((entry: MealEntry) =>
-                entry.id === id ? { ...entry, ...data } : entry
-            );
+    const updateMealEntry = useCallback((id: string, data: Partial<MealEntry>): void => {
+        let entryToUpdate: MealEntry | undefined;
 
-            // Sync via Granular API
-            const updated = next.find(e => e.id === id);
-            if (updated) {
-                skipAutoSave.current = true;
-                storageService.updateMealEntry(updated).catch(e => console.error("Failed to update meal", e));
-            }
+        setMealEntries((prev: MealEntry[]) => {
+            const next = prev.map((entry: MealEntry) => {
+                if (entry.id === id) {
+                    const updated = { ...entry, ...data };
+                    entryToUpdate = updated;
+                    return updated;
+                }
+                return entry;
+            });
             return next;
         });
-    }, []);
+
+        // Sync via Granular API outside of state updater
+        if (entryToUpdate) {
+            skipAutoSave.current = true;
+            storageService.updateMealEntry(entryToUpdate).catch(e => console.error("Failed to update meal", e));
+        }
+    }, [storageService]);
 
     const deleteMealEntry = useCallback((id: string): void => {
+        let entryToDelete: MealEntry | undefined;
+
         setMealEntries((prev: MealEntry[]) => {
             const entry = prev.find(e => e.id === id);
             if (entry) {
+                entryToDelete = entry;
                 skipAutoSave.current = true;
-                storageService.deleteMealEntry(id, entry.date).catch(e => console.error("Failed to delete meal", e));
             }
             return prev.filter((entry: MealEntry) => entry.id !== id);
         });
-    }, []);
+
+        if (entryToDelete) {
+            storageService.deleteMealEntry(id, entryToDelete.date).catch(e => console.error("Failed to delete meal", e));
+        }
+    }, [storageService]);
 
     // ============================================
     // Strength Session CRUD (Phase 12)
@@ -944,17 +975,23 @@ export function DataProvider({ children }: DataProviderProps) {
     }, []);
 
     const deleteStrengthSession = useCallback((id: string): void => {
+        let sessionToDelete: StrengthWorkout | undefined;
+
         setStrengthSessions(prev => {
             const session = prev.find(s => s.id === id);
             if (session) {
-                storageService.deleteStrengthSession(id).catch(e => console.error("Failed to delete strength session", e));
+                sessionToDelete = session;
             }
             return prev.filter(s => s.id !== id);
         });
 
+        if (sessionToDelete) {
+            storageService.deleteStrengthSession(id).catch(e => console.error("Failed to delete strength session", e));
+        }
+
         // Also remove from universalActivities if it's there
         setUniversalActivities(prev => prev.filter(a => a.id !== id));
-    }, []);
+    }, [storageService]);
 
 
     // ============================================
@@ -1110,29 +1147,41 @@ export function DataProvider({ children }: DataProviderProps) {
     }, [exerciseEntries, strengthSessions, universalActivities, updateStrengthSession, storageService]);
 
     const deleteExercise = useCallback((id: string) => {
+        let entryToDelete: ExerciseEntry | undefined;
+        let sessionToDelete: StrengthWorkout | undefined;
+        let activityToDelete: UniversalActivity | undefined;
+
         // 1. Legacy Entries
         setExerciseEntries(prev => {
             const entry = prev.find(e => e.id === id);
             if (entry) {
-                storageService.deleteExerciseEntry(id, entry.date).catch(e => console.error("Failed to delete exercise", e));
+                entryToDelete = entry;
             }
             return prev.filter(e => e.id !== id);
         });
+
+        if (entryToDelete) {
+            storageService.deleteExerciseEntry(id, entryToDelete.date).catch(e => console.error("Failed to delete exercise", e));
+        }
 
         // 2. Strength Sessions
         setStrengthSessions(prev => {
             const session = prev.find(s => s.id === id);
             if (session) {
-                storageService.deleteStrengthSession(id).catch(e => console.error("Failed to delete strength session", e));
+                sessionToDelete = session;
             }
             return prev.filter(s => s.id !== id);
         });
+
+        if (sessionToDelete) {
+            storageService.deleteStrengthSession(id).catch(e => console.error("Failed to delete strength session", e));
+        }
 
         // 3. Universal Activities (Strava/Merged etc)
         setUniversalActivities(prev => {
             const activity = prev.find(a => a.id === id);
             if (activity) {
-                storageService.deleteUniversalActivity(id, activity.date).catch(e => console.error("Failed to delete universal activity", e));
+                activityToDelete = activity;
 
                 // If this was a merged activity, we should restore visibility of original activities
                 if (activity.mergeInfo?.isMerged && activity.mergeInfo.originalActivityIds) {
@@ -1151,7 +1200,11 @@ export function DataProvider({ children }: DataProviderProps) {
             }
             return prev.filter(a => a.id !== id);
         });
-    }, []);
+
+        if (activityToDelete) {
+            storageService.deleteUniversalActivity(id, activityToDelete.date).catch(e => console.error("Failed to delete universal activity", e));
+        }
+    }, [storageService]);
 
 
 
@@ -1453,38 +1506,86 @@ export function DataProvider({ children }: DataProviderProps) {
         if (!isLoaded || plannedActivities.length === 0 || unifiedActivities.length === 0) return;
 
         let hasChanges = false;
+        const usedActivityIds = new Set<string>(); // Prevent double-matching
+
         const updatedPlanned = plannedActivities.map(planned => {
             // Only sync those that are still 'PLANNED'
             if (planned.status !== 'PLANNED') return planned;
 
             // Find matching activity on same date with matching type
-            const match = unifiedActivities.find(actual => {
-                const sameDate = actual.date.split('T')[0] === planned.date.split('T')[0];
-                if (!sameDate) return false;
+            // Use scoring to find the BEST match, not just the first match
+            const candidates = unifiedActivities
+                .filter(actual => !usedActivityIds.has(actual.id))
+                .map(actual => {
+                    const sameDate = actual.date.split('T')[0] === planned.date.split('T')[0];
+                    if (!sameDate) return { actual, score: 0 };
 
-                // Type mapping for reconciliation
-                const pType = planned.type;
-                const aType = actual.type;
+                    // Type mapping for reconciliation
+                    const pType = planned.type;
+                    const aType = actual.type;
 
-                // Simple mapping logic
-                const isRunMatch = pType === 'RUN' && (aType === 'running' || aType === 'walking' || aType === 'other'); // Be generous with 'walking' for planned runs
-                const isStrengthMatch = pType === 'STRENGTH' && aType === 'strength';
-                const isBikeMatch = pType === 'BIKE' && aType === 'cycling';
-                const isHyroxMatch = pType === 'HYROX' && (aType === 'running' || aType === 'strength' || aType === 'other');
+                    // Type compatibility check
+                    const isRunMatch = pType === 'RUN' && (aType === 'running' || aType === 'walking' || aType === 'other');
+                    const isStrengthMatch = pType === 'STRENGTH' && aType === 'strength';
+                    const isBikeMatch = pType === 'BIKE' && aType === 'cycling';
+                    const isHyroxMatch = pType === 'HYROX' && (aType === 'running' || aType === 'strength' || aType === 'other');
 
-                return isRunMatch || isStrengthMatch || isBikeMatch || isHyroxMatch;
-            });
+                    if (!isRunMatch && !isStrengthMatch && !isBikeMatch && !isHyroxMatch) {
+                        return { actual, score: 0 };
+                    }
 
-            if (match) {
+                    // Calculate match score (0-100)
+                    let score = 50; // Base score for type match
+
+                    // Duration similarity bonus (up to +25 points)
+                    // A 51min workout vs planned 45min = 13% difference = +22 points
+                    // Estimate planned duration from distance (assuming ~6min/km for runs) or use 45min default for strength
+                    const plannedDuration = planned.estimatedDistance ? planned.estimatedDistance * 6 : 45;
+                    const actualDuration = actual.durationMinutes || 0;
+                    if (actualDuration > 0 && plannedDuration > 0) {
+                        const durationDiff = Math.abs(actualDuration - plannedDuration) / plannedDuration;
+                        if (durationDiff <= 0.30) {
+                            score += 25 * (1 - durationDiff / 0.30); // 0-25 points
+                        }
+                    }
+
+                    // Time proximity bonus (up to +25 points)
+                    // Activity at 11:37 vs planned 12:00 = 23min diff = +24 points
+                    if (planned.startTime && actual.date.includes('T')) {
+                        const plannedHM = planned.startTime.split(':').map(Number);
+                        const actualTime = actual.date.split('T')[1];
+                        if (actualTime) {
+                            const actualHM = actualTime.split(':').map(Number);
+                            const plannedMinutes = (plannedHM[0] || 0) * 60 + (plannedHM[1] || 0);
+                            const actualMinutes = (actualHM[0] || 0) * 60 + (actualHM[1] || 0);
+                            const timeDiffMinutes = Math.abs(plannedMinutes - actualMinutes);
+                            if (timeDiffMinutes <= 120) { // Within 2 hours
+                                score += 25 * (1 - timeDiffMinutes / 120);
+                            }
+                        }
+                    } else {
+                        // No time info - still give partial credit
+                        score += 10;
+                    }
+
+                    return { actual, score };
+                })
+                .filter(c => c.score > 0)
+                .sort((a, b) => b.score - a.score);
+
+            const bestMatch = candidates[0];
+            // Require at least 50 score (type match) to consider it a match
+            if (bestMatch && bestMatch.score >= 50) {
                 hasChanges = true;
+                usedActivityIds.add(bestMatch.actual.id);
                 return {
                     ...planned,
                     status: 'COMPLETED' as const,
-                    completedDate: match.date,
-                    actualDistance: match.distance || planned.estimatedDistance,
-                    actualTimeSeconds: (match.durationMinutes || 0) * 60,
+                    completedDate: bestMatch.actual.date,
+                    actualDistance: bestMatch.actual.distance || planned.estimatedDistance,
+                    actualTimeSeconds: (bestMatch.actual.durationMinutes || 0) * 60,
                     // Store a reference to the activity that completed it
-                    externalId: match.id
+                    externalId: bestMatch.actual.id
                 };
             }
 
@@ -1555,7 +1656,24 @@ export function DataProvider({ children }: DataProviderProps) {
 
         for (const entry of entries) {
             for (const item of entry.items) {
-                const { nutrition } = calculateMealItemNutrition(item, recipes, foodItems);
+                const { nutrition: baseNutrition } = calculateMealItemNutrition(item, recipes, foodItems);
+
+                // Account for pieces as a multiplier for the entire entry
+                const multiplier = entry.pieces ?? 1;
+                const nutrition = {
+                    calories: baseNutrition.calories * multiplier,
+                    protein: baseNutrition.protein * multiplier,
+                    carbs: baseNutrition.carbs * multiplier,
+                    fat: baseNutrition.fat * multiplier,
+                    fiber: (baseNutrition.fiber || 0) * multiplier,
+                    iron: (baseNutrition.iron || 0) * multiplier,
+                    calcium: (baseNutrition.calcium || 0) * multiplier,
+                    zinc: (baseNutrition.zinc || 0) * multiplier,
+                    vitaminB12: (baseNutrition.vitaminB12 || 0) * multiplier,
+                    vitaminC: (baseNutrition.vitaminC || 0) * multiplier,
+                    vitaminA: (baseNutrition.vitaminA || 0) * multiplier,
+                    proteinCategories: baseNutrition.proteinCategories
+                };
 
                 summary.calories += nutrition.calories;
                 summary.protein += nutrition.protein;
@@ -1760,7 +1878,7 @@ export function DataProvider({ children }: DataProviderProps) {
         return streak;
     }, [dailyVitals, getMealEntriesForDate, getExercisesForDate]);
 
-    const calculateTrainingStreak = useCallback((referenceDate?: string, type?: 'strength' | 'running' | 'other'): number => {
+    const calculateTrainingStreak = useCallback((referenceDate?: string, type?: string): number => {
         const anchor = referenceDate ? new Date(referenceDate) : new Date();
         const anchorISO = getISODate(anchor);
 
@@ -1800,7 +1918,7 @@ export function DataProvider({ children }: DataProviderProps) {
         return streak;
     }, [getExercisesForDate]);
 
-    const calculateWeeklyTrainingStreak = useCallback((referenceDate?: string): number => {
+    const calculateWeeklyTrainingStreak = useCallback((referenceDate?: string, _deprecated_type?: string): number => {
         // Count weeks where there was at least one training session
         let streak = 0;
         let checkDate = referenceDate ? new Date(referenceDate) : new Date();
@@ -1981,6 +2099,17 @@ export function DataProvider({ children }: DataProviderProps) {
         setQuickMeals(prev => prev.filter(m => m.id !== id));
         skipAutoSave.current = true;
         storageService.deleteQuickMeal(id).catch(console.error);
+    }, []);
+
+    const updateQuickMeal = useCallback((id: string, updates: Partial<Omit<QuickMeal, 'id' | 'userId' | 'createdAt'>>) => {
+        setQuickMeals(prev => prev.map(m => {
+            if (m.id !== id) return m;
+            const updated = { ...m, ...updates };
+            // Save to storage
+            storageService.saveQuickMeal(updated).catch(console.error);
+            return updated;
+        }));
+        skipAutoSave.current = true;
     }, []);
 
     const updateFoodAlias = useCallback((foodId: string, alias: string) => {
@@ -2352,6 +2481,7 @@ export function DataProvider({ children }: DataProviderProps) {
         // Quick Meals
         quickMeals,
         addQuickMeal,
+        updateQuickMeal,
         deleteQuickMeal,
         foodAliases,
         updateFoodAlias,

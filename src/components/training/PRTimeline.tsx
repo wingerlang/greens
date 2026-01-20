@@ -159,10 +159,10 @@ export function PRTimeline({ workouts, exerciseName }: PRTimelineProps) {
         const startIndex = startDate
             ? allSessions.findIndex(s => s.date > startDate)
             : 0; // If no start date, count from beginning? Usually "gap" implies between two points.
-                 // But for the first PB, there is no "gap stats" shown usually.
-                 // However, the function is called with prevDate. If prevDate is null, we might not render gap stats.
-                 // But if we wanted to show "Training leading to First PB", we could.
-                 // Let's stick to: Gap is strictly BETWEEN PBs.
+        // But for the first PB, there is no "gap stats" shown usually.
+        // However, the function is called with prevDate. If prevDate is null, we might not render gap stats.
+        // But if we wanted to show "Training leading to First PB", we could.
+        // Let's stick to: Gap is strictly BETWEEN PBs.
 
         // If startDate is provided, we filter strictly > startDate.
         // If startDate is null, we filter <= endDate (so everything up to first PB).
@@ -193,31 +193,23 @@ export function PRTimeline({ workouts, exerciseName }: PRTimelineProps) {
     const renderNode = (node: TimelineNode, type: 'weight' | 'e1rm', isLast: boolean) => (
         <div key={node.id} className="relative flex flex-col items-center">
             {/* The Node Card */}
-            <div className={`z-10 w-full p-4 rounded-2xl border backdrop-blur-md shadow-xl transition-all hover:scale-[1.02] ${
-                type === 'weight'
+            <div className={`z-10 w-full p-3 rounded-2xl border backdrop-blur-md shadow-xl transition-all hover:scale-[1.01] ${type === 'weight'
                     ? 'bg-slate-900/80 border-emerald-500/30 hover:border-emerald-500/60'
                     : 'bg-slate-900/80 border-amber-500/30 hover:border-amber-500/60'
-            }`}>
-                <div className="flex justify-between items-start mb-2">
+                }`}>
+                <div className="flex justify-between items-start mb-1">
+                    <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${type === 'weight' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'
+                        }`}>
+                        {type === 'weight' ? 'Tyngst' : 'Bäst'}
+                    </span>
                     <span className="text-[10px] font-mono text-slate-500">{node.date}</span>
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
-                        type === 'weight' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'
-                    }`}>
-                        {type === 'weight' ? 'TYNGST' : 'BÄST'}
-                    </span>
                 </div>
 
-                <div className="flex items-baseline gap-2 mb-1">
-                    <span className={`text-3xl font-black ${
-                        type === 'weight' ? 'text-white' : 'text-white'
-                    }`}>
-                        {node.value}
-                        <span className="text-sm font-normal text-slate-500 ml-1">{type === 'weight' ? 'kg' : 'kg (e1rm)'}</span>
+                <div className="flex items-baseline gap-1 mb-1">
+                    <span className="text-3xl font-black text-white">
+                        {node.reps} <span className="text-xl text-slate-500 mx-0.5">×</span> {node.weight}
+                        <span className="text-sm font-bold text-slate-500 ml-1">kg</span>
                     </span>
-                </div>
-
-                <div className="text-xs text-slate-400 font-medium">
-                    {node.reps} reps @ {node.weight}kg
                 </div>
 
                 <div className="mt-2 pt-2 border-t border-white/5 text-[10px] text-slate-500 truncate">
@@ -227,21 +219,24 @@ export function PRTimeline({ workouts, exerciseName }: PRTimelineProps) {
 
             {/* The Connector Line & Stats (Only if NOT last) */}
             {!isLast && node.gapStats && (
-                <div className="flex flex-col items-center h-32 w-full relative">
+                <div className="flex flex-col items-center h-20 w-full relative">
                     {/* Vertical Line */}
-                    <div className={`absolute top-0 bottom-0 w-0.5 ${
-                         type === 'weight' ? 'bg-gradient-to-b from-emerald-500/30 to-emerald-500/10' : 'bg-gradient-to-b from-amber-500/30 to-amber-500/10'
-                    }`} />
+                    <div className={`absolute top-0 bottom-0 w-0.5 ${type === 'weight' ? 'bg-gradient-to-b from-emerald-500/30 to-emerald-500/5' : 'bg-gradient-to-b from-amber-500/30 to-amber-500/5'
+                        }`} />
 
                     {/* Stats Badge */}
-                    <div className="z-20 my-auto bg-slate-950 border border-white/10 rounded-xl px-3 py-2 text-center shadow-lg max-w-[90%]">
-                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mb-1">
+                    <div className="z-20 my-auto bg-slate-950/80 backdrop-blur-sm border border-white/5 rounded-xl px-4 py-2 text-center shadow-lg">
+                        <div className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1">
                             {node.gapStats.days} dagar mellan
                         </div>
-                        <div className="flex gap-3 justify-center text-[10px] font-mono text-slate-300">
-                            <span title="Pass">🏋️ {node.gapStats.sessions}</span>
-                            <span title="Set">📊 {node.gapStats.sets}</span>
-                            <span title="Volym">⚖️ {(node.gapStats.volume / 1000).toFixed(1)}t</span>
+                        <div className="flex gap-2 justify-center text-[9px] font-black uppercase text-slate-500 tracking-tight">
+                            <span>pass {node.gapStats.sessions}</span>
+                            <span className="opacity-30">•</span>
+                            <span>set {node.gapStats.sets}</span>
+                            <span className="opacity-30">•</span>
+                            <span>reps {node.gapStats.reps}</span>
+                            <span className="opacity-30">•</span>
+                            <span>ton {(node.gapStats.volume / 1000).toFixed(1)}</span>
                         </div>
                     </div>
                 </div>

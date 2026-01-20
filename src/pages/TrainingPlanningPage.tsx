@@ -387,7 +387,7 @@ export function TrainingPlanningPage() {
                     </div>
                 </div>
 
-                {/* 1. Denna Vecka (Actuals) */}
+                {/* 1. Denna Vecka (Actuals vs Planned) */}
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
                     <div className="flex items-center gap-2 mb-3">
                         <TrendingUp size={16} className="text-emerald-500" />
@@ -397,15 +397,13 @@ export function TrainingPlanningPage() {
                         <div className="flex flex-col flex-1">
                             <div className="text-[10px] font-black uppercase text-slate-400 mb-0.5">🏃 Löpning</div>
                             <div className="flex items-baseline gap-2">
-                                <span className="text-3xl font-black text-slate-900 dark:text-white">
+                                <span className="text-2xl font-black text-slate-900 dark:text-white">
                                     {weeklyStats.running.km.toFixed(1)}
-                                    <span className="text-lg font-bold text-slate-400 ml-1">km</span>
+                                    <span className="text-xs font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.runningKm.toFixed(1)} km</span>
                                 </span>
                             </div>
                             <div className="text-xs font-medium text-slate-500 flex items-center gap-2">
-                                <span>{weeklyStats.running.sessions} pass</span>
-                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                <span>{formatDuration(weeklyStats.running.time * 60)}</span>
+                                <span>{weeklyStats.running.sessions} ({weeklyStats.forecast.runningSessions}) pass</span>
                             </div>
                         </div>
 
@@ -417,13 +415,11 @@ export function TrainingPlanningPage() {
                             <div className="flex items-baseline gap-2">
                                 <span className="text-2xl font-black text-slate-900 dark:text-white">
                                     {weeklyStats.strength.sessions}
-                                    <span className="text-base font-bold text-slate-400 ml-1">pass</span>
+                                    <span className="text-xs font-bold text-slate-400 ml-1">/ {weeklyStats.forecast.strengthSessions} pass</span>
                                 </span>
                             </div>
                             <div className="text-xs font-medium text-slate-500 flex items-center gap-2">
                                 <span>{(weeklyStats.strength.tonnage / 1000).toFixed(1)} ton</span>
-                                <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                                <span>{formatDuration(weeklyStats.strength.time * 60)}</span>
                             </div>
                         </div>
                     </div>
@@ -615,6 +611,12 @@ export function TrainingPlanningPage() {
                                                 {act.distance ? `${act.distance.toFixed(1)} km` : ''}
                                                 {act.durationMinutes ? ` ${formatDurationHHMM(act.durationMinutes)}` : ''}
                                             </p>
+                                            {act.startTime && (
+                                                <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-0.5">
+                                                    <Clock size={9} />
+                                                    {act.startTime}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -642,6 +644,7 @@ export function TrainingPlanningPage() {
                                             <p className="text-[10px] text-slate-500 mt-1">
                                                 {act.tonnage ? `${(act.tonnage / 1000).toFixed(1)}t • ` : ''}
                                                 {formatDurationHHMM(act.durationMinutes || 0)}
+                                                {act.startTime && ` • kl ${act.startTime}`}
                                             </p>
                                         </div>
                                     );
@@ -664,12 +667,19 @@ export function TrainingPlanningPage() {
                                                 ? 'bg-amber-500/10 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700/50 hover:border-amber-500 dark:hover:border-amber-500'
                                                 : act.type === 'REST' || act.category === 'REST'
                                                     ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
-                                                    : 'bg-blue-50 dark:bg-blue-900/10 border-blue-100 dark:border-blue-900/30 hover:border-blue-300 dark:hover:border-blue-700'
+                                                    : act.type === 'STRENGTH' || act.category === 'STRENGTH'
+                                                        ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700'
+                                                        : act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox')
+                                                            ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700'
+                                                            : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700'
                                                 }`}
                                         >
                                             <div className="flex justify-between items-start mb-1">
                                                 <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' :
-                                                    act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' : 'text-blue-600 dark:text-blue-400'
+                                                    act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' :
+                                                        act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' :
+                                                            act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' :
+                                                                'text-emerald-600 dark:text-emerald-400'
                                                     }`}>
                                                     {isRace ? <Trophy size={10} /> : null}
                                                     {isRace ? 'TÄVLING' :

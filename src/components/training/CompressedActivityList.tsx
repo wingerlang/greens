@@ -62,6 +62,7 @@ export function CompressedActivityList({ activities }: CompressedActivityListPro
                                     ) : (
                                         <span className="text-xs font-bold text-slate-300">
                                             {formatSecondsToTime(((activity.durationMinutes || 0) * 60))}
+                                            {activity.startTime && <div className="text-[9px] text-slate-500 font-normal">kl {activity.startTime}</div>}
                                         </span>
                                     )}
                                 </td>

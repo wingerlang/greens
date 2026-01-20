@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useTrainingSummary } from '../hooks/useTrainingSummary.ts';
 import { SummaryCard } from '../components/summary/SummaryCard.tsx';
+import { SummaryVsCard } from '../components/summary/SummaryVsCard.tsx';
 import { SummaryControls } from '../components/summary/SummaryControls.tsx';
 import html2canvas from 'html2canvas';
 
@@ -14,15 +15,31 @@ export function SummaryPage() {
     const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
     const [showPrs, setShowPrs] = useState(true);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [viewMode, setViewMode] = useState<'single' | 'vs'>('single');
 
     const { stats } = useTrainingSummary(startDate, endDate);
+
+    // Calculate same period last year
+    const prevStartDate = useMemo(() => {
+        const d = new Date(startDate);
+        d.setFullYear(d.getFullYear() - 1);
+        return d.toISOString().split('T')[0];
+    }, [startDate]);
+
+    const prevEndDate = useMemo(() => {
+        const d = new Date(endDate);
+        d.setFullYear(d.getFullYear() - 1);
+        return d.toISOString().split('T')[0];
+    }, [endDate]);
+
+    const { stats: prevStats } = useTrainingSummary(prevStartDate, prevEndDate);
+
     const cardRef = useRef<HTMLDivElement>(null);
 
     const handleDownload = async () => {
         if (!cardRef.current) return;
         setIsDownloading(true);
         try {
-            // Need to wait a bit for any images/fonts to be fully ready if not already
             const canvas = await html2canvas(cardRef.current, {
                 backgroundColor: '#020617', // slate-950
                 scale: 2, // High res
@@ -33,7 +50,7 @@ export function SummaryPage() {
             const image = canvas.toDataURL('image/png');
             const link = document.createElement('a');
             link.href = image;
-            link.download = `Greens_Summary_${startDate}_${endDate}.png`;
+            link.download = `Greens_Summary_${viewMode === 'vs' ? 'VS_' : ''}${startDate}_${endDate}.png`;
             link.click();
         } catch (err) {
             console.error('Failed to generate summary image', err);
@@ -68,6 +85,8 @@ export function SummaryPage() {
                         onTogglePrs={setShowPrs}
                         onDownload={handleDownload}
                         isDownloading={isDownloading}
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
                     />
                 </div>
 
@@ -78,12 +97,23 @@ export function SummaryPage() {
                     {/* The Card Wrapper to capture */}
                     <div className="shadow-2xl shadow-black/50 overflow-hidden rounded-none">
                         <div ref={cardRef}>
-                            <SummaryCard
-                                stats={stats}
-                                startDate={startDate}
-                                endDate={endDate}
-                                showPrs={showPrs}
-                            />
+                            {viewMode === 'vs' ? (
+                                <SummaryVsCard
+                                    stats={stats}
+                                    prevStats={prevStats}
+                                    startDate={startDate}
+                                    endDate={endDate}
+                                    prevStartDate={prevStartDate}
+                                    prevEndDate={prevEndDate}
+                                />
+                            ) : (
+                                <SummaryCard
+                                    stats={stats}
+                                    startDate={startDate}
+                                    endDate={endDate}
+                                    showPrs={showPrs}
+                                />
+                            )}
                         </div>
                     </div>
                 </div>
