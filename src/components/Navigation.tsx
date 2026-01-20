@@ -62,6 +62,7 @@ const NAV_ITEMS: NavItem[] = [
     { path: '/tools/1rm', label: '1RM & Last', icon: '💪', section: 'tools' },
     { path: '/tools/race', label: 'Race', icon: '🏃', section: 'tools' },
     { path: '/tools/pace', label: 'Pace', icon: '⏱️', section: 'tools' },
+    { path: '/tools/cycling', label: 'Cykling & Assault', icon: '🚴', section: 'tools' },
     { path: '/tools/health', label: 'Hälsa', icon: '🩺', section: 'tools' },
 
     // Admin (Simplified)

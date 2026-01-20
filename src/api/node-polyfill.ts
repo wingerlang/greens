@@ -220,6 +220,15 @@ Deno.serve = (options: any, handler: any) => {
                 duplex: body ? 'half' : undefined
             });
 
+            // Mock Deno.ServeHandlerInfo
+            const info = {
+                remoteAddr: {
+                    transport: "tcp",
+                    hostname: req.socket.remoteAddress || "127.0.0.1",
+                    port: req.socket.remotePort || 0
+                }
+            };
+
             // Handle
             const info = {
                 remoteAddr: {
