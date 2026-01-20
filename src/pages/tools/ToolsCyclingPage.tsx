@@ -4,16 +4,18 @@ import {
     calculateWattsPerKg,
     estimateFtp,
     getCyclingLevel,
-    getAssaultBikeLevel,
     analyzeAssaultBikePerformance,
-    getBest20MinPower
+    ASSAULT_BIKE_INTERVALS,
+    AssaultBikeMath,
+    extractFtpFromHistory,
+    type AssaultInterval
 } from '../../utils/cyclingCalculations';
 import { CYCLING_POWER_PROFILE } from './data/cyclingStandards';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Bike, Wind, Trophy, Info, Activity, Dumbbell } from 'lucide-react';
+import { Bike, Wind, Trophy, Activity, Timer, Calculator, Zap, Flame, Gauge } from 'lucide-react';
 
 export const ToolsCyclingPage: React.FC = () => {
-    const { getLatestWeight, exerciseEntries, userSettings } = useData();
+    const { getLatestWeight, exerciseEntries, userSettings, strengthSessions } = useData();
     const [activeTab, setActiveTab] = useState<'cycling' | 'assault'>('cycling');
 
     // Cycling State
@@ -22,9 +24,11 @@ export const ToolsCyclingPage: React.FC = () => {
     const [weight, setWeight] = useState<string>('80');
     const [gender, setGender] = useState<'male' | 'female'>('male');
 
-    // Assault Bike State
-    const [assaultTime, setAssaultTime] = useState<'1m' | '10m' | '20m'>('10m');
-    const [assaultCals, setAssaultCals] = useState<string>('');
+    // Assault Bike Calculator State
+    const [calcWatts, setCalcWatts] = useState<string>('300');
+    const [calcRpm, setCalcRpm] = useState<string>('60');
+    const [calcSpeed, setCalcSpeed] = useState<string>('26'); // km/h
+    const [calcCals, setCalcCals] = useState<string>('15'); // cals/min
 
     // Load initial data
     useEffect(() => {
@@ -36,10 +40,10 @@ export const ToolsCyclingPage: React.FC = () => {
         }
 
         // Pre-fill cycling best if available
-        const best20 = getBest20MinPower(exerciseEntries);
-        if (best20) {
-            setInputWatts(best20.watts.toString());
-            setIsFtpInput(false); // It's 20min power, not FTP
+        const bestFtp = extractFtpFromHistory(exerciseEntries);
+        if (bestFtp) {
+            setInputWatts(bestFtp.watts.toString());
+            setIsFtpInput(true); // Extracted logic returns "FTP", whether estimated or explicit
         }
     }, [getLatestWeight, exerciseEntries, userSettings]);
 
@@ -59,8 +63,6 @@ export const ToolsCyclingPage: React.FC = () => {
 
     const cyclingChartData = useMemo(() => {
         const standards = CYCLING_POWER_PROFILE[gender];
-        // Create chart data: Level labels vs W/kg thresholds
-        // We reverse it so "World Class" is at top if vertical, or right if horizontal
         const data = standards.map(s => ({
             name: s.level,
             wKg: s.wKgFtp,
@@ -72,19 +74,116 @@ export const ToolsCyclingPage: React.FC = () => {
     }, [gender, cyclingStats]);
 
     // Assault Bike Analysis
-    const assaultStats = useMemo(() => {
-        const cals = parseFloat(assaultCals) || 0;
-        if (!cals) return null;
-
-        const level = getAssaultBikeLevel(cals, assaultTime, gender);
-        const calsPerMin = assaultTime === '1m' ? cals : assaultTime === '10m' ? cals / 10 : cals / 20;
-
-        return { level, calsPerMin: Math.round(calsPerMin * 10) / 10 };
-    }, [assaultCals, assaultTime, gender]);
-
     const historicalAssault = useMemo(() => {
-        return analyzeAssaultBikePerformance(exerciseEntries, gender);
-    }, [exerciseEntries, gender]);
+        return analyzeAssaultBikePerformance(exerciseEntries, strengthSessions, gender);
+    }, [exerciseEntries, strengthSessions, gender]);
+
+    // Assault Calculator Handlers
+    const handleWattChange = (val: string) => {
+        setCalcWatts(val);
+        const w = parseFloat(val);
+        if (!w) return;
+        setCalcRpm(AssaultBikeMath.wattsToRpm(w).toFixed(1));
+        setCalcCals(AssaultBikeMath.wattsToCalsPerMin(w).toFixed(1));
+        const rpm = AssaultBikeMath.wattsToRpm(w);
+        setCalcSpeed(AssaultBikeMath.rpmToSpeedKmh(rpm).toFixed(1));
+    };
+
+    const handleRpmChange = (val: string) => {
+        setCalcRpm(val);
+        const rpm = parseFloat(val);
+        if (!rpm) return;
+        setCalcWatts(AssaultBikeMath.rpmToWatts(rpm).toFixed(0));
+        setCalcSpeed(AssaultBikeMath.rpmToSpeedKmh(rpm).toFixed(1));
+        const w = AssaultBikeMath.rpmToWatts(rpm);
+        setCalcCals(AssaultBikeMath.wattsToCalsPerMin(w).toFixed(1));
+    };
+
+    const handleSpeedChange = (val: string) => {
+        setCalcSpeed(val);
+        const s = parseFloat(val);
+        if (!s) return;
+        // speed = rpm * 0.43 => rpm = speed / 0.43
+        const rpm = s / 0.43;
+        setCalcRpm(rpm.toFixed(1));
+        const w = AssaultBikeMath.rpmToWatts(rpm);
+        setCalcWatts(w.toFixed(0));
+        setCalcCals(AssaultBikeMath.wattsToCalsPerMin(w).toFixed(1));
+    };
+
+    const handleCalsChange = (val: string) => {
+        setCalcCals(val);
+        const c = parseFloat(val);
+        if (!c) return;
+        const w = AssaultBikeMath.calsPerMinToWatts(c);
+        setCalcWatts(w.toFixed(0));
+        setCalcRpm(AssaultBikeMath.wattsToRpm(w).toFixed(1));
+        const rpm = AssaultBikeMath.wattsToRpm(w);
+        setCalcSpeed(AssaultBikeMath.rpmToSpeedKmh(rpm).toFixed(1));
+    };
+
+    // Relevant Activities List
+    const relevantActivities = useMemo(() => {
+        if (activeTab === 'cycling') {
+            return exerciseEntries
+                .filter(e => e.type === 'cycling' || (e.averageWatts && e.averageWatts > 0))
+                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        } else {
+             // For Assault, we want summaries or Strength Sessions with Assault sets
+             const relevantSummaryIds = new Set<string>();
+             const list: {
+                 id: string; date: string; title: string; type: string; details: string;
+             }[] = [];
+
+             // 1. Summaries
+             exerciseEntries.forEach(e => {
+                 const title = (e.title || '').toLowerCase();
+                 const notes = (e.notes || '').toLowerCase();
+                 if (['assault', 'air bike', 'echo'].some(k => title.includes(k) || notes.includes(k))) {
+                     relevantSummaryIds.add(e.id);
+                     list.push({
+                         id: e.id,
+                         date: e.date,
+                         title: e.title || 'Cardio',
+                         type: 'Cardio',
+                         details: `${e.caloriesBurned} kcal, ${e.durationMinutes} min`
+                     });
+                 }
+             });
+
+             // 2. Strength Sessions
+             strengthSessions.forEach(s => {
+                  const hasAssault = s.exercises.some(ex => {
+                      const name = (ex.exerciseName || '').toLowerCase();
+                      return ['assault', 'air bike', 'echo'].some(k => name.includes(k));
+                  });
+
+                  if (hasAssault) {
+                      // Find best set details
+                      const sets: string[] = [];
+                      s.exercises.forEach(ex => {
+                          if (['assault', 'air bike', 'echo'].some(k => (ex.exerciseName || '').toLowerCase().includes(k))) {
+                              ex.sets.forEach(set => {
+                                  if (set.calories) sets.push(`${set.calories} kcal`);
+                                  else if (set.distance) sets.push(`${set.distance}${set.distanceUnit || 'm'}`);
+                                  else if (set.time) sets.push(`${set.time}`);
+                              });
+                          }
+                      });
+
+                      list.push({
+                          id: s.id,
+                          date: s.date,
+                          title: s.name || 'Styrkepass',
+                          type: 'Strength',
+                          details: sets.slice(0, 3).join(', ') + (sets.length > 3 ? '...' : '')
+                      });
+                  }
+             });
+
+             return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        }
+    }, [activeTab, exerciseEntries, strengthSessions]);
 
     return (
         <div className="max-w-4xl mx-auto pb-20 space-y-8">
@@ -266,103 +365,154 @@ export const ToolsCyclingPage: React.FC = () => {
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Assault Bike Layout */}
 
-                    {/* Top Row: Historical Records */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        {[
-                            { label: '1 min', data: historicalAssault.best1m, icon: '🔥' },
-                            { label: '10 min', data: historicalAssault.best10m, icon: '⚡' },
-                            { label: '20 min', data: historicalAssault.best20m, icon: '🚴' }
-                        ].map((item) => (
-                            <div key={item.label} className="bg-slate-900/50 border border-white/10 rounded-2xl p-4 flex flex-col justify-between h-32 relative overflow-hidden group hover:border-emerald-500/30 transition-colors">
-                                <div className="absolute -right-4 -top-4 text-slate-800 group-hover:text-emerald-500/10 transition-colors">
-                                    <Wind size={80} />
-                                </div>
-                                <div className="relative z-10">
-                                    <div className="text-xs font-bold text-slate-500 uppercase mb-1">{item.label} Rekord</div>
-                                    {item.data ? (
-                                        <>
-                                            <div className="text-2xl font-bold text-white">{Math.round(item.data.totalCals)} <span className="text-sm font-medium text-slate-500">kcal</span></div>
-                                            <div className="text-xs font-medium text-emerald-400 mt-1">{item.data.level}</div>
-                                            <div className="text-[10px] text-slate-600 mt-2">{item.data.date.split('T')[0]}</div>
-                                        </>
-                                    ) : (
-                                        <div className="text-sm text-slate-600 italic mt-2">Inga data hittades</div>
-                                    )}
-                                </div>
-                            </div>
-                        ))}
+                    {/* Historical Grid */}
+                    <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
+                        <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                             <Trophy size={20} className="text-amber-400" />
+                             Mina Rekord
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                            {ASSAULT_BIKE_INTERVALS.map((interval) => {
+                                const record = historicalAssault[interval.key];
+                                return (
+                                    <div key={interval.key} className="bg-slate-950/50 border border-white/5 rounded-xl p-3 flex flex-col justify-between h-28 relative group hover:border-emerald-500/30 transition-all">
+                                        <div className="text-[10px] font-bold text-slate-500 uppercase">{interval.label}</div>
+                                        {record ? (
+                                            <div>
+                                                <div className="text-lg font-bold text-white">
+                                                    {interval.type === 'time' ? Math.round(record.totalCals) : formatTime(record.durationMinutes * 60)}
+                                                    <span className="text-[10px] font-medium text-slate-500 ml-1">
+                                                        {interval.type === 'time' ? 'kcal' : 'min'}
+                                                    </span>
+                                                </div>
+                                                <div className="text-[10px] text-emerald-400 mt-0.5 truncate">{record.description}</div>
+                                                <div className="text-[9px] text-slate-600 mt-1">{record.date.split('T')[0]}</div>
+                                            </div>
+                                        ) : (
+                                            <div className="text-xs text-slate-600 italic">Inget data</div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
 
                     {/* Calculator Area */}
-                    <div className="grid md:grid-cols-2 gap-8">
-                         <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6 space-y-6">
-                            <h3 className="text-xl font-bold text-white mb-4">Kalkylator</h3>
-
-                            <div className="space-y-6">
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-3">Test (Tid)</label>
-                                    <div className="flex bg-slate-950 p-1 rounded-xl border border-white/10">
-                                        {(['1m', '10m', '20m'] as const).map(t => (
-                                            <button
-                                                key={t}
-                                                onClick={() => setAssaultTime(t)}
-                                                className={`flex-1 py-2 rounded-lg text-sm font-bold transition-all ${assaultTime === t ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400 hover:text-white'}`}
-                                            >
-                                                {t}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Resultat (Kalorier)</label>
-                                    <div className="relative">
-                                        <input
-                                            type="number"
-                                            value={assaultCals}
-                                            onChange={(e) => setAssaultCals(e.target.value)}
-                                            placeholder="Antal kalorier..."
-                                            className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        />
-                                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold">kcal</div>
-                                    </div>
-                                </div>
-                            </div>
+                    <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                             <Calculator className="text-emerald-400" size={24} />
+                             <h3 className="text-xl font-bold text-white">Konverterare</h3>
                         </div>
 
-                        {/* Analysis Output */}
-                        <div className="bg-gradient-to-br from-slate-900 to-slate-900/50 border border-white/10 rounded-2xl p-6 relative overflow-hidden flex flex-col justify-center">
-                             {assaultStats ? (
-                                <div className="space-y-6 text-center">
-                                    <div>
-                                        <div className="text-xs text-slate-500 uppercase font-bold mb-1">Prestationsnivå</div>
-                                        <div className="text-3xl font-bold text-white flex items-center justify-center gap-3">
-                                            <Trophy className="text-amber-400" size={32} />
-                                            {assaultStats.level}
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4 mt-4">
-                                        <div className="bg-slate-950/50 rounded-xl p-3 border border-white/5">
-                                            <div className="text-[10px] text-slate-500 uppercase font-bold">Snitt (kcal/min)</div>
-                                            <div className="text-xl font-bold text-emerald-400">{assaultStats.calsPerMin}</div>
-                                        </div>
-                                        <div className="bg-slate-950/50 rounded-xl p-3 border border-white/5">
-                                            <div className="text-[10px] text-slate-500 uppercase font-bold">Total</div>
-                                            <div className="text-xl font-bold text-white">{assaultCals}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                             ) : (
-                                <div className="flex flex-col items-center justify-center text-slate-500 space-y-4">
-                                    <Wind size={48} className="opacity-20" />
-                                    <p>Mata in resultat för att se nivå</p>
-                                </div>
-                             )}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                             <div>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
+                                    <Zap size={14} /> Watt
+                                </label>
+                                <input
+                                    type="number"
+                                    value={calcWatts}
+                                    onChange={(e) => handleWattChange(e.target.value)}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
+                                />
+                             </div>
+                             <div>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
+                                    <Gauge size={14} /> RPM
+                                </label>
+                                <input
+                                    type="number"
+                                    value={calcRpm}
+                                    onChange={(e) => handleRpmChange(e.target.value)}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
+                                />
+                             </div>
+                             <div>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
+                                    <Wind size={14} /> Km/h (Est)
+                                </label>
+                                <input
+                                    type="number"
+                                    value={calcSpeed}
+                                    onChange={(e) => handleSpeedChange(e.target.value)}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
+                                />
+                             </div>
+                             <div>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
+                                    <Flame size={14} /> Kcal/min
+                                </label>
+                                <input
+                                    type="number"
+                                    value={calcCals}
+                                    onChange={(e) => handleCalsChange(e.target.value)}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
+                                />
+                             </div>
                         </div>
+                        <p className="text-[10px] text-slate-500 mt-4 text-center">
+                            Baserat på standardformler för Assault/Echo bike (Watts = 0.99 * RPM³ / 1260).
+                        </p>
                     </div>
+
                 </div>
             )}
+
+            {/* Common: Relevant Activity List */}
+            <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <h3 className="text-xl font-bold text-white mb-6">Relevanta Aktiviteter</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="text-xs text-slate-500 border-b border-white/10">
+                                <th className="py-3 px-4 font-bold uppercase">Datum</th>
+                                <th className="py-3 px-4 font-bold uppercase">Titel</th>
+                                <th className="py-3 px-4 font-bold uppercase">Typ</th>
+                                <th className="py-3 px-4 font-bold uppercase text-right">
+                                    {activeTab === 'cycling' ? 'Snittwatt / FTP' : 'Detaljer'}
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                            {relevantActivities.length > 0 ? (
+                                relevantActivities.map((activity: any) => (
+                                    <tr key={activity.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                        <td className="py-3 px-4 text-slate-400 font-mono">{activity.date.split('T')[0]}</td>
+                                        <td className="py-3 px-4 text-white font-medium">{activity.title}</td>
+                                        <td className="py-3 px-4 text-slate-400">
+                                            {activeTab === 'cycling'
+                                                ? (activity.type === 'cycling' ? 'Cykling' : 'Annat')
+                                                : activity.type}
+                                        </td>
+                                        <td className="py-3 px-4 text-right">
+                                            {activeTab === 'cycling' ? (
+                                                <div className="flex flex-col items-end">
+                                                    {activity.averageWatts && <span className="text-emerald-400 font-bold">{Math.round(activity.averageWatts)}W</span>}
+                                                    {activity.title.toLowerCase().includes('ftp') && <span className="text-[10px] text-amber-400 font-bold uppercase">FTP TEST</span>}
+                                                </div>
+                                            ) : (
+                                                <span className="text-slate-300">{activity.details}</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={4} className="py-8 text-center text-slate-500 italic">
+                                        Inga relevanta aktiviteter hittades.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 };
+
+function formatTime(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = Math.round(seconds % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}

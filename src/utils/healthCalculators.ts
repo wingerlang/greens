@@ -3,6 +3,9 @@
  * BMI, BMR, TDEE, Deficit
  */
 
+/**
+ * Calculates BMI (Body Mass Index).
+ */
 export function calculateBMI(weightKg: number, heightCm: number): number {
     if (heightCm <= 0) return 0;
     const heightM = heightCm / 100;
@@ -10,6 +13,9 @@ export function calculateBMI(weightKg: number, heightCm: number): number {
     return Math.round(bmi * 10) / 10;
 }
 
+/**
+ * Calculates BMR (Basal Metabolic Rate) using Mifflin-St Jeor Equation.
+ */
 export function calculateBMR(weightKg: number, heightCm: number, age: number, gender: 'male' | 'female'): number {
     // Mifflin-St Jeor Equation
     // Men: 10W + 6.25H - 5A + 5
@@ -20,6 +26,9 @@ export function calculateBMR(weightKg: number, heightCm: number, age: number, ge
 
 export type ActivityLevel = 'sedentary' | 'lightly_active' | 'active' | 'very_active' | 'extra_active';
 
+/**
+ * Calculates TDEE (Total Daily Energy Expenditure) based on BMR and activity level.
+ */
 export function calculateTDEE(bmr: number, activityLevel: ActivityLevel): number {
     const multipliers: Record<ActivityLevel, number> = {
         'sedentary': 1.2,      // Little or no exercise
@@ -31,6 +40,10 @@ export function calculateTDEE(bmr: number, activityLevel: ActivityLevel): number
     return Math.round(bmr * (multipliers[activityLevel] || 1.2));
 }
 
+/**
+ * Calculates required daily calorie deficit to reach target weight in given days.
+ * Assumes 7700 kcal per kg of fat.
+ */
 export function calculateCalorieDeficit(
     currentWeightKg: number,
     targetWeightKg: number,

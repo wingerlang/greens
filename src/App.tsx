@@ -78,6 +78,7 @@ import { DeveloperDeepAnalysis } from './pages/developer/DeveloperDeepAnalysis.t
 import { DeveloperTodos } from './pages/developer/DeveloperTodos.tsx';
 import { DeveloperHealth } from './pages/developer/DeveloperHealth.tsx';
 import { DeveloperManagement } from './pages/developer/DeveloperManagement.tsx';
+import { DeveloperCoverage } from './pages/developer/DeveloperCoverage.tsx';
 import { BugReporter } from './components/debug/BugReporter.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
@@ -172,6 +173,7 @@ export function App() {
                                                             <Route path="deep" element={<DeveloperDeepAnalysis />} />
                                                             <Route path="health" element={<DeveloperHealth />} />
                                                             <Route path="management" element={<DeveloperManagement />} />
+                                                            <Route path="coverage" element={<DeveloperCoverage />} />
                                                         </Route>
 
                                                         <Route path="api" element={<ApiPage />} />

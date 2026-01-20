@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { calculateCooperVO2, formatPace, formatSeconds, calculateVDOT, predictRaceTime } from '../../utils/runningCalculator.ts';
+import { calculateCooperVO2, formatPace, formatSeconds, calculateVDOT, predictRaceTime, convertTimeToPace } from '../../utils/runningCalculator.ts';
 import { useData } from '../../context/DataContext.tsx';
 import {
     COOPER_STANDARDS,
@@ -122,7 +122,7 @@ export function ToolsCooperPage() {
     }, [distance, standard]);
 
     // Pace Calculations
-    const currentPace = distance > 0 ? 12 / (distance / 1000) : 0; // min/km
+    const currentPace = convertTimeToPace(distance / 1000, 12 * 60);
 
     // Next Level Logic
     // nextLevelDistance is the LOWER bound of the next level.
@@ -131,7 +131,7 @@ export function ToolsCooperPage() {
         : 0;
 
     const distanceToNext = Math.max(0, nextLevelThreshold - distance);
-    const nextLevelPace = nextLevelThreshold > 0 ? 12 / (nextLevelThreshold / 1000) : 0;
+    const nextLevelPace = convertTimeToPace(nextLevelThreshold / 1000, 12 * 60);
 
     // Pace Improvement
     const paceImprovementRaw = Math.max(0, currentPace - nextLevelPace);
@@ -382,7 +382,7 @@ export function ToolsCooperPage() {
                                     <tbody className="divide-y divide-white/5 bg-slate-900/50">
                                         {(['Excellent', 'Good', 'Average', 'Bad'] as const).map((lvl) => {
                                             const threshold = standard.levels[lvl.toLowerCase() as keyof typeof standard.levels];
-                                            const pace = 12 / (threshold / 1000);
+                                            const pace = convertTimeToPace(threshold / 1000, 12 * 60);
                                             const diff = distance - threshold;
                                             const diffPercent = (diff / threshold) * 100;
 
