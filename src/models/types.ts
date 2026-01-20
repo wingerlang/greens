@@ -611,6 +611,8 @@ export interface ExerciseEntry {
     subType?: ExerciseSubType;
     title?: string; // e.g. "Morning Run" or "Strava Activity Title"
     tonnage?: number;   // total kg lifted
+    totalSets?: number;
+    totalReps?: number;
     // Cycling / Performance
     averageWatts?: number;
     maxWatts?: number;

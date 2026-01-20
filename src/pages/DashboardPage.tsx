@@ -509,6 +509,7 @@ export function DashboardPage() {
                             calories={{ current: consumed, target: target }}
                             protein={{ current: proteinCurrent, target: proteinTarget }}
                             trainingMinutes={completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0)}
+                            burnedCalories={burned}
                             measurementsCount={0}
                             weighInDone={unifiedHistory.some(w => w.date === today && w.weight)}
                             sleepHours={vitals.sleep || 0}

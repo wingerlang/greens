@@ -5,6 +5,7 @@ interface DailySummaryProps {
     calories: { current: number; target: number; };
     protein: { current: number; target: number; };
     trainingMinutes: number;
+    burnedCalories?: number;
     measurementsCount: number;
     weighInDone: boolean;
     sleepHours: number;
@@ -16,6 +17,7 @@ export const DailySummaryCard: React.FC<DailySummaryProps> = ({
     calories,
     protein,
     trainingMinutes,
+    burnedCalories = 0,
     measurementsCount,
     weighInDone,
     sleepHours,
@@ -57,11 +59,12 @@ export const DailySummaryCard: React.FC<DailySummaryProps> = ({
                 const m = totalMins % 60;
                 return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
             })(),
-            sub: '',
+            sub: burnedCalories > 0 ? `-${Math.round(burnedCalories)} kcal` : '',
             icon: Dumbbell,
             isGood: isTrainingGood,
             color: isTrainingGood ? 'text-emerald-600' : 'text-slate-500',
-            bg: isTrainingGood ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-slate-100 dark:bg-slate-800'
+            bg: isTrainingGood ? 'bg-emerald-100 dark:bg-emerald-900/30' : 'bg-slate-100 dark:bg-slate-800',
+            subColor: 'text-rose-500'
         },
         {
             label: 'Sömn',
@@ -105,7 +108,7 @@ export const DailySummaryCard: React.FC<DailySummaryProps> = ({
                         <div className={`font-black ${density === 'compact' ? 'text-xs' : 'text-sm'} ${item.color}`}>
                             {item.value}
                         </div>
-                        {item.sub && <div className="text-[9px] font-bold text-slate-400">{item.sub}</div>}
+                        {item.sub && <div className={`text-[9px] font-bold ${item.subColor || 'text-slate-400'}`}>{item.sub}</div>}
                     </div>
                 ))}
             </div>

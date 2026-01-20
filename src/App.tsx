@@ -239,6 +239,7 @@ export function App() {
                                                         <Route path="tools/report" element={<ToolsTrainingReportPage />} />
                                                         <Route path="tools/cycling" element={<ToolsCyclingPage />} />
                                                         <Route path="tools/beast" element={<BeastModePage />} />
+                                                        <Route path="beast" element={<BeastModePage />} />
                                                     </Routes>
                                                 </Layout>
                                             </RequireAuth>

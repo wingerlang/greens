@@ -27,14 +27,17 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
     settings
 }) => {
     const navigate = useNavigate();
+    const totalCalories = completedTraining.reduce((sum, act) => sum + act.caloriesBurned, 0);
 
     // Determine content
     let trainingContent;
     if (completedTraining.length > 0) {
         const totalDuration = completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0);
-        const totalCalories = completedTraining.reduce((sum, act) => sum + act.caloriesBurned, 0);
         const totalDistance = completedTraining.reduce((sum, act) => sum + (act.distance || 0), 0);
         const totalTonnage = completedTraining.reduce((sum, act) => sum + (act.tonnage || 0), 0);
+        const totalSessions = completedTraining.length;
+        const totalSets = completedTraining.reduce((sum, act) => sum + (act.totalSets || 0), 0);
+        const totalReps = completedTraining.reduce((sum, act) => sum + (act.totalReps || 0), 0);
         const goalMet = totalDuration >= (settings.dailyTrainingGoal || 60);
 
         trainingContent = (
@@ -43,17 +46,29 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                     <div className="text-[9px] font-bold uppercase text-slate-400">Dagens Totalt</div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
                         <span className="font-bold text-slate-900 dark:text-white">{Math.round(totalDuration)} min</span>
-                        <span className="opacity-20">|</span>
-                        <span>{totalCalories} kcal</span>
+                        <span className="opacity-20 text-slate-300">|</span>
+                        <span>{totalSessions} {totalSessions === 1 ? 'pass' : 'pass'}</span>
                         {totalDistance > 0 && (
                             <>
-                                <span className="opacity-20">|</span>
+                                <span className="opacity-20 text-slate-300">|</span>
                                 <span className="text-blue-600 dark:text-blue-400 font-bold">{totalDistance.toFixed(1)} km</span>
+                            </>
+                        )}
+                        {totalSets > 0 && (
+                            <>
+                                <span className="opacity-20 text-slate-300">|</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">{totalSets} set</span>
+                            </>
+                        )}
+                        {totalReps > 0 && (
+                            <>
+                                <span className="opacity-20 text-slate-300">|</span>
+                                <span className="text-amber-600 dark:text-amber-400 font-bold">{totalReps} reps</span>
                             </>
                         )}
                         {totalTonnage > 0 && (
                             <>
-                                <span className="opacity-20">|</span>
+                                <span className="opacity-20 text-slate-300">|</span>
                                 <span className="text-purple-600 dark:text-purple-400 font-bold">{(totalTonnage / 1000).toFixed(1)} ton</span>
                             </>
                         )}
@@ -66,24 +81,27 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                     const metricParts = [];
                     metricParts.push(`${Math.round(act.durationMinutes)} min`);
 
+                    if (act.caloriesBurned > 0) {
+                        metricParts.push(`<span class="text-rose-500 font-bold">${act.caloriesBurned} kcal</span>`);
+                    }
+
                     if (act.distance) {
                         if (act.type === 'running') {
                             const pace = act.durationMinutes / act.distance;
                             const paceMin = Math.floor(pace);
                             const paceSec = Math.round((pace - paceMin) * 60);
                             const paceStr = `${paceMin}:${paceSec.toString().padStart(2, '0')}`;
-                            metricParts.push(`${act.distance} km`);
-                            metricParts.push(`${paceStr}/km`);
+                            metricParts.push(`${act.distance} km (${paceStr}/km)`);
                         } else {
                             metricParts.push(`${act.distance} km`);
                         }
                     }
 
+                    if (act.totalSets) metricParts.push(`${act.totalSets} set`);
+                    if (act.totalReps) metricParts.push(`${act.totalReps} reps`);
                     if (act.tonnage) {
                         metricParts.push(`${(act.tonnage / 1000).toFixed(1)} ton`);
                     }
-
-                    const details = metricParts.join(' • ');
 
                     let hrString = '';
                     if (act.heartRateAvg) {
@@ -108,8 +126,13 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                                     {typeDef?.label || act.type}
                                     {hrString && <span className="text-[8px] font-black text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1 py-0.5 rounded tracking-wide">{hrString}</span>}
                                 </div>
-                                <div className="text-[11px] text-slate-500 font-medium">
-                                    {details}
+                                <div className="text-[11px] text-slate-500 font-medium flex flex-wrap gap-x-1 items-center">
+                                    {metricParts.map((part, i) => (
+                                        <React.Fragment key={i}>
+                                            <span dangerouslySetInnerHTML={{ __html: part }} />
+                                            {i < metricParts.length - 1 && <span className="opacity-30">•</span>}
+                                        </React.Fragment>
+                                    ))}
                                 </div>
                             </div>
 
@@ -180,7 +203,14 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                     <Dumbbell className={density === 'compact' ? 'w-4 h-4' : 'w-7 h-7'} />
                 </div>
                 <div className="flex-1 min-w-0 text-left z-10">
-                    <div className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} text-slate-500 dark:text-slate-400 font-semibold mb-1`}>Dagens träning</div>
+                    <div className={`${density === 'compact' ? 'text-[10px]' : 'text-sm'} text-slate-500 dark:text-slate-400 font-semibold mb-1 flex items-center justify-between`}>
+                        <span>Dagens träning</span>
+                        {totalCalories > 0 && (
+                            <span className="text-rose-500 font-black animate-in fade-in slide-in-from-right-2">
+                                -{totalCalories} kcal
+                            </span>
+                        )}
+                    </div>
                     <div className="w-full">{trainingContent}</div>
                 </div>
             </div>
