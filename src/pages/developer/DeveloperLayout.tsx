@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Terminal, FolderTree, Activity, FileCode, Settings, ListTodo, HeartPulse, CheckSquare, Layers } from 'lucide-react';
+import { Terminal, FolderTree, Activity, FileCode, Settings, ListTodo, HeartPulse, CheckSquare, Layers, Shield } from 'lucide-react';
 import { DeveloperProvider, useDeveloper } from './DeveloperContext.tsx';
 import { Modal } from '../../components/common/Modal.tsx';
 
@@ -172,6 +172,19 @@ function DevLayoutContent() {
                             <div className="flex items-center gap-2">
                                 <Layers size={16} />
                                 Deep
+                            </div>
+                        </NavLink>
+
+                        <NavLink
+                            to="/developer/coverage"
+                            className={({ isActive }) =>
+                                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${isActive ? 'bg-emerald-500/20 text-emerald-400' : 'hover:bg-slate-700 text-slate-400'
+                                }`
+                            }
+                        >
+                            <div className="flex items-center gap-2">
+                                <Shield size={16} />
+                                Coverage
                             </div>
                         </NavLink>
                     </nav>
