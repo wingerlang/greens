@@ -149,6 +149,78 @@ export async function handleDeveloperRoutes(req: Request, url: URL, headers: Hea
              }
         }
 
+        // --- Coverage Endpoint ---
+        if (url.pathname === "/api/developer/coverage" && req.method === "POST") {
+            try {
+                // 1. Clean previous
+                try { await Deno.remove(".coverage", { recursive: true }); } catch {}
+
+                // 2. Run Tests
+                // Note: We skip check for speed and robust execution in dev env
+                const testCmd = new Deno.Command("deno", {
+                    args: ["test", "--coverage=.coverage", "--allow-all", "--no-check", "src/utils", "src/features"],
+                    stdout: "piped",
+                    stderr: "piped"
+                });
+                const testOutput = await testCmd.output();
+
+                // 3. Generate Report (Text format)
+                const covCmd = new Deno.Command("deno", {
+                    args: ["coverage", ".coverage"],
+                    stdout: "piped",
+                    stderr: "piped"
+                });
+                const covOutput = await covCmd.output();
+
+                // 4. Cleanup
+                try { await Deno.remove(".coverage", { recursive: true }); } catch {}
+
+                if (!covOutput.success) {
+                    // If coverage failed, maybe tests failed? Return what we have.
+                    const err = new TextDecoder().decode(covOutput.stderr);
+                    const testErr = new TextDecoder().decode(testOutput.stderr);
+                    return new Response(JSON.stringify({
+                        error: "Failed to generate coverage",
+                        details: err + "\n" + testErr
+                    }), { status: 500, headers });
+                }
+
+                const outputStr = new TextDecoder().decode(covOutput.stdout);
+
+                // 5. Parse Output
+                const lines = outputStr.split('\n');
+                const files = [];
+                let total = { branch: "0.0", line: "0.0" };
+
+                for (const line of lines) {
+                    // Remove ANSI codes
+                    const cleanLine = line.replace(/\u001b\[[0-9;]*m/g, '');
+                    if (!cleanLine.trim().startsWith('|')) continue;
+
+                    const parts = cleanLine.split('|').map(s => s.trim()).filter(s => s !== '');
+                    if (parts.length < 3) continue;
+                    if (parts[0] === 'File' || parts[0].startsWith('---')) continue;
+
+                    const row = {
+                        file: parts[0],
+                        branch: parts[1],
+                        line: parts[2]
+                    };
+
+                    if (row.file === 'All files') {
+                        total = { branch: row.branch, line: row.line };
+                    } else {
+                        files.push(row);
+                    }
+                }
+
+                return new Response(JSON.stringify({ total, files, raw: outputStr }), { headers });
+
+            } catch (e) {
+                return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+            }
+        }
+
         return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 
     } catch (e) {

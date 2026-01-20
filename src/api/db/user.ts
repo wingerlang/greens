@@ -1,5 +1,5 @@
 import { kv } from "../kv.ts";
-import { User, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY } from "../../models/types.ts";
+import { User, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY, UserRole } from "../../models/types.ts";
 
 export interface DBUser extends User {
     passHash: string;
@@ -8,7 +8,7 @@ export interface DBUser extends User {
 
 import { hashPassword } from "../utils/crypto.ts";
 
-export async function createUser(username: string, password: string, email?: string, role: 'user' | 'admin' = 'user'): Promise<DBUser | null> {
+export async function createUser(username: string, password: string, email?: string, role: UserRole = 'user'): Promise<DBUser | null> {
     const existing = await kv.get(['users_by_username', username]);
     if (existing.value) return null;
 

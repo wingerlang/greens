@@ -161,15 +161,24 @@ export function getAllHrZones(maxHr: number, restingHr: number) {
 
 // --- New Tool Functions ---
 
+/**
+ * Converts pace (seconds/km) to total time (seconds) for a given distance.
+ */
 export function convertPaceToTime(distanceKm: number, paceSecondsPerKm: number): number {
     return distanceKm * paceSecondsPerKm;
 }
 
+/**
+ * Converts total time (seconds) to pace (seconds/km).
+ */
 export function convertTimeToPace(distanceKm: number, totalSeconds: number): number {
     if (distanceKm <= 0) return 0;
     return totalSeconds / distanceKm;
 }
 
+/**
+ * Calculates distance (km) given time and pace.
+ */
 export function calculateDistance(totalSeconds: number, paceSecondsPerKm: number): number {
     if (paceSecondsPerKm <= 0) return 0;
     return totalSeconds / paceSecondsPerKm;
@@ -181,6 +190,11 @@ export interface CardioInput {
     powerWatts?: number; // for cycling
 }
 
+/**
+ * Estimates calories burned for running or cycling.
+ * Running: Based on weight and distance.
+ * Cycling: Based on power (Watts) and time.
+ */
 export function estimateCardioCalories(type: 'running' | 'cycling', durationSeconds: number, input: CardioInput): number {
     const durationHours = durationSeconds / 3600;
 
@@ -209,18 +223,27 @@ export function estimateCardioCalories(type: 'running' | 'cycling', durationSeco
     return 0;
 }
 
+/**
+ * Predicts race time using Riegel's formula: T2 = T1 * (D2 / D1)^1.06
+ */
 export function calculateRiegelTime(currentSeconds: number, currentDistKm: number, targetDistKm: number): number {
     if (currentDistKm <= 0 || targetDistKm <= 0) return 0;
     // T2 = T1 * (D2 / D1)^1.06
     return Math.round(currentSeconds * Math.pow((targetDistKm / currentDistKm), 1.06));
 }
 
+/**
+ * Estimates VO2Max from Cooper test distance (meters).
+ */
 export function calculateCooperVO2(distanceMeters: number): number {
     // (Distance - 504.9) / 44.73
     const vo2 = (distanceMeters - 504.9) / 44.73;
     return Math.max(0, Math.round(vo2 * 10) / 10);
 }
 
+/**
+ * @deprecated Use `src/pages/tools/data/cooperStandards.ts` for detailed grading.
+ */
 export function getCooperGrade(distanceMeters: number, age: number, gender: 'male' | 'female'): string {
     // Simplified grading logic
     // Using widely available standard tables roughly
