@@ -1420,19 +1420,35 @@ export function DataProvider({ children }: DataProviderProps) {
 
         // Iterate through all local strength entries and try to find a match
         strengthEntries.forEach(se => {
+            const sw = (strengthSessions as any[]).find(s => s.id === se.id);
             const dateKey = se.date.split('T')[0];
             const candidates = stravaStrengthByDate.get(dateKey) || [];
 
-            // Filter out already merged ones
-            const availableCandidates = candidates.filter(c => !mergedStravaIds.has(c.id));
+            // 0. Respect explicit separation
+            if (sw?.mergeInfo?.isMerged === false) {
+                mergedStrengthEntries.push(se);
+                return;
+            }
 
-            // Find best match among available candidates
-            // 1. By approximate duration (within 10 mins)
-            let match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 10);
+            // 1. Check for explicit persistence (already merged in DB)
+            let match: any = null;
+            if (sw?.mergeInfo?.isMerged && sw.mergeInfo.stravaActivityId) {
+                match = candidates.find(c => c.id === sw.mergeInfo?.stravaActivityId);
+            }
 
-            // 2. If no match, just take the first available one if there's only one candidate left for this day
-            if (!match && availableCandidates.length === 1) {
-                match = availableCandidates[0];
+            // 2. Otherwise try auto-matching
+            if (!match) {
+                // Filter out already merged ones
+                const availableCandidates = candidates.filter(c => !mergedStravaIds.has(c.id));
+
+                // Find best match among available candidates
+                // 1. By approximate duration (within 10 mins)
+                match = availableCandidates.find(c => Math.abs(c.durationMinutes - se.durationMinutes) <= 10);
+
+                // 2. If no match, just take the first available one if there's only one candidate left for this day
+                if (!match && availableCandidates.length === 1) {
+                    match = availableCandidates[0];
+                }
             }
 
             if (match) {

@@ -1345,6 +1345,22 @@ export function StrengthPage() {
                             handleCloseWorkout();
                             fetchData();  // Refresh the list
                         }}
+                        isMerged={selectedWorkout.mergeInfo?.isMerged}
+                        onSeparate={selectedWorkout.mergeInfo?.isMerged ? async () => {
+                            if (!token) return;
+                            try {
+                                const res = await fetch(`/api/strength/workout/${selectedWorkout.id}/merge`, {
+                                    method: 'DELETE',
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                if (res.ok) {
+                                    handleCloseWorkout();
+                                    fetchData();  // Refresh the list
+                                }
+                            } catch (e) {
+                                console.error('Failed to separate workout:', e);
+                            }
+                        } : undefined}
                     />
                 )
             }

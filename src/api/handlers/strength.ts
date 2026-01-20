@@ -168,6 +168,61 @@ export async function handleStrengthRoutes(req: Request, url: URL, headers: Head
             return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
         }
     }
+    // ============================================
+    // Merge Management
+    // ============================================
+    // POST /api/strength/workout/:id/merge - Link workout to Strava activity
+    if (url.pathname.match(/^\/api\/strength\/workout\/[^/]+\/merge$/) && method === 'POST') {
+        try {
+            const pathParts = url.pathname.split('/');
+            const workoutId = decodeURIComponent(pathParts[4]);
+            const body = await req.json();
+            const { stravaActivityId, stravaExternalId } = body;
+
+            if (!workoutId) {
+                return new Response(JSON.stringify({ error: 'Missing workout ID' }), { status: 400, headers });
+            }
+
+            const success = await strengthRepo.updateWorkoutMergeInfo(userId, workoutId, {
+                isMerged: true,
+                stravaActivityId,
+                stravaExternalId,
+                mergedAt: new Date().toISOString()
+            });
+
+            if (!success) {
+                return new Response(JSON.stringify({ error: 'Workout not found' }), { status: 404, headers });
+            }
+
+            return new Response(JSON.stringify({ success: true, message: 'Workout merged with Strava activity' }), { headers });
+        } catch (e) {
+            console.error('[POST /api/strength/workout/:id/merge] Error:', e);
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+        }
+    }
+
+    // DELETE /api/strength/workout/:id/merge - Unlink/separate workout from Strava
+    if (url.pathname.match(/^\/api\/strength\/workout\/[^/]+\/merge$/) && method === 'DELETE') {
+        try {
+            const pathParts = url.pathname.split('/');
+            const workoutId = decodeURIComponent(pathParts[4]);
+
+            if (!workoutId) {
+                return new Response(JSON.stringify({ error: 'Missing workout ID' }), { status: 400, headers });
+            }
+
+            const success = await strengthRepo.clearWorkoutMergeInfo(userId, workoutId);
+
+            if (!success) {
+                return new Response(JSON.stringify({ error: 'Workout not found' }), { status: 404, headers });
+            }
+
+            return new Response(JSON.stringify({ success: true, message: 'Workout separated from Strava activity' }), { headers });
+        } catch (e) {
+            console.error('[DELETE /api/strength/workout/:id/merge] Error:', e);
+            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 500, headers });
+        }
+    }
 
     return new Response(JSON.stringify({ error: 'Not found' }), { status: 404, headers });
 }

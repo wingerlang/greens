@@ -382,9 +382,16 @@ export function ExerciseDetailModal({
     const totalReps = useMemo(() => exerciseHistory.reduce((sum, h) => sum + h.reps, 0), [exerciseHistory]);
     const totalVolume = exerciseHistory.reduce((sum: number, h) => sum + h.volume, 0);
 
-    // Find workout for Max 1RM
+    // Find workout for Max 1RM / Max Calories
     const maxRecord = useMemo(() => {
         if (exerciseHistory.length === 0) return null;
+
+        // Prioritize calories for cardio
+        const hasCals = exerciseHistory.some(h => (h as any).totalCalories > 0);
+        if (hasCals) {
+            return exerciseHistory.reduce((prev, curr) => ((curr as any).totalCalories || 0) > ((prev as any).totalCalories || 0) ? curr : prev, exerciseHistory[0]);
+        }
+
         if (metricMode === 'relative') {
             return exerciseHistory.reduce((prev, curr) => ((curr.relativeMaxWeight || 0) > (prev.relativeMaxWeight || 0) ? curr : prev), exerciseHistory[0]);
         }
@@ -402,6 +409,13 @@ export function ExerciseDetailModal({
 
     const bestRecord = useMemo(() => {
         if (exerciseHistory.length === 0) return null;
+
+        // Prioritize calories for cardio
+        const hasCals = exerciseHistory.some(h => (h as any).totalCalories > 0);
+        if (hasCals) {
+            return exerciseHistory.reduce((prev, curr) => ((curr as any).totalCalories || 0) > ((prev as any).totalCalories || 0) ? curr : prev, exerciseHistory[0]);
+        }
+
         if (isDistanceBasedExercise(exerciseName)) {
             return exerciseHistory.reduce((prev, curr) => ((curr.maxDistance || 0) > (prev.maxDistance || 0) ? curr : prev), exerciseHistory[0]);
         }
@@ -421,7 +435,15 @@ export function ExerciseDetailModal({
         }
 
         if (isDistanceBasedExercise(exerciseName)) {
-            return `${Math.round(bestRecord?.maxDistance || 0)}m`;
+            const bestCalH = exerciseHistory.reduce((prev, curr) =>
+                ((curr as any).totalCalories || 0) > ((prev as any).totalCalories || 0) ? curr : prev,
+                exerciseHistory[0]
+            );
+
+            if ((bestCalH as any).totalCalories > 0) {
+                return `${(bestCalH as any).totalCalories} kcal`;
+            }
+            return `${Math.round(bestRecord?.totalDistance || bestRecord?.maxDistance || 0)}m`;
         }
 
         if (metricMode === 'relative') {
@@ -431,7 +453,7 @@ export function ExerciseDetailModal({
 
         // Default Strength
         return `${bestRecord?.est1RM || 0} kg`;
-    }, [maxRecord, bestRecord, exerciseName, metricMode]);
+    }, [maxRecord, bestRecord, exerciseName, metricMode, exerciseHistory]);
 
     // Contextual Calculations (Motivation Mode)
     const contextStats = useMemo(() => {
@@ -723,6 +745,12 @@ export function ExerciseDetailModal({
 
                                     if (isDistanceBasedExercise(exerciseName)) {
                                         mainText = bestValueDisplay;
+                                        const h = maxRecord as any;
+                                        if (h?.totalCalories > 0) {
+                                            subText = `${h.totalTimeFormatted} • ${Math.round(h.totalDistance)}m`;
+                                        } else if (h?.bestTempo) {
+                                            subText = `${h.bestTempo} (${h.maxTimeFormatted})`;
+                                        }
                                     } else if (metricMode === 'relative') {
                                         const rel = maxRecord?.relativeMaxWeight || 0;
                                         mainText = rel > 0 ? `${rel.toFixed(2)}x` : 'N/A';
@@ -750,7 +778,9 @@ export function ExerciseDetailModal({
                                     );
                                 })()}
                                 <p className="text-[9px] text-emerald-500 uppercase font-bold flex items-center justify-center gap-1 mt-0.5">
-                                    {isDistanceBasedExercise(exerciseName) ? 'Längsta Distans' : 'Tyngsta Lyft'}
+                                    {(maxRecord as any)?.totalCalories > 0 ? 'Bästa Kaloripass' :
+                                        isDistanceBasedExercise(exerciseName) ? 'Längsta Distans' :
+                                            'Tyngsta Lyft'}
                                     <span className="opacity-0 group-hover/main:opacity-100 transition-opacity">→</span>
                                 </p>
                             </div>
@@ -1323,9 +1353,13 @@ export function ExerciseDetailModal({
                                                 <th className="px-4 py-3 text-right font-bold">Set</th>
                                                 {isDistanceBasedExercise(exerciseName) ? (
                                                     <>
-                                                        <th className="px-4 py-3 text-right font-bold">Tempo</th>
+                                                        <th className="px-4 py-3 text-right font-bold">
+                                                            {(exerciseHistory.some(h => (h as any).totalCalories > 0)) ? 'Kalorier' : 'Tempo'}
+                                                        </th>
                                                         <th className="px-4 py-3 text-right font-bold">Distans</th>
-                                                        <th className="px-4 py-3 text-right font-bold">Tid</th>
+                                                        <th className="px-4 py-3 text-right font-bold">
+                                                            {(exerciseHistory.some(h => (h as any).totalCalories > 0)) ? 'Total Tid' : 'Bästa Tid'}
+                                                        </th>
                                                     </>
                                                 ) : (
                                                     <>
@@ -1352,13 +1386,19 @@ export function ExerciseDetailModal({
                                                     {isDistanceBasedExercise(exerciseName) ? (
                                                         <>
                                                             <td className="px-4 py-3 text-right text-blue-400 group-hover:text-blue-300 transition-colors font-mono">
-                                                                {h.bestTempo || '-'}
+                                                                {(h as any).totalCalories > 0
+                                                                    ? <span className="text-orange-400">{(h as any).totalCalories} kcal</span>
+                                                                    : (h.bestTempo || '-')
+                                                                }
                                                             </td>
                                                             <td className="px-4 py-3 text-right text-white font-bold">
                                                                 {h.totalDistance ? Math.round(h.totalDistance) + 'm' : '-'}
                                                             </td>
                                                             <td className="px-4 py-3 text-right text-emerald-400 group-hover:text-emerald-300 transition-colors">
-                                                                {h.maxTimeFormatted || '-'}
+                                                                {(h as any).totalCalories > 0
+                                                                    ? (h as any).totalTimeFormatted
+                                                                    : (h.maxTimeFormatted || '-')
+                                                                }
                                                             </td>
                                                         </>
                                                     ) : (

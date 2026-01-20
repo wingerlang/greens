@@ -319,7 +319,7 @@ export function calculateStreaks(workouts: StrengthWorkout[]): { currentStreak: 
 
     for (let i = 0; i < sortedUniqueWeeks.length - 1; i++) {
         const thisWeek = sortedUniqueWeeks[i];
-        const nextWeek = sortedUniqueWeeks[i+1]; // older
+        const nextWeek = sortedUniqueWeeks[i + 1]; // older
 
         // Check if nextWeek is exactly 1 week before thisWeek
         const d1 = new Date(weekToDate.get(thisWeek)!);
@@ -366,7 +366,7 @@ export function calculateStreaks(workouts: StrengthWorkout[]): { currentStreak: 
         activeStreak = 1;
         for (let i = 0; i < sortedUniqueWeeks.length - 1; i++) {
             const thisWeek = sortedUniqueWeeks[i];
-            const nextWeek = sortedUniqueWeeks[i+1];
+            const nextWeek = sortedUniqueWeeks[i + 1];
 
             const d1Obj = new Date(weekToDate.get(thisWeek)!);
             const prevWeekDate = new Date(d1Obj);
@@ -390,6 +390,36 @@ export function calculateStreaks(workouts: StrengthWorkout[]): { currentStreak: 
 // ============================================
 // Data Management
 // ============================================
+
+/**
+ * Update merge info on a strength workout
+ */
+export async function updateWorkoutMergeInfo(
+    userId: string,
+    workoutId: string,
+    mergeInfo: StrengthWorkout['mergeInfo']
+): Promise<boolean> {
+    const workout = await getWorkout(userId, workoutId);
+    if (!workout) return false;
+
+    workout.mergeInfo = mergeInfo;
+    workout.updatedAt = new Date().toISOString();
+    await saveWorkout(workout);
+    return true;
+}
+
+/**
+ * Clear merge info from a strength workout (separate/unmerge)
+ */
+export async function clearWorkoutMergeInfo(userId: string, workoutId: string): Promise<boolean> {
+    const workout = await getWorkout(userId, workoutId);
+    if (!workout) return false;
+
+    workout.mergeInfo = { isMerged: false };
+    workout.updatedAt = new Date().toISOString();
+    await saveWorkout(workout);
+    return true;
+}
 
 export async function clearUserStrengthData(userId: string): Promise<void> {
     // 1. Delete all workouts
@@ -425,5 +455,7 @@ export const strengthRepo = {
     importWorkouts,
     getStrengthStats,
     calculateStreaks, // Exported for testing
+    updateWorkoutMergeInfo,
+    clearWorkoutMergeInfo,
     clearUserStrengthData
 };

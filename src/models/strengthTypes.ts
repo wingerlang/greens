@@ -130,6 +130,14 @@ export interface StrengthWorkout {
     rawSource?: string;              // Original raw text/CSV for re-parsing
     excludeFromStats?: boolean;
 
+    // Merge tracking (when combined with Strava activity)
+    mergeInfo?: {
+        isMerged: boolean;            // true if merged, false if explicitly separated
+        stravaActivityId?: string;    // Linked Strava activity ID
+        stravaExternalId?: string;    // Strava's own activity ID for deeplinking
+        mergedAt?: string;            // ISO timestamp when merged
+    };
+
     createdAt: string;
     updatedAt: string;
 }
