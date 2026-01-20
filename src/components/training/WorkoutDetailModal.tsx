@@ -18,9 +18,11 @@ interface WorkoutDetailModalProps {
     sessionNumber?: number;
     sessionTotal?: number;
     sessionYear?: number;
+    isMerged?: boolean;
+    onSeparate?: () => void;
 }
 
-export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [], onDeleted, allWorkouts = [], sessionNumber, sessionTotal, sessionYear }: WorkoutDetailModalProps) {
+export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [], onDeleted, allWorkouts = [], sessionNumber, sessionTotal, sessionYear, isMerged, onSeparate }: WorkoutDetailModalProps) {
     const { token } = useAuth();
     const navigate = useNavigate();
     const [dailyActivities, setDailyActivities] = useState<UniversalActivity[]>([]);
@@ -305,11 +307,10 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                         <button
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as 'DETAILS' | 'ANALYSIS')}
-                            className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${
-                                activeTab === tab.id
-                                    ? 'text-white border-indigo-500'
-                                    : 'text-slate-500 border-transparent hover:text-slate-300'
-                            }`}
+                            className={`pb-3 text-xs font-bold uppercase tracking-wider transition-all border-b-2 ${activeTab === tab.id
+                                ? 'text-white border-indigo-500'
+                                : 'text-slate-500 border-transparent hover:text-slate-300'
+                                }`}
                         >
                             {tab.label}
                         </button>
@@ -539,6 +540,15 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                     >
                         📝 Använd som mall
                     </button>
+                    {isMerged && onSeparate && (
+                        <button
+                            onClick={onSeparate}
+                            className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 font-bold py-2.5 px-4 rounded-xl transition-all"
+                            title="Ta isär sammanslaget pass"
+                        >
+                            🔀
+                        </button>
+                    )}
                     <button
                         onClick={() => setShowDeleteConfirm(true)}
                         className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-bold py-2.5 px-4 rounded-xl transition-all"
