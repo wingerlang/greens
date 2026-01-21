@@ -211,14 +211,8 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
         const existing = await foodRepo.getFood(id);
 
         if (existing) {
-            // Delete image file if exists
-            if (existing.imageUrl && existing.imageUrl.startsWith("uploads/")) {
-                try {
-                    await Deno.remove(existing.imageUrl);
-                } catch (e) {
-                    console.error("Failed to delete food image:", e);
-                }
-            }
+            // Soft Delete (Quarantine): We do NOT delete the image yet.
+            // Image cleanup should happen when the item is hard deleted (e.g. via cron after 3 months).
             await foodRepo.deleteFood(id);
         }
 
