@@ -16,8 +16,12 @@ export class FoodRepository {
     async deleteFood(id: string): Promise<void> {
         const food = await this.getFood(id);
         if (food) {
-            await kv.delete(["foods", id]);
-            await kv.delete(["foods_by_name", food.name.toLowerCase()]);
+            // Soft delete (Quarantine) - 3 months
+            food.deletedAt = new Date().toISOString();
+            await kv.set(["foods", id], food);
+            // We do NOT delete from index or KV, just mark as deleted.
+            // We might want to remove from name index to allow reuse of name?
+            // For now, keep it simple: soft delete retains the object.
         }
     }
 
@@ -27,7 +31,7 @@ export class FoodRepository {
         const lowQuery = query.toLowerCase();
 
         for await (const entry of iter) {
-            if (entry.value.name.toLowerCase().includes(lowQuery)) {
+            if (!entry.value.deletedAt && entry.value.name.toLowerCase().includes(lowQuery)) {
                 results.push(entry.value);
             }
             if (results.length >= limit) break;
@@ -39,7 +43,9 @@ export class FoodRepository {
         const iter = kv.list<FoodItem>({ prefix: ["foods"] });
         const results: FoodItem[] = [];
         for await (const entry of iter) {
-            results.push(entry.value);
+            if (!entry.value.deletedAt) {
+                results.push(entry.value);
+            }
         }
         return results;
     }
