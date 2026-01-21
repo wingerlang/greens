@@ -289,6 +289,7 @@ export interface FoodItem {
     ingredients?: string;                     // List of ingredients
     createdAt: string;
     updatedAt: string;
+    deletedAt?: string;                       // For 3-month quarantine (Soft Delete)
 }
 
 export interface ExtendedFoodDetails {
