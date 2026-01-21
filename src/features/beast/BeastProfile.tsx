@@ -1,5 +1,10 @@
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Dumbbell, Timer, Activity, Flame, Weight, TrendingUp, Bike } from 'lucide-react';
+import {
+    RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+    ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Cell, Tooltip
+} from 'recharts';
 import { BeastStats } from './utils/beastDataService.ts';
 import { getBeastTier } from './utils/beastCalculators.ts';
 

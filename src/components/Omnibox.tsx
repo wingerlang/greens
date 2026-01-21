@@ -116,6 +116,15 @@ const VITALS_INFO: Record<string, { icon: any; label: string; unit: string; bg: 
     steps: { icon: Search, label: 'Steg', unit: 'steg', bg: 'bg-green-500/20', text: 'text-green-400' },
 };
 
+// Action commands for system tasks
+const ACTION_COMMANDS = [
+    { id: 'backup', label: 'Backup System', command: '!backup', icon: '💾', description: 'Exportera databas till JSON' },
+    { id: 'recalc', label: 'Recalculate Calories', command: '!recalc', icon: '🔄', description: 'Beräkna om alla dagstotaler' },
+    { id: 'debug', label: 'Toggle Debug Mode', command: '!debug', icon: '🐞', description: 'Visa/Dölj system-debug' },
+    { id: 'clear', label: 'Clear Cache', command: '!clear', icon: '🧹', description: 'Rensa lokala webbläsar-cache' },
+    { id: 'add-food', label: 'Lägg till Råvara', command: '! lägg till råvara', icon: '➕', description: 'Öppna formulär för ny mat' },
+];
+
 const MEASUREMENT_INFO: Record<BodyMeasurementType, { label: string; icon: string }> = {
     waist: { label: 'Midja', icon: '📏' },
     hips: { label: 'Höft', icon: '🍑' },
@@ -216,7 +225,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         quickMeals,
         calculateRecipeNutrition
     } = useData();
-    const { logEvent } = useAnalytics();
+    const { logEvent, visitStats } = useAnalytics();
 
 
     const intent = parseOmniboxInput(input);
@@ -301,9 +310,22 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         }
     }, [input]);
 
-    // Detect slash navigation mode
+    // Detect modes
     const isSlashMode = input.startsWith('/');
+    const isActionMode = input.startsWith('!');
     const slashQuery = isSlashMode ? input.slice(1).toLowerCase() : '';
+    const actionQuery = isActionMode ? input.slice(1).toLowerCase().trim() : '';
+
+    // Action suggestions
+    const actionSuggestions = useMemo(() => {
+        if (!isActionMode) return [];
+        if (!actionQuery) return ACTION_COMMANDS;
+
+        return ACTION_COMMANDS.filter(action =>
+            action.command.toLowerCase().includes(input.toLowerCase()) ||
+            action.label.toLowerCase().includes(actionQuery)
+        );
+    }, [isActionMode, actionQuery, input]);
 
     // Navigation suggestions for slash mode
     const navSuggestions = useMemo(() => {
@@ -524,6 +546,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     const selectableItems = useMemo(() => {
         if (lockedFood) return []; // No selection when locked
         if (isSlashMode) return navSuggestions.map(r => ({ itemType: 'nav' as const, ...r }));
+        if (isActionMode) return actionSuggestions.map(a => ({ itemType: 'action' as const, ...a }));
 
         const items: any[] = [];
         if (quickMealResults.length > 0) items.push(...quickMealResults);
@@ -532,7 +555,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         if (!input && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
 
         return items;
-    }, [isSlashMode, navSuggestions, foodResults, userResults, quickMealResults, input, recentFoods, lockedFood]);
+    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, userResults, quickMealResults, input, recentFoods, lockedFood]);
 
 
     // Reset selection when results change
@@ -826,6 +849,36 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             return;
         }
 
+        // Handle action selection
+        if (isActionMode && selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'action') {
+            const action = selectableItems[selectedIndex] as any;
+            if (action.id === 'add-food') {
+                navigate('/database?action=new');
+            } else if (action.id === 'backup') {
+                fetch('/api/backup').then(r => r.blob()).then(blob => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                });
+            } else if (action.id === 'recalc') {
+                fetch('/api/recalculate-calories', { method: 'POST' });
+            } else if (action.id === 'debug') {
+                const current = localStorage.getItem('debug_view');
+                localStorage.setItem('debug_view', current === 'true' ? 'false' : 'true');
+                window.location.reload();
+            } else if (action.id === 'clear') {
+                localStorage.clear();
+                sessionStorage.clear();
+                window.location.reload();
+            }
+            onClose();
+            return;
+        }
+
         // Handle quick meal selection
         if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'quickMeal') {
             const selectedMeal = selectableItems[selectedIndex] as QuickMeal;
@@ -969,7 +1022,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                             {route.icon}
                                         </div>
                                         <div>
-                                            <div className="font-medium">{route.label}</div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="font-medium">{route.label}</div>
+                                                {visitStats.paths[route.path] > 0 && (
+                                                    <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-1.2 py-0.2 rounded font-bold uppercase">
+                                                        🧭 {visitStats.paths[route.path]} besök
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="text-[10px] text-slate-500">{route.path}</div>
                                         </div>
                                     </div>
@@ -977,6 +1037,39 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                             ))}
                             <div className="px-2 py-1 text-[10px] text-slate-600 text-center">
                                 ↑↓ navigera • Enter för att öppna
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Action Mode */}
+                    {isActionMode && (
+                        <div className="px-2 py-2">
+                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                <span>⚡</span> Systemåtgärder ({actionSuggestions.length})
+                            </div>
+                            {actionSuggestions.map((action, idx) => (
+                                <div
+                                    key={action.id}
+                                    onClick={() => setInput(action.command)}
+                                    className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
+                                        ? 'bg-amber-500/20 text-amber-400'
+                                        : 'hover:bg-white/5 text-white'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm">
+                                            {action.icon}
+                                        </div>
+                                        <div>
+                                            <div className="font-medium">{action.label}</div>
+                                            <div className="text-[10px] text-slate-500">{action.description}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-[10px] font-mono text-slate-600">{action.command}</div>
+                                </div>
+                            ))}
+                            <div className="px-2 py-1 text-[10px] text-slate-600 text-center">
+                                ↑↓ navigera • Enter för att köra
                             </div>
                         </div>
                     )}
@@ -1397,7 +1490,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                                 {user.avatarUrl ? <img src={user.avatarUrl} className="w-full h-full object-cover rounded-lg" /> : user.name[0]}
                                             </div>
                                             <div>
-                                                <div className="font-medium">{user.name}</div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="font-medium">{user.name}</div>
+                                                    {visitStats.users[user.id] > 0 && (
+                                                        <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                            👤 {visitStats.users[user.id]} besök
+                                                        </span>
+                                                    )}
+                                                </div>
                                                 <div className="text-[10px] text-slate-500">@{user.handle || user.username}</div>
                                             </div>
                                         </div>
@@ -1527,6 +1627,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                                     {item.brand && (
                                                         <span className="text-[10px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium uppercase tracking-wide">
                                                             {item.brand}
+                                                        </span>
+                                                    )}
+                                                    {visitStats.paths[`/database?id=${item.id}`] > 0 && (
+                                                        <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                            👁️ {visitStats.paths[`/database?id=${item.id}`]}
                                                         </span>
                                                     )}
                                                 </div>

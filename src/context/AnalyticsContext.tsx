@@ -2,16 +2,20 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext.tsx';
 import { PageView, InteractionEvent, generateId } from '../models/types.ts';
+import { safeFetch } from '../utils/http.ts';
 
 interface AnalyticsContextType {
     logEvent: (type: InteractionEvent['type'], label: string, target?: string, metadata?: any) => void;
+    visitStats: { paths: Record<string, number>; users: Record<string, number> };
+    refreshStats: () => Promise<void>;
 }
 
 const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefined);
 
 export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     const location = useLocation();
-    const { user } = useAuth();
+    const { user, token } = useAuth();
+    const [visitStats, setVisitStats] = useState<{ paths: Record<string, number>; users: Record<string, number> }>({ paths: {}, users: {} });
 
     // Session Management
     const [sessionId] = useState(() => {
@@ -190,8 +194,48 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
         }).catch(e => console.debug("Analytics custom log failed", e));
     };
 
+    const refreshStats = async () => {
+        if (!token) return;
+        try {
+            const [statsData, usersData] = await Promise.all([
+                safeFetch<any>('/api/usage/stats?days=30', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                safeFetch<any>('/api/usage/users?days=30', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                })
+            ]);
+
+            const paths: Record<string, number> = {};
+            const users: Record<string, number> = {};
+
+            if (statsData?.popularPages) {
+                statsData.popularPages.forEach((p: any) => {
+                    paths[p.path] = p.count;
+                });
+            }
+
+            if (usersData?.users) {
+                usersData.users.forEach((u: any) => {
+                    users[u.userId] = u.pageViews;
+                });
+            }
+
+            setVisitStats({ paths, users });
+        } catch (e) {
+            console.error("Failed to refresh visit stats", e);
+        }
+    };
+
+    // Auto-refresh stats when token becomes available or every 10 mins
+    useEffect(() => {
+        if (token) {
+            refreshStats();
+        }
+    }, [token]);
+
     return (
-        <AnalyticsContext.Provider value={{ logEvent }}>
+        <AnalyticsContext.Provider value={{ logEvent, visitStats, refreshStats }}>
             {children}
         </AnalyticsContext.Provider>
     );

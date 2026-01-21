@@ -154,6 +154,8 @@ export function App() {
                                                                 <AdminPage />
                                                             </RequireRole>
                                                         } />
+                                                        <Route path="analytics" element={<Navigate to="/admin?tab=analytics" replace />} />
+                                                        <Route path="analys" element={<Navigate to="/admin?tab=analytics" replace />} />
                                                         <Route path="admin/exercises" element={
                                                             <RequireRole role="admin">
                                                                 <ExerciseDatabasePage />
