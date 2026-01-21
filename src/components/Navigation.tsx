@@ -266,7 +266,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                                 <NavLink
                                                     key={item.path}
                                                     to={item.path}
-                                                    className={item.path.includes('?') ? getLinkClasses(item.path) : linkClasses}
+                                                    className={getLinkClasses(item.path)}
                                                 >
                                                     <span className="w-5 text-center">{item.icon}</span>
                                                     <span>{item.label}</span>
@@ -352,7 +352,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                     <div key={item.path} className="relative group">
                                         <NavLink
                                             to={item.path}
-                                            className={item.path.includes('?') ? getMobileLinkClasses(item.path) : mobileLinkClasses}
+                                            className={getMobileLinkClasses(item.path)}
                                             onClick={() => !isEditMode && setIsMenuOpen(false)}
                                         >
                                             <span className="text-xl">{item.icon}</span>
@@ -406,7 +406,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                             <div key={item.path} className="relative">
                                                 <NavLink
                                                     to={item.path}
-                                                    className={item.path.includes('?') ? getMobileLinkClasses(item.path) : mobileLinkClasses}
+                                                    className={getMobileLinkClasses(item.path)}
                                                     onClick={() => !isEditMode && setIsMenuOpen(false)}
                                                 >
                                                     <span className="text-xl opacity-70 group-hover:opacity-100">{item.icon}</span>

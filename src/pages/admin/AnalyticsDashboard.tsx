@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    BarChart, Bar, Cell
+    BarChart, Bar, Cell, PieChart, Pie, Legend
 } from 'recharts';
 
 // Types for analytics
@@ -52,13 +52,17 @@ interface SessionEvent extends InteractionEvent {
 
 export function AnalyticsDashboard() {
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState<'overview' | 'sessions'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'sessions' | 'retention' | 'pathing'>('overview');
 
     // Overview Data
     const [stats, setStats] = useState<AnalyticsStats | null>(null);
     const [users, setUsers] = useState<UserActivity[]>([]);
     const [omnibox, setOmnibox] = useState<OmniboxStats | null>(null);
     const [daily, setDaily] = useState<DailyData[]>([]);
+    const [pulse, setPulse] = useState<number[]>([]);
+    const [retention, setRetention] = useState<any[]>([]);
+    const [pathing, setPathing] = useState<any[]>([]);
+    const [friction, setFriction] = useState<any[]>([]);
 
     // Sessions Data
     const [sessions, setSessions] = useState<AnalyticsSession[]>([]);
@@ -104,11 +108,31 @@ export function AnalyticsDashboard() {
                 setDaily(dailyData.daily || []);
                 setRawEvents(eventsData.events || []);
                 setRawPageViews(eventsData.pageViews || []);
-            } else {
+
+                // Fetch pulse & friction
+                const [pulseRes, frictionRes] = await Promise.all([
+                    fetch('/api/usage/pulse'),
+                    fetch(`/api/usage/friction?days=${daysBack}`)
+                ]);
+                const [pulseData, frictionData] = await Promise.all([
+                    pulseRes.json(),
+                    frictionRes.json()
+                ]);
+                setPulse(pulseData.pulse || []);
+                setFriction(frictionData.friction || []);
+            } else if (activeTab === 'sessions') {
                 // Fetch Sessions
                 const res = await fetch(`/api/usage/sessions?days=${daysBack}`);
                 const data = await res.json();
                 setSessions(data.sessions || []);
+            } else if (activeTab === 'retention') {
+                const res = await fetch(`/api/usage/retention?days=${daysBack}`);
+                const data = await res.json();
+                setRetention(data.retention || []);
+            } else if (activeTab === 'pathing') {
+                const res = await fetch(`/api/usage/pathing?days=${daysBack}`);
+                const data = await res.json();
+                setPathing(data.pathing || []);
             }
             setError(null);
         } catch (err) {
@@ -155,6 +179,18 @@ export function AnalyticsDashboard() {
                         >
                             Sessioner (Replay)
                         </button>
+                        <button
+                            onClick={() => setActiveTab('retention')}
+                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'retention' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                        >
+                            Retention
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('pathing')}
+                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'pathing' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                        >
+                            Flöden
+                        </button>
                     </div>
                 </div>
                 <div className="flex items-center gap-3">
@@ -185,11 +221,27 @@ export function AnalyticsDashboard() {
                 <>
                     {/* Key Metrics */}
                     {stats && (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                             <StatCard icon={<Users className="text-emerald-500" />} label="Aktiva (24h)" value={stats.activeUsers24h} />
                             <StatCard icon={<TrendingUp className="text-blue-500" />} label="Sidvisningar" value={stats.totalPageViews} />
                             <StatCard icon={<MousePointer2 className="text-purple-500" />} label="Interaktioner" value={stats.totalEvents} />
-                            <StatCard icon={<Search className="text-pink-500" />} label="Omnibox Sök" value={omnibox?.totalSearches || 0} />
+                            <StatCard icon={<Timer className="text-amber-500" />} label="Session-djup" value={stats.sessionDepth || 0} />
+                            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 hidden lg:block">
+                                <div className="text-[10px] text-slate-500 uppercase font-black mb-2 flex items-center justify-between">
+                                    <span>24H Puls</span>
+                                    <Clock size={10} />
+                                </div>
+                                <div className="h-8 flex items-end gap-0.5">
+                                    {pulse.map((v, i) => (
+                                        <div
+                                            key={i}
+                                            style={{ height: `${Math.min(100, (v / (Math.max(...pulse) || 1)) * 100)}%` }}
+                                            className="flex-1 bg-pink-500/30 hover:bg-pink-500 rounded-t-sm transition-all"
+                                            title={`${i}:00 - ${v} views`}
+                                        />
+                                    ))}
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -218,6 +270,7 @@ export function AnalyticsDashboard() {
                                         <YAxis stroke="#64748b" fontSize={10} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold' }}
                                             labelStyle={{ color: '#94a3b8' }}
                                         />
                                         <Area type="monotone" dataKey="pageViews" stroke="#3b82f6" fill="url(#colorViews)" name="Sidvisningar" />
@@ -227,6 +280,129 @@ export function AnalyticsDashboard() {
                             </div>
                         </div>
                     )}
+
+                    {/* Funnels and Module Breakdown */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Module Engagement */}
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                            <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                <Monitor size={20} className="text-emerald-500" />
+                                Modul-intensitet
+                            </h2>
+                            <div className="h-[250px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <PieChart>
+                                        <Pie
+                                            data={Object.entries(stats?.moduleStats || {}).map(([name, value]) => ({ name, value }))}
+                                            innerRadius={60}
+                                            outerRadius={80}
+                                            paddingAngle={5}
+                                            dataKey="value"
+                                        >
+                                            {Object.entries(stats?.moduleStats || {}).map((_entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#a855f7', '#ec4899', '#64748b'][index % 6]} />
+                                            ))}
+                                        </Pie>
+                                        <Tooltip
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold' }}
+                                        />
+                                        <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                                    </PieChart>
+                                </ResponsiveContainer>
+                            </div>
+                        </div>
+
+                        {/* Conversion Funnels */}
+                        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                            <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                <TrendingUp size={20} className="text-pink-500" />
+                                Konvertering: Planerat vs Verkligt
+                            </h2>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Meals Conversion */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-black uppercase tracking-widest text-slate-500">Måltider</span>
+                                        <span className="text-lg font-black text-emerald-500">
+                                            {stats?.conversionStats?.meals.planned ? Math.round((stats.conversionStats.meals.logged / stats.conversionStats.meals.planned) * 100) : 0}%
+                                        </span>
+                                    </div>
+                                    <div className="h-4 bg-slate-800 rounded-full overflow-hidden flex">
+                                        <div
+                                            className="h-full bg-emerald-500 transition-all duration-1000"
+                                            style={{ width: `${stats?.conversionStats ? (stats.conversionStats.meals.logged / (stats.conversionStats.meals.planned || 1)) * 100 : 0}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                                        <span>{stats?.conversionStats?.meals.logged} Loggade</span>
+                                        <span>{stats?.conversionStats?.meals.planned} Planerade</span>
+                                    </div>
+                                </div>
+
+                                {/* Training Conversion */}
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-black uppercase tracking-widest text-slate-500">Träningspass</span>
+                                        <span className="text-lg font-black text-blue-500">
+                                            {stats?.conversionStats?.training.planned ? Math.round((stats.conversionStats.training.completed / stats.conversionStats.training.planned) * 100) : 0}%
+                                        </span>
+                                    </div>
+                                    <div className="h-4 bg-slate-800 rounded-full overflow-hidden flex">
+                                        <div
+                                            className="h-full bg-blue-500 transition-all duration-1000"
+                                            style={{ width: `${stats?.conversionStats ? (stats.conversionStats.training.completed / (stats.conversionStats.training.planned || 1)) * 100 : 0}%` }}
+                                        />
+                                    </div>
+                                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                                        <span>{stats?.conversionStats?.training.completed} Genomförda</span>
+                                        <span>{stats?.conversionStats?.training.planned} Planerade</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Insight box */}
+                            <div className="mt-8 p-4 bg-slate-800/30 border border-slate-800 rounded-xl flex items-start gap-3">
+                                <AlertCircle size={16} className="text-pink-500 shrink-0 mt-0.5" />
+                                <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                                    Konverteringsgraden mäter hur väl dina användare följer sina planer.
+                                    En hög siffra indikerar att appens planeringstjänst skapar disciplin och värde.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* UX Friction Analysis */}
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                            <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                <Clock size={20} className="text-amber-500" />
+                                Loggnings-effektivitet
+                            </h2>
+                            <div className="h-[250px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={friction} layout="vertical">
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="label" type="category" stroke="#64748b" fontSize={10} width={80} />
+                                        <Tooltip
+                                            cursor={{ fill: 'transparent' }}
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold' }}
+                                        />
+                                        <Bar dataKey="avgSeconds" name="Sekunder" radius={[0, 4, 4, 0]}>
+                                            {friction.map((_entry, index) => (
+                                                <Cell key={`cell-${index}`} fill={index === 0 ? '#f59e0b' : '#3b82f6'} />
+                                            ))}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                <p className="text-[10px] text-amber-500 font-bold leading-relaxed">
+                                    Mäter medeltid från öppnad modal till färdig loggning.
+                                    Låga värden indikerar hög effektivitet och låg friktion.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                         {/* User Activity */}
@@ -305,6 +481,12 @@ export function AnalyticsDashboard() {
                         )}
                     </div>
                 </>
+            ) : activeTab === 'retention' ? (
+                // --- RETENTION TAB ---
+                <RetentionHeatmap data={retention} />
+            ) : activeTab === 'pathing' ? (
+                // --- PATHING TAB ---
+                <PathingFlow data={pathing} />
             ) : (
                 // --- SESSIONS TAB ---
                 <div className="space-y-6">
@@ -388,6 +570,107 @@ export function AnalyticsDashboard() {
 }
 
 // --- HELPER COMPONENTS ---
+
+function RetentionHeatmap({ data }: { data: any[] }) {
+    return (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
+            <h2 className="text-lg font-black mb-6 flex items-center gap-2">
+                <Calendar size={20} className="text-pink-500" />
+                Kohort-Retention (14 Dagar)
+            </h2>
+            <table className="w-full text-[10px] border-collapse">
+                <thead>
+                    <tr>
+                        <th className="p-2 text-left bg-slate-800/50 sticky left-0 z-10 w-24">Datum</th>
+                        <th className="p-2 text-center bg-slate-800/50">Antal</th>
+                        {new Array(14).fill(0).map((_, i) => (
+                            <th key={i} className="p-2 text-center bg-slate-800/20 w-8">D{i + 1}</th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                    {data.map(row => (
+                        <tr key={row.date} className="hover:bg-slate-800/30">
+                            <td className="p-2 font-bold text-slate-300 sticky left-0 bg-slate-900 z-10">{row.date}</td>
+                            <td className="p-2 text-center font-bold text-white bg-slate-800/30">{row.total}</td>
+                            {row.retained.map((count: number, i: number) => {
+                                const percent = row.total > 0 ? (count / row.total) * 100 : 0;
+                                let bgColor = 'bg-slate-900';
+                                if (percent > 0) bgColor = 'bg-pink-500/10';
+                                if (percent > 20) bgColor = 'bg-pink-500/30';
+                                if (percent > 50) bgColor = 'bg-pink-500/60';
+                                if (percent > 80) bgColor = 'bg-pink-500';
+
+                                return (
+                                    <td
+                                        key={i}
+                                        className={`p-2 text-center border border-slate-800/50 transition-colors ${bgColor} ${percent > 50 ? 'text-white' : 'text-slate-400'}`}
+                                        title={`${count} användare återvände dag ${i + 1}`}
+                                    >
+                                        {percent > 0 ? `${Math.round(percent)}%` : '-'}
+                                    </td>
+                                );
+                            })}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
+function PathingFlow({ data }: { data: any[] }) {
+    // Separate paths and calculate exit dropoffs (simplisticly)
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                    <TrendingUp size={20} className="text-blue-500" />
+                    Vanliga Navigeringsvägar
+                </h2>
+                <div className="space-y-4">
+                    {data.map((item, i) => {
+                        const [from, to] = item.label.split(' -> ');
+                        return (
+                            <div key={i} className="flex items-center gap-4 group">
+                                <div className="flex-1 bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex items-center justify-between group-hover:border-blue-500/50 transition-colors">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <span className="text-xs font-mono text-slate-400 truncate max-w-[150px]">{from}</span>
+                                        <SkipForward size={14} className="text-slate-600 flex-shrink-0" />
+                                        <span className="text-xs font-mono text-blue-400 font-bold truncate max-w-[150px]">{to}</span>
+                                    </div>
+                                    <div className="text-lg font-black text-white">{item.count}</div>
+                                </div>
+                                <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-blue-500"
+                                        style={{ width: `${(item.count / data[0].count) * 100}%` }}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div className="space-y-8">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                    <h2 className="text-sm font-black uppercase text-slate-500 mb-4 flex items-center gap-2">
+                        <Monitor size={16} />
+                        Exit-Analys
+                    </h2>
+                    <div className="text-[10px] text-slate-400 mb-4 italic">
+                        Identifierar sidor där flödet ofta bryts.
+                    </div>
+                    {/* Placeholder for exit stats if we had them or calculate here */}
+                    <div className="p-8 text-center text-slate-600">
+                        Kommer i nästa uppdatering...
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 function SessionPlayer({ sessionId, onClose }: { sessionId: string, onClose: () => void }) {
     const [events, setEvents] = useState<any[]>([]);
@@ -477,7 +760,7 @@ function SessionPlayer({ sessionId, onClose }: { sessionId: string, onClose: () 
                                 >
                                     <div className="flex justify-between items-center mb-1">
                                         <span className={`font-bold uppercase text-[10px] px-1.5 py-0.5 rounded ${e.type === 'error' ? 'bg-red-500/20 text-red-400' :
-                                                e._type === 'view' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'
+                                            e._type === 'view' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'
                                             }`}>
                                             {e.type || 'PAGEVIEW'}
                                         </span>

@@ -37,19 +37,28 @@ export const analyticsRepository = {
         const pageViews: PageView[] = [];
         const events: InteractionEvent[] = [];
 
-        // Fetch Page Views
-        for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] })) {
-            if (entry.value.timestamp >= cutoffStr) {
-                pageViews.push(entry.value);
+        // Fetch Page Views and Events in parallel scans
+        const fetchViews = async () => {
+            for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] }, { reverse: true })) {
+                if (entry.value.timestamp >= cutoffStr) {
+                    pageViews.push(entry.value);
+                } else {
+                    break; // Timestamp is indexed, we can stop early
+                }
             }
-        }
+        };
 
-        // Fetch Events
-        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
-            if (entry.value.timestamp >= cutoffStr) {
-                events.push(entry.value);
+        const fetchEvents = async () => {
+            for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] }, { reverse: true })) {
+                if (entry.value.timestamp >= cutoffStr) {
+                    events.push(entry.value);
+                } else {
+                    break; // Timestamp is indexed, we can stop early
+                }
             }
-        }
+        };
+
+        await Promise.all([fetchViews(), fetchEvents()]);
 
         // --- Aggregation Logic ---
 
@@ -93,12 +102,79 @@ export const analyticsRepository = {
             if (v.timestamp >= yesterdayStr) activeUserIds.add(v.userId);
         });
 
+        // 4. Module Engagement (Phase 2)
+        const moduleStats: Record<string, number> = {
+            'Kalorier': 0,
+            'Träning': 0,
+            'Planering': 0,
+            'Profil & Social': 0,
+            'Admin': 0,
+            'Övrigt': 0
+        };
+
+        const categorizePath = (path: string) => {
+            if (path.startsWith('/calories') || path.startsWith('/database')) return 'Kalorier';
+            if (path.startsWith('/exercise') || path.startsWith('/strength')) return 'Träning';
+            if (path.startsWith('/planera') || path.startsWith('/planning')) return 'Planering';
+            if (path.startsWith('/profile') || path.startsWith('/social') || path.startsWith('/settings')) return 'Profil & Social';
+            if (path.startsWith('/admin')) return 'Admin';
+            return 'Övrigt';
+        };
+
+        events.forEach(e => {
+            const mod = categorizePath(e.path || '/');
+            moduleStats[mod]++;
+        });
+
+        // 5. Session Depth (Phase 2)
+        const sessionDepth = pageViews.length > 0 ? Number((events.length / pageViews.length).toFixed(2)) : 0;
+
+        // 6. Conversion Stats (Phase 2)
+        // Note: For performance, we'll fetch these once and cache or handle as separate calls if slow.
+        // For now, let's look at the basic plan compliance.
+        let plannedMeals = 0;
+        let loggedMeals = 0;
+        let plannedTraining = 0;
+        let completedTraining = 0;
+
+        const cutoffDateStr = cutoff.toISOString().split('T')[0];
+
+        // Fetch Weekly Plans
+        for await (const entry of kv.list<any>({ prefix: ["weekly_plans"] })) {
+            const plan = entry.value;
+            if (plan.weekStartDate >= cutoffDateStr && plan.meals) {
+                Object.values(plan.meals).forEach((day: any) => {
+                    Object.values(day).forEach((meal: any) => {
+                        if (meal?.recipeId) {
+                            plannedMeals++;
+                            if (meal.loggedToCalories) loggedMeals++;
+                        }
+                    });
+                });
+            }
+        }
+
+        // Fetch Activities
+        for await (const entry of kv.list<any>({ prefix: ["activities"] })) {
+            const act = entry.value;
+            if (act.date >= cutoffDateStr) {
+                if (act.status === 'PLANNED') plannedTraining++;
+                if (act.status === 'COMPLETED') completedTraining++;
+            }
+        }
+
         return {
             totalPageViews: pageViews.length,
             totalEvents: events.length,
             popularPages,
             popularInteractions,
-            activeUsers24h: activeUserIds.size
+            activeUsers24h: activeUserIds.size,
+            moduleStats,
+            sessionDepth,
+            conversionStats: {
+                meals: { planned: plannedMeals, logged: loggedMeals },
+                training: { planned: plannedTraining, completed: completedTraining }
+            }
         };
     },
 
@@ -297,8 +373,10 @@ export const analyticsRepository = {
     async getOmniboxStats(daysBack = 30): Promise<{
         totalSearches: number;
         totalLogs: number;
+        totalNavigations: number;
         topSearches: Array<{ query: string; count: number }>;
         topLoggedFoods: Array<{ food: string; count: number }>;
+        topNavigations: Array<{ path: string; count: number }>;
         hourlyDistribution: number[];
     }> {
         const cutoff = new Date();
@@ -307,6 +385,7 @@ export const analyticsRepository = {
 
         const searches: string[] = [];
         const loggedFoods: string[] = [];
+        const navigations: string[] = [];
         const hourlyDistribution = new Array(24).fill(0);
 
         for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
@@ -321,6 +400,11 @@ export const analyticsRepository = {
             }
             if (e.type === 'omnibox_log' && e.metadata?.food) {
                 loggedFoods.push(e.metadata.food);
+                const hour = new Date(e.timestamp).getHours();
+                hourlyDistribution[hour]++;
+            }
+            if (e.type === 'omnibox_nav' && e.metadata?.path) {
+                navigations.push(e.metadata.path);
                 const hour = new Date(e.timestamp).getHours();
                 hourlyDistribution[hour]++;
             }
@@ -342,11 +426,21 @@ export const analyticsRepository = {
             .sort((a, b) => b.count - a.count)
             .slice(0, 20);
 
+        // Aggregate top navigations
+        const navCounts = new Map<string, number>();
+        navigations.forEach(p => navCounts.set(p, (navCounts.get(p) || 0) + 1));
+        const topNavigations = Array.from(navCounts.entries())
+            .map(([path, count]) => ({ path, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 20);
+
         return {
             totalSearches: searches.length,
             totalLogs: loggedFoods.length,
+            totalNavigations: navigations.length,
             topSearches,
             topLoggedFoods,
+            topNavigations,
             hourlyDistribution
         };
     },
@@ -394,5 +488,137 @@ export const analyticsRepository = {
         return Array.from(dailyMap.entries())
             .map(([date, data]) => ({ date, ...data }))
             .sort((a, b) => a.date.localeCompare(b.date));
+    },
+
+    /**
+     * Get retention (cohort analysis)
+     * Groups users by their first seen date and tracks return rates
+     */
+    async getRetentionStats(daysBack = 30): Promise<any> {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - daysBack);
+        const cutoffStr = cutoff.toISOString();
+
+        const userFirstSeen = new Map<string, string>(); // userId -> firstDate
+        const userActivity = new Map<string, Set<string>>(); // userId -> Set of dates active
+
+        // Fetch all PageViews for these users
+        for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] })) {
+            const v = entry.value;
+            const dateStr = v.timestamp.split('T')[0];
+
+            if (!userFirstSeen.has(v.userId) || v.timestamp < userFirstSeen.get(v.userId)!) {
+                userFirstSeen.set(v.userId, v.timestamp);
+            }
+
+            if (!userActivity.has(v.userId)) userActivity.set(v.userId, new Set());
+            userActivity.get(v.userId)!.add(dateStr);
+        }
+
+        // Aggregate into cohorts
+        const cohorts = new Map<string, { total: number; retained: number[] }>();
+        const today = new Date();
+
+        userFirstSeen.forEach((firstTimestamp, userId) => {
+            const firstDateStr = firstTimestamp.split('T')[0];
+            if (firstDateStr < cutoffStr) return;
+
+            if (!cohorts.has(firstDateStr)) cohorts.set(firstDateStr, { total: 0, retained: new Array(14).fill(0) });
+            const cohort = cohorts.get(firstDateStr)!;
+            cohort.total++;
+
+            // Check activity for the next 14 days
+            const startDate = new Date(firstDateStr);
+            for (let i = 1; i <= 14; i++) {
+                const nextDate = new Date(startDate);
+                nextDate.setDate(nextDate.getDate() + i);
+                const nextDateStr = nextDate.toISOString().split('T')[0];
+
+                if (userActivity.get(userId)?.has(nextDateStr)) {
+                    cohort.retained[i - 1]++;
+                }
+            }
+        });
+
+        return Array.from(cohorts.entries())
+            .map(([date, data]) => ({ date, ...data }))
+            .sort((a, b) => b.date.localeCompare(a.date));
+    },
+
+    /**
+     * Get pathing stats (transitions between pages)
+     */
+    async getPathingStats(daysBack = 7): Promise<any> {
+        const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+        const transitions = new Map<string, number>();
+        const sessions = new Map<string, string[]>(); // sessionId -> path list
+
+        for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] })) {
+            if (entry.value.timestamp < cutoff) continue;
+            const v = entry.value;
+            if (!sessions.has(v.sessionId)) sessions.set(v.sessionId, []);
+            sessions.get(v.sessionId)!.push(v.path);
+        }
+
+        sessions.forEach(paths => {
+            for (let i = 0; i < paths.length - 1; i++) {
+                const from = paths[i];
+                const to = paths[i + 1];
+                if (from === to) continue;
+                const key = `${from} -> ${to}`;
+                transitions.set(key, (transitions.get(key) || 0) + 1);
+            }
+        });
+
+        return Array.from(transitions.entries())
+            .map(([label, count]) => ({ label, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 30);
+    },
+
+    /**
+     * Get hourly pulse (last 24-48 hours activity)
+     */
+    async getHourlyPulse(): Promise<any> {
+        const now = new Date();
+        const activity = new Array(24).fill(0);
+        const cutoff = new Date(now.getTime() - 24 * 3600000).toISOString();
+
+        for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] })) {
+            if (entry.value.timestamp >= cutoff) {
+                const hour = new Date(entry.value.timestamp).getHours();
+                activity[hour]++;
+            }
+        }
+
+        return activity;
+    },
+
+    /**
+     * Get friction stats (average Time-to-Log)
+     */
+    async getFrictionStats(daysBack = 30): Promise<any> {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - daysBack);
+        const cutoffStr = cutoff.toISOString();
+
+        const data: Record<string, { totalMs: number; count: number }> = {};
+
+        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] }, { reverse: true })) {
+            const e = entry.value;
+            if (e.timestamp < cutoffStr) break;
+
+            if (e.metadata?.durationMs) {
+                const label = e.type === 'omnibox_log' ? 'Omnibox' : 'QuickAdd';
+                if (!data[label]) data[label] = { totalMs: 0, count: 0 };
+                data[label].totalMs += e.metadata.durationMs;
+                data[label].count++;
+            }
+        }
+
+        return Object.entries(data).map(([label, stats]) => ({
+            label,
+            avgSeconds: Number((stats.totalMs / stats.count / 1000).toFixed(2))
+        }));
     }
 };

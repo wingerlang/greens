@@ -34,7 +34,8 @@ export async function handleAnalyticsRoutes(req: Request, url: URL, headers: Hea
 
         // GET /stats - Get aggregated dashboard stats
         if (path === "/stats" && method === "GET") {
-            const stats = await analyticsRepository.getStats(30);
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const stats = await analyticsRepository.getStats(daysBack);
             return json(stats);
         }
 
@@ -84,6 +85,33 @@ export async function handleAnalyticsRoutes(req: Request, url: URL, headers: Hea
 
             const events = await analyticsRepository.getSessionEvents(id);
             return json({ events });
+        }
+
+        // GET /retention - Get retention stats
+        if (path === "/retention" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const retention = await analyticsRepository.getRetentionStats(daysBack);
+            return json({ retention });
+        }
+
+        // GET /pathing - Get user pathing transitions
+        if (path === "/pathing" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '7');
+            const pathing = await analyticsRepository.getPathingStats(daysBack);
+            return json({ pathing });
+        }
+
+        // GET /pulse - Get hourly activity pulse
+        if (path === "/pulse" && method === "GET") {
+            const pulse = await analyticsRepository.getHourlyPulse();
+            return json({ pulse });
+        }
+
+        // GET /friction - Get UX friction stats
+        if (path === "/friction" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const friction = await analyticsRepository.getFrictionStats(daysBack);
+            return json({ friction });
         }
 
         return json({ error: "Not Found" }, 404);

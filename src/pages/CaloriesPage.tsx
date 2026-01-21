@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
+import { useAnalytics } from '../context/AnalyticsContext.tsx';
 import {
     type MealType,
     type MealItem,
@@ -15,6 +16,7 @@ import { calculateAdaptiveGoals } from '../utils/performanceEngine.ts';
 import { getActiveCalories } from '../utils/calorieTarget.ts';
 import { MealTimeline } from '../components/calories/MealTimeline.tsx';
 import { QuickAddModal } from '../components/calories/QuickAddModal.tsx';
+import { CreateQuickMealModal } from '../components/calories/CreateQuickMealModal.tsx';
 import { NutritionBreakdownModal } from '../components/calories/NutritionBreakdownModal.tsx';
 import { NutritionInsights } from '../components/calories/NutritionInsights.tsx';
 import { MacroDistribution } from '../components/calories/MacroDistribution.tsx';
@@ -52,6 +54,7 @@ export function CaloriesPage() {
     } = useData();
 
     const { settings } = useSettings();
+    const { logEvent } = useAnalytics();
 
     // Initialize from URL or default to today
     const urlDate = searchParams.get('date');
@@ -89,6 +92,8 @@ export function CaloriesPage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [quickAddServings, setQuickAddServings] = useState(1);
     const [portionMode] = useState<'portions' | 'st' | 'grams'>('portions');
+    const [isQuickMealModalOpen, setIsQuickMealModalOpen] = useState(false);
+    const [quickMealItems, setQuickMealItems] = useState<MealItem[]>([]);
 
     // Nutrition breakdown modal state
     const [breakdownItem, setBreakdownItem] = useState<MealItem | null>(null);
@@ -222,7 +227,7 @@ export function CaloriesPage() {
             });
     }, [mealEntries, recipes, foodItems]);
 
-    const handleQuickAdd = (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number) => {
+    const handleQuickAdd = (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number, variantId?: string, durationMs?: number | null) => {
         let servingsValue = quickAddServings;
 
         if (type === 'foodItem') {
@@ -235,6 +240,18 @@ export function CaloriesPage() {
             }
         }
 
+        const itemName = type === 'foodItem'
+            ? foodItems.find(f => f.id === id)?.name || 'Okänd råvara'
+            : recipes.find(r => r.id === id)?.name || 'Okänt recept';
+
+        logEvent('quick_add_log', itemName, type, {
+            type,
+            itemId: id,
+            grams: type === 'foodItem' ? servingsValue : undefined,
+            isCooked: loggedAsCooked,
+            durationMs
+        });
+
         addMealEntry({
             date: selectedDate,
             mealType,
@@ -244,6 +261,7 @@ export function CaloriesPage() {
                 servings: servingsValue,
                 ...(loggedAsCooked && { loggedAsCooked: true }),
                 ...(effectiveYieldFactor && { effectiveYieldFactor }),
+                ...(variantId && { variantId })
             }],
         });
 
@@ -407,18 +425,30 @@ export function CaloriesPage() {
 
     const handleCreateQuickMeal = () => {
         if (selectedIds.size === 0) return;
-        const name = prompt("Namn på snabbval (t.ex. 'Frukostmacka'):");
-        if (!name) return;
 
         const itemsToSave: MealItem[] = [];
-        // Preserve order based on dailyEntries
         dailyEntries.forEach(entry => {
             if (selectedIds.has(entry.id)) {
                 itemsToSave.push(...entry.items);
             }
         });
 
-        addQuickMeal(name, itemsToSave);
+        setQuickMealItems(itemsToSave);
+        setIsQuickMealModalOpen(true);
+    };
+
+    const onSaveQuickMeal = (name: string) => {
+        const newMeal = addQuickMeal(name, quickMealItems);
+
+        // Link original entries to this new snabbval
+        selectedIds.forEach(id => {
+            updateMealEntry(id, {
+                snabbvalId: newMeal.id,
+                title: newMeal.name
+            });
+        });
+
+        setIsQuickMealModalOpen(false);
         setSelectedIds(new Set());
     };
 
@@ -780,6 +810,16 @@ export function CaloriesPage() {
                 onLogQuickMeal={handleLogQuickMeal}
                 getItemName={getItemName}
                 getItemNutrition={getItemNutrition}
+            />
+
+            <CreateQuickMealModal
+                isOpen={isQuickMealModalOpen}
+                onClose={() => setIsQuickMealModalOpen(false)}
+                onSave={onSaveQuickMeal}
+                items={quickMealItems}
+                getItemName={getItemName}
+                getItemNutrition={getItemNutrition}
+                recentQuickMeals={quickMeals}
             />
 
             <NutritionBreakdownModal

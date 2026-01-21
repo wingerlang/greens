@@ -210,7 +210,7 @@ interface DataContextType {
 
     // Quick Meals & Aliases
     quickMeals: QuickMeal[];
-    addQuickMeal: (name: string, items: MealItem[]) => void;
+    addQuickMeal: (name: string, items: MealItem[]) => QuickMeal;
     updateQuickMeal: (id: string, updates: Partial<Omit<QuickMeal, 'id' | 'userId' | 'createdAt'>>) => void;
     deleteQuickMeal: (id: string) => void;
     foodAliases: Record<string, string>;
@@ -2118,6 +2118,7 @@ export function DataProvider({ children }: DataProviderProps) {
         setQuickMeals(prev => [...prev, newMeal]);
         skipAutoSave.current = true;
         storageService.saveQuickMeal(newMeal).catch(console.error);
+        return newMeal;
     }, [currentUser]);
 
     const deleteQuickMeal = useCallback((id: string) => {

@@ -1628,7 +1628,7 @@ export interface InteractionEvent {
     id: string;
     userId: string;
     sessionId: string;
-    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'error';
+    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'omnibox_nav' | 'quick_add_log' | 'error';
     target: string; // e.g., "button", "a", "input"
     label: string; // e.g., "Save Workout", "Log Out"
     path: string; // Where it happened
@@ -1652,4 +1652,11 @@ export interface AnalyticsStats {
     popularPages: { path: string; count: number; avgTime: number }[];
     popularInteractions: { label: string; count: number }[];
     activeUsers24h: number;
+    // Phase 2 Metrics
+    moduleStats?: Record<string, number>;
+    conversionStats?: {
+        meals: { planned: number; logged: number };
+        training: { planned: number; completed: number };
+    };
+    sessionDepth?: number; // avg events per view
 }

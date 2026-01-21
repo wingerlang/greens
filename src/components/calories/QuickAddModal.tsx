@@ -176,7 +176,7 @@ interface QuickAddModalProps {
     proposals: SearchResult[];
     quickAddServings: number;
     setQuickAddServings: (val: number) => void;
-    handleQuickAdd: (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number, variantId?: string) => void;
+    handleQuickAdd: (type: 'recipe' | 'foodItem', id: string, defaultPortion?: number, loggedAsCooked?: boolean, effectiveYieldFactor?: number, variantId?: string, durationMs?: number | null) => void;
     selectedDate?: string;
     quickMeals?: QuickMeal[];
     onLogQuickMeal?: (qm: QuickMeal, pieceCount?: number) => void;
@@ -210,6 +210,8 @@ export function QuickAddModal({
     // Track hover highlighting for Snabbval
     const [hoveredSnabbvalId, setHoveredSnabbvalId] = useState<string | null>(null);
     const [hoveredIngredientIndex, setHoveredIngredientIndex] = useState<number | null>(null);
+    // UX Friction Tracking
+    const [openTimestamp, setOpenTimestamp] = useState<number | null>(null);
 
     const toggleCooked = (id: string) => {
         setCookedItems(prev => {
@@ -263,17 +265,25 @@ export function QuickAddModal({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, onClose]);
 
-    // Reset cooked toggles when closing
+    // Reset cooked toggles and capture open timestamp
     useEffect(() => {
-        if (!isOpen) {
+        if (isOpen) {
+            setOpenTimestamp(Date.now());
+        } else {
             setCookedItems(new Set());
+            setOpenTimestamp(null);
         }
     }, [isOpen]);
 
     const filteredQuickMeals = useMemo(() => {
         if (!quickMeals) return [];
-        if (!searchQuery) return quickMeals;
-        return quickMeals.filter(qm => qm.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        const base = [...quickMeals].sort((a, b) => {
+            const dateA = a.createdAt || '';
+            const dateB = b.createdAt || '';
+            return dateB.localeCompare(dateA);
+        });
+        if (!searchQuery) return base;
+        return base.filter(qm => qm.name.toLowerCase().includes(searchQuery.toLowerCase()));
     }, [quickMeals, searchQuery]);
 
     if (!isOpen) return null;
@@ -358,7 +368,8 @@ export function QuickAddModal({
                             result.defaultPortion,
                             isCooked,
                             isCooked ? effectiveYieldFactor : undefined,
-                            effectiveVariantId
+                            effectiveVariantId,
+                            openTimestamp ? Date.now() - openTimestamp : null
                         )}
                     >
                         + Lägg till

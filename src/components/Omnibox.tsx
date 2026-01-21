@@ -254,6 +254,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     // Cooked toggle state for raw ingredients
     const [draftLogAsCooked, setDraftLogAsCooked] = useState(false);
 
+    // UX Friction Tracking: Timestamp when opened
+    const [openTimestamp, setOpenTimestamp] = useState<number | null>(null);
+
     // Sync draft from intent
     useEffect(() => {
         if (!isManual && intent.type === 'exercise') {
@@ -330,13 +333,23 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     // Navigation suggestions for slash mode
     const navSuggestions = useMemo(() => {
         if (!isSlashMode) return [];
-        if (!slashQuery) return NAVIGATION_ROUTES;
-
-        return NAVIGATION_ROUTES.filter(route =>
-            route.aliases.some(alias => alias.includes(slashQuery)) ||
-            route.label.toLowerCase().includes(slashQuery)
+        const base = NAVIGATION_ROUTES.filter(route =>
+            route.path.toLowerCase().includes(slashQuery) ||
+            route.label.toLowerCase().includes(slashQuery) ||
+            route.aliases.some(alias => alias.toLowerCase().includes(slashQuery))
         );
-    }, [isSlashMode, slashQuery]);
+
+        // Sort by omnibox usage first, then total visits
+        return base.sort((a, b) => {
+            const aOmni = visitStats.omniboxNavs[a.path] || 0;
+            const bOmni = visitStats.omniboxNavs[b.path] || 0;
+            if (bOmni !== aOmni) return bOmni - aOmni;
+
+            const aTotal = visitStats.paths[a.path] || 0;
+            const bTotal = visitStats.paths[b.path] || 0;
+            return bTotal - aTotal;
+        });
+    }, [isSlashMode, slashQuery, visitStats]);
 
     // Calculate food usage stats from meal entries
     const foodUsageStats = useMemo(() => {
@@ -574,6 +587,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         if (isOpen && inputRef.current) {
             inputRef.current.focus();
             setInput('');
+            setOpenTimestamp(Date.now());
+        } else {
+            setOpenTimestamp(null);
         }
     }, [isOpen]);
 
@@ -648,11 +664,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         });
 
         // Analytics: Track food log
+        const durationMs = openTimestamp ? Date.now() - openTimestamp : null;
         logEvent('omnibox_log', item.name, 'food', {
             food: item.name,
             grams: quantity,
             mealType,
-            isCooked: isLoggingAsCooked
+            isCooked: isLoggingAsCooked,
+            durationMs
         });
 
         // Calculate displayed calories (adjust for cooked if needed)
@@ -699,12 +717,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         });
 
         // Analytics
+        const durationMs = openTimestamp ? Date.now() - openTimestamp : null;
         logEvent('omnibox_log', meal.name, 'food', {
             type: 'quick_meal',
             mealId: meal.id,
             itemCount: meal.items.length,
             logDate,
-            mealType
+            mealType,
+            durationMs
         });
 
         setShowFeedback(true);
@@ -833,10 +853,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             return;
         }
 
-        // Handle slash navigation
+        // Handle navigation selection
         if (isSlashMode && selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'nav') {
-            const navItem = selectableItems[selectedIndex] as { itemType: 'nav'; path: string };
-            navigate(navItem.path);
+            const route = selectableItems[selectedIndex] as any;
+            logEvent('omnibox_nav', `Navigated to ${route.label}`, 'omnibox', { path: route.path });
+            navigate(route.path);
             onClose();
             return;
         }
@@ -1024,11 +1045,18 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                         <div>
                                             <div className="flex items-center gap-2">
                                                 <div className="font-medium">{route.label}</div>
-                                                {visitStats.paths[route.path] > 0 && (
-                                                    <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-1.2 py-0.2 rounded font-bold uppercase">
-                                                        🧭 {visitStats.paths[route.path]} besök
-                                                    </span>
-                                                )}
+                                                <div className="flex items-center gap-1">
+                                                    {visitStats.paths[route.path] > 0 && (
+                                                        <span className="text-[9px] bg-slate-500/10 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase" title="Totala besök">
+                                                            👁️ {visitStats.paths[route.path]}
+                                                        </span>
+                                                    )}
+                                                    {visitStats.omniboxNavs[route.path] > 0 && (
+                                                        <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded font-bold uppercase" title="Via Omnibox">
+                                                            🧭 {visitStats.omniboxNavs[route.path]}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                             <div className="text-[10px] text-slate-500">{route.path}</div>
                                         </div>

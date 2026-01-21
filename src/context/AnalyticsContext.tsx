@@ -6,7 +6,11 @@ import { safeFetch } from '../utils/http.ts';
 
 interface AnalyticsContextType {
     logEvent: (type: InteractionEvent['type'], label: string, target?: string, metadata?: any) => void;
-    visitStats: { paths: Record<string, number>; users: Record<string, number> };
+    visitStats: {
+        paths: Record<string, number>;
+        users: Record<string, number>;
+        omniboxNavs: Record<string, number>;
+    };
     refreshStats: () => Promise<void>;
 }
 
@@ -15,7 +19,11 @@ const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefin
 export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     const location = useLocation();
     const { user, token } = useAuth();
-    const [visitStats, setVisitStats] = useState<{ paths: Record<string, number>; users: Record<string, number> }>({ paths: {}, users: {} });
+    const [visitStats, setVisitStats] = useState<{
+        paths: Record<string, number>;
+        users: Record<string, number>;
+        omniboxNavs: Record<string, number>;
+    }>({ paths: {}, users: {}, omniboxNavs: {} });
 
     // Session Management
     const [sessionId] = useState(() => {
@@ -197,17 +205,21 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     const refreshStats = async () => {
         if (!token) return;
         try {
-            const [statsData, usersData] = await Promise.all([
+            const [statsData, usersData, omniboxData] = await Promise.all([
                 safeFetch<any>('/api/usage/stats?days=30', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 }),
                 safeFetch<any>('/api/usage/users?days=30', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }),
+                safeFetch<any>('/api/usage/omnibox?days=30', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 })
             ]);
 
             const paths: Record<string, number> = {};
             const users: Record<string, number> = {};
+            const omniboxNavs: Record<string, number> = {};
 
             if (statsData?.popularPages) {
                 statsData.popularPages.forEach((p: any) => {
@@ -221,7 +233,13 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 });
             }
 
-            setVisitStats({ paths, users });
+            if (omniboxData?.topNavigations) {
+                omniboxData.topNavigations.forEach((n: any) => {
+                    omniboxNavs[n.path] = n.count;
+                });
+            }
+
+            setVisitStats({ paths, users, omniboxNavs });
         } catch (e) {
             console.error("Failed to refresh visit stats", e);
         }
