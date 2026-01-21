@@ -4,6 +4,7 @@ import { StrengthWorkout, StrengthWorkoutExercise, PersonalBest, isWeightedDista
 import { calculateEstimated1RM } from '../../utils/strengthCalculators.ts';
 import { UniversalActivity } from '../../models/types.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useData } from '../../context/DataContext.tsx';
 import { SimilarWorkouts } from './SimilarWorkouts.tsx';
 import { formatSecondsToTime } from '../../utils/dateUtils.ts';
 import { WorkoutAnalysisTab } from '../workouts/WorkoutAnalysisTab.tsx';
@@ -24,6 +25,7 @@ interface WorkoutDetailModalProps {
 
 export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [], onDeleted, allWorkouts = [], sessionNumber, sessionTotal, sessionYear, isMerged, onSeparate }: WorkoutDetailModalProps) {
     const { token } = useAuth();
+    const { updateStrengthSession } = useData();
     const navigate = useNavigate();
     const [dailyActivities, setDailyActivities] = useState<UniversalActivity[]>([]);
     const [loadingActivities, setLoadingActivities] = useState(false);
@@ -472,6 +474,25 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                                     </div>
                                 );
                             })}
+                        </div>
+
+                        {/* Stats Exclusion Toggle */}
+                        <div className="px-4 py-2 border-t border-white/5 bg-slate-900/50">
+                            <div
+                                onClick={() => updateStrengthSession(workout.id, { excludeFromStats: !workout.excludeFromStats })}
+                                className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${workout.excludeFromStats ? 'bg-rose-500/10 border-rose-500/30' : 'bg-slate-800 border-white/5 opacity-60 hover:opacity-100'}`}
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className={`text-lg ${workout.excludeFromStats ? 'opacity-100' : 'opacity-40'}`}>🚫</span>
+                                    <div>
+                                        <p className={`text-xs font-bold ${workout.excludeFromStats ? 'text-rose-400' : 'text-white'}`}>Exkludera från Beast Mode</p>
+                                        <p className="text-[10px] text-slate-500">Passet räknas inte med i statistik och poäng</p>
+                                    </div>
+                                </div>
+                                <div className={`w-10 h-6 rounded-full relative transition-all ${workout.excludeFromStats ? 'bg-rose-500' : 'bg-slate-700'}`}>
+                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${workout.excludeFromStats ? 'left-5' : 'left-1'}`} />
+                                </div>
+                            </div>
                         </div>
 
                         {/* Similar Workouts Section */}

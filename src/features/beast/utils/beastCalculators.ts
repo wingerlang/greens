@@ -20,6 +20,9 @@ const SINCLAIR_MIN = 0;
 const HYROX_BEST_SEC = 57 * 60; // 57 mins (Elite)
 const HYROX_BASELINE_SEC = 120 * 60; // 2 hours (Novice/Cutoff)
 
+const FTP_MAX_REL = 5.0; // 5.0 W/kg (Elite/Category 1)
+const FTP_MIN_REL = 1.5; // Novice
+
 // ==========================================
 // UTILITIES
 // ==========================================
@@ -79,6 +82,10 @@ export function calculateHyroxScore(timeSeconds: number): number {
     const diff = HYROX_BASELINE_SEC - timeSeconds; // How much faster than baseline?
 
     return Math.round((diff / range) * 100);
+}
+
+export function calculateCyclingScore(relativeWattsPerKg: number): number {
+    return normalize(relativeWattsPerKg, FTP_MIN_REL, FTP_MAX_REL);
 }
 
 export function getBeastTier(score: number): string {

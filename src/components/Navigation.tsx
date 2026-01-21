@@ -141,12 +141,15 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
             return currentPath === itemPathname && currentSearch === `?${itemSearch}`;
         }
 
-        // For paths without query params, use startsWith logic for nested routes
-        // but with special handling for admin to avoid /admin matching /admin/exercises
-        if (itemPathname === '/admin') {
-            return currentPath === '/admin' && !currentSearch;
+        // Special handling for "Overview" style links that are base paths
+        // We want exact match for these to avoid highlighting them when on a sub-route
+        const exactMatchPaths = ['/tools', '/health', '/training', '/admin'];
+        if (exactMatchPaths.includes(itemPathname)) {
+            return currentPath === itemPathname && !currentSearch;
         }
 
+        // For paths with potential sub-routes (like /health/body), use startsWith
+        // but ensure we don't match the root by accident if we handled it above
         return currentPath.startsWith(itemPathname);
     };
 

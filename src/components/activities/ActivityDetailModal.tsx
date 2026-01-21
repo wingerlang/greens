@@ -99,7 +99,8 @@ export function ActivityDetailModal({
         notes: activity.notes || '',
         subType: activity.subType || 'default',
         tonnage: activity.tonnage ? activity.tonnage.toString() : '',
-        distance: activity.distance ? activity.distance.toString() : ''
+        distance: activity.distance ? activity.distance.toString() : '',
+        excludeFromStats: activity.excludeFromStats || false
     });
 
     const { exerciseEntries, universalActivities, updateExercise, deleteExercise, addExercise, calculateExerciseCalories } = useData();
@@ -362,7 +363,8 @@ export function ActivityDetailModal({
             subType: editForm.subType as any,
             tonnage: editForm.tonnage ? parseFloat(editForm.tonnage) : undefined,
             distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
-            caloriesBurned: calories
+            caloriesBurned: calories,
+            excludeFromStats: editForm.excludeFromStats
         };
 
         // For 'merged' virtual activities, we must create a new manual entry (override).
@@ -653,6 +655,23 @@ export function ActivityDetailModal({
                                 onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
                                 className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white resize-none focus:outline-none focus:border-emerald-500/50"
                             />
+                        </div>
+
+                        {/* Stats Exclusion Toggle */}
+                        <div
+                            onClick={() => setEditForm({ ...editForm, excludeFromStats: !editForm.excludeFromStats })}
+                            className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${editForm.excludeFromStats ? 'bg-rose-500/10 border-rose-500/30' : 'bg-slate-800 border-white/5 opacity-60 hover:opacity-100'}`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <span className={`text-lg ${editForm.excludeFromStats ? 'opacity-100' : 'opacity-40'}`}>🚫</span>
+                                <div>
+                                    <p className={`text-xs font-bold ${editForm.excludeFromStats ? 'text-rose-400' : 'text-white'}`}>Exkludera från Beast Mode</p>
+                                    <p className="text-[10px] text-slate-500">Aktiviteten räknas inte med i statistik och poäng</p>
+                                </div>
+                            </div>
+                            <div className={`w-10 h-6 rounded-full relative transition-all ${editForm.excludeFromStats ? 'bg-rose-500' : 'bg-slate-700'}`}>
+                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${editForm.excludeFromStats ? 'left-5' : 'left-1'}`} />
+                            </div>
                         </div>
 
                         <div className="flex gap-3 pt-4 border-t border-white/5">

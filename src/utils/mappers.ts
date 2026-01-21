@@ -30,6 +30,7 @@ export function mapUniversalToLegacyEntry(a: UniversalActivity): ExerciseEntry |
         averageSpeed: a.performance.averageSpeed,
         startTime: a.performance.startTimeLocal ? a.performance.startTimeLocal.split('T')[1]?.substring(0, 5) : undefined,
         notes: a.performance.notes !== a.plan?.title ? a.performance.notes : undefined,
+        excludeFromStats: a.performance.excludeFromStats,
     };
 }
 

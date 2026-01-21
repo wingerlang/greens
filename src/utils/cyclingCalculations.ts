@@ -58,7 +58,7 @@ export const AssaultBikeMath = {
 
     /** Kcal/min = (Watts * 0.01433) + 2 (Base metabolic rate correction often used) */
     wattsToCalsPerMin: (watts: number): number => {
-         // Standard formula derived from console behavior
+        // Standard formula derived from console behavior
         return (watts / 261.5) * 60 * 0.18 + 0.5; // Actually let's use the known linear approximation for simplicity if exact isn't critical
         // Reverting to common Echo/Assault formula found in open source parsers:
         // Cals/Hour = (Watts * 3.6) / 4.186 (roughly).
@@ -106,7 +106,7 @@ export const getCyclingLevel = (
     // Find the highest level the user qualifies for
     for (const std of standards) {
         let threshold = 0;
-        switch(duration) {
+        switch (duration) {
             case '5s': threshold = std.wKg5s; break;
             case '1m': threshold = std.wKg1m; break;
             case '5m': threshold = std.wKg5m; break;
@@ -139,7 +139,7 @@ export const getAssaultBikeLevel = (
     const stds = ASSAULT_BIKE_STANDARDS[gender];
 
     if (duration === '1m' || duration === '10m' || duration === '20m') {
-         for (const std of stds) {
+        for (const std of stds) {
             let threshold = 0;
             if (duration === '1m') threshold = std.oneMinCals;
             if (duration === '10m') threshold = std.tenMinCals;
@@ -186,24 +186,24 @@ export const analyzeAssaultBikePerformance = (
 
         // Match Time Intervals (within margin)
         ASSAULT_BIKE_INTERVALS.filter(i => i.type === 'time').forEach(interval => {
-             // Tolerance: +/- 5% or 5 seconds
+            // Tolerance: +/- 5% or 5 seconds
             const tolerance = Math.max(5, interval.target * 0.05);
             if (Math.abs(seconds - interval.target) <= tolerance) {
-                 const currentBest = results[interval.key];
-                 // Higher cals is better
-                 if (!currentBest || cals > currentBest.totalCals) {
-                     results[interval.key] = {
-                         calsPerMin,
-                         totalCals: cals,
-                         durationMinutes: mins,
-                         date: activity.date,
-                         level: getAssaultBikeLevel(cals, interval.key, gender),
-                         isEstimate: false,
-                         sourceType: 'cardio',
-                         sourceId: activity.id,
-                         description: activity.title || 'Cardio Session'
-                     };
-                 }
+                const currentBest = results[interval.key];
+                // Higher cals is better
+                if (!currentBest || cals > currentBest.totalCals) {
+                    results[interval.key] = {
+                        calsPerMin,
+                        totalCals: cals,
+                        durationMinutes: mins,
+                        date: activity.date,
+                        level: getAssaultBikeLevel(cals, interval.key, gender),
+                        isEstimate: false,
+                        sourceType: 'cardio',
+                        sourceId: activity.id,
+                        description: activity.title || 'Cardio Session'
+                    };
+                }
             }
         });
 
@@ -224,7 +224,7 @@ export const analyzeAssaultBikePerformance = (
                 // Check Time
                 const setSeconds = set.timeSeconds || (set.time ? parseTimeToSeconds(set.time) : 0);
                 if (setSeconds > 0) {
-                     ASSAULT_BIKE_INTERVALS.filter(i => i.type === 'time').forEach(interval => {
+                    ASSAULT_BIKE_INTERVALS.filter(i => i.type === 'time').forEach(interval => {
                         const tolerance = Math.max(2, interval.target * 0.05); // Tighter tolerance for sets
                         if (Math.abs(setSeconds - interval.target) <= tolerance) {
                             // We need Cals or Watts to determine "Best"
@@ -255,7 +255,7 @@ export const analyzeAssaultBikePerformance = (
                                 }
                             }
                         }
-                     });
+                    });
                 }
 
                 // Check Distance
@@ -267,22 +267,22 @@ export const analyzeAssaultBikePerformance = (
                     ASSAULT_BIKE_INTERVALS.filter(i => i.type === 'distance').forEach(interval => {
                         // Exact match usually for distance targets
                         if (Math.abs(setDistMeters - interval.target) < 10) {
-                             // For distance, "Best" is fastest Time.
-                             if (setSeconds > 0) {
-                                 const currentBest = results[interval.key];
-                                 // For distance, LOWER duration is better.
-                                 // We store "totalCals" as proxy for score, but for distance we want MIN time.
-                                 // Let's assume we want to track Time for Distance intervals.
-                                 // But our Record interface expects "totalCals".
-                                 // Let's calculate Cals if missing to normalize score.
+                            // For distance, "Best" is fastest Time.
+                            if (setSeconds > 0) {
+                                const currentBest = results[interval.key];
+                                // For distance, LOWER duration is better.
+                                // We store "totalCals" as proxy for score, but for distance we want MIN time.
+                                // Let's assume we want to track Time for Distance intervals.
+                                // But our Record interface expects "totalCals".
+                                // Let's calculate Cals if missing to normalize score.
 
-                                 const calculatedCals = set.calories || (setDistMeters * 0.05); // dummy fallback
+                                const calculatedCals = set.calories || (setDistMeters * 0.05); // dummy fallback
 
-                                 // Check if this new one is faster
-                                 const isFaster = !currentBest || (setSeconds < (currentBest.durationMinutes * 60));
+                                // Check if this new one is faster
+                                const isFaster = !currentBest || (setSeconds < (currentBest.durationMinutes * 60));
 
-                                 if (isFaster) {
-                                     results[interval.key] = {
+                                if (isFaster) {
+                                    results[interval.key] = {
                                         calsPerMin: (set.calories || 0) / (setSeconds / 60),
                                         totalCals: set.calories || 0,
                                         durationMinutes: setSeconds / 60,
@@ -292,9 +292,9 @@ export const analyzeAssaultBikePerformance = (
                                         sourceType: 'strength',
                                         sourceId: session.id,
                                         description: `${session.name} (Set ${set.setNumber}) - ${setDistMeters}m @ ${formatTime(setSeconds)}`
-                                     };
-                                 }
-                             }
+                                    };
+                                }
+                            }
                         }
                     });
                 }
@@ -308,14 +308,17 @@ export const analyzeAssaultBikePerformance = (
 /**
  * Scans history for best 20min Cycling Power or explicit FTP
  */
-export const extractFtpFromHistory = (entries: ExerciseEntry[]): { watts: number; date: string; source: string; method: 'explicit' | 'estimated' } | null => {
+export const extractFtpFromHistory = (entries: ExerciseEntry[]): { id: string; watts: number; date: string; source: string; method: 'explicit' | 'estimated' } | null => {
     let bestFtp = 0;
-    let bestEntry: { watts: number; date: string; source: string; method: 'explicit' | 'estimated' } | null = null;
+    let bestEntry: { id: string; watts: number; date: string; source: string; method: 'explicit' | 'estimated' } | null = null;
+
+    // Filter out excluded entries
+    const eligibleEntries = entries.filter(e => !e.excludeFromStats);
 
     // 1. Explicit FTP from Titles
     const ftpRegex = /FTP[:\s-]*(\d+)/i;
 
-    entries.forEach(e => {
+    eligibleEntries.forEach(e => {
         const title = e.title || '';
         const match = title.match(ftpRegex);
         if (match && match[1]) {
@@ -323,6 +326,7 @@ export const extractFtpFromHistory = (entries: ExerciseEntry[]): { watts: number
             if (ftp > bestFtp) {
                 bestFtp = ftp;
                 bestEntry = {
+                    id: e.id,
                     watts: ftp,
                     date: e.date,
                     source: title,
@@ -333,7 +337,7 @@ export const extractFtpFromHistory = (entries: ExerciseEntry[]): { watts: number
     });
 
     // 2. Estimate from 20min Power
-    const cyclingActivities = entries.filter(e =>
+    const cyclingActivities = eligibleEntries.filter(e =>
         (e.type === 'cycling' || e.title?.toLowerCase().includes('zwift') || e.title?.toLowerCase().includes('wattbike')) &&
         e.averageWatts &&
         e.durationMinutes >= 20
@@ -346,6 +350,7 @@ export const extractFtpFromHistory = (entries: ExerciseEntry[]): { watts: number
             if (estimated > bestFtp + 5) {
                 bestFtp = estimated;
                 bestEntry = {
+                    id: e.id,
                     watts: estimated,
                     date: e.date,
                     source: `${e.title} (95% of ${Math.round(e.averageWatts)}W 20min)`,
@@ -376,11 +381,11 @@ function formatTime(seconds: number): string {
 }
 
 export const getBest20MinPower = (entries: ExerciseEntry[]): { watts: number; date: string } | null => {
-   // Legacy wrapper for compatibility if needed, otherwise replaced by extractFtpFromHistory
-   const best = extractFtpFromHistory(entries);
-   if (best && best.method === 'estimated') {
-       // Reverse engineering the 20min power from the estimate
-       return { watts: Math.round(best.watts / 0.95), date: best.date };
-   }
-   return null;
+    // Legacy wrapper for compatibility if needed, otherwise replaced by extractFtpFromHistory
+    const best = extractFtpFromHistory(entries);
+    if (best && best.method === 'estimated') {
+        // Reverse engineering the 20min power from the estimate
+        return { watts: Math.round(best.watts / 0.95), date: best.date };
+    }
+    return null;
 };

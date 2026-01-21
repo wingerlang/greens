@@ -966,7 +966,8 @@ export function DataProvider({ children }: DataProviderProps) {
                     body: JSON.stringify({
                         title: updated.name,
                         notes: updated.notes,
-                        durationMinutes: updated.duration
+                        durationMinutes: updated.duration,
+                        excludeFromStats: updated.excludeFromStats
                     })
                 }).catch(e => console.error("Failed to persist strength session update:", e));
             }
@@ -1047,7 +1048,8 @@ export function DataProvider({ children }: DataProviderProps) {
                 updateStrengthSession(id, {
                     name: updates.title || strSession.name,
                     notes: updates.notes || strSession.notes,
-                    duration: updates.durationMinutes || strSession.duration
+                    duration: updates.durationMinutes || strSession.duration,
+                    excludeFromStats: updates.excludeFromStats !== undefined ? updates.excludeFromStats : strSession.excludeFromStats
                 });
                 return;
             }
@@ -1074,7 +1076,8 @@ export function DataProvider({ children }: DataProviderProps) {
                                 notes: updates.notes || ua.performance?.notes,
                                 subType: updates.subType || ua.performance?.subType,
                                 // Also update distance in performance if changed
-                                distanceKm: updates.distance !== undefined ? updates.distance : ua.performance?.distanceKm
+                                distanceKm: updates.distance !== undefined ? updates.distance : ua.performance?.distanceKm,
+                                excludeFromStats: updates.excludeFromStats !== undefined ? updates.excludeFromStats : ua.performance?.excludeFromStats
                             }
                         } as UniversalActivity;
                     }
@@ -1095,7 +1098,8 @@ export function DataProvider({ children }: DataProviderProps) {
                         durationMinutes: updates.durationMinutes,
                         type: updates.type,
                         distance: updates.distance,
-                        intensity: updates.intensity
+                        intensity: updates.intensity,
+                        excludeFromStats: updates.excludeFromStats
                     })
                 }).catch(e => console.error("Failed to persist virtual activity update:", e));
                 return;
@@ -1372,7 +1376,8 @@ export function DataProvider({ children }: DataProviderProps) {
             createdAt: w.createdAt || new Date().toISOString(),
             subType: undefined,
             externalId: undefined,
-            movingTime: (w.duration || w.durationMinutes || 60) * 60
+            movingTime: (w.duration || w.durationMinutes || 60) * 60,
+            excludeFromStats: w.excludeFromStats
         }));
 
         // Content-based deduplication (Defense in Depth against near-identical duplicates with different IDs)

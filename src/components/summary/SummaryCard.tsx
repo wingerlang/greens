@@ -123,14 +123,15 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({ stats, startDate, endD
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 blur-[50px] rounded-full" />
 
                     {/* Header */}
-                    <div className="flex items-center gap-3 pb-4 border-b border-emerald-500/10">
-                        <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400">
-                            <TrendingUp className="w-6 h-6" />
+                    <div className="flex flex-col items-center gap-2 pb-4">
+                        <div className="flex items-center gap-3 w-full">
+                            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-500/10 to-emerald-500/30" />
+                            <div className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.25em] flex items-center gap-2 px-2 whitespace-nowrap">
+                                🏃 LÖPNING
+                            </div>
+                            <div className="h-px flex-1 bg-gradient-to-l from-transparent via-emerald-500/10 to-emerald-500/30" />
                         </div>
-                        <div>
-                            <p className="text-emerald-400 text-sm font-black uppercase tracking-widest">Löpning</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase">{runningCount} pass loggade</p>
-                        </div>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{runningCount} pass loggade</p>
                     </div>
 
                     {/* Big Stats */}
@@ -209,14 +210,15 @@ export const SummaryCard: React.FC<SummaryCardProps> = ({ stats, startDate, endD
                     <div className="absolute top-0 right-0 w-32 h-32 bg-purple-500/10 blur-[50px] rounded-full" />
 
                     {/* Header */}
-                    <div className="flex items-center gap-3 pb-4 border-b border-purple-500/10">
-                        <div className="p-2 bg-purple-500/20 rounded-lg text-purple-400">
-                            <Dumbbell className="w-6 h-6" />
+                    <div className="flex flex-col items-center gap-2 pb-4">
+                        <div className="flex items-center gap-3 w-full">
+                            <div className="h-px flex-1 bg-gradient-to-r from-transparent via-purple-500/10 to-purple-500/30" />
+                            <div className="text-[10px] font-black text-purple-400 uppercase tracking-[0.25em] flex items-center gap-2 px-2 whitespace-nowrap">
+                                💪 STYRKA
+                            </div>
+                            <div className="h-px flex-1 bg-gradient-to-l from-transparent via-purple-500/10 to-purple-500/30" />
                         </div>
-                        <div>
-                            <p className="text-purple-400 text-sm font-black uppercase tracking-widest">Styrka</p>
-                            <p className="text-[10px] text-slate-400 font-bold uppercase">{strengthCount} pass loggade</p>
-                        </div>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">{strengthCount} pass loggade</p>
                     </div>
 
                     {/* Big Stats */}

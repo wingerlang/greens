@@ -160,7 +160,14 @@ export const SummaryVsCard: React.FC<SummaryVsCardProps> = ({
             {/* Content */}
             <div className="relative z-10 flex-1 space-y-1">
                 {/* Overall */}
-                <div>
+                <div className="pt-2">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-slate-500/10 to-slate-500/20" />
+                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] flex items-center gap-2 px-2 whitespace-nowrap">
+                            📊 TOTALT
+                        </div>
+                        <div className="h-px flex-1 bg-gradient-to-l from-transparent via-slate-500/10 to-slate-500/20" />
+                    </div>
                     <ComparisonRow label="Tid" current={Math.round(stats.totalTime)} previous={Math.round(prevStats.totalTime)} isTime icon={Clock} colorClass="emerald" />
                     <ComparisonRow label="Pass" current={stats.totalSessions} previous={prevStats.totalSessions} unit="st" icon={Zap} colorClass="amber" />
                     <ComparisonRow
@@ -173,9 +180,13 @@ export const SummaryVsCard: React.FC<SummaryVsCardProps> = ({
                 </div>
 
                 {/* Running */}
-                <div>
-                    <div className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-0.5 flex items-center gap-2">
-                        <TrendingUp className="w-3.5 h-3.5" /> LÖPNING <div className="h-px flex-1 bg-emerald-500/20" />
+                <div className="pt-2">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-emerald-500/10 to-emerald-500/20" />
+                        <div className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] flex items-center gap-2 px-2 whitespace-nowrap">
+                            🏃 LÖPNING
+                        </div>
+                        <div className="h-px flex-1 bg-gradient-to-l from-transparent via-emerald-500/10 to-emerald-500/20" />
                     </div>
                     <ComparisonRow label="km" current={Math.round(runningStats.dist)} previous={Math.round(prevRunningStats.dist)} unit="km" icon={Activity} colorClass="emerald" />
                     <ComparisonRow label="Tid" current={Math.round(runningStats.time)} previous={Math.round(prevRunningStats.time)} isTime icon={Clock} colorClass="emerald" />
@@ -183,9 +194,13 @@ export const SummaryVsCard: React.FC<SummaryVsCardProps> = ({
                 </div>
 
                 {/* Strength */}
-                <div>
-                    <div className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-0.5 flex items-center gap-2">
-                        <Dumbbell className="w-3.5 h-3.5" /> STYRKA <div className="h-px flex-1 bg-indigo-500/20" />
+                <div className="pt-2">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-indigo-500/10 to-indigo-500/20" />
+                        <div className="text-[9px] font-black text-indigo-400 uppercase tracking-[0.2em] flex items-center gap-2 px-2 whitespace-nowrap">
+                            💪 STYRKA
+                        </div>
+                        <div className="h-px flex-1 bg-gradient-to-l from-transparent via-indigo-500/10 to-indigo-500/20" />
                     </div>
                     <ComparisonRow label="Tonnage" current={Number((stats.totalTonnage / 1000).toFixed(1))} previous={Number((prevStats.totalTonnage / 1000).toFixed(1))} unit="t" icon={Layers} colorClass="indigo" />
                     <ComparisonRow label="Tid" current={Math.round(strengthStats.time)} previous={Math.round(prevStrengthStats.time)} isTime icon={Clock} colorClass="indigo" />

@@ -178,6 +178,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                     if (updates.title !== undefined) workout.name = updates.title;
                     if (updates.notes !== undefined) workout.notes = updates.notes;
                     if (updates.durationMinutes !== undefined) workout.duration = updates.durationMinutes;
+                    if (updates.excludeFromStats !== undefined) workout.excludeFromStats = updates.excludeFromStats;
                     if (updates.intensity !== undefined) {
                         // Strength sessions don't have intensity yet, but we can store it in notes or ignore
                     }
@@ -200,7 +201,8 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                     distanceKm: legacy.distance || legacy.distanceKm || 0,
                     activityType: legacy.type || 'other',
                     source: legacy.source,
-                    notes: legacy.notes
+                    notes: legacy.notes,
+                    excludeFromStats: legacy.excludeFromStats
                 };
                 // Ensure date is preserved if moving
             }
@@ -243,6 +245,19 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
 
                 // Also update plan description if it exists
                 if (activity.plan) activity.plan.description = updates.notes;
+            }
+
+            // Handle excludeFromStats direct update
+            if (updates.excludeFromStats !== undefined) {
+                if (!activity.performance) {
+                    activity.performance = {
+                        durationMinutes: 0,
+                        calories: 0,
+                        excludeFromStats: updates.excludeFromStats
+                    };
+                } else {
+                    activity.performance.excludeFromStats = updates.excludeFromStats;
+                }
             }
 
             // Handle performance object updates (e.g., subType for race marking)

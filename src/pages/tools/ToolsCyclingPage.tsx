@@ -12,10 +12,11 @@ import {
 } from '../../utils/cyclingCalculations';
 import { CYCLING_POWER_PROFILE } from './data/cyclingStandards';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Bike, Wind, Trophy, Activity, Timer, Calculator, Zap, Flame, Gauge } from 'lucide-react';
+import { Bike, Wind, Trophy, Activity, Timer, Calculator, Zap, Flame, Gauge, ArrowUpDown, Ban, CheckCircle, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 export const ToolsCyclingPage: React.FC = () => {
-    const { getLatestWeight, exerciseEntries, userSettings, strengthSessions } = useData();
+    const { getLatestWeight, unifiedActivities, userSettings, strengthSessions } = useData();
     const [activeTab, setActiveTab] = useState<'cycling' | 'assault'>('cycling');
 
     // Cycling State
@@ -29,6 +30,10 @@ export const ToolsCyclingPage: React.FC = () => {
     const [calcRpm, setCalcRpm] = useState<string>('60');
     const [calcSpeed, setCalcSpeed] = useState<string>('26'); // km/h
     const [calcCals, setCalcCals] = useState<string>('15'); // cals/min
+    const [sourceFtp, setSourceFtp] = useState<{ id: string; watts: number; date: string; source: string; method: string } | null>(null);
+    const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
+
+    const { updateExercise } = useData();
 
     // Load initial data
     useEffect(() => {
@@ -40,12 +45,13 @@ export const ToolsCyclingPage: React.FC = () => {
         }
 
         // Pre-fill cycling best if available
-        const bestFtp = extractFtpFromHistory(exerciseEntries);
+        const bestFtp = extractFtpFromHistory(unifiedActivities);
         if (bestFtp) {
             setInputWatts(bestFtp.watts.toString());
-            setIsFtpInput(true); // Extracted logic returns "FTP", whether estimated or explicit
+            setIsFtpInput(true);
+            setSourceFtp(bestFtp);
         }
-    }, [getLatestWeight, exerciseEntries, userSettings]);
+    }, [getLatestWeight, unifiedActivities, userSettings]);
 
     // Cycling Calculations
     const cyclingStats = useMemo(() => {
@@ -75,8 +81,8 @@ export const ToolsCyclingPage: React.FC = () => {
 
     // Assault Bike Analysis
     const historicalAssault = useMemo(() => {
-        return analyzeAssaultBikePerformance(exerciseEntries, strengthSessions, gender);
-    }, [exerciseEntries, strengthSessions, gender]);
+        return analyzeAssaultBikePerformance(unifiedActivities, strengthSessions, gender);
+    }, [unifiedActivities, strengthSessions, gender]);
 
     // Assault Calculator Handlers
     const handleWattChange = (val: string) => {
@@ -124,66 +130,128 @@ export const ToolsCyclingPage: React.FC = () => {
 
     // Relevant Activities List
     const relevantActivities = useMemo(() => {
+        const list: {
+            id: string; date: string; title: string; type: string; details: string; averageWatts?: number; excludeFromStats?: boolean; durationMinutes?: number; notes?: string;
+        }[] = [];
+
         if (activeTab === 'cycling') {
-            return exerciseEntries
-                .filter(e => e.type === 'cycling' || (e.averageWatts && e.averageWatts > 0))
-                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            const baseList = unifiedActivities
+                .filter(e => {
+                    const isCycling = e.type === 'cycling';
+                    const hasWatts = (e.averageWatts && e.averageWatts > 0);
+                    const isFtpSession = (e.notes || '').toLowerCase().includes('ftp') || (e.title || '').toLowerCase().includes('ftp');
+
+                    return isCycling || hasWatts || isFtpSession;
+                });
+
+            // Apply Sorting
+            return [...baseList].sort((a, b) => {
+                const aVal = (a as any)[sortConfig.key];
+                const bVal = (b as any)[sortConfig.key];
+
+                if (sortConfig.key === 'date') {
+                    const timeA = new Date(aVal || 0).getTime();
+                    const timeB = new Date(bVal || 0).getTime();
+                    return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
+                }
+
+                if (sortConfig.key === 'efTP') {
+                    const getFtp = (item: any) => (item.title?.toLowerCase().includes('ftp') || item.notes?.toLowerCase().includes('ftp')) ? item.averageWatts : (item.durationMinutes >= 20 ? item.averageWatts * 0.95 : 0);
+                    const ftpA = getFtp(a);
+                    const ftpB = getFtp(b);
+                    return sortConfig.direction === 'asc' ? ftpA - ftpB : ftpB - ftpA;
+                }
+
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+
+                return sortConfig.direction === 'asc'
+                    ? String(aVal).localeCompare(String(bVal))
+                    : String(bVal).localeCompare(String(aVal));
+            });
         } else {
-             // For Assault, we want summaries or Strength Sessions with Assault sets
-             const relevantSummaryIds = new Set<string>();
-             const list: {
-                 id: string; date: string; title: string; type: string; details: string;
-             }[] = [];
+            // For Assault, we want summaries or Strength Sessions with Assault sets
+            const relevantSummaryIds = new Set<string>();
 
-             // 1. Summaries
-             exerciseEntries.forEach(e => {
-                 const title = (e.title || '').toLowerCase();
-                 const notes = (e.notes || '').toLowerCase();
-                 if (['assault', 'air bike', 'echo'].some(k => title.includes(k) || notes.includes(k))) {
-                     relevantSummaryIds.add(e.id);
-                     list.push({
-                         id: e.id,
-                         date: e.date,
-                         title: e.title || 'Cardio',
-                         type: 'Cardio',
-                         details: `${e.caloriesBurned} kcal, ${e.durationMinutes} min`
-                     });
-                 }
-             });
+            // 1. Summaries from unifiedActivities
+            unifiedActivities.forEach(e => {
+                const title = (e.title || '').toLowerCase();
+                const notes = (e.notes || '').toLowerCase();
+                if (['assault', 'air bike', 'echo'].some(k => title.includes(k) || notes.includes(k))) {
+                    relevantSummaryIds.add(e.id);
+                    list.push({
+                        id: e.id,
+                        date: e.date,
+                        title: e.title || 'Cardio',
+                        type: 'Cardio',
+                        details: `${e.caloriesBurned} kcal, ${e.durationMinutes} min`,
+                        excludeFromStats: e.excludeFromStats
+                    });
+                }
+            });
 
-             // 2. Strength Sessions
-             strengthSessions.forEach(s => {
-                  const hasAssault = s.exercises.some(ex => {
-                      const name = (ex.exerciseName || '').toLowerCase();
-                      return ['assault', 'air bike', 'echo'].some(k => name.includes(k));
-                  });
+            // 2. Strength Sessions
+            strengthSessions.forEach(s => {
+                const hasAssault = s.exercises.some(ex => {
+                    const name = (ex.exerciseName || '').toLowerCase();
+                    return ['assault', 'air bike', 'echo'].some(k => name.includes(k));
+                });
 
-                  if (hasAssault) {
-                      // Find best set details
-                      const sets: string[] = [];
-                      s.exercises.forEach(ex => {
-                          if (['assault', 'air bike', 'echo'].some(k => (ex.exerciseName || '').toLowerCase().includes(k))) {
-                              ex.sets.forEach(set => {
-                                  if (set.calories) sets.push(`${set.calories} kcal`);
-                                  else if (set.distance) sets.push(`${set.distance}${set.distanceUnit || 'm'}`);
-                                  else if (set.time) sets.push(`${set.time}`);
-                              });
-                          }
-                      });
+                if (hasAssault) {
+                    const sets: string[] = [];
+                    s.exercises.forEach(ex => {
+                        if (['assault', 'air bike', 'echo'].some(k => (ex.exerciseName || '').toLowerCase().includes(k))) {
+                            ex.sets.forEach(set => {
+                                if (set.calories) sets.push(`${set.calories} kcal`);
+                                else if (set.distance) sets.push(`${set.distance}${set.distanceUnit || 'm'}`);
+                                else if (set.time) sets.push(`${set.time}`);
+                            });
+                        }
+                    });
 
-                      list.push({
-                          id: s.id,
-                          date: s.date,
-                          title: s.name || 'Styrkepass',
-                          type: 'Strength',
-                          details: sets.slice(0, 3).join(', ') + (sets.length > 3 ? '...' : '')
-                      });
-                  }
-             });
+                    list.push({
+                        id: s.id,
+                        date: s.date,
+                        title: s.name || 'Styrkepass',
+                        type: 'Strength',
+                        details: sets.slice(0, 3).join(', ') + (sets.length > 3 ? '...' : ''),
+                        excludeFromStats: s.excludeFromStats
+                    });
+                }
+            });
 
-             return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            return list.sort((a, b) => {
+                const aVal = (a as any)[sortConfig.key];
+                const bVal = (b as any)[sortConfig.key];
+
+                if (sortConfig.key === 'date') {
+                    const timeA = new Date(aVal || 0).getTime();
+                    const timeB = new Date(bVal || 0).getTime();
+                    return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
+                }
+
+                if (typeof aVal === 'number' && typeof bVal === 'number') {
+                    return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+                }
+
+                return sortConfig.direction === 'asc'
+                    ? String(aVal).localeCompare(String(bVal))
+                    : String(bVal).localeCompare(String(aVal));
+            });
         }
-    }, [activeTab, exerciseEntries, strengthSessions]);
+    }, [activeTab, unifiedActivities, strengthSessions, sortConfig]);
+
+    const handleSort = (key: string) => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'desc' ? 'asc' : 'desc'
+        }));
+    };
+
+    const handleToggleExclude = (id: string, current: boolean) => {
+        updateExercise(id, { excludeFromStats: !current });
+    };
 
     return (
         <div className="max-w-4xl mx-auto pb-20 space-y-8">
@@ -204,18 +272,16 @@ export const ToolsCyclingPage: React.FC = () => {
             <div className="flex gap-4 border-b border-white/10">
                 <button
                     onClick={() => setActiveTab('cycling')}
-                    className={`pb-4 px-4 font-medium transition-colors relative ${
-                        activeTab === 'cycling' ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
-                    }`}
+                    className={`pb-4 px-4 font-medium transition-colors relative ${activeTab === 'cycling' ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
+                        }`}
                 >
                     <span className="flex items-center gap-2"><Activity size={18} /> Lande/Stationär</span>
                     {activeTab === 'cycling' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-400 rounded-t-full" />}
                 </button>
                 <button
                     onClick={() => setActiveTab('assault')}
-                    className={`pb-4 px-4 font-medium transition-colors relative ${
-                        activeTab === 'assault' ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
-                    }`}
+                    className={`pb-4 px-4 font-medium transition-colors relative ${activeTab === 'assault' ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
+                        }`}
                 >
                     <span className="flex items-center gap-2"><Wind size={18} /> Assault Bike</span>
                     {activeTab === 'assault' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-400 rounded-t-full" />}
@@ -284,6 +350,18 @@ export const ToolsCyclingPage: React.FC = () => {
                                             ? "Ange din Functional Threshold Power."
                                             : "Vi drar av 5% från ditt 20-minutersvärde för att estimera FTP."}
                                     </p>
+                                    {sourceFtp && (
+                                        <div className="mt-3 p-3 bg-emerald-500/5 border border-emerald-500/10 rounded-lg">
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase mb-1">Baserat på senast hittade data:</p>
+                                            <div className="flex items-center justify-between gap-2 text-xs font-medium">
+                                                <Link to={`?activityId=${sourceFtp.id}`} className="text-emerald-400 hover:text-emerald-300 underline decoration-emerald-500/30 flex items-center gap-1">
+                                                    {sourceFtp.watts}W från {sourceFtp.source}
+                                                    <ExternalLink size={10} />
+                                                </Link>
+                                                <span className="text-slate-500">({sourceFtp.date})</span>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -351,12 +429,20 @@ export const ToolsCyclingPage: React.FC = () => {
                                         <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={11} width={100} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }}
-                                            cursor={{fill: '#ffffff05'}}
+                                            cursor={{ fill: '#ffffff05' }}
                                         />
                                         <Bar dataKey="wKg" fill="#334155" radius={[0, 4, 4, 0]} barSize={20} name="Standard" />
                                         <ReferenceLine x={cyclingStats.wKg} stroke="#10b981" strokeWidth={2} label={{ position: 'top', value: 'DU', fill: '#10b981', fontSize: 10, fontWeight: 'bold' }} />
                                     </BarChart>
                                 </ResponsiveContainer>
+                            </div>
+                            <div className="mt-8 p-4 bg-slate-950/50 rounded-xl border border-white/5">
+                                <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Om beräkningarna</h4>
+                                <p className="text-xs text-slate-500 leading-relaxed">
+                                    Denna kalkylator använder <span className="text-slate-300">Coggan Power Profile</span> för att kategorisera din atletiska profil.
+                                    FTP-estimeringen baseras på <span className="text-slate-300">95%-regeln</span>, där man drar av 5% från din maximala snitteffekt över 20 minuter för att kompensera för den anaeroba komponenten.
+                                    Detta anses vara den gyllene standarden för att uppskatta den effekt man kan hålla stadigt i ungefär en timme.
+                                </p>
                             </div>
                         </div>
                     )}
@@ -368,8 +454,8 @@ export const ToolsCyclingPage: React.FC = () => {
                     {/* Historical Grid */}
                     <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
                         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                             <Trophy size={20} className="text-amber-400" />
-                             Mina Rekord
+                            <Trophy size={20} className="text-amber-400" />
+                            Mina Rekord
                         </h3>
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                             {ASSAULT_BIKE_INTERVALS.map((interval) => {
@@ -400,12 +486,12 @@ export const ToolsCyclingPage: React.FC = () => {
                     {/* Calculator Area */}
                     <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
                         <div className="flex items-center gap-3 mb-6">
-                             <Calculator className="text-emerald-400" size={24} />
-                             <h3 className="text-xl font-bold text-white">Konverterare</h3>
+                            <Calculator className="text-emerald-400" size={24} />
+                            <h3 className="text-xl font-bold text-white">Konverterare</h3>
                         </div>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                             <div>
+                            <div>
                                 <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
                                     <Zap size={14} /> Watt
                                 </label>
@@ -415,8 +501,8 @@ export const ToolsCyclingPage: React.FC = () => {
                                     onChange={(e) => handleWattChange(e.target.value)}
                                     className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
                                 />
-                             </div>
-                             <div>
+                            </div>
+                            <div>
                                 <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
                                     <Gauge size={14} /> RPM
                                 </label>
@@ -426,8 +512,8 @@ export const ToolsCyclingPage: React.FC = () => {
                                     onChange={(e) => handleRpmChange(e.target.value)}
                                     className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
                                 />
-                             </div>
-                             <div>
+                            </div>
+                            <div>
                                 <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
                                     <Wind size={14} /> Km/h (Est)
                                 </label>
@@ -437,8 +523,8 @@ export const ToolsCyclingPage: React.FC = () => {
                                     onChange={(e) => handleSpeedChange(e.target.value)}
                                     className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
                                 />
-                             </div>
-                             <div>
+                            </div>
+                            <div>
                                 <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
                                     <Flame size={14} /> Kcal/min
                                 </label>
@@ -448,7 +534,7 @@ export const ToolsCyclingPage: React.FC = () => {
                                     onChange={(e) => handleCalsChange(e.target.value)}
                                     className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
                                 />
-                             </div>
+                            </div>
                         </div>
                         <p className="text-[10px] text-slate-500 mt-4 text-center">
                             Baserat på standardformler för Assault/Echo bike (Watts = 0.99 * RPM³ / 1260).
@@ -464,21 +550,37 @@ export const ToolsCyclingPage: React.FC = () => {
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="text-xs text-slate-500 border-b border-white/10">
-                                <th className="py-3 px-4 font-bold uppercase">Datum</th>
-                                <th className="py-3 px-4 font-bold uppercase">Titel</th>
-                                <th className="py-3 px-4 font-bold uppercase">Typ</th>
-                                <th className="py-3 px-4 font-bold uppercase text-right">
-                                    {activeTab === 'cycling' ? 'Snittwatt / FTP' : 'Detaljer'}
+                            <tr className="text-xs text-slate-500 border-b border-white/10 uppercase font-bold">
+                                <th className="py-3 px-4 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('date')}>
+                                    <div className="flex items-center gap-1">Datum <ArrowUpDown size={10} /></div>
                                 </th>
+                                <th className="py-3 px-4 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('title')}>
+                                    <div className="flex items-center gap-1">Titel <ArrowUpDown size={10} /></div>
+                                </th>
+                                <th className="py-3 px-4 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('type')}>
+                                    <div className="flex items-center gap-1">Typ <ArrowUpDown size={10} /></div>
+                                </th>
+                                <th className="py-3 px-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('averageWatts')}>
+                                    <div className="flex items-center justify-end gap-1">{activeTab === 'cycling' ? 'Snittwatt' : 'Detaljer'} <ArrowUpDown size={10} /></div>
+                                </th>
+                                {activeTab === 'cycling' && (
+                                    <th className="py-3 px-4 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('efTP')}>
+                                        <div className="flex items-center justify-end gap-1">(e)FTP <ArrowUpDown size={10} /></div>
+                                    </th>
+                                )}
+                                <th className="py-3 px-4 text-right">Status</th>
                             </tr>
                         </thead>
                         <tbody className="text-sm">
                             {relevantActivities.length > 0 ? (
                                 relevantActivities.map((activity: any) => (
-                                    <tr key={activity.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                    <tr key={activity.id} className={`border-b border-white/5 hover:bg-white/5 transition-colors ${activity.excludeFromStats ? 'opacity-40 grayscale-[0.5]' : ''}`}>
                                         <td className="py-3 px-4 text-slate-400 font-mono">{activity.date.split('T')[0]}</td>
-                                        <td className="py-3 px-4 text-white font-medium">{activity.title}</td>
+                                        <td className="py-3 px-4">
+                                            <Link to={`?activityId=${activity.id}`} className="text-white font-medium hover:text-emerald-400 transition-colors">
+                                                {activity.title}
+                                            </Link>
+                                        </td>
                                         <td className="py-3 px-4 text-slate-400">
                                             {activeTab === 'cycling'
                                                 ? (activity.type === 'cycling' ? 'Cykling' : 'Annat')
@@ -487,18 +589,41 @@ export const ToolsCyclingPage: React.FC = () => {
                                         <td className="py-3 px-4 text-right">
                                             {activeTab === 'cycling' ? (
                                                 <div className="flex flex-col items-end">
-                                                    {activity.averageWatts && <span className="text-emerald-400 font-bold">{Math.round(activity.averageWatts)}W</span>}
-                                                    {activity.title.toLowerCase().includes('ftp') && <span className="text-[10px] text-amber-400 font-bold uppercase">FTP TEST</span>}
+                                                    {activity.averageWatts ? (
+                                                        <span className="text-slate-300 font-bold">{Math.round(activity.averageWatts)}W</span>
+                                                    ) : '-'}
                                                 </div>
                                             ) : (
                                                 <span className="text-slate-300">{activity.details}</span>
                                             )}
                                         </td>
+                                        {activeTab === 'cycling' && (
+                                            <td className="py-3 px-4 text-right">
+                                                {activity.averageWatts ? (
+                                                    <div className="flex flex-col items-end">
+                                                        {(activity.title?.toLowerCase().includes('ftp') || activity.notes?.toLowerCase().includes('ftp')) ? (
+                                                            <span className="text-emerald-400 font-bold">{Math.round(activity.averageWatts)}W</span>
+                                                        ) : (activity.durationMinutes >= 20) ? (
+                                                            <span className="text-amber-400/80 font-bold">{Math.round(activity.averageWatts * 0.95)}W <span className="text-[10px] opacity-50">est</span></span>
+                                                        ) : '-'}
+                                                    </div>
+                                                ) : '-'}
+                                            </td>
+                                        )}
+                                        <td className="py-3 px-4 text-right">
+                                            <button
+                                                onClick={() => handleToggleExclude(activity.id, !!activity.excludeFromStats)}
+                                                className={`p-1.5 rounded-lg transition-all ${activity.excludeFromStats ? 'text-slate-500 hover:text-emerald-400' : 'text-slate-600 hover:text-rose-400'}`}
+                                                title={activity.excludeFromStats ? "Inkludera i beräkningar" : "Exkludera från beräkningar (t.ex. felaktig data)"}
+                                            >
+                                                {activity.excludeFromStats ? <CheckCircle size={16} /> : <Ban size={16} />}
+                                            </button>
+                                        </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan={4} className="py-8 text-center text-slate-500 italic">
+                                    <td colSpan={6} className="py-8 text-center text-slate-500 italic">
                                         Inga relevanta aktiviteter hittades.
                                     </td>
                                 </tr>
