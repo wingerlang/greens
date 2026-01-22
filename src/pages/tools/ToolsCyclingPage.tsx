@@ -10,14 +10,21 @@ import {
     extractFtpFromHistory,
     type AssaultInterval
 } from '../../utils/cyclingCalculations';
+import {
+    analyzeErgPerformance,
+    ErgMath,
+    type ErgInterval
+} from '../../utils/ergCalculations';
 import { CYCLING_POWER_PROFILE } from './data/cyclingStandards';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Bike, Wind, Trophy, Activity, Timer, Calculator, Zap, Flame, Gauge, ArrowUpDown, Ban, CheckCircle, ExternalLink } from 'lucide-react';
+import { Bike, Wind, Trophy, Activity, Timer, Calculator, Zap, Flame, Gauge, ArrowUpDown, Ban, CheckCircle, ExternalLink, Waves, Snowflake } from 'lucide-react';
 import { Link } from 'react-router-dom';
+
+type TabType = 'cycling' | 'assault' | 'row' | 'ski';
 
 export const ToolsCyclingPage: React.FC = () => {
     const { getLatestWeight, unifiedActivities, userSettings, strengthSessions } = useData();
-    const [activeTab, setActiveTab] = useState<'cycling' | 'assault'>('cycling');
+    const [activeTab, setActiveTab] = useState<TabType>('cycling');
 
     // Cycling State
     const [inputWatts, setInputWatts] = useState<string>('');
@@ -30,6 +37,11 @@ export const ToolsCyclingPage: React.FC = () => {
     const [calcRpm, setCalcRpm] = useState<string>('60');
     const [calcSpeed, setCalcSpeed] = useState<string>('26'); // km/h
     const [calcCals, setCalcCals] = useState<string>('15'); // cals/min
+
+    // Erg Calculator State (Row/Ski)
+    const [ergWatts, setErgWatts] = useState<string>('200');
+    const [ergPace, setErgPace] = useState<string>('2:00'); // /500m
+
     const [sourceFtp, setSourceFtp] = useState<{ id: string; watts: number; date: string; source: string; method: string } | null>(null);
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
@@ -79,10 +91,19 @@ export const ToolsCyclingPage: React.FC = () => {
         return data;
     }, [gender, cyclingStats]);
 
-    // Assault Bike Analysis
+    // History Analysis
     const historicalAssault = useMemo(() => {
         return analyzeAssaultBikePerformance(unifiedActivities, strengthSessions, gender);
     }, [unifiedActivities, strengthSessions, gender]);
+
+    const historicalRow = useMemo(() => {
+        return analyzeErgPerformance(unifiedActivities, strengthSessions, 'row', gender);
+    }, [unifiedActivities, strengthSessions, gender]);
+
+    const historicalSki = useMemo(() => {
+        return analyzeErgPerformance(unifiedActivities, strengthSessions, 'ski', gender);
+    }, [unifiedActivities, strengthSessions, gender]);
+
 
     // Assault Calculator Handlers
     const handleWattChange = (val: string) => {
@@ -109,7 +130,6 @@ export const ToolsCyclingPage: React.FC = () => {
         setCalcSpeed(val);
         const s = parseFloat(val);
         if (!s) return;
-        // speed = rpm * 0.43 => rpm = speed / 0.43
         const rpm = s / 0.43;
         setCalcRpm(rpm.toFixed(1));
         const w = AssaultBikeMath.rpmToWatts(rpm);
@@ -128,6 +148,26 @@ export const ToolsCyclingPage: React.FC = () => {
         setCalcSpeed(AssaultBikeMath.rpmToSpeedKmh(rpm).toFixed(1));
     };
 
+    // Erg Calculator Handlers
+    const handleErgWattsChange = (val: string) => {
+        setErgWatts(val);
+        const w = parseFloat(val);
+        if (!w) return;
+        const paceSec = ErgMath.wattsToPace(w);
+        setErgPace(ErgMath.formatTime(paceSec));
+    };
+
+    const handleErgPaceChange = (val: string) => {
+        setErgPace(val);
+        // Try parsing MM:SS or MM:SS.s
+        const sec = ErgMath.parseTime(val);
+        if (sec > 0) {
+            const w = ErgMath.paceToWatts(sec);
+            setErgWatts(w.toFixed(0));
+        }
+    };
+
+
     // Relevant Activities List
     const relevantActivities = useMemo(() => {
         const list: {
@@ -140,52 +180,46 @@ export const ToolsCyclingPage: React.FC = () => {
                     const isCycling = e.type === 'cycling';
                     const hasWatts = (e.averageWatts && e.averageWatts > 0);
                     const isFtpSession = (e.notes || '').toLowerCase().includes('ftp') || (e.title || '').toLowerCase().includes('ftp');
-
                     return isCycling || hasWatts || isFtpSession;
                 });
-
-            // Apply Sorting
-            return [...baseList].sort((a, b) => {
-                const aVal = (a as any)[sortConfig.key];
-                const bVal = (b as any)[sortConfig.key];
-
-                if (sortConfig.key === 'date') {
-                    const timeA = new Date(aVal || 0).getTime();
-                    const timeB = new Date(bVal || 0).getTime();
-                    return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
-                }
-
-                if (sortConfig.key === 'efTP') {
-                    const getFtp = (item: any) => (item.title?.toLowerCase().includes('ftp') || item.notes?.toLowerCase().includes('ftp')) ? item.averageWatts : (item.durationMinutes >= 20 ? item.averageWatts * 0.95 : 0);
-                    const ftpA = getFtp(a);
-                    const ftpB = getFtp(b);
-                    return sortConfig.direction === 'asc' ? ftpA - ftpB : ftpB - ftpA;
-                }
-
-                if (typeof aVal === 'number' && typeof bVal === 'number') {
-                    return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
-                }
-
-                return sortConfig.direction === 'asc'
-                    ? String(aVal).localeCompare(String(bVal))
-                    : String(bVal).localeCompare(String(aVal));
-            });
+             list.push(...baseList.map(e => ({
+                 id: e.id,
+                 date: e.date,
+                 title: e.title || 'Cycling',
+                 type: e.type,
+                 details: '',
+                 averageWatts: e.averageWatts,
+                 excludeFromStats: e.excludeFromStats,
+                 durationMinutes: e.durationMinutes,
+                 notes: e.notes
+             })));
         } else {
-            // For Assault, we want summaries or Strength Sessions with Assault sets
-            const relevantSummaryIds = new Set<string>();
+            // Cardio & Strength Logic for Assault/Row/Ski
+            const keywords = activeTab === 'assault'
+                ? ['assault', 'air bike', 'echo']
+                : activeTab === 'row'
+                    ? ['row', 'rodd', 'concept2']
+                    : ['ski', 'skierg', 'stakmaskin'];
 
             // 1. Summaries from unifiedActivities
             unifiedActivities.forEach(e => {
                 const title = (e.title || '').toLowerCase();
                 const notes = (e.notes || '').toLowerCase();
-                if (['assault', 'air bike', 'echo'].some(k => title.includes(k) || notes.includes(k))) {
-                    relevantSummaryIds.add(e.id);
+                const type = (e.type || '').toLowerCase();
+
+                let isMatch = false;
+                if (activeTab === 'row' && (type === 'rowing' || type === 'indoor_rowing')) isMatch = true;
+                if (activeTab === 'ski' && type === 'cross_country_skiing' && (title.includes('erg') || notes.includes('erg'))) isMatch = true;
+
+                if (keywords.some(k => title.includes(k) || notes.includes(k))) isMatch = true;
+
+                if (isMatch) {
                     list.push({
                         id: e.id,
                         date: e.date,
                         title: e.title || 'Cardio',
                         type: 'Cardio',
-                        details: `${e.caloriesBurned} kcal, ${e.durationMinutes} min`,
+                        details: `${e.distance ? e.distance + (e.distanceUnit||'km') : ''} ${e.caloriesBurned ? e.caloriesBurned + 'kcal' : ''} ${e.durationMinutes}m`,
                         excludeFromStats: e.excludeFromStats
                     });
                 }
@@ -193,19 +227,19 @@ export const ToolsCyclingPage: React.FC = () => {
 
             // 2. Strength Sessions
             strengthSessions.forEach(s => {
-                const hasAssault = s.exercises.some(ex => {
+                const hasMatch = s.exercises.some(ex => {
                     const name = (ex.exerciseName || '').toLowerCase();
-                    return ['assault', 'air bike', 'echo'].some(k => name.includes(k));
+                    return keywords.some(k => name.includes(k));
                 });
 
-                if (hasAssault) {
+                if (hasMatch) {
                     const sets: string[] = [];
                     s.exercises.forEach(ex => {
-                        if (['assault', 'air bike', 'echo'].some(k => (ex.exerciseName || '').toLowerCase().includes(k))) {
+                        if (keywords.some(k => (ex.exerciseName || '').toLowerCase().includes(k))) {
                             ex.sets.forEach(set => {
-                                if (set.calories) sets.push(`${set.calories} kcal`);
+                                if (set.time) sets.push(`${set.time}`);
                                 else if (set.distance) sets.push(`${set.distance}${set.distanceUnit || 'm'}`);
-                                else if (set.time) sets.push(`${set.time}`);
+                                else if (set.calories) sets.push(`${set.calories} kcal`);
                             });
                         }
                     });
@@ -220,26 +254,35 @@ export const ToolsCyclingPage: React.FC = () => {
                     });
                 }
             });
-
-            return list.sort((a, b) => {
-                const aVal = (a as any)[sortConfig.key];
-                const bVal = (b as any)[sortConfig.key];
-
-                if (sortConfig.key === 'date') {
-                    const timeA = new Date(aVal || 0).getTime();
-                    const timeB = new Date(bVal || 0).getTime();
-                    return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
-                }
-
-                if (typeof aVal === 'number' && typeof bVal === 'number') {
-                    return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
-                }
-
-                return sortConfig.direction === 'asc'
-                    ? String(aVal).localeCompare(String(bVal))
-                    : String(bVal).localeCompare(String(aVal));
-            });
         }
+
+        // Apply Sorting
+        return list.sort((a, b) => {
+            const aVal = (a as any)[sortConfig.key];
+            const bVal = (b as any)[sortConfig.key];
+
+            if (sortConfig.key === 'date') {
+                const timeA = new Date(aVal || 0).getTime();
+                const timeB = new Date(bVal || 0).getTime();
+                return sortConfig.direction === 'asc' ? timeA - timeB : timeB - timeA;
+            }
+
+            if (sortConfig.key === 'efTP') {
+                const getFtp = (item: any) => (item.title?.toLowerCase().includes('ftp') || item.notes?.toLowerCase().includes('ftp')) ? item.averageWatts : (item.durationMinutes >= 20 ? item.averageWatts * 0.95 : 0);
+                const ftpA = getFtp(a);
+                const ftpB = getFtp(b);
+                return sortConfig.direction === 'asc' ? ftpA - ftpB : ftpB - ftpA;
+            }
+
+            if (typeof aVal === 'number' && typeof bVal === 'number') {
+                return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+            }
+
+            return sortConfig.direction === 'asc'
+                ? String(aVal).localeCompare(String(bVal))
+                : String(bVal).localeCompare(String(aVal));
+        });
+
     }, [activeTab, unifiedActivities, strengthSessions, sortConfig]);
 
     const handleSort = (key: string) => {
@@ -259,39 +302,44 @@ export const ToolsCyclingPage: React.FC = () => {
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                        <Bike className="text-emerald-400" size={32} />
-                        Cykling & Assault
+                        {activeTab === 'cycling' && <Bike className="text-emerald-400" size={32} />}
+                        {activeTab === 'assault' && <Wind className="text-emerald-400" size={32} />}
+                        {activeTab === 'row' && <Waves className="text-emerald-400" size={32} />}
+                        {activeTab === 'ski' && <Snowflake className="text-emerald-400" size={32} />}
+                        Erg & Cardio Tools
                     </h1>
                     <p className="text-slate-400 mt-2">
-                        Analysera din prestation, räkna ut FTP och se hur du ligger till jämfört med standarder.
+                        Prestationsanalys och kalkylatorer för din konditionsträning.
                     </p>
                 </div>
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-4 border-b border-white/10">
-                <button
-                    onClick={() => setActiveTab('cycling')}
-                    className={`pb-4 px-4 font-medium transition-colors relative ${activeTab === 'cycling' ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
-                        }`}
-                >
-                    <span className="flex items-center gap-2"><Activity size={18} /> Lande/Stationär</span>
-                    {activeTab === 'cycling' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-400 rounded-t-full" />}
-                </button>
-                <button
-                    onClick={() => setActiveTab('assault')}
-                    className={`pb-4 px-4 font-medium transition-colors relative ${activeTab === 'assault' ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
-                        }`}
-                >
-                    <span className="flex items-center gap-2"><Wind size={18} /> Assault Bike</span>
-                    {activeTab === 'assault' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-400 rounded-t-full" />}
-                </button>
+            <div className="flex gap-2 overflow-x-auto pb-2 border-b border-white/10 no-scrollbar">
+                {[
+                    { id: 'cycling', label: 'Cykling', icon: Activity },
+                    { id: 'assault', label: 'Assault', icon: Wind },
+                    { id: 'row', label: 'Rodd', icon: Waves },
+                    { id: 'ski', label: 'Skierg', icon: Snowflake }
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id as TabType)}
+                        className={`pb-4 px-4 font-medium transition-colors relative whitespace-nowrap ${activeTab === tab.id ? 'text-emerald-400' : 'text-slate-400 hover:text-white'
+                            }`}
+                    >
+                        <span className="flex items-center gap-2">
+                            <tab.icon size={18} /> {tab.label}
+                        </span>
+                        {activeTab === tab.id && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-emerald-400 rounded-t-full" />}
+                    </button>
+                ))}
             </div>
 
             {/* Content */}
             {activeTab === 'cycling' ? (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    {/* Calculator Card */}
+                    {/* Cycling Content (Existing) */}
                     <div className="grid md:grid-cols-2 gap-8">
                         <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6 space-y-6">
                             <h3 className="text-xl font-bold text-white mb-4">Kalkylator</h3>
@@ -392,7 +440,6 @@ export const ToolsCyclingPage: React.FC = () => {
                                             {cyclingStats.level}
                                         </div>
                                         <div className="h-2 bg-slate-800 rounded-full mt-4 overflow-hidden relative">
-                                            {/* Simplified Visual Bar */}
                                             <div
                                                 className="absolute top-0 left-0 h-full bg-emerald-500 transition-all duration-1000"
                                                 style={{ width: `${Math.min(100, (cyclingStats.wKg / 6.0) * 100)}%` }}
@@ -440,18 +487,15 @@ export const ToolsCyclingPage: React.FC = () => {
                                 <h4 className="text-xs font-bold text-slate-400 uppercase mb-2">Om beräkningarna</h4>
                                 <p className="text-xs text-slate-500 leading-relaxed">
                                     Denna kalkylator använder <span className="text-slate-300">Coggan Power Profile</span> för att kategorisera din atletiska profil.
-                                    FTP-estimeringen baseras på <span className="text-slate-300">95%-regeln</span>, där man drar av 5% från din maximala snitteffekt över 20 minuter för att kompensera för den anaeroba komponenten.
-                                    Detta anses vara den gyllene standarden för att uppskatta den effekt man kan hålla stadigt i ungefär en timme.
+                                    FTP-estimeringen baseras på <span className="text-slate-300">95%-regeln</span>, där man drar av 5% från din maximala snitteffekt över 20 minuter.
                                 </p>
                             </div>
                         </div>
                     )}
                 </div>
-            ) : (
+            ) : activeTab === 'assault' ? (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     {/* Assault Bike Layout */}
-
-                    {/* Historical Grid */}
                     <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
                         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                             <Trophy size={20} className="text-amber-400" />
@@ -483,7 +527,6 @@ export const ToolsCyclingPage: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* Calculator Area */}
                     <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
                         <div className="flex items-center gap-3 mb-6">
                             <Calculator className="text-emerald-400" size={24} />
@@ -540,7 +583,123 @@ export const ToolsCyclingPage: React.FC = () => {
                             Baserat på standardformler för Assault/Echo bike (Watts = 0.99 * RPM³ / 1260).
                         </p>
                     </div>
+                </div>
+            ) : (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Erg (Row/Ski) Layout */}
 
+                    {/* Records Grid */}
+                    <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
+                         <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <Trophy size={20} className="text-amber-400" />
+                                Mina Rekord ({activeTab === 'row' ? 'Rodd' : 'Skierg'})
+                            </h3>
+                            <div className="flex bg-slate-950 p-1 rounded-xl border border-white/10">
+                                <button
+                                    onClick={() => setGender('male')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${gender === 'male' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Man
+                                </button>
+                                <button
+                                    onClick={() => setGender('female')}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${gender === 'female' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400 hover:text-white'}`}
+                                >
+                                    Kvinna
+                                </button>
+                            </div>
+                         </div>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {(['500m', '1000m', '2000m', '5000m'] as ErgInterval[]).map((dist) => {
+                                if (activeTab === 'ski' && dist === '500m') return null; // Ski usually doesn't track 500m benchmark as heavily? Or user didn't ask for it. User asked for 1k, 2k, 5k for Ski.
+
+                                const records = activeTab === 'row' ? historicalRow : historicalSki;
+                                const record = records[dist];
+
+                                return (
+                                    <div key={dist} className="bg-slate-950/50 border border-white/5 rounded-xl p-4 flex flex-col justify-between min-h-[140px] relative group hover:border-emerald-500/30 transition-all">
+                                        <div className="flex justify-between items-start">
+                                            <div className="text-xs font-bold text-slate-500 uppercase">{dist}</div>
+                                            {record && record.level !== '-' && (
+                                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300`}>
+                                                    {record.level}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {record ? (
+                                            <div className="mt-2">
+                                                <div className="text-2xl font-bold text-white font-mono">
+                                                    {record.timeString}
+                                                </div>
+                                                <div className="text-xs text-emerald-400 font-mono mt-1">
+                                                    {record.pace}/500m
+                                                </div>
+                                                <div className="text-[10px] text-slate-500 mt-3 truncate border-t border-white/5 pt-2">
+                                                    {record.date.split('T')[0]} • {record.watts?.toFixed(0)}W
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex-1 flex items-center justify-center text-xs text-slate-600 italic">
+                                                Inget data
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Calculator */}
+                    <div className="bg-slate-900/50 border border-white/10 rounded-2xl p-6">
+                        <div className="flex items-center gap-3 mb-6">
+                            <Calculator className="text-emerald-400" size={24} />
+                            <h3 className="text-xl font-bold text-white">Pace Konverterare</h3>
+                        </div>
+
+                        <div className="grid md:grid-cols-3 gap-8">
+                             <div>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
+                                    <Timer size={14} /> Pace / 500m
+                                </label>
+                                <input
+                                    type="text"
+                                    value={ergPace}
+                                    onChange={(e) => handleErgPaceChange(e.target.value)}
+                                    placeholder="2:00"
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
+                                />
+                                <p className="text-[10px] text-slate-500 mt-1">Format: MM:SS (t.ex. 1:45)</p>
+                            </div>
+
+                            <div>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
+                                    <Zap size={14} /> Watt
+                                </label>
+                                <input
+                                    type="number"
+                                    value={ergWatts}
+                                    onChange={(e) => handleErgWattsChange(e.target.value)}
+                                    className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50 font-mono text-lg"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase mb-2">
+                                    <Flame size={14} /> Cal/hr (Est)
+                                </label>
+                                <div className="w-full bg-slate-950/50 border border-white/5 rounded-xl px-4 py-3 text-slate-400 font-mono text-lg">
+                                    ~{ErgMath.wattsToCalHr(parseFloat(ergWatts) || 0)}
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-1">Ungefärlig mekanisk förbränning.</p>
+                            </div>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-4 text-center">
+                            Baserat på Concept2 fysikmodell (Watts = 2.80 / (Pace/500m)³).
+                        </p>
+                    </div>
                 </div>
             )}
 
