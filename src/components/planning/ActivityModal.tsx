@@ -49,6 +49,7 @@ export function ActivityModal({
     // Hyrox specific
     const [formIncludesRunning, setFormIncludesRunning] = useState(true);
     const [formHyroxFocus, setFormHyroxFocus] = useState<'hybrid' | 'strength' | 'cardio'>('hybrid');
+    const [formStatus, setFormStatus] = useState<'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'CHANGED'>('PLANNED');
     const [formStartTime, setFormStartTime] = useState('');
     const [formDate, setFormDate] = useState(selectedDate || '');
 
@@ -266,6 +267,7 @@ export function ActivityModal({
                 setFormIncludesRunning(editingActivity.includesRunning ?? true);
                 setFormHyroxFocus((editingActivity as any).hyroxFocus || 'hybrid');
                 setFormStartTime(editingActivity.startTime || '');
+                setFormStatus(editingActivity.status === 'DRAFT' ? 'PLANNED' : editingActivity.status as any);
                 setFormDate(editingActivity.date || selectedDate || '');
             } else {
                 setFormType('RUN');
@@ -280,6 +282,7 @@ export function ActivityModal({
                 setFormIncludesRunning(true);
                 setFormHyroxFocus('hybrid');
                 setFormStartTime('');
+                setFormStatus('PLANNED');
                 setFormDate(selectedDate || '');
             }
         }
@@ -378,7 +381,7 @@ export function ActivityModal({
             targetPace: '',
             targetHrZone: formType === 'REST' ? 1 : (formIntensity === 'low' ? 2 : formIntensity === 'moderate' ? 3 : 4),
             structure: { warmupKm: 0, mainSet: [], cooldownKm: 0 } as PlannedActivity['structure'],
-            status: 'PLANNED' as const,
+            status: formStatus as any,
             isRace: isRace
         };
 
@@ -569,6 +572,31 @@ export function ActivityModal({
 
                     {/* Form */}
                     <div className="space-y-4">
+                        {/* Status Selector */}
+                        <div>
+                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-1">Status</label>
+                            <div className="flex gap-1.5">
+                                {[
+                                    { id: 'PLANNED', label: 'Planerat', color: 'blue' },
+                                    { id: 'COMPLETED', label: 'Klart', color: 'emerald' },
+                                    { id: 'SKIPPED', label: 'Överhoppat', color: 'slate' },
+                                    { id: 'CHANGED', label: 'Bytt', color: 'amber' },
+                                ].map((s) => (
+                                    <button
+                                        key={s.id}
+                                        type="button"
+                                        onClick={() => setFormStatus(s.id as any)}
+                                        className={`flex-1 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all border ${formStatus === s.id
+                                            ? `bg-${s.color}-500 text-white border-${s.color}-500 shadow-md`
+                                            : `bg-transparent border-slate-200 dark:border-slate-700 text-slate-400 hover:border-${s.color}-300`
+                                            }`}
+                                    >
+                                        {s.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
                         {/* Type Selector */}
                         <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
                             <button

@@ -24,7 +24,9 @@ import {
     TrendingUp,
     Clock,
     Trophy,
-    AlertTriangle
+    AlertTriangle,
+    RefreshCcw,
+    MinusCircle
 } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import { formatDuration } from '../utils/dateUtils.ts';
@@ -45,7 +47,8 @@ export function TrainingPlanningPage() {
         deletePlannedActivity,
         updatePlannedActivity,
         universalActivities = [],
-        unifiedActivities = []
+        unifiedActivities = [],
+        currentUser
     } = useData();
 
     const [currentWeekStart, setCurrentWeekStart] = useState(getWeekStartDate());
@@ -520,16 +523,44 @@ export function TrainingPlanningPage() {
             {/* Calendar Grid */}
             <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-7 gap-4">
                 {weekDates.map((day) => {
-                    const dayActivities = plannedActivities.filter(a => a.date.split('T')[0] === day.date && a.status !== 'COMPLETED');
-                    const dayCompleted = unifiedActivities.filter(a => a.date.split('T')[0] === day.date);
+                    // 1. Get all planned activities for this day
+                    const dayPlanned = plannedActivities.filter(a => a.date.split('T')[0] === day.date);
 
-                    const dayCardio = dayCompleted.filter(a => a.type !== 'strength');
-                    const dayStrength = dayCompleted.filter(a => a.type === 'strength');
+                    // 2. Get all actual activities for this day
+                    const dayActualRaw = unifiedActivities.filter(a => a.date.split('T')[0] === day.date);
 
-                    // Day summary calculation
-                    const daySessions = dayCompleted.length;
-                    const dayKm = dayCompleted.reduce((sum, a) => sum + (a.distance || 0), 0);
-                    const dayTime = dayCompleted.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+                    // 3. Deduplicate: Find which actual IDs are already represented by a matched plan
+                    const matchedActualIds = new Set(
+                        dayPlanned
+                            .filter(p => p.status === 'COMPLETED' && p.externalId)
+                            .map(p => p.externalId!)
+                    );
+
+                    // 4. Create unified list of events
+                    const allEvents = [
+                        ...dayPlanned.map(p => ({
+                            type: 'planned' as const,
+                            id: p.id,
+                            time: p.startTime || (p.status === 'COMPLETED' && p.completedDate?.includes('T') ? p.completedDate.split('T')[1].substring(0, 5) : undefined),
+                            data: p
+                        })),
+                        ...dayActualRaw
+                            .filter(a => !matchedActualIds.has(a.id))
+                            .map(a => ({
+                                type: 'actual' as const,
+                                id: a.id,
+                                time: a.date.includes('T') ? a.date.split('T')[1].substring(0, 5) : undefined,
+                                data: a
+                            }))
+                    ].sort((a, b) => {
+                        const timeA = a.time || '23:59';
+                        const timeB = b.time || '23:59';
+                        return timeA.localeCompare(timeB);
+                    });
+
+                    // Summary calculations (can still use raw lists for stats)
+                    const dayKm = dayActualRaw.reduce((sum, a) => sum + (a.distance || 0), 0);
+                    const dayTime = dayActualRaw.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
 
                     const isToday = day.date === getISODate();
                     const isPast = day.date < getISODate();
@@ -581,201 +612,229 @@ export function TrainingPlanningPage() {
                                     }
                                 }}
                             >
-                                {/* Cardio Activities */}
-                                {dayCardio.map((act) => {
-                                    const typeLabels: Record<string, string> = {
-                                        running: 'Löpning',
-                                        cycling: 'Cykling',
-                                        swimming: 'Simning',
-                                        walking: 'Promenad',
-                                        other: 'Aktivitet'
-                                    };
-                                    const typeLabel = typeLabels[act.type || 'other'] || 'Aktivitet';
+                                {allEvents.map(event => {
+                                    if (event.type === 'planned') {
+                                        const act = event.data;
+                                        const isRace = act.isRace || act.title?.toLowerCase().includes('tävling');
+                                        const isCompleted = act.status === 'COMPLETED';
+                                        const isPlanned = act.status === 'PLANNED';
+                                        const isSkipped = act.status === 'SKIPPED';
+                                        const isChanged = act.status === 'CHANGED';
 
-                                    return (
-                                        <div
-                                            key={`cardio-${act.id}`}
-                                            onClick={() => updateUrlParams({ activityId: act.id })}
-                                            className="p-3 bg-emerald-500/10 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl relative cursor-pointer hover:bg-emerald-500/20 transition-colors z-10"
-                                        >
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 tracking-wider flex items-center gap-1">
-                                                    <Check size={10} />
-                                                    {typeLabel}
-                                                    {(act.source === 'strava' || act.source === 'merged') && (
-                                                        <span className="text-[#FC4C02]" title="Strava">🔥</span>
-                                                    )}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                                {act.distance ? `${act.distance.toFixed(1)} km` : ''}
-                                                {act.durationMinutes ? ` ${formatDurationHHMM(act.durationMinutes)}` : ''}
-                                            </p>
-                                            {act.startTime && (
-                                                <div className="flex items-center gap-1 text-[9px] text-slate-400 mt-0.5">
-                                                    <Clock size={9} />
-                                                    {act.startTime}
+                                        return (
+                                            <div
+                                                key={act.id}
+                                                draggable={!isCompleted}
+                                                onDragStart={(e) => {
+                                                    if (isCompleted) return;
+                                                    e.dataTransfer.setData('activityId', act.id);
+                                                    e.dataTransfer.effectAllowed = 'move';
+                                                }}
+                                                onClick={() => handleOpenModal(day.date, act)}
+                                                className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 
+                                                    ${isPlanned ? 'border-dashed' : 'border-solid'} 
+                                                    ${isCompleted ? 'border-slate-300 dark:border-slate-700' : ''} 
+                                                    ${isSkipped ? 'opacity-40 grayscale border-slate-200 dark:border-slate-800' : ''}
+                                                    ${isChanged ? 'border-amber-400 dark:border-amber-600 shadow-[0_0_10px_rgba(251,191,36,0.1)]' : ''} 
+                                                    ${isRace
+                                                        ? 'bg-amber-500/10 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700/50 hover:border-amber-500 dark:hover:border-amber-500'
+                                                        : act.type === 'REST' || act.category === 'REST'
+                                                            ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+                                                            : act.type === 'STRENGTH' || act.category === 'STRENGTH'
+                                                                ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700'
+                                                                : act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox')
+                                                                    ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700'
+                                                                    : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700'
+                                                    }`}
+                                            >
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' :
+                                                        act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' :
+                                                            act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' :
+                                                                act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' :
+                                                                    'text-emerald-600 dark:text-emerald-400'
+                                                        }`}>
+                                                        {isCompleted ? <Check size={10} className="text-emerald-500" /> : isRace ? <Trophy size={10} /> : isSkipped ? <MinusCircle size={10} /> : isChanged ? <RefreshCcw size={10} /> : null}
+                                                        {isCompleted ? 'GENOMFÖRT' : isRace ? 'TÄVLING' : isSkipped ? 'ÖVERHOPPAT' : isChanged ? 'BYTT PASS' :
+                                                            act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
+                                                                (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
+                                                    </span>
+                                                    <div className="flex items-center gap-2">
+                                                        {!isCompleted && (
+                                                            <>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const d = new Date(day.date + 'T00:00:00');
+                                                                        d.setDate(d.getDate() - 1);
+                                                                        const prevDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                                                        updatePlannedActivity(act.id, { date: prevDateStr });
+                                                                        notificationService.notify('success', `Passet flyttat till igår (${prevDateStr})`);
+                                                                    }}
+                                                                    className="text-slate-400 hover:text-blue-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                                    title="Flytta till igår"
+                                                                >
+                                                                    <ChevronLeft size={12} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const d = new Date(day.date + 'T00:00:00');
+                                                                        d.setDate(d.getDate() + 1);
+                                                                        const nextDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                                                        updatePlannedActivity(act.id, { date: nextDateStr });
+                                                                        notificationService.notify('success', `Passet flyttat till imorgon (${nextDateStr})`);
+                                                                    }}
+                                                                    className="text-slate-400 hover:text-blue-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                                    title="Flytta till imorgon"
+                                                                >
+                                                                    <ChevronRight size={12} />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
+                                                            className="text-slate-400 hover:text-rose-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
+                                                            title="Ta bort"
+                                                        >
+                                                            <X size={12} />
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
+                                                <p className={`text-xs font-medium leading-tight ${isSkipped ? 'line-through' : ''} ${isCompleted ? 'text-slate-700 dark:text-slate-200' : 'text-slate-700 dark:text-slate-300'}`}>
+                                                    {isRace && act.title && <span className="font-bold block mb-0.5">{act.title}</span>}
+                                                    {act.description || (isCompleted ? (act.reconciliation?.matchReason?.includes('Liknande') ? 'Loggat pass' : 'Pass genomfört') : isSkipped ? 'Passet blev aldrig av' : '')}
+                                                </p>
 
-                                {/* Strength Activities */}
-                                {dayStrength.map(act => {
-                                    const isStrava = act.source === 'strava' || act.source === 'merged';
-
-                                    return (
-                                        <div
-                                            key={`str-${act.id}`}
-                                            onClick={() => updateUrlParams({ activityId: act.id })}
-                                            className="p-3 bg-purple-500/10 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-xl relative cursor-pointer hover:bg-purple-500/20 transition-colors z-10"
-                                        >
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className="text-[10px] font-black uppercase text-purple-600 dark:text-purple-400 tracking-wider flex items-center gap-1">
-                                                    <Dumbbell size={10} />
-                                                    Styrka
-                                                    {isStrava && <span className="text-[#FC4C02]" title="Strava">🔥</span>}
-                                                </span>
-                                            </div>
-                                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                                {act.title || (act._mergeData?.strengthWorkout?.name) || 'Styrkepass'}
-                                            </p>
-                                            <p className="text-[10px] text-slate-500 mt-1">
-                                                {act.tonnage ? `${(act.tonnage / 1000).toFixed(1)}t • ` : ''}
-                                                {formatDurationHHMM(act.durationMinutes || 0)}
-                                                {act.startTime && ` • kl ${act.startTime}`}
-                                            </p>
-                                        </div>
-                                    );
-                                })}
-
-                                {/* Planned Activities - Clickable for edit */}
-                                {dayActivities.map(act => {
-                                    const isRace = act.isRace || act.title?.toLowerCase().includes('tävling');
-
-                                    return (
-                                        <div
-                                            key={act.id}
-                                            draggable={true}
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('activityId', act.id);
-                                                e.dataTransfer.effectAllowed = 'move';
-                                            }}
-                                            onClick={() => handleOpenModal(day.date, act)}
-                                            className={`p-3 border rounded-xl group/card relative hover:shadow-md transition-all cursor-pointer z-10 active:opacity-50 ${isRace
-                                                ? 'bg-amber-500/10 dark:bg-amber-900/20 border-amber-300 dark:border-amber-700/50 hover:border-amber-500 dark:hover:border-amber-500'
-                                                : act.type === 'REST' || act.category === 'REST'
-                                                    ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
-                                                    : act.type === 'STRENGTH' || act.category === 'STRENGTH'
-                                                        ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30 hover:border-purple-300 dark:hover:border-purple-700'
-                                                        : act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox')
-                                                            ? 'bg-indigo-50 dark:bg-indigo-900/10 border-indigo-100 dark:border-indigo-900/30 hover:border-indigo-300 dark:hover:border-indigo-700'
-                                                            : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30 hover:border-emerald-300 dark:hover:border-emerald-700'
-                                                }`}
-                                        >
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' :
-                                                    act.type === 'REST' || act.category === 'REST' ? 'text-slate-500' :
-                                                        act.type === 'STRENGTH' || act.category === 'STRENGTH' ? 'text-purple-600 dark:text-purple-400' :
-                                                            act.type === 'HYROX' || act.title?.toLowerCase().includes('hyrox') ? 'text-indigo-600 dark:text-indigo-400' :
-                                                                'text-emerald-600 dark:text-emerald-400'
-                                                    }`}>
-                                                    {isRace ? <Trophy size={10} /> : null}
-                                                    {isRace ? 'TÄVLING' :
-                                                        act.type === 'REST' || act.category === 'REST' ? '💤 Vila' :
-                                                            (act.type === 'STRENGTH' || act.category === 'STRENGTH' ? '💪' : '📅') + ' ' + act.title}
-                                                </span>
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            const d = new Date(day.date + 'T00:00:00');
-                                                            d.setDate(d.getDate() - 1);
-                                                            const prevDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                                            updatePlannedActivity(act.id, { date: prevDateStr });
-                                                            notificationService.notify('success', `Passet flyttat till igår (${prevDateStr})`);
-                                                        }}
-                                                        className="text-slate-400 hover:text-blue-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
-                                                        title="Flytta till igår"
-                                                    >
-                                                        <ChevronLeft size={12} />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            const d = new Date(day.date + 'T00:00:00');
-                                                            d.setDate(d.getDate() + 1);
-                                                            const nextDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                                            updatePlannedActivity(act.id, { date: nextDateStr });
-                                                            notificationService.notify('success', `Passet flyttat till imorgon (${nextDateStr})`);
-                                                        }}
-                                                        className="text-slate-400 hover:text-blue-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
-                                                        title="Flytta till imorgon"
-                                                    >
-                                                        <ChevronRight size={12} />
-                                                    </button>
-                                                    <button
-                                                        onClick={(e) => { e.stopPropagation(); deletePlannedActivity(act.id); }}
-                                                        className="text-slate-400 hover:text-rose-500 opacity-0 group-hover/card:opacity-100 transition-opacity"
-                                                        title="Ta bort"
-                                                    >
-                                                        <X size={12} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            <p className="text-xs text-slate-700 dark:text-slate-300 font-medium leading-tight">
-                                                {isRace && act.title && <span className="font-bold block mb-0.5">{act.title}</span>}
-                                                {act.description}
-                                            </p>
-                                            {/* Start Time Indicator  */}
-                                            {act.startTime && (
-                                                <div className="flex items-center gap-1 text-[10px] text-indigo-500 dark:text-indigo-400 font-bold mt-1">
-                                                    <Clock size={10} />
-                                                    {act.startTime}
-                                                </div>
-                                            )}
-                                            <div className="flex flex-col gap-1 mt-1">
-                                                {/* Running Stats */}
-                                                {(act.estimatedDistance || 0) > 0 && (
-                                                    <div className={`text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
-                                                        <Activity size={10} />
-                                                        {Number(act.estimatedDistance).toFixed(1)} km
+                                                {/* Developer Insights */}
+                                                {(currentUser?.role === 'developer' || currentUser?.role === 'admin') && act.reconciliation && (
+                                                    <div className="mt-2 pt-2 border-t border-slate-200/50 dark:border-slate-800/50 text-[9px] font-mono text-slate-400">
+                                                        <div className="flex justify-between items-center mb-0.5">
+                                                            <span className={act.reconciliation.score! >= 60 ? 'text-emerald-500' : 'text-amber-500'}>
+                                                                Match: {act.reconciliation.score}%
+                                                            </span>
+                                                            {act.reconciliation.reconciledAt && (
+                                                                <span>{act.reconciliation.reconciledAt?.split('T')[1].substring(0, 5)}</span>
+                                                            )}
+                                                        </div>
+                                                        <p className="italic leading-[1.1] text-[8px] opacity-70">
+                                                            {act.reconciliation.matchReason}
+                                                        </p>
+                                                        {act.externalId && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    updateUrlParams({ activityId: act.externalId! });
+                                                                }}
+                                                                className="mt-1 flex items-center gap-1 text-blue-500 hover:underline"
+                                                            >
+                                                                <Activity size={8} /> Visa källa: {act.externalId.substring(0, 8)}
+                                                            </button>
+                                                        )}
                                                     </div>
                                                 )}
 
-                                                {/* Strength Stats */}
-                                                {(act.type === 'STRENGTH' || act.type === 'HYROX') && (
-                                                    <div className="flex flex-wrap gap-2">
+                                                {/* Time Indicator - only if explicit time exists  */}
+                                                {event.time && (
+                                                    <div className={`flex items-center gap-1 text-[9px] font-bold mt-1 opacity-60`}>
+                                                        <Clock size={9} />
+                                                        {event.time}
+                                                    </div>
+                                                )}
+                                                <div className="flex flex-col gap-1 mt-1">
+                                                    {/* Stats */}
+                                                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                                        {(act.estimatedDistance || 0) > 0 && (
+                                                            <div className={`text-[10px] font-bold flex items-center gap-1 ${isRace ? 'text-amber-600 dark:text-amber-400' : 'text-slate-500'}`}>
+                                                                <Activity size={10} />
+                                                                {Number(act.estimatedDistance).toFixed(1)} km
+                                                            </div>
+                                                        )}
                                                         {act.tonnage && act.tonnage > 0 && (
-                                                            <div className="text-[10px] font-bold text-slate-500 flex items-center gap-1">
+                                                            <div className={`text-[10px] font-bold flex items-center gap-1 text-slate-500`}>
                                                                 <Dumbbell size={10} />
                                                                 {(act.tonnage / 1000).toFixed(1)}t
                                                             </div>
                                                         )}
-                                                        {act.muscleGroups && act.muscleGroups.length > 0 && (
-                                                            <div className="text-[10px] font-medium text-slate-400 flex flex-wrap gap-1">
-                                                                {act.muscleGroups.slice(0, 3).map(m => (
-                                                                    <span key={m} className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
-                                                                        {({
-                                                                            legs: 'Ben',
-                                                                            chest: 'Bröst',
-                                                                            back: 'Rygg',
-                                                                            arms: 'Armar',
-                                                                            shoulders: 'Axlar',
-                                                                            core: 'Core'
-                                                                        } as Record<string, string>)[m] || m}
-                                                                    </span>
-                                                                ))}
-                                                                {act.muscleGroups.length > 3 && <span>+</span>}
-                                                            </div>
-                                                        )}
                                                     </div>
-                                                )}
+                                                    {act.muscleGroups && act.muscleGroups.length > 0 && (
+                                                        <div className={`text-[10px] font-medium flex flex-wrap gap-1 text-slate-400`}>
+                                                            {act.muscleGroups.slice(0, 3).map((m: any) => (
+                                                                <span key={m} className={`px-1 rounded bg-slate-100 dark:bg-slate-800`}>
+                                                                    {({
+                                                                        legs: 'Ben',
+                                                                        chest: 'Bröst',
+                                                                        back: 'Rygg',
+                                                                        arms: 'Armar',
+                                                                        shoulders: 'Axlar',
+                                                                        core: 'Core'
+                                                                    } as Record<string, string>)[m] || m}
+                                                                </span>
+                                                            ))}
+                                                            {act.muscleGroups.length > 3 && <span>+</span>}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    );
+                                        );
+                                    } else {
+                                        // Actual Activity (Unmatched)
+                                        const actual = event.data;
+                                        return (
+                                            <div
+                                                key={actual.id}
+                                                onClick={() => updateUrlParams({ activityId: actual.id })}
+                                                className={`p-3 border rounded-xl hover:shadow-md transition-all cursor-pointer group 
+                                                    ${actual.type === 'strength'
+                                                        ? 'bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900/30'
+                                                        : 'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30'
+                                                    }`}
+                                            >
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className={`text-[10px] font-black uppercase tracking-wider flex items-center gap-1 
+                                                        ${actual.type === 'strength' ? 'text-purple-600 dark:text-purple-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                                                        {actual.source === 'strava' ? 'STRAVA' : 'LOGGAT'}
+                                                        {(actual.source === 'strava' || actual.source === 'merged') && (
+                                                            <span className="text-[#FC4C02]" title="Strava">🔥</span>
+                                                        )}
+                                                    </span>
+                                                    {event.time && (
+                                                        <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1 opacity-60">
+                                                            <Clock size={9} />
+                                                            {event.time}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">
+                                                        {actual.title || (actual.type === 'strength' ? 'Styrkepass' : 'Träningspass')}
+                                                    </h4>
+                                                </div>
+                                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+                                                    {(actual.distance ?? 0) > 0 && (
+                                                        <span className="text-xs text-slate-500 font-medium">🏃 {actual.distance?.toFixed(1)} km</span>
+                                                    )}
+                                                    {actual.durationMinutes > 0 && (
+                                                        <span className="text-xs text-slate-500 font-medium">⏱️ {formatDurationHHMM(actual.durationMinutes)}</span>
+                                                    )}
+                                                    {(actual.tonnage ?? 0) > 0 && (
+                                                        <span className="text-xs text-slate-500 font-medium">💪 {((actual.tonnage || 0) / 1000).toFixed(1)}t</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    }
                                 })}
+
+
+                                {allEvents.length === 0 && (
+                                    <div className="h-full flex flex-col items-center justify-center opacity-20 pointer-events-none">
+                                        <div className="w-12 h-12 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center mb-2">
+                                            <Activity size={20} className="text-slate-400" />
+                                        </div>
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Vila</span>
+                                    </div>
+                                )}
 
                                 <button
                                     onClick={() => {

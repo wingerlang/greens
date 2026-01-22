@@ -1025,7 +1025,7 @@ export interface RecoveryMetric {
 // Universal Activity Model (Database Overhaul)
 // ============================================
 
-export type ActivityStatus = 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'MISSED';
+export type ActivityStatus = 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'MISSED' | 'CHANGED';
 export type DataSource = 'strava' | 'garmin' | 'apple_health' | 'manual' | 'unknown' | 'strength';
 export type ActivitySource = DataSource;
 /**
@@ -1229,7 +1229,7 @@ export interface PlannedActivity {
     tonnage?: number;
     muscleGroups?: StrengthMuscleGroup[];
     // Progress Tracking
-    status: 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'DRAFT';
+    status: 'PLANNED' | 'COMPLETED' | 'SKIPPED' | 'DRAFT' | 'CHANGED';
     feedback?: 'EASY' | 'PERFECT' | 'HARD' | 'TOO_HARD' | 'INJURY';
     completedDate?: string;
     actualDistance?: number;
@@ -1243,10 +1243,17 @@ export interface PlannedActivity {
     externalId?: string; // Reference to the activity that completed this plan
     raceUrl?: string;
 
-    // Hyrox specific
-    includesRunning?: boolean;
     hyroxFocus?: 'hybrid' | 'strength' | 'cardio';
     startTime?: string; // HH:mm
+    includesRunning?: boolean;
+
+    // Recon / Sync Metadata
+    reconciliation?: {
+        score?: number;
+        matchReason?: string;
+        bestCandidateId?: string;
+        reconciledAt?: string;
+    };
 }
 
 /** Weight and body measurements tracking entry */
@@ -1660,4 +1667,6 @@ export interface AnalyticsStats {
         training: { planned: number; completed: number };
     };
     sessionDepth?: number; // avg events per view
+    deviceBreakdown?: Record<string, number>;
+    browserBreakdown?: Record<string, number>;
 }

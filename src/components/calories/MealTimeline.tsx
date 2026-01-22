@@ -308,7 +308,22 @@ export function MealTimeline({
                                 </div>
                             </div>
 
-                            {dailyEntries.map(entry => renderEntryRow(entry, true))}
+                            <div
+                                className="space-y-1"
+                                onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.dataTransfer.dropEffect = 'move';
+                                }}
+                                onDrop={(e) => {
+                                    const entryId = e.dataTransfer.getData('entryId');
+                                    // In compact mode, we might want to toggle the mealType if dropped on a specific area, 
+                                    // but for now, we just ensure it doesn't break.
+                                    // If we had mealType targets in compact mode, we would use them here.
+                                    console.log('Dropped in compact list:', entryId);
+                                }}
+                            >
+                                {dailyEntries.map(entry => renderEntryRow(entry, true))}
+                            </div>
                             <TimelineActions setIsFormOpen={setIsFormOpen} />
                         </>
                     )}
@@ -335,6 +350,7 @@ export function MealTimeline({
                     className="meal-section"
                     onDragOver={(e) => {
                         e.preventDefault();
+                        e.dataTransfer.dropEffect = 'move';
                         (e.currentTarget as HTMLElement).classList.add('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
                     }}
                     onDragLeave={(e) => {
@@ -343,7 +359,9 @@ export function MealTimeline({
                     onDrop={(e) => {
                         (e.currentTarget as HTMLElement).classList.remove('bg-emerald-500/10', 'ring-2', 'ring-emerald-500/30', 'ring-inset');
                         const entryId = e.dataTransfer.getData('entryId');
-                        if (entryId) updateMealEntry(entryId, { mealType: mealTypeKey });
+                        if (entryId) {
+                            updateMealEntry(entryId, { mealType: mealTypeKey });
+                        }
                     }}
                 >
                     <div className="flex items-center justify-between mb-4 px-2">
@@ -427,16 +445,25 @@ function PortionControls({
 }) {
     const [isEditing, setIsEditing] = useState(false);
     const [inputValue, setInputValue] = useState('');
+    const isSubmitting = React.useRef(false); // Ref to track submission to avoid double calls (e.g. Enter + Blur)
 
     const step = item.type === 'recipe' ? 0.25 : 25;
 
     const handleInputSubmit = () => {
+        if (isSubmitting.current) return;
+        isSubmitting.current = true;
+
         const val = parseFloat(inputValue);
         if (!isNaN(val) && val > 0) {
             onUpdate(val);
         }
         setIsEditing(false);
         onActive?.(false);
+
+        // Reset the submission flag after the component has updated/unmounted or after a small delay
+        setTimeout(() => {
+            isSubmitting.current = false;
+        }, 100);
     };
 
     if (isEditing) {

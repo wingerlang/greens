@@ -52,7 +52,7 @@ interface SessionEvent extends InteractionEvent {
 
 export function AnalyticsDashboard() {
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState<'overview' | 'sessions' | 'retention' | 'pathing'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'sessions' | 'retention' | 'pathing' | 'appData' | 'errors'>('overview');
 
     // Overview Data
     const [stats, setStats] = useState<AnalyticsStats | null>(null);
@@ -63,6 +63,9 @@ export function AnalyticsDashboard() {
     const [retention, setRetention] = useState<any[]>([]);
     const [pathing, setPathing] = useState<any[]>([]);
     const [friction, setFriction] = useState<any[]>([]);
+    const [exitStats, setExitStats] = useState<any[]>([]);
+    const [appDataStats, setAppDataStats] = useState<any | null>(null);
+    const [errorStats, setErrorStats] = useState<any[]>([]);
 
     // Sessions Data
     const [sessions, setSessions] = useState<AnalyticsSession[]>([]);
@@ -130,9 +133,24 @@ export function AnalyticsDashboard() {
                 const data = await res.json();
                 setRetention(data.retention || []);
             } else if (activeTab === 'pathing') {
-                const res = await fetch(`/api/usage/pathing?days=${daysBack}`);
+                const [pathingRes, exitRes] = await Promise.all([
+                    fetch(`/api/usage/pathing?days=${daysBack}`),
+                    fetch(`/api/usage/exit?days=${daysBack}`)
+                ]);
+                const [pathingData, exitData] = await Promise.all([
+                    pathingRes.json(),
+                    exitRes.json()
+                ]);
+                setPathing(pathingData.pathing || []);
+                setExitStats(exitData.exits || []);
+            } else if (activeTab === 'appData') {
+                const res = await fetch(`/api/usage/app-stats?days=${daysBack}`);
                 const data = await res.json();
-                setPathing(data.pathing || []);
+                setAppDataStats(data);
+            } else if (activeTab === 'errors') {
+                const res = await fetch(`/api/usage/errors?days=${daysBack}`);
+                const data = await res.json();
+                setErrorStats(data.errors || []);
             }
             setError(null);
         } catch (err) {
@@ -190,6 +208,18 @@ export function AnalyticsDashboard() {
                             className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'pathing' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
                         >
                             Flöden
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('appData')}
+                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'appData' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                        >
+                            Global Data
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('errors')}
+                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'errors' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                        >
+                            Fel-logg
                         </button>
                     </div>
                 </div>
@@ -270,7 +300,7 @@ export function AnalyticsDashboard() {
                                         <YAxis stroke="#64748b" fontSize={10} />
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold' }}
+                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
                                             labelStyle={{ color: '#94a3b8' }}
                                         />
                                         <Area type="monotone" dataKey="pageViews" stroke="#3b82f6" fill="url(#colorViews)" name="Sidvisningar" />
@@ -305,7 +335,7 @@ export function AnalyticsDashboard() {
                                         </Pie>
                                         <Tooltip
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold' }}
+                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
                                         />
                                         <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                                     </PieChart>
@@ -385,7 +415,7 @@ export function AnalyticsDashboard() {
                                         <Tooltip
                                             cursor={{ fill: 'transparent' }}
                                             contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold' }}
+                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
                                         />
                                         <Bar dataKey="avgSeconds" name="Sekunder" radius={[0, 4, 4, 0]}>
                                             {friction.map((_entry, index) => (
@@ -481,6 +511,120 @@ export function AnalyticsDashboard() {
                         )}
                     </div>
                 </>
+            ) : activeTab === 'appData' ? (
+                // --- GLOBAL APP DATA TAB ---
+                <div className="space-y-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Nutrition Stats */}
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                            <h2 className="text-xl font-black mb-6 flex items-center gap-2">
+                                <Activity className="text-emerald-500" />
+                                Topp-livsmedel (Community)
+                            </h2>
+                            <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={appDataStats?.nutrition?.topFoods || []} layout="vertical">
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={10} width={120} />
+                                        <Tooltip
+                                            cursor={{ fill: 'transparent' }}
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
+                                        />
+                                        <Bar dataKey="count" name="Gånger loggat" fill="#10b981" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="mt-6 flex gap-4">
+                                <div className="flex-1 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                    <div className="text-sm font-black text-slate-500 uppercase">Avg. Kalorier/Dag</div>
+                                    <div className="text-2xl font-black text-white">{appDataStats?.nutrition?.avgDailyCalories || 0} kcal</div>
+                                </div>
+                                <div className="flex-1 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                    <div className="text-sm font-black text-slate-500 uppercase">Totala Måltider</div>
+                                    <div className="text-2xl font-black text-white">{appDataStats?.nutrition?.totalMealsLogged || 0} st</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Exercise Stats */}
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                            <h2 className="text-xl font-black mb-6 flex items-center gap-2">
+                                <Activity className="text-blue-500" />
+                                Topp-träning (Community)
+                            </h2>
+                            <div className="h-[300px]">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart data={appDataStats?.training?.topExercises || []} layout="vertical">
+                                        <XAxis type="number" hide />
+                                        <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={10} width={100} />
+                                        <Tooltip
+                                            cursor={{ fill: 'transparent' }}
+                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
+                                        />
+                                        <Bar dataKey="count" name="Sessioner" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            </div>
+                            <div className="mt-6 grid grid-cols-2 gap-4">
+                                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                                    <div className="text-[10px] font-black text-slate-500 uppercase">Total Distans</div>
+                                    <div className="text-lg font-black text-blue-400">{appDataStats?.training?.totalDistance || 0} km</div>
+                                </div>
+                                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                                    <div className="text-[10px] font-black text-slate-500 uppercase">Total Tonnage</div>
+                                    <div className="text-lg font-black text-amber-500">{appDataStats?.training?.totalTonnage || 0} kg</div>
+                                </div>
+                                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                                    <div className="text-[10px] font-black text-slate-500 uppercase">Cardio Pass</div>
+                                    <div className="text-lg font-black text-emerald-400">{appDataStats?.training?.cardioWorkoutCount || 0}</div>
+                                </div>
+                                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                                    <div className="text-[10px] font-black text-slate-500 uppercase">Styrke Pass</div>
+                                    <div className="text-lg font-black text-purple-400">{appDataStats?.training?.strengthWorkoutCount || 0}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ) : activeTab === 'errors' ? (
+                // --- ERRORS TAB ---
+                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                    <h2 className="text-xl font-black mb-6 flex items-center gap-2 text-red-500">
+                        <AlertCircle />
+                        Systemfel & Undantag (Problemområden)
+                    </h2>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 sticky top-0">
+                                <tr>
+                                    <th className="px-4 py-3 text-left">Felmeddelande</th>
+                                    <th className="px-4 py-3 text-right">Antal</th>
+                                    <th className="px-4 py-3 text-left">Topp-sida</th>
+                                    <th className="px-4 py-3 text-right">Senast sett</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800">
+                                {errorStats.map((err, i) => (
+                                    <tr key={i} className="hover:bg-red-500/5 transition-colors">
+                                        <td className="px-4 py-4 font-bold text-red-400 max-w-md break-words">{err.message}</td>
+                                        <td className="px-4 py-4 text-right font-black text-lg">{err.count}</td>
+                                        <td className="px-4 py-4 font-mono text-xs text-slate-500">{err.topPath}</td>
+                                        <td className="px-4 py-4 text-right text-xs text-slate-500">{formatRelativeTime(err.lastSeen)}</td>
+                                    </tr>
+                                ))}
+                                {errorStats.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="px-4 py-20 text-center text-slate-500 font-bold">
+                                            Inga fel hittade! Servern mår utmärkt. 🥳
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             ) : activeTab === 'retention' ? (
                 // --- RETENTION TAB ---
                 <RetentionHeatmap data={retention} />
@@ -659,12 +803,26 @@ function PathingFlow({ data }: { data: any[] }) {
                         <Monitor size={16} />
                         Exit-Analys
                     </h2>
-                    <div className="text-[10px] text-slate-400 mb-4 italic">
-                        Identifierar sidor där flödet ofta bryts.
-                    </div>
-                    {/* Placeholder for exit stats if we had them or calculate here */}
-                    <div className="p-8 text-center text-slate-600">
-                        Kommer i nästa uppdatering...
+                    <div className="space-y-4">
+                        {exitStats.map((item, i) => (
+                            <div key={i} className="flex flex-col gap-1">
+                                <div className="flex justify-between text-[10px] font-bold">
+                                    <span className="text-slate-400 truncate max-w-[150px]" title={item.label}>{item.label}</span>
+                                    <span className="text-pink-400">{item.count}</span>
+                                </div>
+                                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-pink-500"
+                                        style={{ width: `${(item.count / (exitStats[0]?.count || 1)) * 100}%` }}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                        {exitStats.length === 0 && (
+                            <div className="p-8 text-center text-slate-600 text-xs">
+                                Inga exit-data tillgängliga.
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

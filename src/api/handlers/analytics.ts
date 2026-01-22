@@ -114,6 +114,27 @@ export async function handleAnalyticsRoutes(req: Request, url: URL, headers: Hea
             return json({ friction });
         }
 
+        // GET /exit - Get exit stats
+        if (path === "/exit" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '7');
+            const exits = await analyticsRepository.getExitStats(daysBack);
+            return json({ exits });
+        }
+
+        // GET /app-stats - Get global app data stats
+        if (path === "/app-stats" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const stats = await analyticsRepository.getAppDataStats(daysBack);
+            return json(stats);
+        }
+
+        // GET /errors - Get error statistics
+        if (path === "/errors" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '7');
+            const errors = await analyticsRepository.getErrorStats(daysBack);
+            return json({ errors });
+        }
+
         return json({ error: "Not Found" }, 404);
 
     } catch (error) {

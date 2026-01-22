@@ -163,6 +163,27 @@ export const analyticsRepository = {
             }
         }
 
+        // 7. Device Breakdown
+        const deviceMap = new Map<string, number>();
+        pageViews.forEach(v => {
+            let device = 'Desktop';
+            const ua = v.userAgent || '';
+            if (/mobile/i.test(ua)) device = 'Mobile';
+            if (/tablet/i.test(ua)) device = 'Tablet';
+            deviceMap.set(device, (deviceMap.get(device) || 0) + 1);
+        });
+
+        const browserMap = new Map<string, number>();
+        pageViews.forEach(v => {
+            let browser = 'Other';
+            const ua = v.userAgent || '';
+            if (/chrome/i.test(ua)) browser = 'Chrome';
+            else if (/firefox/i.test(ua)) browser = 'Firefox';
+            else if (/safari/i.test(ua)) browser = 'Safari';
+            else if (/edg/i.test(ua)) browser = 'Edge';
+            browserMap.set(browser, (browserMap.get(browser) || 0) + 1);
+        });
+
         return {
             totalPageViews: pageViews.length,
             totalEvents: events.length,
@@ -174,7 +195,9 @@ export const analyticsRepository = {
             conversionStats: {
                 meals: { planned: plannedMeals, logged: loggedMeals },
                 training: { planned: plannedTraining, completed: completedTraining }
-            }
+            },
+            deviceBreakdown: Object.fromEntries(deviceMap),
+            browserBreakdown: Object.fromEntries(browserMap)
         };
     },
 
@@ -620,5 +643,142 @@ export const analyticsRepository = {
             label,
             avgSeconds: Number((stats.totalMs / stats.count / 1000).toFixed(2))
         }));
+    },
+
+    /**
+     * Get exit statistics (top pages where users end their session)
+     */
+    async getExitStats(daysBack = 7): Promise<any> {
+        const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+        const sessionExits = new Map<string, { path: string, timestamp: string }>();
+
+        // We need to find the latest page view for each session
+        for await (const entry of kv.list<PageView>({ prefix: [KEY_PREFIX.PAGE_VIEW] })) {
+            if (entry.value.timestamp < cutoff) continue;
+            const v = entry.value;
+
+            const existing = sessionExits.get(v.sessionId);
+            if (!existing || v.timestamp > existing.timestamp) {
+                sessionExits.set(v.sessionId, { path: v.path, timestamp: v.timestamp });
+            }
+        }
+
+        const exitCounts = new Map<string, number>();
+        sessionExits.forEach(exit => {
+            exitCounts.set(exit.path, (exitCounts.get(exit.path) || 0) + 1);
+        });
+
+        return Array.from(exitCounts.entries())
+            .map(([label, count]) => ({ label, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10);
+    },
+
+    /**
+     * Get global app data statistics (aggregated from all users)
+     */
+    async getAppDataStats(daysBack = 30): Promise<any> {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - daysBack);
+        const cutoffStr = cutoff.toISOString().split('T')[0];
+
+        const foodCounts = new Map<string, number>();
+        const exerciseCounts = new Map<string, number>();
+        let totalCals = 0;
+        let mealCount = 0;
+        let totalDistance = 0;
+        let totalTonnage = 0;
+        let strengthWorkoutCount = 0;
+        let cardioWorkoutCount = 0;
+
+        // 1. Aggregate Food from all users
+        for await (const entry of kv.list<any>({ prefix: ["meals"] })) {
+            const meal = entry.value;
+            if (meal.date >= cutoffStr) {
+                totalCals += meal.calories || 0;
+                mealCount++;
+                if (meal.items) {
+                    meal.items.forEach((item: any) => {
+                        foodCounts.set(item.name, (foodCounts.get(item.name) || 0) + 1);
+                    });
+                }
+            }
+        }
+
+        // 2. Aggregate Activities (Cardio)
+        for await (const entry of kv.list<any>({ prefix: ["activities"] })) {
+            const act = entry.value;
+            if (act.date >= cutoffStr && act.status === 'COMPLETED') {
+                cardioWorkoutCount++;
+                if (act.type) exerciseCounts.set(act.type, (exerciseCounts.get(act.type) || 0) + 1);
+                if (act.performance?.distance) totalDistance += act.performance.distance;
+            }
+        }
+
+        // 3. Aggregate Strength
+        for await (const entry of kv.list<any>({ prefix: ["strength_workouts"] })) {
+            const workout = entry.value;
+            if (workout.date >= cutoffStr) {
+                strengthWorkoutCount++;
+                totalTonnage += workout.totalVolume || 0;
+            }
+        }
+
+        // Format top lists
+        const topFoods = Array.from(foodCounts.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 15);
+
+        const topExercises = Array.from(exerciseCounts.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 10);
+
+        return {
+            nutrition: {
+                topFoods,
+                avgDailyCalories: mealCount > 0 ? Math.round(totalCals / (mealCount / 3)) : 0, // Approx 3 meals/day
+                totalMealsLogged: mealCount
+            },
+            training: {
+                topExercises,
+                totalDistance: Math.round(totalDistance),
+                totalTonnage: Math.round(totalTonnage),
+                strengthWorkoutCount,
+                cardioWorkoutCount
+            }
+        };
+    },
+
+    /**
+     * Get error statistics
+     */
+    async getErrorStats(daysBack = 7): Promise<any> {
+        const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+        const errors = new Map<string, { count: number, lastSeen: string, paths: Set<string> }>();
+
+        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
+            const e = entry.value;
+            if (e.timestamp < cutoff) continue;
+            if (e.type !== 'error') continue;
+
+            const existing = errors.get(e.label) || { count: 0, lastSeen: e.timestamp, paths: new Set<string>() };
+            existing.count++;
+            if (e.timestamp > existing.lastSeen) existing.lastSeen = e.timestamp;
+            if (e.path) existing.paths.add(e.path);
+            errors.set(e.label, existing);
+        }
+
+        return Array.from(errors.entries())
+            .map(([message, data]) => ({
+                message,
+                count: data.count,
+                lastSeen: data.lastSeen,
+                pathCount: data.paths.size,
+                topPath: Array.from(data.paths)[0]
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 20);
     }
 };

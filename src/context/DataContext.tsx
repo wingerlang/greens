@@ -876,10 +876,23 @@ export function DataProvider({ children }: DataProviderProps) {
 
     const updateMealEntry = useCallback((id: string, data: Partial<MealEntry>): void => {
         let entryToUpdate: MealEntry | undefined;
+        let hasChanges = false;
 
         setMealEntries((prev: MealEntry[]) => {
             const next = prev.map((entry: MealEntry) => {
                 if (entry.id === id) {
+                    // Check if anything actually changed before triggering API
+                    const isDifferent = Object.entries(data).some(([key, value]) => {
+                        // For items, we do a shallow compare of the array (since they are usually new objects if changed)
+                        if (key === 'items') return JSON.stringify(entry.items) !== JSON.stringify(value);
+                        return (entry as any)[key] !== value;
+                    });
+
+                    if (!isDifferent) {
+                        return entry;
+                    }
+
+                    hasChanges = true;
                     const updated = { ...entry, ...data };
                     entryToUpdate = updated;
                     return updated;
@@ -890,7 +903,7 @@ export function DataProvider({ children }: DataProviderProps) {
         });
 
         // Sync via Granular API outside of state updater
-        if (entryToUpdate) {
+        if (entryToUpdate && hasChanges) {
             skipAutoSave.current = true;
             storageService.updateMealEntry(entryToUpdate).catch(e => console.error("Failed to update meal", e));
         }
@@ -1535,15 +1548,15 @@ export function DataProvider({ children }: DataProviderProps) {
 
         const updatedPlanned = plannedActivities.map(planned => {
             // Only sync those that are still 'PLANNED'
+            // or those that have reconciliation data but might need updating (though COMPLETED is terminal here for auto-sync)
             if (planned.status !== 'PLANNED') return planned;
 
             // Find matching activity on same date with matching type
-            // Use scoring to find the BEST match, not just the first match
             const candidates = unifiedActivities
                 .filter(actual => !usedActivityIds.has(actual.id))
                 .map(actual => {
                     const sameDate = actual.date.split('T')[0] === planned.date.split('T')[0];
-                    if (!sameDate) return { actual, score: 0 };
+                    if (!sameDate) return { actual, score: 0, reason: "Annat datum" };
 
                     // Type mapping for reconciliation
                     const pType = planned.type;
@@ -1556,70 +1569,126 @@ export function DataProvider({ children }: DataProviderProps) {
                     const isHyroxMatch = pType === 'HYROX' && (aType === 'running' || aType === 'strength' || aType === 'other');
 
                     if (!isRunMatch && !isStrengthMatch && !isBikeMatch && !isHyroxMatch) {
-                        return { actual, score: 0 };
+                        return { actual, score: 0, reason: `Inkompatibel typ: ${pType} vs ${aType}` };
                     }
 
                     // Calculate match score (0-100)
-                    let score = 50; // Base score for type match
+                    let score = 50; // Base score for type match on same date
+                    const reasons: string[] = [`Matchande träningstyp (${pType})`];
 
-                    // Duration similarity bonus (up to +25 points)
-                    // A 51min workout vs planned 45min = 13% difference = +22 points
-                    // Estimate planned duration from distance (assuming ~6min/km for runs) or use 45min default for strength
+                    // Duration similarity bonus (up to +20 points)
                     const plannedDuration = planned.estimatedDistance ? planned.estimatedDistance * 6 : 45;
                     const actualDuration = actual.durationMinutes || 0;
                     if (actualDuration > 0 && plannedDuration > 0) {
                         const durationDiff = Math.abs(actualDuration - plannedDuration) / plannedDuration;
-                        if (durationDiff <= 0.30) {
-                            score += 25 * (1 - durationDiff / 0.30); // 0-25 points
+                        if (durationDiff <= 0.40) { // More lenient duration diff (40%)
+                            const bonus = Math.round(20 * (1 - durationDiff / 0.40));
+                            score += bonus;
+                            reasons.push(`Liknande längd (+${bonus}p)`);
                         }
                     }
 
-                    // Time proximity bonus (up to +25 points)
-                    // Activity at 11:37 vs planned 12:00 = 23min diff = +24 points
+                    // Time proximity bonus (up to +15 points)
                     if (planned.startTime && actual.date.includes('T')) {
                         const plannedHM = planned.startTime.split(':').map(Number);
                         const actualTime = actual.date.split('T')[1];
-                        if (actualTime) {
+                        if (actualTime && actualTime.includes(':')) {
                             const actualHM = actualTime.split(':').map(Number);
                             const plannedMinutes = (plannedHM[0] || 0) * 60 + (plannedHM[1] || 0);
                             const actualMinutes = (actualHM[0] || 0) * 60 + (actualHM[1] || 0);
                             const timeDiffMinutes = Math.abs(plannedMinutes - actualMinutes);
-                            if (timeDiffMinutes <= 120) { // Within 2 hours
-                                score += 25 * (1 - timeDiffMinutes / 120);
+                            if (timeDiffMinutes <= 240) { // Within 4 hours
+                                const bonus = Math.round(15 * (1 - timeDiffMinutes / 240));
+                                score += bonus;
+                                reasons.push(`Tidsnära (+${bonus}p, diff: ${timeDiffMinutes}m)`);
                             }
+                        } else {
+                            // Actual activity has no time - give a bonus for being "date-only" to help auto-matching
+                            score += 15;
+                            reasons.push("Ingen specifik tid på loggat pass (+15p)");
                         }
-                    } else {
-                        // No time info - still give partial credit
-                        score += 10;
+                    } else if (!planned.startTime) {
+                        // No specific time planned - give a generic bonus for "anytime today"
+                        score += 15;
+                        reasons.push("Ingen specifik tid planerad (+15p)");
                     }
 
-                    return { actual, score };
+                    // Title similarity bonus (+10)
+                    if (planned.title && actual.title) {
+                        const pTitle = planned.title.toLowerCase();
+                        const aTitle = actual.title.toLowerCase();
+                        if (pTitle.includes(aTitle) || aTitle.includes(pTitle)) {
+                            score += 10;
+                            reasons.push("Titel-matchning (+10p)");
+                        }
+                    }
+
+                    return { actual, score, reason: reasons.join(", ") };
                 })
                 .filter(c => c.score > 0)
                 .sort((a, b) => b.score - a.score);
 
+            // Bonus: If there is exactly one compatible activity today, give it a "Unique Candidate" bonus
+            if (candidates.length === 1 && candidates[0].score >= 50) {
+                candidates[0].score += 10;
+                candidates[0].reason += ", Ensam kandidat idag (+10p)";
+            }
+
             const bestMatch = candidates[0];
-            // Require at least 50 score (type match) to consider it a match
-            if (bestMatch && bestMatch.score >= 50) {
+            // Require at least 60 score to auto-reconcile
+            if (bestMatch && bestMatch.score >= 60) {
                 hasChanges = true;
                 usedActivityIds.add(bestMatch.actual.id);
+                console.log(`[DataContext] Auto-matched: "${planned.title}" -> "${bestMatch.actual.type}" (Score: ${bestMatch.score})`);
                 return {
                     ...planned,
                     status: 'COMPLETED' as const,
                     completedDate: bestMatch.actual.date,
                     actualDistance: bestMatch.actual.distance || planned.estimatedDistance,
                     actualTimeSeconds: (bestMatch.actual.durationMinutes || 0) * 60,
-                    // Store a reference to the activity that completed it
-                    externalId: bestMatch.actual.id
+                    externalId: bestMatch.actual.id,
+                    reconciliation: {
+                        score: bestMatch.score,
+                        matchReason: bestMatch.reason,
+                        bestCandidateId: bestMatch.actual.id,
+                        reconciledAt: new Date().toISOString()
+                    }
                 };
+            } else if (bestMatch) {
+                // Store candidate info even if not a strong enough match
+                // but ONLY if it changed from what was there before
+                if (planned.reconciliation?.bestCandidateId !== bestMatch.actual.id || planned.reconciliation?.score !== bestMatch.score) {
+                    hasChanges = true;
+                    console.log(`[DataContext] candidate for "${planned.title}": ${bestMatch.score}% - ${bestMatch.reason}`);
+                    return {
+                        ...planned,
+                        reconciliation: {
+                            score: bestMatch.score,
+                            matchReason: bestMatch.reason,
+                            bestCandidateId: bestMatch.actual.id,
+                            reconciledAt: new Date().toISOString()
+                        }
+                    };
+                }
             }
 
             return planned;
         });
 
         if (hasChanges) {
-            console.log(`[DataContext] Auto-reconciled ${updatedPlanned.filter(p => p.status === 'COMPLETED' && !plannedActivities.find(o => o.id === p.id && o.status === 'COMPLETED')).length} tasks.`);
+            const newlyChanged = updatedPlanned.filter((p, i) => {
+                const old = plannedActivities[i];
+                return p.status !== old.status || p.reconciliation?.score !== old.reconciliation?.score;
+            });
+
+            console.log(`[DataContext] Auto-reconciliation found ${newlyChanged.length} changes.`);
             setPlannedActivities(updatedPlanned);
+
+            // Persist changes to storage
+            newlyChanged.forEach(p => {
+                skipAutoSave.current = true;
+                storageService.savePlannedActivity(p).catch(e => console.error("Failed to persist reconciliation update:", e));
+            });
         }
     }, [unifiedActivities, plannedActivities, isLoaded]);
 

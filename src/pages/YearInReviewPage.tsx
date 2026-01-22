@@ -634,20 +634,54 @@ export function YearInReviewPage() {
             const days = [];
             let current = new Date(start);
 
-            const activityMap = new Map();
+            const activityMap = new Map<string, { minutes: number; cardio: number; strength: number; count: number; labels: string[] }>();
+
+            // Process Universal Activities (Cardio + Others)
             yearlyActivities.forEach((a: UniversalActivity) => {
                 const d = new Date(a.date);
                 if (d.getFullYear() !== year) return;
                 const date = a.date.split('T')[0];
-                const existing = activityMap.get(date) || 0;
-                activityMap.set(date, existing + (a.performance?.durationMinutes || 0));
+                const type = (a.performance?.activityType || '').toLowerCase();
+                const isCardio = ['running', 'cycling', 'walking', 'trail', 'hiking', 'swimming', 'rowing'].some(t => type.includes(t));
+                const mins = a.performance?.durationMinutes || 0;
+
+                const existing = activityMap.get(date) || { minutes: 0, cardio: 0, strength: 0, count: 0, labels: [] };
+
+                existing.minutes += mins;
+                if (isCardio) existing.cardio += mins;
+                // If it's tagged as strength in universal activities (sometimes happens with Strava imports)
+                else if (type.includes('strength') || type.includes('weight')) existing.strength += mins;
+
+                existing.count += 1;
+                existing.labels.push(`${mins}m ${a.performance?.activityType || 'Aktivitet'}`);
+                activityMap.set(date, existing);
+            });
+
+            // Process Strength Sessions (Pure Strength)
+            yearlyStrengthSessions.forEach(s => {
+                const d = new Date(s.date);
+                if (d.getFullYear() !== year) return;
+                const date = s.date.split('T')[0];
+                const mins = s.duration || 45; // Default if missing
+
+                const existing = activityMap.get(date) || { minutes: 0, cardio: 0, strength: 0, count: 0, labels: [] };
+                existing.minutes += mins;
+                existing.strength += mins;
+                existing.count += 1;
+                existing.labels.push(`${mins}m Styrka`);
+                activityMap.set(date, existing);
             });
 
             while (current <= end) {
                 const iso = current.toISOString().split('T')[0];
+                const dayData = activityMap.get(iso);
                 days.push({
                     date: iso,
-                    minutes: activityMap.get(iso) || 0,
+                    minutes: dayData?.minutes || 0,
+                    cardio: dayData?.cardio || 0,
+                    strength: dayData?.strength || 0,
+                    count: dayData?.count || 0,
+                    labels: dayData?.labels || [],
                     dayOfWeek: current.getDay()
                 });
                 current.setDate(current.getDate() + 1);
@@ -655,7 +689,7 @@ export function YearInReviewPage() {
             grids[year] = days;
         });
         return grids;
-    }, [yearlyActivities, selectedYears]);
+    }, [yearlyActivities, yearlyStrengthSessions, selectedYears]);
 
     // Computed Range for Charts
     const dateRange = useMemo(() => {
@@ -1974,18 +2008,31 @@ export function YearInReviewPage() {
                                                                         const dayData = yearlyGrids[year]?.[weekIndex * 7 + dayIndex];
                                                                         if (!dayData) return <div key={dayIndex} className="w-[11px] h-[11px] rounded-[1px] bg-transparent" />;
 
-                                                                        const intensityClass =
-                                                                            dayData.minutes === 0 ? 'bg-slate-800/20' :
-                                                                                dayData.minutes < 30 ? 'bg-emerald-900/60' :
+                                                                        const isDouble = dayData.cardio > 0 && dayData.strength > 0;
+                                                                        const isTriple = dayData.count >= 3;
+
+                                                                        let intensityClass = 'bg-slate-800/20';
+                                                                        if (dayData.minutes > 0) {
+                                                                            if (isTriple) {
+                                                                                intensityClass = 'bg-gradient-to-br from-amber-400 to-rose-500 shadow-lg shadow-amber-500/20';
+                                                                            } else if (isDouble) {
+                                                                                intensityClass = 'bg-gradient-to-br from-emerald-500 to-purple-600 shadow-md shadow-emerald-500/10';
+                                                                            } else if (dayData.cardio > 0) {
+                                                                                intensityClass = dayData.minutes < 30 ? 'bg-emerald-900/60' :
                                                                                     dayData.minutes < 60 ? 'bg-emerald-700/70' :
-                                                                                        dayData.minutes < 90 ? 'bg-emerald-500/80' :
-                                                                                            'bg-emerald-400';
+                                                                                        dayData.minutes < 90 ? 'bg-emerald-500/80' : 'bg-emerald-400';
+                                                                            } else {
+                                                                                intensityClass = dayData.minutes < 30 ? 'bg-purple-900/60' :
+                                                                                    dayData.minutes < 60 ? 'bg-purple-700/70' :
+                                                                                        dayData.minutes < 120 ? 'bg-purple-500/80' : 'bg-purple-400';
+                                                                            }
+                                                                        }
 
                                                                         return (
                                                                             <div
                                                                                 key={dayIndex}
                                                                                 className={`w-[11px] h-[11px] rounded-[1px] ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all cursor-pointer`}
-                                                                                title={`${dayData.date}: ${dayData.minutes} min`}
+                                                                                title={`${dayData.date}: ${dayData.minutes} min [${dayData.labels.join(', ')}]`}
                                                                             />
                                                                         );
                                                                     })}
@@ -2038,18 +2085,31 @@ export function YearInReviewPage() {
                                                     const dayData = yearlyGrids[year]?.[weekIndex * 7 + dayIndex];
                                                     if (!dayData) return <div key={dayIndex} className="w-3 h-3 rounded-sm bg-transparent" />;
 
-                                                    const intensityClass =
-                                                        dayData.minutes === 0 ? 'bg-slate-800/50' :
-                                                            dayData.minutes < 30 ? 'bg-emerald-900' :
+                                                    const isDouble = dayData.cardio > 0 && dayData.strength > 0;
+                                                    const isTriple = dayData.count >= 3;
+
+                                                    let intensityClass = 'bg-slate-800/50';
+                                                    if (dayData.minutes > 0) {
+                                                        if (isTriple) {
+                                                            intensityClass = 'bg-gradient-to-br from-amber-400 to-rose-500 shadow-lg';
+                                                        } else if (isDouble) {
+                                                            intensityClass = 'bg-gradient-to-br from-emerald-500 to-purple-600 shadow-md';
+                                                        } else if (dayData.cardio > 0) {
+                                                            intensityClass = dayData.minutes < 30 ? 'bg-emerald-900' :
                                                                 dayData.minutes < 60 ? 'bg-emerald-700' :
-                                                                    dayData.minutes < 90 ? 'bg-emerald-500' :
-                                                                        'bg-emerald-300';
+                                                                    dayData.minutes < 90 ? 'bg-emerald-500' : 'bg-emerald-300';
+                                                        } else {
+                                                            intensityClass = dayData.minutes < 30 ? 'bg-purple-900' :
+                                                                dayData.minutes < 60 ? 'bg-purple-700' :
+                                                                    dayData.minutes < 120 ? 'bg-purple-500' : 'bg-purple-300';
+                                                        }
+                                                    }
 
                                                     return (
                                                         <div
                                                             key={dayIndex}
                                                             className={`w-3 h-3 rounded-sm ${intensityClass} hover:ring-2 hover:ring-white/50 transition-all cursor-pointer`}
-                                                            title={`${dayData.date}: ${dayData.minutes} min`}
+                                                            title={`${dayData.date}: ${dayData.minutes} min [${dayData.labels.join(', ')}]`}
                                                         />
                                                     );
                                                 })}
