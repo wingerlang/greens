@@ -46,7 +46,10 @@ import {
     type BodyMeasurementEntry, // Phase Legacy+
     type TrainingPeriod,
     type QuickMeal,
-    type MealItem
+    type MealItem,
+    type DatabaseAction,
+    type DatabaseActionType,
+    type DatabaseEntityType
 } from '../models/types.ts';
 import { type StrengthWorkout } from '../models/strengthTypes.ts';
 import { storageService } from '../services/storage.ts';
@@ -225,6 +228,7 @@ interface DataContextType {
     // System
     refreshData: () => Promise<void>;
     isLoading: boolean;
+    databaseActions: DatabaseAction[];
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -276,6 +280,8 @@ export function DataProvider({ children }: DataProviderProps) {
     const [quickMeals, setQuickMeals] = useState<QuickMeal[]>([]);
     const [foodAliases, setFoodAliases] = useState<Record<string, string>>({});
 
+    const [databaseActions, setDatabaseActions] = useState<DatabaseAction[]>([]);
+
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Helper for Feed events
@@ -300,6 +306,27 @@ export function DataProvider({ children }: DataProviderProps) {
             timestamp: new Date().toISOString(),
             visibility
         }).catch(err => console.error("Feed event failed:", err));
+    }, [currentUser]);
+
+    // Helper: Log a database action
+    const logAction = useCallback((
+        actionType: DatabaseActionType,
+        entityType: DatabaseEntityType,
+        entityId: string,
+        entityName?: string,
+        metadata?: Record<string, any>
+    ) => {
+        const action: DatabaseAction = {
+            id: generateId(),
+            timestamp: new Date().toISOString(),
+            userId: currentUser?.id,
+            actionType,
+            entityType,
+            entityId,
+            entityName,
+            metadata
+        };
+        setDatabaseActions(prev => [action, ...prev].slice(0, 500)); // Keep last 500 actions
     }, [currentUser]);
 
     // Optimization: Skip auto-save for atomic updates that are handled by dedicated API calls
@@ -690,8 +717,10 @@ export function DataProvider({ children }: DataProviderProps) {
             }
         }).catch(e => console.error("Failed to sync food:", e));
 
+        logAction('CREATE', 'food_item', newItem.id, newItem.name);
+
         return newItem;
-    }, []);
+    }, [logAction]);
 
     const updateFoodItem = useCallback((id: string, data: Partial<FoodItemFormData>): void => {
         setFoodItems((prev: FoodItem[]) => {
@@ -710,17 +739,20 @@ export function DataProvider({ children }: DataProviderProps) {
                         setFoodItems(current => current.map(i => i.id === id ? serverItem : i));
                     }
                 }).catch(e => console.error("Failed to sync food:", e));
+                logAction('UPDATE', 'food_item', id, updatedItem.name);
             }
 
             return next;
         });
-    }, []);
+    }, [logAction]);
 
     const deleteFoodItem = useCallback((id: string): void => {
+        const item = foodItems.find(f => f.id === id);
         setFoodItems((prev: FoodItem[]) => prev.filter((item: FoodItem) => item.id !== id));
         skipAutoSave.current = true;
         storageService.deleteFoodItem(id).catch(e => console.error("Failed to delete food:", e));
-    }, []);
+        logAction('DELETE', 'food_item', id, item?.name);
+    }, [foodItems, logAction]);
 
     const getFoodItem = useCallback((id: string): FoodItem | undefined => {
         return foodItems.find(item => item.id === id);
@@ -743,8 +775,10 @@ export function DataProvider({ children }: DataProviderProps) {
         skipAutoSave.current = true;
         storageService.saveRecipe(newRecipe).catch(e => console.error("Failed to save recipe", e));
 
+        logAction('CREATE', 'recipe', newRecipe.id, newRecipe.name);
+
         return newRecipe;
-    }, []);
+    }, [logAction]);
 
     const updateRecipe = useCallback((id: string, data: Partial<RecipeFormData>): void => {
         const existing = recipes.find(r => r.id === id);
@@ -756,13 +790,16 @@ export function DataProvider({ children }: DataProviderProps) {
 
         skipAutoSave.current = true;
         storageService.saveRecipe(updated).catch(e => console.error("Failed to update recipe", e));
-    }, [recipes]);
+        logAction('UPDATE', 'recipe', id, updated.name);
+    }, [recipes, logAction]);
 
     const deleteRecipe = useCallback((id: string): void => {
+        const recipe = recipes.find(r => r.id === id);
         setRecipes((prev: Recipe[]) => prev.filter((recipe: Recipe) => recipe.id !== id));
         skipAutoSave.current = true;
         storageService.deleteRecipe(id).catch(e => console.error("Failed to delete recipe", e));
-    }, []);
+        logAction('DELETE', 'recipe', id, recipe?.name);
+    }, [recipes, logAction]);
 
     const getRecipe = useCallback((id: string): Recipe | undefined => {
         return recipes.find(recipe => recipe.id === id);
@@ -872,8 +909,10 @@ export function DataProvider({ children }: DataProviderProps) {
             [{ label: 'Energi', value: Math.round(totalCals), unit: 'kcal', icon: '🔥' }]
         );
 
+        logAction('CREATE', 'meal_entry', newEntry.id, undefined, { mealType: newEntry.mealType, date: newEntry.date });
+
         return newEntry;
-    }, [foodItems, recipes, calculateRecipeNutrition, emitFeedEvent]);
+    }, [foodItems, recipes, calculateRecipeNutrition, emitFeedEvent, logAction]);
 
     const updateMealEntry = useCallback((id: string, data: Partial<MealEntry>): void => {
         let entryToUpdate: MealEntry | undefined;
@@ -907,8 +946,9 @@ export function DataProvider({ children }: DataProviderProps) {
         if (entryToUpdate && hasChanges) {
             skipAutoSave.current = true;
             storageService.updateMealEntry(entryToUpdate).catch(e => console.error("Failed to update meal", e));
+            logAction('UPDATE', 'meal_entry', id, undefined, { date: (entryToUpdate as MealEntry).date });
         }
-    }, [storageService]);
+    }, [storageService, logAction]);
 
     const deleteMealEntry = useCallback((id: string): void => {
         let entryToDelete: MealEntry | undefined;
@@ -924,8 +964,9 @@ export function DataProvider({ children }: DataProviderProps) {
 
         if (entryToDelete) {
             storageService.deleteMealEntry(id, entryToDelete.date).catch(e => console.error("Failed to delete meal", e));
+            logAction('DELETE', 'meal_entry', id, undefined, { date: entryToDelete.date });
         }
-    }, [storageService]);
+    }, [storageService, logAction]);
 
     // ============================================
     // Strength Session CRUD (Phase 12)
@@ -1050,7 +1091,7 @@ export function DataProvider({ children }: DataProviderProps) {
         );
 
         return newEntry;
-    }, [emitFeedEvent]);
+    }, [emitFeedEvent, logAction]);
 
     const updateExercise = useCallback((id: string, updates: Partial<ExerciseEntry>) => {
         const existing = exerciseEntries.find(e => e.id === id);
@@ -1291,8 +1332,10 @@ export function DataProvider({ children }: DataProviderProps) {
             [{ label: 'Vikt', value: weight, unit: 'kg', icon: '⚖️' }]
         );
 
+        logAction('CREATE', 'weight_entry', newEntry.id, undefined, { weight, date });
+
         return newEntry;
-    }, [weightEntries, emitFeedEvent]);
+    }, [weightEntries, emitFeedEvent, logAction]);
 
     const bulkAddWeightEntries = useCallback((entries: Partial<WeightEntry>[]) => {
         const newEntries = entries.map(e => ({
@@ -2188,14 +2231,16 @@ export function DataProvider({ children }: DataProviderProps) {
         setQuickMeals(prev => [...prev, newMeal]);
         skipAutoSave.current = true;
         storageService.saveQuickMeal(newMeal).catch(console.error);
+        logAction('CREATE', 'quick_meal', newMeal.id, newMeal.name);
         return newMeal;
-    }, [currentUser]);
+    }, [currentUser, logAction]);
 
     const deleteQuickMeal = useCallback((id: string) => {
         setQuickMeals(prev => prev.filter(m => m.id !== id));
         skipAutoSave.current = true;
         storageService.deleteQuickMeal(id).catch(console.error);
-    }, []);
+        logAction('DELETE', 'quick_meal', id);
+    }, [logAction]);
 
     const updateQuickMeal = useCallback((id: string, updates: Partial<Omit<QuickMeal, 'id' | 'userId' | 'createdAt'>>) => {
         setQuickMeals(prev => prev.map(m => {
@@ -2203,10 +2248,11 @@ export function DataProvider({ children }: DataProviderProps) {
             const updated = { ...m, ...updates };
             // Save to storage
             storageService.saveQuickMeal(updated).catch(console.error);
+            logAction('UPDATE', 'quick_meal', id, updated.name);
             return updated;
         }));
         skipAutoSave.current = true;
-    }, []);
+    }, [logAction]);
 
     const updateFoodAlias = useCallback((foodId: string, alias: string) => {
         setFoodAliases(prev => {
@@ -2584,7 +2630,8 @@ export function DataProvider({ children }: DataProviderProps) {
 
         unifiedActivities,
         refreshData,
-        isLoading: !isLoaded
+        isLoading: !isLoaded,
+        databaseActions
     };
 
     return (

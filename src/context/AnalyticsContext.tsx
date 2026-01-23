@@ -88,14 +88,66 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
     }, [location.pathname, user]);
 
-    // 2. Global Click Tracking
+    // 2. Global Click Tracking (with Heatmap & Rage Click detection)
+    const lastClickRef = useRef<{ target: string; time: number; count: number } | null>(null);
+
     useEffect(() => {
         if (!user) return;
 
         const handleClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
+
+            // --- Heatmap Data Capture ---
+            // Capture ALL clicks, not just interactive ones, for pure heatmap
+            const viewportW = window.innerWidth;
+            const viewportH = window.innerHeight;
+            const x = e.clientX;
+            const y = e.clientY;
+
+            // --- Rage Click Logic ---
+            // Check if clicking same element rapidly (within 500ms)
+            // Use a simple selector path as "ID"
+            const selector = target.id ? `#${target.id}` : target.tagName.toLowerCase() + (target.className ? `.${target.className.split(' ')[0]}` : '');
+            const now = Date.now();
+
+            if (lastClickRef.current &&
+                lastClickRef.current.target === selector &&
+                (now - lastClickRef.current.time < 500)) {
+
+                lastClickRef.current.count++;
+                lastClickRef.current.time = now;
+
+                if (lastClickRef.current.count === 3) { // Trigger on 3rd rapid click
+                    const rageEvent: InteractionEvent = {
+                        id: generateId(),
+                        userId: user.id,
+                        sessionId: sessionIdRef.current,
+                        type: 'rage_click',
+                        target: selector,
+                        label: 'Rage Click Detected',
+                        path: location.pathname,
+                        timestamp: new Date().toISOString(),
+                        coordinates: {
+                            x, y,
+                            pctX: Math.round((x / viewportW) * 100),
+                            pctY: Math.round((y / viewportH) * 100),
+                            viewportW,
+                            viewportH
+                        }
+                    };
+                    fetch('/api/usage/event', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(rageEvent)
+                    }).catch(e => console.debug("Analytics rage log failed", e));
+                }
+            } else {
+                lastClickRef.current = { target: selector, time: now, count: 1 };
+            }
+            // ------------------------
+
             // Find closest interactive element
-            const interactive = target.closest('button, a, input[type="submit"], [role="button"]');
+            const interactive = target.closest('button, a, input, select, textarea, [role="button"], [onclick]');
 
             if (interactive) {
                 const element = interactive as HTMLElement;
@@ -113,7 +165,14 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                     target: element.tagName.toLowerCase(),
                     label: label,
                     path: location.pathname,
-                    timestamp: new Date().toISOString()
+                    timestamp: new Date().toISOString(),
+                    coordinates: {
+                        x, y,
+                        pctX: Math.round((x / viewportW) * 100),
+                        pctY: Math.round((y / viewportH) * 100),
+                        viewportW,
+                        viewportH
+                    }
                 };
 
                 fetch('/api/usage/event', {
@@ -121,6 +180,34 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(event)
                 }).catch(e => console.debug("Analytics event log failed", e));
+            } else {
+                // --- Dead Click Logic ---
+                // If not interactive, and it's text/div/span, user might be confused
+                const isText = ['P', 'SPAN', 'DIV', 'H1', 'H2', 'H3', 'LI'].includes(target.tagName);
+                if (isText && target.innerText && target.innerText.length < 50) { // Limit to short texts that look like buttons
+                    const deadEvent: InteractionEvent = {
+                        id: generateId(),
+                        userId: user.id,
+                        sessionId: sessionIdRef.current,
+                        type: 'dead_click',
+                        target: target.tagName,
+                        label: target.innerText.substring(0, 30),
+                        path: location.pathname,
+                        timestamp: new Date().toISOString(),
+                        coordinates: {
+                            x, y,
+                            pctX: Math.round((x / viewportW) * 100),
+                            pctY: Math.round((y / viewportH) * 100),
+                            viewportW,
+                            viewportH
+                        }
+                    };
+                    fetch('/api/usage/event', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(deadEvent)
+                    }).catch(e => console.debug("Analytics dead log failed", e));
+                }
             }
         };
 

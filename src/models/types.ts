@@ -1408,6 +1408,43 @@ export interface AppData {
     // Quick Meals & Aliases
     quickMeals?: QuickMeal[];
     foodAliases?: Record<string, string>; // foodId -> alias
+
+    // Activity Log
+    databaseActions?: DatabaseAction[];
+}
+
+// ============================================
+// Database Action Tracking
+// ============================================
+
+export type DatabaseActionType =
+    | 'CREATE'
+    | 'UPDATE'
+    | 'DELETE';
+
+export type DatabaseEntityType =
+    | 'food_item'
+    | 'recipe'
+    | 'meal_entry'
+    | 'weight_entry'
+    | 'exercise_entry'
+    | 'weekly_plan'
+    | 'quick_meal'
+    | 'strength_session'
+    | 'goal'
+    | 'period'
+    | 'body_measurement'
+    | 'other';
+
+export interface DatabaseAction {
+    id: string;
+    timestamp: string; // ISO
+    userId?: string;
+    actionType: DatabaseActionType;
+    entityType: DatabaseEntityType;
+    entityId: string;
+    entityName?: string; // e.g., "Havregryn" or "Pasta Marinara"
+    metadata?: Record<string, any>; // Extra context
 }
 
 /** Pantry quantities - maps item name (lowercase) to quantity at home */
@@ -1654,12 +1691,20 @@ export interface InteractionEvent {
     id: string;
     userId: string;
     sessionId: string;
-    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'omnibox_nav' | 'quick_add_log' | 'estimate_lunch_log' | 'error';
+    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'omnibox_nav' | 'quick_add_log' | 'estimate_lunch_log' | 'error' | 'rage_click' | 'dead_click';
     target: string; // e.g., "button", "a", "input"
     label: string; // e.g., "Save Workout", "Log Out"
     path: string; // Where it happened
     timestamp: string;
     metadata?: Record<string, any>;
+    coordinates?: {
+        x: number; // ClientX: relative to viewport
+        y: number; // ClientY
+        pctX: number; // 0-100% of viewport width
+        pctY: number; // 0-100% of viewport height
+        viewportW: number;
+        viewportH: number;
+    };
 }
 
 export interface AnalyticsSession {

@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-    BarChart, Bar, Cell, PieChart, Pie, Legend
+    BarChart, Bar, Cell, PieChart, Pie, Legend,
+    RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar
 } from 'recharts';
 
 // Types for analytics
@@ -52,7 +53,7 @@ interface SessionEvent extends InteractionEvent {
 
 export function AnalyticsDashboard() {
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState<'overview' | 'sessions' | 'retention' | 'pathing' | 'appData' | 'errors'>('overview');
+    const [activeTab, setActiveTab] = useState<'overview' | 'sessions' | 'retention' | 'pathing' | 'appData' | 'errors' | 'heatmap' | 'friction' | 'funnel'>('overview');
 
     // Overview Data
     const [stats, setStats] = useState<AnalyticsStats | null>(null);
@@ -220,6 +221,24 @@ export function AnalyticsDashboard() {
                             className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'errors' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
                         >
                             Fel-logg
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('heatmap')}
+                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'heatmap' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                        >
+                            🔥 Heatmap
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('friction')}
+                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'friction' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                        >
+                            🛑 Friction
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('funnel')}
+                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'funnel' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
+                        >
+                            🌪️ Funnel
                         </button>
                     </div>
                 </div>
@@ -700,346 +719,468 @@ export function AnalyticsDashboard() {
                         </div>
                     </div>
                 </div>
+            ) : activeTab === 'heatmap' ? (
+            // --- HEATMAP TAB ---
+            <HeatmapView events={rawEvents} />
+            ) : activeTab === 'friction' ? (
+            // --- FRICTION TAB ---
+            <FrictionView events={rawEvents} />
+            ) : activeTab === 'funnel' ? (
+            // --- FUNNEL TAB ---
+            <FunnelView events={rawEvents} />
+            ) : (
+            // --- SESSIONS TAB ---
+            <div className="space-y-6">
+                {/* TABLE WAS HERE, RESTORE IT IF NEEDED OR ASSUME IT IS ABOVE? */}
+                {/* Validating context: generic "Sessions" logic usually goes here */}
+                {/* The table code seems to be what was rendered in the 'else' of pathing. */}
+                {/* If I am in the 'else' of 'funnel', I should render the table. */}
+                {/* I will assume the table code needs to be HERE. */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="text-xs text-slate-400 uppercase bg-slate-800/50">
+                                <tr>
+                                    <th className="px-4 py-3 text-left">Användare</th>
+                                    <th className="px-4 py-3 text-left">Starttid</th>
+                                    <th className="px-4 py-3 text-right">Längd</th>
+                                    <th className="px-4 py-3 text-right">Händelser</th>
+                                    <th className="px-4 py-3 text-left">Flöde</th>
+                                    <th className="px-4 py-3 text-center">Åtgärd</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800">
+                                {sessions.map(s => (
+                                    <tr key={s.sessionId} className="hover:bg-slate-800/30">
+                                        <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                                            {s.userId.slice(0, 8)}...
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-400 text-xs">
+                                            {new Date(s.startTime).toLocaleString('sv-SE', {
+                                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                            })}
+                                        </td>
+                                        <td className="px-4 py-3 text-right text-slate-300 font-bold">
+                                            {formatDuration(s.durationSeconds)}
+                                        </td>
+                                        <td className="px-4 py-3 text-right text-purple-400 font-bold">
+                                            {s.eventCount + s.viewCount}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div className="flex items-center gap-1 opacity-70">
+                                                {s.pathFlow.slice(0, 3).map((path, i) => (
+                                                    <React.Fragment key={i}>
+                                                        {i > 0 && <span className="text-slate-600">→</span>}
+                                                        <span className="text-xs bg-slate-800 px-1.5 py-0.5 rounded truncate max-w-[100px]" title={path}>
+                                                            {path}
+                                                        </span>
+                                                    </React.Fragment>
+                                                ))}
+                                                {s.pathFlow.length > 3 && <span className="text-xs text-slate-500">...</span>}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3 text-center">
+                                            <button
+                                                onClick={() => setPlayingSessionId(s.sessionId)}
+                                                className="p-1.5 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors shadow-lg shadow-pink-500/20"
+                                                title="Spela upp session"
+                                            >
+                                                <Play size={16} fill="currentColor" />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {sessions.length === 0 && !loading && (
+                                    <tr>
+                                        <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                                            Inga sessioner hittades för denna period.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             )}
 
-            {/* SESSION PLAYER MODAL */}
-            {playingSessionId && (
-                <SessionPlayer
-                    sessionId={playingSessionId}
-                    onClose={() => setPlayingSessionId(null)}
-                />
-            )}
-        </div>
-    );
+                {/* SESSION PLAYER MODAL */}
+                {playingSessionId && (
+                    <SessionPlayer
+                        sessionId={playingSessionId}
+                        onClose={() => setPlayingSessionId(null)}
+                    />
+                )}
+            </div>
+            );
 }
 
-// --- HELPER COMPONENTS ---
+            // --- HELPER COMPONENTS ---
 
-function RetentionHeatmap({ data }: { data: any[] }) {
+            function RetentionHeatmap({data}: {data: any[] }) {
     return (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
-            <h2 className="text-lg font-black mb-6 flex items-center gap-2">
-                <Calendar size={20} className="text-pink-500" />
-                Kohort-Retention (14 Dagar)
-            </h2>
-            <table className="w-full text-[10px] border-collapse">
-                <thead>
-                    <tr>
-                        <th className="p-2 text-left bg-slate-800/50 sticky left-0 z-10 w-24">Datum</th>
-                        <th className="p-2 text-center bg-slate-800/50">Antal</th>
-                        {new Array(14).fill(0).map((_, i) => (
-                            <th key={i} className="p-2 text-center bg-slate-800/20 w-8">D{i + 1}</th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                    {data.map(row => (
-                        <tr key={row.date} className="hover:bg-slate-800/30">
-                            <td className="p-2 font-bold text-slate-300 sticky left-0 bg-slate-900 z-10">{row.date}</td>
-                            <td className="p-2 text-center font-bold text-white bg-slate-800/30">{row.total}</td>
-                            {row.retained.map((count: number, i: number) => {
-                                const percent = row.total > 0 ? (count / row.total) * 100 : 0;
-                                let bgColor = 'bg-slate-900';
-                                if (percent > 0) bgColor = 'bg-pink-500/10';
-                                if (percent > 20) bgColor = 'bg-pink-500/30';
-                                if (percent > 50) bgColor = 'bg-pink-500/60';
-                                if (percent > 80) bgColor = 'bg-pink-500';
-
-                                return (
-                                    <td
-                                        key={i}
-                                        className={`p-2 text-center border border-slate-800/50 transition-colors ${bgColor} ${percent > 50 ? 'text-white' : 'text-slate-400'}`}
-                                        title={`${count} användare återvände dag ${i + 1}`}
-                                    >
-                                        {percent > 0 ? `${Math.round(percent)}%` : '-'}
-                                    </td>
-                                );
-                            })}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <h2 className="text-lg font-black mb-6 flex items-center gap-2">
+                    <Calendar size={20} className="text-pink-500" />
+                    Kohort-Retention (14 Dagar)
+                </h2>
+                <table className="w-full text-[10px] border-collapse">
+                    <thead>
+                        <tr>
+                            <th className="p-2 text-left bg-slate-800/50 sticky left-0 z-10 w-24">Datum</th>
+                            <th className="p-2 text-center bg-slate-800/50">Antal</th>
+                            {new Array(14).fill(0).map((_, i) => (
+                                <th key={i} className="p-2 text-center bg-slate-800/20 w-8">D{i + 1}</th>
+                            ))}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                        {data.map(row => (
+                            <tr key={row.date} className="hover:bg-slate-800/30">
+                                <td className="p-2 font-bold text-slate-300 sticky left-0 bg-slate-900 z-10">{row.date}</td>
+                                <td className="p-2 text-center font-bold text-white bg-slate-800/30">{row.total}</td>
+                                {row.retained.map((count: number, i: number) => {
+                                    const percent = row.total > 0 ? (count / row.total) * 100 : 0;
+                                    let bgColor = 'bg-slate-900';
+                                    if (percent > 0) bgColor = 'bg-pink-500/10';
+                                    if (percent > 20) bgColor = 'bg-pink-500/30';
+                                    if (percent > 50) bgColor = 'bg-pink-500/60';
+                                    if (percent > 80) bgColor = 'bg-pink-500';
+
+                                    return (
+                                        <td
+                                            key={i}
+                                            className={`p-2 text-center border border-slate-800/50 transition-colors ${bgColor} ${percent > 50 ? 'text-white' : 'text-slate-400'}`}
+                                            title={`${count} användare återvände dag ${i + 1}`}
+                                        >
+                                            {percent > 0 ? `${Math.round(percent)}%` : '-'}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            );
 }
 
-function PathingFlow({ data }: { data: any[] }) {
+            function PathingFlow({data}: {data: any[] }) {
     // Separate paths and calculate exit dropoffs (simplisticly)
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                <h2 className="text-lg font-black mb-4 flex items-center gap-2">
-                    <TrendingUp size={20} className="text-blue-500" />
-                    Vanliga Navigeringsvägar
-                </h2>
-                <div className="space-y-4">
-                    {data.map((item, i) => {
-                        const [from, to] = item.label.split(' -> ');
-                        return (
-                            <div key={i} className="flex items-center gap-4 group">
-                                <div className="flex-1 bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex items-center justify-between group-hover:border-blue-500/50 transition-colors">
-                                    <div className="flex items-center gap-3 overflow-hidden">
-                                        <span className="text-xs font-mono text-slate-400 truncate max-w-[150px]">{from}</span>
-                                        <SkipForward size={14} className="text-slate-600 flex-shrink-0" />
-                                        <span className="text-xs font-mono text-blue-400 font-bold truncate max-w-[150px]">{to}</span>
-                                    </div>
-                                    <div className="text-lg font-black text-white">{item.count}</div>
-                                </div>
-                                <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-blue-500"
-                                        style={{ width: `${(item.count / data[0].count) * 100}%` }}
-                                    />
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            </div>
-
-            <div className="space-y-8">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                    <h2 className="text-sm font-black uppercase text-slate-500 mb-4 flex items-center gap-2">
-                        <Monitor size={16} />
-                        Exit-Analys
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                    <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                        <TrendingUp size={20} className="text-blue-500" />
+                        Vanliga Navigeringsvägar
                     </h2>
                     <div className="space-y-4">
-                        {exitStats.map((item, i) => (
-                            <div key={i} className="flex flex-col gap-1">
-                                <div className="flex justify-between text-[10px] font-bold">
-                                    <span className="text-slate-400 truncate max-w-[150px]" title={item.label}>{item.label}</span>
-                                    <span className="text-pink-400">{item.count}</span>
+                        {data.map((item, i) => {
+                            const [from, to] = item.label.split(' -> ');
+                            return (
+                                <div key={i} className="flex items-center gap-4 group">
+                                    <div className="flex-1 bg-slate-800/50 p-3 rounded-xl border border-slate-700 flex items-center justify-between group-hover:border-blue-500/50 transition-colors">
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                            <span className="text-xs font-mono text-slate-400 truncate max-w-[150px]">{from}</span>
+                                            <SkipForward size={14} className="text-slate-600 flex-shrink-0" />
+                                            <span className="text-xs font-mono text-blue-400 font-bold truncate max-w-[150px]">{to}</span>
+                                        </div>
+                                        <div className="text-lg font-black text-white">{item.count}</div>
+                                    </div>
+                                    <div className="w-16 h-1 bg-slate-800 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-blue-500"
+                                            style={{ width: `${(item.count / data[0].count) * 100}%` }}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-pink-500"
-                                        style={{ width: `${(item.count / (exitStats[0]?.count || 1)) * 100}%` }}
-                                    />
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="space-y-8">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                        <h2 className="text-sm font-black uppercase text-slate-500 mb-4 flex items-center gap-2">
+                            <Monitor size={16} />
+                            Exit-Analys
+                        </h2>
+                        <div className="space-y-4">
+                            {exitStats.map((item, i) => (
+                                <div key={i} className="flex flex-col gap-1">
+                                    <div className="flex justify-between text-[10px] font-bold">
+                                        <span className="text-slate-400 truncate max-w-[150px]" title={item.label}>{item.label}</span>
+                                        <span className="text-pink-400">{item.count}</span>
+                                    </div>
+                                    <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-pink-500"
+                                            style={{ width: `${(item.count / (exitStats[0]?.count || 1)) * 100}%` }}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
-                        {exitStats.length === 0 && (
-                            <div className="p-8 text-center text-slate-600 text-xs">
-                                Inga exit-data tillgängliga.
-                            </div>
-                        )}
+                            ))}
+                            {exitStats.length === 0 && (
+                                <div className="p-8 text-center text-slate-600 text-xs">
+                                    Inga exit-data tillgängliga.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-    );
+            );
 }
 
-function SessionPlayer({ sessionId, onClose }: { sessionId: string, onClose: () => void }) {
+            function SessionPlayer({sessionId, onClose}: {sessionId: string, onClose: () => void }) {
     const [events, setEvents] = useState<any[]>([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [isPlaying, setIsPlaying] = useState(false);
-    const [loading, setLoading] = useState(true);
-    const [playbackSpeed, setPlaybackSpeed] = useState(1);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [loading, setLoading] = useState(true);
+            const [playbackSpeed, setPlaybackSpeed] = useState(1);
 
     // Fetch detailed events
     useEffect(() => {
         const fetchEvents = async () => {
             try {
                 const res = await fetch(`/api/usage/session?id=${sessionId}`);
-                const data = await res.json();
-                setEvents(data.events || []);
+            const data = await res.json();
+            setEvents(data.events || []);
             } catch (e) {
                 console.error(e);
             }
             setLoading(false);
         };
-        fetchEvents();
+            fetchEvents();
     }, [sessionId]);
 
     // Playback Loop
     useEffect(() => {
-        let timer: any;
-        if (isPlaying && currentIndex < events.length - 1) {
-            timer = setTimeout(() => {
-                setCurrentIndex(prev => prev + 1);
-            }, 1000 / playbackSpeed); // Simple constant time between events for now (could use real timestamps)
+                let timer: any;
+            if (isPlaying && currentIndex < events.length - 1) {
+                timer = setTimeout(() => {
+                    setCurrentIndex(prev => prev + 1);
+                }, 1000 / playbackSpeed); // Simple constant time between events for now (could use real timestamps)
         } else if (currentIndex >= events.length - 1) {
-            setIsPlaying(false);
+                setIsPlaying(false);
         }
         return () => clearTimeout(timer);
     }, [isPlaying, currentIndex, events.length, playbackSpeed]);
 
-    const currentEvent = events[currentIndex];
+            const currentEvent = events[currentIndex];
 
-    // Scroll event list to show current
-    const listRef = useRef<HTMLDivElement>(null);
+            // Scroll event list to show current
+            const listRef = useRef<HTMLDivElement>(null);
     useEffect(() => {
         if (listRef.current) {
             const item = listRef.current.children[currentIndex] as HTMLElement;
-            if (item) {
-                item.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (item) {
+                    item.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
     }, [currentIndex]);
 
-    if (loading) return null;
+                if (loading) return null;
 
-    return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl overflow-hidden">
-                {/* Header */}
-                <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-950">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-pink-500 rounded-lg">
-                            <Monitor size={20} className="text-white" />
-                        </div>
-                        <div>
-                            <h2 className="text-lg font-bold text-white">Sessionsuppspelning</h2>
-                            <p className="text-xs text-slate-400 font-mono">{sessionId}</p>
-                        </div>
-                    </div>
-                    <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white">
-                        <X size={24} />
-                    </button>
-                </div>
-
-                {/* Main Content */}
-                <div className="flex-1 flex overflow-hidden">
-                    {/* Left: Event List */}
-                    <div className="w-1/3 border-r border-slate-700 flex flex-col bg-slate-900">
-                        <div className="p-2 bg-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">
-                            Händelselogg
-                        </div>
-                        <div ref={listRef} className="flex-1 overflow-y-auto p-2 space-y-1">
-                            {events.map((e, i) => (
-                                <div
-                                    key={i}
-                                    onClick={() => { setCurrentIndex(i); setIsPlaying(false); }}
-                                    className={`p-3 rounded-lg text-xs cursor-pointer transition-all border ${i === currentIndex
-                                        ? 'bg-pink-500/20 border-pink-500 text-pink-100 shadow-md transform scale-[1.02]'
-                                        : 'bg-slate-800/50 border-transparent text-slate-400 hover:bg-slate-800'
-                                        }`}
-                                >
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className={`font-bold uppercase text-[10px] px-1.5 py-0.5 rounded ${e.type === 'error' ? 'bg-red-500/20 text-red-400' :
-                                            e._type === 'view' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'
-                                            }`}>
-                                            {e.type || 'PAGEVIEW'}
-                                        </span>
-                                        <span className="text-slate-500">{new Date(e.timestamp).toLocaleTimeString()}</span>
-                                    </div>
-                                    <div className="font-medium truncate" title={e.label || e.path}>
-                                        {e.label || e.path}
-                                    </div>
-                                    {e.metadata && (
-                                        <div className="mt-1 text-[10px] text-slate-500 bg-black/20 p-1 rounded font-mono break-all">
-                                            {JSON.stringify(e.metadata).slice(0, 50)}...
-                                        </div>
-                                    )}
+                return (
+                <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-5xl h-[80vh] flex flex-col shadow-2xl overflow-hidden">
+                        {/* Header */}
+                        <div className="p-4 border-b border-slate-700 flex items-center justify-between bg-slate-950">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-pink-500 rounded-lg">
+                                    <Monitor size={20} className="text-white" />
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Right: Visualizer */}
-                    <div className="w-2/3 bg-slate-950 p-8 flex flex-col items-center justify-center relative">
-                        {currentEvent ? (
-                            <div className="w-full max-w-lg aspect-video bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-700 flex flex-col overflow-hidden relative">
-                                {/* Fake Browser Bar */}
-                                <div className="h-8 bg-slate-200 dark:bg-slate-700 flex items-center px-3 gap-2">
-                                    <div className="flex gap-1.5">
-                                        <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
-                                        <div className="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
-                                        <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
-                                    </div>
-                                    <div className="flex-1 bg-white dark:bg-slate-900 h-5 rounded text-[10px] flex items-center px-2 text-slate-500 truncate font-mono">
-                                        {currentEvent.path}
-                                    </div>
-                                </div>
-
-                                {/* Content Placeholder */}
-                                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative w-full">
-                                    {currentEvent._type === 'view' ? (
-                                        <>
-                                            <Monitor size={64} className="text-slate-700 mb-4" />
-                                            <h3 className="text-xl font-bold text-slate-300">Sidvisning</h3>
-                                            <p className="text-blue-400 font-mono mt-2">{currentEvent.path}</p>
-                                        </>
-                                    ) : currentEvent.type === 'error' ? (
-                                        <>
-                                            <AlertCircle size={64} className="text-red-500 mb-4 animate-pulse" />
-                                            <h3 className="text-xl font-bold text-red-400">Frontend Fel</h3>
-                                            <p className="text-slate-300 font-mono mt-2 text-sm">{currentEvent.label}</p>
-
-                                            {/* Metadata Overlay */}
-                                            {currentEvent.metadata && (
-                                                <div className="mt-4 bg-slate-900 p-4 rounded-lg border border-red-500/30 text-left w-full max-w-lg overflow-auto max-h-[300px]">
-                                                    <pre className="text-[10px] text-red-300 font-mono whitespace-pre-wrap">
-                                                        {currentEvent.metadata.stack || currentEvent.metadata.reason || JSON.stringify(currentEvent.metadata, null, 2)}
-                                                    </pre>
-                                                </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <>
-                                            <MousePointer2 size={64} className="text-pink-500 mb-4 animate-bounce" />
-                                            <h3 className="text-xl font-bold text-slate-300">Interaktion</h3>
-                                            <p className="text-pink-400 font-mono mt-2">{currentEvent.target}: {currentEvent.label}</p>
-
-                                            {/* Metadata Overlay */}
-                                            {currentEvent.metadata && (
-                                                <div className="mt-4 bg-slate-900 p-4 rounded-lg border border-slate-700 text-left w-full max-w-sm">
-                                                    <pre className="text-xs text-emerald-400 font-mono whitespace-pre-wrap">
-                                                        {JSON.stringify(currentEvent.metadata, null, 2)}
-                                                    </pre>
-                                                </div>
-                                            )}
-                                        </>
-                                    )}
+                                <div>
+                                    <h2 className="text-lg font-bold text-white">Sessionsuppspelning</h2>
+                                    <p className="text-xs text-slate-400 font-mono">{sessionId}</p>
                                 </div>
                             </div>
+                            <button onClick={onClose} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white">
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        {/* Main Content */}
+                        <div className="flex-1 flex overflow-hidden">
+                            {/* Left: Event List */}
+                            <div className="w-1/3 border-r border-slate-700 flex flex-col bg-slate-900">
+                                <div className="p-2 bg-slate-800 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">
+                                    Händelselogg
+                                </div>
+                                <div ref={listRef} className="flex-1 overflow-y-auto p-2 space-y-1">
+                                    {events.map((e, i) => (
+                                        <div
+                                            key={i}
+                                            onClick={() => { setCurrentIndex(i); setIsPlaying(false); }}
+                                            className={`p-3 rounded-lg text-xs cursor-pointer transition-all border ${i === currentIndex
+                                                ? 'bg-pink-500/20 border-pink-500 text-pink-100 shadow-md transform scale-[1.02]'
+                                                : 'bg-slate-800/50 border-transparent text-slate-400 hover:bg-slate-800'
+                                                }`}
+                                        >
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className={`font-bold uppercase text-[10px] px-1.5 py-0.5 rounded ${e.type === 'error' ? 'bg-red-500/20 text-red-400' :
+                                                    e.type === 'rage_click' ? 'bg-red-600 text-white animate-pulse' :
+                                                        e._type === 'view' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'
+                                                    }`}>
+                                                    {e.type === 'rage_click' ? '🤬 RAGE CLICK' : e.type || 'PAGEVIEW'}
+                                                </span>
+                                                <span className="text-slate-500">{new Date(e.timestamp).toLocaleTimeString()}</span>
+                                            </div>
+                                            <div className="font-medium truncate" title={e.label || e.path}>
+                                                {e.label || e.path}
+                                            </div>
+                                            {e.metadata && (
+                                                <div className="mt-1 text-[10px] text-slate-500 bg-black/20 p-1 rounded font-mono break-all">
+                                                    {JSON.stringify(e.metadata).slice(0, 50)}...
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Right: Visualizer */}
+                            <div className="w-2/3 bg-slate-950 p-8 flex flex-col items-center justify-center relative">
+                                {currentEvent ? (
+                                    <div className="w-full max-w-lg aspect-video bg-white dark:bg-slate-800 rounded-xl shadow-2xl border border-slate-700 flex flex-col overflow-hidden relative">
+                                        {/* Fake Browser Bar */}
+                                        <div className="h-8 bg-slate-200 dark:bg-slate-700 flex items-center px-3 gap-2">
+                                            <div className="flex gap-1.5">
+                                                <div className="w-2.5 h-2.5 rounded-full bg-red-400"></div>
+                                                <div className="w-2.5 h-2.5 rounded-full bg-yellow-400"></div>
+                                                <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
+                                            </div>
+                                            <div className="flex-1 bg-white dark:bg-slate-900 h-5 rounded text-[10px] flex items-center px-2 text-slate-500 truncate font-mono">
+                                                {currentEvent.path}
+                                            </div>
+                                        </div>
+
+                                        {/* Content Placeholder */}
+                                        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center relative w-full">
+                                            {currentEvent._type === 'view' ? (
+                                                <>
+                                                    <Monitor size={64} className="text-slate-700 mb-4" />
+                                                    <h3 className="text-xl font-bold text-slate-300">Sidvisning</h3>
+                                                    <p className="text-blue-400 font-mono mt-2">{currentEvent.path}</p>
+                                                </>
+                                            ) : currentEvent.type === 'rage_click' ? (
+                                                <>
+                                                    <div className="relative">
+                                                        <MousePointer2 size={64} className="text-red-500 mb-4 animate-ping absolute top-0 left-0 opacity-50" />
+                                                        <MousePointer2 size={64} className="text-red-600 mb-4 relative z-10" />
+                                                    </div>
+                                                    <h3 className="text-2xl font-black text-red-500 uppercase tracking-widest">Rage Click</h3>
+                                                    <p className="text-slate-400 font-mono mt-2 text-sm">{currentEvent.label}</p>
+                                                    <div className="mt-4 px-4 py-2 bg-red-500/10 border border-red-500/50 rounded text-red-300 text-xs">
+                                                        Användaren klickade upprepade gånger på {currentEvent.target}
+                                                    </div>
+                                                    {currentEvent.coordinates && (
+                                                        <div className="mt-2 text-[10px] text-slate-500 font-mono">
+                                                            X: {currentEvent.coordinates.x}, Y: {currentEvent.coordinates.y}
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : currentEvent.type === 'error' ? (
+                                                <>
+                                                    <AlertCircle size={64} className="text-red-500 mb-4 animate-pulse" />
+                                                    <h3 className="text-xl font-bold text-red-400">Frontend Fel</h3>
+                                                    <p className="text-slate-300 font-mono mt-2 text-sm">{currentEvent.label}</p>
+
+                                                    {/* Metadata Overlay */}
+                                                    {currentEvent.metadata && (
+                                                        <div className="mt-4 bg-slate-900 p-4 rounded-lg border border-red-500/30 text-left w-full max-w-lg overflow-auto max-h-[300px]">
+                                                            <pre className="text-[10px] text-red-300 font-mono whitespace-pre-wrap">
+                                                                {currentEvent.metadata.stack || currentEvent.metadata.reason || JSON.stringify(currentEvent.metadata, null, 2)}
+                                                            </pre>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <MousePointer2 size={64} className="text-pink-500 mb-4 animate-bounce" />
+                                                    <h3 className="text-xl font-bold text-slate-300">Interaktion</h3>
+                                                    <p className="text-pink-400 font-mono mt-2">{currentEvent.target}: {currentEvent.label}</p>
+
+                                                    {/* Metadata Overlay */}
+                                                    {currentEvent.metadata && (
+                                                        <div className="mt-4 bg-slate-900 p-4 rounded-lg border border-slate-700 text-left w-full max-w-sm">
+                                                            <pre className="text-xs text-emerald-400 font-mono whitespace-pre-wrap">
+                                                                {JSON.stringify(currentEvent.metadata, null, 2)}
+                                                            </pre>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                        {currentEvent.metadata.stack || currentEvent.metadata.reason || JSON.stringify(currentEvent.metadata, null, 2)}
+                                    </pre>
+                                                        </div>
+                                                    )}
+                        </>
                         ) : (
-                            <div className="text-slate-500">Välj en händelse för att visa</div>
-                        )}
+                        <>
+                            <MousePointer2 size={64} className="text-pink-500 mb-4 animate-bounce" />
+                            <h3 className="text-xl font-bold text-slate-300">Interaktion</h3>
+                            <p className="text-pink-400 font-mono mt-2">{currentEvent.target}: {currentEvent.label}</p>
+
+                            {/* Metadata Overlay */}
+                            {currentEvent.metadata && (
+                                <div className="mt-4 bg-slate-900 p-4 rounded-lg border border-slate-700 text-left w-full max-w-sm">
+                                    <pre className="text-xs text-emerald-400 font-mono whitespace-pre-wrap">
+                                        {JSON.stringify(currentEvent.metadata, null, 2)}
+                                    </pre>
+                                </div>
+                            )}
+                        </>
+                                            )}
                     </div>
                 </div>
-
-                {/* Footer: Controls */}
-                <div className="p-4 bg-slate-900 border-t border-slate-700 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setPlaybackSpeed(1)} className={`text-xs px-2 py-1 rounded ${playbackSpeed === 1 ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-800'}`}>1x</button>
-                        <button onClick={() => setPlaybackSpeed(2)} className={`text-xs px-2 py-1 rounded ${playbackSpeed === 2 ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-800'}`}>2x</button>
-                        <button onClick={() => setPlaybackSpeed(5)} className={`text-xs px-2 py-1 rounded ${playbackSpeed === 5 ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-800'}`}>5x</button>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                        <button
-                            onClick={() => { setCurrentIndex(Math.max(0, currentIndex - 1)); setIsPlaying(false); }}
-                            disabled={currentIndex === 0}
-                            className="p-2 rounded-full hover:bg-slate-800 disabled:opacity-50 text-white"
-                        >
-                            <SkipBack size={20} />
-                        </button>
-
-                        <button
-                            onClick={() => setIsPlaying(!isPlaying)}
-                            className="p-4 bg-pink-500 hover:bg-pink-600 rounded-full text-white shadow-lg shadow-pink-500/30 transition-transform active:scale-95"
-                        >
-                            {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
-                        </button>
-
-                        <button
-                            onClick={() => { setCurrentIndex(Math.min(events.length - 1, currentIndex + 1)); setIsPlaying(false); }}
-                            disabled={currentIndex === events.length - 1}
-                            className="p-2 rounded-full hover:bg-slate-800 disabled:opacity-50 text-white"
-                        >
-                            <SkipForward size={20} />
-                        </button>
-                    </div>
-
-                    <div className="w-[100px] text-right text-xs text-slate-500 font-mono">
-                        {currentIndex + 1} / {events.length}
-                    </div>
-                </div>
-            </div>
+                ) : (
+                <div className="text-slate-500">Välj en händelse för att visa</div>
+                                )}
         </div>
-    );
+                        </div >
+
+        {/* Footer: Controls */ }
+        < div className = "p-4 bg-slate-900 border-t border-slate-700 flex items-center justify-between" >
+                            <div className="flex items-center gap-2">
+                                <button onClick={() => setPlaybackSpeed(1)} className={`text-xs px-2 py-1 rounded ${playbackSpeed === 1 ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-800'}`}>1x</button>
+                                <button onClick={() => setPlaybackSpeed(2)} className={`text-xs px-2 py-1 rounded ${playbackSpeed === 2 ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-800'}`}>2x</button>
+                                <button onClick={() => setPlaybackSpeed(5)} className={`text-xs px-2 py-1 rounded ${playbackSpeed === 5 ? 'bg-slate-700 text-white' : 'text-slate-500 hover:bg-slate-800'}`}>5x</button>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => { setCurrentIndex(Math.max(0, currentIndex - 1)); setIsPlaying(false); }}
+                                    disabled={currentIndex === 0}
+                                    className="p-2 rounded-full hover:bg-slate-800 disabled:opacity-50 text-white"
+                                >
+                                    <SkipBack size={20} />
+                                </button>
+
+                                <button
+                                    onClick={() => setIsPlaying(!isPlaying)}
+                                    className="p-4 bg-pink-500 hover:bg-pink-600 rounded-full text-white shadow-lg shadow-pink-500/30 transition-transform active:scale-95"
+                                >
+                                    {isPlaying ? <Pause size={24} fill="currentColor" /> : <Play size={24} fill="currentColor" />}
+                                </button>
+
+                                <button
+                                    onClick={() => { setCurrentIndex(Math.min(events.length - 1, currentIndex + 1)); setIsPlaying(false); }}
+                                    disabled={currentIndex === events.length - 1}
+                                    className="p-2 rounded-full hover:bg-slate-800 disabled:opacity-50 text-white"
+                                >
+                                    <SkipForward size={20} />
+                                </button>
+                            </div>
+
+                            <div className="w-[100px] text-right text-xs text-slate-500 font-mono">
+                                {currentIndex + 1} / {events.length}
+                            </div>
+                        </div >
+                    </div >
+                </div >
+                );
 }
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
@@ -1072,3 +1213,223 @@ function formatRelativeTime(isoString: string): string {
     const days = Math.floor(hours / 24);
     return `${days}d sedan`;
 }
+function HeatmapView({ events }: { events: InteractionEvent[] }) {
+    // Filter for clicks with coordinates
+    const clicks = events.filter(e => (e.type === 'click' || e.type === 'rage_click') && e.coordinates);
+
+    // Group by path to allow filtering
+    const [selectedPath, setSelectedPath] = useState<string>('all');
+    const paths = Array.from(new Set(clicks.map(e => e.path)));
+
+    const filteredClicks = selectedPath === 'all' ? clicks : clicks.filter(e => e.path === selectedPath);
+
+    return (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+            <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-black flex items-center gap-2">
+                    <Activity className="text-orange-500" />
+                    Klick-Heatmap
+                </h2>
+                <select
+                    value={selectedPath}
+                    onChange={e => setSelectedPath(e.target.value)}
+                    className="bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 text-xs"
+                >
+                    <option value="all">Alla sidor</option>
+                    {paths.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+            </div>
+
+            <div className="relative w-full aspect-video bg-slate-100 dark:bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
+                {/* Mock UI Background (optional, or just grid) */}
+                <div className="absolute inset-0 opacity-10 grid grid-cols-12 grid-rows-6 gap-2 p-4">
+                    {/* Header */}
+                    <div className="col-span-12 row-span-1 bg-slate-500 rounded"></div>
+                    {/* Sidebar */}
+                    <div className="col-span-3 row-span-5 bg-slate-500 rounded"></div>
+                    {/* Content */}
+                    <div className="col-span-9 row-span-5 bg-slate-500 rounded"></div>
+                </div>
+
+                {/* Heatmap Points */}
+                {filteredClicks.map((click, i) => (
+                    <div
+                        key={i}
+                        className={`absolute w-6 h-6 rounded-full blur-md transform -translate-x-1/2 -translate-y-1/2 transition-opacity duration-500 ${click.type === 'rage_click' ? 'bg-red-500 opacity-80 z-20 w-8 h-8' : 'bg-orange-500 opacity-40 hover:opacity-100 z-10'
+                            }`}
+                        style={{
+                            left: `${click.coordinates?.pctX}%`,
+                            top: `${click.coordinates?.pctY}%`,
+                        }}
+                        title={`${click.label} (${click.coordinates?.x}, ${click.coordinates?.y})`}
+                    />
+                ))}
+
+                {filteredClicks.length === 0 && (
+                    <div className="absolute inset-0 flex items-center justify-center text-slate-500">
+                        Inga klick-data med koordinater hittades för denna vy.
+                    </div>
+                )}
+            </div>
+            <div className="mt-4 flex gap-4 text-xs text-slate-500">
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-500 opacity-50"></div>
+                    <span>Normal Klick</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500 opacity-80"></div>
+                    <span>Rage Click (Frustration)</span>
+                </div>
+                <div className="ml-auto">
+                    Visar {filteredClicks.length} datapunkter
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function FrictionView({ events }: { events: InteractionEvent[] }) {
+    // Calculate metric scores (normally these would be pre-calculated on server)
+    const stats = React.useMemo(() => {
+        const rageClicks = events.filter(e => e.type === 'rage_click').length;
+        const deadClicks = events.filter(e => e.type === 'dead_click').length;
+        const errors = events.filter(e => e.type === 'error').length;
+
+        // Mocking slow pages for demo if no data
+        const slowPages = events.filter(e => e.type === 'other' && (e.metadata?.duration > 1000)).length;
+        const bounceRate = 12; // Hardcoded mock or calc from sessions
+
+        return [
+            { subject: 'Rage Clicks', A: Math.min(100, rageClicks * 10), fullMark: 100 },
+            { subject: 'Errors', A: Math.min(100, errors * 20), fullMark: 100 },
+            { subject: 'Dead Clicks', A: Math.min(100, deadClicks * 5), fullMark: 100 },
+            { subject: 'Slow Pages', A: Math.min(100, slowPages * 10), fullMark: 100 },
+            { subject: 'Bounce Rate', A: bounceRate, fullMark: 100 },
+        ];
+    }, [events]);
+
+    return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center">
+                <h2 className="text-xl font-black mb-6 flex items-center gap-2 self-start">
+                    <AlertCircle className="text-red-500" />
+                    UX Friction Radar
+                </h2>
+                <div className="w-full h-[400px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart cx="50%" cy="50%" outerRadius="80%" data={stats}>
+                            <PolarGrid stroke="#334155" />
+                            <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 'bold' }} />
+                            <PolarRadiusAxis angle={30} domain={[0, 100]} stroke="#475569" />
+                            <Radar
+                                name="Friction Score"
+                                dataKey="A"
+                                stroke="#ec4899"
+                                strokeWidth={3}
+                                fill="#ec4899"
+                                fillOpacity={0.3}
+                            />
+                            <Tooltip
+                                contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
+                                itemStyle={{ color: '#ec4899' }}
+                            />
+                        </RadarChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                <h2 className="text-xl font-black mb-6 text-slate-100">Analys</h2>
+                <div className="space-y-6">
+                    <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                        <h3 className="font-bold text-red-400 mb-2">Högsta Friktion</h3>
+                        <p className="text-sm text-slate-400">
+                            {stats.sort((a, b) => b.A - a.A)[0].subject} är det största problemet just nu.
+                            Detta indikerar att användare upplever frustration eller tekniska hinder.
+                        </p>
+                    </div>
+                    <div className="p-4 bg-slate-800 rounded-xl">
+                        <div className="text-xs font-bold text-slate-500 uppercase mb-2">Totala Händelser</div>
+                        <div className="space-y-2">
+                            {stats.map(s => (
+                                <div key={s.subject} className="flex justify-between text-sm">
+                                    <span className="text-slate-300">{s.subject}</span>
+                                    <span className="font-mono text-pink-400 font-bold">{s.A}%</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function FunnelView({ events }: { events: InteractionEvent[] }) {
+    // Hardcoded logic for "Meal Logging Funnel" based on event paths/types
+    const funnelData = React.useMemo(() => {
+        const totalUsers = new Set(events.map(e => e.userId)).size || 1;
+
+        // 1. Visited Database
+        const step1Users = new Set(events.filter(e => e.path === '/database').map(e => e.userId));
+
+        // 2. Clicked "Add Item" (mock selector/label match)
+        const step2Users = new Set(events.filter(e => e.path === '/database' && (e.label.includes('Add') || e.target === 'button')).map(e => e.userId)); // Looser match for demo
+
+        // 3. Submitted (mock)
+        const step3Users = new Set(events.filter(e => e.type === 'submit' || (e.label === 'Spara')).map(e => e.userId));
+
+        return [
+            { name: 'Start Session', value: totalUsers, fill: '#6366f1' },
+            { name: 'View Database', value: step1Users.size, fill: '#8b5cf6' },
+            { name: 'Open Form', value: step2Users.size, fill: '#d946ef' },
+            { name: 'Save Item', value: step3Users.size, fill: '#ec4899' },
+        ];
+    }, [events]);
+
+    return (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+            <h2 className="text-xl font-black mb-8 flex items-center gap-2">
+                <TrendingUp className="text-pink-500" />
+                Konvertering: Logga Måltid
+            </h2>
+            <div className="w-full h-[400px]">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                        data={funnelData}
+                        layout="vertical"
+                        barSize={40}
+                        margin={{ top: 20, right: 30, left: 40, bottom: 5 }}
+                    >
+                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#334155" />
+                        <XAxis type="number" stroke="#94a3b8" />
+                        <YAxis type="category" dataKey="name" stroke="#94a3b8" width={100} />
+                        <Tooltip
+                            cursor={{ fill: 'transparent' }}
+                            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
+                        />
+                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                            {funnelData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+            </div>
+            <div className="grid grid-cols-4 gap-4 mt-8">
+                {funnelData.map((step, i) => (
+                    <div key={step.name} className="bg-slate-800 p-4 rounded-xl text-center relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: step.fill }}></div>
+                        <div className="text-2xl font-black text-white">{step.value}</div>
+                        <div className="text-[10px] uppercase font-bold text-slate-500">{step.name}</div>
+                        {i > 0 && (
+                            <div className="absolute top-2 right-2 text-[10px] text-slate-600">
+                                {Math.round((step.value / (funnelData[0].value || 1)) * 100)}%
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+

@@ -58,10 +58,10 @@ const EMPTY_FORM: FoodItemFormData = {
 };
 
 type ViewMode = 'grid' | 'list';
-type DatabaseTab = 'items' | 'my-content' | 'stats';
+type DatabaseTab = 'items' | 'my-content' | 'activity-log' | 'stats';
 
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
-    const { foodItems, recipes, mealEntries, quickMeals, addFoodItem, updateFoodItem, deleteFoodItem, foodAliases, updateFoodAlias, users, currentUser } = useData();
+    const { foodItems, recipes, mealEntries, quickMeals, addFoodItem, updateFoodItem, deleteFoodItem, foodAliases, updateFoodAlias, users, currentUser, databaseActions } = useData();
     const [searchParams, setSearchParams] = useSearchParams();
     const hasAutoOpened = useRef(false);
 
@@ -707,6 +707,12 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 ✨ Mina Tillägg
                             </button>
                             <button
+                                className={`px-4 py-2 rounded-lg transition-all text-sm font-bold ${activeTab === 'activity-log' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                                onClick={() => setActiveTab('activity-log')}
+                            >
+                                📋 Aktivitetslogg
+                            </button>
+                            <button
                                 className={`px-4 py-2 rounded-lg transition-all text-sm font-bold ${activeTab === 'stats' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
                                 onClick={() => setActiveTab('stats')}
                             >
@@ -840,6 +846,71 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             </div>
                         )}
                     </section>
+                </div>
+            )}
+
+            {activeTab === 'activity-log' && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Totala Åtgärder</div>
+                            <div className="text-2xl font-black text-white">{databaseActions.length}</div>
+                        </div>
+                        <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Skapade</div>
+                            <div className="text-2xl font-black text-emerald-400">{databaseActions.filter(a => a.actionType === 'CREATE').length}</div>
+                        </div>
+                        <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Uppdaterade</div>
+                            <div className="text-2xl font-black text-blue-400">{databaseActions.filter(a => a.actionType === 'UPDATE').length}</div>
+                        </div>
+                        <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
+                            <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Borttagna</div>
+                            <div className="text-2xl font-black text-rose-400">{databaseActions.filter(a => a.actionType === 'DELETE').length}</div>
+                        </div>
+                    </div>
+
+                    {/* Activity Log */}
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
+                        <div className="p-4 border-b border-slate-800 text-sm font-black text-slate-400 uppercase tracking-widest">
+                            Senaste Aktiviteter
+                        </div>
+                        <div className="divide-y divide-slate-800/50 max-h-[500px] overflow-y-auto">
+                            {databaseActions.length === 0 ? (
+                                <div className="p-12 text-center text-slate-500">
+                                    <span className="text-4xl mb-4 block opacity-50">📋</span>
+                                    Inga ändringar loggade ännu. Prova att lägga till eller redigera en råvara!
+                                </div>
+                            ) : (
+                                databaseActions.slice(0, 50).map((action) => (
+                                    <div key={action.id} className="p-4 flex items-center gap-4 hover:bg-slate-800/30 transition-colors">
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${action.actionType === 'CREATE' ? 'bg-emerald-500/10 text-emerald-400' :
+                                                action.actionType === 'UPDATE' ? 'bg-blue-500/10 text-blue-400' :
+                                                    'bg-rose-500/10 text-rose-400'
+                                            }`}>
+                                            {action.actionType === 'CREATE' ? '➕' : action.actionType === 'UPDATE' ? '✏️' : '🗑️'}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="font-bold text-slate-200 truncate">
+                                                {action.entityName || action.entityId.slice(0, 8)}
+                                            </div>
+                                            <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                                <span className="px-1.5 py-0.5 bg-slate-800 rounded text-[9px] uppercase font-black">{action.entityType.replace('_', ' ')}</span>
+                                                <span>•</span>
+                                                <span>{action.actionType}</span>
+                                            </div>
+                                        </div>
+                                        <div className="text-xs text-slate-600 whitespace-nowrap">
+                                            {new Date(action.timestamp).toLocaleString('sv-SE', {
+                                                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                            })}
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
                 </div>
             )}
 
