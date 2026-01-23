@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { type MealItem, type Recipe, type FoodItem } from '../../models/types.ts';
+import { type MealItem, type Recipe, type FoodItem, type FoodCategory } from '../../models/types.ts';
 import { parseIngredients, matchToFoodItem } from '../../utils/ingredientParser.ts';
 
 interface NutritionBreakdownModalProps {
@@ -31,9 +31,11 @@ export function NutritionBreakdownModal({
 
     // Get recipe or food item details
     const isRecipe = item.type === 'recipe';
+    const isEstimate = item.type === 'estimate';
     const recipe = isRecipe ? recipes.find(r => r.id === item.referenceId) : null;
-    const foodItem = !isRecipe ? getFoodItem(item.referenceId) : null;
-    const itemName = isRecipe ? recipe?.name : foodItem?.name;
+    const foodItem = !isRecipe && !isEstimate ? getFoodItem(item.referenceId) : null;
+    const estDetails = isEstimate ? item.estimateDetails : null;
+    const itemName = isRecipe ? recipe?.name : isEstimate ? estDetails?.name : foodItem?.name;
     const servings = item.servings;
 
     // Calculate ingredient breakdown for recipes
@@ -67,15 +69,14 @@ export function NutritionBreakdownModal({
         })
         : [];
 
-    // For food items, create single-item breakdown
-    const foodBreakdown = !isRecipe && foodItem ? [{
+    const foodBreakdown = !isRecipe && !isEstimate && foodItem ? [{
         name: foodItem.name,
         amount: servings,
         unit: 'g',
         calories: Math.round((foodItem.calories / 100) * servings),
         protein: Math.round((foodItem.protein / 100) * servings * 10) / 10,
-        carbs: Math.round((foodItem.carbs / 100) * servings * 10) / 10,
-        fat: Math.round((foodItem.fat / 100) * servings * 10) / 10,
+        carbs: Math.round((foodItem.carbs || 0) / 100 * servings * 10) / 10,
+        fat: Math.round((foodItem.fat || 0) / 100 * servings * 10) / 10,
         iron: ((foodItem.iron || 0) / 100) * servings,
         calcium: ((foodItem.calcium || 0) / 100) * servings,
         zinc: ((foodItem.zinc || 0) / 100) * servings,
@@ -85,7 +86,26 @@ export function NutritionBreakdownModal({
         complementaryCategories: foodItem.complementaryCategories,
     }] : [];
 
-    const breakdown = isRecipe ? ingredients : foodBreakdown;
+    const estimateBreakdown = isEstimate && estDetails ? [{
+        name: estDetails.name + (estDetails.uncertaintyEmoji ? ` ${estDetails.uncertaintyEmoji}` : ''),
+        amount: 1,
+        unit: 'p',
+        calories: estDetails.caloriesAvg,
+        protein: estDetails.protein || 0,
+        carbs: estDetails.carbs || 0,
+        fat: estDetails.fat || 0,
+        iron: 0,
+        calcium: 0,
+        zinc: 0,
+        vitaminB12: 0,
+        isComplete: false,
+        missingAminoAcids: undefined as string[] | undefined,
+        complementaryCategories: undefined as FoodCategory[] | undefined,
+        caloriesMin: estDetails.caloriesMin,
+        caloriesMax: estDetails.caloriesMax,
+    }] : [];
+
+    const breakdown = isRecipe ? ingredients : (isEstimate ? estimateBreakdown : foodBreakdown);
     const totals = breakdown.reduce((acc, bItem) => ({
         calories: acc.calories + bItem.calories,
         protein: acc.protein + bItem.protein,
@@ -133,9 +153,14 @@ export function NutritionBreakdownModal({
 
                 {/* Summary Macros */}
                 <div className="grid grid-cols-4 gap-2 mb-4 p-3 bg-slate-800/50 rounded-lg">
-                    <div className="text-center">
+                    <div className="text-center relative">
                         <span className="block text-lg font-bold text-emerald-400">{Math.round(totals.calories)}</span>
                         <span className="text-xs text-slate-500">kcal</span>
+                        {isEstimate && (
+                            <div className="absolute -bottom-1 left-0 right-0 text-[8px] text-slate-600 font-bold uppercase">
+                                Range: {estDetails?.caloriesMin}-{estDetails?.caloriesMax}
+                            </div>
+                        )}
                     </div>
                     <div className="text-center">
                         <span className="block text-lg font-bold text-violet-400">{totals.protein.toFixed(1)}g</span>

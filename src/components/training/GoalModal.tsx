@@ -405,20 +405,20 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                 const measureTarget = includeMeasurement ? parseFloat(targetMeasurement) : undefined;
                 targets = [{
                     value: weightTarget || measureTarget || 0,
-                    unit: includeWeight ? 'kg' : 'cm'
+                    unit: type === 'weight' ? 'kg' : 'cm'
                 }];
                 if (!goalName) {
                     const parts = [];
-                    if (includeWeight) {
+                    if (includeWeight && type === 'weight') {
                         const dirLabel = weightDirection === 'down' ? 'Gå ner' : weightDirection === 'up' ? 'Gå upp' : 'Håll';
                         parts.push(`${dirLabel} till ${targetWeight}kg`);
                     }
-                    if (includeMeasurement) {
+                    if (includeMeasurement || type === 'measurement') {
                         const mt = MEASUREMENT_TYPES.find(m => m.id === measurementType);
                         const dirLabel = measurementDirection === 'down' ? '↓' : measurementDirection === 'up' ? '↑' : '=';
                         parts.push(`${mt?.label || measurementType} ${dirLabel} ${targetMeasurement}cm`);
                     }
-                    goalName = parts.join(' + ') || 'Kroppsmål';
+                    goalName = parts.join(' + ') || (type === 'weight' ? 'Viktmål' : 'Måttmål');
                 }
                 break;
 
@@ -448,7 +448,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
 
         const goalData: Omit<PerformanceGoal, 'id' | 'createdAt'> = {
             name: goalName,
-            type: type === 'measurement' ? 'weight' : type, // Map measurement to weight type
+            type: type, // Preserving measurement type
             period,
             targets,
             startDate: customStartDate,
@@ -457,7 +457,15 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
             status: editingGoal?.status || 'active',
             // Weight-specific fields
             targetWeightRate: type === 'weight' ? parseFloat(weeklyRate) || undefined : undefined,
-            milestoneProgress: type === 'weight' ? parseFloat(currentWeight) || undefined : undefined,
+            targetWeight: type === 'weight' ? parseFloat(targetWeight) || undefined : undefined,
+            // Measurement-specific fields
+            targetMeasurement: type === 'measurement' ? parseFloat(targetMeasurement) || undefined : undefined,
+            measurementType: type === 'measurement' ? (measurementType as any) : undefined,
+            goalDirection: type === 'weight' ? (weightDirection as any) :
+                type === 'measurement' ? (measurementDirection as any) : undefined,
+            // milestoneProgress used as start value for both
+            milestoneProgress: type === 'weight' ? (parseFloat(currentWeight) || undefined) :
+                type === 'measurement' ? (parseFloat(currentMeasurement) || undefined) : undefined,
             nutritionMacros: calculatedMacros || undefined,
             periodId: selectedPeriodId || undefined,
             userId: currentUser?.id || 'unknown'

@@ -9,7 +9,9 @@ import type {
     MealEntry,
     FoodItem,
     Recipe,
-    GoalTarget
+    GoalTarget,
+    WeightEntry,
+    BodyMeasurementEntry
 } from '../models/types';
 
 // ============================================
@@ -27,6 +29,7 @@ export interface GoalProgress {
     estimatedCompletionDate?: string;
     periodStart: string;
     periodEnd: string;
+    actualCurrentValue?: number; // The actual latest value (e.g. latest weight) instead of progress relative to start
     linkedActivityId?: string; // ID of the activity that achieved the goal (e.g. for PBs/Speed)
 }
 
@@ -735,7 +738,8 @@ export function calculateGoalProgress(
     mealEntries: MealEntry[] = [],
     foodItems: FoodItem[] = [],
     recipes: Recipe[] = [],
-    weightEntries: { date: string; weight: number }[] = []
+    weightEntries: WeightEntry[] = [],
+    bodyMeasurements: BodyMeasurementEntry[] = []
 ): GoalProgress {
     const { start, end } = getGoalPeriodDates(goal);
     const target = goal.targets[0];
@@ -747,6 +751,9 @@ export function calculateGoalProgress(
         1;
 
     let linkedActivityId: string | undefined;
+
+    let latestWeightVal: number | undefined;
+    let latestMVal: number | undefined;
 
     switch (goal.type) {
         case 'frequency':
@@ -791,20 +798,54 @@ export function calculateGoalProgress(
                 target?.value || 1;
             break;
         case 'weight':
-            const latestWeight = weightEntries.length > 0
-                ? weightEntries.sort((a, b) => b.date.localeCompare(a.date))[0].weight
-                : 0;
-            const startWeight = goal.milestoneProgress || latestWeight;
+            const latestWeightEntry = weightEntries.length > 0
+                ? weightEntries.sort((a, b) => b.date.localeCompare(a.date))[0]
+                : undefined;
+            latestWeightVal = latestWeightEntry?.weight || 0;
+            const startWeight = goal.milestoneProgress || latestWeightVal;
             const targetWeight = goal.targetWeight || 0;
             // Progress is how close we are to target
             if (targetWeight < startWeight) {
                 // Weight loss goal
-                current = startWeight - latestWeight;
+                current = startWeight - latestWeightVal;
                 targetValue = startWeight - targetWeight;
             } else {
                 // Weight gain goal
-                current = latestWeight - startWeight;
+                current = latestWeightVal - startWeight;
                 targetValue = targetWeight - startWeight;
+            }
+            break;
+        case 'measurement':
+            const mType = goal.measurementType || 'waist';
+            latestMVal = (() => {
+                const FromWeight = weightEntries
+                    .filter(w => (w as any)[mType])
+                    .sort((a, b) => b.date.localeCompare(a.date))[0];
+                const fromBody = bodyMeasurements
+                    .filter(m => (m as any)[mType])
+                    .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+                const valW = FromWeight ? (FromWeight as any)[mType] : undefined;
+                const valB = fromBody ? (fromBody as any)[mType] : undefined;
+
+                // Return newest
+                if (FromWeight && fromBody) {
+                    return FromWeight.date >= fromBody.date ? valW : valB;
+                }
+                return valB || valW || 0;
+            })();
+
+            const startM = goal.milestoneProgress || latestMVal || 0;
+            const targetM = goal.targetMeasurement || 0;
+
+            if (targetM < startM) {
+                // decrease goal
+                current = startM - (latestMVal || startM);
+                targetValue = startM - targetM;
+            } else {
+                // increase goal
+                current = (latestMVal || startM) - startM;
+                targetValue = targetM - startM;
             }
             break;
         case 'milestone':
@@ -851,6 +892,9 @@ export function calculateGoalProgress(
         estimatedCompletionDate: !isComplete ? estimateCompletionDate(goal, current, targetValue) : undefined,
         periodStart: getGoalPeriodDates(goal).start,
         periodEnd: getGoalPeriodDates(goal).end,
+        actualCurrentValue: goal.type === 'weight' ? latestWeightVal :
+            goal.type === 'measurement' ? latestMVal :
+                current,
         linkedActivityId
     };
 }

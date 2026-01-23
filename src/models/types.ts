@@ -7,7 +7,7 @@ import { type StrengthWorkout } from './strengthTypes.ts';
 export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l' | 'cup';
 
 /** Meal type for calorie tracking entries */
-export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'beverage';
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'beverage' | 'estimate';
 
 /** Food category for organizing the database (vegan only) */
 export type FoodCategory =
@@ -289,6 +289,7 @@ export interface FoodItem {
     ingredients?: string;                     // List of ingredients
     createdAt: string;
     updatedAt: string;
+    createdBy?: string; // User ID of the creator
     deletedAt?: string;                       // For 3-month quarantine (Soft Delete)
 }
 
@@ -363,7 +364,7 @@ export interface Recipe {
  * MealItem - A single item in a meal entry
  */
 export interface MealItem {
-    type: 'recipe' | 'foodItem';
+    type: 'recipe' | 'foodItem' | 'estimate';
     referenceId: string;
     servings: number;
     // New fields for enhanced calorie tracking
@@ -375,6 +376,18 @@ export interface MealItem {
     loggedAsCooked?: boolean;        // If true, divide kcal by yieldFactor (raw→cooked conversion)
     effectiveYieldFactor?: number;   // The yield factor used for calorie calculation when loggedAsCooked
     variantId?: string;              // Specific variant ID if applicable
+
+    // For type: 'estimate'
+    estimateDetails?: {
+        name: string;
+        caloriesMin: number;
+        caloriesMax: number;
+        caloriesAvg: number;
+        protein?: number;
+        carbs?: number;
+        fat?: number;
+        uncertaintyEmoji?: string;
+    };
 }
 
 /**
@@ -554,6 +567,9 @@ export interface PerformanceGoal {
     };
     targetWeight?: number;        // For weight goals (target kg)
     targetWeightRate?: number;    // Rate of change (kg per week)
+    targetMeasurement?: number;   // For measurement goals (target cm)
+    measurementType?: 'waist' | 'hip' | 'chest' | 'arm' | 'thigh' | 'neck';
+    goalDirection?: 'up' | 'down' | 'stable';
     periodId?: string;            // Link to TrainingPeriod
 }
 
@@ -1439,7 +1455,8 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
     lunch: 'Lunch',
     dinner: 'Middag',
     snack: 'Mellanmål',
-    beverage: 'Dryck'
+    beverage: 'Dryck',
+    estimate: 'Estimering 🤷',
 };
 
 /** Meal type colors for UI */
@@ -1449,6 +1466,7 @@ export const MEAL_TYPE_COLORS: Record<MealType, string> = {
     dinner: 'text-emerald-400 bg-emerald-500/10',
     snack: 'text-violet-400 bg-violet-500/10',
     beverage: 'text-cyan-400 bg-cyan-500/10',
+    estimate: 'text-orange-400 bg-orange-500/10',
 };
 
 /** Weekday display labels (Swedish) */
@@ -1636,7 +1654,7 @@ export interface InteractionEvent {
     id: string;
     userId: string;
     sessionId: string;
-    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'omnibox_nav' | 'quick_add_log' | 'error';
+    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'omnibox_nav' | 'quick_add_log' | 'estimate_lunch_log' | 'error';
     target: string; // e.g., "button", "a", "input"
     label: string; // e.g., "Save Workout", "Log Out"
     path: string; // Where it happened

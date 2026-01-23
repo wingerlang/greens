@@ -16,6 +16,7 @@ export function MacroDistribution({ entries, foodItems, recipes }: MacroDistribu
             dinner: { calories: 0, protein: 0, carbs: 0, fat: 0 },
             snack: { calories: 0, protein: 0, carbs: 0, fat: 0 },
             beverage: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+            estimate: { calories: 0, protein: 0, carbs: 0, fat: 0 },
         };
 
         entries.forEach(entry => {
@@ -34,6 +35,13 @@ export function MacroDistribution({ entries, foodItems, recipes }: MacroDistribu
                             fat: food.fat * factor,
                         };
                     }
+                } else if (item.type === 'estimate' && item.estimateDetails) {
+                    nutrition = {
+                        calories: item.estimateDetails.caloriesAvg,
+                        protein: item.estimateDetails.protein || 0,
+                        carbs: item.estimateDetails.carbs || 0,
+                        fat: item.estimateDetails.fat || 0,
+                    };
                 } else {
                     const recipe = recipes.find(r => r.id === item.referenceId);
                     if (recipe && recipe.ingredientsText) {

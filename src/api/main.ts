@@ -4,5 +4,6 @@ import { startMdns } from './utils/mdns.ts';
 // Entry point
 if (import.meta.main) {
     startMdns();
-    await startServer(8000);
+    const port = Number(Deno.env.get("PORT") || "8000");
+    await startServer(port);
 }

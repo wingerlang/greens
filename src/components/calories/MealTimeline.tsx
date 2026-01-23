@@ -4,7 +4,8 @@ import {
     type MealEntry,
     type MealType,
     type MealItem,
-    MEAL_TYPE_LABELS
+    MEAL_TYPE_LABELS,
+    MEAL_TYPE_COLORS
 } from '../../models/types.ts';
 import { ConfirmModal } from '../shared/ConfirmModal.tsx';
 import { NutritionLabel } from '../shared/NutritionLabel.tsx';
@@ -111,8 +112,8 @@ export function MealTimeline({
                     )}
                     {isCompact && (
                         <div className="flex flex-col items-center w-10 shrink-0">
-                            <span className="text-[10px] uppercase text-slate-500 font-black">
-                                {MEAL_TYPE_LABELS[entry.mealType].substring(0, 3)}
+                            <span className={`text-[8px] uppercase font-black px-1 rounded ${MEAL_TYPE_COLORS[entry.mealType]}`}>
+                                {MEAL_TYPE_LABELS[entry.mealType].split(' ')[0].substring(0, 3)}
                             </span>
                             <span className="text-[9px] text-slate-600 font-mono">
                                 {new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -207,6 +208,11 @@ export function MealTimeline({
                     {/* Calories - Green as requested */}
                     <span className="text-sm font-black text-emerald-500 min-w-[55px] text-right">
                         {Math.round(totalNutrition.calories)} <span className="text-[10px] uppercase opacity-70">kcal</span>
+                        {entry.items.some(it => it.type === 'estimate') && entry.items.find(it => it.type === 'estimate')?.estimateDetails && (
+                            <div className="text-[9px] text-slate-500 font-medium leading-none mt-0.5">
+                                {entry.items.find(it => it.type === 'estimate')?.estimateDetails?.caloriesMin}-{entry.items.find(it => it.type === 'estimate')?.estimateDetails?.caloriesMax}
+                            </div>
+                        )}
                     </span>
 
                     {/* Action buttons (Info, Ersätt, Delete) */}
@@ -373,6 +379,7 @@ export function MealTimeline({
                                     {mealTypeKey === 'dinner' && '🌙'}
                                     {mealTypeKey === 'snack' && '🍎'}
                                     {mealTypeKey === 'beverage' && '🥤'}
+                                    {mealTypeKey === 'estimate' && '🤷'}
                                 </span>
                                 {MEAL_TYPE_LABELS[mealTypeKey]}
                             </h3>

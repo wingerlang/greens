@@ -44,9 +44,16 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
     const friendlyTargetText = (() => {
         const t = goal.targets[0];
         if (goal.type === 'weight') {
-            if (goal.targetWeight === undefined) return 'Mål: Stabil vikt';
-            const isLoss = (progress?.current || 0) > goal.targetWeight;
+            if (goal.targetWeight === undefined || goal.goalDirection === 'stable') return 'Mål: Stabil vikt';
+            const isLoss = goal.goalDirection === 'down';
             return isLoss ? `Gå ner till ${goal.targetWeight} kg` : `Gå upp till ${goal.targetWeight} kg`;
+        }
+        if (goal.type === 'measurement') {
+            const mt = goal.measurementType || 'midja';
+            const unit = 'cm';
+            if (goal.goalDirection === 'stable') return `Mål: Håll ${mt}`;
+            const isLoss = goal.goalDirection === 'down';
+            return isLoss ? `Minska ${mt} till ${goal.targetMeasurement}${unit}` : `Öka ${mt} till ${goal.targetMeasurement}${unit}`;
         }
         if (goal.type === 'frequency') {
             const periodText = goal.period === 'weekly' ? 'i veckan' : 'totalt';
@@ -59,7 +66,10 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
 
     const friendlyProgressText = (() => {
         if (goal.type === 'weight') {
-            return `Just nu: ${progress?.current.toFixed(1)} kg`;
+            return `Just nu: ${progress?.actualCurrentValue?.toFixed(1) || '0.0'} kg`;
+        }
+        if (goal.type === 'measurement') {
+            return `Just nu: ${progress?.actualCurrentValue?.toFixed(1) || '0.0'} cm`;
         }
         if (goal.type === 'frequency') {
             // "2 av 4 pass avklarade"

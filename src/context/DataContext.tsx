@@ -340,7 +340,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
         setFoodItems(deDuplicate(data.foodItems || []));
         setRecipes(deDuplicate(data.recipes || []));
-        setMealEntries(data.mealEntries || []);
+        setMealEntries(deDuplicate(data.mealEntries || []));
         setWeeklyPlans(data.weeklyPlans || []);
         setPantryItems(data.pantryItems || []);
         setPantryQuantitiesState(data.pantryQuantities || {});
@@ -677,6 +677,7 @@ export function DataProvider({ children }: DataProviderProps) {
             id: generateId(),
             createdAt: now,
             updatedAt: now,
+            createdBy: currentUser?.id,
         };
         // Optimistic update
         setFoodItems((prev: FoodItem[]) => [...prev, newItem]);

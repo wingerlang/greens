@@ -25,7 +25,8 @@ export function useGoalProgress(goal: PerformanceGoal | null | undefined): GoalP
         mealEntries = [],
         foodItems = [],
         recipes = [],
-        weightEntries = []
+        weightEntries = [],
+        bodyMeasurements = []
     } = useData();
 
     return useMemo(() => {
@@ -38,9 +39,10 @@ export function useGoalProgress(goal: PerformanceGoal | null | undefined): GoalP
             mealEntries,
             foodItems,
             recipes,
-            weightEntries
+            weightEntries,
+            bodyMeasurements
         );
-    }, [goal, unifiedActivities, mealEntries, foodItems, recipes, weightEntries]);
+    }, [goal, unifiedActivities, mealEntries, foodItems, recipes, weightEntries, bodyMeasurements]);
 }
 
 /**
@@ -53,7 +55,8 @@ export function useAllGoalsProgress(): Map<string, GoalProgress> {
         mealEntries = [],
         foodItems = [],
         recipes = [],
-        weightEntries = []
+        weightEntries = [],
+        bodyMeasurements = []
     } = useData();
 
     return useMemo(() => {
@@ -67,13 +70,14 @@ export function useAllGoalsProgress(): Map<string, GoalProgress> {
                 mealEntries,
                 foodItems,
                 recipes,
-                weightEntries
+                weightEntries,
+                bodyMeasurements
             );
             progressMap.set(goal.id, progress);
         });
 
         return progressMap;
-    }, [performanceGoals, unifiedActivities, mealEntries, foodItems, recipes, weightEntries]);
+    }, [performanceGoals, unifiedActivities, mealEntries, foodItems, recipes, weightEntries, bodyMeasurements]);
 }
 
 /**

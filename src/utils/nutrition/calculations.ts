@@ -40,7 +40,7 @@ export function calculateItemNutrition(
         const variant = foodItem.variants.find(v => v.id === variantId);
         if (variant) {
             if (variant.nutrition) {
-                base = { ...base, ...variant.nutrition };
+                base = { ...base, ...variant.nutrition } as any;
             }
             if (variant.caffeine !== undefined) caffeine = variant.caffeine;
             if (variant.alcohol !== undefined) alcohol = variant.alcohol;
@@ -74,41 +74,41 @@ export function calculateItemNutrition(
     return {
         nutrition: result,
         caffeine: caffeine ? caffeine * (amountGrams / 100) : 0, // Assuming caffeine is per 100g in DB? Or per unit?
-                                                                 // The DB standard is per 100g/ml for everything.
-                                                                 // However, for single unit items (Nocco), users often think "per can".
-                                                                 // But the system stores items as food items.
-                                                                 // If a Nocco is 330ml, and user logs 1 pcs (330g),
-                                                                 // the DB entry for Nocco should likely be per 100ml.
-                                                                 // Nocco: 55mg/100ml -> 180mg/330ml.
-                                                                 // If the variant override says "180", is that per 100g or per unit?
-                                                                 // To be consistent with the system, it MUST be per 100g.
-                                                                 // Wait, "Nocco (180mg)" usually implies total content.
-                                                                 // If I override caffeine to 180, and user logs 330g, they get 180 * 3.3 = 594mg!
-                                                                 // REQUIREMENT CLARIFICATION:
-                                                                 // "T.ex. har en dansk nocco 105mg koffein vs 180 standard."
-                                                                 // This likely refers to the *can* content.
-                                                                 // But the system works in grams/units.
-                                                                 // If the user logs "1 st Nocco", and "1 st" = 330g.
-                                                                 // The base item caffeine should be stored as ~55mg (per 100g).
-                                                                 // If the variant override is used, the user probably enters "105" thinking "per can".
-                                                                 // Ideally, overrides should follow the "per 100g" rule OR we handle "per unit" logic if the item has a default weight.
-                                                                 // BUT, `FoodVariant` struct `nutrition` is `Partial<NutritionSummary>`, which is absolute values? No, NutritionSummary is just values.
-                                                                 // In `calculateItemNutrition`, we treat base values as "per 100g".
-                                                                 // So if `variant.caffeine` is 105, we treat it as 105mg/100g.
-                                                                 // This might be confusing for the user entering data.
-                                                                 // However, for simplicity and consistency, we MUST assume ALL stored data is per 100g/ml.
-                                                                 // So if Danish Nocco is 105mg/330ml, user must enter 105/3.3 = 31.8mg/100ml.
-                                                                 // I will assume standard system behavior (per 100g) for now.
+        // The DB standard is per 100g/ml for everything.
+        // However, for single unit items (Nocco), users often think "per can".
+        // But the system stores items as food items.
+        // If a Nocco is 330ml, and user logs 1 pcs (330g),
+        // the DB entry for Nocco should likely be per 100ml.
+        // Nocco: 55mg/100ml -> 180mg/330ml.
+        // If the variant override says "180", is that per 100g or per unit?
+        // To be consistent with the system, it MUST be per 100g.
+        // Wait, "Nocco (180mg)" usually implies total content.
+        // If I override caffeine to 180, and user logs 330g, they get 180 * 3.3 = 594mg!
+        // REQUIREMENT CLARIFICATION:
+        // "T.ex. har en dansk nocco 105mg koffein vs 180 standard."
+        // This likely refers to the *can* content.
+        // But the system works in grams/units.
+        // If the user logs "1 st Nocco", and "1 st" = 330g.
+        // The base item caffeine should be stored as ~55mg (per 100g).
+        // If the variant override is used, the user probably enters "105" thinking "per can".
+        // Ideally, overrides should follow the "per 100g" rule OR we handle "per unit" logic if the item has a default weight.
+        // BUT, `FoodVariant` struct `nutrition` is `Partial<NutritionSummary>`, which is absolute values? No, NutritionSummary is just values.
+        // In `calculateItemNutrition`, we treat base values as "per 100g".
+        // So if `variant.caffeine` is 105, we treat it as 105mg/100g.
+        // This might be confusing for the user entering data.
+        // However, for simplicity and consistency, we MUST assume ALL stored data is per 100g/ml.
+        // So if Danish Nocco is 105mg/330ml, user must enter 105/3.3 = 31.8mg/100ml.
+        // I will assume standard system behavior (per 100g) for now.
         alcohol: alcohol ? alcohol * (amountGrams / 100) : 0 // Alcohol % * amount = volume of alcohol?
-                                                             // Wait. Alcohol is %.
-                                                             // If 5% vol.
-                                                             // 100g (approx 100ml) * 5% = 5ml Alcohol.
-                                                             // Formula: (Amount * Percent / 100).
-                                                             // Note: Logic in DataContext was: (grams * alcoholPercent) / 1000 => Units.
-                                                             // Let's return the raw amount (ml/g of alcohol) or just the params?
-                                                             // Let's return the calculated totals.
-                                                             // Alcohol % * Amount = Raw Alcohol Volume.
-                                                             // e.g. 5.0 * 500ml / 100 = 25ml.
+        // Wait. Alcohol is %.
+        // If 5% vol.
+        // 100g (approx 100ml) * 5% = 5ml Alcohol.
+        // Formula: (Amount * Percent / 100).
+        // Note: Logic in DataContext was: (grams * alcoholPercent) / 1000 => Units.
+        // Let's return the raw amount (ml/g of alcohol) or just the params?
+        // Let's return the calculated totals.
+        // Alcohol % * Amount = Raw Alcohol Volume.
+        // e.g. 5.0 * 500ml / 100 = 25ml.
     };
 }
 
@@ -189,6 +189,26 @@ export function calculateMealItemNutrition(
     foodItems: FoodItem[]
 ): { nutrition: NutritionSummary; caffeine?: number; alcoholUnits?: number } {
 
+    if (item.type === 'estimate' && item.estimateDetails) {
+        const est = item.estimateDetails;
+        return {
+            nutrition: {
+                calories: est.caloriesAvg,
+                protein: est.protein || 0,
+                carbs: est.carbs || 0,
+                fat: est.fat || 0,
+                fiber: 0,
+                iron: 0,
+                calcium: 0,
+                zinc: 0,
+                vitaminB12: 0,
+                vitaminC: 0,
+                vitaminA: 0,
+                proteinCategories: [] as any[]
+            }
+        };
+    }
+
     if (item.type === 'recipe') {
         const recipe = recipes.find(r => r.id === item.referenceId);
         if (recipe) {
@@ -224,8 +244,8 @@ export function calculateMealItemNutrition(
         if (foodItem) {
             // FoodItem calculation with Variants
             const amountGrams = item.servings; // item.servings IS grams for foodItems usually, unless unit conversion logic is applied elsewhere.
-                                               // In DataContext `addMealEntry`: "const mult = item.servings / 100".
-                                               // `item.servings` is the raw quantity input (e.g. 150g).
+            // In DataContext `addMealEntry`: "const mult = item.servings / 100".
+            // `item.servings` is the raw quantity input (e.g. 150g).
 
             const { nutrition, caffeine, alcohol } = calculateItemNutrition(
                 foodItem,

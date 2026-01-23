@@ -26,10 +26,9 @@ const getCategoryLabel = (category: string) => {
     }
 };
 
-// Sub-component for individual goal items to use hooks
 const ActiveGoalItem: React.FC<{ goal: PerformanceGoal }> = ({ goal }) => {
     const progress = useGoalProgress(goal);
-    const { weightEntries, unifiedActivities } = useData();
+    const { weightEntries, bodyMeasurements, unifiedActivities } = useData();
 
     // Calculate time stats
     const timeStats = useMemo(() => {
@@ -53,26 +52,35 @@ const ActiveGoalItem: React.FC<{ goal: PerformanceGoal }> = ({ goal }) => {
     const extraStats = useMemo(() => {
         if (!timeStats) return null;
 
-        if (goal.type === 'weight') {
+        if (goal.type === 'weight' || goal.type === 'measurement') {
             // Filter entries since start
-            const entriesSinceStart = weightEntries.filter(w => new Date(w.date).getTime() >= timeStats.start);
-            const count = entriesSinceStart.length;
+            const relevantEntries = goal.type === 'weight'
+                ? weightEntries.filter(w => new Date(w.date).getTime() >= timeStats.start)
+                : bodyMeasurements.filter(m => new Date(m.date).getTime() >= timeStats.start);
+
+            const count = relevantEntries.length;
 
             // Simple rate calculation (diff / weeks elapsed)
             const weeksElapsed = Math.max(0.5, timeStats.daysElapsed / 7);
 
-            // For weight goals, progress.current IS the amount lost/gained so far
+            // progress.current IS the amount lost/gained so far
             const val = progress ? progress.current : 0;
             const ratePerWeek = val / weeksElapsed;
 
             // Forecast
-            const remainingDiff = progress ? (progress.target - progress.current) : 0;
-            const weeksToGoal = ratePerWeek > 0 ? remainingDiff / ratePerWeek : 999;
+            const targetVal = goal.type === 'weight' ? (goal.targetWeight || 0) : (goal.targetMeasurement || 0);
+            const remainingDiff = progress ? (targetVal - (progress.actualCurrentValue || 0)) : 0;
+            // Handle direction
+            const isLoss = progress && (progress.actualCurrentValue || 0) > targetVal;
+            const absoluteRemaining = Math.abs(remainingDiff);
+
+            const weeksToGoal = ratePerWeek > 0 ? absoluteRemaining / ratePerWeek : 999;
             const daysToGoal = weeksToGoal * 7;
             const isFeasible = daysToGoal < timeStats.daysRemaining;
 
             return {
-                type: 'weight',
+                type: goal.type,
+                unit: goal.type === 'weight' ? 'kg' : 'cm',
                 count,
                 rate: ratePerWeek,
                 prediction: isFeasible ? 'Hinner!' : 'Tajtare'
@@ -136,17 +144,17 @@ const ActiveGoalItem: React.FC<{ goal: PerformanceGoal }> = ({ goal }) => {
                 {/* Extra Data (Rate / Count) */}
                 {extraStats && (
                     <div className="hidden sm:flex items-center gap-2 text-[10px] tabular-nums border-r border-slate-700/50 pr-3 mr-1">
-                        {extraStats.type === 'weight' && (
+                        {(extraStats.type === 'weight' || extraStats.type === 'measurement') && (
                             <>
                                 <div className="flex flex-col items-end leading-none gap-0.5">
-                                    <span className={`font-bold ${extraStats.rate && extraStats.rate <= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                        {extraStats.rate && extraStats.rate > 0 ? '+' : ''}{extraStats.rate?.toFixed(1)} kg/v
+                                    <span className={`font-bold ${extraStats.rate && extraStats.rate >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {extraStats.rate && extraStats.rate > 0 ? '+' : ''}{extraStats.rate?.toFixed(1)} {extraStats.unit}/v
                                     </span>
                                     <span className="text-slate-500">takt</span>
                                 </div>
                                 <div className="flex flex-col items-end leading-none gap-0.5 ml-1">
                                     <span className="text-slate-300 font-bold">{extraStats.count}</span>
-                                    <span className="text-slate-500">vägn.</span>
+                                    <span className="text-slate-500">{extraStats.type === 'weight' ? 'vägn.' : 'mått'}</span>
                                 </div>
                             </>
                         )}

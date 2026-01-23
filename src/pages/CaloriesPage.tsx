@@ -10,6 +10,7 @@ import {
     type PlannedMeal,
     type QuickMeal,
     getISODate,
+    generateId,
 } from '../models/types.ts';
 import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
 import { calculateAdaptiveGoals } from '../utils/performanceEngine.ts';
@@ -24,6 +25,7 @@ import { normalizeText, formatActivityDuration } from '../utils/formatters.ts';
 import { DatePicker } from '../components/shared/DatePicker.tsx';
 import { CalorieRing } from '../components/shared/CalorieRing.tsx';
 import { MacroBars } from '../components/shared/MacroBars.tsx';
+import { EstimateLunchModal } from '../components/calories/EstimateLunchModal.tsx';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
@@ -93,6 +95,7 @@ export function CaloriesPage() {
     const [quickAddServings, setQuickAddServings] = useState(1);
     const [portionMode] = useState<'portions' | 'st' | 'grams'>('portions');
     const [isQuickMealModalOpen, setIsQuickMealModalOpen] = useState(false);
+    const [isEstimateModalOpen, setIsEstimateModalOpen] = useState(false);
     const [quickMealItems, setQuickMealItems] = useState<MealItem[]>([]);
 
     // Nutrition breakdown modal state
@@ -146,6 +149,7 @@ export function CaloriesPage() {
             dinner: [],
             snack: [],
             beverage: [],
+            estimate: [],
         };
         dailyEntries.forEach((entry: MealEntry) => {
             grouped[entry.mealType].push(entry);
@@ -186,11 +190,12 @@ export function CaloriesPage() {
     }, [searchQuery, recipes, foodItems, foodAliases]);
 
     const proposals = useMemo(() => {
-        const counts: Record<string, { type: 'recipe' | 'foodItem'; id: string; count: number; lastUsed: number }> = {};
+        const counts: Record<string, { type: 'recipe' | 'foodItem' | 'estimate'; id: string; count: number; lastUsed: number }> = {};
 
         mealEntries.forEach(entry => {
             const time = new Date(entry.createdAt || entry.date).getTime();
             entry.items.forEach(item => {
+                if (item.type === 'estimate') return; // Skip estimates in proposals for now
                 const key = `${item.type}-${item.referenceId}`;
                 if (!counts[key]) {
                     counts[key] = { type: item.type, id: item.referenceId, count: 0, lastUsed: time };
@@ -307,6 +312,9 @@ export function CaloriesPage() {
     };
 
     const getItemName = (item: MealItem): string => {
+        if (item.type === 'estimate') {
+            return (item.estimateDetails?.uncertaintyEmoji ? `${item.estimateDetails.uncertaintyEmoji} ` : '') + (item.estimateDetails?.name || 'Estimering');
+        }
         if (item.type === 'recipe') {
             const recipe = recipes.find(r => r.id === item.referenceId);
             return recipe?.name || 'Okänt recept';
@@ -319,6 +327,7 @@ export function CaloriesPage() {
     };
 
     const getItemCalories = (item: MealItem): number => {
+        if (item.type === 'estimate') return item.estimateDetails?.caloriesAvg || 0;
         if (item.type === 'recipe') {
             const recipe = recipes.find(r => r.id === item.referenceId);
             if (recipe?.ingredientsText) {
@@ -366,6 +375,14 @@ export function CaloriesPage() {
                     fat: Math.round(n.fat * item.servings)
                 };
             }
+        } else if (item.type === 'estimate') {
+            const est = item.estimateDetails;
+            return {
+                calories: est?.caloriesAvg || 0,
+                protein: est?.protein || 0,
+                carbs: est?.carbs || 0,
+                fat: est?.fat || 0
+            };
         } else {
             const food = getFoodItem(item.referenceId);
             if (food) {
@@ -462,6 +479,28 @@ export function CaloriesPage() {
             pieces: pieceCount || 1 // Store the count
         } as any);
         setIsFormOpen(false);
+    };
+
+    const handleSaveEstimate = (details: any) => {
+        console.log('[CaloriesPage] handleSaveEstimate', details);
+        try {
+            addMealEntry({
+                date: selectedDate,
+                mealType: 'estimate',
+                items: [{
+                    type: 'estimate',
+                    referenceId: generateId(),
+                    servings: 1,
+                    estimateDetails: details
+                }],
+            });
+            logEvent('estimate_lunch_log', details.name, 'estimate', {
+                kcalAvg: details.caloriesAvg,
+                isUncertain: !!details.uncertaintyEmoji
+            });
+        } catch (err) {
+            console.error('[CaloriesPage] Failed to save estimate:', err);
+        }
     };
 
 
@@ -837,7 +876,14 @@ export function CaloriesPage() {
                 <NutritionInsights onDateSelect={setSelectedDate} />
             </section>
 
-            <div className="fixed bottom-6 right-6 flex flex-col gap-2">
+            <div className="fixed bottom-6 right-6 flex flex-col gap-3">
+                <button
+                    className="w-12 h-12 bg-orange-500 hover:bg-orange-600 text-white rounded-full shadow-lg flex items-center justify-center text-xl transition-all hover:scale-110 active:scale-95"
+                    onClick={() => setIsEstimateModalOpen(true)}
+                    title="Estimera lunch/middag 🤷"
+                >
+                    🤷
+                </button>
                 <button
                     className="w-14 h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl transition-all hover:scale-110 active:scale-95"
                     onClick={() => setIsFormOpen(true)}
@@ -846,6 +892,12 @@ export function CaloriesPage() {
                     +
                 </button>
             </div>
+
+            <EstimateLunchModal
+                isOpen={isEstimateModalOpen}
+                onClose={() => setIsEstimateModalOpen(false)}
+                onSave={handleSaveEstimate}
+            />
         </div>
     );
 }

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,42 +16,188 @@
             --danger: #ef4444;
             --warning: #f59e0b;
         }
-        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .badge { padding: 4px 12px; border-radius: 99px; font-weight: bold; font-size: 0.9em; }
-        .badge.running { background: var(--success); color: #000; }
-        .badge.stopped { background: var(--danger); color: #fff; }
-        .badge.crashed { background: var(--danger); color: #fff; }
-        .badge.starting { background: var(--warning); color: #000; }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
-        .card { background: var(--card-bg); padding: 20px; border-radius: 12px; border: 1px solid #334155; }
-        .card h3 { margin: 0 0 10px 0; color: var(--text-dim); font-size: 0.9em; text-transform: uppercase; letter-spacing: 0.05em; }
-        .card .value { font-size: 1.8em; font-weight: bold; }
-        .card .sub { font-size: 0.8em; color: var(--text-dim); margin-top: 5px; }
+        body {
+            font-family: -apple-system, system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+        }
 
-        .actions { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
-        button { background: var(--card-bg); color: var(--text); border: 1px solid #334155; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; transition: all 0.2s; }
-        button:hover { background: #334155; }
-        button.primary { background: var(--accent); color: white; border: none; }
-        button.primary:hover { background: #2563eb; }
-        button.danger { border-color: var(--danger); color: var(--danger); }
-        button.danger:hover { background: var(--danger); color: white; }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
 
-        .terminal { background: #000; border-radius: 12px; padding: 20px; height: 500px; overflow-y: auto; font-family: 'Menlo', 'Monaco', 'Courier New', monospace; font-size: 0.9em; border: 1px solid #334155; }
-        .log-entry { margin-bottom: 4px; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
-        .log-entry.stderr { color: #fca5a5; }
-        .log-entry.guardian { color: #7dd3fc; font-style: italic; }
-        .log-entry.stdout { color: #d1d5db; }
-        .timestamp { color: #4b5563; margin-right: 10px; user-select: none; }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .badge.running {
+            background: var(--success);
+            color: #000;
+        }
+
+        .badge.stopped {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .badge.crashed {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .badge.starting {
+            background: var(--warning);
+            color: #000;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #334155;
+        }
+
+        .card h3 {
+            margin: 0 0 10px 0;
+            color: var(--text-dim);
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .card .value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .card .sub {
+            font-size: 0.8em;
+            color: var(--text-dim);
+            margin-top: 5px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: var(--card-bg);
+            color: var(--text);
+            border: 1px solid #334155;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            background: #334155;
+        }
+
+        button.primary {
+            background: var(--accent);
+            color: white;
+            border: none;
+        }
+
+        button.primary:hover {
+            background: #2563eb;
+        }
+
+        button.danger {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        button.danger:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        .terminal {
+            background: #000;
+            border-radius: 12px;
+            padding: 20px;
+            height: 500px;
+            overflow-y: auto;
+            font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+            font-size: 0.9em;
+            border: 1px solid #334155;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        .log-entry.stderr {
+            color: #fca5a5;
+        }
+
+        .log-entry.guardian {
+            color: #7dd3fc;
+            font-style: italic;
+        }
+
+        .log-entry.stdout {
+            color: #d1d5db;
+        }
+
+        .timestamp {
+            color: #4b5563;
+            margin-right: 10px;
+            user-select: none;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
             <h1>🛡️ Guardian Dashboard</h1>
             <div id="status-badge" class="badge stopped">OFFLINE</div>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px; padding: 10px;">
+            <input type="text" id="omnibox" placeholder="Type a command (ex: !restart, !pull) or search..."
+                style="width: 100%; background: transparent; border: none; color: white; font-size: 1.2em; outline: none; padding: 10px; font-family: 'Menlo', 'Monaco', monospace;">
+        </div>
+
+        <div class="card"
+            style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h3 style="margin: 0">Application URL</h3>
+                <div class="value" id="app-url" style="font-size: 1.2em">http://localhost:3000</div>
+            </div>
+            <a id="open-app" href="http://localhost:3000" target="_blank" class="button primary"
+                style="text-decoration: none; display: inline-block; padding: 10px 20px;">🚀 Open App</a>
         </div>
 
         <div class="grid">
@@ -74,7 +221,53 @@
                 <div class="value" id="sys-memory">0%</div>
                 <div class="sub" id="sys-memory-sub">0/0 GB</div>
             </div>
+            <div class="card">
+                <h3>Host & OS</h3>
+                <div class="value" id="host-info" style="font-size: 1.2em">Loading...</div>
+                <div class="sub" id="os-info">...</div>
+            </div>
+            <div class="card">
+                <h3>Load Average</h3>
+                <div class="value" id="load-avg">0.00</div>
+                <div class="sub">1m, 5m, 15m</div>
+            </div>
+            <div class="card">
+                <h3>Database Stats</h3>
+                <div class="value" id="db-counts" style="font-size: 1.2em">0 / 0</div>
+                <div class="sub" id="db-sub">Råvaror / Recept</div>
+            </div>
+            <div class="card">
+                <h3>Omnibox Interactions</h3>
+                <div class="value" id="inter-counts" style="font-size: 1.2em">0 / 0</div>
+                <div class="sub">Omnibox / Totalt</div>
+            </div>
         </div>
+        <style>
+            .button {
+                background: var(--card-bg);
+                color: var(--text);
+                border: 1px solid #334155;
+                padding: 10px 20px;
+                border-radius: 8px;
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.2s;
+            }
+
+            .button:hover {
+                background: #334155;
+            }
+
+            .button.primary {
+                background: var(--accent);
+                color: white;
+                border: none;
+            }
+
+            .button.primary:hover {
+                background: #2563eb;
+            }
+        </style>
 
         <div class="actions">
             <button class="primary" onclick="doAction('restart')">🔄 Restart Server</button>
@@ -85,6 +278,11 @@
 
         <div class="terminal" id="terminal">
             <div class="log-entry guardian">Connecting to Guardian...</div>
+        </div>
+
+        <div style="margin-top: 20px; text-align: center; color: var(--text-dim); font-size: 0.8em;">
+            Deno <span id="deno-version">...</span> • TypeScript <span id="ts-version">...</span> • V8 <span
+                id="v8-version">...</span>
         </div>
     </div>
 
@@ -135,6 +333,47 @@
                     document.getElementById('sys-memory').textContent = pct + '%';
                     document.getElementById('sys-memory-sub').textContent = formatBytes(used) + ' / ' + formatBytes(total);
                 }
+
+                // New Data
+                if (data.appUrl) {
+                    document.getElementById('app-url').textContent = data.appUrl;
+                    document.getElementById('open-app').href = data.appUrl;
+                }
+                document.getElementById('host-info').textContent = data.hostname;
+                document.getElementById('os-info').textContent = data.platform + ' (' + data.status + ')';
+                document.getElementById('load-avg').textContent = data.loadAvg ? data.loadAvg.map(n => n.toFixed(2)).join(', ') : 'N/A';
+
+                // Database Stats
+                if (data.dbStats) {
+                    document.getElementById('db-counts').textContent = `${data.dbStats.foodCount} / ${data.dbStats.recipeCount}`;
+                    document.getElementById('db-sub').textContent = `Råvaror / Recept (${data.dbStats.userCount} users)`;
+                }
+
+                // Interaction Stats
+                if (data.interactionStats) {
+                    const omniRestarts = data.interactionStats.omnibox.restart;
+                    const omniPull = data.interactionStats.omnibox.pull;
+                    const omniBuild = data.interactionStats.omnibox.build;
+                    const omniDeploy = data.interactionStats.omnibox.deploy;
+
+                    const totalOmni = omniRestarts + omniPull + omniBuild + omniDeploy;
+
+                    const clickRestarts = data.interactionStats.click.restart;
+                    const clickPull = data.interactionStats.click.pull;
+                    const clickBuild = data.interactionStats.click.build;
+                    const clickDeploy = data.interactionStats.click.deploy;
+
+                    const totalClick = clickRestarts + clickPull + clickBuild + clickDeploy;
+                    const grandTotal = totalOmni + totalClick;
+
+                    document.getElementById('inter-counts').textContent = `${totalOmni} / ${grandTotal}`;
+                }
+
+                // Version Info
+                document.getElementById('deno-version').textContent = data.denoVersion;
+                document.getElementById('ts-version').textContent = data.typescriptVersion;
+                document.getElementById('v8-version').textContent = data.v8Version;
+
             } catch (e) {
                 console.error(e);
             }
@@ -174,11 +413,34 @@
             }
         }
 
-        async function doAction(action) {
-            if(confirm(`Execute ${action}?`)) {
-                 await fetch(`/api/${action}`, { method: 'POST' });
+        async function doAction(action, source = 'click') {
+            if (confirm(`Execute ${action}?`)) {
+                await fetch(`/api/${action}?source=${source}`, { method: 'POST' });
             }
         }
+
+        // Omnibox Handler
+        document.getElementById('omnibox').addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter') {
+                const val = e.target.value.trim();
+                if (val.startsWith('!')) {
+                    const cmd = val.substring(1);
+                    const actionMap = {
+                        'restart': 'restart',
+                        'pull': 'git-pull',
+                        'build': 'build',
+                        'deploy': 'deploy'
+                    };
+                    const action = actionMap[cmd];
+                    if (action) {
+                        e.target.value = '';
+                        await doAction(action, 'omnibox');
+                    } else {
+                        alert(`Unknown command: ${cmd}`);
+                    }
+                }
+            }
+        });
 
         // Init
         setInterval(updateStatus, 1000);
@@ -187,4 +449,5 @@
         updateLogs();
     </script>
 </body>
+
 </html>
