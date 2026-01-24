@@ -340,6 +340,12 @@ export function ActivitiesPage() {
 
     // URL sync and other logic remains...
 
+    // Optimize: Update preview filters via debounce to avoid typing lag
+    useEffect(() => {
+        const { filters } = parseSmartQuery(debouncedSearchQuery);
+        setPreviewFilters(filters);
+    }, [debouncedSearchQuery]);
+
     // 3. Deep Linking Logic
     useEffect(() => {
         const linkedId = searchParams.get('activityId');
@@ -643,10 +649,6 @@ export function ActivitiesPage() {
                                         setSearchQuery(e.target.value);
                                         // Reset pagination on search
                                         setPage(1);
-
-                                        // Only show previews, don't auto-commit
-                                        const { filters } = parseSmartQuery(e.target.value);
-                                        setPreviewFilters(filters);
                                     }}
                                     onKeyDown={e => {
                                         if (e.key === 'Enter') {

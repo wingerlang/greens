@@ -2,6 +2,7 @@
 // ============================================
 
 import { type StrengthWorkout } from './strengthTypes.ts';
+export type { StrengthWorkout };
 
 /** Unit of measurement for food items and recipe ingredients */
 export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l' | 'cup';

@@ -4,7 +4,7 @@
  * @module services/storage
  */
 
-import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry, type PlannedActivity, type QuickMeal } from '../models/types.ts';
+import { type AppData, type WeeklyPlan, type PerformanceGoal, type TrainingPeriod, type WeightEntry, type PlannedActivity, type QuickMeal, type RaceDefinition, type RaceIgnoreRule } from '../models/types.ts';
 import { SAMPLE_FOOD_ITEMS, SAMPLE_RECIPES, SAMPLE_USERS } from '../data/sampleData.ts';
 import { notificationService } from './notificationService.ts';
 
@@ -51,6 +51,11 @@ export interface StorageService {
     // Quick Meals Granular
     saveQuickMeal(meal: QuickMeal): Promise<void>;
     deleteQuickMeal(id: string): Promise<void>;
+    // Race Definitions (Phase R)
+    saveRaceDefinition(def: RaceDefinition): Promise<void>;
+    deleteRaceDefinition(id: string): Promise<void>;
+    saveRaceIgnoreRule(rule: RaceIgnoreRule): Promise<void>;
+    deleteRaceIgnoreRule(id: string): Promise<void>;
     // Clear specific data from local cache
     clearLocalCache(type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all'): void;
 }
@@ -774,6 +779,78 @@ export class LocalStorageService implements StorageService {
             } catch (e) {
                 console.error('[Storage] Strength session delete failed:', e);
                 notificationService.notify('error', 'Kunde inte ta bort styrkepass');
+            }
+        }
+    }
+
+
+    // ============================================
+    // Race Definitions (Phase R)
+    // ============================================
+
+    async saveRaceDefinition(def: RaceDefinition): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const url = '/api/races/definitions'; // Simplified, assuming backend handles UPSERT on POST or we use POST for all
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(def)
+                });
+                if (!res.ok) throw new Error('API sync failed');
+            } catch (e) {
+                console.error('[Storage] Race def sync failed:', e);
+            }
+        }
+    }
+
+    async deleteRaceDefinition(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`/api/races/definitions/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) {
+                console.error('[Storage] Race def delete failed:', e);
+            }
+        }
+    }
+
+    async saveRaceIgnoreRule(rule: RaceIgnoreRule): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                const res = await fetch('/api/races/ignore-rules', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(rule)
+                });
+                if (!res.ok) throw new Error('API sync failed');
+            } catch (e) {
+                console.error('[Storage] Ignore rule sync failed:', e);
+            }
+        }
+    }
+
+    async deleteRaceIgnoreRule(id: string): Promise<void> {
+        const token = getToken();
+        if (token && ENABLE_CLOUD_SYNC) {
+            try {
+                await fetch(`/api/races/ignore-rules/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (e) {
+                console.error('[Storage] Ignore rule delete failed:', e);
             }
         }
     }

@@ -304,6 +304,7 @@ export function applySmartFilters<T extends ExerciseEntry>(activities: T[], filt
                     const combinedText = `
                         ${a.type || ''} 
                         ${a.name || ''} 
+                        ${a.title || ''}
                         ${a.notes || ''} 
                         ${a.category || ''} 
                         ${a.source || ''} 

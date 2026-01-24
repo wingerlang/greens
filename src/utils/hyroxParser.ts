@@ -1,55 +1,106 @@
-import { ExerciseEntry, HyroxStation, StrengthSession } from '../models/types.ts';
+import { HyroxStation, ExerciseEntry, StrengthWorkout } from '../models/types.ts';
 
-// Standard Weights (Men/Women Open) - can be configured later
-const HYROX_STANDARDS = {
-    sledPush: { weight: 152 }, // kg (Open Men)
-    sledPull: { weight: 103 }, // kg
-    farmersCarry: { weight: 24 }, // kg x 2
-    sandbagLunges: { weight: 20 }, // kg
-    wallBalls: { weight: 6 } // kg
-};
+export const HYROX_STATIONS_ORDER: HyroxStation[] = [
+    'ski_erg',
+    'sled_push',
+    'sled_pull',
+    'burpee_broad_jumps',
+    'rowing',
+    'farmers_carry',
+    'sandbag_lunges',
+    'wall_balls'
+];
 
-export function identifyHyroxActivity(activity: ExerciseEntry): boolean {
-    const text = (activity.notes + ' ' + (activity as any).name).toLowerCase(); // basic check, 'name' might need casting if not on ExerciseEntry yet
-    return text.includes('hyrox') || text.includes('sled push') || text.includes('wall ball');
+interface ParsedHyroxData {
+    runSplits: number[];
+    stations: Partial<Record<HyroxStation, number>>;
 }
 
-// Helper to check both explicit duration (if name matches) and text regex (if name doesn't match or for splits)
-function checkActivityForStation(activity: ExerciseEntry, keywords: string[], targetArray: number[]) {
-    // Combine notes, name, and title to be safe
-    const text = (activity.notes || '' + ' ' + (activity as any).name || '' + ' ' + (activity as any).title || '').toLowerCase();
-    const name = ((activity as any).name || '' + ' ' + (activity as any).title || '').toLowerCase();
-
-    // 1. Check if the Activity ITSELF is this station (e.g. Name = "Sled Push")
-    // and has a valid duration. 
-    // Sanity: Station avg is usually 2-8 mins. Allow up to 20 mins.
-    // If user logged "Sled Push 50m", duration might be accurate.
-    const isDirectMatch = keywords.some(k => name.includes(k));
-    if (isDirectMatch && activity.durationMinutes && activity.durationMinutes > 0.5 && activity.durationMinutes < 20) {
-        // If it's a specific entry for this station
-        targetArray.push(activity.durationMinutes * 60);
-        return;
+// Convert "05:31" or "5:31" to seconds
+const parseTime = (timeStr: string): number | null => {
+    if (!timeStr) return null;
+    const parts = timeStr.split(':');
+    if (parts.length === 2) {
+        return (parseInt(parts[0]) * 60) + parseInt(parts[1]);
     }
+    const num = parseInt(timeStr);
+    return isNaN(num) ? null : num;
+};
 
-    // 2. Look for regex in text (notes or name)
-    // "Sled Push: 3:00"
-    for (const keyword of keywords) {
-        const regex = new RegExp(`${keyword}[^\\d\\r\\n]*(\\d+)(:|m|\\s|\\.)(\\d{2})?`, 'i');
-        const match = text.match(regex);
+export const parseHyroxText = (text: string): ParsedHyroxData => {
+    const lines = text.split('\n');
+    const runSplits: number[] = new Array(8).fill(0);
+    const stations: Partial<Record<HyroxStation, number>> = {};
+
+    // Regex Patterns
+    const runRegex = /R(\d+).*?(\d{1,2}:\d{2})/i; // Matches R1: 05:31
+    const runWordRegex = /Run\s*(\d+).*?(\d{1,2}:\d{2})/i;
+
+    // Station Regexes - map varying names to keys
+    const stationMap: Record<string, HyroxStation> = {
+        'ski': 'ski_erg', 'skierg': 'ski_erg',
+        'push': 'sled_push', 'sled push': 'sled_push',
+        'pull': 'sled_pull', 'sled pull': 'sled_pull',
+        'burpee': 'burpee_broad_jumps', 'bbj': 'burpee_broad_jumps', 'broad': 'burpee_broad_jumps',
+        'row': 'rowing', 'rower': 'rowing', 'rowing': 'rowing',
+        'farmer': 'farmers_carry', 'farmers': 'farmers_carry', 'carry': 'farmers_carry',
+        'lunge': 'sandbag_lunges', 'lunges': 'sandbag_lunges', 'sandbag': 'sandbag_lunges',
+        'wall': 'wall_balls', 'balls': 'wall_balls', 'wallballs': 'wall_balls'
+    };
+
+    // Generic S-regex: S1 (SkiErg): 03:58
+    const sRegex = /S(\d+).*?(\d{1,2}:\d{2})/i;
+
+    lines.forEach(line => {
+        const cleanLine = line.trim();
+        if (!cleanLine) return;
+
+        // 1. Try match Runs
+        let match = cleanLine.match(runRegex) || cleanLine.match(runWordRegex);
         if (match) {
-            const minutes = parseInt(match[1]);
-            const seconds = match[3] ? parseInt(match[3]) : 0;
-            const totalSeconds = minutes * 60 + seconds;
-            // Sanity check (30s to 15 mins)
-            if (totalSeconds > 30 && totalSeconds < 900) {
-                targetArray.push(totalSeconds);
+            const index = parseInt(match[1]) - 1;
+            const time = parseTime(match[2]);
+            if (index >= 0 && index < 8 && time !== null) {
+                runSplits[index] = time;
                 return;
             }
         }
-    }
-}
 
-export function parseHyroxStats(activities: ExerciseEntry[], strengthSessions: StrengthSession[] = []): Record<HyroxStation, number[]> {
+        // 2. Try match indexed Stations (S1, S2...)
+        match = cleanLine.match(sRegex);
+        if (match) {
+            const index = parseInt(match[1]) - 1;
+            const time = parseTime(match[2]);
+            if (index >= 0 && index < 8 && time !== null) {
+                stations[HYROX_STATIONS_ORDER[index]] = time;
+                return;
+            }
+        }
+
+        // 3. Try match named stations (Wall Balls: 07:11)
+        // We look for time at the end or after a separator
+        const timeMatch = cleanLine.match(/(\d{1,2}:\d{2})/);
+        if (timeMatch) {
+            const lower = cleanLine.toLowerCase();
+            for (const [key, stationId] of Object.entries(stationMap)) {
+                if (lower.includes(key)) {
+                    const time = parseTime(timeMatch[1]);
+                    if (time !== null) {
+                        stations[stationId] = time;
+                    }
+                    break;
+                }
+            }
+        }
+    });
+
+    return { runSplits, stations };
+};
+
+/**
+ * Aggregates all Hyrox station times from history
+ */
+export const parseHyroxStats = (exercises: ExerciseEntry[], _strength: StrengthWorkout[]): Record<HyroxStation, number[]> => {
     const stats: Record<HyroxStation, number[]> = {
         ski_erg: [],
         sled_push: [],
@@ -59,77 +110,19 @@ export function parseHyroxStats(activities: ExerciseEntry[], strengthSessions: S
         farmers_carry: [],
         sandbag_lunges: [],
         wall_balls: [],
-        run_1km: []
+        run_1km: [] // We might not track individual runs here easily unless averaged
     };
 
-    // Helper to process any activity (Real or Virtual)
-    const processActivity = (a: ExerciseEntry) => {
-        const text = (a.notes || '' + ' ' + (a as any).name || '').toLowerCase();
-
-        // 1. Station Parsing
-        checkActivityForStation(a, ['ski', 'ski erg'], stats.ski_erg);
-        checkActivityForStation(a, ['sled push', 'push'], stats.sled_push); // "Sled Push" specific
-        checkActivityForStation(a, ['sled pull', 'pull'], stats.sled_pull);
-        checkActivityForStation(a, ['burpee', 'bbj'], stats.burpee_broad_jumps);
-        checkActivityForStation(a, ['row', 'rowing'], stats.rowing);
-        checkActivityForStation(a, ['farmers', 'carry'], stats.farmers_carry);
-        checkActivityForStation(a, ['lunge', 'sandbag'], stats.sandbag_lunges);
-        checkActivityForStation(a, ['wall', 'wall ball', 'wb'], stats.wall_balls);
-
-        // 2. Run Parsing
-        // A) Dedicated 1km Intervals (strict distance check)
-        if (a.type === 'running' && a.distance && Math.abs(a.distance - 1.0) < 0.1) {
-            stats.run_1km.push(a.durationMinutes * 60);
-        }
-        // B) Splits inside a Hyrox Note (e.g., "Run 1: 4:00", "Run 8: 5:30")
-        parseRunSplits(text, stats.run_1km);
-    };
-
-    // 1. Process Standard Activities
-    activities.forEach(processActivity);
-
-    // 2. Process Strength Sessions (Deep Search)
-    if (strengthSessions) {
-        strengthSessions.forEach(session => {
-            // Check each exercise inside the session
-            session.exercises.forEach(ex => {
-                // effective duration: hard to know per exercise if not logged.
-                // Assuming distinct sets? No, usually "3 x 10" etc.
-                // If it's a Hyrox station, we assume it's done as a "station work". 
-                // We fake a Virtual Activity for it. Use 0 duration if unknown, parser might catch text duration?
-
-                // Create a Virtual Entry
-                const virtualEntry: any = {
-                    name: ex.name,
-                    notes: ex.notes || '',
-                    // Fallback duration: if session is 60m and 6 exercises -> 10m each? 
-                    // Better to rely on "Name Match" with a safe default if no explicit duration found.
-                    // But checkActivityForStation checks durationMinutes > 0.5. 
-                    // Let's assume 5 mins if nothing else.
-                    durationMinutes: session.durationMinutes / (session.exercises.length || 1),
-                    type: 'strength',
-                    id: `virtual-${session.id}-${ex.id}`,
-                    date: session.date
-                };
-
-                processActivity(virtualEntry);
+    exercises.forEach(ex => {
+        if (ex.type === 'hyrox' && ex.hyroxStats?.stations) {
+            Object.entries(ex.hyroxStats.stations).forEach(([key, value]) => {
+                const k = key as HyroxStation;
+                if (typeof value === 'number' && stats[k]) {
+                    stats[k].push(value);
+                }
             });
-        });
-    }
+        }
+    });
 
     return stats;
-}
-
-function parseRunSplits(text: string, targetArray: number[]) {
-    // Look for "Run X: 4:30"
-    const regex = /run\s*\d*[^\\d]*(\d+)(:|m|\s|\.)(\d{2})/gi;
-    let match;
-    while ((match = regex.exec(text)) !== null) {
-        const minutes = parseInt(match[1]);
-        const seconds = match[3] ? parseInt(match[3]) : 0;
-        const total = minutes * 60 + seconds;
-        if (total > 150 && total < 600) { // 2:30 to 10:00 range
-            targetArray.push(total);
-        }
-    }
-}
+};

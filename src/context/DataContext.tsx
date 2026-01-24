@@ -328,7 +328,10 @@ export function DataProvider({ children }: DataProviderProps) {
         addTrainingPeriod, updateTrainingPeriod, deleteTrainingPeriod,
         updateCoachConfig, generateCoachPlan,
         deletePlannedActivity, updatePlannedActivity, savePlannedActivities, completePlannedActivity,
-        addCoachGoal, activateCoachGoal, deleteCoachGoal
+        addCoachGoal, activateCoachGoal, deleteCoachGoal,
+        // Race Defs
+        raceDefinitions, addRaceDefinition, updateRaceDefinition, deleteRaceDefinition,
+        raceIgnoreRules, addRaceIgnoreRule, deleteRaceIgnoreRule
     } = useActivityContext({ currentUser, logAction, emitFeedEvent, skipAutoSave, getLatestWeight, isLoaded });
 
     // ============================================
@@ -606,9 +609,7 @@ export function DataProvider({ children }: DataProviderProps) {
         return calculateCalorieGoalStreakUtil(calculateDailyNutrition, currentUser.settings, referenceDate);
     }, [calculateDailyNutrition, currentUser]);
 
-    const calculateExerciseCalories = useCallback((type: ExerciseType, duration: number, intensity: ExerciseIntensity): number => {
-        return calculateExerciseCaloriesUtil(type, duration, intensity, getLatestWeight());
-    }, [getLatestWeight]);
+
 
 
     // ============================================
@@ -729,8 +730,7 @@ export function DataProvider({ children }: DataProviderProps) {
         foodAliases,
         updateFoodAlias,
         unifiedActivities,
-        updateFoodAlias,
-        unifiedActivities,
+
         refreshData,
         isLoading: !isLoaded,
         databaseActions,

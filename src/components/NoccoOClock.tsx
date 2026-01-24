@@ -40,6 +40,15 @@ export function NoccoOClock() {
         setHasRegisteredToday(hasNocco);
     }, [mealEntries, now, foodItems]);
 
+    // Check for persisted dismissal
+    useEffect(() => {
+        const today = getISODate(now);
+        if (localStorage.getItem(`nocco_dismissed_${today}`)) {
+            setIsDismissed(true);
+        }
+    }, [now]);
+
+
     const currentHour = now.getHours();
     const currentMinute = now.getMinutes();
 
@@ -148,13 +157,7 @@ export function NoccoOClock() {
         localStorage.setItem(`nocco_dismissed_${today}`, 'true');
     };
 
-    // Check for persisted dismissal
-    useEffect(() => {
-        const today = getISODate(now);
-        if (localStorage.getItem(`nocco_dismissed_${today}`)) {
-            setIsDismissed(true);
-        }
-    }, [now]);
+
 
     if (isCountdownPhase) {
         // Calculate time until 08:00

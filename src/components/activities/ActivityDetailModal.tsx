@@ -5,7 +5,7 @@ import { StrengthWorkout } from '../../models/strengthTypes.ts';
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { mapUniversalToLegacyEntry } from '../../utils/mappers.ts';
-import { formatDuration, formatPace, getRelativeTime, formatSwedishDate, formatSpeed } from '../../utils/dateUtils.ts';
+import { formatDuration, formatPace, getRelativeTime, formatSwedishDate, formatSpeed, formatSecondsToTime } from '../../utils/dateUtils.ts';
 import { calculatePerformanceScore, calculateGAP, getPerformanceBreakdown } from '../../utils/performanceEngine.ts';
 import { HeartRateZones } from '../training/HeartRateZones.tsx';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
@@ -15,6 +15,8 @@ import { EXERCISE_TYPES, INTENSITIES } from '../training/ExerciseModal.tsx';
 import { ExerciseType, ExerciseIntensity, ExerciseSubType, HyroxStation, HyroxActivityStats } from '../../models/types.ts';
 import { WorkoutStructureCard } from './WorkoutStructureCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
+import { parseHyroxText } from '../../utils/hyroxParser.ts';
+import { Wand2 } from 'lucide-react';
 
 // Expandable Exercise Component - click to show sets
 function ExpandableExercise({ exercise }: { exercise: any }) {
@@ -88,7 +90,12 @@ export function ActivityDetailModal({
     const [viewMode, setViewMode] = useState<'combined' | 'diff' | 'raw'>('combined');
     const [activeTab, setActiveTab] = useState<'stats' | 'compare' | 'splits' | 'merge' | 'analysis'>('stats');
     const [showScoreInfo, setShowScoreInfo] = useState(false);
+
     const [isUnmerging, setIsUnmerging] = useState(false);
+
+    // Hyrox Parser State
+    const [showParser, setShowParser] = useState(false);
+    const [parseText, setParseText] = useState('');
 
     // Edit Form State
     const [editForm, setEditForm] = useState({
@@ -153,7 +160,20 @@ export function ActivityDetailModal({
     }, [universalActivity, activity]);
 
     // Hyrox Visualization Data
-    const hyroxStats = activity.hyroxStats;
+    // Fallback: If hyroxStats is missing (e.g. from Strava import), try to parse from notes
+    const hyroxStats = React.useMemo(() => {
+        if (activity.hyroxStats) return activity.hyroxStats;
+        if (activity.type === 'hyrox' && activity.notes) {
+            const parsed = parseHyroxText(activity.notes);
+            // Only return if meaningful data found
+            if (Object.keys(parsed.stations).length > 0 || parsed.runSplits.some(r => r > 0)) {
+                return parsed;
+            }
+        }
+        return undefined;
+    }, [activity.hyroxStats, activity.type, activity.notes]);
+
+    // const hyroxStats = activity.hyroxStats; // OLD
     const isHyrox = activity.type === 'hyrox';
 
 
@@ -733,6 +753,48 @@ export function ActivityDetailModal({
                                     </div>
                                 </div>
 
+                                {/* Parser Toggle */}
+                                <div className="flex justify-end">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowParser(!showParser)}
+                                        className="text-xs text-amber-500 font-bold flex items-center gap-1 hover:text-amber-400"
+                                    >
+                                        <Wand2 size={12} /> {showParser ? 'Göm import' : 'Importera från text'}
+                                    </button>
+                                </div>
+
+                                {showParser && (
+                                    <div className="bg-slate-950/50 p-3 rounded-xl border border-white/5 space-y-2 animate-in slide-in-from-top-2">
+                                        <textarea
+                                            value={parseText}
+                                            onChange={e => setParseText(e.target.value)}
+                                            placeholder="Klistra in mellantider här (t.ex. 'R1: 05:30', 'S1: 04:00')..."
+                                            className="w-full bg-slate-900 border border-white/10 rounded-lg p-2 text-xs text-mono text-white h-24 focus:outline-none focus:border-amber-500/50"
+                                        />
+                                        <div className="flex justify-end">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const parsed = parseHyroxText(parseText);
+                                                    setEditForm({
+                                                        ...editForm,
+                                                        hyroxStats: {
+                                                            runSplits: parsed.runSplits.map((v, i) => v || editForm.hyroxStats?.runSplits?.[i] || 0),
+                                                            stations: { ...editForm.hyroxStats?.stations, ...parsed.stations }
+                                                        }
+                                                    });
+                                                    setShowParser(false);
+                                                    setParseText('');
+                                                }}
+                                                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-900 text-xs font-bold rounded-lg"
+                                            >
+                                                Applicera
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
                                     {/* 8 Rounds */}
                                     {Array.from({ length: 8 }).map((_, i) => (
@@ -746,7 +808,7 @@ export function ActivityDetailModal({
                                                         <input
                                                             type="text"
                                                             placeholder="mm:ss"
-                                                            value={formatDuration(editForm.hyroxStats?.runSplits?.[i] || 0)}
+                                                            value={formatSecondsToTime(editForm.hyroxStats?.runSplits?.[i] || 0)}
                                                             onChange={e => {
                                                                 // Parse mm:ss to seconds
                                                                 const parts = e.target.value.split(':');
@@ -782,7 +844,7 @@ export function ActivityDetailModal({
                                                     <input
                                                         type="text"
                                                         placeholder="mm:ss"
-                                                        value={formatDuration(editForm.hyroxStats?.stations?.[HYROX_STATIONS[i].id] || 0)}
+                                                        value={formatSecondsToTime(editForm.hyroxStats?.stations?.[HYROX_STATIONS[i].id] || 0)}
                                                         onChange={e => {
                                                             const parts = e.target.value.split(':');
                                                             let sec = 0;
@@ -950,14 +1012,14 @@ export function ActivityDetailModal({
                                         {hyroxStats && (
                                             <div className="text-[10px] uppercase font-bold text-slate-500 bg-slate-800/50 px-2 py-1 rounded">
                                                 Stations: <span className="text-amber-400 text-sm">
-                                                    {formatDuration(Object.values(hyroxStats.stations || {}).reduce((a, b) => a + (b || 0), 0))}
+                                                    {formatSecondsToTime(Object.values(hyroxStats.stations || {}).reduce((a, b) => a + (b || 0), 0))}
                                                 </span>
                                             </div>
                                         )}
                                         {hyroxStats && (
                                             <div className="text-[10px] uppercase font-bold text-slate-500 bg-slate-800/50 px-2 py-1 rounded">
                                                 Run: <span className="text-emerald-400 text-sm">
-                                                    {formatDuration(hyroxStats.runSplits?.reduce((a, b) => a + (b || 0), 0) || 0)}
+                                                    {formatSecondsToTime(hyroxStats.runSplits?.reduce((a, b) => a + (b || 0), 0) || 0)}
                                                 </span>
                                             </div>
                                         )}
@@ -982,7 +1044,7 @@ export function ActivityDetailModal({
                                                         <span className="text-emerald-500 text-xs">🏃 1km Run</span>
                                                         <div className="flex-1 border-b border-dashed border-emerald-500/20 mx-2" />
                                                         <span className="font-mono font-bold text-sm text-emerald-400">
-                                                            {formatDuration(hyroxStats.runSplits?.[i] || 0)}
+                                                            {formatSecondsToTime(hyroxStats.runSplits?.[i] || 0)}
                                                         </span>
                                                     </div>
 
@@ -997,7 +1059,7 @@ export function ActivityDetailModal({
                                                         <span className="text-amber-500 text-xs font-bold">{HYROX_STATIONS[i].label}</span>
                                                         <div className="flex-1 border-b border-dashed border-amber-500/20 mx-2" />
                                                         <span className="font-mono font-bold text-sm text-amber-400">
-                                                            {formatDuration(hyroxStats.stations?.[HYROX_STATIONS[i].id] || 0)}
+                                                            {formatSecondsToTime(hyroxStats.stations?.[HYROX_STATIONS[i].id] || 0)}
                                                         </span>
                                                     </div>
 
@@ -1060,7 +1122,7 @@ export function ActivityDetailModal({
                                                                     <span>{station.icon}</span>
                                                                     {station.label}
                                                                 </span>
-                                                                <span className="font-mono text-amber-400 font-bold">{formatDuration(duration as number)}</span>
+                                                                <span className="font-mono text-amber-400 font-bold">{formatSecondsToTime(duration as number)}</span>
                                                             </div>
                                                         );
                                                     })}
@@ -2178,8 +2240,9 @@ export function ActivityDetailModal({
                             </button>
                         </div>
                     </>
-                )}
-            </div>
+                )
+                }
+            </div >
         </div >
     );
 }

@@ -403,6 +403,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             walking: { low: 2.5, moderate: 3.5, high: 4.5, ultra: 5.5 },
             swimming: { low: 5, moderate: 7, high: 10, ultra: 12 },
             yoga: { low: 2, moderate: 2.5, high: 3.5, ultra: 4 },
+            hyrox: { low: 6, moderate: 8, high: 10, ultra: 12 },
             other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
         };
 
@@ -777,291 +778,344 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
     const updateCompetition = useCallback((id: string, updates: Partial<Competition>) => {
         setCompetitions(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-        const calculateParticipantPoints = useCallback((compId: string, userId: string, date: string): number => {
-            const comp = competitions.find(c => c.id === compId);
-            if (!comp) return 0;
-            // Logic for calculating points based on rules will be implemented in a service/util
-            return 0; // Placeholder
-        }, [competitions]);
+    }, []);
 
-        const addTrainingCycle = useCallback((data: Omit<TrainingCycle, 'id'>): TrainingCycle => {
-            const newCycle: TrainingCycle = {
-                ...data,
-                id: generateId()
-            };
-            setTrainingCycles(prev => [...prev, newCycle]);
-            return newCycle;
-        }, []);
+    const deleteCompetition = useCallback((id: string) => {
+        setCompetitions(prev => prev.filter(c => c.id !== id));
+    }, []);
 
-        const updateTrainingCycle = useCallback((id: string, updates: Partial<TrainingCycle>) => {
-            setTrainingCycles(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
-        }, []);
+    const calculateParticipantPoints = useCallback((compId: string, userId: string, date: string): number => {
+        const comp = competitions.find(c => c.id === compId);
+        if (!comp) return 0;
+        // Logic for calculating points based on rules will be implemented in a service/util
+        return 0; // Placeholder
+    }, [competitions]);
 
-        const deleteTrainingCycle = useCallback((id: string) => {
-            setTrainingCycles(prev => prev.filter(c => c.id !== id));
-        }, []);
-
-        const addGoal = useCallback((data: Omit<PerformanceGoal, 'id' | 'createdAt'>): PerformanceGoal => {
-            const newGoal: PerformanceGoal = {
-                ...data,
-                id: generateId(),
-                userId: currentUser?.id || 'unknown',
-                createdAt: new Date().toISOString()
-            };
-            setPerformanceGoals(prev => [...prev, newGoal]);
-            // Persist Granularly
-            skipAutoSave.current = true;
-            storageService.saveGoal(newGoal).catch(e => console.error("Failed to save goal", e));
-            return newGoal;
-        }, [currentUser, skipAutoSave]);
-
-        const updateGoal = useCallback((id: string, updates: Partial<PerformanceGoal>) => {
-            setPerformanceGoals(prev => {
-                const next = prev.map(g => g.id === id ? { ...g, ...updates } : g);
-                const updatedGoal = next.find(g => g.id === id);
-                if (updatedGoal) {
-                    skipAutoSave.current = true;
-                    storageService.saveGoal(updatedGoal).catch(e => console.error("Failed to update goal", e));
-                }
-                return next;
-            });
-        }, [skipAutoSave]);
-
-        const deleteGoal = useCallback((id: string) => {
-            setPerformanceGoals(prev => prev.filter(g => g.id !== id));
-            skipAutoSave.current = true;
-            storageService.deleteGoal(id).catch(e => console.error("Failed to delete goal", e));
-        }, [skipAutoSave]);
-
-        const getGoalsForCycle = useCallback((cycleId: string): PerformanceGoal[] => {
-            return performanceGoals.filter(g => g.cycleId === cycleId);
-        }, [performanceGoals]);
-
-        const addTrainingPeriod = useCallback((data: Omit<TrainingPeriod, 'id' | 'createdAt' | 'updatedAt'>): TrainingPeriod => {
-            const newPeriod: TrainingPeriod = {
-                ...data,
-                id: generateId(),
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-            setTrainingPeriods(prev => [...prev, newPeriod]);
-            skipAutoSave.current = true;
-            storageService.savePeriod(newPeriod).catch(e => console.error("Failed to save period", e));
-            return newPeriod;
-        }, [skipAutoSave]);
-
-        const updateTrainingPeriod = useCallback((id: string, updates: Partial<TrainingPeriod>) => {
-            setTrainingPeriods(prev => {
-                const next = prev.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p);
-                const updatedPeriod = next.find(p => p.id === id);
-                if (updatedPeriod) {
-                    skipAutoSave.current = true;
-                    storageService.savePeriod(updatedPeriod).catch(e => console.error("Failed to update period", e));
-                }
-                return next;
-            });
-        }, [skipAutoSave]);
-
-        const deleteTrainingPeriod = useCallback((id: string) => {
-            // 1. Remove period locally
-            setTrainingPeriods(prev => prev.filter(p => p.id !== id));
-            skipAutoSave.current = true;
-            storageService.deletePeriod(id).catch(e => console.error("Failed to delete period", e));
-
-            // 2. Unlink goals locally (Orphan them)
-            setPerformanceGoals(prev => prev.map(g => {
-                if (g.periodId === id) {
-                    const updated = { ...g, periodId: undefined };
-                    // We should also sync this update to backend
-                    storageService.saveGoal(updated).catch(e => console.error("Failed to unlink goal", e));
-                    return updated;
-                }
-                return g;
-            }));
-        }, [skipAutoSave]);
-
-        const updateCoachConfig = useCallback((updates: Partial<CoachConfig>) => {
-            setCoachConfig(prev => prev ? { ...prev, ...updates } : updates as CoachConfig);
-        }, []);
-
-        const generateCoachPlanAction = useCallback((stravaHistory: StravaActivity[], configOverride?: CoachConfig) => {
-            const config = configOverride || coachConfig;
-            if (!config) return;
-            const newPlan = generateTrainingPlan(config, stravaHistory, plannedActivities);
-            setPlannedActivities(newPlan);
-        }, [coachConfig, plannedActivities]);
-
-        const deletePlannedActivity = useCallback((id: string) => {
-            setPlannedActivities(prev => prev.filter(a => a.id !== id));
-            skipAutoSave.current = true;
-            storageService.deletePlannedActivity(id).catch(e => console.error("Failed to delete planned activity", e));
-        }, [skipAutoSave]);
-
-        const updatePlannedActivity = useCallback((id: string, updates: Partial<PlannedActivity>) => {
-            setPlannedActivities(prev => {
-                const next = prev.map(a => a.id === id ? { ...a, ...updates } : a);
-                const updated = next.find(a => a.id === id);
-                if (updated) {
-                    skipAutoSave.current = true;
-                    storageService.savePlannedActivity(updated).catch(e => console.error("Failed to update planned activity", e));
-                }
-                return next;
-            });
-        }, [skipAutoSave]);
-
-        const savePlannedActivities = useCallback((newActivities: PlannedActivity[]) => {
-            setPlannedActivities(prev => {
-                const ids = new Set(newActivities.map(a => a.id));
-                const filtered = prev.filter(a => !ids.has(a.id));
-
-                const next = [...filtered, ...newActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-                // Sync to API
-                skipAutoSave.current = true;
-                storageService.savePlannedActivities(newActivities).catch(e => console.error("Failed to save planned activities", e));
-
-                return next;
-            });
-        }, [skipAutoSave]);
-
-        const completePlannedActivity = useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
-            setPlannedActivities(prev => {
-                const next = prev.map(a => {
-                    if (a.id === activityId) {
-                        return {
-                            ...a,
-                            status: 'COMPLETED' as const,
-                            feedback,
-                            completedDate: getISODate(),
-                            actualDistance: actualDist || a.estimatedDistance,
-                            actualTimeSeconds: actualTime
-                        };
-                    }
-                    return a;
-                });
-
-                const completed = next.find(a => a.id === activityId);
-                const original = prev.find(a => a.id === activityId);
-
-                if (completed && original?.status !== 'COMPLETED') {
-                    skipAutoSave.current = true;
-                    storageService.savePlannedActivity(completed).catch(e => console.error("Failed to save completed plan", e));
-
-                    // Automatically add to exercise log
-                    addExercise({
-                        date: completed.completedDate!,
-                        type: 'running',
-                        durationMinutes: Math.round((actualTime || (completed.estimatedDistance * 300)) / 60), // fallback to 5min/km
-                        intensity: feedback === 'HARD' || feedback === 'TOO_HARD' ? 'high' : 'moderate',
-                        caloriesBurned: calculateExerciseCalories('running', (actualTime || (completed.estimatedDistance * 300)) / 60, 'moderate'),
-                        distance: actualDist || completed.estimatedDistance,
-                        notes: `Coached Session: ${completed.title}. Feedback: ${feedback || 'None'}`
-                    });
-                }
-
-                return next;
-            });
-        }, [addExercise, calculateExerciseCalories, skipAutoSave]);
-
-        const addCoachGoal = useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
-            const newGoal: CoachGoal = {
-                ...goalData,
-                id: generateId(),
-                createdAt: new Date().toISOString(),
-                isActive: (coachConfig?.goals?.length || 0) === 0 // First goal is active
-            };
-            setCoachConfig(prev => prev ? { ...prev, goals: [...(prev.goals || []), newGoal] } : {
-                userProfile: { maxHr: 190, restingHr: 60 },
-                preferences: { weeklyVolumeKm: 30, longRunDay: 'Sunday', intervalDay: 'Tuesday', trainingDays: [2, 4, 0] },
-                goals: [newGoal]
-            });
-        }, [coachConfig]);
-
-        const activateCoachGoal = useCallback((goalId: string) => {
-            setCoachConfig(prev => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    goals: prev.goals.map(g => ({ ...g, isActive: g.id === goalId }))
-                };
-            });
-        }, []);
-
-        const deleteCoachGoal = useCallback((goalId: string) => {
-            setCoachConfig(prev => {
-                if (!prev) return prev;
-                return {
-                    ...prev,
-                    goals: prev.goals.filter(g => g.id !== goalId)
-                };
-            });
-        }, []);
-
-        return {
-            // State
-            exerciseEntries,
-            strengthSessions,
-            competitions,
-            trainingCycles,
-            performanceGoals,
-            trainingPeriods,
-            coachConfig,
-            plannedActivities,
-            universalActivities,
-            unifiedActivities,
-
-            // Setters
-            setExerciseEntries,
-            setStrengthSessions,
-            setCompetitions,
-            setTrainingCycles,
-            setPerformanceGoals,
-            setTrainingPeriods,
-            setCoachConfig,
-            setPlannedActivities,
-            setUniversalActivities,
-
-            // Actions
-            addStrengthSession,
-            updateStrengthSession,
-            deleteStrengthSession,
-            addExercise,
-            updateExercise,
-            deleteExercise,
-            calculateExerciseCalories,
-            getExercisesForDate,
-            addCompetition,
-            updateCompetition,
-            deleteCompetition,
-            calculateParticipantPoints,
-            addTrainingCycle,
-            updateTrainingCycle,
-            deleteTrainingCycle,
-            addGoal,
-            updateGoal,
-            deleteGoal,
-            getGoalsForCycle,
-            addTrainingPeriod,
-            updateTrainingPeriod,
-            deleteTrainingPeriod,
-            updateCoachConfig,
-            generateCoachPlan: generateCoachPlanAction,
-            deletePlannedActivity,
-            updatePlannedActivity,
-            savePlannedActivities,
-            completePlannedActivity,
-            addCoachGoal,
-            activateCoachGoal,
-            deleteCoachGoal,
-            // Race Defs
-            raceDefinitions,
-            raceIgnoreRules,
-            addRaceDefinition,
-            updateRaceDefinition,
-            deleteRaceDefinition,
-            addRaceIgnoreRule,
-            deleteRaceIgnoreRule,
-            setRaceDefinitions, // Exposed for loading
-            setRaceIgnoreRules, // Exposed for loading
+    const addTrainingCycle = useCallback((data: Omit<TrainingCycle, 'id'>): TrainingCycle => {
+        const newCycle: TrainingCycle = {
+            ...data,
+            id: generateId()
         };
-    }
+        setTrainingCycles(prev => [...prev, newCycle]);
+        return newCycle;
+    }, []);
+
+    const updateTrainingCycle = useCallback((id: string, updates: Partial<TrainingCycle>) => {
+        setTrainingCycles(prev => prev.map(c => c.id === id ? { ...c, ...updates } : c));
+    }, []);
+
+    const deleteTrainingCycle = useCallback((id: string) => {
+        setTrainingCycles(prev => prev.filter(c => c.id !== id));
+    }, []);
+
+    const addGoal = useCallback((data: Omit<PerformanceGoal, 'id' | 'createdAt'>): PerformanceGoal => {
+        const newGoal: PerformanceGoal = {
+            ...data,
+            id: generateId(),
+            userId: currentUser?.id || 'unknown',
+            createdAt: new Date().toISOString()
+        };
+        setPerformanceGoals(prev => [...prev, newGoal]);
+        // Persist Granularly
+        skipAutoSave.current = true;
+        storageService.saveGoal(newGoal).catch(e => console.error("Failed to save goal", e));
+        return newGoal;
+    }, [currentUser, skipAutoSave]);
+
+    const updateGoal = useCallback((id: string, updates: Partial<PerformanceGoal>) => {
+        setPerformanceGoals(prev => {
+            const next = prev.map(g => g.id === id ? { ...g, ...updates } : g);
+            const updatedGoal = next.find(g => g.id === id);
+            if (updatedGoal) {
+                skipAutoSave.current = true;
+                storageService.saveGoal(updatedGoal).catch(e => console.error("Failed to update goal", e));
+            }
+            return next;
+        });
+    }, [skipAutoSave]);
+
+    const deleteGoal = useCallback((id: string) => {
+        setPerformanceGoals(prev => prev.filter(g => g.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteGoal(id).catch(e => console.error("Failed to delete goal", e));
+    }, [skipAutoSave]);
+
+    const getGoalsForCycle = useCallback((cycleId: string): PerformanceGoal[] => {
+        return performanceGoals.filter(g => g.cycleId === cycleId);
+    }, [performanceGoals]);
+
+    const addTrainingPeriod = useCallback((data: Omit<TrainingPeriod, 'id' | 'createdAt' | 'updatedAt'>): TrainingPeriod => {
+        const newPeriod: TrainingPeriod = {
+            ...data,
+            id: generateId(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+        };
+        setTrainingPeriods(prev => [...prev, newPeriod]);
+        skipAutoSave.current = true;
+        storageService.savePeriod(newPeriod).catch(e => console.error("Failed to save period", e));
+        return newPeriod;
+    }, [skipAutoSave]);
+
+    const updateTrainingPeriod = useCallback((id: string, updates: Partial<TrainingPeriod>) => {
+        setTrainingPeriods(prev => {
+            const next = prev.map(p => p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p);
+            const updatedPeriod = next.find(p => p.id === id);
+            if (updatedPeriod) {
+                skipAutoSave.current = true;
+                storageService.savePeriod(updatedPeriod).catch(e => console.error("Failed to update period", e));
+            }
+            return next;
+        });
+    }, [skipAutoSave]);
+
+    const deleteTrainingPeriod = useCallback((id: string) => {
+        // 1. Remove period locally
+        setTrainingPeriods(prev => prev.filter(p => p.id !== id));
+        skipAutoSave.current = true;
+        storageService.deletePeriod(id).catch(e => console.error("Failed to delete period", e));
+
+        // 2. Unlink goals locally (Orphan them)
+        setPerformanceGoals(prev => prev.map(g => {
+            if (g.periodId === id) {
+                const updated = { ...g, periodId: undefined };
+                // We should also sync this update to backend
+                storageService.saveGoal(updated).catch(e => console.error("Failed to unlink goal", e));
+                return updated;
+            }
+            return g;
+        }));
+    }, [skipAutoSave]);
+
+    const updateCoachConfig = useCallback((updates: Partial<CoachConfig>) => {
+        setCoachConfig(prev => prev ? { ...prev, ...updates } : updates as CoachConfig);
+    }, []);
+
+    const generateCoachPlanAction = useCallback((stravaHistory: StravaActivity[], configOverride?: CoachConfig) => {
+        const config = configOverride || coachConfig;
+        if (!config) return;
+        const newPlan = generateTrainingPlan(config, stravaHistory, plannedActivities);
+        setPlannedActivities(newPlan);
+    }, [coachConfig, plannedActivities]);
+
+    const deletePlannedActivity = useCallback((id: string) => {
+        setPlannedActivities(prev => prev.filter(a => a.id !== id));
+        skipAutoSave.current = true;
+        storageService.deletePlannedActivity(id).catch(e => console.error("Failed to delete planned activity", e));
+    }, [skipAutoSave]);
+
+    const updatePlannedActivity = useCallback((id: string, updates: Partial<PlannedActivity>) => {
+        setPlannedActivities(prev => {
+            const next = prev.map(a => a.id === id ? { ...a, ...updates } : a);
+            const updated = next.find(a => a.id === id);
+            if (updated) {
+                skipAutoSave.current = true;
+                storageService.savePlannedActivity(updated).catch(e => console.error("Failed to update planned activity", e));
+            }
+            return next;
+        });
+    }, [skipAutoSave]);
+
+    const savePlannedActivities = useCallback((newActivities: PlannedActivity[]) => {
+        setPlannedActivities(prev => {
+            const ids = new Set(newActivities.map(a => a.id));
+            const filtered = prev.filter(a => !ids.has(a.id));
+
+            const next = [...filtered, ...newActivities].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+            // Sync to API
+            skipAutoSave.current = true;
+            storageService.savePlannedActivities(newActivities).catch(e => console.error("Failed to save planned activities", e));
+
+            return next;
+        });
+    }, [skipAutoSave]);
+
+    const completePlannedActivity = useCallback((activityId: string, actualDist?: number, actualTime?: number, feedback?: PlannedActivity['feedback']) => {
+        setPlannedActivities(prev => {
+            const next = prev.map(a => {
+                if (a.id === activityId) {
+                    return {
+                        ...a,
+                        status: 'COMPLETED' as const,
+                        feedback,
+                        completedDate: getISODate(),
+                        actualDistance: actualDist || a.estimatedDistance,
+                        actualTimeSeconds: actualTime
+                    };
+                }
+                return a;
+            });
+
+            const completed = next.find(a => a.id === activityId);
+            const original = prev.find(a => a.id === activityId);
+
+            if (completed && original?.status !== 'COMPLETED') {
+                skipAutoSave.current = true;
+                storageService.savePlannedActivity(completed).catch(e => console.error("Failed to save completed plan", e));
+
+                // Automatically add to exercise log
+                addExercise({
+                    date: completed.completedDate!,
+                    type: 'running',
+                    durationMinutes: Math.round((actualTime || (completed.estimatedDistance * 300)) / 60), // fallback to 5min/km
+                    intensity: feedback === 'HARD' || feedback === 'TOO_HARD' ? 'high' : 'moderate',
+                    caloriesBurned: calculateExerciseCalories('running', (actualTime || (completed.estimatedDistance * 300)) / 60, 'moderate'),
+                    distance: actualDist || completed.estimatedDistance,
+                    notes: `Coached Session: ${completed.title}. Feedback: ${feedback || 'None'}`
+                });
+            }
+
+            return next;
+        });
+    }, [addExercise, calculateExerciseCalories, skipAutoSave]);
+
+    const addCoachGoal = useCallback((goalData: Omit<CoachGoal, 'id' | 'createdAt' | 'isActive'>) => {
+        const newGoal: CoachGoal = {
+            ...goalData,
+            id: generateId(),
+            createdAt: new Date().toISOString(),
+            isActive: (coachConfig?.goals?.length || 0) === 0 // First goal is active
+        };
+        setCoachConfig(prev => prev ? { ...prev, goals: [...(prev.goals || []), newGoal] } : {
+            userProfile: { maxHr: 190, restingHr: 60 },
+            preferences: { weeklyVolumeKm: 30, longRunDay: 'Sunday', intervalDay: 'Tuesday', trainingDays: [2, 4, 0] },
+            goals: [newGoal]
+        });
+    }, [coachConfig]);
+
+    const activateCoachGoal = useCallback((goalId: string) => {
+        setCoachConfig(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                goals: prev.goals.map(g => ({ ...g, isActive: g.id === goalId }))
+            };
+        });
+    }, []);
+
+    const deleteCoachGoal = useCallback((goalId: string) => {
+        setCoachConfig(prev => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                goals: prev.goals.filter(g => g.id !== goalId)
+            };
+        });
+    }, []);
+
+    // Race Definitions
+    const addRaceDefinition = useCallback((data: Omit<RaceDefinition, 'id'>): RaceDefinition => {
+        const newDef: RaceDefinition = {
+            ...data,
+            id: generateId()
+        };
+        setRaceDefinitions(prev => [...prev, newDef]);
+        skipAutoSave.current = true;
+        storageService.saveRaceDefinition(newDef).catch(e => console.error("Failed to save race def", e));
+        return newDef;
+    }, [skipAutoSave]);
+
+    const updateRaceDefinition = useCallback((id: string, updates: Partial<RaceDefinition>) => {
+        setRaceDefinitions(prev => {
+            const next = prev.map(d => d.id === id ? { ...d, ...updates } : d);
+            const updated = next.find(d => d.id === id);
+            if (updated) {
+                skipAutoSave.current = true;
+                storageService.saveRaceDefinition(updated).catch(e => console.error("Failed to update race def", e));
+            }
+            return next;
+        });
+    }, [skipAutoSave]);
+
+    const deleteRaceDefinition = useCallback((id: string) => {
+        setRaceDefinitions(prev => prev.filter(d => d.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteRaceDefinition(id).catch(e => console.error("Failed to delete race def", e));
+    }, [skipAutoSave]);
+
+    const addRaceIgnoreRule = useCallback((data: Omit<RaceIgnoreRule, 'id'>): RaceIgnoreRule => {
+        const newRule: RaceIgnoreRule = {
+            ...data,
+            id: generateId()
+        };
+        setRaceIgnoreRules(prev => [...prev, newRule]);
+        skipAutoSave.current = true;
+        storageService.saveRaceIgnoreRule(newRule).catch(e => console.error("Failed to save ignore rule", e));
+        return newRule;
+    }, [skipAutoSave]);
+
+    const deleteRaceIgnoreRule = useCallback((id: string) => {
+        setRaceIgnoreRules(prev => prev.filter(r => r.id !== id));
+        skipAutoSave.current = true;
+        storageService.deleteRaceIgnoreRule(id).catch(e => console.error("Failed to delete ignore rule", e));
+    }, [skipAutoSave]);
+
+    return {
+        // State
+        exerciseEntries,
+        strengthSessions,
+        competitions,
+        trainingCycles,
+        performanceGoals,
+        trainingPeriods,
+        coachConfig,
+        plannedActivities,
+        universalActivities,
+        unifiedActivities,
+
+        // Setters
+        setExerciseEntries,
+        setStrengthSessions,
+        setCompetitions,
+        setTrainingCycles,
+        setPerformanceGoals,
+        setTrainingPeriods,
+        setCoachConfig,
+        setPlannedActivities,
+        setUniversalActivities,
+
+        // Actions
+        addStrengthSession,
+        updateStrengthSession,
+        deleteStrengthSession,
+        addExercise,
+        updateExercise,
+        deleteExercise,
+        calculateExerciseCalories,
+        getExercisesForDate,
+        addCompetition,
+        updateCompetition,
+        deleteCompetition,
+        calculateParticipantPoints,
+        addTrainingCycle,
+        updateTrainingCycle,
+        deleteTrainingCycle,
+        addGoal,
+        updateGoal,
+        deleteGoal,
+        getGoalsForCycle,
+        addTrainingPeriod,
+        updateTrainingPeriod,
+        deleteTrainingPeriod,
+        updateCoachConfig,
+        generateCoachPlan: generateCoachPlanAction,
+        deletePlannedActivity,
+        updatePlannedActivity,
+        savePlannedActivities,
+        completePlannedActivity,
+        addCoachGoal,
+        activateCoachGoal,
+        deleteCoachGoal,
+        // Race Defs
+        raceDefinitions,
+        raceIgnoreRules,
+        addRaceDefinition,
+        updateRaceDefinition,
+        deleteRaceDefinition,
+        addRaceIgnoreRule,
+        deleteRaceIgnoreRule,
+        setRaceDefinitions, // Exposed for loading
+        setRaceIgnoreRules, // Exposed for loading
+    };
+}
