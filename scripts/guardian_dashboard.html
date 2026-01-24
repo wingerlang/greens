@@ -97,11 +97,64 @@
             margin-top: 5px;
         }
 
+
         .actions {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
             flex-wrap: wrap;
+        }
+
+        .controls-container {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            gap: 20px;
+            height: 600px;
+        }
+
+        .sidebar {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid #334155;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .history-item {
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            color: var(--text-dim);
+            transition: all 0.2s;
+        }
+
+        .history-item:hover {
+            background: #334155;
+            color: var(--text);
+        }
+
+        .history-item.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .history-item .meta {
+            font-size: 0.8em;
+            opacity: 0.7;
+        }
+
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
         }
 
         button {
@@ -143,13 +196,14 @@
             background: #000;
             border-radius: 12px;
             padding: 20px;
-            height: 500px;
+            flex: 1;
             overflow-y: auto;
             font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
             font-size: 0.9em;
             border: 1px solid #334155;
         }
 
+        /* ... existing styles ... */
         .log-entry {
             margin-bottom: 4px;
             line-height: 1.4;
@@ -207,10 +261,11 @@
                 <div class="sub">Since last start</div>
             </div>
             <div class="card">
-                <h3>Restarts</h3>
+                <h3>Daily Restarts</h3>
                 <div class="value" id="restarts">0</div>
                 <div class="sub" id="last-exit">No exits yet</div>
             </div>
+            <!-- ... other cards ... -->
             <div class="card">
                 <h3>Memory (RSS)</h3>
                 <div class="value" id="memory">0 MB</div>
@@ -226,48 +281,7 @@
                 <div class="value" id="host-info" style="font-size: 1.2em">Loading...</div>
                 <div class="sub" id="os-info">...</div>
             </div>
-            <div class="card">
-                <h3>Load Average</h3>
-                <div class="value" id="load-avg">0.00</div>
-                <div class="sub">1m, 5m, 15m</div>
-            </div>
-            <div class="card">
-                <h3>Database Stats</h3>
-                <div class="value" id="db-counts" style="font-size: 1.2em">0 / 0</div>
-                <div class="sub" id="db-sub">Råvaror / Recept</div>
-            </div>
-            <div class="card">
-                <h3>Omnibox Interactions</h3>
-                <div class="value" id="inter-counts" style="font-size: 1.2em">0 / 0</div>
-                <div class="sub">Omnibox / Totalt</div>
-            </div>
         </div>
-        <style>
-            .button {
-                background: var(--card-bg);
-                color: var(--text);
-                border: 1px solid #334155;
-                padding: 10px 20px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-weight: 600;
-                transition: all 0.2s;
-            }
-
-            .button:hover {
-                background: #334155;
-            }
-
-            .button.primary {
-                background: var(--accent);
-                color: white;
-                border: none;
-            }
-
-            .button.primary:hover {
-                background: #2563eb;
-            }
-        </style>
 
         <div class="actions">
             <button class="primary" onclick="doAction('restart')">🔄 Restart Server</button>
@@ -276,8 +290,22 @@
             <button class="danger" onclick="doAction('deploy')">🚀 Full Deploy</button>
         </div>
 
-        <div class="terminal" id="terminal">
-            <div class="log-entry guardian">Connecting to Guardian...</div>
+        <div class="controls-container">
+            <div class="sidebar">
+                <h3>History</h3>
+                <div style="margin-bottom: 10px;">
+                    <input type="date" id="history-date"
+                        style="background: var(--bg); color: white; border: 1px solid #334155; padding: 5px; border-radius: 4px; width: 100%;">
+                </div>
+                <ul class="history-list" id="session-list">
+                    <!-- Sessions go here -->
+                </ul>
+            </div>
+            <div class="main-content">
+                <div class="terminal" id="terminal">
+                    <div class="log-entry guardian">Connecting to Guardian...</div>
+                </div>
+            </div>
         </div>
 
         <div style="margin-top: 20px; text-align: center; color: var(--text-dim); font-size: 0.8em;">
@@ -288,7 +316,17 @@
 
     <script>
         const terminal = document.getElementById('terminal');
+        const sessionList = document.getElementById('session-list');
+        const dateInput = document.getElementById('history-date');
+
         let lastLogCount = 0;
+        let currentSessionId = null;
+        let viewSessionId = null; // The session we are currently viewing
+        let isLive = true; // Viewing live logs
+
+        // Set date to today
+        dateInput.valueAsDate = new Date();
+        dateInput.addEventListener('change', loadSessions);
 
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
@@ -311,6 +349,15 @@
                 const res = await fetch('/api/status');
                 const data = await res.json();
 
+                // Track current active session
+                if (data.sessionId && currentSessionId !== data.sessionId) {
+                    currentSessionId = data.sessionId;
+                    if (isLive) viewSessionId = currentSessionId; // Switch to new session if watching live
+                    loadSessions();
+                }
+
+                if (!isLive) return; // Don't update live stats if viewing history
+
                 // Update badge
                 const badge = document.getElementById('status-badge');
                 badge.className = 'badge ' + data.status;
@@ -318,7 +365,10 @@
 
                 // Update cards
                 document.getElementById('uptime').textContent = formatTime(data.uptimeSeconds);
-                document.getElementById('restarts').textContent = data.restartCount;
+                // Use daily stats if available
+                const restarts = data.dailyStats ? data.dailyStats.restarts : data.restartCount;
+                document.getElementById('restarts').textContent = restarts + (data.dailyStats ? " (Today)" : "");
+
                 document.getElementById('last-exit').textContent = data.lastExitCode !== null ? `Last Code: ${data.lastExitCode}` : 'Clean run';
 
                 // Memory
@@ -341,33 +391,6 @@
                 }
                 document.getElementById('host-info').textContent = data.hostname;
                 document.getElementById('os-info').textContent = data.platform + ' (' + data.status + ')';
-                document.getElementById('load-avg').textContent = data.loadAvg ? data.loadAvg.map(n => n.toFixed(2)).join(', ') : 'N/A';
-
-                // Database Stats
-                if (data.dbStats) {
-                    document.getElementById('db-counts').textContent = `${data.dbStats.foodCount} / ${data.dbStats.recipeCount}`;
-                    document.getElementById('db-sub').textContent = `Råvaror / Recept (${data.dbStats.userCount} users)`;
-                }
-
-                // Interaction Stats
-                if (data.interactionStats) {
-                    const omniRestarts = data.interactionStats.omnibox.restart;
-                    const omniPull = data.interactionStats.omnibox.pull;
-                    const omniBuild = data.interactionStats.omnibox.build;
-                    const omniDeploy = data.interactionStats.omnibox.deploy;
-
-                    const totalOmni = omniRestarts + omniPull + omniBuild + omniDeploy;
-
-                    const clickRestarts = data.interactionStats.click.restart;
-                    const clickPull = data.interactionStats.click.pull;
-                    const clickBuild = data.interactionStats.click.build;
-                    const clickDeploy = data.interactionStats.click.deploy;
-
-                    const totalClick = clickRestarts + clickPull + clickBuild + clickDeploy;
-                    const grandTotal = totalOmni + totalClick;
-
-                    document.getElementById('inter-counts').textContent = `${totalOmni} / ${grandTotal}`;
-                }
 
                 // Version Info
                 document.getElementById('deno-version').textContent = data.denoVersion;
@@ -379,38 +402,113 @@
             }
         }
 
-        async function updateLogs() {
+        async function loadSessions() {
+            const date = dateInput.value;
             try {
-                const res = await fetch('/api/logs');
+                const res = await fetch(`/api/history?date=${date}`);
+                const data = await res.json(); // { date, sessions: [] }
+
+                sessionList.innerHTML = '';
+
+                if (data.sessions.length === 0) {
+                    sessionList.innerHTML = '<li class="history-item">No sessions found</li>';
+                    return;
+                }
+
+                // Sort newest first
+                data.sessions.sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+                data.sessions.forEach(session => {
+                    const li = document.createElement('li');
+                    li.className = 'history-item';
+                    if (session.id === viewSessionId) li.classList.add('active');
+
+                    const time = new Date(session.startTime).toLocaleTimeString();
+                    const isCurrent = session.id === currentSessionId;
+
+                    li.innerHTML = `
+                        <div>${time} ${isCurrent ? '<span class="badge running" style="font-size:0.7em">LIVE</span>' : ''}</div>
+                        <div class="meta">${session.id.substring(0, 8)}...</div>
+                    `;
+
+                    li.onclick = () => selectSession(session.id);
+                    sessionList.appendChild(li);
+                });
+            } catch (e) { console.error(e); }
+        }
+
+        function selectSession(sessionId) {
+            viewSessionId = sessionId;
+            isLive = (sessionId === currentSessionId);
+
+            // Highlight active
+            document.querySelectorAll('.history-item').forEach(el => el.classList.remove('active'));
+            // Re-render list to applying active class might be easier but let's just find the element
+            // Actually re-calling loadSessions might be overkill, let's just reload standard way if needed
+            // Ideally we find the element and toggle class
+
+            // Clear terminal if switching sessions
+            terminal.innerHTML = '';
+            lastLogCount = 0; // Reset log counter
+
+            // Update UI immediate
+            loadSessions(); // Re-render list to update active state
+            updateLogs();
+        }
+
+        async function updateLogs() {
+            if (!viewSessionId) return;
+
+            try {
+                // If viewing history (not live), we might want to fetch all at once or handle differently
+                // But the API supports ?sessionId=...
+                const res = await fetch(`/api/logs?sessionId=${viewSessionId}`);
                 const logs = await res.json();
 
-                if (logs.length > lastLogCount) {
-                    const newLogs = logs.slice(lastLogCount);
-                    const wasAtBottom = terminal.scrollHeight - terminal.scrollTop === terminal.clientHeight;
+                // If live, append. If history, maybe just replace or smart append?
+                // For simplicity: if history check if we have more logs than before?
+                // Actually history logs are static mostly, unless the session is still active.
 
-                    newLogs.forEach(log => {
-                        const div = document.createElement('div');
-                        div.className = 'log-entry ' + log.source;
-                        // Escape HTML to prevent injection
-                        const text = document.createTextNode(log.message);
-                        const timeSpan = document.createElement('span');
-                        timeSpan.className = 'timestamp';
-                        timeSpan.textContent = `[${new Date(log.timestamp).toLocaleTimeString()}] `;
-
-                        div.appendChild(timeSpan);
-                        div.appendChild(text);
-                        terminal.appendChild(div);
-                    });
-
-                    lastLogCount = logs.length;
-
-                    if (wasAtBottom) {
-                        terminal.scrollTop = terminal.scrollHeight;
+                if (isLive) {
+                    if (logs.length > lastLogCount) {
+                        const newLogs = logs.slice(lastLogCount);
+                        const wasAtBottom = terminal.scrollHeight - terminal.scrollTop === terminal.clientHeight;
+                        appendLogs(newLogs);
+                        lastLogCount = logs.length;
+                        if (wasAtBottom) terminal.scrollTop = terminal.scrollHeight;
                     }
+                } else {
+                    // Start fresh if just switched, or simple replace
+                    // Optimization: check if length changed?
+                    if (terminal.innerHTML === '') {
+                        appendLogs(logs);
+                        terminal.scrollTop = terminal.scrollHeight;
+                    } else if (logs.length > lastLogCount) {
+                        // Should rare happen for closed sessions
+                        const newLogs = logs.slice(lastLogCount);
+                        appendLogs(newLogs);
+                    }
+                    lastLogCount = logs.length;
                 }
             } catch (e) {
                 console.error(e);
             }
+        }
+
+        function appendLogs(logs) {
+            logs.forEach(log => {
+                const div = document.createElement('div');
+                div.className = 'log-entry ' + log.source;
+                // Escape HTML to prevent injection
+                const text = document.createTextNode(log.message);
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'timestamp';
+                timeSpan.textContent = `[${new Date(log.timestamp).toLocaleTimeString()}] `;
+
+                div.appendChild(timeSpan);
+                div.appendChild(text);
+                terminal.appendChild(div);
+            });
         }
 
         async function doAction(action, source = 'click') {
@@ -443,10 +541,17 @@
         });
 
         // Init
+        // First load status to get current session ID
+        updateStatus().then(() => {
+            viewSessionId = currentSessionId;
+            loadSessions();
+            updateLogs();
+        });
+
         setInterval(updateStatus, 1000);
-        setInterval(updateLogs, 2000);
-        updateStatus();
-        updateLogs();
+        setInterval(() => {
+            if (isLive) updateLogs();
+        }, 2000);
     </script>
 </body>
 

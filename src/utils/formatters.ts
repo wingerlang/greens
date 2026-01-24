@@ -158,7 +158,7 @@ export function formatDuration(minutes: number): string {
  */
 export function formatActivityDuration(minutes: number | undefined | null): string {
     if (minutes === undefined || minutes === null || isNaN(minutes)) return '0 min';
-    return `${Math.round(minutes)} min`;
+    return formatDuration(minutes);
 }
 
 /**

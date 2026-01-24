@@ -7,7 +7,7 @@ const BACKEND_PORT = Number(Deno.env.get("PORT") || "8000");
 const FRONTEND_PORT = 3000;
 const RESTART_DELAY_MS = 3000;
 
-// State
+// State Interfaces
 interface LogEntry {
     id: string;
     timestamp: string;
@@ -24,6 +24,22 @@ interface ProcessStats {
     uptimeSeconds: number;
 }
 
+interface SessionInfo {
+    id: string;
+    startTime: string;
+    endTime: string | null;
+    date: string; // YYYY-MM-DD
+}
+
+interface DailyStats {
+    date: string;
+    restarts: number;
+    gitPulls: number;
+    builds: number;
+    deploys: number;
+}
+
+// In-memory state (mirrored to KV)
 const logs: LogEntry[] = [];
 const stats: ProcessStats = {
     status: "stopped",
@@ -33,6 +49,9 @@ const stats: ProcessStats = {
     lastExitCode: null,
     uptimeSeconds: 0,
 };
+
+let currentSessionId = crypto.randomUUID();
+let kv: Deno.Kv;
 
 const interactionStats = {
     click: { restart: 0, pull: 0, build: 0, deploy: 0 },
@@ -45,15 +64,93 @@ let dbStats = {
     userCount: 0,
 };
 
-// Periodic DB counting
-async function countDbItems() {
-    if (typeof Deno.openKv !== "function") {
-        addLog("guardian", "Error counting DB items: Deno.openKv is not available. Please run with --unstable-kv");
-        return;
+// --- Persistence Helpers ---
+
+function getTodayStr() {
+    return new Date().toISOString().split('T')[0];
+}
+
+async function persistLog(entry: LogEntry) {
+    if (!kv) return;
+    // Key: ["guardian", "logs", sessionId, timestamp, logId]
+    // Value: LogEntry
+    // Also keeping a recent list in memory for quick access
+    try {
+        await kv.set(
+            ["guardian", "logs", currentSessionId, entry.timestamp, entry.id],
+            entry,
+            { expireIn: 30 * 24 * 60 * 60 * 1000 } // Auto-expire after 30 days
+        );
+    } catch (e) {
+        console.error("Failed to persist log:", e);
     }
+}
+
+async function updateDailyStat(type: 'restarts' | 'gitPulls' | 'builds' | 'deploys', count: number = 1) {
+    if (!kv) return;
+    const date = getTodayStr();
+    const key = ["guardian", "stats", date];
 
     try {
-        const kv = await Deno.openKv("./greens.db");
+        await kv.atomic()
+            .mutate({
+                type: "sum",
+                key: [...key, type],
+                value: new Deno.KvU64(BigInt(count))
+            })
+            .commit();
+    } catch (e) {
+        console.error("Failed to update daily stats:", e);
+    }
+}
+
+async function initSession() {
+    if (!kv) return;
+    const now = new Date();
+    const session: SessionInfo = {
+        id: currentSessionId,
+        startTime: now.toISOString(),
+        endTime: null,
+        date: getTodayStr()
+    };
+
+    // Save session info
+    await kv.set(["guardian", "sessions", session.date, session.id], session);
+    await kv.set(["guardian", "active_session"], session.id);
+
+    addLog("guardian", `Session started: ${currentSessionId}`);
+}
+
+async function loadHistory(sessionId: string): Promise<LogEntry[]> {
+    if (!kv) return [];
+    const entries: LogEntry[] = [];
+    const prefix = ["guardian", "logs", sessionId];
+    for await (const entry of kv.list<LogEntry>({ prefix })) {
+        entries.push(entry.value);
+    }
+    // Sort by timestamp
+    return entries.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+}
+
+async function getSessionsForDate(date: string): Promise<SessionInfo[]> {
+    if (!kv) return [];
+    const sessions: SessionInfo[] = [];
+    for await (const entry of kv.list<SessionInfo>({ prefix: ["guardian", "sessions", date] })) {
+        sessions.push(entry.value);
+    }
+    return sessions;
+}
+
+// Periodic DB counting
+async function countDbItems() {
+    if (!kv) return;
+
+    try {
+        // We use the same KV for app data and guardian data, potentially dangerous but convenient here
+        // Assuming app data is in the same DB file
+
+        // Actually, let's open a separate connection for app data if needed, 
+        // or just reuse if it's the same file. The Plan implied reuse.
 
         let foods = 0;
         for await (const _ of kv.list({ prefix: ["foods"] })) foods++;
@@ -65,15 +162,10 @@ async function countDbItems() {
         for await (const _ of kv.list({ prefix: ["users"] })) users++;
 
         dbStats = { foodCount: foods, recipeCount: recipes, userCount: users };
-        await kv.close();
     } catch (e) {
         addLog("guardian", `Error counting DB items: ${e instanceof Error ? e.message : e}`);
     }
 }
-
-// Initial count and periodic update
-countDbItems();
-setInterval(countDbItems, 60000); // Every minute
 
 function addLog(source: "stdout" | "stderr" | "guardian", message: string) {
     const entry: LogEntry = {
@@ -82,16 +174,20 @@ function addLog(source: "stdout" | "stderr" | "guardian", message: string) {
         source,
         message: message.trimEnd(),
     };
+
+    // Memory buffer
     logs.push(entry);
     if (logs.length > MAX_LOGS) {
         logs.shift();
     }
-    // Also print to real console so we can see it in the terminal running the guardian
+
+    // Persist
+    persistLog(entry);
+
+    // Console output
     if (source === "guardian") {
         console.log(`[GUARDIAN] ${message}`);
     } else {
-        // We don't re-print child logs to avoid double logging if piping,
-        // but usually we want to see them.
         console.log(message);
     }
 }
@@ -159,6 +255,10 @@ class ProcessManager {
     async restart() {
         await this.stop();
         setTimeout(() => this.start(), 1000);
+
+        // Track restart
+        stats.restartCount++;
+        await updateDailyStat("restarts");
     }
 
     private async handleOutput(stream: ReadableStream<Uint8Array>, source: "stdout" | "stderr") {
@@ -185,8 +285,13 @@ class ProcessManager {
 
         if (this.shouldRun) {
             stats.status = "crashed";
-            stats.restartCount++;
+            // Wait before restart
             addLog("guardian", `Process exited with code ${code}. Restarting everything in ${RESTART_DELAY_MS}ms...`);
+
+            // Track restart due to crash
+            stats.restartCount++;
+            updateDailyStat("restarts");
+
             setTimeout(() => this.start(), RESTART_DELAY_MS);
         }
     }
@@ -243,6 +348,17 @@ async function handleRequest(req: Request): Promise<Response> {
             memory = Deno.memoryUsage();
         } catch { }
 
+        // Get daily stats
+        const date = getTodayStr();
+        const dailyStats: any = {};
+        if (kv) {
+            const keys = ["restarts", "gitPulls", "builds", "deploys"];
+            for (const k of keys) {
+                const res = await kv.get<Deno.KvU64>(["guardian", "stats", date, k]);
+                dailyStats[k] = res.value ? Number(res.value.value) : 0;
+            }
+        }
+
         return Response.json({
             ...stats,
             uptimeSeconds: currentUptime,
@@ -257,13 +373,28 @@ async function handleRequest(req: Request): Promise<Response> {
             typescriptVersion: Deno.version.typescript,
             timestamp: Date.now(),
             dbStats,
-            interactionStats
+            interactionStats,
+            dailyStats: dailyStats,
+            sessionId: currentSessionId
         });
     }
 
     if (url.pathname === "/api/logs") {
-        // Optional: filter by source or last N
+        const sessionId = url.searchParams.get("sessionId");
+        if (sessionId && sessionId !== currentSessionId) {
+            // Fetch history
+            const history = await loadHistory(sessionId);
+            return Response.json(history);
+        }
+        // Return current buffer
         return Response.json(logs);
+    }
+
+    if (url.pathname === "/api/history") {
+        // List sessions for a date (default today)
+        const date = url.searchParams.get("date") || getTodayStr();
+        const sessions = await getSessionsForDate(date);
+        return Response.json({ date, sessions });
     }
 
     if (req.method === "POST") {
@@ -277,6 +408,8 @@ async function handleRequest(req: Request): Promise<Response> {
         if (url.pathname === "/api/git-pull") {
             const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
             interactionStats[source].pull++;
+            await updateDailyStat("gitPulls");
+
             // Run in background to not block
             runCommand("git", ["pull"]).then(success => {
                 if (success) addLog("guardian", "Git pull successful");
@@ -288,6 +421,8 @@ async function handleRequest(req: Request): Promise<Response> {
         if (url.pathname === "/api/build") {
             const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
             interactionStats[source].build++;
+            await updateDailyStat("builds");
+
             runCommand("deno", ["task", "build"]).then(success => {
                 if (success) addLog("guardian", "Build successful");
                 else addLog("guardian", "Build failed");
@@ -298,6 +433,8 @@ async function handleRequest(req: Request): Promise<Response> {
         if (url.pathname === "/api/deploy") {
             const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
             interactionStats[source].deploy++;
+            await updateDailyStat("deploys");
+
             // Chain commands
             (async () => {
                 const pull = await runCommand("git", ["pull"]);
@@ -342,6 +479,19 @@ async function clearPort(port: number) {
 
 // Start everything
 async function bootstrap() {
+    // Open KV
+    try {
+        kv = await Deno.openKv("./greens.db");
+    } catch (e) {
+        console.error("Failed to open KV:", e);
+    }
+
+    await initSession();
+
+    // Check if we recovered from a crash/restart based on previous stats?
+    // For now, simpler to just say we started a new session.
+    addLog("guardian", "Guardian initialized. State persistence enabled.");
+
     addLog("guardian", `Clearing ports and initializing...`);
     await clearPort(PORT);
     await clearPort(FRONTEND_PORT);
@@ -350,6 +500,10 @@ async function bootstrap() {
     addLog("guardian", `Guardian starting on port ${PORT}...`);
     addLog("guardian", `Application will be available at http://localhost:${FRONTEND_PORT}`);
     manager.start();
+
+    // Initial Db count
+    countDbItems();
+    setInterval(countDbItems, 60000);
 
     Deno.serve({ port: PORT, handler: handleRequest });
 }
