@@ -8,41 +8,41 @@
 // ============================================
 
 export type ExerciseCategory =
-    | 'barbell'
-    | 'dumbbell'
-    | 'machine'
-    | 'bodyweight'
-    | 'cable'
-    | 'kettlebell'
-    | 'cardio'
-    | 'other';
+  | "barbell"
+  | "dumbbell"
+  | "machine"
+  | "bodyweight"
+  | "cable"
+  | "kettlebell"
+  | "cardio"
+  | "other";
 
 export type MuscleGroup =
-    | 'chest'
-    | 'back'
-    | 'shoulders'
-    | 'biceps'
-    | 'triceps'
-    | 'forearms'
-    | 'quads'
-    | 'hamstrings'
-    | 'glutes'
-    | 'calves'
-    | 'core'
-    | 'traps'
-    | 'lats'
-    | 'full_body';
+  | "chest"
+  | "back"
+  | "shoulders"
+  | "biceps"
+  | "triceps"
+  | "forearms"
+  | "quads"
+  | "hamstrings"
+  | "glutes"
+  | "calves"
+  | "core"
+  | "traps"
+  | "lats"
+  | "full_body";
 
 export interface StrengthExercise {
-    id: string;
-    name: string;                    // "Squat", "Bench Press"
-    normalizedName: string;          // Lowercase, trimmed for matching
-    category: ExerciseCategory;
-    primaryMuscle: MuscleGroup;
-    secondaryMuscles?: MuscleGroup[];
-    isCompound: boolean;
-    isUnilateral?: boolean;          // Single arm/leg
-    equipment?: string;              // "barbell", "smith machine"
+  id: string;
+  name: string; // "Squat", "Bench Press"
+  normalizedName: string; // Lowercase, trimmed for matching
+  category: ExerciseCategory;
+  primaryMuscle: MuscleGroup;
+  secondaryMuscles?: MuscleGroup[];
+  isCompound: boolean;
+  isUnilateral?: boolean; // Single arm/leg
+  equipment?: string; // "barbell", "smith machine"
 }
 
 // ============================================
@@ -50,31 +50,31 @@ export interface StrengthExercise {
 // ============================================
 
 export interface StrengthSet {
-    setNumber: number;
-    reps: number;
-    weight: number;                  // kg (0 for bodyweight-only)
+  setNumber: number;
+  reps: number;
+  weight: number; // kg (0 for bodyweight-only)
 
-    // Bodyweight exercises
-    isBodyweight?: boolean;
-    bodyweight?: number;             // User's bodyweight at time
-    extraWeight?: number;            // Added weight for weighted pullups etc.
+  // Bodyweight exercises
+  isBodyweight?: boolean;
+  bodyweight?: number; // User's bodyweight at time
+  extraWeight?: number; // Added weight for weighted pullups etc.
 
-    // Cardio/timed exercises
-    time?: string;                   // "00:04:44" format
-    timeSeconds?: number;            // Parsed seconds
-    distance?: number;               // meters or km
-    distanceUnit?: 'km' | 'm';
+  // Cardio/timed exercises
+  time?: string; // "00:04:44" format
+  timeSeconds?: number; // Parsed seconds
+  distance?: number; // meters or km
+  distanceUnit?: "km" | "m";
 
-    // Machine-specific
-    calories?: number;
-    rpm?: number;
+  // Machine-specific
+  calories?: number;
+  rpm?: number;
 
-    // Qualitative
-    rpe?: number;                    // 1-10 Rate of Perceived Exertion
-    isWarmup?: boolean;
-    isDropset?: boolean;
-    isFailed?: boolean;              // Didn't complete target reps
-    tempo?: string;                  // e.g. "2:05/500m"
+  // Qualitative
+  rpe?: number; // 1-10 Rate of Perceived Exertion
+  isWarmup?: boolean;
+  isDropset?: boolean;
+  isFailed?: boolean; // Didn't complete target reps
+  tempo?: string; // e.g. "2:05/500m"
 }
 
 // ============================================
@@ -82,103 +82,112 @@ export interface StrengthSet {
 // ============================================
 
 export interface StrengthWorkoutExercise {
-    exerciseId: string;              // Reference to StrengthExercise.id
-    exerciseName: string;            // Denormalized for display
-    sets: StrengthSet[];
+  exerciseId: string; // Reference to StrengthExercise.id
+  exerciseName: string; // Denormalized for display
+  sets: StrengthSet[];
 
-    // Computed/derived
-    totalVolume?: number;            // sum(reps * weight)
-    topSet?: { reps: number; weight: number }; // Heaviest set
-    notes?: string;
+  // Computed/derived
+  totalVolume?: number; // sum(reps * weight)
+  topSet?: { reps: number; weight: number }; // Heaviest set
+  notes?: string;
 }
 
 // ============================================
 // Workout Categories (Push/Pull/Legs)
 // ============================================
 
-export type WorkoutCategory = 'push' | 'pull' | 'legs' | 'mixed' | 'other';
+export type WorkoutCategory = "push" | "pull" | "legs" | "mixed" | "other";
 
 export interface StrengthWorkout {
-    id: string;
-    userId: string;
-    date: string;                    // YYYY-MM-DD
-    name: string;                    // "Hyrox", "Wednesday Morning: Squat"
+  id: string;
+  userId: string;
+  date: string; // YYYY-MM-DD
+  name: string; // "Hyrox", "Wednesday Morning: Squat"
 
-    // User state
-    bodyWeight?: number;             // kg
-    shape?: number;                  // -1 to 1 (StrengthLog format)
-    sleep?: number;                  // -1 to 1
-    stress?: number;                 // -1 to 1
+  // User state
+  bodyWeight?: number; // kg
+  shape?: number; // -1 to 1 (StrengthLog format)
+  sleep?: number; // -1 to 1
+  stress?: number; // -1 to 1
 
-    // Exercises performed
-    exercises: StrengthWorkoutExercise[];
+  // Exercises performed
+  exercises: StrengthWorkoutExercise[];
 
-    // Computed totals
-    totalVolume: number;             // Sum of all exercise volumes
-    totalSets: number;
-    totalReps: number;
-    uniqueExercises: number;
+  // Computed totals
+  totalVolume: number; // Sum of all exercise volumes
+  totalSets: number;
+  totalReps: number;
+  uniqueExercises: number;
 
-    // Category (Push/Pull/Legs/Mixed)
-    workoutCategory?: WorkoutCategory;
+  // Category (Push/Pull/Legs/Mixed)
+  workoutCategory?: WorkoutCategory;
 
-    // Metadata
-    duration?: number;               // minutes
-    notes?: string;
-    source: 'strengthlog' | 'manual' | 'garmin' | 'strava' | 'hevy';
-    sourceWorkoutName?: string;      // Original name from import
-    rawSource?: string;              // Original raw text/CSV for re-parsing
-    excludeFromStats?: boolean;
+  // Metadata
+  duration?: number; // minutes
+  notes?: string;
+  source: "strengthlog" | "manual" | "garmin" | "strava" | "hevy";
+  sourceWorkoutName?: string; // Original name from import
+  rawSource?: string; // Original raw text/CSV for re-parsing
+  excludeFromStats?: boolean;
 
-    // Merge tracking (when combined with Strava activity)
-    mergeInfo?: {
-        isMerged: boolean;            // true if merged, false if explicitly separated
-        stravaActivityId?: string;    // Linked Strava activity ID
-        stravaExternalId?: string;    // Strava's own activity ID for deeplinking
-        mergedAt?: string;            // ISO timestamp when merged
-    };
+  // Merge tracking (when combined with Strava activity)
+  mergeInfo?: {
+    isMerged: boolean; // true if merged, false if explicitly separated
+    stravaActivityId?: string; // Linked Strava activity ID
+    stravaExternalId?: string; // Strava's own activity ID for deeplinking
+    mergedAt?: string; // ISO timestamp when merged
+  };
 
-    createdAt: string;
-    updatedAt: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ============================================
 // Personal Bests
 // ============================================
 
-export type PBType = '1rm' | '3rm' | '5rm' | '10rm' | 'volume' | 'reps' | 'time' | 'distance' | 'calories';
+export type PBType =
+  | "1rm"
+  | "3rm"
+  | "5rm"
+  | "10rm"
+  | "volume"
+  | "reps"
+  | "time"
+  | "distance"
+  | "calories";
 
 export interface PersonalBest {
-    id: string;
-    exerciseId: string;
-    exerciseName: string;            // Denormalized
-    userId: string;
+  id: string;
+  exerciseId: string;
+  exerciseName: string; // Denormalized
+  userId: string;
 
-    type: PBType;
-    value: number;                   // The PB value (weight, volume, reps, seconds)
+  type: PBType;
+  value: number; // The PB value (weight, volume, reps, seconds)
 
-    // Context
-    weight?: number;                 // Weight used
-    reps?: number;                   // Reps achieved
-    distance?: number;               // Distance covered (meters)
-    distanceUnit?: 'm' | 'km';
-    calories?: number;               // Calories burned (cardio)
-    time?: number;
-    tempo?: string;
-    date: string;
-    workoutId: string;
-    workoutName?: string;
-    isBodyweight?: boolean;
-    extraWeight?: number;
-    orderIndex?: number;            // For chronological sorting within same day
-    isActual1RM?: boolean;          // reps === 1
-    isHighestWeight?: boolean;       // Highest absolute weight to date
+  // Context
+  weight?: number; // Weight used
+  reps?: number; // Reps achieved
+  distance?: number; // Distance covered (meters)
+  distanceUnit?: "m" | "km";
+  calories?: number; // Calories burned (cardio)
+  time?: number;
+  tempo?: string;
+  date: string;
+  workoutId: string;
+  workoutName?: string;
+  isBodyweight?: boolean;
+  extraWeight?: number;
+  orderIndex?: number; // For chronological sorting within same day
+  isActual1RM?: boolean; // reps === 1
+  isHighestWeight?: boolean; // Highest absolute weight to date
 
-    // Computed
-    estimated1RM?: number;           // Epley/Brzycki formula
+  // Computed
+  estimated1RM?: number; // Epley/Brzycki formula
 
-    createdAt: string;
-    previousBest?: number;           // For tracking improvement
+  createdAt: string;
+  previousBest?: number; // For tracking improvement
 }
 
 // ============================================
@@ -186,37 +195,37 @@ export interface PersonalBest {
 // ============================================
 
 export interface ExerciseProgress {
-    exerciseId: string;
-    exerciseName: string;
-    dataPoints: {
-        date: string;
-        topSetWeight: number;
-        topSetReps: number;
-        totalVolume: number;
-        estimated1RM: number;
-    }[];
+  exerciseId: string;
+  exerciseName: string;
+  dataPoints: {
+    date: string;
+    topSetWeight: number;
+    topSetReps: number;
+    totalVolume: number;
+    estimated1RM: number;
+  }[];
 }
 
 export interface StrengthStats {
-    userId: string;
-    totalWorkouts: number;
-    totalSets: number;
-    totalVolume: number;             // All time
+  userId: string;
+  totalWorkouts: number;
+  totalSets: number;
+  totalVolume: number; // All time
 
-    // Time-based
-    workoutsThisWeek: number;
-    workoutsThisMonth: number;
-    volumeThisWeek: number;
-    volumeThisMonth: number;
+  // Time-based
+  workoutsThisWeek: number;
+  workoutsThisMonth: number;
+  volumeThisWeek: number;
+  volumeThisMonth: number;
 
-    // Muscle group distribution
-    muscleGroupVolume: Record<MuscleGroup, number>;
+  // Muscle group distribution
+  muscleGroupVolume: Record<MuscleGroup, number>;
 
-    // Streaks
-    currentStreak: number;           // Consecutive weeks with workouts
-    longestStreak: number;
+  // Streaks
+  currentStreak: number; // Consecutive weeks with workouts
+  longestStreak: number;
 
-    lastWorkoutDate?: string;
+  lastWorkoutDate?: string;
 }
 
 // ============================================
@@ -224,47 +233,47 @@ export interface StrengthStats {
 // ============================================
 
 export interface StrengthLogImportResult {
-    success: boolean;
-    workoutsImported: number;
-    workoutsUpdated: number;
-    workoutsSkipped: number;
-    exercisesDiscovered: number;
-    personalBestsFound: number;
-    errors: string[];
+  success: boolean;
+  workoutsImported: number;
+  workoutsUpdated: number;
+  workoutsSkipped: number;
+  exercisesDiscovered: number;
+  personalBestsFound: number;
+  errors: string[];
 }
 
 // ============================================
 // Utility Functions
 // ============================================
 
-import { calculateEstimated1RM } from '../utils/strengthCalculators.ts';
+import { calculateEstimated1RM } from "../utils/strengthCalculators.ts";
 
 // Re-export for easier refactoring, but prefer importing from utils directly
 export { calculateEstimated1RM };
 
 /** Normalize exercise name for matching */
 export function normalizeExerciseName(name: string): string {
-    return name
-        .toLowerCase()
-        .trim()
-        .replace(/[^a-z0-9\s]/g, '')
-        .replace(/\s+/g, ' ');
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, "")
+    .replace(/\s+/g, " ");
 }
 
 /** Parse time string to seconds */
 export function parseTimeToSeconds(time: string): number {
-    const parts = time.split(':').map(Number);
-    if (parts.length === 3) {
-        return parts[0] * 3600 + parts[1] * 60 + parts[2];
-    } else if (parts.length === 2) {
-        return parts[0] * 60 + parts[1];
-    }
-    return 0;
+  const parts = time.split(":").map(Number);
+  if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  } else if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  }
+  return 0;
 }
 
 /** Generate unique ID */
 export function generateStrengthId(): string {
-    return `str-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  return `str-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
 }
 
 // ============================================
@@ -273,97 +282,183 @@ export function generateStrengthId(): string {
 
 /** Bodyweight exercises - should use actual 1RM (max reps × extra weight) not estimated */
 export const BODYWEIGHT_EXERCISES = [
-    'pull up', 'pullup', 'pull-up', 'chin up', 'chinup', 'chin-up', 'chins',
-    'push up', 'pushup', 'push-up', 'push ups', 'armhävningar', 'armhävning',
-    'dip', 'dips', 'dippar',
-    'muscle up', 'muscle-up', 'muscleup',
-    'pistol squat', 'pistol', 'pistols',
-    'lunge', 'lunges', 'utfall',
-    'burpee', 'burpees',
-    'squat jump', 'jump squat', 'box jump',
-    'inverted row', 'body row', 'australian pull up',
-    'leg raise', 'hanging leg raise', 'toes to bar',
-    'l-sit', 'l sit',
-    'handstand', 'handstand push up', 'hspu',
-    'nordic curl', 'nordic hamstring curl',
-    'back extension', 'reverse hyper'
+  "pull up",
+  "pullup",
+  "pull-up",
+  "chin up",
+  "chinup",
+  "chin-up",
+  "chins",
+  "push up",
+  "pushup",
+  "push-up",
+  "push ups",
+  "armhävningar",
+  "armhävning",
+  "dip",
+  "dips",
+  "dippar",
+  "muscle up",
+  "muscle-up",
+  "muscleup",
+  "pistol squat",
+  "pistol",
+  "pistols",
+  "lunge",
+  "lunges",
+  "utfall",
+  "burpee",
+  "burpees",
+  "squat jump",
+  "jump squat",
+  "box jump",
+  "inverted row",
+  "body row",
+  "australian pull up",
+  "leg raise",
+  "hanging leg raise",
+  "toes to bar",
+  "l-sit",
+  "l sit",
+  "handstand",
+  "handstand push up",
+  "hspu",
+  "nordic curl",
+  "nordic hamstring curl",
+  "back extension",
+  "reverse hyper",
 ];
 
 /** Time-based exercises - track duration instead of reps */
 export const TIME_BASED_EXERCISES = [
-    'plank', 'plankan', 'planking', 'side plank',
-    'dead hang', 'hang', 'hängning',
-    'wall sit', 'wall squat',
-    'hollow hold', 'hollow body hold',
-    'superman hold', 'superman',
-    'bridge hold', 'glute bridge hold',
-    'farmer walk', 'farmers walk', 'farmer carry',
-    'l-sit', 'l sit',
-    'handstand hold', 'handstand',
-    'flexed arm hang',
-    'static hold', 'statiskt håll'
+  "plank",
+  "plankan",
+  "planking",
+  "side plank",
+  "dead hang",
+  "hang",
+  "hängning",
+  "wall sit",
+  "wall squat",
+  "hollow hold",
+  "hollow body hold",
+  "superman hold",
+  "superman",
+  "bridge hold",
+  "glute bridge hold",
+  "farmer walk",
+  "farmers walk",
+  "farmer carry",
+  "l-sit",
+  "l sit",
+  "handstand hold",
+  "handstand",
+  "flexed arm hang",
+  "static hold",
+  "statiskt håll",
 ];
 
 /** Distance/cardio exercises - track distance + time */
 export const DISTANCE_BASED_EXERCISES = [
-    'rowing', 'rowing machine', 'rower', 'rodd',
-    'ski erg', 'skierg', 'skiing',
-    'assault bike', 'echo bike', 'air bike',
-    'treadmill', 'löpband',
-    'stationary bike', 'cycle', 'cykel',
-    'running', 'löpning',
-    'burpee broad jump', 'burpee broad jumps'
+  "rowing",
+  "rowing machine",
+  "rower",
+  "rodd",
+  "ski erg",
+  "skierg",
+  "skiing",
+  "assault bike",
+  "echo bike",
+  "air bike",
+  "treadmill",
+  "löpband",
+  "stationary bike",
+  "cycle",
+  "cykel",
+  "running",
+  "löpning",
+  "burpee broad jump",
+  "burpee broad jumps",
 ];
 
 /** Weighted Distance exercises - track Weight (primary) + Distance (secondary) */
 export const WEIGHTED_DISTANCE_EXERCISES = [
-    'sled push', 'sled', 'sledge push', 'prowler',
-    'sled pull', 'sled rope pull',
-    'farmers walk', 'farmers carry', 'farmer walk', 'farmer carry',
-    'yoke', 'yoke walk', 'yoke carry',
-    'sandbag lunge', 'sandbag lunges', 'walking lunge', 'walking lunges', 'utfallsgång'
+  "sled push",
+  "sled",
+  "sledge push",
+  "prowler",
+  "sled pull",
+  "sled rope pull",
+  "farmers walk",
+  "farmers carry",
+  "farmer walk",
+  "farmer carry",
+  "yoke",
+  "yoke walk",
+  "yoke carry",
+  "sandbag lunge",
+  "sandbag lunges",
+  "walking lunge",
+  "walking lunges",
+  "utfallsgång",
 ];
 
 /** Hyrox specific exercises - for labeling */
 export const HYROX_EXERCISES = [
-    'ski erg', 'skierg',
-    'sled push', 'sled', 'prowler',
-    'sled pull', 'sled rope pull',
-    'burpee broad jump', 'burpee broad jumps',
-    'rowing', 'rowing machine', 'rodd',
-    'farmers walk', 'farmers carry', 'farmer walk',
-    'sandbag lunge', 'sandbag lunges', 'walking lunge', 'walking lunges', 'utfallsgång',
-    'wall ball', 'wall balls', 'wallball', 'wallballs'
+  "ski erg",
+  "skierg",
+  "sled push",
+  "sled",
+  "prowler",
+  "sled pull",
+  "sled rope pull",
+  "burpee broad jump",
+  "burpee broad jumps",
+  "rowing",
+  "rowing machine",
+  "rodd",
+  "farmers walk",
+  "farmers carry",
+  "farmer walk",
+  "sandbag lunge",
+  "sandbag lunges",
+  "walking lunge",
+  "walking lunges",
+  "utfallsgång",
+  "wall ball",
+  "wall balls",
+  "wallball",
+  "wallballs",
 ];
 
 /** Check if exercise is bodyweight-based */
 export function isBodyweightExercise(name: string): boolean {
-    const normalized = normalizeExerciseName(name);
-    return BODYWEIGHT_EXERCISES.some(bw => normalized.includes(bw));
+  const normalized = normalizeExerciseName(name);
+  return BODYWEIGHT_EXERCISES.some((bw) => normalized.includes(bw));
 }
 
 /** Check if exercise is time-based (duration instead of reps) */
 export function isTimeBasedExercise(name: string): boolean {
-    const normalized = normalizeExerciseName(name);
-    return TIME_BASED_EXERCISES.some(tb => normalized.includes(tb));
+  const normalized = normalizeExerciseName(name);
+  return TIME_BASED_EXERCISES.some((tb) => normalized.includes(tb));
 }
 
 /** Check if exercise is distance-based (rowing, skiing, etc.) */
 export function isDistanceBasedExercise(name: string): boolean {
-    const normalized = normalizeExerciseName(name);
-    return DISTANCE_BASED_EXERCISES.some(db => normalized.includes(db));
+  const normalized = normalizeExerciseName(name);
+  return DISTANCE_BASED_EXERCISES.some((db) => normalized.includes(db));
 }
 
 /** Check if exercise is weighted distance (heavy carry/push) */
 export function isWeightedDistanceExercise(name: string): boolean {
-    const normalized = normalizeExerciseName(name);
-    return WEIGHTED_DISTANCE_EXERCISES.some(wd => normalized.includes(wd));
+  const normalized = normalizeExerciseName(name);
+  return WEIGHTED_DISTANCE_EXERCISES.some((wd) => normalized.includes(wd));
 }
 
 /** Check if exercise is a Hyrox event */
 export function isHyroxExercise(name: string): boolean {
-    const normalized = normalizeExerciseName(name);
-    return HYROX_EXERCISES.some(h => normalized.includes(h));
+  const normalized = normalizeExerciseName(name);
+  return HYROX_EXERCISES.some((h) => normalized.includes(h));
 }
 
 /**
@@ -372,46 +467,50 @@ export function isHyroxExercise(name: string): boolean {
  * Returns: { used1RM: actual max weight used, estimated1RM: Epley estimate }
  */
 export function calculate1RMForBodyweight(
-    bodyweight: number,
-    extraWeight: number,
-    reps: number
+  bodyweight: number,
+  extraWeight: number,
+  reps: number,
 ): { actual1RM: number; estimated1RM: number } {
-    const totalWeight = bodyweight + extraWeight;
-    const estimated1RM = calculateEstimated1RM(totalWeight, reps);
+  const totalWeight = bodyweight + extraWeight;
+  const estimated1RM = calculateEstimated1RM(totalWeight, reps);
 
-    // For bodyweight, actual 1RM is just the max weight achieved (BW + extra)
-    // We don't estimate because bodyweight exercises have different mechanics
-    return {
-        actual1RM: totalWeight,
-        estimated1RM
-    };
+  // For bodyweight, actual 1RM is just the max weight achieved (BW + extra)
+  // We don't estimate because bodyweight exercises have different mechanics
+  return {
+    actual1RM: totalWeight,
+    estimated1RM,
+  };
 }
 
 /**
  * Get the best set value for a time-based exercise.
  * Returns duration in seconds (longer is better).
  */
-export function getTimePBValue(sets: StrengthSet[]): { seconds: number; formatted: string } | null {
-    let maxSeconds = 0;
+export function getTimePBValue(
+  sets: StrengthSet[],
+): { seconds: number; formatted: string } | null {
+  let maxSeconds = 0;
 
-    for (const set of sets) {
-        const seconds = set.timeSeconds ?? (set.time ? parseTimeToSeconds(set.time) : 0);
-        if (seconds > maxSeconds) {
-            maxSeconds = seconds;
-        }
+  for (const set of sets) {
+    const seconds = set.timeSeconds ??
+      (set.time ? parseTimeToSeconds(set.time) : 0);
+    if (seconds > maxSeconds) {
+      maxSeconds = seconds;
     }
+  }
 
-    if (maxSeconds === 0) return null;
+  if (maxSeconds === 0) return null;
 
-    // Format as mm:ss or hh:mm:ss
-    const hours = Math.floor(maxSeconds / 3600);
-    const mins = Math.floor((maxSeconds % 3600) / 60);
-    const secs = maxSeconds % 60;
+  // Format as mm:ss or hh:mm:ss
+  const hours = Math.floor(maxSeconds / 3600);
+  const mins = Math.floor((maxSeconds % 3600) / 60);
+  const secs = maxSeconds % 60;
 
-    const formatted = hours > 0
-        ? `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-        : `${mins}:${secs.toString().padStart(2, '0')}`;
+  const formatted = hours > 0
+    ? `${hours}:${mins.toString().padStart(2, "0")}:${
+      secs.toString().padStart(2, "0")
+    }`
+    : `${mins}:${secs.toString().padStart(2, "0")}`;
 
-    return { seconds: maxSeconds, formatted };
+  return { seconds: maxSeconds, formatted };
 }
-

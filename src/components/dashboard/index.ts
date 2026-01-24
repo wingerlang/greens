@@ -1,9 +1,25 @@
 // Dashboard Components - Barrel Export
-export { DoubleCircularProgress } from './DoubleCircularProgress.tsx';
-export { WeightSparkline } from './WeightSparkline.tsx';
-export { DashboardHeader } from './DashboardHeader.tsx';
-export { getBMICategory, getRelativeDateLabel, getRangeStartDate, type WeightRange } from './dashboardUtils.ts';
-export type { DensityMode, WaterCardProps, CaffeineCardProps, AlcoholCardProps, SleepCardProps } from './dashboard.types.ts';
+export { DoubleCircularProgress } from "./DoubleCircularProgress.tsx";
+export { WeightSparkline } from "./WeightSparkline.tsx";
+export { DashboardHeader } from "./DashboardHeader.tsx";
+export {
+  getBMICategory,
+  getRangeStartDate,
+  getRelativeDateLabel,
+  type WeightRange,
+} from "./dashboardUtils.ts";
+export type {
+  AlcoholCardProps,
+  CaffeineCardProps,
+  DensityMode,
+  SleepCardProps,
+  WaterCardProps,
+} from "./dashboard.types.ts";
 
 // Cards
-export { WaterCard, CaffeineCard, AlcoholCard, SleepCard } from './cards/index.ts';
+export {
+  AlcoholCard,
+  CaffeineCard,
+  SleepCard,
+  WaterCard,
+} from "./cards/index.ts";

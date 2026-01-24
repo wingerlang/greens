@@ -1,121 +1,154 @@
 import { kv } from "../kv.ts";
-import { User, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY, UserRole } from "../../models/types.ts";
+import {
+  DEFAULT_PRIVACY,
+  DEFAULT_USER_SETTINGS,
+  User,
+  UserRole,
+} from "../../models/types.ts";
 
 export interface DBUser extends User {
-    passHash: string;
-    salt: string;
+  passHash: string;
+  salt: string;
 }
 
 import { hashPassword } from "../utils/crypto.ts";
 
-export async function createUser(username: string, password: string, email?: string, role: UserRole = 'user'): Promise<DBUser | null> {
-    const existing = await kv.get(['users_by_username', username]);
-    if (existing.value) return null;
+export async function createUser(
+  username: string,
+  password: string,
+  email?: string,
+  role: UserRole = "user",
+): Promise<DBUser | null> {
+  const existing = await kv.get(["users_by_username", username]);
+  if (existing.value) return null;
 
-    const salt = crypto.randomUUID();
-    const passHash = await hashPassword(password, salt);
+  const salt = crypto.randomUUID();
+  const passHash = await hashPassword(password, salt);
 
-    const user: DBUser = {
-        id: crypto.randomUUID(),
-        username,
-        passHash,
-        salt,
-        role,
-        plan: 'free',
-        createdAt: new Date().toISOString(),
-        email: email || '',
-        name: username,
-        handle: username.toLowerCase(),
-        settings: DEFAULT_USER_SETTINGS,
-        privacy: DEFAULT_PRIVACY,
-        followersCount: 0,
-        followingCount: 0
-    };
+  const user: DBUser = {
+    id: crypto.randomUUID(),
+    username,
+    passHash,
+    salt,
+    role,
+    plan: "free",
+    createdAt: new Date().toISOString(),
+    email: email || "",
+    name: username,
+    handle: username.toLowerCase(),
+    settings: DEFAULT_USER_SETTINGS,
+    privacy: DEFAULT_PRIVACY,
+    followersCount: 0,
+    followingCount: 0,
+  };
 
-    const res = await kv.atomic()
-        .set(['users', user.id], user)
-        .set(['users_by_username', username], user.id)
-        .commit();
+  const res = await kv.atomic()
+    .set(["users", user.id], user)
+    .set(["users_by_username", username], user.id)
+    .commit();
 
-    return res.ok ? user : null;
+  return res.ok ? user : null;
 }
 
 export async function getUser(username: string): Promise<DBUser | null> {
-    const idEntry = await kv.get(['users_by_username', username]);
-    if (!idEntry.value) return null;
-    const userEntry = await kv.get(['users', idEntry.value as string]);
-    return userEntry.value as DBUser;
+  const idEntry = await kv.get(["users_by_username", username]);
+  if (!idEntry.value) return null;
+  const userEntry = await kv.get(["users", idEntry.value as string]);
+  return userEntry.value as DBUser;
 }
 
 export async function getUserById(id: string): Promise<DBUser | null> {
-    const entry = await kv.get(['users', id]);
-    if (!entry.value) return null;
+  const entry = await kv.get(["users", id]);
+  if (!entry.value) return null;
 
-    const user = entry.value as DBUser;
+  const user = entry.value as DBUser;
 
-    // Merge dynamic stats
-    const followersRes = await kv.get<Deno.KvU64>(['stats', id, 'followersCount']);
-    const followingRes = await kv.get<Deno.KvU64>(['stats', id, 'followingCount']);
+  // Merge dynamic stats
+  const followersRes = await kv.get<Deno.KvU64>([
+    "stats",
+    id,
+    "followersCount",
+  ]);
+  const followingRes = await kv.get<Deno.KvU64>([
+    "stats",
+    id,
+    "followingCount",
+  ]);
 
-    user.followersCount = Number(followersRes.value?.value || 0n);
-    user.followingCount = Number(followingRes.value?.value || 0n);
+  user.followersCount = Number(followersRes.value?.value || 0n);
+  user.followingCount = Number(followingRes.value?.value || 0n);
 
-    return user;
+  return user;
 }
 
-export async function getAllUsers(limit: number = 100, cursor?: string): Promise<{ users: DBUser[], cursor: string }> {
-    const iter = kv.list({ prefix: ['users'] }, { limit, cursor });
-    const users: DBUser[] = [];
-    for await (const entry of iter) {
-        users.push(entry.value as DBUser);
-    }
-    return { users, cursor: iter.cursor };
+export async function getAllUsers(
+  limit: number = 100,
+  cursor?: string,
+): Promise<{ users: DBUser[]; cursor: string }> {
+  const iter = kv.list({ prefix: ["users"] }, { limit, cursor });
+  const users: DBUser[] = [];
+  for await (const entry of iter) {
+    users.push(entry.value as DBUser);
+  }
+  return { users, cursor: iter.cursor };
 }
 
 export async function saveUser(user: DBUser): Promise<void> {
-    await kv.set(['users', user.id], user);
-    // Maintain indexes
-    if (user.username) await kv.set(['users_by_username', user.username], user.id);
-    if (user.handle) await kv.set(['users_by_handle', user.handle.toLowerCase()], user.id);
+  await kv.set(["users", user.id], user);
+  // Maintain indexes
+  if (user.username) {
+    await kv.set(["users_by_username", user.username], user.id);
+  }
+  if (user.handle) {
+    await kv.set(["users_by_handle", user.handle.toLowerCase()], user.id);
+  }
 }
 
-import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } from "./session.ts";
+import {
+  getSession,
+  getUserSessions,
+  revokeAllUserSessions,
+  revokeSession,
+} from "./session.ts";
 import { getUserData, saveUserData } from "./data.ts";
 
 export function sanitizeUser(user: DBUser): User {
-    const { passHash, salt, ...rest } = user;
-    return rest;
+  const { passHash, salt, ...rest } = user;
+  return rest;
 }
 
-export async function resetUserData(userId: string, type: 'meals' | 'exercises' | 'weight' | 'all'): Promise<void> {
-    if (type === 'all') {
-        const user = await getUserById(userId);
-        if (user) {
-            await kv.atomic()
-                .delete(["users", userId])
-                .delete(["user_profiles", userId])
-                .delete(["users_by_username", user.username])
-                .delete(["users_by_handle", user.handle || ""])
-                .commit();
+export async function resetUserData(
+  userId: string,
+  type: "meals" | "exercises" | "weight" | "all",
+): Promise<void> {
+  if (type === "all") {
+    const user = await getUserById(userId);
+    if (user) {
+      await kv.atomic()
+        .delete(["users", userId])
+        .delete(["user_profiles", userId])
+        .delete(["users_by_username", user.username])
+        .delete(["users_by_handle", user.handle || ""])
+        .commit();
 
-            // Also cleanup sessions
-            await revokeAllUserSessions(userId);
-        }
-        return;
+      // Also cleanup sessions
+      await revokeAllUserSessions(userId);
     }
+    return;
+  }
 
-    const data = await getUserData(userId);
-    if (!data) return;
+  const data = await getUserData(userId);
+  if (!data) return;
 
-    if (type === 'meals') {
-        data.mealEntries = [];
-    } else if (type === 'exercises') {
-        data.exerciseEntries = [];
-        data.trainingCycles = [];
-        data.plannedActivities = [];
-    } else if (type === 'weight') {
-        data.weightEntries = [];
-    }
+  if (type === "meals") {
+    data.mealEntries = [];
+  } else if (type === "exercises") {
+    data.exerciseEntries = [];
+    data.trainingCycles = [];
+    data.plannedActivities = [];
+  } else if (type === "weight") {
+    data.weightEntries = [];
+  }
 
-    await saveUserData(userId, data);
+  await saveUserData(userId, data);
 }

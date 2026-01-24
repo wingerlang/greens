@@ -13,28 +13,34 @@ import { CleanProductNameSchema } from "../schemas.ts";
  * @returns Cleaned product name string.
  */
 export const cleanProductName = (title: string, h1?: string): string => {
-    // 1. Validate Input
-    const input = CleanProductNameSchema.parse({ title, h1 });
+  // 1. Validate Input
+  const input = CleanProductNameSchema.parse({ title, h1 });
 
-    // If title is generic, prioritize H1
-    const genericTitles = ['startsida', 'home', 'login', 'produkter', 'varukorg'];
-    const lowerTitle = (input.title || '').toLowerCase();
+  // If title is generic, prioritize H1
+  const genericTitles = ["startsida", "home", "login", "produkter", "varukorg"];
+  const lowerTitle = (input.title || "").toLowerCase();
 
-    let base = input.title;
-    if (input.h1 && (genericTitles.some(g => lowerTitle.includes(g)) || !input.title)) {
-        base = input.h1;
-    }
+  let base = input.title;
+  if (
+    input.h1 &&
+    (genericTitles.some((g) => lowerTitle.includes(g)) || !input.title)
+  ) {
+    base = input.h1;
+  }
 
-    if (!base) return '';
+  if (!base) return "";
 
-    // Remove common site suffixes
-    let name = base.split(/[|•\-–—]| - /)[0].trim();
+  // Remove common site suffixes
+  let name = base.split(/[|•\-–—]| - /)[0].trim();
 
-    // Remove "Handla", "Köp", "Price" etc if they are at the start
-    name = name.replace(/^(Handla|Köp|Pris på|Varuinformation för|Se priset på)\s+/i, '');
+  // Remove "Handla", "Köp", "Price" etc if they are at the start
+  name = name.replace(
+    /^(Handla|Köp|Pris på|Varuinformation för|Se priset på)\s+/i,
+    "",
+  );
 
-    // SMART FEATURE: Remove weight suffixes like "275g" or "1kg" from the name if they exist
-    name = name.replace(/\s*\d+\s*(g|kg|ml|l|cl)\b/i, '').trim();
+  // SMART FEATURE: Remove weight suffixes like "275g" or "1kg" from the name if they exist
+  name = name.replace(/\s*\d+\s*(g|kg|ml|l|cl)\b/i, "").trim();
 
-    return name;
+  return name;
 };

@@ -2,10 +2,10 @@
 // Import from here instead of individual files
 
 // Atoms
-export * from './atoms/index.ts';
+export * from "./atoms/index.ts";
 
 // Hooks
-export * from './hooks/index.ts';
+export * from "./hooks/index.ts";
 
 // Sections
-export * from './sections/index.ts';
+export * from "./sections/index.ts";

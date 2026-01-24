@@ -64,6 +64,8 @@ let dbStats = {
     userCount: 0,
 };
 
+let lastCoverage = { percent: 0, timestamp: 0 };
+
 // --- Persistence Helpers ---
 
 function getTodayStr() {
@@ -445,6 +447,50 @@ async function handleRequest(req: Request): Promise<Response> {
             })();
             return Response.json({ success: true, message: "Deploy sequence started" });
         }
+
+        if (url.pathname === "/api/test") {
+            addLog("guardian", "Starting tests...");
+            const covDir = "coverage_guardian";
+
+            // Clean up old coverage
+            try { await Deno.remove(covDir, { recursive: true }); } catch {}
+
+            // Run tests
+            runCommand("deno", ["test", "-A", `--coverage=${covDir}`]).then(async (success) => {
+                if (success) {
+                    addLog("guardian", "Tests passed. Calculating coverage...");
+
+                    // Generate summary
+                    const cmd = new Deno.Command("deno", {
+                        args: ["coverage", covDir],
+                        stdout: "piped",
+                        stderr: "piped"
+                    });
+                    const output = await cmd.output();
+                    const text = new TextDecoder().decode(output.stdout);
+
+                    if (text) {
+                        addLog("stdout", text);
+                        // Extract percentage (naive regex)
+                        const match = text.match(/Covered (\d+(\.\d+)?)%/); // e.g. "Covered 85.5% of lines"
+                         // Actually Deno output format is:
+                         // "Covered 85.5% (lines)" or similar?
+                         // Deno 1.4x: "Covered 92.5% of lines"
+                        if (match) {
+                            lastCoverage = { percent: parseFloat(match[1]), timestamp: Date.now() };
+                        }
+                    }
+                } else {
+                    addLog("guardian", "Tests failed.");
+                }
+            });
+
+            return Response.json({ success: true, message: "Tests started" });
+        }
+    }
+
+    if (url.pathname === "/api/coverage") {
+        return Response.json(lastCoverage);
     }
 
     return new Response("Not Found", { status: 404 });

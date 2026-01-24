@@ -281,12 +281,18 @@
                 <div class="value" id="host-info" style="font-size: 1.2em">Loading...</div>
                 <div class="sub" id="os-info">...</div>
             </div>
+            <div class="card">
+                <h3>Test Coverage</h3>
+                <div class="value" id="coverage">--%</div>
+                <div class="sub" id="coverage-ts">No data</div>
+            </div>
         </div>
 
         <div class="actions">
             <button class="primary" onclick="doAction('restart')">🔄 Restart Server</button>
             <button onclick="doAction('git-pull')">⬇️ Git Pull</button>
             <button onclick="doAction('build')">🏗️ Build</button>
+            <button onclick="doAction('test')">🧪 Run Tests</button>
             <button class="danger" onclick="doAction('deploy')">🚀 Full Deploy</button>
         </div>
 
@@ -396,6 +402,17 @@
                 document.getElementById('deno-version').textContent = data.denoVersion;
                 document.getElementById('ts-version').textContent = data.typescriptVersion;
                 document.getElementById('v8-version').textContent = data.v8Version;
+
+                // Coverage
+                try {
+                    const covRes = await fetch('/api/coverage');
+                    const covData = await covRes.json();
+                    if (covData.percent > 0) {
+                        document.getElementById('coverage').textContent = covData.percent + '%';
+                        const date = new Date(covData.timestamp);
+                        document.getElementById('coverage-ts').textContent = date.toLocaleTimeString();
+                    }
+                } catch {}
 
             } catch (e) {
                 console.error(e);
@@ -527,7 +544,8 @@
                         'restart': 'restart',
                         'pull': 'git-pull',
                         'build': 'build',
-                        'deploy': 'deploy'
+                        'deploy': 'deploy',
+                        'test': 'test'
                     };
                     const action = actionMap[cmd];
                     if (action) {

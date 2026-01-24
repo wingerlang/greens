@@ -1,499 +1,734 @@
-import React, { useState, useMemo, useRef } from 'react';
-import { useData } from '../../context/DataContext.tsx';
-import { useSettings } from '../../context/SettingsContext.tsx';
-import { DaySnapshot, HealthStats } from '../../utils/healthAggregator.ts';
-import { WeightEntry, DailyVitals, BodyMeasurementType, BodyMeasurementEntry } from '../../models/types.ts';
-import { HealthHistoryGraph } from '../../components/health/HealthHistoryGraph.tsx';
+import React, { useMemo, useRef, useState } from "react";
+import { useData } from "../../context/DataContext.tsx";
+import { useSettings } from "../../context/SettingsContext.tsx";
+import { DaySnapshot, HealthStats } from "../../utils/healthAggregator.ts";
+import {
+  BodyMeasurementEntry,
+  BodyMeasurementType,
+  DailyVitals,
+  WeightEntry,
+} from "../../models/types.ts";
+import { HealthHistoryGraph } from "../../components/health/HealthHistoryGraph.tsx";
 
 interface MetricFocusViewProps {
-    type: 'sleep' | 'weight' | BodyMeasurementType;
-    snapshots: DaySnapshot[];
-    stats: HealthStats;
-    days: number;
+  type: "sleep" | "weight" | BodyMeasurementType;
+  snapshots: DaySnapshot[];
+  stats: HealthStats;
+  days: number;
 }
 
-export function MetricFocusView({ type, snapshots, stats, days }: MetricFocusViewProps) {
-    const {
-        weightEntries, bodyMeasurements,
-        updateWeightEntry, deleteWeightEntry,
-        updateVitals, addWeightEntry,
-        addBodyMeasurement, deleteBodyMeasurement, updateBodyMeasurement
-    } = useData();
-    const { settings } = useSettings();
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editValue, setEditValue] = useState<string>('');
-    const [editDate, setEditDate] = useState<string>('');
-    const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-    const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-    const hasAutoOpened = useRef(false);
+export function MetricFocusView(
+  { type, snapshots, stats, days }: MetricFocusViewProps,
+) {
+  const {
+    weightEntries,
+    bodyMeasurements,
+    updateWeightEntry,
+    deleteWeightEntry,
+    updateVitals,
+    addWeightEntry,
+    addBodyMeasurement,
+    deleteBodyMeasurement,
+    updateBodyMeasurement,
+  } = useData();
+  const { settings } = useSettings();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>("");
+  const [editDate, setEditDate] = useState<string>("");
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const hasAutoOpened = useRef(false);
 
-    const isWeight = type === 'weight';
-    const isSleep = type === 'sleep';
-    const isMeasurement = !isWeight && !isSleep;
+  const isWeight = type === "weight";
+  const isSleep = type === "sleep";
+  const isMeasurement = !isWeight && !isSleep;
 
-    const measurementInfo = useMemo(() => {
-        if (!isMeasurement) return null;
-        const types: Record<string, { label: string, unit: string, color: string }> = {
-            waist: { label: 'Midja', unit: 'cm', color: '#10b981' },
-            hips: { label: 'Höft', unit: 'cm', color: '#34d399' },
-            chest: { label: 'Bröst', unit: 'cm', color: '#60a5fa' },
-            neck: { label: 'Nacke', unit: 'cm', color: '#94a3b8' },
-            shoulders: { label: 'Axlar', unit: 'cm', color: '#38bdf8' },
-            arm_left: { label: 'Vänster Arm', unit: 'cm', color: '#818cf8' },
-            arm_right: { label: 'Höger Arm', unit: 'cm', color: '#818cf8' },
-            thigh_left: { label: 'Vänster Lår', unit: 'cm', color: '#fbbf24' },
-            thigh_right: { label: 'Höger Lår', unit: 'cm', color: '#fbbf24' },
-            calf_left: { label: 'Vänster Vad', unit: 'cm', color: '#f87171' },
-            calf_right: { label: 'Höger Vad', unit: 'cm', color: '#f87171' }
-        };
-        return types[type] || { label: type, unit: 'cm', color: '#10b981' };
-    }, [type, isMeasurement]);
+  const measurementInfo = useMemo(() => {
+    if (!isMeasurement) return null;
+    const types: Record<
+      string,
+      { label: string; unit: string; color: string }
+    > = {
+      waist: { label: "Midja", unit: "cm", color: "#10b981" },
+      hips: { label: "Höft", unit: "cm", color: "#34d399" },
+      chest: { label: "Bröst", unit: "cm", color: "#60a5fa" },
+      neck: { label: "Nacke", unit: "cm", color: "#94a3b8" },
+      shoulders: { label: "Axlar", unit: "cm", color: "#38bdf8" },
+      arm_left: { label: "Vänster Arm", unit: "cm", color: "#818cf8" },
+      arm_right: { label: "Höger Arm", unit: "cm", color: "#818cf8" },
+      thigh_left: { label: "Vänster Lår", unit: "cm", color: "#fbbf24" },
+      thigh_right: { label: "Höger Lår", unit: "cm", color: "#fbbf24" },
+      calf_left: { label: "Vänster Vad", unit: "cm", color: "#f87171" },
+      calf_right: { label: "Höger Vad", unit: "cm", color: "#f87171" },
+    };
+    return types[type] || { label: type, unit: "cm", color: "#10b981" };
+  }, [type, isMeasurement]);
 
-    // Prepare table data with grouping
-    const groupedTableData = useMemo(() => {
-        if (isWeight) {
-            const raw = weightEntries
-                .filter(w => snapshots.some(s => s.date === w.date));
+  // Prepare table data with grouping
+  const groupedTableData = useMemo(() => {
+    if (isWeight) {
+      const raw = weightEntries
+        .filter((w) => snapshots.some((s) => s.date === w.date));
 
-            // Group by date
-            const groups: { date: string, items: typeof raw }[] = [];
-            raw.forEach(entry => {
-                const existing = groups.find(g => g.date === entry.date);
-                if (existing) {
-                    existing.items.push(entry);
-                } else {
-                    groups.push({ date: entry.date, items: [entry] });
-                }
-            });
-
-            return groups.map(g => {
-                const avg = g.items.reduce((sum, item) => sum + item.weight, 0) / g.items.length;
-                const avgWaist = g.items.reduce((sum, item) => sum + (item.waist || 0), 0) / g.items.filter(i => i.waist).length;
-                return {
-                    date: g.date,
-                    count: g.items.length,
-                    average: avg,
-                    averageWaist: isNaN(avgWaist) ? null : avgWaist,
-                    items: g.items.map(i => ({ id: i.id, date: i.date, value: i.weight, waist: i.waist, unit: 'kg' }))
-                };
-            }).sort((a, b) => b.date.localeCompare(a.date));
-        } else if (isSleep) {
-            // Sleep is 1 entry per day (DailyVitals)
-            return snapshots
-                .filter(s => s.vitals.sleep > 0)
-                .map(s => ({
-                    date: s.date,
-                    count: 1,
-                    average: s.vitals.sleep || 0,
-                    averageWaist: null,
-                    items: [{ id: s.date, date: s.date, value: s.vitals.sleep || 0, waist: undefined, unit: 'h' }]
-                }))
-                .reverse();
+      // Group by date
+      const groups: { date: string; items: typeof raw }[] = [];
+      raw.forEach((entry) => {
+        const existing = groups.find((g) => g.date === entry.date);
+        if (existing) {
+          existing.items.push(entry);
         } else {
-            // Body Measurements
-            const extractedFromWeight: BodyMeasurementEntry[] = [];
-            weightEntries.forEach(entry => {
-                const val = (entry as any)[type];
-                if (val) {
-                    extractedFromWeight.push({
-                        id: `${entry.id}-${type}`,
-                        date: entry.date,
-                        type: type as BodyMeasurementType,
-                        value: val,
-                        createdAt: entry.createdAt
-                    });
-                }
-            });
-
-            const combined = [...bodyMeasurements.filter(m => m.type === type), ...extractedFromWeight];
-            const sorted = combined.sort((a, b) => b.date.localeCompare(a.date));
-
-            // Group by date
-            const groups: { date: string, items: BodyMeasurementEntry[] }[] = [];
-            sorted.forEach(entry => {
-                const existing = groups.find(g => g.date === entry.date);
-                if (existing) existing.items.push(entry);
-                else groups.push({ date: entry.date, items: [entry] });
-            });
-
-            return groups.map(g => {
-                const avg = g.items.reduce((sum, item) => sum + item.value, 0) / g.items.length;
-                return {
-                    date: g.date,
-                    count: g.items.length,
-                    average: avg,
-                    averageWaist: null,
-                    items: g.items.map(i => ({ id: i.id, date: i.date, value: i.value, unit: measurementInfo?.unit || 'cm' }))
-                };
-            });
+          groups.push({ date: entry.date, items: [entry] });
         }
-    }, [type, isWeight, isSleep, weightEntries, bodyMeasurements, snapshots, measurementInfo]);
+      });
 
-    const handleEdit = (item: { id: string, date: string, value: number }) => {
-        setEditingId(item.id);
-        setEditValue(item.value.toString());
-        setEditDate(item.date);
-    };
-
-    const handleNewEntry = (date: string) => {
-        setEditingId('NEW_' + date);
-        setEditValue('');
-        setEditDate(date);
-
-        // Auto-expand group if it exists
-        setExpandedGroups(prev => {
-            const next = new Set(prev);
-            next.add(date);
-            return next;
-        });
-    };
-
-    const handleSave = async () => {
-        if (!editingId) return;
-        const val = parseFloat(editValue);
-        if (isNaN(val)) return;
-
-        if (editingId.startsWith('NEW_')) {
-            // Create new entry
-            if (isWeight) {
-                await addWeightEntry(val, editDate);
-            } else if (isSleep) {
-                updateVitals(editDate, { sleep: val });
-            } else {
-                addBodyMeasurement({
-                    date: editDate,
-                    type: type as BodyMeasurementType,
-                    value: val
-                });
-            }
-        } else {
-            // Update existing
-            if (isWeight) {
-                updateWeightEntry(editingId, val, editDate);
-            } else if (isSleep) {
-                updateVitals(editDate, { sleep: val });
-            } else {
-                // If ID contains hyphen, it's extracted from weight. We should update the weight entry instead?
-                // For now, let's assume we update the bodyMeasurement if it has a clean ID.
-                if (editingId.includes('-')) {
-                    const [weightId] = editingId.split('-');
-                    updateWeightEntry(weightId, undefined as any, undefined as any, { [type]: val } as any);
-                } else {
-                    updateBodyMeasurement(editingId, { value: val, date: editDate });
-                }
-            }
-        }
-        setEditingId(null);
-    };
-
-    const handleDelete = (id: string, date: string) => {
-        if (!window.confirm('Vill du verkligen ta bort denna loggning?')) return;
-        if (isWeight) {
-            deleteWeightEntry(id);
-        } else if (isSleep) {
-            updateVitals(date, { sleep: 0 });
-        } else {
-            if (id.includes('-')) {
-                const [weightId] = id.split('-');
-                updateWeightEntry(weightId, undefined as any, undefined as any, { [type]: undefined } as any);
-            } else {
-                deleteBodyMeasurement(id);
-            }
-        }
-    };
-
-    const toggleGroup = (date: string) => {
-        setExpandedGroups(prev => {
-            const next = new Set(prev);
-            if (next.has(date)) next.delete(date);
-            else next.add(date);
-            return next;
-        });
-    };
-
-    const themeColor = isWeight ? '#f43f5e' : (isSleep ? '#0ea5e9' : (measurementInfo?.color || '#10b981'));
-
-
-
-    // Comparison Stats
-    const comparisonStats = useMemo(() => {
-        if (!isWeight) return null;
-
-        // Use the latest visible weight from the graph/snapshots as "Current"
-        // This ensures what you see in the "Nuvarande" card matches the graph's end point.
-        // Fallback to weightEntries[0] if no snapshots (e.g. empty range)
-        const latestSnapshotWeight = snapshots.slice().reverse().find(s => s.weight !== undefined)?.weight;
-        const latestWeight = latestSnapshotWeight ?? weightEntries[0]?.weight;
-
-        if (!latestWeight) return null;
-
-        const getDateWeight = (daysAgo: number) => {
-            const targetDate = new Date();
-            targetDate.setDate(targetDate.getDate() - daysAgo);
-            const dateStr = targetDate.toISOString().split('T')[0];
-
-            // Find closest entry before or on this date
-            // Since weightEntries are sorted desc, we look for first one <= dateStr
-            return weightEntries.find(w => w.date <= dateStr)?.weight;
-        };
-
-        const prev7 = getDateWeight(7);
-        const prev30 = getDateWeight(30);
-
+      return groups.map((g) => {
+        const avg = g.items.reduce((sum, item) => sum + item.weight, 0) /
+          g.items.length;
+        const avgWaist = g.items.reduce((sum, item) =>
+          sum + (item.waist || 0), 0) / g.items.filter((i) =>
+            i.waist
+          ).length;
         return {
-            current: latestWeight,
-            delta7: prev7 ? latestWeight - prev7 : 0,
-            delta30: prev30 ? latestWeight - prev30 : 0,
-            has7: !!prev7,
-            has30: !!prev30
+          date: g.date,
+          count: g.items.length,
+          average: avg,
+          averageWaist: isNaN(avgWaist) ? null : avgWaist,
+          items: g.items.map((i) => ({
+            id: i.id,
+            date: i.date,
+            value: i.weight,
+            waist: i.waist,
+            unit: "kg",
+          })),
         };
+      }).sort((a, b) => b.date.localeCompare(a.date));
+    } else if (isSleep) {
+      // Sleep is 1 entry per day (DailyVitals)
+      return snapshots
+        .filter((s) => s.vitals.sleep > 0)
+        .map((s) => ({
+          date: s.date,
+          count: 1,
+          average: s.vitals.sleep || 0,
+          averageWaist: null,
+          items: [{
+            id: s.date,
+            date: s.date,
+            value: s.vitals.sleep || 0,
+            waist: undefined,
+            unit: "h",
+          }],
+        }))
+        .reverse();
+    } else {
+      // Body Measurements
+      const extractedFromWeight: BodyMeasurementEntry[] = [];
+      weightEntries.forEach((entry) => {
+        const val = (entry as any)[type];
+        if (val) {
+          extractedFromWeight.push({
+            id: `${entry.id}-${type}`,
+            date: entry.date,
+            type: type as BodyMeasurementType,
+            value: val,
+            createdAt: entry.createdAt,
+          });
+        }
+      });
 
-    }, [weightEntries, snapshots, isWeight]);
+      const combined = [
+        ...bodyMeasurements.filter((m) => m.type === type),
+        ...extractedFromWeight,
+      ];
+      const sorted = combined.sort((a, b) => b.date.localeCompare(a.date));
 
+      // Group by date
+      const groups: { date: string; items: BodyMeasurementEntry[] }[] = [];
+      sorted.forEach((entry) => {
+        const existing = groups.find((g) => g.date === entry.date);
+        if (existing) existing.items.push(entry);
+        else groups.push({ date: entry.date, items: [entry] });
+      });
 
+      return groups.map((g) => {
+        const avg = g.items.reduce((sum, item) => sum + item.value, 0) /
+          g.items.length;
+        return {
+          date: g.date,
+          count: g.items.length,
+          average: avg,
+          averageWaist: null,
+          items: g.items.map((i) => ({
+            id: i.id,
+            date: i.date,
+            value: i.value,
+            unit: measurementInfo?.unit || "cm",
+          })),
+        };
+      });
+    }
+  }, [
+    type,
+    isWeight,
+    isSleep,
+    weightEntries,
+    bodyMeasurements,
+    snapshots,
+    measurementInfo,
+  ]);
 
+  const handleEdit = (item: { id: string; date: string; value: number }) => {
+    setEditingId(item.id);
+    setEditValue(item.value.toString());
+    setEditDate(item.date);
+  };
 
-    return (
-        <div className="metric-focus-view animate-in zoom-in-95 duration-300 flex flex-col gap-6">
-            <div className="health-card glass overflow-hidden">
-                <div className="card-header p-8 pb-0 flex justify-between items-start">
-                    <div>
-                        <h2 className="text-2xl" style={{ color: themeColor }}>
-                            {isWeight ? 'Viktanalys' : 'Sömnanalys'}
-                        </h2>
-                        <p className="text-sm">
-                            {isWeight ? 'Din resa mot målvikten.' : `Din återhämtning de senaste ${days} dagarna.`}
-                        </p>
-                    </div>
-                </div>
+  const handleNewEntry = (date: string) => {
+    setEditingId("NEW_" + date);
+    setEditValue("");
+    setEditDate(date);
 
-                <div className="p-8 relative">
-                    <HealthHistoryGraph
-                        snapshots={snapshots}
-                        days={days}
-                        height={isWeight ? 'h-[400px] md:h-[600px]' : 'h-[300px]'}
-                        primaryMetric={isWeight ? 'weight' : 'sleep'}
-                        themeColor={themeColor}
-                    />
-                </div>
+    // Auto-expand group if it exists
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      next.add(date);
+      return next;
+    });
+  };
 
-                <div className="grid grid-cols-1 md:grid-cols-4 border-t border-white/5 bg-slate-950/40">
-                    <div className="p-6 border-r border-white/5 text-center">
-                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                            {isWeight ? 'Nuvarande' : 'Snitt'}
-                        </div>
-                        <div className="text-xl font-black text-white">
-                            {isWeight
-                                ? `${(comparisonStats?.current || 0).toFixed(1)} kg`
-                                : `${stats.avgSleep.toFixed(1)}h`
-                            }
-                        </div>
-                        {isWeight && (
-                            <div className="text-[10px] text-slate-500 mt-1">Senaste logg</div>
-                        )}
-                    </div>
+  const handleSave = async () => {
+    if (!editingId) return;
+    const val = parseFloat(editValue);
+    if (isNaN(val)) return;
 
-                    <div className="p-6 border-r border-white/5 text-center">
-                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                            {isWeight ? '7 Dagar' : 'Mål-match'}
-                        </div>
-                        <div className={`text-xl font-black ${isWeight ? ((comparisonStats?.delta7 || 0) <= 0 ? 'text-emerald-400' : 'text-rose-400') : 'text-sky-400'}`}>
-                            {isWeight
-                                ? `${(comparisonStats?.delta7 || 0) > 0 ? '+' : ''}${(comparisonStats?.delta7 || 0).toFixed(1)} kg`
-                                : `${Math.round((snapshots.filter(s => s.vitals.sleep >= 8).length / snapshots.length) * 100)}%`
-                            }
-                        </div>
-                        {isWeight && (
-                            <div className="text-[10px] text-slate-500 mt-1">vs förra veckan</div>
-                        )}
-                    </div>
+    if (editingId.startsWith("NEW_")) {
+      // Create new entry
+      if (isWeight) {
+        await addWeightEntry(val, editDate);
+      } else if (isSleep) {
+        updateVitals(editDate, { sleep: val });
+      } else {
+        addBodyMeasurement({
+          date: editDate,
+          type: type as BodyMeasurementType,
+          value: val,
+        });
+      }
+    } else {
+      // Update existing
+      if (isWeight) {
+        updateWeightEntry(editingId, val, editDate);
+      } else if (isSleep) {
+        updateVitals(editDate, { sleep: val });
+      } else {
+        // If ID contains hyphen, it's extracted from weight. We should update the weight entry instead?
+        // For now, let's assume we update the bodyMeasurement if it has a clean ID.
+        if (editingId.includes("-")) {
+          const [weightId] = editingId.split("-");
+          updateWeightEntry(
+            weightId,
+            undefined as any,
+            undefined as any,
+            { [type]: val } as any,
+          );
+        } else {
+          updateBodyMeasurement(editingId, { value: val, date: editDate });
+        }
+      }
+    }
+    setEditingId(null);
+  };
 
-                    <div className="p-6 border-r border-white/5 text-center">
-                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
-                            {isWeight ? '30 Dagar' : 'Koffein'}
-                        </div>
-                        <div className={`text-xl font-black ${isWeight ? ((comparisonStats?.delta30 || 0) <= 0 ? 'text-emerald-400' : 'text-rose-400') : 'text-emerald-400'}`}>
-                            {isWeight
-                                ? `${(comparisonStats?.delta30 || 0) > 0 ? '+' : ''}${(comparisonStats?.delta30 || 0).toFixed(1)} kg`
-                                : `${stats.avgCaffeine.toFixed(1)}`
-                            }
-                        </div>
-                        {isWeight && (
-                            <div className="text-[10px] text-slate-500 mt-1">vs förra månaden</div>
-                        )}
-                    </div>
+  const handleDelete = (id: string, date: string) => {
+    if (!window.confirm("Vill du verkligen ta bort denna loggning?")) return;
+    if (isWeight) {
+      deleteWeightEntry(id);
+    } else if (isSleep) {
+      updateVitals(date, { sleep: 0 });
+    } else {
+      if (id.includes("-")) {
+        const [weightId] = id.split("-");
+        updateWeightEntry(
+          weightId,
+          undefined as any,
+          undefined as any,
+          { [type]: undefined } as any,
+        );
+      } else {
+        deleteBodyMeasurement(id);
+      }
+    }
+  };
 
-                    <div className="p-6 bg-gradient-to-br from-white/5 to-transparent text-center">
-                        <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">Period</div>
-                        <div className="text-xl font-black text-white">{days} Dagar</div>
-                        {!isWeight && (
-                            <div onClick={() => alert('Garmin synk startad (WIP)')} className="text-[10px] text-sky-400 mt-1 cursor-pointer hover:underline">
-                                ↻ Synka Garmin
-                            </div>
-                        )}
-                        {isWeight && (
-                            <div className="text-[10px] text-slate-500 mt-1">Totalt: {stats.weightTrend > 0 ? '+' : ''}{stats.weightTrend.toFixed(1)} kg</div>
-                        )}
-                    </div>
-                </div>
-            </div>
+  const toggleGroup = (date: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
 
-            {/* History Table */}
-            <div className="history-section glass p-6 rounded-2xl border border-white/5">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-sm font-bold uppercase tracking-widest opacity-60">Logghistorik</h3>
-                    <span className="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-1 rounded-full">{groupedTableData.reduce((acc, g) => acc + g.count, 0)} Punkter</span>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                        <thead>
-                            <tr className="text-[10px] uppercase font-black text-slate-500 border-b border-white/5">
-                                <th className="py-3 px-4">Datum</th>
-                                <th className="py-3 px-4">{isWeight ? 'Vikt' : (isSleep ? 'Sömn' : measurementInfo?.label || 'Värde')}</th>
-                                {isWeight && <th className="py-3 px-4">Midja</th>}
-                                <th className="py-3 px-4 text-right">Åtgärder</th>
-                            </tr>
-                        </thead>
-                        <tbody className="text-sm">
-                            {/* Logic for NEW ENTRY row */}
-                            {editingId?.startsWith('NEW_') && (
-                                <tr className="bg-emerald-500/5 border-b border-emerald-500/20 animate-in fade-in slide-in-from-top-2">
-                                    <td className="py-3 px-4 text-emerald-400 font-bold">{editDate} (Ny)</td>
-                                    <td className="py-3 px-4">
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="number"
-                                                step="0.1"
-                                                autoFocus
-                                                placeholder="0.0"
-                                                className="bg-slate-800 border border-emerald-500/30 rounded p-1 text-white text-xs w-20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                                value={editValue}
-                                                onChange={(e) => setEditValue(e.target.value)}
-                                                onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-                                            />
-                                            <span className="text-[10px] opacity-40">{isWeight ? 'kg' : 'h'}</span>
-                                        </div>
-                                    </td>
-                                    <td className="py-3 px-4 text-right">
-                                        <div className="flex justify-end gap-2">
-                                            <button onClick={handleSave} className="bg-emerald-500 text-slate-900 px-3 py-1 rounded-lg text-[10px] font-bold uppercase hover:bg-emerald-400 shadow-lg shadow-emerald-500/20">Spara</button>
-                                            <button onClick={() => setEditingId(null)} className="text-slate-500 px-3 py-1 rounded-lg text-[10px] font-bold uppercase hover:bg-white/5">Avbryt</button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
+  const themeColor = isWeight
+    ? "#f43f5e"
+    : (isSleep ? "#0ea5e9" : (measurementInfo?.color || "#10b981"));
 
-                            {groupedTableData.map((group) => (
-                                <React.Fragment key={group.date}>
-                                    {/* Group Header Row */}
-                                    <tr
-                                        className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer select-none ${group.count > 1 ? 'bg-slate-800/20' : ''}`}
-                                        onClick={() => group.count > 1 && toggleGroup(group.date)}
-                                    >
-                                        <td className="py-3 px-4 font-medium flex items-center gap-2">
-                                            {group.count > 1 && (
-                                                <span className={`text-[10px] text-slate-500 transition-transform ${expandedGroups.has(group.date) ? 'rotate-90' : ''}`}>▶</span>
-                                            )}
-                                            {group.date}
-                                        </td>
-                                        <td className="py-3 px-4">
-                                            {group.count > 1 ? (
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-bold">{group.average.toFixed(1)} {group.items[0].unit}</span>
-                                                    <span className="text-[10px] bg-slate-700 px-1.5 rounded text-slate-400">{group.count} st</span>
-                                                </div>
-                                            ) : (
-                                                <span className="font-black">{group.items[0].value} {group.items[0].unit}</span>
-                                            )}
-                                        </td>
-                                        {isWeight && (
-                                            <td className="py-3 px-4">
-                                                {group.count > 1 ? (
-                                                    group.averageWaist ? <span className="text-slate-400 font-bold">{group.averageWaist.toFixed(1)} cm</span> : '--'
-                                                ) : (
-                                                    (group.items[0] as any).waist ? <span className="font-black">{(group.items[0] as any).waist} cm</span> : '--'
-                                                )}
-                                            </td>
-                                        )}
-                                        <td className="py-3 px-4 text-right">
-                                            {group.count === 1 && (
-                                                // Single item actions - always visible
-                                                <div className="flex justify-end gap-2">
-                                                    <button onClick={(e) => { e.stopPropagation(); handleEdit(group.items[0]); }} className="text-sky-400 hover:text-sky-300 p-1 rounded hover:bg-sky-500/10 transition-colors" title="Redigera">
-                                                        <EditIcon />
-                                                    </button>
-                                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(group.items[0].id, group.items[0].date); }} className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 transition-colors" title="Ta bort">
-                                                        <DeleteIcon />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </td>
-                                    </tr>
+  // Comparison Stats
+  const comparisonStats = useMemo(() => {
+    if (!isWeight) return null;
 
-                                    {/* Expanded Group Items OR Editing State */}
-                                    {(expandedGroups.has(group.date) || group.count === 1) && group.items.map(item => {
-                                        if (group.count === 1 && editingId !== item.id) return null;
+    // Use the latest visible weight from the graph/snapshots as "Current"
+    // This ensures what you see in the "Nuvarande" card matches the graph's end point.
+    // Fallback to weightEntries[0] if no snapshots (e.g. empty range)
+    const latestSnapshotWeight = snapshots.slice().reverse().find((s) =>
+      s.weight !== undefined
+    )?.weight;
+    const latestWeight = latestSnapshotWeight ?? weightEntries[0]?.weight;
 
-                                        return (
-                                            <tr key={item.id} className={`${group.count > 1 ? 'bg-slate-900/50' : ''} border-b border-white/5`}>
-                                                <td className="py-2 px-4 pl-8 text-xs text-slate-500">
-                                                    {group.count > 1 ? `${item.date} (Logg)` : item.date}
-                                                </td>
-                                                <td className="py-2 px-4">
-                                                    {editingId === item.id ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <input
-                                                                type="number"
-                                                                step="0.1"
-                                                                className="bg-slate-800 border-none rounded p-1 text-white text-xs w-20"
-                                                                value={editValue}
-                                                                onChange={(e) => setEditValue(e.target.value)}
-                                                            />
-                                                            <span className="text-[10px] opacity-40">{item.unit}</span>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="font-medium text-slate-300">{item.value} {item.unit}</span>
-                                                    )}
-                                                </td>
-                                                {isWeight && (
-                                                    <td className="py-2 px-4 text-xs">
-                                                        {(item as any).waist ? `${(item as any).waist} cm` : '--'}
-                                                    </td>
-                                                )}
-                                                <td className="py-2 px-4 text-right">
-                                                    {editingId === item.id ? (
-                                                        <div className="flex justify-end gap-2">
-                                                            <button onClick={handleSave} className="text-emerald-400 text-[10px] font-bold uppercase">Spara</button>
-                                                            <button onClick={() => setEditingId(null)} className="text-slate-500 text-[10px] font-bold uppercase">Avbryt</button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex justify-end gap-2">
-                                                            <button onClick={() => handleEdit(item)} className="text-sky-400 hover:text-sky-300 p-1 rounded hover:bg-sky-500/10 transition-colors" title="Redigera">
-                                                                <EditIcon />
-                                                            </button>
-                                                            <button onClick={() => handleDelete(item.id, item.date)} className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 transition-colors" title="Ta bort">
-                                                                <DeleteIcon />
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </React.Fragment>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+    if (!latestWeight) return null;
+
+    const getDateWeight = (daysAgo: number) => {
+      const targetDate = new Date();
+      targetDate.setDate(targetDate.getDate() - daysAgo);
+      const dateStr = targetDate.toISOString().split("T")[0];
+
+      // Find closest entry before or on this date
+      // Since weightEntries are sorted desc, we look for first one <= dateStr
+      return weightEntries.find((w) => w.date <= dateStr)?.weight;
+    };
+
+    const prev7 = getDateWeight(7);
+    const prev30 = getDateWeight(30);
+
+    return {
+      current: latestWeight,
+      delta7: prev7 ? latestWeight - prev7 : 0,
+      delta30: prev30 ? latestWeight - prev30 : 0,
+      has7: !!prev7,
+      has30: !!prev30,
+    };
+  }, [weightEntries, snapshots, isWeight]);
+
+  return (
+    <div className="metric-focus-view animate-in zoom-in-95 duration-300 flex flex-col gap-6">
+      <div className="health-card glass overflow-hidden">
+        <div className="card-header p-8 pb-0 flex justify-between items-start">
+          <div>
+            <h2 className="text-2xl" style={{ color: themeColor }}>
+              {isWeight ? "Viktanalys" : "Sömnanalys"}
+            </h2>
+            <p className="text-sm">
+              {isWeight
+                ? "Din resa mot målvikten."
+                : `Din återhämtning de senaste ${days} dagarna.`}
+            </p>
+          </div>
         </div>
-    );
+
+        <div className="p-8 relative">
+          <HealthHistoryGraph
+            snapshots={snapshots}
+            days={days}
+            height={isWeight ? "h-[400px] md:h-[600px]" : "h-[300px]"}
+            primaryMetric={isWeight ? "weight" : "sleep"}
+            themeColor={themeColor}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 border-t border-white/5 bg-slate-950/40">
+          <div className="p-6 border-r border-white/5 text-center">
+            <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+              {isWeight ? "Nuvarande" : "Snitt"}
+            </div>
+            <div className="text-xl font-black text-white">
+              {isWeight
+                ? `${(comparisonStats?.current || 0).toFixed(1)} kg`
+                : `${stats.avgSleep.toFixed(1)}h`}
+            </div>
+            {isWeight && (
+              <div className="text-[10px] text-slate-500 mt-1">
+                Senaste logg
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 border-r border-white/5 text-center">
+            <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+              {isWeight ? "7 Dagar" : "Mål-match"}
+            </div>
+            <div
+              className={`text-xl font-black ${
+                isWeight
+                  ? ((comparisonStats?.delta7 || 0) <= 0
+                    ? "text-emerald-400"
+                    : "text-rose-400")
+                  : "text-sky-400"
+              }`}
+            >
+              {isWeight
+                ? `${(comparisonStats?.delta7 || 0) > 0 ? "+" : ""}${
+                  (comparisonStats?.delta7 || 0).toFixed(1)
+                } kg`
+                : `${
+                  Math.round(
+                    (snapshots.filter((s) => s.vitals.sleep >= 8).length /
+                      snapshots.length) * 100,
+                  )
+                }%`}
+            </div>
+            {isWeight && (
+              <div className="text-[10px] text-slate-500 mt-1">
+                vs förra veckan
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 border-r border-white/5 text-center">
+            <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+              {isWeight ? "30 Dagar" : "Koffein"}
+            </div>
+            <div
+              className={`text-xl font-black ${
+                isWeight
+                  ? ((comparisonStats?.delta30 || 0) <= 0
+                    ? "text-emerald-400"
+                    : "text-rose-400")
+                  : "text-emerald-400"
+              }`}
+            >
+              {isWeight
+                ? `${(comparisonStats?.delta30 || 0) > 0 ? "+" : ""}${
+                  (comparisonStats?.delta30 || 0).toFixed(1)
+                } kg`
+                : `${stats.avgCaffeine.toFixed(1)}`}
+            </div>
+            {isWeight && (
+              <div className="text-[10px] text-slate-500 mt-1">
+                vs förra månaden
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 bg-gradient-to-br from-white/5 to-transparent text-center">
+            <div className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1">
+              Period
+            </div>
+            <div className="text-xl font-black text-white">{days} Dagar</div>
+            {!isWeight && (
+              <div
+                onClick={() => alert("Garmin synk startad (WIP)")}
+                className="text-[10px] text-sky-400 mt-1 cursor-pointer hover:underline"
+              >
+                ↻ Synka Garmin
+              </div>
+            )}
+            {isWeight && (
+              <div className="text-[10px] text-slate-500 mt-1">
+                Totalt: {stats.weightTrend > 0 ? "+" : ""}
+                {stats.weightTrend.toFixed(1)} kg
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* History Table */}
+      <div className="history-section glass p-6 rounded-2xl border border-white/5">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-sm font-bold uppercase tracking-widest opacity-60">
+            Logghistorik
+          </h3>
+          <span className="text-[10px] font-bold text-slate-500 bg-white/5 px-2 py-1 rounded-full">
+            {groupedTableData.reduce((acc, g) => acc + g.count, 0)} Punkter
+          </span>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-[10px] uppercase font-black text-slate-500 border-b border-white/5">
+                <th className="py-3 px-4">Datum</th>
+                <th className="py-3 px-4">
+                  {isWeight
+                    ? "Vikt"
+                    : (isSleep ? "Sömn" : measurementInfo?.label || "Värde")}
+                </th>
+                {isWeight && <th className="py-3 px-4">Midja</th>}
+                <th className="py-3 px-4 text-right">Åtgärder</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {/* Logic for NEW ENTRY row */}
+              {editingId?.startsWith("NEW_") && (
+                <tr className="bg-emerald-500/5 border-b border-emerald-500/20 animate-in fade-in slide-in-from-top-2">
+                  <td className="py-3 px-4 text-emerald-400 font-bold">
+                    {editDate} (Ny)
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        step="0.1"
+                        autoFocus
+                        placeholder="0.0"
+                        className="bg-slate-800 border border-emerald-500/30 rounded p-1 text-white text-xs w-20 focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleSave()}
+                      />
+                      <span className="text-[10px] opacity-40">
+                        {isWeight ? "kg" : "h"}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-right">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        onClick={handleSave}
+                        className="bg-emerald-500 text-slate-900 px-3 py-1 rounded-lg text-[10px] font-bold uppercase hover:bg-emerald-400 shadow-lg shadow-emerald-500/20"
+                      >
+                        Spara
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="text-slate-500 px-3 py-1 rounded-lg text-[10px] font-bold uppercase hover:bg-white/5"
+                      >
+                        Avbryt
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
+
+              {groupedTableData.map((group) => (
+                <React.Fragment key={group.date}>
+                  {/* Group Header Row */}
+                  <tr
+                    className={`border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer select-none ${
+                      group.count > 1 ? "bg-slate-800/20" : ""
+                    }`}
+                    onClick={() => group.count > 1 && toggleGroup(group.date)}
+                  >
+                    <td className="py-3 px-4 font-medium flex items-center gap-2">
+                      {group.count > 1 && (
+                        <span
+                          className={`text-[10px] text-slate-500 transition-transform ${
+                            expandedGroups.has(group.date) ? "rotate-90" : ""
+                          }`}
+                        >
+                          ▶
+                        </span>
+                      )}
+                      {group.date}
+                    </td>
+                    <td className="py-3 px-4">
+                      {group.count > 1
+                        ? (
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold">
+                              {group.average.toFixed(1)} {group.items[0].unit}
+                            </span>
+                            <span className="text-[10px] bg-slate-700 px-1.5 rounded text-slate-400">
+                              {group.count} st
+                            </span>
+                          </div>
+                        )
+                        : (
+                          <span className="font-black">
+                            {group.items[0].value} {group.items[0].unit}
+                          </span>
+                        )}
+                    </td>
+                    {isWeight && (
+                      <td className="py-3 px-4">
+                        {group.count > 1
+                          ? (
+                            group.averageWaist
+                              ? (
+                                <span className="text-slate-400 font-bold">
+                                  {group.averageWaist.toFixed(1)} cm
+                                </span>
+                              )
+                              : "--"
+                          )
+                          : (
+                            (group.items[0] as any).waist
+                              ? (
+                                <span className="font-black">
+                                  {(group.items[0] as any).waist} cm
+                                </span>
+                              )
+                              : "--"
+                          )}
+                      </td>
+                    )}
+                    <td className="py-3 px-4 text-right">
+                      {group.count === 1 && (
+                        // Single item actions - always visible
+                        <div className="flex justify-end gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(group.items[0]);
+                            }}
+                            className="text-sky-400 hover:text-sky-300 p-1 rounded hover:bg-sky-500/10 transition-colors"
+                            title="Redigera"
+                          >
+                            <EditIcon />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(
+                                group.items[0].id,
+                                group.items[0].date,
+                              );
+                            }}
+                            className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 transition-colors"
+                            title="Ta bort"
+                          >
+                            <DeleteIcon />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+
+                  {/* Expanded Group Items OR Editing State */}
+                  {(expandedGroups.has(group.date) || group.count === 1) &&
+                    group.items.map((item) => {
+                      if (group.count === 1 && editingId !== item.id) {
+                        return null;
+                      }
+
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`${
+                            group.count > 1 ? "bg-slate-900/50" : ""
+                          } border-b border-white/5`}
+                        >
+                          <td className="py-2 px-4 pl-8 text-xs text-slate-500">
+                            {group.count > 1
+                              ? `${item.date} (Logg)`
+                              : item.date}
+                          </td>
+                          <td className="py-2 px-4">
+                            {editingId === item.id
+                              ? (
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="number"
+                                    step="0.1"
+                                    className="bg-slate-800 border-none rounded p-1 text-white text-xs w-20"
+                                    value={editValue}
+                                    onChange={(e) =>
+                                      setEditValue(e.target.value)}
+                                  />
+                                  <span className="text-[10px] opacity-40">
+                                    {item.unit}
+                                  </span>
+                                </div>
+                              )
+                              : (
+                                <span className="font-medium text-slate-300">
+                                  {item.value} {item.unit}
+                                </span>
+                              )}
+                          </td>
+                          {isWeight && (
+                            <td className="py-2 px-4 text-xs">
+                              {(item as any).waist
+                                ? `${(item as any).waist} cm`
+                                : "--"}
+                            </td>
+                          )}
+                          <td className="py-2 px-4 text-right">
+                            {editingId === item.id
+                              ? (
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={handleSave}
+                                    className="text-emerald-400 text-[10px] font-bold uppercase"
+                                  >
+                                    Spara
+                                  </button>
+                                  <button
+                                    onClick={() => setEditingId(null)}
+                                    className="text-slate-500 text-[10px] font-bold uppercase"
+                                  >
+                                    Avbryt
+                                  </button>
+                                </div>
+                              )
+                              : (
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={() => handleEdit(item)}
+                                    className="text-sky-400 hover:text-sky-300 p-1 rounded hover:bg-sky-500/10 transition-colors"
+                                    title="Redigera"
+                                  >
+                                    <EditIcon />
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleDelete(item.id, item.date)}
+                                    className="text-rose-500 hover:text-rose-400 p-1 rounded hover:bg-rose-500/10 transition-colors"
+                                    title="Ta bort"
+                                  >
+                                    <DeleteIcon />
+                                  </button>
+                                </div>
+                              )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function EditIcon() {
-    return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7">
+      </path>
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+    </svg>
+  );
 }
 
 function DeleteIcon() {
-    return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>;
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <polyline points="3 6 5 6 21 6"></polyline>
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+      </path>
+      <line x1="10" y1="11" x2="10" y2="17"></line>
+      <line x1="14" y1="11" x2="14" y2="17"></line>
+    </svg>
+  );
 }

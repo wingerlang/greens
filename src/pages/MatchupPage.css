@@ -1,127 +1,132 @@
 .matchup-page {
-    padding-bottom: 5rem;
+  padding-bottom: 5rem;
 }
 
 .matchup-header {
-    margin-left: -1rem;
-    margin-right: -1rem;
-    border-radius: 0 0 2rem 2rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin-left: -1rem;
+  margin-right: -1rem;
+  border-radius: 0 0 2rem 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .glass {
-    background: rgba(15, 23, 42, 0.6);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Animations */
 @keyframes slideUp {
-    from {
-        transform: translateY(20px);
-        opacity: 0;
-    }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
 
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .animate-in {
-    animation: slideUp 0.5s ease-out forwards;
+  animation: slideUp 0.5s ease-out forwards;
 }
 
 /* Custom Table Styling */
 table {
-    border-collapse: separate;
-    border-spacing: 0;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 th {
-    font-size: 0.65rem;
-    letter-spacing: 0.1em;
+  font-size: 0.65rem;
+  letter-spacing: 0.1em;
 }
 
 /* Radar Chart Styling */
 .recharts-polar-grid-concentric-path {
-    stroke: rgba(255, 255, 255, 0.05);
+  stroke: rgba(255, 255, 255, 0.05);
 }
 
 .recharts-polar-grid-angle-line {
-    stroke: rgba(255, 255, 255, 0.05);
+  stroke: rgba(255, 255, 255, 0.05);
 }
 
 .recharts-default-tooltip {
-    border-radius: 12px !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5) !important;
 }
 
 /* Hide scrollbar but keep functionality */
 .overflow-x-auto {
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
 }
 
 .overflow-x-auto::-webkit-scrollbar {
-    height: 4px;
+  height: 4px;
 }
 
 .overflow-x-auto::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
 
 /* Select Styling Overlay */
 select {
-    background: none;
-    border: none;
-    color: white;
-    font-weight: 800;
-    cursor: pointer;
+  background: none;
+  border: none;
+  color: white;
+  font-weight: 800;
+  cursor: pointer;
 }
 
 select option {
-    background: #0f172a;
-    color: white;
-    padding: 10px;
+  background: #0f172a;
+  color: white;
+  padding: 10px;
 }
 
 /* KPI Card Shine Effect */
 .glass::after {
-    content: '';
-    position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.03), transparent);
-    transform: rotate(45deg);
-    transition: 0.5s;
-    pointer-events: none;
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent,
+    rgba(255, 255, 255, 0.03),
+    transparent
+  );
+  transform: rotate(45deg);
+  transition: 0.5s;
+  pointer-events: none;
 }
 
 .glass:hover::after {
-    left: 100%;
+  left: 100%;
 }
 
 /* Responsiveness */
 @media (max-width: 768px) {
-    .matchup-header {
-        padding: 1rem;
-    }
+  .matchup-header {
+    padding: 1rem;
+  }
 
-    .matchup-header h2 {
-        font-size: 1rem;
-    }
+  .matchup-header h2 {
+    font-size: 1rem;
+  }
 
-    .matchup-header .w-12 {
-        width: 2.5rem;
-        height: 2.5rem;
-    }
+  .matchup-header .w-12 {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
 
-    .matchup-header select {
-        font-size: 1rem;
-    }
+  .matchup-header select {
+    font-size: 1rem;
+  }
 }

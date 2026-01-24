@@ -1,355 +1,390 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useAuth } from './AuthContext.tsx';
-import { PageView, InteractionEvent, generateId } from '../models/types.ts';
-import { safeFetch } from '../utils/http.ts';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { useLocation } from "react-router-dom";
+import { useAuth } from "./AuthContext.tsx";
+import { generateId, InteractionEvent, PageView } from "../models/types.ts";
+import { safeFetch } from "../utils/http.ts";
 
 interface AnalyticsContextType {
-    logEvent: (type: InteractionEvent['type'], label: string, target?: string, metadata?: any) => void;
-    visitStats: {
-        paths: Record<string, number>;
-        users: Record<string, number>;
-        omniboxNavs: Record<string, number>;
-    };
-    refreshStats: () => Promise<void>;
+  logEvent: (
+    type: InteractionEvent["type"],
+    label: string,
+    target?: string,
+    metadata?: any,
+  ) => void;
+  visitStats: {
+    paths: Record<string, number>;
+    users: Record<string, number>;
+    omniboxNavs: Record<string, number>;
+  };
+  refreshStats: () => Promise<void>;
 }
 
-const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefined);
+const AnalyticsContext = createContext<AnalyticsContextType | undefined>(
+  undefined,
+);
 
 export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
-    const location = useLocation();
-    const { user, token } = useAuth();
-    const [visitStats, setVisitStats] = useState<{
-        paths: Record<string, number>;
-        users: Record<string, number>;
-        omniboxNavs: Record<string, number>;
-    }>({ paths: {}, users: {}, omniboxNavs: {} });
+  const location = useLocation();
+  const { user, token } = useAuth();
+  const [visitStats, setVisitStats] = useState<{
+    paths: Record<string, number>;
+    users: Record<string, number>;
+    omniboxNavs: Record<string, number>;
+  }>({ paths: {}, users: {}, omniboxNavs: {} });
 
-    // Session Management
-    const [sessionId] = useState(() => {
-        const stored = sessionStorage.getItem('analytics_session_id');
-        const timestamp = sessionStorage.getItem('analytics_session_ts');
-        const now = Date.now();
+  // Session Management
+  const [sessionId] = useState(() => {
+    const stored = sessionStorage.getItem("analytics_session_id");
+    const timestamp = sessionStorage.getItem("analytics_session_ts");
+    const now = Date.now();
 
-        // Reset session if > 30 mins inactivity or missing
-        if (stored && timestamp && (now - parseInt(timestamp) < 30 * 60 * 1000)) {
-            sessionStorage.setItem('analytics_session_ts', now.toString());
-            return stored;
-        }
+    // Reset session if > 30 mins inactivity or missing
+    if (stored && timestamp && (now - parseInt(timestamp) < 30 * 60 * 1000)) {
+      sessionStorage.setItem("analytics_session_ts", now.toString());
+      return stored;
+    }
 
-        const newId = generateId();
-        sessionStorage.setItem('analytics_session_id', newId);
-        sessionStorage.setItem('analytics_session_ts', now.toString());
-        return newId;
-    });
+    const newId = generateId();
+    sessionStorage.setItem("analytics_session_id", newId);
+    sessionStorage.setItem("analytics_session_ts", now.toString());
+    return newId;
+  });
 
-    const sessionIdRef = useRef(sessionId); // Keep ref for closures
+  const sessionIdRef = useRef(sessionId); // Keep ref for closures
 
-    // Update timestamp on activity
-    useEffect(() => {
-        sessionStorage.setItem('analytics_session_ts', Date.now().toString());
-    }, [location.pathname]);
+  // Update timestamp on activity
+  useEffect(() => {
+    sessionStorage.setItem("analytics_session_ts", Date.now().toString());
+  }, [location.pathname]);
 
-    const startTimeRef = useRef(Date.now());
-    const currentPathRef = useRef(location.pathname);
+  const startTimeRef = useRef(Date.now());
+  const currentPathRef = useRef(location.pathname);
 
-    // 1. Navigation Tracking
-    useEffect(() => {
-        // Don't track if no user (or track as anon if needed)
-        if (!user) return;
+  // 1. Navigation Tracking
+  useEffect(() => {
+    // Don't track if no user (or track as anon if needed)
+    if (!user) return;
 
-        const now = Date.now();
-        const duration = (now - startTimeRef.current) / 1000;
-        const prevPath = currentPathRef.current;
+    const now = Date.now();
+    const duration = (now - startTimeRef.current) / 1000;
+    const prevPath = currentPathRef.current;
 
-        // Log PREVIOUS page view on exit
-        if (prevPath && duration > 0.5) { // Filter instant redirects
-            const view: PageView = {
-                id: generateId(),
-                userId: user.id,
-                sessionId: sessionIdRef.current,
-                path: prevPath,
-                timestamp: new Date(startTimeRef.current).toISOString(),
-                durationSeconds: parseFloat(duration.toFixed(1)),
-                userAgent: navigator.userAgent
-            };
+    // Log PREVIOUS page view on exit
+    if (prevPath && duration > 0.5) { // Filter instant redirects
+      const view: PageView = {
+        id: generateId(),
+        userId: user.id,
+        sessionId: sessionIdRef.current,
+        path: prevPath,
+        timestamp: new Date(startTimeRef.current).toISOString(),
+        durationSeconds: parseFloat(duration.toFixed(1)),
+        userAgent: navigator.userAgent,
+      };
 
-            // Send to API (fire and forget)
-            fetch('/api/usage/view', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(view)
-            }).catch(e => console.debug("Analytics view log failed", e));
-        }
+      // Send to API (fire and forget)
+      fetch("/api/usage/view", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(view),
+      }).catch((e) => console.debug("Analytics view log failed", e));
+    }
 
-        // Reset for new page
-        startTimeRef.current = now;
-        currentPathRef.current = location.pathname;
+    // Reset for new page
+    startTimeRef.current = now;
+    currentPathRef.current = location.pathname;
+  }, [location.pathname, user]);
 
-    }, [location.pathname, user]);
+  // 2. Global Click Tracking (with Heatmap & Rage Click detection)
+  const lastClickRef = useRef<
+    { target: string; time: number; count: number } | null
+  >(null);
 
-    // 2. Global Click Tracking (with Heatmap & Rage Click detection)
-    const lastClickRef = useRef<{ target: string; time: number; count: number } | null>(null);
+  useEffect(() => {
+    if (!user) return;
 
-    useEffect(() => {
-        if (!user) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
 
-        const handleClick = (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
+      // --- Heatmap Data Capture ---
+      // Capture ALL clicks, not just interactive ones, for pure heatmap
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
+      const x = e.clientX;
+      const y = e.clientY;
 
-            // --- Heatmap Data Capture ---
-            // Capture ALL clicks, not just interactive ones, for pure heatmap
-            const viewportW = window.innerWidth;
-            const viewportH = window.innerHeight;
-            const x = e.clientX;
-            const y = e.clientY;
+      // --- Rage Click Logic ---
+      // Check if clicking same element rapidly (within 500ms)
+      // Use a simple selector path as "ID"
+      const selector = target.id
+        ? `#${target.id}`
+        : target.tagName.toLowerCase() +
+          (target.className ? `.${target.className.split(" ")[0]}` : "");
+      const now = Date.now();
 
-            // --- Rage Click Logic ---
-            // Check if clicking same element rapidly (within 500ms)
-            // Use a simple selector path as "ID"
-            const selector = target.id ? `#${target.id}` : target.tagName.toLowerCase() + (target.className ? `.${target.className.split(' ')[0]}` : '');
-            const now = Date.now();
+      if (
+        lastClickRef.current &&
+        lastClickRef.current.target === selector &&
+        (now - lastClickRef.current.time < 500)
+      ) {
+        lastClickRef.current.count++;
+        lastClickRef.current.time = now;
 
-            if (lastClickRef.current &&
-                lastClickRef.current.target === selector &&
-                (now - lastClickRef.current.time < 500)) {
-
-                lastClickRef.current.count++;
-                lastClickRef.current.time = now;
-
-                if (lastClickRef.current.count === 3) { // Trigger on 3rd rapid click
-                    const rageEvent: InteractionEvent = {
-                        id: generateId(),
-                        userId: user.id,
-                        sessionId: sessionIdRef.current,
-                        type: 'rage_click',
-                        target: selector,
-                        label: 'Rage Click Detected',
-                        path: location.pathname,
-                        timestamp: new Date().toISOString(),
-                        coordinates: {
-                            x, y,
-                            pctX: Math.round((x / viewportW) * 100),
-                            pctY: Math.round((y / viewportH) * 100),
-                            viewportW,
-                            viewportH
-                        }
-                    };
-                    fetch('/api/usage/event', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(rageEvent)
-                    }).catch(e => console.debug("Analytics rage log failed", e));
-                }
-            } else {
-                lastClickRef.current = { target: selector, time: now, count: 1 };
-            }
-            // ------------------------
-
-            // Find closest interactive element
-            const interactive = target.closest('button, a, input, select, textarea, [role="button"], [onclick]');
-
-            if (interactive) {
-                const element = interactive as HTMLElement;
-                let label = element.innerText || element.getAttribute('aria-label') || element.getAttribute('title') || '';
-
-                // Truncate if too long
-                if (label.length > 50) label = label.substring(0, 50) + '...';
-                if (!label) return; // Skip if no meaningful label
-
-                const event: InteractionEvent = {
-                    id: generateId(),
-                    userId: user.id,
-                    sessionId: sessionIdRef.current,
-                    type: 'click',
-                    target: element.tagName.toLowerCase(),
-                    label: label,
-                    path: location.pathname,
-                    timestamp: new Date().toISOString(),
-                    coordinates: {
-                        x, y,
-                        pctX: Math.round((x / viewportW) * 100),
-                        pctY: Math.round((y / viewportH) * 100),
-                        viewportW,
-                        viewportH
-                    }
-                };
-
-                fetch('/api/usage/event', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(event)
-                }).catch(e => console.debug("Analytics event log failed", e));
-            } else {
-                // --- Dead Click Logic ---
-                // If not interactive, and it's text/div/span, user might be confused
-                const isText = ['P', 'SPAN', 'DIV', 'H1', 'H2', 'H3', 'LI'].includes(target.tagName);
-                if (isText && target.innerText && target.innerText.length < 50) { // Limit to short texts that look like buttons
-                    const deadEvent: InteractionEvent = {
-                        id: generateId(),
-                        userId: user.id,
-                        sessionId: sessionIdRef.current,
-                        type: 'dead_click',
-                        target: target.tagName,
-                        label: target.innerText.substring(0, 30),
-                        path: location.pathname,
-                        timestamp: new Date().toISOString(),
-                        coordinates: {
-                            x, y,
-                            pctX: Math.round((x / viewportW) * 100),
-                            pctY: Math.round((y / viewportH) * 100),
-                            viewportW,
-                            viewportH
-                        }
-                    };
-                    fetch('/api/usage/event', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(deadEvent)
-                    }).catch(e => console.debug("Analytics dead log failed", e));
-                }
-            }
-        };
-
-        window.addEventListener('click', handleClick, true); // Capture phase
-
-        return () => {
-            window.removeEventListener('click', handleClick, true);
-        };
-    }, [user, location.pathname]);
-
-    // 3. Global Error Tracking
-    useEffect(() => {
-        if (!user) return;
-
-        const handleError = (event: ErrorEvent) => {
-            fetch('/api/usage/event', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: generateId(),
-                    userId: user.id,
-                    sessionId: sessionIdRef.current,
-                    type: 'error',
-                    target: 'window',
-                    label: event.message,
-                    path: location.pathname,
-                    timestamp: new Date().toISOString(),
-                    metadata: { stack: event.error?.stack, filename: event.filename, lineno: event.lineno }
-                })
-            }).catch(e => console.debug("Analytics error log failed", e));
-        };
-
-        const handleRejection = (event: PromiseRejectionEvent) => {
-            fetch('/api/usage/event', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    id: generateId(),
-                    userId: user.id,
-                    sessionId: sessionIdRef.current,
-                    type: 'error',
-                    target: 'promise',
-                    label: event.reason?.message || String(event.reason),
-                    path: location.pathname,
-                    timestamp: new Date().toISOString(),
-                    metadata: { reason: event.reason }
-                })
-            }).catch(e => console.debug("Analytics rejection log failed", e));
-        };
-
-        window.addEventListener('error', handleError);
-        window.addEventListener('unhandledrejection', handleRejection);
-
-        return () => {
-            window.removeEventListener('error', handleError);
-            window.removeEventListener('unhandledrejection', handleRejection);
-        };
-    }, [user, location.pathname]);
-
-    const logEvent = (type: InteractionEvent['type'], label: string, target = 'custom', metadata?: any) => {
-        if (!user) return;
-
-        const event: InteractionEvent = {
+        if (lastClickRef.current.count === 3) { // Trigger on 3rd rapid click
+          const rageEvent: InteractionEvent = {
             id: generateId(),
             userId: user.id,
             sessionId: sessionIdRef.current,
-            type,
-            target,
-            label,
+            type: "rage_click",
+            target: selector,
+            label: "Rage Click Detected",
             path: location.pathname,
             timestamp: new Date().toISOString(),
-            metadata
+            coordinates: {
+              x,
+              y,
+              pctX: Math.round((x / viewportW) * 100),
+              pctY: Math.round((y / viewportH) * 100),
+              viewportW,
+              viewportH,
+            },
+          };
+          fetch("/api/usage/event", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(rageEvent),
+          }).catch((e) => console.debug("Analytics rage log failed", e));
+        }
+      } else {
+        lastClickRef.current = { target: selector, time: now, count: 1 };
+      }
+      // ------------------------
+
+      // Find closest interactive element
+      const interactive = target.closest(
+        'button, a, input, select, textarea, [role="button"], [onclick]',
+      );
+
+      if (interactive) {
+        const element = interactive as HTMLElement;
+        let label = element.innerText || element.getAttribute("aria-label") ||
+          element.getAttribute("title") || "";
+
+        // Truncate if too long
+        if (label.length > 50) label = label.substring(0, 50) + "...";
+        if (!label) return; // Skip if no meaningful label
+
+        const event: InteractionEvent = {
+          id: generateId(),
+          userId: user.id,
+          sessionId: sessionIdRef.current,
+          type: "click",
+          target: element.tagName.toLowerCase(),
+          label: label,
+          path: location.pathname,
+          timestamp: new Date().toISOString(),
+          coordinates: {
+            x,
+            y,
+            pctX: Math.round((x / viewportW) * 100),
+            pctY: Math.round((y / viewportH) * 100),
+            viewportW,
+            viewportH,
+          },
         };
 
-        fetch('/api/usage/event', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(event)
-        }).catch(e => console.debug("Analytics custom log failed", e));
+        fetch("/api/usage/event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(event),
+        }).catch((e) => console.debug("Analytics event log failed", e));
+      } else {
+        // --- Dead Click Logic ---
+        // If not interactive, and it's text/div/span, user might be confused
+        const isText = ["P", "SPAN", "DIV", "H1", "H2", "H3", "LI"].includes(
+          target.tagName,
+        );
+        if (isText && target.innerText && target.innerText.length < 50) { // Limit to short texts that look like buttons
+          const deadEvent: InteractionEvent = {
+            id: generateId(),
+            userId: user.id,
+            sessionId: sessionIdRef.current,
+            type: "dead_click",
+            target: target.tagName,
+            label: target.innerText.substring(0, 30),
+            path: location.pathname,
+            timestamp: new Date().toISOString(),
+            coordinates: {
+              x,
+              y,
+              pctX: Math.round((x / viewportW) * 100),
+              pctY: Math.round((y / viewportH) * 100),
+              viewportW,
+              viewportH,
+            },
+          };
+          fetch("/api/usage/event", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(deadEvent),
+          }).catch((e) => console.debug("Analytics dead log failed", e));
+        }
+      }
     };
 
-    const refreshStats = async () => {
-        if (!token) return;
-        try {
-            const [statsData, usersData, omniboxData] = await Promise.all([
-                safeFetch<any>('/api/usage/stats?days=30', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }),
-                safeFetch<any>('/api/usage/users?days=30', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                }),
-                safeFetch<any>('/api/usage/omnibox?days=30', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                })
-            ]);
+    window.addEventListener("click", handleClick, true); // Capture phase
 
-            const paths: Record<string, number> = {};
-            const users: Record<string, number> = {};
-            const omniboxNavs: Record<string, number> = {};
+    return () => {
+      window.removeEventListener("click", handleClick, true);
+    };
+  }, [user, location.pathname]);
 
-            if (statsData?.popularPages) {
-                statsData.popularPages.forEach((p: any) => {
-                    paths[p.path] = p.count;
-                });
-            }
+  // 3. Global Error Tracking
+  useEffect(() => {
+    if (!user) return;
 
-            if (usersData?.users) {
-                usersData.users.forEach((u: any) => {
-                    users[u.userId] = u.pageViews;
-                });
-            }
-
-            if (omniboxData?.topNavigations) {
-                omniboxData.topNavigations.forEach((n: any) => {
-                    omniboxNavs[n.path] = n.count;
-                });
-            }
-
-            setVisitStats({ paths, users, omniboxNavs });
-        } catch (e) {
-            console.error("Failed to refresh visit stats", e);
-        }
+    const handleError = (event: ErrorEvent) => {
+      fetch("/api/usage/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: generateId(),
+          userId: user.id,
+          sessionId: sessionIdRef.current,
+          type: "error",
+          target: "window",
+          label: event.message,
+          path: location.pathname,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            stack: event.error?.stack,
+            filename: event.filename,
+            lineno: event.lineno,
+          },
+        }),
+      }).catch((e) => console.debug("Analytics error log failed", e));
     };
 
-    // Auto-refresh stats when token becomes available or every 10 mins
-    useEffect(() => {
-        if (token) {
-            refreshStats();
-        }
-    }, [token]);
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      fetch("/api/usage/event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: generateId(),
+          userId: user.id,
+          sessionId: sessionIdRef.current,
+          type: "error",
+          target: "promise",
+          label: event.reason?.message || String(event.reason),
+          path: location.pathname,
+          timestamp: new Date().toISOString(),
+          metadata: { reason: event.reason },
+        }),
+      }).catch((e) => console.debug("Analytics rejection log failed", e));
+    };
 
-    return (
-        <AnalyticsContext.Provider value={{ logEvent, visitStats, refreshStats }}>
-            {children}
-        </AnalyticsContext.Provider>
-    );
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, [user, location.pathname]);
+
+  const logEvent = (
+    type: InteractionEvent["type"],
+    label: string,
+    target = "custom",
+    metadata?: any,
+  ) => {
+    if (!user) return;
+
+    const event: InteractionEvent = {
+      id: generateId(),
+      userId: user.id,
+      sessionId: sessionIdRef.current,
+      type,
+      target,
+      label,
+      path: location.pathname,
+      timestamp: new Date().toISOString(),
+      metadata,
+    };
+
+    fetch("/api/usage/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(event),
+    }).catch((e) => console.debug("Analytics custom log failed", e));
+  };
+
+  const refreshStats = async () => {
+    if (!token) return;
+    try {
+      const [statsData, usersData, omniboxData] = await Promise.all([
+        safeFetch<any>("/api/usage/stats?days=30", {
+          headers: { "Authorization": `Bearer ${token}` },
+        }),
+        safeFetch<any>("/api/usage/users?days=30", {
+          headers: { "Authorization": `Bearer ${token}` },
+        }),
+        safeFetch<any>("/api/usage/omnibox?days=30", {
+          headers: { "Authorization": `Bearer ${token}` },
+        }),
+      ]);
+
+      const paths: Record<string, number> = {};
+      const users: Record<string, number> = {};
+      const omniboxNavs: Record<string, number> = {};
+
+      if (statsData?.popularPages) {
+        statsData.popularPages.forEach((p: any) => {
+          paths[p.path] = p.count;
+        });
+      }
+
+      if (usersData?.users) {
+        usersData.users.forEach((u: any) => {
+          users[u.userId] = u.pageViews;
+        });
+      }
+
+      if (omniboxData?.topNavigations) {
+        omniboxData.topNavigations.forEach((n: any) => {
+          omniboxNavs[n.path] = n.count;
+        });
+      }
+
+      setVisitStats({ paths, users, omniboxNavs });
+    } catch (e) {
+      console.error("Failed to refresh visit stats", e);
+    }
+  };
+
+  // Auto-refresh stats when token becomes available or every 10 mins
+  useEffect(() => {
+    if (token) {
+      refreshStats();
+    }
+  }, [token]);
+
+  return (
+    <AnalyticsContext.Provider value={{ logEvent, visitStats, refreshStats }}>
+      {children}
+    </AnalyticsContext.Provider>
+  );
 }
 
 export function useAnalytics() {
-    const context = useContext(AnalyticsContext);
-    if (!context) {
-        throw new Error('useAnalytics must be used within an AnalyticsProvider');
-    }
-    return context;
+  const context = useContext(AnalyticsContext);
+  if (!context) {
+    throw new Error("useAnalytics must be used within an AnalyticsProvider");
+  }
+  return context;
 }

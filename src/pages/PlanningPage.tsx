@@ -1,84 +1,93 @@
-import { useState, useMemo, useCallback } from 'react';
-import { useData } from '../context/DataContext.tsx';
-import { useSettings } from '../context/SettingsContext.tsx';
+import { useCallback, useMemo, useState } from "react";
+import { useData } from "../context/DataContext.tsx";
+import { useSettings } from "../context/SettingsContext.tsx";
 import {
-    type Recipe,
-    type Weekday,
-    type MealType,
-    type PlannedMeal,
-    WEEKDAY_LABELS,
-    WEEKDAYS,
-    MEAL_TYPE_LABELS,
-    getWeekStartDate,
-    getISODate,
-} from '../models/types.ts';
-import type { WeeklyPlan } from '../models/types.ts';
-import { calculateRecipeEstimate } from '../utils/ingredientParser.ts';
-import { useSmartPlanner } from '../hooks/useSmartPlanner.ts';
-import { useHealth } from '../hooks/useHealth.ts';
-import { RecipeSelectionModal } from '../components/RecipeSelectionModal.tsx';
-import printJS from 'print-js';
-import './PlanningPage.css';
+  getISODate,
+  getWeekStartDate,
+  MEAL_TYPE_LABELS,
+  type MealType,
+  type PlannedMeal,
+  type Recipe,
+  type Weekday,
+  WEEKDAY_LABELS,
+  WEEKDAYS,
+} from "../models/types.ts";
+import type { WeeklyPlan } from "../models/types.ts";
+import { calculateRecipeEstimate } from "../utils/ingredientParser.ts";
+import { useSmartPlanner } from "../hooks/useSmartPlanner.ts";
+import { useHealth } from "../hooks/useHealth.ts";
+import { RecipeSelectionModal } from "../components/RecipeSelectionModal.tsx";
+import printJS from "print-js";
+import "./PlanningPage.css";
 
 // ============================================
 // Types
 // ============================================
 
 interface RecipeSuggestion {
-    recipe: Recipe;
-    score: number;
-    reasons: string[];
-    tags: SuggestionTag[];
+  recipe: Recipe;
+  score: number;
+  reasons: string[];
+  tags: SuggestionTag[];
 }
 
 type SuggestionTag =
-    | 'friday-favorite'
-    | 'long-time'
-    | 'seasonal'
-    | 'quick'
-    | 'budget'
-    | 'carb-variety'
-    | 'protein-variety'
-    | 'suitable';
+  | "friday-favorite"
+  | "long-time"
+  | "seasonal"
+  | "quick"
+  | "budget"
+  | "carb-variety"
+  | "protein-variety"
+  | "suitable";
 
 // Meal type categories for smart filtering
 const MEAL_CATEGORIES: Record<MealType, string[]> = {
-    breakfast: ['breakfast', 'brunch', 'frukost', 'morgon'],
-    lunch: ['lunch', 'middag', 'dinner'],
-    dinner: ['lunch', 'middag', 'dinner', 'kvällsmat'],
-    snack: ['snack', 'mellanmål', 'fika'],
-    beverage: ['dryck', 'dricka', 'beverage', 'drink'],
+  breakfast: ["breakfast", "brunch", "frukost", "morgon"],
+  lunch: ["lunch", "middag", "dinner"],
+  dinner: ["lunch", "middag", "dinner", "kvällsmat"],
+  snack: ["snack", "mellanmål", "fika"],
+  beverage: ["dryck", "dricka", "beverage", "drink"],
 };
 
 // Season detection
-const getCurrentSeason = (): 'winter' | 'spring' | 'summer' | 'autumn' => {
-    const month = new Date().getMonth();
-    if (month >= 2 && month <= 4) return 'spring';
-    if (month >= 5 && month <= 7) return 'summer';
-    if (month >= 8 && month <= 10) return 'autumn';
-    return 'winter';
+const getCurrentSeason = (): "winter" | "spring" | "summer" | "autumn" => {
+  const month = new Date().getMonth();
+  if (month >= 2 && month <= 4) return "spring";
+  if (month >= 5 && month <= 7) return "summer";
+  if (month >= 8 && month <= 10) return "autumn";
+  return "winter";
 };
 
 // Seasonal ingredients
 const SEASONAL_INGREDIENTS: Record<string, string[]> = {
-    winter: ['rotfrukter', 'kål', 'morot', 'palsternacka', 'äpple', 'päron'],
-    spring: ['sparris', 'rädisor', 'örter', 'spenat', 'ruccola'],
-    summer: ['tomat', 'gurka', 'zucchini', 'bär', 'sallad', 'dill'],
-    autumn: ['svamp', 'pumpa', 'squash', 'plommon', 'äpple', 'kål'],
+  winter: ["rotfrukter", "kål", "morot", "palsternacka", "äpple", "päron"],
+  spring: ["sparris", "rädisor", "örter", "spenat", "ruccola"],
+  summer: ["tomat", "gurka", "zucchini", "bär", "sallad", "dill"],
+  autumn: ["svamp", "pumpa", "squash", "plommon", "äpple", "kål"],
 };
 
 // Carb types for variety tracking
-const CARB_TYPES = ['ris', 'pasta', 'potatis', 'bulgur', 'couscous', 'nudlar', 'bröd', 'quinoa'];
+const CARB_TYPES = [
+  "ris",
+  "pasta",
+  "potatis",
+  "bulgur",
+  "couscous",
+  "nudlar",
+  "bröd",
+  "quinoa",
+];
 
 // Short weekday labels
 const SHORT_WEEKDAY_LABELS: Record<Weekday, string> = {
-    monday: 'MÅN',
-    tuesday: 'TIS',
-    wednesday: 'ONS',
-    thursday: 'TOR',
-    friday: 'FRE',
-    saturday: 'LÖR',
-    sunday: 'SÖN',
+  monday: "MÅN",
+  tuesday: "TIS",
+  wednesday: "ONS",
+  thursday: "TOR",
+  friday: "FRE",
+  saturday: "LÖR",
+  sunday: "SÖN",
 };
 
 // ============================================
@@ -86,513 +95,643 @@ const SHORT_WEEKDAY_LABELS: Record<Weekday, string> = {
 // ============================================
 
 export function PlanningPage() {
-    const { recipes, foodItems, weeklyPlans, getWeeklyPlan, saveWeeklyPlan } = useData();
-    const { settings } = useSettings();
-    const [currentWeekStart, setCurrentWeekStart] = useState(() => getWeekStartDate());
+  const { recipes, foodItems, weeklyPlans, getWeeklyPlan, saveWeeklyPlan } =
+    useData();
+  const { settings } = useSettings();
+  const [currentWeekStart, setCurrentWeekStart] = useState(() =>
+    getWeekStartDate()
+  );
 
-    // Use useHealth for the current week start to estimate goals (imperfect if cycle changes mid-week but good enough)
-    const { targetCalories } = useHealth(currentWeekStart);
+  // Use useHealth for the current week start to estimate goals (imperfect if cycle changes mid-week but good enough)
+  const { targetCalories } = useHealth(currentWeekStart);
 
-    const { getOptimizationSuggestion } = useSmartPlanner(recipes, foodItems);
-    const [selectedSlot, setSelectedSlot] = useState<{ day: Weekday; meal: MealType } | null>(null);
-    const [searchQuery, setSearchQuery] = useState('');
+  const { getOptimizationSuggestion } = useSmartPlanner(recipes, foodItems);
+  const [selectedSlot, setSelectedSlot] = useState<
+    { day: Weekday; meal: MealType } | null
+  >(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-    // Get current week plan data - ensure it defaults to empty plan structure
-    const weekPlanData = useMemo(() => {
-        return getWeeklyPlan(currentWeekStart);
-    }, [currentWeekStart, getWeeklyPlan]);
+  // Get current week plan data - ensure it defaults to empty plan structure
+  const weekPlanData = useMemo(() => {
+    return getWeeklyPlan(currentWeekStart);
+  }, [currentWeekStart, getWeeklyPlan]);
 
-    // Derived meal map
-    const weekPlanMeals = useMemo<WeeklyPlan['meals']>(() => {
-        return weekPlanData?.meals || {
-            monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {}
-        };
-    }, [weekPlanData]);
-
-    // Calculate daily planned calories
-    const dailyPlannedCalories = useMemo(() => {
-        const stats: Record<Weekday, number> = {
-            monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0
-        };
-        Object.entries(weekPlanMeals).forEach(([day, meals]) => {
-            if (!meals) return;
-            Object.values(meals).forEach(planned => {
-                if (planned?.recipeId) {
-                    const recipe = recipes.find(r => r.id === planned.recipeId);
-                    if (recipe && recipe.ingredientsText) {
-                        const est = calculateRecipeEstimate(recipe.ingredientsText, foodItems);
-                        // Assume 1 serving per planned meal for now, or use recipe.servings?
-                        // Usually a planned meal is 1 serving for the user.
-                        // Estimate.calories is TOTAL for recipe.
-                        const calsPerServing = recipe.servings ? est.calories / recipe.servings : est.calories;
-                        stats[day as Weekday] += calsPerServing;
-                    }
-                }
-            });
-        });
-        return stats;
-    }, [weekPlanMeals, recipes, foodItems]);
-
-    // Calculate week number
-    const weekNumber = useMemo(() => {
-        const date = new Date(currentWeekStart);
-        const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-        const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
-        return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-    }, [currentWeekStart]);
-
-    // Navigate weeks
-    const navigateWeek = (direction: number) => {
-        const newDate = new Date(currentWeekStart);
-        newDate.setDate(newDate.getDate() + (direction * 7));
-        setCurrentWeekStart(getISODate(newDate));
+  // Derived meal map
+  const weekPlanMeals = useMemo<WeeklyPlan["meals"]>(() => {
+    return weekPlanData?.meals || {
+      monday: {},
+      tuesday: {},
+      wednesday: {},
+      thursday: {},
+      friday: {},
+      saturday: {},
+      sunday: {},
     };
+  }, [weekPlanData]);
 
-    // Get meal history for patterns
-    const getMealHistory = useCallback(() => {
-        const history: { recipeId: string; day: Weekday; meal: MealType; date: string }[] = [];
-
-        weeklyPlans.forEach(plan => {
-            WEEKDAYS.forEach(day => {
-                const dayMeals = plan.meals[day];
-                if (dayMeals) {
-                    Object.entries(dayMeals).forEach(([meal, planned]) => {
-                        if (planned?.recipeId) {
-                            history.push({
-                                recipeId: planned.recipeId,
-                                day,
-                                meal: meal as MealType,
-                                date: plan.weekStartDate,
-                            });
-                        }
-                    });
-                }
-            });
-        });
-
-        return history;
-    }, [weeklyPlans]);
-
-    // Check if recipe is suitable for meal type
-    const isSuitableForMealType = (recipe: Recipe, mealType: MealType): boolean => {
-        const recipeMealType = recipe.mealType?.toLowerCase() || '';
-        const categories = MEAL_CATEGORIES[mealType];
-
-        // If recipe has a meal type, check if it matches
-        if (recipeMealType) {
-            // Snacks should not include main meals
-            if (mealType === 'snack') {
-                return recipeMealType.includes('snack') ||
-                    recipeMealType.includes('mellanmål') ||
-                    recipeMealType.includes('fika');
-            }
-            return categories.some(cat => recipeMealType.includes(cat));
-        }
-
-        // For snacks without explicit type, filter by prep time and name
-        if (mealType === 'snack') {
-            const quickSnack = (recipe.cookTime || 60) <= 15;
-            const nameHints = ['snack', 'smoothie', 'yoghurt', 'frukt', 'nötter', 'bars'];
-            return quickSnack || nameHints.some(hint => recipe.name.toLowerCase().includes(hint));
-        }
-
-        return true;
+  // Calculate daily planned calories
+  const dailyPlannedCalories = useMemo(() => {
+    const stats: Record<Weekday, number> = {
+      monday: 0,
+      tuesday: 0,
+      wednesday: 0,
+      thursday: 0,
+      friday: 0,
+      saturday: 0,
+      sunday: 0,
     };
-
-    // Generate smart suggestions for a slot
-    const getSuggestions = useCallback((day: Weekday, mealType: MealType): RecipeSuggestion[] => {
-        const history = getMealHistory();
-        const season = getCurrentSeason();
-        const suggestions: RecipeSuggestion[] = [];
-
-        recipes.forEach(recipe => {
-            const reasons: string[] = [];
-            const tags: SuggestionTag[] = [];
-            let score = 0;
-
-            // 1. Meal type suitability (CRITICAL for snacks)
-            if (!isSuitableForMealType(recipe, mealType)) {
-                return; // Skip unsuitable recipes
-            }
-            tags.push('suitable');
-
-            // 2. Friday pattern (people often eat special food on Fridays)
-            if (day === 'friday') {
-                const fridayHistory = history.filter(h => h.day === 'friday');
-                const recipeFrequency = fridayHistory.filter(h => h.recipeId === recipe.id).length;
-                if (recipeFrequency >= 2) {
-                    score += 30;
-                    reasons.push('🔥 Fredagsfavorit');
-                    tags.push('friday-favorite');
-                }
-            }
-
-            // 3. Long time since last eaten
-            const recipeHistory = history.filter(h => h.recipeId === recipe.id);
-            const lastEaten = recipeHistory.length > 0
-                ? Math.max(...recipeHistory.map(h => new Date(h.date).getTime()))
-                : 0;
-            const daysSinceEaten = lastEaten
-                ? Math.floor((Date.now() - lastEaten) / (1000 * 60 * 60 * 24))
-                : 999;
-
-            if (daysSinceEaten >= 30 && recipeHistory.length > 0) {
-                score += 25;
-                reasons.push(`⏰ ${daysSinceEaten} dagar sedan`);
-                tags.push('long-time');
-            } else if (daysSinceEaten >= 14) {
-                score += 10;
-            }
-
-            // 4. Seasonal ingredients
-            const seasonalIngredients = SEASONAL_INGREDIENTS[season];
-            const ingredientsText = (recipe.ingredientsText || '').toLowerCase();
-            const seasonalMatches = seasonalIngredients.filter(ing => ingredientsText.includes(ing));
-            if (seasonalMatches.length > 0) {
-                score += 15 * seasonalMatches.length;
-                reasons.push(`🥬 Säsong: ${seasonalMatches.join(', ')}`);
-                tags.push('seasonal');
-            }
-
-            // 5. Quick meals for weekdays
-            const isWeekday = ['monday', 'tuesday', 'wednesday', 'thursday'].includes(day);
-            if (isWeekday && (recipe.cookTime || 60) <= 30) {
-                score += 15;
-                reasons.push(`⏱️ Snabbt (${recipe.cookTime || '?'} min)`);
-                tags.push('quick');
-            }
-
-            // 6. Carb variety (avoid too much rice/pasta in a row)
-            const plannedThisWeek = Object.values(weekPlanMeals).flatMap(dayMeals =>
-                Object.values(dayMeals || {}).map(m => m?.recipeId)
-            ).filter(Boolean);
-
-            const recipeCarbs = CARB_TYPES.filter(carb => ingredientsText.includes(carb));
-            const weekCarbs = plannedThisWeek.map(id => {
-                const r = recipes.find(rec => rec.id === id);
-                return CARB_TYPES.filter(carb => (r?.ingredientsText || '').toLowerCase().includes(carb));
-            }).flat();
-
-            const carbOverlap = recipeCarbs.filter(c => weekCarbs.includes(c)).length;
-            if (recipeCarbs.length > 0 && carbOverlap === 0) {
-                score += 10;
-                reasons.push(`🍚 Kolhydratvariation: ${recipeCarbs.join(', ')}`);
-                tags.push('carb-variety');
-            }
-
-            // 7. Base score for recipes with nutrition data
-            if (recipe.ingredientsText) {
-                const estimate = calculateRecipeEstimate(recipe.ingredientsText, foodItems);
-                if (estimate.calories > 0) {
-                    score += 5; // Bonus for complete nutrition data
-                }
-            }
-
-            // Only include if has some score
-            if (score > 0 || reasons.length > 0) {
-                suggestions.push({ recipe, score, reasons, tags });
-            }
-        });
-
-        // Sort by score descending
-        return suggestions.sort((a, b) => b.score - a.score).slice(0, 8);
-    }, [recipes, foodItems, weekPlanMeals, getMealHistory]);
-
-    // Get filtered recipes for search
-    const filteredRecipes = useMemo(() => {
-        if (!selectedSlot) return [];
-
-        let filtered = recipes.filter(r => isSuitableForMealType(r, selectedSlot.meal));
-
-        if (searchQuery) {
-            const query = searchQuery.toLowerCase();
-            filtered = filtered.filter(r =>
-                r.name.toLowerCase().includes(query) ||
-                (r.description || '').toLowerCase().includes(query) ||
-                (r.ingredientsText || '').toLowerCase().includes(query)
+    Object.entries(weekPlanMeals).forEach(([day, meals]) => {
+      if (!meals) return;
+      Object.values(meals).forEach((planned) => {
+        if (planned?.recipeId) {
+          const recipe = recipes.find((r) => r.id === planned.recipeId);
+          if (recipe && recipe.ingredientsText) {
+            const est = calculateRecipeEstimate(
+              recipe.ingredientsText,
+              foodItems,
             );
+            // Assume 1 serving per planned meal for now, or use recipe.servings?
+            // Usually a planned meal is 1 serving for the user.
+            // Estimate.calories is TOTAL for recipe.
+            const calsPerServing = recipe.servings
+              ? est.calories / recipe.servings
+              : est.calories;
+            stats[day as Weekday] += calsPerServing;
+          }
         }
+      });
+    });
+    return stats;
+  }, [weekPlanMeals, recipes, foodItems]);
 
-        return filtered;
-    }, [recipes, selectedSlot, searchQuery]);
+  // Calculate week number
+  const weekNumber = useMemo(() => {
+    const date = new Date(currentWeekStart);
+    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+    const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) /
+      86400000;
+    return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+  }, [currentWeekStart]);
 
-    // Handle selecting a recipe
-    const handleSelectRecipe = (recipeId: string) => {
-        if (!selectedSlot) return;
+  // Navigate weeks
+  const navigateWeek = (direction: number) => {
+    const newDate = new Date(currentWeekStart);
+    newDate.setDate(newDate.getDate() + (direction * 7));
+    setCurrentWeekStart(getISODate(newDate));
+  };
 
-        const currentMeals = weekPlanMeals[selectedSlot.day] || {};
+  // Get meal history for patterns
+  const getMealHistory = useCallback(() => {
+    const history: {
+      recipeId: string;
+      day: Weekday;
+      meal: MealType;
+      date: string;
+    }[] = [];
 
-        const newPlan: WeeklyPlan['meals'] = {
-            ...weekPlanMeals,
-            [selectedSlot.day]: {
-                ...currentMeals,
-                [selectedSlot.meal]: { recipeId } as PlannedMeal,
-            },
-        };
-
-        saveWeeklyPlan(currentWeekStart, newPlan);
-        setSelectedSlot(null);
-        setSearchQuery('');
-    };
-
-    // Handle saving meal with swaps
-    const handleSaveMeal = (recipeId: string, swaps?: Record<string, string>) => {
-        if (!selectedSlot) return;
-
-        const currentMeals = weekPlanMeals[selectedSlot.day] || {};
-
-        const newPlan: WeeklyPlan['meals'] = {
-            ...weekPlanMeals,
-            [selectedSlot.day]: {
-                ...currentMeals,
-                [selectedSlot.meal]: {
-                    recipeId,
-                    swaps
-                } as PlannedMeal,
-            },
-        };
-
-        saveWeeklyPlan(currentWeekStart, newPlan);
-        setSelectedSlot(null);
-        setSearchQuery('');
-    };
-
-    // History Analysis for "Long time ago" and "Often"
-    const recipeStats = useMemo(() => {
-        if (!weeklyPlans) return {};
-        const stats: Record<string, { count: number; lastDate: string }> = {};
-
-        weeklyPlans.forEach(plan => {
-            if (!plan || !plan.meals) return;
-            Object.values(plan.meals).forEach(day => {
-                if (!day) return;
-                Object.values(day).forEach(meal => {
-                    if (meal?.recipeId) {
-                        if (!stats[meal.recipeId]) {
-                            stats[meal.recipeId] = { count: 0, lastDate: '2000-01-01' };
-                        }
-                        stats[meal.recipeId].count++;
-                        if (plan.weekStartDate > stats[meal.recipeId].lastDate) {
-                            stats[meal.recipeId].lastDate = plan.weekStartDate;
-                        }
-                    }
-                });
-            });
-        });
-        return stats;
-    }, [weeklyPlans]);
-
-    // Get suggestions for modal
-    const getSuggestionsForSlot = (day: Weekday, meal: MealType) => {
-        const fullPlan: WeeklyPlan = {
-            id: 'current',
-            weekStartDate: currentWeekStart,
-            meals: weekPlanMeals || { monday: {}, tuesday: {}, wednesday: {}, thursday: {}, friday: {}, saturday: {}, sunday: {} },
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-        };
-
-        const suggestions: { recipe: Recipe; reasons: string[] }[] = [];
-        const addedIds = new Set<string>();
-
-        // 1. Optimization (Completes the day)
-        const opt = getOptimizationSuggestion(fullPlan, day, meal);
-        if (opt && !addedIds.has(opt.id)) {
-            suggestions.push({ recipe: opt, reasons: ['Kompletterar näringen', 'Ökar variationen'] });
-            addedIds.add(opt.id);
-        }
-
-        // 2. "Often" (High count)
-        const popular = recipes
-            .filter(r => r.mealType === meal && !addedIds.has(r.id))
-            .sort((a, b) => (recipeStats[b.id]?.count || 0) - (recipeStats[a.id]?.count || 0))
-            .slice(0, 2);
-
-        popular.forEach(r => {
-            if (recipeStats[r.id]?.count > 0) {
-                suggestions.push({ recipe: r, reasons: ['Ofta lagad', 'Favorit'] });
-                addedIds.add(r.id);
+    weeklyPlans.forEach((plan) => {
+      WEEKDAYS.forEach((day) => {
+        const dayMeals = plan.meals[day];
+        if (dayMeals) {
+          Object.entries(dayMeals).forEach(([meal, planned]) => {
+            if (planned?.recipeId) {
+              history.push({
+                recipeId: planned.recipeId,
+                day,
+                meal: meal as MealType,
+                date: plan.weekStartDate,
+              });
             }
-        });
+          });
+        }
+      });
+    });
 
-        // 3. "Long time ago" (High count but old date, or just old date)
-        const forgotten = recipes
-            .filter(r => r.mealType === meal && !addedIds.has(r.id))
-            .sort((a, b) => (recipeStats[a.id]?.lastDate || '9999').localeCompare(recipeStats[b.id]?.lastDate || '9999'))
-            .slice(0, 1);
+    return history;
+  }, [weeklyPlans]);
 
-        forgotten.forEach(r => {
-            suggestions.push({ recipe: r, reasons: ['Länge sedan sist', 'Dags att återbesöka?'] });
-            addedIds.add(r.id);
-        });
+  // Check if recipe is suitable for meal type
+  const isSuitableForMealType = (
+    recipe: Recipe,
+    mealType: MealType,
+  ): boolean => {
+    const recipeMealType = recipe.mealType?.toLowerCase() || "";
+    const categories = MEAL_CATEGORIES[mealType];
 
-        // 4. Quick (if needed)
-        if (suggestions.length < 3) {
-            const quick = recipes.find(r => r.mealType === meal && !addedIds.has(r.id) && (r.cookTime || 60) <= 20);
-            if (quick) {
-                suggestions.push({ recipe: quick, reasons: ['Snabblagat (under 20 min)'] });
-                addedIds.add(quick.id);
-            }
+    // If recipe has a meal type, check if it matches
+    if (recipeMealType) {
+      // Snacks should not include main meals
+      if (mealType === "snack") {
+        return recipeMealType.includes("snack") ||
+          recipeMealType.includes("mellanmål") ||
+          recipeMealType.includes("fika");
+      }
+      return categories.some((cat) => recipeMealType.includes(cat));
+    }
+
+    // For snacks without explicit type, filter by prep time and name
+    if (mealType === "snack") {
+      const quickSnack = (recipe.cookTime || 60) <= 15;
+      const nameHints = [
+        "snack",
+        "smoothie",
+        "yoghurt",
+        "frukt",
+        "nötter",
+        "bars",
+      ];
+      return quickSnack ||
+        nameHints.some((hint) => recipe.name.toLowerCase().includes(hint));
+    }
+
+    return true;
+  };
+
+  // Generate smart suggestions for a slot
+  const getSuggestions = useCallback(
+    (day: Weekday, mealType: MealType): RecipeSuggestion[] => {
+      const history = getMealHistory();
+      const season = getCurrentSeason();
+      const suggestions: RecipeSuggestion[] = [];
+
+      recipes.forEach((recipe) => {
+        const reasons: string[] = [];
+        const tags: SuggestionTag[] = [];
+        let score = 0;
+
+        // 1. Meal type suitability (CRITICAL for snacks)
+        if (!isSuitableForMealType(recipe, mealType)) {
+          return; // Skip unsuitable recipes
+        }
+        tags.push("suitable");
+
+        // 2. Friday pattern (people often eat special food on Fridays)
+        if (day === "friday") {
+          const fridayHistory = history.filter((h) => h.day === "friday");
+          const recipeFrequency = fridayHistory.filter((h) =>
+            h.recipeId === recipe.id
+          ).length;
+          if (recipeFrequency >= 2) {
+            score += 30;
+            reasons.push("🔥 Fredagsfavorit");
+            tags.push("friday-favorite");
+          }
         }
 
-        return suggestions;
+        // 3. Long time since last eaten
+        const recipeHistory = history.filter((h) => h.recipeId === recipe.id);
+        const lastEaten = recipeHistory.length > 0
+          ? Math.max(...recipeHistory.map((h) => new Date(h.date).getTime()))
+          : 0;
+        const daysSinceEaten = lastEaten
+          ? Math.floor((Date.now() - lastEaten) / (1000 * 60 * 60 * 24))
+          : 999;
+
+        if (daysSinceEaten >= 30 && recipeHistory.length > 0) {
+          score += 25;
+          reasons.push(`⏰ ${daysSinceEaten} dagar sedan`);
+          tags.push("long-time");
+        } else if (daysSinceEaten >= 14) {
+          score += 10;
+        }
+
+        // 4. Seasonal ingredients
+        const seasonalIngredients = SEASONAL_INGREDIENTS[season];
+        const ingredientsText = (recipe.ingredientsText || "").toLowerCase();
+        const seasonalMatches = seasonalIngredients.filter((ing) =>
+          ingredientsText.includes(ing)
+        );
+        if (seasonalMatches.length > 0) {
+          score += 15 * seasonalMatches.length;
+          reasons.push(`🥬 Säsong: ${seasonalMatches.join(", ")}`);
+          tags.push("seasonal");
+        }
+
+        // 5. Quick meals for weekdays
+        const isWeekday = ["monday", "tuesday", "wednesday", "thursday"]
+          .includes(day);
+        if (isWeekday && (recipe.cookTime || 60) <= 30) {
+          score += 15;
+          reasons.push(`⏱️ Snabbt (${recipe.cookTime || "?"} min)`);
+          tags.push("quick");
+        }
+
+        // 6. Carb variety (avoid too much rice/pasta in a row)
+        const plannedThisWeek = Object.values(weekPlanMeals).flatMap(
+          (dayMeals) => Object.values(dayMeals || {}).map((m) => m?.recipeId),
+        ).filter(Boolean);
+
+        const recipeCarbs = CARB_TYPES.filter((carb) =>
+          ingredientsText.includes(carb)
+        );
+        const weekCarbs = plannedThisWeek.map((id) => {
+          const r = recipes.find((rec) => rec.id === id);
+          return CARB_TYPES.filter((carb) =>
+            (r?.ingredientsText || "").toLowerCase().includes(carb)
+          );
+        }).flat();
+
+        const carbOverlap = recipeCarbs.filter((c) =>
+          weekCarbs.includes(c)
+        ).length;
+        if (recipeCarbs.length > 0 && carbOverlap === 0) {
+          score += 10;
+          reasons.push(`🍚 Kolhydratvariation: ${recipeCarbs.join(", ")}`);
+          tags.push("carb-variety");
+        }
+
+        // 7. Base score for recipes with nutrition data
+        if (recipe.ingredientsText) {
+          const estimate = calculateRecipeEstimate(
+            recipe.ingredientsText,
+            foodItems,
+          );
+          if (estimate.calories > 0) {
+            score += 5; // Bonus for complete nutrition data
+          }
+        }
+
+        // Only include if has some score
+        if (score > 0 || reasons.length > 0) {
+          suggestions.push({ recipe, score, reasons, tags });
+        }
+      });
+
+      // Sort by score descending
+      return suggestions.sort((a, b) => b.score - a.score).slice(0, 8);
+    },
+    [recipes, foodItems, weekPlanMeals, getMealHistory],
+  );
+
+  // Get filtered recipes for search
+  const filteredRecipes = useMemo(() => {
+    if (!selectedSlot) return [];
+
+    let filtered = recipes.filter((r) =>
+      isSuitableForMealType(r, selectedSlot.meal)
+    );
+
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter((r) =>
+        r.name.toLowerCase().includes(query) ||
+        (r.description || "").toLowerCase().includes(query) ||
+        (r.ingredientsText || "").toLowerCase().includes(query)
+      );
+    }
+
+    return filtered;
+  }, [recipes, selectedSlot, searchQuery]);
+
+  // Handle selecting a recipe
+  const handleSelectRecipe = (recipeId: string) => {
+    if (!selectedSlot) return;
+
+    const currentMeals = weekPlanMeals[selectedSlot.day] || {};
+
+    const newPlan: WeeklyPlan["meals"] = {
+      ...weekPlanMeals,
+      [selectedSlot.day]: {
+        ...currentMeals,
+        [selectedSlot.meal]: { recipeId } as PlannedMeal,
+      },
     };
-    // Handle removing a meal
-    const handleRemoveMeal = (day: Weekday, meal: MealType) => {
-        const currentMeals = weekPlanMeals[day] || {};
-        const updatedDayMeals = { ...currentMeals };
-        delete updatedDayMeals[meal];
 
-        const updatedPlanMeals: WeeklyPlan['meals'] = {
-            ...weekPlanMeals,
-            [day]: updatedDayMeals
-        };
+    saveWeeklyPlan(currentWeekStart, newPlan);
+    setSelectedSlot(null);
+    setSearchQuery("");
+  };
 
-        saveWeeklyPlan(currentWeekStart, updatedPlanMeals);
+  // Handle saving meal with swaps
+  const handleSaveMeal = (recipeId: string, swaps?: Record<string, string>) => {
+    if (!selectedSlot) return;
+
+    const currentMeals = weekPlanMeals[selectedSlot.day] || {};
+
+    const newPlan: WeeklyPlan["meals"] = {
+      ...weekPlanMeals,
+      [selectedSlot.day]: {
+        ...currentMeals,
+        [selectedSlot.meal]: {
+          recipeId,
+          swaps,
+        } as PlannedMeal,
+      },
     };
 
-    // Get recipe name
-    const getRecipeName = (recipeId: string): string => {
-        return recipes.find(r => r.id === recipeId)?.name || 'Okänt';
+    saveWeeklyPlan(currentWeekStart, newPlan);
+    setSelectedSlot(null);
+    setSearchQuery("");
+  };
+
+  // History Analysis for "Long time ago" and "Often"
+  const recipeStats = useMemo(() => {
+    if (!weeklyPlans) return {};
+    const stats: Record<string, { count: number; lastDate: string }> = {};
+
+    weeklyPlans.forEach((plan) => {
+      if (!plan || !plan.meals) return;
+      Object.values(plan.meals).forEach((day) => {
+        if (!day) return;
+        Object.values(day).forEach((meal) => {
+          if (meal?.recipeId) {
+            if (!stats[meal.recipeId]) {
+              stats[meal.recipeId] = { count: 0, lastDate: "2000-01-01" };
+            }
+            stats[meal.recipeId].count++;
+            if (plan.weekStartDate > stats[meal.recipeId].lastDate) {
+              stats[meal.recipeId].lastDate = plan.weekStartDate;
+            }
+          }
+        });
+      });
+    });
+    return stats;
+  }, [weeklyPlans]);
+
+  // Get suggestions for modal
+  const getSuggestionsForSlot = (day: Weekday, meal: MealType) => {
+    const fullPlan: WeeklyPlan = {
+      id: "current",
+      weekStartDate: currentWeekStart,
+      meals: weekPlanMeals ||
+        {
+          monday: {},
+          tuesday: {},
+          wednesday: {},
+          thursday: {},
+          friday: {},
+          saturday: {},
+          sunday: {},
+        },
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    // Get suggestions for selected slot
-    const suggestions = useMemo(() => {
-        if (!selectedSlot) return [];
-        return getSuggestions(selectedSlot.day, selectedSlot.meal);
-    }, [selectedSlot, getSuggestions]);
+    const suggestions: { recipe: Recipe; reasons: string[] }[] = [];
+    const addedIds = new Set<string>();
 
-    return (
-        <div className="planning-page">
-            {/* Header */}
-            <header className="planning-header">
-                <div className="week-nav">
-                    <button className="nav-btn" onClick={() => navigateWeek(-1)}>←</button>
-                    <h1>✨ Planera Vecka {weekNumber}</h1>
-                    <button className="nav-btn" onClick={() => navigateWeek(1)}>→</button>
-                </div>
-                <p className="planning-subtitle">Smarta förslag baserat på dina mönster</p>
-                <button
-                    onClick={() => {
-                        // Create a temporary simplified layout for printing
-                        const printContent = `
+    // 1. Optimization (Completes the day)
+    const opt = getOptimizationSuggestion(fullPlan, day, meal);
+    if (opt && !addedIds.has(opt.id)) {
+      suggestions.push({
+        recipe: opt,
+        reasons: ["Kompletterar näringen", "Ökar variationen"],
+      });
+      addedIds.add(opt.id);
+    }
+
+    // 2. "Often" (High count)
+    const popular = recipes
+      .filter((r) => r.mealType === meal && !addedIds.has(r.id))
+      .sort((a, b) =>
+        (recipeStats[b.id]?.count || 0) - (recipeStats[a.id]?.count || 0)
+      )
+      .slice(0, 2);
+
+    popular.forEach((r) => {
+      if (recipeStats[r.id]?.count > 0) {
+        suggestions.push({ recipe: r, reasons: ["Ofta lagad", "Favorit"] });
+        addedIds.add(r.id);
+      }
+    });
+
+    // 3. "Long time ago" (High count but old date, or just old date)
+    const forgotten = recipes
+      .filter((r) => r.mealType === meal && !addedIds.has(r.id))
+      .sort((a, b) =>
+        (recipeStats[a.id]?.lastDate || "9999").localeCompare(
+          recipeStats[b.id]?.lastDate || "9999",
+        )
+      )
+      .slice(0, 1);
+
+    forgotten.forEach((r) => {
+      suggestions.push({
+        recipe: r,
+        reasons: ["Länge sedan sist", "Dags att återbesöka?"],
+      });
+      addedIds.add(r.id);
+    });
+
+    // 4. Quick (if needed)
+    if (suggestions.length < 3) {
+      const quick = recipes.find((r) =>
+        r.mealType === meal && !addedIds.has(r.id) && (r.cookTime || 60) <= 20
+      );
+      if (quick) {
+        suggestions.push({
+          recipe: quick,
+          reasons: ["Snabblagat (under 20 min)"],
+        });
+        addedIds.add(quick.id);
+      }
+    }
+
+    return suggestions;
+  };
+  // Handle removing a meal
+  const handleRemoveMeal = (day: Weekday, meal: MealType) => {
+    const currentMeals = weekPlanMeals[day] || {};
+    const updatedDayMeals = { ...currentMeals };
+    delete updatedDayMeals[meal];
+
+    const updatedPlanMeals: WeeklyPlan["meals"] = {
+      ...weekPlanMeals,
+      [day]: updatedDayMeals,
+    };
+
+    saveWeeklyPlan(currentWeekStart, updatedPlanMeals);
+  };
+
+  // Get recipe name
+  const getRecipeName = (recipeId: string): string => {
+    return recipes.find((r) => r.id === recipeId)?.name || "Okänt";
+  };
+
+  // Get suggestions for selected slot
+  const suggestions = useMemo(() => {
+    if (!selectedSlot) return [];
+    return getSuggestions(selectedSlot.day, selectedSlot.meal);
+  }, [selectedSlot, getSuggestions]);
+
+  return (
+    <div className="planning-page">
+      {/* Header */}
+      <header className="planning-header">
+        <div className="week-nav">
+          <button className="nav-btn" onClick={() => navigateWeek(-1)}>
+            ←
+          </button>
+          <h1>✨ Planera Vecka {weekNumber}</h1>
+          <button className="nav-btn" onClick={() => navigateWeek(1)}>→</button>
+        </div>
+        <p className="planning-subtitle">
+          Smarta förslag baserat på dina mönster
+        </p>
+        <button
+          onClick={() => {
+            // Create a temporary simplified layout for printing
+            const printContent = `
                             <div style="font-family: sans-serif; padding: 20px;">
                                 <h1 style="color: #10b981; margin-bottom: 20px;">Matsedel Vecka ${weekNumber}</h1>
-                                ${WEEKDAYS.map(day => {
-                            const dayPlan = weekPlanMeals[day];
-                            if (!dayPlan || Object.keys(dayPlan).length === 0) return '';
-                            return `
+                                ${
+              WEEKDAYS.map((day) => {
+                const dayPlan = weekPlanMeals[day];
+                if (!dayPlan || Object.keys(dayPlan).length === 0) return "";
+                return `
                                         <div style="margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
                                             <h3 style="margin: 0 0 10px 0; color: #333; text-transform: uppercase;">
                                                 ${WEEKDAY_LABELS[day]}
                                             </h3>
-                                            ${settings.visibleMeals.map(meal => {
-                                const planned = dayPlan[meal];
-                                if (!planned) return '';
-                                const recipe = recipes.find(r => r.id === planned.recipeId);
-                                return `
+                                            ${
+                  settings.visibleMeals.map((meal) => {
+                    const planned = dayPlan[meal];
+                    if (!planned) return "";
+                    const recipe = recipes.find((r) =>
+                      r.id === planned.recipeId
+                    );
+                    return `
                                                     <div style="display: flex; margin-bottom: 5px;">
                                                         <span style="width: 80px; color: #666; font-size: 0.9em; font-weight: bold;">
-                                                            ${MEAL_TYPE_LABELS[meal]}:
+                                                            ${
+                      MEAL_TYPE_LABELS[meal]
+                    }:
                                                         </span>
-                                                        <span style="flex: 1;">${recipe?.name || 'Okänt recept'}</span>
+                                                        <span style="flex: 1;">${
+                      recipe?.name || "Okänt recept"
+                    }</span>
                                                     </div>
                                                 `;
-                            }).join('')}
+                  }).join("")
+                }
                                         </div>
                                     `;
-                        }).join('')}
+              }).join("")
+            }
                                 <div style="margin-top: 30px; font-size: 0.8em; color: #999; text-align: center;">
-                                    Utskrivet från Greens • ${new Date().toLocaleDateString()}
+                                    Utskrivet från Greens • ${
+              new Date().toLocaleDateString()
+            }
                                 </div>
                             </div>
                         `;
 
-                        // Create hidden element
-                        const printArea = document.createElement('div');
-                        printArea.id = 'print-area';
-                        printArea.innerHTML = printContent;
-                        document.body.appendChild(printArea);
+            // Create hidden element
+            const printArea = document.createElement("div");
+            printArea.id = "print-area";
+            printArea.innerHTML = printContent;
+            document.body.appendChild(printArea);
 
-                        printJS({
-                            printable: 'print-area',
-                            type: 'html',
-                            style: '@page { size: A4; margin: 20mm; }',
-                            scanStyles: false,
-                            onPrintDialogClose: () => document.body.removeChild(printArea)
-                        });
+            printJS({
+              printable: "print-area",
+              type: "html",
+              style: "@page { size: A4; margin: 20mm; }",
+              scanStyles: false,
+              onPrintDialogClose: () => document.body.removeChild(printArea),
+            });
+          }}
+          className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
+        >
+          🖨️ Skriv ut Matsedel (PDF)
+        </button>
+      </header>
+
+      {/* Week Grid - Compact View */}
+      <div className="week-grid">
+        {WEEKDAYS.map((day) => (
+          <div key={day} className="day-column">
+            <div className="day-header">
+              <span className="day-short">{SHORT_WEEKDAY_LABELS[day]}</span>
+              <div className="flex flex-col items-center mt-1">
+                <span className="text-[10px] text-slate-500 font-medium tracking-tighter">
+                  {Math.round(dailyPlannedCalories[day])} / {targetCalories}
+                </span>
+                <div className="w-8 h-0.5 bg-slate-800 rounded-full mt-0.5 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${
+                      dailyPlannedCalories[day] > targetCalories
+                        ? "bg-rose-500"
+                        : "bg-emerald-500"
+                    }`}
+                    style={{
+                      width: `${
+                        Math.min(
+                          100,
+                          (dailyPlannedCalories[day] /
+                            (targetCalories || 2000)) * 100,
+                        )
+                      }%`,
                     }}
-                    className="mt-4 px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 transition-all shadow-lg shadow-emerald-900/20"
-                >
-                    🖨️ Skriv ut Matsedel (PDF)
-                </button>
-            </header>
-
-            {/* Week Grid - Compact View */}
-            <div className="week-grid">
-                {WEEKDAYS.map(day => (
-                    <div key={day} className="day-column">
-                        <div className="day-header">
-                            <span className="day-short">{SHORT_WEEKDAY_LABELS[day]}</span>
-                            <div className="flex flex-col items-center mt-1">
-                                <span className="text-[10px] text-slate-500 font-medium tracking-tighter">
-                                    {Math.round(dailyPlannedCalories[day])} / {targetCalories}
-                                </span>
-                                <div className="w-8 h-0.5 bg-slate-800 rounded-full mt-0.5 overflow-hidden">
-                                    <div
-                                        className={`h-full rounded-full ${dailyPlannedCalories[day] > targetCalories ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                                        style={{ width: `${Math.min(100, (dailyPlannedCalories[day] / (targetCalories || 2000)) * 100)}%` }}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                        <div className="day-meals">
-                            {settings.visibleMeals.map(meal => {
-                                const planned = weekPlanMeals[day]?.[meal];
-                                const isSelected = selectedSlot?.day === day && selectedSlot?.meal === meal;
-
-                                return (
-                                    <div
-                                        key={meal}
-                                        className={`meal-cell ${planned ? 'has-meal' : 'empty'} ${isSelected ? 'selected' : ''}`}
-                                        onClick={() => setSelectedSlot({ day, meal })}
-                                    >
-                                        {planned?.recipeId ? (
-                                            <div className="meal-content">
-                                                <span className="meal-icon">{
-                                                    meal === 'breakfast' ? '🌅' :
-                                                        meal === 'lunch' ? '☀️' :
-                                                            meal === 'dinner' ? '🌙' :
-                                                                meal === 'beverage' ? '🥤' : '🍎'
-                                                }</span>
-                                                <span className="meal-name">{getRecipeName(planned.recipeId)}</span>
-                                                <button
-                                                    className="remove-btn"
-                                                    onClick={(e) => { e.stopPropagation(); handleRemoveMeal(day, meal); }}
-                                                >×</button>
-                                            </div>
-                                        ) : (
-                                            <span className="add-icon">+</span>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                ))}
+                  />
+                </div>
+              </div>
             </div>
+            <div className="day-meals">
+              {settings.visibleMeals.map((meal) => {
+                const planned = weekPlanMeals[day]?.[meal];
+                const isSelected = selectedSlot?.day === day &&
+                  selectedSlot?.meal === meal;
 
-            {/* Smart Recipe Selection Modal */}
-            <RecipeSelectionModal
-                isOpen={!!selectedSlot}
-                onClose={() => setSelectedSlot(null)}
-                editingSlot={selectedSlot}
-                currentPlannedMeal={selectedSlot ? (weekPlanMeals[selectedSlot.day]?.[selectedSlot.meal]) : undefined}
-                onSelectRecipe={handleSelectRecipe}
-                onRemoveMeal={() => selectedSlot && handleRemoveMeal(selectedSlot.day, selectedSlot.meal)}
-                onSave={(recipeId, swaps) => handleSaveMeal(recipeId, swaps)}
-                getSuggestions={getSuggestionsForSlot}
-            />
-        </div>
-    );
+                return (
+                  <div
+                    key={meal}
+                    className={`meal-cell ${planned ? "has-meal" : "empty"} ${
+                      isSelected ? "selected" : ""
+                    }`}
+                    onClick={() => setSelectedSlot({ day, meal })}
+                  >
+                    {planned?.recipeId
+                      ? (
+                        <div className="meal-content">
+                          <span className="meal-icon">
+                            {meal === "breakfast"
+                              ? "🌅"
+                              : meal === "lunch"
+                              ? "☀️"
+                              : meal === "dinner"
+                              ? "🌙"
+                              : meal === "beverage"
+                              ? "🥤"
+                              : "🍎"}
+                          </span>
+                          <span className="meal-name">
+                            {getRecipeName(planned.recipeId)}
+                          </span>
+                          <button
+                            className="remove-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRemoveMeal(day, meal);
+                            }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      )
+                      : <span className="add-icon">+</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Smart Recipe Selection Modal */}
+      <RecipeSelectionModal
+        isOpen={!!selectedSlot}
+        onClose={() => setSelectedSlot(null)}
+        editingSlot={selectedSlot}
+        currentPlannedMeal={selectedSlot
+          ? (weekPlanMeals[selectedSlot.day]?.[selectedSlot.meal])
+          : undefined}
+        onSelectRecipe={handleSelectRecipe}
+        onRemoveMeal={() =>
+          selectedSlot && handleRemoveMeal(selectedSlot.day, selectedSlot.meal)}
+        onSave={(recipeId, swaps) => handleSaveMeal(recipeId, swaps)}
+        getSuggestions={getSuggestionsForSlot}
+      />
+    </div>
+  );
 }
