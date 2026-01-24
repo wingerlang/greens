@@ -47,6 +47,14 @@ import {
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { safeFetch } from '../utils/http.ts';
+import {
+    calculateBMR as calculateBMRUtil,
+    calculateStreak as calculateStreakUtil,
+    calculateTrainingStreak as calculateTrainingStreakUtil,
+    calculateWeeklyTrainingStreak as calculateWeeklyTrainingStreakUtil,
+    calculateCalorieGoalStreak as calculateCalorieGoalStreakUtil,
+    calculateExerciseCalories as calculateExerciseCaloriesUtil
+} from '../utils/analytics.ts';
 
 // Feature Hooks
 import { useUserContext } from './features/useUserContext.ts';
@@ -560,179 +568,35 @@ export function DataProvider({ children }: DataProviderProps) {
     // ============================================
 
     const calculateBMR = useCallback((): number => {
-        if (!currentUser?.settings) return 2000;
-        const s = currentUser.settings;
-        const weight = getLatestWeight();
-        const height = s.height || 175;
-        const currentYear = new Date().getFullYear();
-        const age = s.birthYear ? (currentYear - s.birthYear) : 30;
-        const gender = s.gender || 'other';
-
-        let bmr = (10 * weight) + (6.25 * height) - (5 * age);
-        if (gender === 'male') bmr += 5;
-        else if (gender === 'female') bmr -= 161;
-        else bmr -= 78; // Average/other
-
-        return Math.round(bmr);
+        return calculateBMRUtil(getLatestWeight(), currentUser?.settings);
     }, [currentUser, getLatestWeight]);
 
     const calculateStreak = useCallback((referenceDate?: string): number => {
-        const anchor = referenceDate ? new Date(referenceDate) : new Date();
-        const anchorISO = getISODate(anchor);
-
-        // Yesterday relative to anchor
-        const prevDay = new Date(anchor);
-        prevDay.setDate(prevDay.getDate() - 1);
-        const prevDayISO = getISODate(prevDay);
-
-        const isDayActive = (date: string) => {
-            const meals = getMealEntriesForDate(date);
-            const exercises = getExercisesForDate(date);
-            const vitals = dailyVitals[date];
-            const weightEntry = weightEntries.some(w => w.date === date);
-
-            // Active if logged meals, exercises, weights, or significant vitals
-            return meals.length > 0 ||
-                exercises.length > 0 ||
-                weightEntry ||
-                (vitals && (vitals.water > 0 || (vitals.caffeine ?? 0) > 0 || (vitals.alcohol ?? 0) > 0 || (vitals.sleep ?? 0) > 0));
-        };
-
-        let streak = 0;
-        let checkDate = new Date(anchor);
-
-        const anchorActive = isDayActive(anchorISO);
-        const prevActive = isDayActive(prevDayISO);
-
-        if (!anchorActive && !prevActive) return 0;
-
-        // If anchor is not active, but prev is, we count from prev (streak maintained but not incremented for today yet)
-        if (!anchorActive) checkDate = prevDay;
-
-        while (true) {
-            const dateStr = getISODate(checkDate);
-            if (isDayActive(dateStr)) {
-                streak++;
-                checkDate.setDate(checkDate.getDate() - 1);
-            } else {
-                break;
-            }
-            if (streak > 3650) break;
-        }
-        return streak;
-    }, [dailyVitals, getMealEntriesForDate, getExercisesForDate, weightEntries]);
+        return calculateStreakUtil(
+            mealEntries,
+            exerciseEntries,
+            dailyVitals,
+            weightEntries,
+            referenceDate
+        );
+    }, [mealEntries, exerciseEntries, dailyVitals, weightEntries]);
 
     const calculateTrainingStreak = useCallback((referenceDate?: string, type?: string): number => {
-        const anchor = referenceDate ? new Date(referenceDate) : new Date();
-        const anchorISO = getISODate(anchor);
+        return calculateTrainingStreakUtil(exerciseEntries, referenceDate, type);
+    }, [exerciseEntries]);
 
-        const prevDay = new Date(anchor);
-        prevDay.setDate(prevDay.getDate() - 1);
-        const prevDayISO = getISODate(prevDay);
-
-        const isTrainingDay = (date: string) => {
-            const exercises = getExercisesForDate(date);
-            if (!type) {
-                // Any training
-                return exercises.length > 0;
-            } else if (type === 'strength') {
-                return exercises.some(e => e.type === 'strength');
-            } else if (type === 'running') {
-                // Cardio mode: running, cycling, walking, swimming
-                return exercises.some(e => ['running', 'cycling', 'walking', 'swimming'].includes(e.type));
-            }
-            return false;
-        };
-
-        let streak = 0;
-        let checkDate = new Date(anchor);
-
-        if (!isTrainingDay(anchorISO) && !isTrainingDay(prevDayISO)) return 0;
-        if (!isTrainingDay(anchorISO)) checkDate = prevDay;
-
-        while (true) {
-            if (isTrainingDay(getISODate(checkDate))) {
-                streak++;
-                checkDate.setDate(checkDate.getDate() - 1);
-            } else {
-                break;
-            }
-            if (streak > 1000) break;
-        }
-        return streak;
-    }, [getExercisesForDate]);
-
-    const calculateWeeklyTrainingStreak = useCallback((referenceDate?: string, _deprecated_type?: string): number => {
-        // Count weeks where there was at least one training session
-        let streak = 0;
-        let checkDate = referenceDate ? new Date(referenceDate) : new Date();
-
-        // Move to the beginning of current week (Monday) of the checkDate
-        const day = checkDate.getDay();
-        const diff = checkDate.getDate() - day + (day === 0 ? -6 : 1);
-        checkDate.setDate(diff);
-
-        // Helper to check if a specific calendar week has any training
-        const hasTrainingInWeek = (startDate: Date) => {
-            for (let i = 0; i < 7; i++) {
-                const d = new Date(startDate);
-                d.setDate(startDate.getDate() + i);
-                if (getExercisesForDate(getISODate(d)).length > 0) return true;
-            }
-            return false;
-        };
-
-        // If current week has no training yet, check last week.
-        if (!hasTrainingInWeek(new Date(checkDate))) {
-            const lastWeek = new Date(checkDate);
-            lastWeek.setDate(lastWeek.getDate() - 7);
-            if (!hasTrainingInWeek(lastWeek)) return 0;
-            checkDate = lastWeek;
-        }
-
-        while (true) {
-            if (hasTrainingInWeek(new Date(checkDate))) {
-                streak++;
-                checkDate.setDate(checkDate.getDate() - 7);
-            } else {
-                break;
-            }
-            if (streak > 520) break;
-        }
-        return streak;
-    }, [getExercisesForDate]);
+    const calculateWeeklyTrainingStreak = useCallback((referenceDate?: string): number => {
+        return calculateWeeklyTrainingStreakUtil(exerciseEntries, referenceDate);
+    }, [exerciseEntries]);
 
     const calculateCalorieGoalStreak = useCallback((referenceDate?: string): number => {
-        const anchor = referenceDate ? new Date(referenceDate) : new Date();
-        const anchorISO = getISODate(anchor);
-
-        const prevDay = new Date(anchor);
-        prevDay.setDate(prevDay.getDate() - 1);
-        const prevDayISO = getISODate(prevDay);
-
-        const isGoalMet = (date: string) => {
-            const data = calculateDailyNutrition(date);
-            const target = currentUser?.settings?.dailyCalorieGoal || 2500;
-            return data.calories > 0 && data.calories <= target;
-        };
-
-        let streak = 0;
-        let checkDate = new Date(anchor);
-
-        if (!isGoalMet(anchorISO) && !isGoalMet(prevDayISO)) return 0;
-        if (!isGoalMet(anchorISO)) checkDate = prevDay;
-
-        while (true) {
-            if (isGoalMet(getISODate(checkDate))) {
-                streak++;
-                checkDate.setDate(checkDate.getDate() - 1);
-            } else {
-                break;
-            }
-            if (streak > 1000) break;
-        }
-        return streak;
+        if (!currentUser?.settings) return 0;
+        return calculateCalorieGoalStreakUtil(calculateDailyNutrition, currentUser.settings, referenceDate);
     }, [calculateDailyNutrition, currentUser]);
+
+    const calculateExerciseCalories = useCallback((type: ExerciseType, duration: number, intensity: ExerciseIntensity): number => {
+        return calculateExerciseCaloriesUtil(type, duration, intensity, getLatestWeight());
+    }, [getLatestWeight]);
 
 
     // ============================================
