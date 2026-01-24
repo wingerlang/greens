@@ -9,6 +9,7 @@ const EXERCISE_TYPES: { type: ExerciseType; icon: string; label: string }[] = [
     { type: 'walking', icon: '🚶', label: 'Promenad' },
     { type: 'swimming', icon: '🏊', label: 'Simning' },
     { type: 'yoga', icon: '🧘', label: 'Yoga' },
+    { type: 'hyrox', icon: '🦅', label: 'Hyrox' },
     { type: 'other', icon: '✨', label: 'Annat' },
 ];
 

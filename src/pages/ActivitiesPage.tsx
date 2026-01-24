@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { useDebounce } from '../hooks/useDebounce.ts';
 import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
@@ -317,6 +318,7 @@ export function ActivitiesPage() {
 
     // Filter State
     const [searchQuery, setSearchQuery] = useState('');
+    const debouncedSearchQuery = useDebounce(searchQuery, 300);
     const [activeSmartFilters, setActiveSmartFilters] = useState<SmartFilter[]>([]);
     const [previewFilters, setPreviewFilters] = useState<SmartFilter[]>([]);
     const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -431,8 +433,8 @@ export function ActivitiesPage() {
 
             // Search (Combine active smart filters with live search text)
             let currentFilters = activeSmartFilters;
-            if (searchQuery) {
-                const { filters: liveFilters } = parseSmartQuery(searchQuery);
+            if (debouncedSearchQuery) {
+                const { filters: liveFilters } = parseSmartQuery(debouncedSearchQuery);
                 currentFilters = [...currentFilters, ...liveFilters];
             }
 
@@ -479,7 +481,7 @@ export function ActivitiesPage() {
         });
 
         return result;
-    }, [allActivities, sortConfig, searchQuery, sourceFilter, datePreset, minDist, maxDist, minTime, maxTime]);
+    }, [allActivities, sortConfig, debouncedSearchQuery, sourceFilter, datePreset, minDist, maxDist, minTime, maxTime]);
 
     // Reset pagination when filters change
     useEffect(() => {

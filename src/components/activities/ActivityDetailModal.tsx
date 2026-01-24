@@ -12,7 +12,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 import { EXERCISE_TYPES, INTENSITIES } from '../training/ExerciseModal.tsx';
 
-import { ExerciseType, ExerciseIntensity, ExerciseSubType } from '../../models/types.ts';
+import { ExerciseType, ExerciseIntensity, ExerciseSubType, HyroxStation, HyroxActivityStats } from '../../models/types.ts';
 import { WorkoutStructureCard } from './WorkoutStructureCard.tsx';
 import { parseWorkout } from '../../utils/workoutParser.ts';
 
@@ -101,8 +101,21 @@ export function ActivityDetailModal({
         tonnage: activity.tonnage ? activity.tonnage.toString() : '',
         distance: activity.distance ? activity.distance.toString() : '',
         location: activity.location || '',
-        excludeFromStats: activity.excludeFromStats || false
+        excludeFromStats: activity.excludeFromStats || false,
+        hyroxStats: activity.hyroxStats || { runSplits: [], stations: {} }
     });
+
+    // Stations definition
+    const HYROX_STATIONS: { id: HyroxStation; label: string; icon: string }[] = [
+        { id: 'ski_erg', label: '1000m Ski Erg', icon: '⛷️' },
+        { id: 'sled_push', label: '50m Sled Push', icon: '🛒' },
+        { id: 'sled_pull', label: '50m Sled Pull', icon: '🚜' },
+        { id: 'burpee_broad_jumps', label: '80m BBJ', icon: '🐸' },
+        { id: 'rowing', label: '1000m Rowing', icon: '🚣' },
+        { id: 'farmers_carry', label: '200m Farmers', icon: '👜' },
+        { id: 'sandbag_lunges', label: '100m Lunges', icon: '🎒' },
+        { id: 'wall_balls', label: 'Wall Balls', icon: '🏐' },
+    ];
 
     const { exerciseEntries, universalActivities, updateExercise, deleteExercise, addExercise, calculateExerciseCalories } = useData();
     const { token } = useAuth();
@@ -138,6 +151,12 @@ export function ActivityDetailModal({
         const desc = universalActivity?.plan?.description || activity._mergeData?.universalActivity?.plan?.description || activity.notes || '';
         return parseWorkout(title, desc);
     }, [universalActivity, activity]);
+
+    // Hyrox Visualization Data
+    const hyroxStats = activity.hyroxStats;
+    const isHyrox = activity.type === 'hyrox';
+
+
 
     // Derived splits helper
     const splits = universalActivity?.performance?.splits || activity._mergeData?.universalActivity?.performance?.splits || [];
@@ -366,7 +385,8 @@ export function ActivityDetailModal({
             distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
             caloriesBurned: calories,
             location: editForm.location,
-            excludeFromStats: editForm.excludeFromStats
+            excludeFromStats: editForm.excludeFromStats,
+            hyroxStats: editForm.type === 'hyrox' ? editForm.hyroxStats : undefined
         };
 
         // For 'merged' virtual activities, we must create a new manual entry (override).
@@ -618,10 +638,37 @@ export function ActivityDetailModal({
                                     <option value="race">Tävling</option>
                                     <option value="tonnage">Styrka (Tonnage)</option>
                                     <option value="competition">Tävlingsmoment</option>
+                                    <option value="default">Standard</option>
                                 </select>
                             </div>
 
-                            {(editForm.type === 'running' || editForm.type === 'cycling' || editForm.type === 'walking' || editForm.type === 'swimming') && (
+                            {/* Hyrox Toggle for specific competition mode */}
+                            {editForm.type === 'hyrox' && (
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500 uppercase">Typ</label>
+                                    <div className="flex bg-slate-800 rounded-xl p-1 border border-white/5">
+                                        {[
+                                            { id: 'competition', label: 'Tävling' },
+                                            { id: 'race', label: 'Simulering' },
+                                            { id: 'default', label: 'Träning' }
+                                        ].map(opt => (
+                                            <button
+                                                key={opt.id}
+                                                type="button"
+                                                onClick={() => setEditForm({ ...editForm, subType: opt.id as any })}
+                                                className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase transition-all ${editForm.subType === opt.id
+                                                    ? 'bg-emerald-500 text-slate-900 shadow'
+                                                    : 'text-slate-400 hover:text-white'
+                                                    }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {(editForm.type === 'running' || editForm.type === 'cycling' || editForm.type === 'walking' || editForm.type === 'swimming' || editForm.type === 'hyrox') && (
                                 <div className="space-y-1">
                                     <label className="text-xs font-bold text-slate-500 uppercase">Distans (km)</label>
                                     <input
@@ -670,6 +717,101 @@ export function ActivityDetailModal({
                                 className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white resize-none focus:outline-none focus:border-emerald-500/50"
                             />
                         </div>
+
+                        {/* HYROX EDITOR - Only show if type is hyrox */}
+                        {editForm.type === 'hyrox' && (
+                            <div className="space-y-4 pt-4 border-t border-white/5 animate-in fade-in slide-in-from-bottom-4">
+                                <div className="flex justify-between items-center">
+                                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Hyrox Splits</h3>
+                                    <div className="text-xs text-slate-500 font-mono">
+                                        Total: <span className="text-emerald-400 font-bold">{
+                                            formatDuration(
+                                                (editForm.hyroxStats?.runSplits?.reduce((a, b) => a + (b || 0), 0) || 0) +
+                                                (Object.values(editForm.hyroxStats?.stations || {}).reduce((a, b) => a + (b || 0), 0) || 0)
+                                            )
+                                        }</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {/* 8 Rounds */}
+                                    {Array.from({ length: 8 }).map((_, i) => (
+                                        <div key={i} className="bg-slate-800/50 p-3 rounded-xl border border-white/5 space-y-2">
+                                            {/* Run Split */}
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xl">🏃</span>
+                                                <div className="flex-1 space-y-1">
+                                                    <label className="text-[10px] uppercase font-bold text-slate-500">Run {i + 1} (1km)</label>
+                                                    <div className="flex gap-2 items-center">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="mm:ss"
+                                                            value={formatDuration(editForm.hyroxStats?.runSplits?.[i] || 0)}
+                                                            onChange={e => {
+                                                                // Parse mm:ss to seconds
+                                                                const parts = e.target.value.split(':');
+                                                                let sec = 0;
+                                                                if (parts.length === 2) {
+                                                                    sec = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
+                                                                } else if (parts.length === 1 && !isNaN(parseInt(parts[0]))) {
+                                                                    sec = parseInt(parts[0]);
+                                                                }
+
+                                                                const newSplits = [...(editForm.hyroxStats?.runSplits || [])];
+                                                                newSplits[i] = sec;
+
+                                                                setEditForm({
+                                                                    ...editForm,
+                                                                    hyroxStats: {
+                                                                        ...editForm.hyroxStats,
+                                                                        runSplits: newSplits
+                                                                    }
+                                                                });
+                                                            }}
+                                                            className="w-full bg-slate-900 border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-emerald-500/50 outline-none"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Station Split */}
+                                            <div className="flex items-center gap-3 pl-8 border-l-2 border-slate-700/50 ml-2">
+                                                <span className="text-xl">{HYROX_STATIONS[i].icon}</span>
+                                                <div className="flex-1 space-y-1">
+                                                    <label className="text-[10px] uppercase font-bold text-amber-500/80">{HYROX_STATIONS[i].label}</label>
+                                                    <input
+                                                        type="text"
+                                                        placeholder="mm:ss"
+                                                        value={formatDuration(editForm.hyroxStats?.stations?.[HYROX_STATIONS[i].id] || 0)}
+                                                        onChange={e => {
+                                                            const parts = e.target.value.split(':');
+                                                            let sec = 0;
+                                                            if (parts.length === 2) {
+                                                                sec = (parseInt(parts[0]) * 60) + parseInt(parts[1]);
+                                                            } else if (parts.length === 1 && !isNaN(parseInt(parts[0]))) {
+                                                                sec = parseInt(parts[0]);
+                                                            }
+
+                                                            setEditForm({
+                                                                ...editForm,
+                                                                hyroxStats: {
+                                                                    ...editForm.hyroxStats,
+                                                                    stations: {
+                                                                        ...editForm.hyroxStats?.stations,
+                                                                        [HYROX_STATIONS[i].id]: sec
+                                                                    }
+                                                                }
+                                                            });
+                                                        }}
+                                                        className="w-full bg-slate-900 border-white/10 rounded-lg p-2 text-white font-mono text-sm focus:border-amber-500/50 outline-none"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Stats Exclusion Toggle */}
                         <div
@@ -798,13 +940,142 @@ export function ActivityDetailModal({
                                         ) : null;
                                     })()}
                                 </div>
-                                <p className="text-slate-400 font-mono text-sm">
-                                    {activity.date}
-                                    {activity.startTime && <span className="ml-2 text-slate-500">kl {activity.startTime}</span>}
-                                </p>
+
+                                {/* Hyrox Specific Header Data */}
+                                {isHyrox && (activity.subType === 'competition' || activity.subType === 'race') && (
+                                    <div className="flex gap-4 mt-2">
+                                        <div className="text-[10px] uppercase font-bold text-slate-500 bg-slate-800/50 px-2 py-1 rounded">
+                                            Total Tid: <span className="text-white text-sm">{formatDuration(activity.durationMinutes * 60)}</span>
+                                        </div>
+                                        {hyroxStats && (
+                                            <div className="text-[10px] uppercase font-bold text-slate-500 bg-slate-800/50 px-2 py-1 rounded">
+                                                Stations: <span className="text-amber-400 text-sm">
+                                                    {formatDuration(Object.values(hyroxStats.stations || {}).reduce((a, b) => a + (b || 0), 0))}
+                                                </span>
+                                            </div>
+                                        )}
+                                        {hyroxStats && (
+                                            <div className="text-[10px] uppercase font-bold text-slate-500 bg-slate-800/50 px-2 py-1 rounded">
+                                                Run: <span className="text-emerald-400 text-sm">
+                                                    {formatDuration(hyroxStats.runSplits?.reduce((a, b) => a + (b || 0), 0) || 0)}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
-                            <button onClick={onClose} className="text-slate-500 hover:text-white text-2xl">×</button>
                         </div>
+
+                        {/* HYROX VISUALIZATION */}
+                        {/* HYROX VISUALIZATION */}
+                        {isHyrox && hyroxStats && activeTab === 'stats' && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Timeline / Split View */}
+                                    <div className="p-4 bg-slate-800/30 rounded-2xl border border-white/5 space-y-3">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Race Breakdown</h4>
+                                        <div className="space-y-2 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                                            {Array.from({ length: 8 }).map((_, i) => (
+                                                <div key={i} className="flex flex-col gap-1">
+                                                    {/* Run Segment */}
+                                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-emerald-500/5 border border-emerald-500/10">
+                                                        <span className="text-emerald-500 text-xs">🏃 1km Run</span>
+                                                        <div className="flex-1 border-b border-dashed border-emerald-500/20 mx-2" />
+                                                        <span className="font-mono font-bold text-sm text-emerald-400">
+                                                            {formatDuration(hyroxStats.runSplits?.[i] || 0)}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Arrow */}
+                                                    <div className="flex justify-center -my-1 relative z-10">
+                                                        <span className="text-[10px] text-slate-600">↓</span>
+                                                    </div>
+
+                                                    {/* Station Segment */}
+                                                    <div className="flex items-center gap-3 p-2 rounded-lg bg-amber-500/5 border border-amber-500/10">
+                                                        <span className="text-xl">{HYROX_STATIONS[i].icon}</span>
+                                                        <span className="text-amber-500 text-xs font-bold">{HYROX_STATIONS[i].label}</span>
+                                                        <div className="flex-1 border-b border-dashed border-amber-500/20 mx-2" />
+                                                        <span className="font-mono font-bold text-sm text-amber-400">
+                                                            {formatDuration(hyroxStats.stations?.[HYROX_STATIONS[i].id] || 0)}
+                                                        </span>
+                                                    </div>
+
+                                                    {/* Connector line unless last */}
+                                                    {i < 7 && (
+                                                        <div className="flex justify-center -my-1 relative z-10">
+                                                            <span className="text-[10px] text-slate-600">↓</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Analysis / Charts */}
+                                    <div className="space-y-4">
+                                        {/* Distribution Chart */}
+                                        <div className="p-4 bg-slate-800/30 rounded-2xl border border-white/5 h-[200px] flex flex-col">
+                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tid per kategori</h4>
+                                            <div className="flex-1 flex items-end gap-4 px-4 pb-2">
+                                                {(() => {
+                                                    const totalRun = hyroxStats.runSplits?.reduce((a, b) => a + (b || 0), 0) || 0;
+                                                    const totalStation = Object.values(hyroxStats.stations || {}).reduce((a, b) => a + (b || 0), 0) || 0;
+                                                    const total = totalRun + totalStation || 1;
+
+                                                    return (
+                                                        <>
+                                                            <div className="flex-1 flex flex-col gap-2 items-center group">
+                                                                <div className="w-full bg-emerald-500/20 rounded-t-xl relative overflow-hidden transition-all group-hover:bg-emerald-500/30" style={{ height: `${(totalRun / total) * 100}%` }}>
+                                                                    <div className="absolute inset-x-0 bottom-0 bg-emerald-500 opacity-20 h-full" />
+                                                                </div>
+                                                                <span className="text-xs font-bold text-emerald-400">{Math.round((totalRun / total) * 100)}%</span>
+                                                                <span className="text-[10px] font-black uppercase text-slate-500">Run</span>
+                                                            </div>
+                                                            <div className="flex-1 flex flex-col gap-2 items-center group">
+                                                                <div className="w-full bg-amber-500/20 rounded-t-xl relative overflow-hidden transition-all group-hover:bg-amber-500/30" style={{ height: `${(totalStation / total) * 100}%` }}>
+                                                                    <div className="absolute inset-x-0 bottom-0 bg-amber-500 opacity-20 h-full" />
+                                                                </div>
+                                                                <span className="text-xs font-bold text-amber-400">{Math.round((totalStation / total) * 100)}%</span>
+                                                                <span className="text-[10px] font-black uppercase text-slate-500">Stations</span>
+                                                            </div>
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+
+                                        {/* Station Ranking */}
+                                        <div className="p-4 bg-slate-800/30 rounded-2xl border border-white/5 flex-1">
+                                            <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tidskrävande Stationer</h4>
+                                            <div className="space-y-2">
+                                                {Object.entries(hyroxStats.stations || {})
+                                                    .sort(([, a], [, b]) => (b as number) - (a as number))
+                                                    .map(([key, duration]) => {
+                                                        const station = HYROX_STATIONS.find(s => s.id === key);
+                                                        if (!station) return null;
+                                                        return (
+                                                            <div key={key} className="flex justify-between items-center text-xs">
+                                                                <span className="flex items-center gap-2 text-slate-300">
+                                                                    <span>{station.icon}</span>
+                                                                    {station.label}
+                                                                </span>
+                                                                <span className="font-mono text-amber-400 font-bold">{formatDuration(duration as number)}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Standard Content for Non-Hyrox (or just hide it if Hyrox?) 
+                            We want to HIDE standard graphs if it's a Hyrox race to avoid clutter, 
+                            but maybe keep notes etc. 
+                        */}
+
 
                         {/* Warning Banner: This activity is a component of a merge */}
                         {isMergedInto && parentMergedActivity && (
@@ -1116,7 +1387,7 @@ export function ActivityDetailModal({
                         )}
 
                         {/* COMBINED VIEW */}
-                        {(viewMode === 'combined' || !isMerged) && activeTab === 'stats' && (
+                        {!isHyrox && (viewMode === 'combined' || !isMerged) && activeTab === 'stats' && (
                             <>
                                 {/* Main Stats Display - Swaps between Strava Card and Generic Grid */}
                                 {showStravaCard ? (
