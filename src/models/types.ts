@@ -15,6 +15,7 @@ export type FoodCategory =
     | 'vegetables'     // Grönsaker
     | 'fruits'         // Frukter
     | 'grains'         // Spannmål, ris, pasta
+    | 'cereals'        // Müsli, flingor, granola
     | 'legumes'        // Baljväxter (linser, bönor, kikärtor)
     | 'protein'        // Proteinrika (tofu, tempeh, seitan)
     | 'fats'           // Fetter/oljor
@@ -1608,6 +1609,7 @@ export const CATEGORY_LABELS: Record<FoodCategory, string> = {
     vegetables: 'Grönsaker',
     fruits: 'Frukt',
     grains: 'Spannmål',
+    cereals: 'Müsli & Flingor',
     legumes: 'Baljväxter',
     protein: 'Protein',
     fats: 'Fett & Oljor',

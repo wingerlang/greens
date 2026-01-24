@@ -29,7 +29,14 @@ export const extractBrand = (text: string, knownBrands: string[] = []): string |
             // Clean up common noise words
             let candidate = match[1].trim();
             if (candidate && !['sweden', 'sverige', 'ab'].includes(candidate.toLowerCase())) {
-                return candidate.replace(/\b(ab|as|oy)\b/gi, '').trim(); // Remove corporate suffix
+                let cleaned = candidate.replace(/\b(ab|as|oy)\b/gi, '').trim(); // Remove corporate suffix
+
+                // Filter out pricing text that often gets captured (e.g. "Nuvarande pris", "Jmf pris")
+                cleaned = cleaned.replace(/\b(nuvarande|ordinarie|jmf|kampanj|medlems)\s*pris.*$/i, '').trim();
+                // Also remove "Pris: 123" or "Pris 123" but keep "First Price"
+                cleaned = cleaned.replace(/\bpris\s*[:\d].*$/i, '').trim();
+
+                return cleaned;
             }
         }
     }
