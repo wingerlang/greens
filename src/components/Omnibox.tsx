@@ -257,6 +257,22 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     // UX Friction Tracking: Timestamp when opened
     const [openTimestamp, setOpenTimestamp] = useState<number | null>(null);
 
+    // System Action Usage Tracking
+    const [actionUsage, setActionUsage] = useState<Record<string, number>>(() => {
+        try {
+            const saved = localStorage.getItem('system_action_usage');
+            return saved ? JSON.parse(saved) : {};
+        } catch {
+            return {};
+        }
+    });
+
+    const trackActionUsage = (actionId: string) => {
+        const newUsage = { ...actionUsage, [actionId]: (actionUsage[actionId] || 0) + 1 };
+        setActionUsage(newUsage);
+        localStorage.setItem('system_action_usage', JSON.stringify(newUsage));
+    };
+
     // Sync draft from intent
     useEffect(() => {
         if (!isManual && intent.type === 'exercise') {
@@ -324,11 +340,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         if (!isActionMode) return [];
         if (!actionQuery) return ACTION_COMMANDS;
 
-        return ACTION_COMMANDS.filter(action =>
+        const filtered = ACTION_COMMANDS.filter(action =>
             action.command.toLowerCase().includes(input.toLowerCase()) ||
             action.label.toLowerCase().includes(actionQuery)
         );
-    }, [isActionMode, actionQuery, input]);
+        // Sort by usage count
+        return filtered.sort((a, b) => (actionUsage[b.id] || 0) - (actionUsage[a.id] || 0));
+    }, [isActionMode, actionQuery, input, actionUsage]);
+
 
     // Navigation suggestions for slash mode
     const navSuggestions = useMemo(() => {
@@ -873,6 +892,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         // Handle action selection
         if (isActionMode && selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'action') {
             const action = selectableItems[selectedIndex] as any;
+            trackActionUsage(action.id);
             if (action.id === 'add-food') {
                 navigate('/database?action=new');
             } else if (action.id === 'backup') {
@@ -1089,7 +1109,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                             {action.icon}
                                         </div>
                                         <div>
-                                            <div className="font-medium">{action.label}</div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="font-medium">{action.label}</div>
+                                                {actionUsage[action.id] > 0 && (
+                                                    <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                        ⚡ {actionUsage[action.id]}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <div className="text-[10px] text-slate-500">{action.description}</div>
                                         </div>
                                     </div>

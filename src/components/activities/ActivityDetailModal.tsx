@@ -1448,8 +1448,8 @@ export function ActivityDetailModal({
                             </div>
                         )}
 
-                        {/* COMBINED VIEW */}
-                        {!isHyrox && (viewMode === 'combined' || !isMerged) && activeTab === 'stats' && (
+                        {/* COMBINED VIEW - Now also for Hyrox */}
+                        {(viewMode === 'combined' || !isMerged) && activeTab === 'stats' && (
                             <>
                                 {/* Main Stats Display - Swaps between Strava Card and Generic Grid */}
                                 {showStravaCard ? (
