@@ -675,6 +675,27 @@ export interface HyroxActivityStats {
 }
 
 /**
+ * Race Definition for Aliasing and Grouping
+ */
+export interface RaceDefinition {
+    id: string;
+    name: string; // Canonical Name (e.g. "Göteborgsvarvet")
+    aliases: string[]; // Fuzzy match strings (e.g. "Gbg varvet", "Göteborgs Varvet")
+    distance?: number; // Canonical distance in km
+    location?: string;
+    website?: string;
+}
+
+/**
+ * Rules for excluding activities from Race List automatically
+ */
+export interface RaceIgnoreRule {
+    id: string;
+    pattern: string; // Regex or string match
+    matchType: 'exact' | 'contains' | 'regex';
+}
+
+/**
  * Raw Strava activity from API
  */
 export interface StravaActivity {

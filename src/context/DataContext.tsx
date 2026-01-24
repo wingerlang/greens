@@ -43,7 +43,9 @@ import {
     type MealItem,
     type DatabaseAction,
     type DatabaseActionType,
-    type DatabaseEntityType
+    type DatabaseEntityType,
+    type RaceDefinition, // Phase R
+    type RaceIgnoreRule // Phase R
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { safeFetch } from '../utils/http.ts';
@@ -225,6 +227,16 @@ interface DataContextType {
     calculateWeeklyTrainingStreak: (referenceDate?: string) => number;
     calculateCalorieGoalStreak: (referenceDate?: string) => number;
 
+    // Race Definitions (Phase R)
+    raceDefinitions: RaceDefinition[];
+    addRaceDefinition: (def: Omit<RaceDefinition, 'id'>) => RaceDefinition;
+    updateRaceDefinition: (id: string, updates: Partial<RaceDefinition>) => void;
+    deleteRaceDefinition: (id: string) => void;
+
+    raceIgnoreRules: RaceIgnoreRule[];
+    addRaceIgnoreRule: (rule: Omit<RaceIgnoreRule, 'id'>) => RaceIgnoreRule;
+    deleteRaceIgnoreRule: (id: string) => void;
+
     // System
     refreshData: () => Promise<void>;
     isLoading: boolean;
@@ -363,87 +375,87 @@ export function DataProvider({ children }: DataProviderProps) {
         // Online Sync
         const token = localStorage.getItem('auth_token');
         if (token) {
-             // Create AbortController for this refresh cycle
-             const abortController = new AbortController();
-             const signal = abortController.signal;
+            // Create AbortController for this refresh cycle
+            const abortController = new AbortController();
+            const signal = abortController.signal;
 
-             try {
-                 console.log('[DataContext] Starting parallel sync...');
+            try {
+                console.log('[DataContext] Starting parallel sync...');
 
-                 // execute all independent fetches in parallel
-                 const [userPayload, mePayload, planData, strengthData, quickMealsData] = await Promise.all([
-                     safeFetch<{ users: User[] }>('/api/users', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
-                     safeFetch<{ user: User }>('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
-                     safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', { headers: { 'Authorization': `Bearer ${token}` } }),
-                     safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } }),
-                     safeFetch<QuickMeal[]>('/api/quick-meals', { headers: { 'Authorization': `Bearer ${token}` } })
-                 ]);
+                // execute all independent fetches in parallel
+                const [userPayload, mePayload, planData, strengthData, quickMealsData] = await Promise.all([
+                    safeFetch<{ users: User[] }>('/api/users', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
+                    safeFetch<{ user: User }>('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
+                    safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    safeFetch<QuickMeal[]>('/api/quick-meals', { headers: { 'Authorization': `Bearer ${token}` } })
+                ]);
 
-                 // 1. Handle Users
-                 if (userPayload && userPayload.users && Array.isArray(userPayload.users)) {
-                     console.log('[DataContext] Loaded real users list:', userPayload.users.map(u => u.username));
-                     loadedUsers = userPayload.users;
-                     data.users = loadedUsers;
-                 }
+                // 1. Handle Users
+                if (userPayload && userPayload.users && Array.isArray(userPayload.users)) {
+                    console.log('[DataContext] Loaded real users list:', userPayload.users.map(u => u.username));
+                    loadedUsers = userPayload.users;
+                    data.users = loadedUsers;
+                }
 
-                 // 2. Handle Me (Current User)
-                 if (mePayload && mePayload.user) {
-                     console.log('[DataContext] Resolved current user:', mePayload.user.username);
-                     data.currentUserId = mePayload.user.id;
-                     if (!loadedUsers.find(u => u.id === mePayload.user.id)) {
-                         loadedUsers.push(mePayload.user);
-                     }
-                 }
+                // 2. Handle Me (Current User)
+                if (mePayload && mePayload.user) {
+                    console.log('[DataContext] Resolved current user:', mePayload.user.username);
+                    data.currentUserId = mePayload.user.id;
+                    if (!loadedUsers.find(u => u.id === mePayload.user.id)) {
+                        loadedUsers.push(mePayload.user);
+                    }
+                }
 
-                 // 3. Handle Planned Activities
-                 if (planData && planData.activities && Array.isArray(planData.activities)) {
-                     console.log('[DataContext] Loaded planned activities globally:', planData.activities.length);
-                     const newActivities = planData.activities;
-                     const existing = data.plannedActivities || [];
-                     const newIds = new Set(newActivities.map((a: PlannedActivity) => a.id));
-                     const merged = [
-                         ...existing.filter((a: PlannedActivity) => !newIds.has(a.id)),
-                         ...newActivities
-                     ];
-                     data.plannedActivities = merged;
-                 }
+                // 3. Handle Planned Activities
+                if (planData && planData.activities && Array.isArray(planData.activities)) {
+                    console.log('[DataContext] Loaded planned activities globally:', planData.activities.length);
+                    const newActivities = planData.activities;
+                    const existing = data.plannedActivities || [];
+                    const newIds = new Set(newActivities.map((a: PlannedActivity) => a.id));
+                    const merged = [
+                        ...existing.filter((a: PlannedActivity) => !newIds.has(a.id)),
+                        ...newActivities
+                    ];
+                    data.plannedActivities = merged;
+                }
 
-                 // 4. Handle Strength Workouts
-                 if (strengthData && strengthData.workouts && Array.isArray(strengthData.workouts)) {
-                     console.log('[DataContext] Loaded strength workouts globally:', strengthData.workouts.length);
-                     data.strengthSessions = strengthData.workouts;
+                // 4. Handle Strength Workouts
+                if (strengthData && strengthData.workouts && Array.isArray(strengthData.workouts)) {
+                    console.log('[DataContext] Loaded strength workouts globally:', strengthData.workouts.length);
+                    data.strengthSessions = strengthData.workouts;
 
-                     // Update local mirror so next load has it
-                     const stored = localStorage.getItem('greens-app-data');
-                     if (stored) {
-                         const parsed = JSON.parse(stored);
-                         parsed.strengthSessions = strengthData.workouts;
-                         localStorage.setItem('greens-app-data', JSON.stringify(parsed));
-                     }
-                 }
+                    // Update local mirror so next load has it
+                    const stored = localStorage.getItem('greens-app-data');
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        parsed.strengthSessions = strengthData.workouts;
+                        localStorage.setItem('greens-app-data', JSON.stringify(parsed));
+                    }
+                }
 
-                 // 5. Handle Quick Meals
-                 if (quickMealsData && Array.isArray(quickMealsData)) {
-                     console.log('[DataContext] Loaded quick meals:', quickMealsData.length);
-                     data.quickMeals = quickMealsData;
-                     setQuickMeals(quickMealsData);
+                // 5. Handle Quick Meals
+                if (quickMealsData && Array.isArray(quickMealsData)) {
+                    console.log('[DataContext] Loaded quick meals:', quickMealsData.length);
+                    data.quickMeals = quickMealsData;
+                    setQuickMeals(quickMealsData);
 
-                     // Update local mirror
-                     const stored = localStorage.getItem('greens-app-data');
-                     if (stored) {
-                         const parsed = JSON.parse(stored);
-                         parsed.quickMeals = quickMealsData;
-                         localStorage.setItem('greens-app-data', JSON.stringify(parsed));
-                     }
-                 }
+                    // Update local mirror
+                    const stored = localStorage.getItem('greens-app-data');
+                    if (stored) {
+                        const parsed = JSON.parse(stored);
+                        parsed.quickMeals = quickMealsData;
+                        localStorage.setItem('greens-app-data', JSON.stringify(parsed));
+                    }
+                }
 
-             } catch (e: unknown) {
-                 if (e instanceof Error && e.name === 'AbortError') {
-                     console.log('[DataContext] Request aborted (expected during re-renders)');
-                 } else {
-                     console.error('[DataContext] Exception during parallel sync:', e);
-                 }
-             }
+            } catch (e: unknown) {
+                if (e instanceof Error && e.name === 'AbortError') {
+                    console.log('[DataContext] Request aborted (expected during re-renders)');
+                } else {
+                    console.error('[DataContext] Exception during parallel sync:', e);
+                }
+            }
         } else {
             console.log('[DataContext] No token found, skipping online sync.');
         }
@@ -483,7 +495,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 let date = w.date;
                 if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
                     // Date normalization logic...
-                     if (date.includes('/') || date.includes('.')) {
+                    if (date.includes('/') || date.includes('.')) {
                         const sep = date.includes('/') ? '/' : '.';
                         const parts = date.split(sep);
                         if (parts.length === 3) {
@@ -717,9 +729,20 @@ export function DataProvider({ children }: DataProviderProps) {
         foodAliases,
         updateFoodAlias,
         unifiedActivities,
+        updateFoodAlias,
+        unifiedActivities,
         refreshData,
         isLoading: !isLoaded,
-        databaseActions
+        databaseActions,
+
+        // Race Defs
+        raceDefinitions,
+        addRaceDefinition,
+        updateRaceDefinition,
+        deleteRaceDefinition,
+        raceIgnoreRules,
+        addRaceIgnoreRule,
+        deleteRaceIgnoreRule
     };
 
     return (

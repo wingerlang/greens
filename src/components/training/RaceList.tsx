@@ -4,6 +4,7 @@ import { useData } from '../../context/DataContext.tsx';
 import { formatActivityDuration } from '../../utils/formatters.ts';
 import { ActivityDetailModal } from '../activities/ActivityDetailModal.tsx';
 import { RaceSeriesDetailModal } from './RaceSeriesDetailModal.tsx';
+import { RaceSeriesManager } from './RaceSeriesManager.tsx';
 import {
     BarChart,
     Bar,
