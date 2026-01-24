@@ -1,8 +1,9 @@
 // Shared Types - Reusable across all modules
 // ============================================
 
-import { type StrengthWorkout } from './strengthTypes.ts';
-export type { StrengthWorkout };
+import { type StrengthWorkout, type StrengthSet } from './strengthTypes.ts';
+import { type ExerciseDefinition } from './exercise.ts';
+export type { StrengthWorkout, StrengthSet, ExerciseDefinition };
 
 /** Unit of measurement for food items and recipe ingredients */
 export type Unit = 'g' | 'ml' | 'pcs' | 'kg' | 'l' | 'cup';
@@ -672,6 +673,7 @@ export type HyroxStation =
 export interface HyroxActivityStats {
     totalTime?: number;
     stations?: Partial<Record<HyroxStation, number>>; // time in seconds
+    stationDistances?: Partial<Record<HyroxStation, number>>; // In meters (custom)
     runSplits?: number[]; // 8 x 1km splits
 }
 
@@ -1459,6 +1461,8 @@ export interface AppData {
     // Quick Meals & Aliases
     quickMeals?: QuickMeal[];
     foodAliases?: Record<string, string>; // foodId -> alias
+
+    exercises?: ExerciseDefinition[]; // Central exercise database
 
     // Activity Log
     databaseActions?: DatabaseAction[];

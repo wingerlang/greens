@@ -1,8 +1,8 @@
-
 import { useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext.tsx';
+import { useData } from '../context/DataContext.tsx';
 import { useQuery } from '@tanstack/react-query';
-import exercisesData from '../../data/exercises.json';
+import { findExerciseMatch } from '../utils/exerciseMapper.ts';
 
 // Type definitions
 interface WorkoutSet {
@@ -31,6 +31,7 @@ interface IntensityBucket {
 
 export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId: string | null, intensityThreshold: number = 0.7) => {
     const { user, token } = useAuth();
+    const { exercises: allExercises } = useData();
 
     const { data: workoutHistory, isLoading } = useQuery({
         queryKey: ['training-history-full', user?.username],
@@ -53,13 +54,11 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
 
     // Main Logic
     const stats = useMemo(() => {
-        if (!workoutHistory || (!muscleId && !targetExerciseId)) return null;
-
-        const allExercises = exercisesData.exercises;
+        if (!workoutHistory || (!muscleId && !targetExerciseId) || !allExercises.length) return null;
 
         // 1. Identify relevant exercises
         // We store the full object to access aliases later
-        let relevantExercises: { def: typeof allExercises[0]; role: 'primary' | 'secondary' | 'target' }[] = [];
+        let relevantExercises: { def: any; role: 'primary' | 'secondary' | 'target' }[] = [];
 
         if (targetExerciseId) {
             const ex = allExercises.find(e => e.id === targetExerciseId);
@@ -71,53 +70,20 @@ export const useMuscleLoadAnalysis = (muscleId: string | null, targetExerciseId:
             ];
         }
 
-        // Helper to normalize names for matching
-        const normalize = (str: string) => str.toLowerCase().replace(/[^a-zåäö0-9]/g, '');
-
-        // Helper to match a history entry to a relevant exercise with fuzzy matching
+        // Helper to match a history entry to a relevant exercise using the unified mapper
         const findMatch = (entry: any): { match?: typeof relevantExercises[0]; matchReason?: string } => {
-            const entryId = entry.exerciseId?.toLowerCase().trim();
-            const entryName = entry.exerciseName?.toLowerCase().trim();
-            const normalizedEntryName = entryName ? normalize(entryName) : '';
-            const normalizedEntryId = entryId ? normalize(entryId) : '';
+            const entryId = entry.exerciseId;
+            const entryName = entry.exerciseName || entryId;
 
-            for (const re of relevantExercises) {
-                const exId = re.def.id.toLowerCase();
-                const exNameSv = re.def.name_sv.toLowerCase();
-                const exNameEn = re.def.name_en.toLowerCase();
-                const normalizedExId = normalize(exId);
-                const normalizedExNameSv = normalize(exNameSv);
-                const normalizedExNameEn = normalize(exNameEn);
+            if (!entryName) return {};
 
-                // 1. Direct ID Match
-                if (entryId && (exId === entryId || normalizedExId === normalizedEntryId)) {
-                    return { match: re, matchReason: `ID: ${entryId} = ${exId}` };
-                }
-
-                // 2. Exact Name Match
-                if (entryName) {
-                    if (exNameSv === entryName || exNameEn === entryName) {
-                        return { match: re, matchReason: `ExactName: ${entryName}` };
-                    }
-                }
-
-                // 3. Fuzzy: entry name is contained in exercise name (or vice versa)
-                if (normalizedEntryName && normalizedEntryName.length >= 3) {
-                    // "deadlift" contained in "deadliftbarbell"
-                    if (normalizedExId.includes(normalizedEntryName) || normalizedExNameEn.includes(normalizedEntryName)) {
-                        return { match: re, matchReason: `Fuzzy: "${entryName}" ⊂ "${exNameEn}"` };
-                    }
-                    // "deadliftbarbell" contains "deadlift"
-                    if (normalizedEntryName.includes(normalizedExId) || normalizedEntryName.includes(normalizedExNameEn)) {
-                        return { match: re, matchReason: `FuzzyReverse: "${exNameEn}" ⊂ "${entryName}"` };
-                    }
-                }
-
-                // 4. ID-based fuzzy: "deadlift" matches "deadlift_barbell"
-                if (normalizedEntryId && normalizedEntryId.length >= 3) {
-                    if (normalizedExId.includes(normalizedEntryId) || normalizedEntryId.includes(normalizedExId)) {
-                        return { match: re, matchReason: `FuzzyID: ${entryId} ~ ${exId}` };
-                    }
+            // Use the unified mapper
+            const matchResult = findExerciseMatch(entryName, allExercises);
+            if (matchResult) {
+                // Check if this matched exercise is in our "relevant" list (the muscle/target filter)
+                const relevantMatch = relevantExercises.find(re => re.def.id === matchResult.exercise.id);
+                if (relevantMatch) {
+                    return { match: relevantMatch, matchReason: matchResult.reason };
                 }
             }
             return {};

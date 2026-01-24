@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
-import { Plus, Ruler, Dumbbell } from 'lucide-react';
+import { Plus, Ruler, Dumbbell, Flame } from 'lucide-react';
 
 interface DashboardActionFABProps {
     onLogMeasurements: () => void;
     onImportWorkout: () => void;
+    onQuickEstimate: () => void;
 }
 
-export function DashboardActionFAB({ onLogMeasurements, onImportWorkout }: DashboardActionFABProps) {
+export function DashboardActionFAB({ onLogMeasurements, onImportWorkout, onQuickEstimate }: DashboardActionFABProps) {
     const [isOpen, setIsOpen] = useState(false);
 
     return (
@@ -16,6 +17,21 @@ export function DashboardActionFAB({ onLogMeasurements, onImportWorkout }: Dashb
         >
             {/* Secondary Actions */}
             <div className={`flex flex-col gap-3 transition-all duration-300 ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}>
+
+                {/* Quick Estimate */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onQuickEstimate();
+                        setIsOpen(false);
+                    }}
+                    className="flex items-center gap-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2 rounded-full shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors group border border-slate-200 dark:border-slate-700"
+                >
+                    <span className="text-xs font-bold uppercase tracking-wider">Estimering 🤷</span>
+                    <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                        <Flame size={16} />
+                    </div>
+                </button>
 
                 {/* Import Workout */}
                 <button

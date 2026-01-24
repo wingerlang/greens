@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext.tsx';
-import { parseHyroxStats } from '../../utils/hyroxParser.ts';
+import { parseHyroxStats, HyroxStationStats, parseHyroxHistory, HyroxSessionSummary } from '../../utils/hyroxParser.ts';
 import { predictHyroxTime, HyroxPrediction, HyroxClass, HYROX_STANDARDS } from '../../utils/hyroxPredictor.ts';
 import { HyroxStation } from '../../models/types.ts';
 import { HyroxStationDetailModal } from './HyroxStationDetailModal.tsx';
@@ -50,15 +50,20 @@ const ELITE_SPLITS = {
 const ALL_STATIONS: HyroxStation[] = ['ski_erg', 'sled_push', 'sled_pull', 'burpee_broad_jumps', 'rowing', 'farmers_carry', 'sandbag_lunges', 'wall_balls'];
 
 export function HyroxDashboard() {
-    const { exerciseEntries, coachConfig, strengthSessions } = useData();
+    const { unifiedActivities, coachConfig, strengthSessions, exercises } = useData();
 
     const [selectedClass, setSelectedClass] = useState<HyroxClass>('MEN_OPEN');
     // Feature 7.0: 'pro_stats' tab
-    const [viewMode, setViewMode] = useState<'status' | 'simulate' | 'goals' | 'training' | 'guide' | 'duo' | 'pro_stats'>('status');
+    // Feature 7.0: 'pro_stats' tab
+    const [viewMode, setViewMode] = useState<'status' | 'races' | 'workouts' | 'history' | 'simulate' | 'goals' | 'duo' | 'guide' | 'training' | 'pro_stats'>('status');
     const [runImprovement, setRunImprovement] = useState(0);
     const [stationEfficiency, setStationEfficiency] = useState(0);
     const [roxzoneImprovement, setRoxzoneImprovement] = useState(0);
-    const [goalTime, setGoalTime] = useState("01:30");
+    const [goalTime, setGoalTime] = useState('01:30');
+
+    // History Table Sort
+    const [sortField, setSortField] = useState<string>('date');
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
     // Feature 6.0: Encyclopedia Modal
     const [selectedStation, setSelectedStation] = useState<HyroxStation | null>(null);
@@ -68,8 +73,35 @@ export function HyroxDashboard() {
 
     const isDoubles = selectedClass.includes('DOUBLES') || selectedClass === 'RELAY';
 
-    // 1. Gather Data & 5k Form
-    const stats = useMemo(() => parseHyroxStats(exerciseEntries, strengthSessions), [exerciseEntries, strengthSessions]);
+    const stats: Record<HyroxStation, HyroxStationStats> = useMemo(() => parseHyroxStats(unifiedActivities as any, strengthSessions, exercises), [unifiedActivities, strengthSessions, exercises]);
+    const rawHyroxHistory = useMemo(() => parseHyroxHistory(unifiedActivities as any, strengthSessions, exercises), [unifiedActivities, strengthSessions, exercises]);
+
+    const hyroxHistory = useMemo(() => {
+        const sorted = [...rawHyroxHistory];
+        sorted.sort((a, b) => {
+            let valA: any = a[sortField as keyof HyroxSessionSummary];
+            let valB: any = b[sortField as keyof HyroxSessionSummary];
+
+            if (sortField === 'tonnage') {
+                valA = a.totalTonnage || 0;
+                valB = b.totalTonnage || 0;
+            }
+
+            if (valA < valB) return sortOrder === 'asc' ? -1 : 1;
+            if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return sorted;
+    }, [rawHyroxHistory, sortField, sortOrder]);
+
+    const requestSort = (field: string) => {
+        if (sortField === field) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortField(field);
+            setSortOrder('desc');
+        }
+    };
     const recent5k = useMemo(() => {
         if (coachConfig?.userProfile?.recentRaceTime) {
             const { distance, timeSeconds } = coachConfig.userProfile.recentRaceTime;
@@ -86,9 +118,9 @@ export function HyroxDashboard() {
     const averageStats = useMemo(() => {
         const statsObj: Partial<Record<HyroxStation, number>> = {};
         ALL_STATIONS.forEach(station => {
-            const history = stats[station];
-            if (history.length > 0) {
-                statsObj[station] = history.reduce((a, b) => a + b, 0) / history.length;
+            const stationData = stats[station];
+            if (stationData.times.length > 0) {
+                statsObj[station] = stationData.times.reduce((a, b) => a + b, 0) / stationData.times.length;
             }
         });
         return statsObj;
@@ -230,12 +262,13 @@ export function HyroxDashboard() {
 
                 <div className="flex gap-2 mt-8 border-t border-white/5 pt-4 overflow-x-auto pb-1 scrollbar-none">
                     <TabBtn label="Status" active={viewMode === 'status'} onClick={() => setViewMode('status')} color="indigo" />
-                    <TabBtn label="🔮 Simulator" active={viewMode === 'simulate'} onClick={() => setViewMode('simulate')} color="amber" />
-                    <TabBtn label="🎯 Mål & Splits" active={viewMode === 'goals'} onClick={() => setViewMode('goals')} color="emerald" />
-                    <TabBtn label="🏋️ Workouts" active={viewMode === 'training'} onClick={() => setViewMode('training')} color="rose" />
-                    <TabBtn label="🧠 Strategy" active={viewMode === 'guide'} onClick={() => setViewMode('guide')} color="sky" />
-                    <TabBtn label="⚔️ Duo Lab" active={viewMode === 'duo'} onClick={() => setViewMode('duo')} color="cyan" />
-                    <TabBtn label="📊 Pro Stats" active={viewMode === 'pro_stats'} onClick={() => setViewMode('pro_stats')} color="indigo" />
+                    <TabBtn label="Tävlingar" active={viewMode === 'races'} onClick={() => setViewMode('races')} color="rose" />
+                    <TabBtn label="Träningslab" active={viewMode === 'workouts'} onClick={() => setViewMode('workouts')} color="emerald" />
+                    <TabBtn label="Simulator" active={viewMode === 'simulate'} onClick={() => setViewMode('simulate')} color="amber" />
+                    <TabBtn label="Målpacing" active={viewMode === 'goals'} onClick={() => setViewMode('goals')} color="emerald" />
+                    <TabBtn label="Duo Lab" active={viewMode === 'duo'} onClick={() => setViewMode('duo')} color="sky" />
+                    <TabBtn label="Historik" active={viewMode === 'history'} onClick={() => setViewMode('history')} color="indigo" />
+                    <TabBtn label="Guide" active={viewMode === 'guide'} onClick={() => setViewMode('guide')} color="slate" />
                 </div>
             </div>
 
@@ -511,34 +544,67 @@ export function HyroxDashboard() {
                             )}
 
                             {viewMode === 'status' && (
-                                <div className="grid gap-4">
-                                    <div className="bg-slate-900 p-5 rounded-2xl border border-white/5">
-                                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Din Superkraft ⚡</h3>
-                                        <div className="flex items-center gap-4">
-                                            <div className="text-3xl">🏃</div> {/* Should differ based on station, hardcoded for now or map icon */}
-                                            <div>
-                                                <div className="font-bold text-white text-lg leading-none mb-1">{prediction.strongestStation.replace(/_/g, ' ')}</div>
-                                                <p className="text-xs text-slate-400">Du är 15% snabbare än snittet här.</p>
+                                <div className="space-y-6">
+                                    <div className="grid gap-4">
+                                        <div className="bg-slate-900 p-5 rounded-2xl border border-white/5">
+                                            <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Din Superkraft ⚡</h3>
+                                            <div className="flex items-center gap-4">
+                                                <div className="text-3xl">🏃</div>
+                                                <div>
+                                                    <div className="font-bold text-white text-lg leading-none mb-1">{prediction.strongestStation.replace(/_/g, ' ')}</div>
+                                                    <p className="text-xs text-slate-400">Du är 15% snabbare än snittet här.</p>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Feature 14: Compare Levels */}
-                                    <div className="bg-slate-900 p-5 rounded-2xl border border-white/5">
-                                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-3">Compare</h3>
-                                        <div className="space-y-2 text-xs">
-                                            <div className="flex justify-between text-slate-400">
-                                                <span>User Average</span>
-                                                <span className="font-mono">01:35:00</span>
-                                            </div>
-                                            <div className="flex justify-between text-amber-500 font-bold">
-                                                <span>YOU</span>
-                                                <span className="font-mono">{prediction.totalTimeFormatted}</span>
-                                            </div>
-                                            <div className="flex justify-between text-emerald-500">
-                                                <span>Elite Cutoff</span>
-                                                <span className="font-mono">01:05:00</span>
-                                            </div>
+                                    {/* TRAINING SUMMARY (CLOSED LOOP) */}
+                                    <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-4 opacity-5 text-8xl">🏋️</div>
+                                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest mb-6 flex items-center gap-2 relative z-10">
+                                            <span>📊</span> Träningsstatus
+                                        </h3>
+                                        <div className="space-y-4 relative z-10 max-h-[460px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-white/10">
+                                            {ALL_STATIONS.map(stId => {
+                                                const sStats = stats[stId];
+                                                if (sStats.totalSets === 0) return null;
+                                                return (
+                                                    <div key={stId} className={`p-4 rounded-2xl border transition-all ${stId === 'sled_push' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-slate-950/50 border-white/5'}`}>
+                                                        <div className="flex justify-between items-center mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-lg">{HYROX_ENCYCLOPEDIA[stId]?.icon || '💪'}</span>
+                                                                <span className={`text-sm font-black uppercase tracking-tight ${stId === 'sled_push' ? 'text-emerald-400' : 'text-white'}`}>
+                                                                    {stId.replace(/_/g, ' ')}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[10px] font-bold text-slate-500 uppercase">{sStats.sessions.size} pass</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-4 gap-2">
+                                                            <div className="text-center">
+                                                                <div className="text-[8px] text-slate-500 uppercase font-black">Sets</div>
+                                                                <div className="text-sm font-bold text-slate-300">{sStats.totalSets}</div>
+                                                            </div>
+                                                            <div className="text-center">
+                                                                <div className="text-[8px] text-slate-500 uppercase font-black">Reps</div>
+                                                                <div className="text-sm font-bold text-slate-300">{sStats.totalReps || '-'}</div>
+                                                            </div>
+                                                            <div className="text-center">
+                                                                <div className="text-[8px] text-slate-500 uppercase font-black">Längd</div>
+                                                                <div className="text-sm font-bold text-slate-300">{sStats.totalDistance ? `${sStats.totalDistance}m` : '-'}</div>
+                                                            </div>
+                                                            <div className="text-center">
+                                                                <div className="text-[8px] text-slate-500 uppercase font-black">Volym</div>
+                                                                <div className="text-sm font-bold text-emerald-500">{(sStats.totalTonnage / 1000).toFixed(1)}t</div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {Object.values(stats).every(s => s.totalSets === 0) && (
+                                                <div className="text-center py-8 text-slate-500 italic text-sm">
+                                                    Ingen historik hittades. Logga övningar i träningsdagboken för att se dem här!
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -618,6 +684,93 @@ export function HyroxDashboard() {
                     </>
                 )
                 }
+
+                {viewMode === 'races' && (
+                    <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span>🏆</span> Hyrox Tävlingar & Fulla Simulationer
+                            </h3>
+                            <div className="grid gap-4">
+                                {hyroxHistory.filter(s => s.isRace).map(session => (
+                                    <div key={session.id} className="bg-slate-950/50 p-6 rounded-2xl border border-white/5 hover:border-rose-500/30 transition-all group">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <div className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">{session.date}</div>
+                                                <h4 className="text-lg font-black text-white uppercase tracking-tight">{session.name}</h4>
+                                            </div>
+                                            <div className="bg-rose-500 text-black text-[10px] font-black px-2 py-1 rounded">RACE</div>
+                                        </div>
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                            {ALL_STATIONS.map(st => {
+                                                const time = session.splits?.[st];
+                                                if (!time) return null;
+                                                return (
+                                                    <div key={st} className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                                        <div className="text-[8px] text-slate-500 font-black uppercase mb-1">{st.replace(/_/g, ' ')}</div>
+                                                        <div className="font-mono text-sm font-bold text-white">{fmtSec(time)}</div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                        {session.totalDuration && (
+                                            <div className="flex justify-between items-center pt-4 border-t border-white/5">
+                                                <span className="text-xs text-slate-500 font-bold uppercase">Total Tid</span>
+                                                <span className="text-xl font-black text-white font-mono">{session.totalDuration} min</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                                {hyroxHistory.filter(s => s.isRace).length === 0 && (
+                                    <div className="py-20 text-center text-slate-500">Inga tävlingar registrerade än.</div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {viewMode === 'workouts' && (
+                    <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="bg-slate-900 border border-emerald-500/20 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span>🏋️</span> Träningssimulator (Log)
+                            </h3>
+                            <div className="space-y-4">
+                                {hyroxHistory.filter(s => !s.isRace).map(session => (
+                                    <div key={session.id} className="bg-slate-950/50 p-4 rounded-xl border border-white/5 hover:border-emerald-500/30 transition-all">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-xs font-mono font-bold text-slate-500">{session.date}</span>
+                                                <h4 className="text-sm font-black text-white uppercase tracking-tight">{session.name}</h4>
+                                            </div>
+                                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${session.type === 'simulation' ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                                                {session.type === 'simulation' ? 'Custom Sim' : 'Strength'}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            {session.stations.map(st => (
+                                                <div key={st} className="flex flex-col bg-white/5 px-3 py-2 rounded-lg border border-white/5">
+                                                    <span className="text-[8px] text-slate-500 font-black uppercase">{st.replace(/_/g, ' ')}</span>
+                                                    <span className="text-[10px] font-bold text-white">
+                                                        {session.splits?.[st] ? (
+                                                            <>
+                                                                {session.stationDistances?.[st] && <span className="text-emerald-400 mr-1">{session.stationDistances[st]}m</span>}
+                                                                {fmtSec(session.splits[st])}
+                                                            </>
+                                                        ) : session.totalTonnage ? 'Weight/Reps' : 'Check History'}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
+                                {hyroxHistory.filter(s => !s.isRace).length === 0 && (
+                                    <div className="py-20 text-center text-slate-500">Inga anpassade träningspass än.</div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {
                     viewMode === 'training' && (
@@ -721,6 +874,76 @@ export function HyroxDashboard() {
                             </div>
                         </div>
                     )}
+                {viewMode === 'history' && (
+                    <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                        <div className="bg-slate-900 border border-white/10 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                            <h3 className="text-sm font-black text-white uppercase tracking-widest mb-6 flex items-center gap-2">
+                                <span>📅</span> Alla Hyrox-pass
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="border-b border-white/5 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                                            <th className="pb-3 pl-2 cursor-pointer hover:text-white" onClick={() => requestSort('date')}>
+                                                Datum {sortField === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th className="pb-3 cursor-pointer hover:text-white" onClick={() => requestSort('name')}>
+                                                Pass {sortField === 'name' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th className="pb-3 text-center cursor-pointer hover:text-white" onClick={() => requestSort('type')}>
+                                                Typ {sortField === 'type' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                            <th className="pb-3">Stationer</th>
+                                            <th className="pb-3 text-right pr-2 cursor-pointer hover:text-white" onClick={() => requestSort('tonnage')}>
+                                                Volym/Tid {sortField === 'tonnage' && (sortOrder === 'asc' ? '↑' : '↓')}
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-white/5">
+                                        {hyroxHistory.map((session) => (
+                                            <tr key={session.id} className="group hover:bg-white/5 transition-colors">
+                                                <td className="py-4 pl-2">
+                                                    <span className="text-xs font-mono font-bold text-slate-400">{session.date}</span>
+                                                </td>
+                                                <td className="py-4">
+                                                    <div className="text-xs font-black text-white uppercase tracking-tight">{session.name}</div>
+                                                    {session.notes && <div className="text-[10px] text-slate-500 italic max-w-xs truncate">{session.notes}</div>}
+                                                </td>
+                                                <td className="py-4 text-center">
+                                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${session.type === 'simulation' ? 'bg-amber-500/20 text-amber-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                                                        {session.type === 'simulation' ? 'SIM' : 'STR'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-4">
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {session.stations.map(st => (
+                                                            <span key={st} className="text-[9px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
+                                                                {st.replace(/_/g, ' ')}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </td>
+                                                <td className="py-4 text-right pr-2">
+                                                    {session.type === 'simulation' ? (
+                                                        <span className="text-xs font-mono font-bold text-amber-400">{session.totalDuration} min</span>
+                                                    ) : (
+                                                        <span className="text-xs font-mono font-bold text-emerald-400">{Math.round((session.totalTonnage || 0) / 1000)}t+</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                {hyroxHistory.length === 0 && (
+                                    <div className="py-12 text-center text-slate-500 italic text-sm">
+                                        Inga Hyrox-pass hittades i historiken.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {viewMode === 'duo' && (
                     <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
                         <HyroxDuoLab />
@@ -731,23 +954,21 @@ export function HyroxDashboard() {
             {/* End of Main Grid */}
 
             {/* MODAL */}
-            {
-                selectedStation && (
-                    <HyroxStationDetailModal
-                        stationId={selectedStation}
-                        onClose={() => setSelectedStation(null)}
-                        stats={(() => {
-                            const history = stats[selectedStation] || [];
-                            if (history.length === 0) return undefined;
-                            return {
-                                pb: Math.min(...history),
-                                history: history,
-                                average: Math.round(history.reduce((a, b) => a + b, 0) / (history.length || 1))
-                            };
-                        })()}
-                    />
-                )
-            }
+            {selectedStation && (
+                <HyroxStationDetailModal
+                    stationId={selectedStation}
+                    onClose={() => setSelectedStation(null)}
+                    stats={(() => {
+                        const st = stats[selectedStation];
+                        if (!st || st.history.length === 0) return undefined;
+                        return {
+                            pb: st.times.length > 0 ? Math.min(...st.times) : 0,
+                            history: st,
+                            average: st.times.length > 0 ? Math.round(st.times.reduce((a: number, b: number) => a + b, 0) / st.times.length) : 0
+                        };
+                    })()}
+                />
+            )}
         </div >
         // End of Main Container
     );

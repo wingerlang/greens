@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { useHealth } from '../hooks/useHealth.ts';
-import { getISODate, DailyVitals } from '../models/types.ts';
+import { getISODate, DailyVitals, generateId } from '../models/types.ts';
 import { useNavigate } from 'react-router-dom';
 import { getActiveCalorieTarget } from '../utils/calorieTarget.ts';
 import { MeasurementEntryModal } from '../components/dashboard/MeasurementEntryModal.tsx';
@@ -24,6 +24,8 @@ import { DashboardActionFAB } from '../components/dashboard/DashboardActionFAB.t
 import { ImportWorkoutModal } from '../components/training/ImportWorkoutModal.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { WeeklySummary } from '../components/dashboard/WeeklySummary.tsx';
+import { EstimateLunchModal } from '../components/calories/EstimateLunchModal.tsx';
+import { useAnalytics } from '../context/AnalyticsContext.tsx';
 
 // Feature Components
 import { DailyIntakeCard } from '../features/dashboard/components/DailyIntakeCard.tsx';
@@ -61,6 +63,7 @@ export function DashboardPage() {
         calculateWeeklyTrainingStreak,
         calculateCalorieGoalStreak,
         calculateDailyNutrition,
+        addMealEntry,
         weightEntries,
         bodyMeasurements,
         trainingPeriods,
@@ -75,6 +78,7 @@ export function DashboardPage() {
         unifiedActivities
     } = useData();
     const { token } = useAuth();
+    const { logEvent } = useAnalytics();
 
     const health = useHealth(selectedDate);
     const today = getISODate();
@@ -91,6 +95,7 @@ export function DashboardPage() {
     const [importResult, setImportResult] = useState<any | null>(null);
     const [weightRange, setWeightRange] = useState<'7d' | '14d' | '30d' | '3m' | '1y' | 'year' | 'all'>('1y');
     const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
+    const [isEstimateModalOpen, setIsEstimateModalOpen] = useState(false);
     const [isHoveringChart, setIsHoveringChart] = useState(false);
     const [isHoveringTraining, setIsHoveringTraining] = useState(false); // State shared between Intake and Training cards
 
@@ -465,6 +470,27 @@ export function DashboardPage() {
         return a.isDone ? 1 : -1;
     });
 
+    const handleSaveEstimate = (details: any) => {
+        try {
+            addMealEntry({
+                date: selectedDate,
+                mealType: 'estimate',
+                items: [{
+                    type: 'estimate',
+                    referenceId: generateId(),
+                    servings: 1,
+                    estimateDetails: details
+                }],
+            });
+            logEvent('estimate_lunch_log', details.name, 'estimate', {
+                kcalAvg: details.caloriesAvg,
+                isUncertain: !!details.uncertaintyEmoji
+            });
+        } catch (err) {
+            console.error('[DashboardPage] Failed to save estimate:', err);
+        }
+    };
+
     return (
         <div className="min-h-screen bg-[#FDFBF7] dark:bg-slate-950 p-4 md:p-12 font-sans text-slate-900 dark:text-white animate-in fade-in duration-500 transition-colors relative overflow-x-hidden">
             {isHoveringChart && (
@@ -748,9 +774,15 @@ export function DashboardPage() {
                 onClose={() => setIsStravaModalOpen(false)}
                 initialRange="7days"
             />
+            <EstimateLunchModal
+                isOpen={isEstimateModalOpen}
+                onClose={() => setIsEstimateModalOpen(false)}
+                onSave={handleSaveEstimate}
+            />
             <DashboardActionFAB
                 onLogMeasurements={() => setIsWeightModalOpen(true)}
                 onImportWorkout={() => setShowImportModal(true)}
+                onQuickEstimate={() => setIsEstimateModalOpen(true)}
             />
             <ImportWorkoutModal
                 isOpen={showImportModal}

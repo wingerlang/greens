@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { HYROX_ENCYCLOPEDIA } from '../../utils/hyroxEncyclopedia.ts';
 import { HyroxStation } from '../../models/types.ts';
+import { HyroxStationStats } from '../../utils/hyroxParser.ts';
 
 interface Props {
     stationId: HyroxStation;
     onClose: () => void;
     stats?: {
         pb: number;
-        history: number[];
+        history: HyroxStationStats;
         average: number;
     };
 }
@@ -63,7 +64,7 @@ export function HyroxStationDetailModal({ stationId, onClose, stats }: Props) {
 
                     {activeTab === 'stats' && (
                         <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                            {!stats || stats.history.length === 0 ? (
+                            {!stats || stats.history.history.length === 0 ? (
                                 <div className="text-center py-12">
                                     <div className="text-4xl mb-4">🤷‍♂️</div>
                                     <h3 className="text-white font-bold mb-2">Ingen data än!</h3>
@@ -83,14 +84,32 @@ export function HyroxStationDetailModal({ stationId, onClose, stats }: Props) {
                                     </div>
 
                                     <div className="bg-slate-950/50 p-6 rounded-xl border border-white/5">
-                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Historik (Senaste Först)</h4>
-                                        <div className="space-y-2">
-                                            {stats.history.slice(0, 10).map((time, i) => (
-                                                <div key={i} className="flex justify-between items-center p-2 rounded hover:bg-white/5 transition-colors border-b border-white/5 last:border-0">
-                                                    <span className="text-xs text-slate-500 font-mono">#{stats.history.length - i}</span>
-                                                    <div className="flex items-center gap-3">
-                                                        {time === stats.pb && <span className="text-[10px] bg-emerald-500 text-black px-1.5 rounded font-black">PB</span>}
-                                                        <span className={`font-mono font-bold ${time === stats.pb ? 'text-emerald-400' : 'text-slate-300'}`}>{fmtSec(time)}</span>
+                                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Historik (Alla Pass)</h4>
+                                        <div className="space-y-3">
+                                            {stats.history.history.map((ev, i) => (
+                                                <div key={i} className="flex justify-between items-start p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[10px] font-bold text-slate-500 uppercase">{ev.date}</span>
+                                                        <span className={`text-xs font-black uppercase tracking-tight ${ev.type === 'simulation' ? 'text-amber-400' : 'text-slate-300'}`}>
+                                                            {ev.type === 'simulation' ? '🏎️ Simulation' : '🏋️ Styrkepass'}
+                                                        </span>
+                                                        {ev.notes && <p className="text-[10px] text-slate-500 italic mt-1 max-w-[200px] truncate">{ev.notes}</p>}
+                                                    </div>
+                                                    <div className="flex flex-col items-end">
+                                                        {ev.timeSeconds ? (
+                                                            <div className="flex items-center gap-2">
+                                                                {ev.timeSeconds === stats.pb && <span className="text-[8px] bg-emerald-500 text-black px-1 rounded font-black">PB</span>}
+                                                                <span className="text-sm font-mono font-bold text-white">{fmtSec(ev.timeSeconds)}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex flex-col items-end gap-1">
+                                                                <div className="flex gap-2">
+                                                                    {ev.distance && <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">{ev.distance}m</span>}
+                                                                    {ev.weight && <span className="text-[10px] font-mono font-bold text-sky-400 bg-sky-400/10 px-1.5 py-0.5 rounded">{ev.weight}kg</span>}
+                                                                </div>
+                                                                {ev.reps && <span className="text-[10px] text-slate-500 font-bold uppercase">{ev.reps} totala reps</span>}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             ))}
