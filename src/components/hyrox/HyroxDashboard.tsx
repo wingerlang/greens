@@ -1,13 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { useData } from '../../context/DataContext.tsx';
-import { parseHyroxStats, HyroxStationStats, parseHyroxHistory, HyroxSessionSummary } from '../../utils/hyroxParser.ts';
+import { parseHyroxStats, HyroxStationStats, parseHyroxHistory } from '../../utils/hyroxParser.ts';
 import { predictHyroxTime, HyroxPrediction, HyroxClass, HYROX_STANDARDS } from '../../utils/hyroxPredictor.ts';
-import { HyroxStation } from '../../models/types.ts';
+import { HyroxStation, HyroxSessionSummary } from '../../models/types.ts';
 import { HyroxStationDetailModal } from './HyroxStationDetailModal.tsx';
 
 import { HYROX_WORKOUTS, DEEP_TIPS, HyroxWorkout } from '../../utils/hyroxWorkouts.ts';
 import { HYROX_ENCYCLOPEDIA } from '../../utils/hyroxEncyclopedia.ts';
 import { HyroxDuoLab } from './HyroxDuoLab.tsx';
+import { HyroxRaceAnalysis } from './HyroxRaceAnalysis.tsx';
 
 // Feature 1: Class Selector Options
 const CLASSES: { id: HyroxClass; label: string }[] = [
@@ -70,6 +71,9 @@ export function HyroxDashboard() {
 
     // Feature 11: Doubles Strategy
     const [doublesStrategy, setDoublesStrategy] = useState<Record<string, 'ME' | 'PARTNER' | 'SPLIT'>>({});
+
+    // Feature 12: Deep Analysis
+    const [analyzingSessionId, setAnalyzingSessionId] = useState<string | null>(null);
 
     const isDoubles = selectedClass.includes('DOUBLES') || selectedClass === 'RELAY';
 
@@ -699,25 +703,42 @@ export function HyroxDashboard() {
                                                 <div className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">{session.date}</div>
                                                 <h4 className="text-lg font-black text-white uppercase tracking-tight">{session.name}</h4>
                                             </div>
-                                            <div className="bg-rose-500 text-black text-[10px] font-black px-2 py-1 rounded">RACE</div>
-                                        </div>
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                            {ALL_STATIONS.map(st => {
-                                                const time = session.splits?.[st];
-                                                if (!time) return null;
-                                                return (
-                                                    <div key={st} className="bg-white/5 p-3 rounded-xl border border-white/5">
-                                                        <div className="text-[8px] text-slate-500 font-black uppercase mb-1">{st.replace(/_/g, ' ')}</div>
-                                                        <div className="font-mono text-sm font-bold text-white">{fmtSec(time)}</div>
-                                                    </div>
-                                                )
-                                            })}
-                                        </div>
-                                        {session.totalDuration && (
-                                            <div className="flex justify-between items-center pt-4 border-t border-white/5">
-                                                <span className="text-xs text-slate-500 font-bold uppercase">Total Tid</span>
-                                                <span className="text-xl font-black text-white font-mono">{session.totalDuration} min</span>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => setAnalyzingSessionId(analyzingSessionId === session.id ? null : session.id)}
+                                                    className={`text-[10px] font-black px-3 py-1 rounded transition-all ${analyzingSessionId === session.id ? 'bg-rose-500 text-black' : 'bg-white/10 text-white hover:bg-white/20'}`}
+                                                >
+                                                    {analyzingSessionId === session.id ? 'STÄNG ANALYS' : 'DJUPANALYS'}
+                                                </button>
+                                                <div className="bg-rose-500 text-black text-[10px] font-black px-2 py-1 rounded flex items-center">RACE</div>
                                             </div>
+                                        </div>
+
+                                        {analyzingSessionId === session.id ? (
+                                            <div className="pt-4 border-t border-white/10 mt-4">
+                                                <HyroxRaceAnalysis session={session} />
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                                    {ALL_STATIONS.map((st: HyroxStation) => {
+                                                        const time = session.splits?.[st];
+                                                        if (!time) return null;
+                                                        return (
+                                                            <div key={st} className="bg-white/5 p-3 rounded-xl border border-white/5">
+                                                                <div className="text-[8px] text-slate-500 font-black uppercase mb-1">{st.replace(/_/g, ' ')}</div>
+                                                                <div className="font-mono text-sm font-bold text-white">{fmtSec(time)}</div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                                {session.totalDuration && (
+                                                    <div className="flex justify-between items-center pt-4 border-t border-white/5">
+                                                        <span className="text-xs text-slate-500 font-bold uppercase">Total Tid</span>
+                                                        <span className="text-xl font-black text-white font-mono">{session.totalDuration} min</span>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </div>
                                 ))}

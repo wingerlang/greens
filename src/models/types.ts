@@ -1788,3 +1788,33 @@ export interface AnalyticsStats {
     deviceBreakdown?: Record<string, number>;
     browserBreakdown?: Record<string, number>;
 }
+// ============================================
+// Hyrox Simulation & Race Analysis (Phase R)
+// ============================================
+
+export interface HyroxStationEvent {
+    date: string;
+    type: 'simulation' | 'strength';
+    timeSeconds?: number;
+    reps?: number;
+    weight?: number;
+    distance?: number;
+    sets?: StrengthSet[];
+    notes?: string;
+}
+
+export interface HyroxSessionSummary {
+    id: string;
+    date: string;
+    name: string;
+    type: 'simulation' | 'strength';
+    stations: HyroxStation[];
+    isRace?: boolean;
+    isWorkout?: boolean;
+    totalDuration?: number;
+    totalTonnage?: number;
+    notes?: string;
+    splits?: Partial<Record<HyroxStation, number>>;
+    runSplits?: number[]; // [r1, r2, ... r8] in seconds
+    stationDistances?: Partial<Record<HyroxStation, number>>;
+}

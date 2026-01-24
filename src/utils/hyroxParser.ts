@@ -1,4 +1,4 @@
-import { HyroxStation, ExerciseEntry, StrengthWorkout, ExerciseDefinition, StrengthSet } from '../models/types.ts';
+import { HyroxStation, ExerciseEntry, StrengthWorkout, ExerciseDefinition, StrengthSet, HyroxStationEvent, HyroxSessionSummary } from '../models/types.ts';
 import { findExerciseMatch } from './exerciseMapper.ts';
 
 export const HYROX_STATIONS_ORDER: HyroxStation[] = [
@@ -28,6 +28,20 @@ const parseTime = (timeStr: string): number | null => {
     const num = parseInt(timeStr);
     return isNaN(num) ? null : num;
 };
+
+// Moving these to be accessible in all functions
+const STATION_MAPPING: Record<HyroxStation, string[]> = {
+    'ski_erg': ['ski_erg', 'skierg', 'skiing', 'ski'],
+    'sled_push': ['sled_push', 'sled', 'släde push', 'prowler'],
+    'sled_pull': ['sled_pull', 'sled rope pull', 'släde pull'],
+    'burpee_broad_jumps': ['burpee_broad_jump', 'burpee_broad_jumps', 'bbj'],
+    'rowing': ['rowing_machine', 'rowing', 'roder', 'rodd'],
+    'farmers_carry': ['farmers_walk', 'farmers_carry', 'farmer walk'],
+    'sandbag_lunges': ['sandbag_lunge', 'sandbag_lunges', 'walking lunges', 'utfallsgång'],
+    'wall_balls': ['wall_ball', 'wall_balls', 'wallballs'],
+    'run_1km': ['running', 'treadmill']
+};
+
 
 export const parseHyroxText = (text: string): ParsedHyroxData => {
     const lines = text.split('\n');
@@ -112,17 +126,6 @@ export const parseHyroxText = (text: string): ParsedHyroxData => {
 };
 
 
-export interface HyroxStationEvent {
-    date: string;
-    type: 'simulation' | 'strength';
-    timeSeconds?: number;
-    reps?: number;
-    weight?: number;
-    distance?: number;
-    sets?: StrengthSet[];
-    notes?: string;
-}
-
 export interface HyroxStationStats {
     times: number[];
     totalSets: number;
@@ -132,21 +135,6 @@ export interface HyroxStationStats {
     lastDate?: string;
     sessions: Set<string>; // Dates of sessions
     history: HyroxStationEvent[];
-}
-
-export interface HyroxSessionSummary {
-    id: string;
-    date: string;
-    name: string;
-    type: 'simulation' | 'strength';
-    stations: HyroxStation[];
-    isRace?: boolean;
-    isWorkout?: boolean;
-    totalDuration?: number;
-    totalTonnage?: number;
-    notes?: string;
-    splits?: Partial<Record<HyroxStation, number>>;
-    stationDistances?: Partial<Record<HyroxStation, number>>;
 }
 
 export const parseHyroxStats = (exercises: ExerciseEntry[], strength: StrengthWorkout[], exerciseDB: ExerciseDefinition[]): Record<HyroxStation, HyroxStationStats> => {
@@ -181,20 +169,6 @@ export const parseHyroxStats = (exercises: ExerciseEntry[], strength: StrengthWo
         }
     });
 
-    // 2. Add data from strength sessions (searching for Hyrox-specific names via mapping)
-    // Map of HyroxStation to preferred Exercise IDs or search terms
-    const stationMapping: Record<HyroxStation, string[]> = {
-        'ski_erg': ['ski_erg', 'skierg', 'skiing', 'ski'],
-        'sled_push': ['sled_push', 'sled', 'släde push', 'prowler'],
-        'sled_pull': ['sled_pull', 'sled rope pull', 'släde pull'],
-        'burpee_broad_jumps': ['burpee_broad_jump', 'burpee_broad_jumps', 'bbj'],
-        'rowing': ['rowing_machine', 'rowing', 'roder', 'rodd'],
-        'farmers_carry': ['farmers_walk', 'farmers_carry', 'farmer walk'],
-        'sandbag_lunges': ['sandbag_lunge', 'sandbag_lunges', 'walking lunges', 'utfallsgång'],
-        'wall_balls': ['wall_ball', 'wall_balls', 'wallballs'],
-        'run_1km': ['running', 'treadmill']
-    };
-
     strength.forEach(session => {
         (session.exercises || []).forEach(exercise => {
             // Use the unified mapper to find what exercise this is in our database
@@ -204,7 +178,7 @@ export const parseHyroxStats = (exercises: ExerciseEntry[], strength: StrengthWo
             const matchedId = match.exercise.id;
 
             // Check if this matched exercise belongs to any Hyrox station
-            for (const [stationId, ids] of Object.entries(stationMapping)) {
+            for (const [stationId, ids] of Object.entries(STATION_MAPPING)) {
                 if (ids.includes(matchedId) || ids.some(id => matchedId.includes(id))) {
                     const st = stats[stationId as HyroxStation];
                     const dateKey = session.date.split('T')[0];
@@ -286,46 +260,70 @@ export const parseHyroxStats = (exercises: ExerciseEntry[], strength: StrengthWo
  */
 export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: StrengthWorkout[], exerciseDB: ExerciseDefinition[]): HyroxSessionSummary[] => {
     const history: HyroxSessionSummary[] = [];
+    const processedIds = new Set<string>();
 
-    // 1. Simulations
+    // Unified Processing: Process everything in the master list (exercises)
     exercises.forEach(ex => {
-        if (ex.type === 'hyrox' && ex.hyroxStats) {
-            const stations = Object.keys(ex.hyroxStats.stations || {}) as HyroxStation[];
-            if (stations.length > 0) {
-                // A Race has all stations (or at least most)
-                const isRace = stations.filter(s => s !== 'run_1km').length >= 7;
+        const isExplicitRace = ex.subType === 'race' || ex.subType === 'competition';
+        const hStats = (ex as any).hyroxStats || { stations: {}, runSplits: [] };
+        const stationsFromStats = Object.keys(hStats.stations || {}) as HyroxStation[];
+        const hasRuns = hStats.runSplits?.some((r: number) => r > 0);
 
-                history.push({
-                    id: ex.id,
-                    date: ex.date,
-                    name: ex.title || (isRace ? 'Hyrox Race' : 'Hyrox Simulation'),
-                    type: 'simulation',
-                    stations,
-                    isRace,
-                    isWorkout: !isRace,
-                    totalDuration: ex.durationMinutes,
-                    notes: ex.notes,
-                    splits: ex.hyroxStats.stations,
-                    stationDistances: ex.hyroxStats.stationDistances
-                });
-            }
+        // Detect stations from strength names if it's a strength activity or merged
+        const detectedStations: Set<HyroxStation> = new Set(stationsFromStats);
+        let tonnage = 0;
+
+        // Check for underlying strength data (either mapped or merged)
+        const mergeData = (ex as any)._mergeData;
+        const sw = mergeData?.strengthWorkout || (ex.source === 'strength' ? strength.find(s => s.id === ex.id) : null);
+
+        if (sw) {
+            (sw.exercises || []).forEach((e: any) => {
+                const match = findExerciseMatch(e.exerciseName, exerciseDB);
+                if (match) {
+                    const matchedId = match.exercise.id;
+                    for (const [stationId, ids] of Object.entries(STATION_MAPPING)) {
+                        if (ids.includes(matchedId) || ids.some(id => matchedId.includes(id))) {
+                            detectedStations.add(stationId as HyroxStation);
+                            (e.sets || []).forEach((set: any) => {
+                                tonnage += (set.reps || 0) * (set.weight || 0);
+                            });
+                            break;
+                        }
+                    }
+                }
+            });
+        }
+
+        const stations = Array.from(detectedStations);
+
+        if (stations.length > 0 || hasRuns || isExplicitRace) {
+            // A Race has most stations OR is explicitly marked as race/competition
+            const isRace = isExplicitRace || stations.filter(s => s !== 'run_1km').length >= 7;
+
+            history.push({
+                id: ex.id,
+                date: ex.date,
+                name: ex.title || (isRace ? 'Hyrox Race' : 'Hyrox Simulation'),
+                type: (ex.type === 'hyrox' || isRace) ? 'simulation' : 'strength',
+                stations,
+                isRace,
+                isWorkout: !isRace,
+                totalDuration: ex.durationMinutes,
+                totalTonnage: tonnage > 0 ? tonnage : undefined,
+                notes: ex.notes,
+                splits: hStats.stations,
+                runSplits: hStats.runSplits,
+                stationDistances: hStats.stationDistances
+            });
+            processedIds.add(ex.id);
         }
     });
 
-    // 2. Strength Sessions
-    const stationMapping: Record<HyroxStation, string[]> = {
-        'ski_erg': ['ski_erg', 'skierg', 'skiing', 'ski'],
-        'sled_push': ['sled_push', 'sled', 'släde push', 'prowler'],
-        'sled_pull': ['sled_pull', 'sled rope pull', 'släde pull'],
-        'burpee_broad_jumps': ['burpee_broad_jump', 'burpee_broad_jumps', 'bbj'],
-        'rowing': ['rowing_machine', 'rowing', 'roder', 'rodd'],
-        'farmers_carry': ['farmers_walk', 'farmers_carry', 'farmer walk'],
-        'sandbag_lunges': ['sandbag_lunge', 'sandbag_lunges', 'walking lunges', 'utfallsgång'],
-        'wall_balls': ['wall_ball', 'wall_balls', 'wallballs'],
-        'run_1km': ['running', 'treadmill']
-    };
-
+    // 2. Fallback for raw strength sessions not in the master list
     strength.forEach(session => {
+        if (processedIds.has(session.id)) return;
+
         const matchingStations: Set<HyroxStation> = new Set();
         let sessionTonnage = 0;
 
@@ -334,7 +332,7 @@ export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: Strength
             if (!match) return;
 
             const matchedId = match.exercise.id;
-            for (const [stationId, ids] of Object.entries(stationMapping)) {
+            for (const [stationId, ids] of Object.entries(STATION_MAPPING)) {
                 if (ids.includes(matchedId) || ids.some(id => matchedId.includes(id))) {
                     matchingStations.add(stationId as HyroxStation);
                     (exercise.sets || []).forEach(set => {
@@ -348,12 +346,14 @@ export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: Strength
         if (matchingStations.size > 0) {
             history.push({
                 id: session.id,
-                date: session.date, // Already YYYY-MM-DD
+                date: session.date,
                 name: session.name || 'Strength Session',
                 type: 'strength',
                 stations: Array.from(matchingStations),
                 totalTonnage: sessionTonnage,
-                notes: session.notes
+                notes: session.notes,
+                isRace: false,
+                isWorkout: true
             });
         }
     });

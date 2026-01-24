@@ -808,7 +808,7 @@ export function ActivityDetailModal({
                                                         <input
                                                             type="text"
                                                             placeholder="mm:ss"
-                                                            value={formatSecondsToTime(editForm.hyroxStats?.runSplits?.[i] || 0)}
+                                                            value={editForm.hyroxStats?.runSplits?.[i] ? formatSecondsToTime(editForm.hyroxStats.runSplits[i]) : ''}
                                                             onChange={e => {
                                                                 // Parse mm:ss to seconds
                                                                 const parts = e.target.value.split(':');
@@ -844,7 +844,7 @@ export function ActivityDetailModal({
                                                     <input
                                                         type="text"
                                                         placeholder="mm:ss"
-                                                        value={formatSecondsToTime(editForm.hyroxStats?.stations?.[HYROX_STATIONS[i].id] || 0)}
+                                                        value={editForm.hyroxStats?.stations?.[HYROX_STATIONS[i].id] ? formatSecondsToTime(editForm.hyroxStats.stations?.[HYROX_STATIONS[i].id] as number) : ''}
                                                         onChange={e => {
                                                             const parts = e.target.value.split(':');
                                                             let sec = 0;

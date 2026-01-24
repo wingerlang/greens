@@ -281,6 +281,9 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         type: updates.type,
                         distance: updates.distance,
                         intensity: updates.intensity,
+                        subType: updates.subType,
+                        location: updates.location,
+                        hyroxStats: updates.hyroxStats,
                         excludeFromStats: updates.excludeFromStats
                     })
                 }).catch(e => console.error("Failed to persist virtual activity update:", e));
@@ -320,6 +323,31 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             }
             return ua;
         }));
+
+        // PERSISTENCE FIX: Ensure manual entries also sync their metadata to the backend
+        const token = localStorage.getItem('auth_token');
+        if (token) {
+            const dateParam = updated.date.split('T')[0];
+            fetch(`/api/activities/${id}?date=${dateParam}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    title: updated.title,
+                    notes: updated.notes,
+                    durationMinutes: updated.durationMinutes,
+                    type: updated.type,
+                    distance: updated.distance,
+                    intensity: updated.intensity,
+                    subType: updated.subType,
+                    location: updated.location,
+                    hyroxStats: updated.hyroxStats,
+                    excludeFromStats: updated.excludeFromStats
+                })
+            }).catch(e => console.error("Failed to persist manual activity update:", e));
+        }
 
         skipAutoSave.current = true;
 
