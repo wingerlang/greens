@@ -37,13 +37,17 @@ interface RaceListProps {
     universalActivities: UniversalActivity[];
     filterStartDate?: string | null;
     filterEndDate?: string | null;
+    subTab?: string;
+    seriesId?: string;
 }
 
 export function RaceList({
     exerciseEntries = [],
     universalActivities = [],
     filterStartDate,
-    filterEndDate
+    filterEndDate,
+    subTab,
+    seriesId
 }: RaceListProps) {
     const { plannedActivities, savePlannedActivities, deletePlannedActivity } = useData();
     const [searchQuery, setSearchQuery] = useState('');
@@ -51,9 +55,21 @@ export function RaceList({
     const [selectedActivity, setSelectedActivity] = useState<ExerciseEntry | null>(null);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [editingRace, setEditingRace] = useState<PlannedActivity | null>(null);
+
+    // Initialize view mode based on subTab
     const [viewMode, setViewMode] = useState<'timeline' | 'series'>('timeline');
     const [selectedSeries, setSelectedSeries] = useState<{ name: string, races: ExerciseEntry[] } | null>(null);
     const [seriesSort, setSeriesSort] = useState<'count' | 'name' | 'latest'>('count');
+
+    // Sync Props to State
+    useEffect(() => {
+        if (subTab === 'serier' || subTab === 'series') {
+            setViewMode('series');
+        } else {
+            setViewMode('timeline');
+        }
+    }, [subTab]);
+
 
     // --- Planned Races ---
     const upcomingRaces = useMemo(() => {
@@ -226,6 +242,17 @@ export function RaceList({
                 return 0;
             });
     }, [races, universalActivities, seriesSort]);
+
+    // Handle Deep Linking to Series
+    useEffect(() => {
+        if (seriesId && raceSeries.length > 0) {
+            const decoded = decodeURIComponent(seriesId);
+            const match = raceSeries.find(s => s.name.toLowerCase() === decoded.toLowerCase());
+            if (match) {
+                setSelectedSeries({ name: match.name, races: match.races });
+            }
+        }
+    }, [seriesId, raceSeries]);
 
     // Statistics
     const stats = useMemo(() => {

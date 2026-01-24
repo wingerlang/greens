@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { ExerciseEntry } from '../models/types.ts';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
@@ -56,32 +56,22 @@ export function TrainingPage() {
     } = useData();
 
     const navigate = useNavigate();
+    const { tab, subTab, id } = useParams<{ tab?: string; subTab?: string; id?: string }>();
 
-    // Merge Data - combine server and local entries
-    const exerciseEntries = useMemo(() => {
-        const serverEntries = (universalActivities || [])
-            .map(mapUniversalToLegacyEntry)
-            .filter((e): e is ExerciseEntry => e !== null);
+    // URL State Management
+    const currentTab = useMemo(() => {
+        if (!tab) return 'overview';
+        return (['overview', 'styrka', 'kondition', 'races'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'races';
+    }, [tab]);
 
-        const strength = (strengthSessions || []).map((w): ExerciseEntry => ({
-            id: w.id,
-            date: w.date,
-            type: 'strength',
-            durationMinutes: w.duration || (w.exercises.length * 4) + (w.totalSets * 1.5) || 45,
-            intensity: 'high',
-            caloriesBurned: w.totalVolume ? Math.round(w.totalVolume * 0.05) : 300,
-            tonnage: w.totalVolume,
-            notes: w.name,
-            source: 'strength',
-            createdAt: w.createdAt
-        }));
-
-        // Combine: prefer server entries, add unique legacy entries
-        const serverIds = new Set(serverEntries.map(e => e.id));
-        const uniqueLegacy = (legacyExerciseEntries || []).filter(e => !serverIds.has(e.id));
-
-        return [...serverEntries, ...strength, ...uniqueLegacy];
-    }, [universalActivities, legacyExerciseEntries, strengthSessions]);
+    // Handle Tab Switching
+    const handleTabChange = (newTab: string) => {
+        if (newTab === 'styrka' && currentTab !== 'styrka') {
+            navigate('/styrka');
+        } else {
+            navigate(`/training/${newTab}`);
+        }
+    };
 
     // Handlers for Chart Interaction
     const [selectedCycle, setSelectedCycle] = useState<TrainingCycle | null>(null);
@@ -90,9 +80,6 @@ export function TrainingPage() {
     // Goal Modal State
     const [isGoalModalOpen, setIsGoalModalOpen] = useState(false);
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
-
-    // Tab state for main view switcher
-    const [currentTab, setCurrentTab] = useState<'overview' | 'styrka' | 'kondition' | 'races'>('overview');
 
     const handleEditCycle = (cycle: TrainingCycle) => {
         setSelectedCycle(cycle);
@@ -127,22 +114,17 @@ export function TrainingPage() {
                     if (item.type === 'foodItem') {
                         const food = foodItems.find(f => f.id === item.referenceId);
                         if (food) {
-                            // FoodItem: calories is usually per 100g/ml or per piece
                             const base = (food.unit === 'g' || food.unit === 'ml' || food.unit === 'l' || food.unit === 'kg') ? 100 : 1;
-                            // Convert servings to amount? MealItem uses 'servings' but for raw food items it might be the quantity itself? 
-                            // Check MealItem definition updates. It says 'servings'. 
-                            // In the app usage, usually 'servings' is used as 'amount' for food items.
                             const quantity = item.servings;
                             itemKcal = (food.calories / base) * quantity;
                         }
                     } else if (item.type === 'recipe') {
                         const recipe = recipes.find(r => r.id === item.referenceId);
                         if (recipe) {
-                            // Calculate recipe total calories
                             const recipeTotalKcal = recipe.ingredients.reduce((sum, ing) => {
                                 const f = foodItems.find(fi => fi.id === ing.foodItemId);
                                 if (!f) return sum;
-                                const base = (f.unit === 'g' || f.unit === 'ml') ? 100 : 1; // Simplified unit handling
+                                const base = (f.unit === 'g' || f.unit === 'ml') ? 100 : 1;
                                 return sum + ((f.calories / base) * ing.quantity);
                             }, 0);
 
@@ -171,8 +153,8 @@ export function TrainingPage() {
         switch (preset) {
             case 'all':
                 // Find earliest date
-                if (exerciseEntries.length > 0) {
-                    const sorted = [...exerciseEntries].sort((a, b) => a.date.localeCompare(b.date));
+                if (legacyExerciseEntries.length > 0) {
+                    const sorted = [...legacyExerciseEntries].sort((a, b) => a.date.localeCompare(b.date));
                     setFilterStartDate(sorted[0].date.split('T')[0]);
                 } else {
                     setFilterStartDate(null);
@@ -217,6 +199,32 @@ export function TrainingPage() {
             }
         }
     };
+
+    // Merge Data - combine server and local entries
+    const exerciseEntries = useMemo(() => {
+        const serverEntries = (universalActivities || [])
+            .map(mapUniversalToLegacyEntry)
+            .filter((e): e is ExerciseEntry => e !== null);
+
+        const strength = (strengthSessions || []).map((w): ExerciseEntry => ({
+            id: w.id,
+            date: w.date,
+            type: 'strength',
+            durationMinutes: w.duration || (w.exercises.length * 4) + (w.totalSets * 1.5) || 45,
+            intensity: 'high',
+            caloriesBurned: w.totalVolume ? Math.round(w.totalVolume * 0.05) : 300,
+            tonnage: w.totalVolume,
+            notes: w.name,
+            source: 'strength',
+            createdAt: w.createdAt
+        }));
+
+        // Combine: prefer server entries, add unique legacy entries
+        const serverIds = new Set(serverEntries.map(e => e.id));
+        const uniqueLegacy = (legacyExerciseEntries || []).filter(e => !serverIds.has(e.id));
+
+        return [...serverEntries, ...strength, ...uniqueLegacy];
+    }, [universalActivities, legacyExerciseEntries, strengthSessions]);
 
     // Apply Period Filter to data
     const filteredExerciseEntries = useMemo(() => {
@@ -267,30 +275,24 @@ export function TrainingPage() {
 
     const {
         bmr,
-        tdee: dailyTdee, // Renaming to avoid confusion if needed, or just usage
+        tdee: dailyTdee,
         dailyCaloriesBurned: dailyBurned,
         activeCycle,
         goalAdjustment,
         dailyExercises
     } = useHealth(selectedDate);
 
-    // TDEE in TrainingPage was `bmr + dailyBurned + goalAdjustment`.
-    // useHealth returns `tdee` as `bmr + dailyBurned`.
-    // So the displayed "Dagens Kaloribehov" in UI was `tdee` variable which included adjustment.
-    // Let's match variable text:
     const tdee = dailyTdee + goalAdjustment;
 
     const handleEditExercise = (ex: any) => {
         navigate(`/logg?activityId=${ex.id}`);
     };
-
     return (
         <div className="training-page">
-
             {/* Tab Navigation */}
             <div className="flex p-1 bg-slate-900 border border-white/5 rounded-xl self-start mb-6 overflow-x-auto">
                 <button
-                    onClick={() => setCurrentTab('overview')}
+                    onClick={() => handleTabChange('overview')}
                     className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'overview'
                         ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
                         : 'text-slate-500 hover:text-slate-300'
@@ -305,7 +307,7 @@ export function TrainingPage() {
                     🏋️ Styrka
                 </button>
                 <button
-                    onClick={() => setCurrentTab('kondition')}
+                    onClick={() => handleTabChange('kondition')}
                     className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'kondition'
                         ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/25'
                         : 'text-slate-500 hover:text-slate-300'
@@ -314,7 +316,7 @@ export function TrainingPage() {
                     🏃 Kondition
                 </button>
                 <button
-                    onClick={() => setCurrentTab('races')}
+                    onClick={() => handleTabChange('races')}
                     className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'races'
                         ? 'bg-amber-500 text-white shadow-lg shadow-amber-500/25'
                         : 'text-slate-500 hover:text-slate-300'
@@ -881,6 +883,8 @@ export function TrainingPage() {
                             universalActivities={universalActivities}
                             filterStartDate={filterStartDate}
                             filterEndDate={filterEndDate}
+                            subTab={subTab}
+                            seriesId={id}
                         />
                     </div>
                 )
@@ -902,6 +906,6 @@ export function TrainingPage() {
             />
 
 
-        </div>
+        </div >
     );
 }

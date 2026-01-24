@@ -23,8 +23,38 @@ interface RaceSeriesDetailModalProps {
 export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace }: RaceSeriesDetailModalProps) {
     const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
+    // Distance Grouping
+    const distanceGroups = useMemo(() => {
+        const groups: Record<string, number> = {};
+        races.forEach(r => {
+            if (!r.distance) return;
+            const key = Math.round(r.distance).toString(); // Group by nearest km
+            groups[key] = (groups[key] || 0) + 1;
+        });
+
+        // Convert to array and sort by count DESC
+        return Object.entries(groups)
+            .map(([dist, count]) => ({ distance: Number(dist), count }))
+            .sort((a, b) => b.count - a.count);
+    }, [races]);
+
+    // Default to the most common distance, or 'all' if only one or none
+    const [selectedDistance, setSelectedDistance] = useState<number | 'all'>(() => {
+        // If we have distinct groups with significant counts, default to the top one.
+        // If everything is same-ish, "all" might be fine but the user asked to distinguish.
+        // If we have multiple groups, pick the largest.
+        if (distanceGroups.length > 1) return distanceGroups[0].distance;
+        return 'all';
+    });
+
+    // Filter races
+    const filteredRacesByDistance = useMemo(() => {
+        if (selectedDistance === 'all') return races;
+        return races.filter(r => r.distance && Math.round(r.distance) === selectedDistance);
+    }, [races, selectedDistance]);
+
     const sortedRaces = useMemo(() => {
-        let items = [...races];
+        let items = [...filteredRacesByDistance];
         return items.sort((a, b) => {
             let valA: any = a[sortConfig.key as keyof ExerciseEntry];
             let valB: any = b[sortConfig.key as keyof ExerciseEntry];
@@ -42,7 +72,7 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [races, sortConfig]);
+    }, [filteredRacesByDistance, sortConfig]);
 
     const handleSort = (key: string) => {
         setSortConfig(prev => ({
@@ -68,11 +98,9 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
 
         const avgDuration = sortedRaces.reduce((sum, r) => sum + r.durationMinutes, 0) / sortedRaces.length;
 
-        // Trend Analysis (simple slope check of first vs last 3 if possible)
+        // Trend Analysis
         let trend: 'improving' | 'declining' | 'stable' = 'stable';
         if (sortedRaces.length >= 2) {
-            // Compare recent avg vs historic avg or just simple slope
-            // Let's take the first half vs second half
             const mid = Math.floor(sortedRaces.length / 2);
             const firstHalf = sortedRaces.slice(0, mid);
             const secondHalf = sortedRaces.slice(mid);
@@ -88,21 +116,6 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
         const firstYear = yearsActive[0];
         const lastYear = yearsActive[yearsActive.length - 1];
 
-        // Calculate standard distance (Mode)
-        const distances = sortedRaces.map(r => r.distance || 0).filter(d => d > 0);
-        const distanceCounts: Record<number, number> = {};
-        let standardDistance = 0;
-        let maxCount = 0;
-
-        distances.forEach(d => {
-            const rounded = Math.round(d * 10) / 10; // Round to 1 decimal for grouping
-            distanceCounts[rounded] = (distanceCounts[rounded] || 0) + 1;
-            if (distanceCounts[rounded] > maxCount) {
-                maxCount = distanceCounts[rounded];
-                standardDistance = rounded;
-            }
-        });
-
         return {
             pb: bestRace,
             pw: worstRace,
@@ -111,12 +124,13 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
             totalDistance: sortedRaces.reduce((sum, r) => sum + (r.distance || 0), 0),
             trend,
             span: `${firstYear} - ${lastYear}`,
-            standardDistance
+            // We don't really need standardDistance anymore since we filter by distance, but can keep for "all" view
+            standardDistance: selectedDistance === 'all' ? 0 : selectedDistance
         };
-    }, [sortedRaces]);
+    }, [sortedRaces, selectedDistance]);
 
     const chartData = useMemo(() => {
-        return [...races]
+        return [...filteredRacesByDistance]
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
             .map(r => ({
                 year: r.date.substring(0, 4),
@@ -125,7 +139,7 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
                 formattedTime: formatActivityDuration(r.durationMinutes),
                 isPb: stats?.pb.id === r.id
             }));
-    }, [races, stats]);
+    }, [filteredRacesByDistance, stats]);
 
     if (!stats) return null;
 
@@ -142,7 +156,35 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
                             <Trophy size={14} /> Tävlingsserie
                         </div>
                         <h2 className="text-3xl font-black text-white">{seriesName}</h2>
-                        <div className="text-slate-400 mt-1 flex gap-2 text-sm">
+
+                        {/* Distance Selectors */}
+                        {distanceGroups.length > 1 && (
+                            <div className="flex gap-2 mt-4">
+                                {distanceGroups.map(g => (
+                                    <button
+                                        key={g.distance}
+                                        onClick={() => setSelectedDistance(g.distance)}
+                                        className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-all ${selectedDistance === g.distance
+                                                ? 'bg-amber-500 text-slate-950'
+                                                : 'bg-slate-800 text-slate-400 hover:text-white'
+                                            }`}
+                                    >
+                                        {g.distance} km ({g.count})
+                                    </button>
+                                ))}
+                                <button
+                                    onClick={() => setSelectedDistance('all')}
+                                    className={`px-3 py-1 rounded-lg text-xs font-bold uppercase transition-all ${selectedDistance === 'all'
+                                            ? 'bg-slate-700 text-white'
+                                            : 'bg-slate-800 text-slate-400 hover:text-white'
+                                        }`}
+                                >
+                                    Alla ({races.length})
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="text-slate-400 mt-2 flex gap-2 text-sm">
                             <span>{stats.count} lopp</span>
                             <span>•</span>
                             <span>{stats.span}</span>
@@ -163,7 +205,7 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
                             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                                 <Trophy size={48} className="text-amber-500" />
                             </div>
-                            <div className="text-xs text-slate-500 uppercase font-bold mb-1">Personbästa</div>
+                            <div className="text-xs text-slate-500 uppercase font-bold mb-1">Personbästa {selectedDistance !== 'all' ? `(${selectedDistance}km)` : ''}</div>
                             <div className="text-2xl font-black text-white font-mono">{formatActivityDuration(stats.pb.durationMinutes)}</div>
                             <div className="text-xs text-amber-500 font-bold mt-1 flex items-center gap-1">
                                 {stats.pb.date.substring(0, 4)}
@@ -267,7 +309,8 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
                                 {sortedRaces.map(race => {
                                     const isPb = race.id === stats.pb.id;
                                     const dist = race.distance || 0;
-                                    const isDeviant = stats.standardDistance > 0 && Math.abs(dist - stats.standardDistance) > 1;
+                                    // Highlight deviation if we are in a specific distance mode
+                                    const isDeviant = selectedDistance !== 'all' && Math.abs(dist - selectedDistance) > 1;
 
                                     return (
                                         <tr
@@ -297,7 +340,7 @@ export function RaceSeriesDetailModal({ seriesName, races, onClose, onSelectRace
                                                     <div className="flex flex-col items-end">
                                                         <span>{`${Math.floor(race.durationMinutes / race.distance)}:${Math.round(((race.durationMinutes / race.distance) % 1) * 60).toString().padStart(2, '0')}/km`}</span>
                                                         {isDeviant && (
-                                                            <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 px-1 rounded mt-1" title={`Avviker från standard (${stats.standardDistance}km)`}>
+                                                            <span className="text-[10px] text-rose-400 font-bold bg-rose-500/10 px-1 rounded mt-1" title={`Avviker från standard (${selectedDistance}km)`}>
                                                                 {race.distance?.toFixed(1)}km
                                                             </span>
                                                         )}
