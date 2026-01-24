@@ -28,6 +28,14 @@ interface ProcessStats {
     uptimeSeconds: number;
 }
 
+interface DailyStats {
+    date: string;
+    restarts: number;
+    gitPulls: number;
+    builds: number;
+    deploys: number;
+}
+
 // In-memory buffer for the "Live" view
 let liveLogs: LogEntry[] = [];
 
@@ -50,6 +58,31 @@ let dbStats = {
     recipeCount: 0,
     userCount: 0,
 };
+
+let kv: Deno.Kv | null = null;
+let currentSessionId = crypto.randomUUID();
+
+function getTodayStr() {
+    return new Date().toISOString().split('T')[0];
+}
+
+async function updateDailyStat(type: 'restarts' | 'gitPulls' | 'builds' | 'deploys', count: number = 1) {
+    if (!kv) return;
+    const date = getTodayStr();
+    const key = ["guardian", "stats", date];
+
+    try {
+        await kv.atomic()
+            .mutate({
+                type: "sum",
+                key: [...key, type],
+                value: new Deno.KvU64(BigInt(count))
+            })
+            .commit();
+    } catch (e) {
+        console.error("Failed to update daily stats:", e);
+    }
+}
 
 class LogManager {
     private currentLogPath: string | null = null;
@@ -182,33 +215,35 @@ const logManager = new LogManager();
 
 // Periodic DB counting
 async function countDbItems() {
+    // If KV is available, use it (Upstream logic)
+    // But also check if Deno.openKv is available at all
+
     if (typeof Deno.openKv !== "function") {
         logManager.log("guardian", "Error counting DB items: Deno.openKv is not available. Please run with --unstable-kv");
         return;
     }
 
     try {
-        const kv = await Deno.openKv("./greens.db");
+        // If we have a global KV, use it. Or open new one.
+        // Let's use the global one if initialized, else open temporary
+        const db = kv || await Deno.openKv("./greens.db");
 
         let foods = 0;
-        for await (const _ of kv.list({ prefix: ["foods"] })) foods++;
+        for await (const _ of db.list({ prefix: ["foods"] })) foods++;
 
         let recipes = 0;
-        for await (const _ of kv.list({ prefix: ["recipes"] })) recipes++;
+        for await (const _ of db.list({ prefix: ["recipes"] })) recipes++;
 
         let users = 0;
-        for await (const _ of kv.list({ prefix: ["users"] })) users++;
+        for await (const _ of db.list({ prefix: ["users"] })) users++;
 
         dbStats = { foodCount: foods, recipeCount: recipes, userCount: users };
-        await kv.close();
+
+        if (!kv) db.close(); // Close if we opened it just for this
     } catch (e) {
         logManager.log("guardian", `Error counting DB items: ${e instanceof Error ? e.message : e}`);
     }
 }
-
-// Initial count and periodic update
-countDbItems();
-setInterval(countDbItems, 60000); // Every minute
 
 
 class ProcessManager {
@@ -285,6 +320,10 @@ class ProcessManager {
         await logManager.rotate();
 
         setTimeout(() => this.start(), 1000);
+
+        // Track restart
+        stats.restartCount++;
+        await updateDailyStat("restarts");
     }
 
     private async handleOutput(stream: ReadableStream<Uint8Array>, source: "backend" | "frontend") {
@@ -314,15 +353,11 @@ class ProcessManager {
         if (this.shouldRun) {
             stats.status = "crashed";
             stats.restartCount++;
+            updateDailyStat("restarts");
+
             logManager.log("guardian", `Process exited with code ${code}. Restarting everything in ${RESTART_DELAY_MS}ms...`);
 
             // Auto-restart
-            // We do NOT rotate logs on crash auto-restart usually, to keep context of the crash?
-            // User said: "If we restart- its a new session with clean log."
-            // Assuming this applies to manual restarts or full resets.
-            // For a crash-loop, keeping the log might be better, but let's stick to the directive strictly:
-            // "If we restart- its a new session with clean log."
-            // I will rotate here too to be safe.
             logManager.rotate().then(() => {
                 setTimeout(() => this.start(), RESTART_DELAY_MS);
             });
@@ -386,6 +421,17 @@ async function handleRequest(req: Request): Promise<Response> {
             memory = Deno.memoryUsage();
         } catch { }
 
+        // Get daily stats (from KV if available)
+        const date = getTodayStr();
+        const dailyStats: any = {};
+        if (kv) {
+            const keys = ["restarts", "gitPulls", "builds", "deploys"];
+            for (const k of keys) {
+                const res = await kv.get<Deno.KvU64>(["guardian", "stats", date, k]);
+                dailyStats[k] = res.value ? Number(res.value.value) : 0;
+            }
+        }
+
         return Response.json({
             ...stats,
             uptimeSeconds: currentUptime,
@@ -400,7 +446,9 @@ async function handleRequest(req: Request): Promise<Response> {
             typescriptVersion: Deno.version.typescript,
             timestamp: Date.now(),
             dbStats,
-            interactionStats
+            interactionStats,
+            dailyStats,
+            sessionId: currentSessionId
         });
     }
 
@@ -434,6 +482,8 @@ async function handleRequest(req: Request): Promise<Response> {
         if (url.pathname === "/api/git-pull") {
             const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
             interactionStats[source].pull++;
+            await updateDailyStat("gitPulls");
+
             // Run in background to not block
             runCommand("git", ["pull"]).then(success => {
                 if (success) logManager.log("guardian", "Git pull successful");
@@ -445,6 +495,8 @@ async function handleRequest(req: Request): Promise<Response> {
         if (url.pathname === "/api/build") {
             const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
             interactionStats[source].build++;
+            await updateDailyStat("builds");
+
             runCommand("deno", ["task", "build"]).then(success => {
                 if (success) logManager.log("guardian", "Build successful");
                 else logManager.log("guardian", "Build failed");
@@ -455,6 +507,8 @@ async function handleRequest(req: Request): Promise<Response> {
         if (url.pathname === "/api/deploy") {
             const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
             interactionStats[source].deploy++;
+            await updateDailyStat("deploys");
+
             // Chain commands
             (async () => {
                 const pull = await runCommand("git", ["pull"]);
@@ -499,6 +553,13 @@ async function clearPort(port: number) {
 
 // Start everything
 async function bootstrap() {
+    // Open KV
+    try {
+        kv = await Deno.openKv("./greens.db");
+    } catch (e) {
+        console.error("Failed to open KV:", e);
+    }
+
     await logManager.init(); // Init logging first
 
     logManager.log("guardian", `Clearing ports and initializing...`);
@@ -509,6 +570,10 @@ async function bootstrap() {
     logManager.log("guardian", `Guardian starting on port ${PORT}...`);
     logManager.log("guardian", `Application will be available at http://localhost:${FRONTEND_PORT}`);
     manager.start();
+
+    // Initial Db count
+    countDbItems();
+    setInterval(countDbItems, 60000);
 
     Deno.serve({ port: PORT, handler: handleRequest });
 }

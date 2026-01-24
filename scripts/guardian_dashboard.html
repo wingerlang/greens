@@ -410,7 +410,11 @@
 
                 // Metrics
                 document.getElementById('uptime').textContent = formatTime(data.uptimeSeconds);
-                document.getElementById('restarts').textContent = data.restartCount;
+
+                // Restarts + Daily
+                const restarts = data.dailyStats ? data.dailyStats.restarts : data.restartCount;
+                document.getElementById('restarts').textContent = restarts + (data.dailyStats ? " (Today)" : "");
+
                 document.getElementById('memory').textContent = formatBytes(data.memory.rss);
                 document.getElementById('host-info').textContent = data.hostname;
 

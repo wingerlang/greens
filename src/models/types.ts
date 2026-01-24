@@ -638,6 +638,7 @@ export interface ExerciseEntry {
     startTime?: string; // HH:mm format local start time
     createdAt: string;
     source?: string;
+    location?: string; // Optional location string (e.g. "Båstad", "Göteborg")
     // Integration fields (Strava/Garmin)
     externalId?: string;          // e.g., "strava_123456"
     overridesActivityId?: string; // ID of activity this manual entry supersedes (e.g., to "tag" a Strava activity locally)
@@ -1263,12 +1264,39 @@ export interface PlannedActivity {
     startTime?: string; // HH:mm
     includesRunning?: boolean;
 
-    // Recon / Sync Metadata
     reconciliation?: {
         score?: number;
         matchReason?: string;
         bestCandidateId?: string;
         reconciledAt?: string;
+    };
+
+    // Race Specific Details (Metadata)
+    raceDetails?: RaceDetails;
+}
+
+export interface RaceDetails {
+    goals?: {
+        a?: string; // Dream goal (e.g., "Sub 3:00")
+        b?: string; // Realistic goal (e.g., "Sub 3:15")
+        c?: string; // Safe/Bailout goal (e.g., "Finish")
+    };
+    logistics?: {
+        location?: string;
+        bibNumber?: string;
+        travelInfo?: string;
+        accommodation?: string;
+    };
+    checklist?: {
+        id: string;
+        item: string;
+        checked: boolean;
+        category: 'gear' | 'nutrition' | 'logistics' | 'other';
+    }[];
+    strategy?: {
+        pacingPlan?: string;    // e.g. "Negative split"
+        fuelingPlan?: string;   // e.g. "Gel every 30m"
+        weatherNotes?: string;  // e.g. "Expected rain, wear cap"
     };
 }
 

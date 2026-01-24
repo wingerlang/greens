@@ -100,6 +100,7 @@ export function ActivityDetailModal({
         subType: activity.subType || 'default',
         tonnage: activity.tonnage ? activity.tonnage.toString() : '',
         distance: activity.distance ? activity.distance.toString() : '',
+        location: activity.location || '',
         excludeFromStats: activity.excludeFromStats || false
     });
 
@@ -364,6 +365,7 @@ export function ActivityDetailModal({
             tonnage: editForm.tonnage ? parseFloat(editForm.tonnage) : undefined,
             distance: editForm.distance ? parseFloat(editForm.distance) : undefined,
             caloriesBurned: calories,
+            location: editForm.location,
             excludeFromStats: editForm.excludeFromStats
         };
 
@@ -645,6 +647,18 @@ export function ActivityDetailModal({
                                     />
                                 </div>
                             )}
+
+                            {/* Location Input */}
+                            <div className="space-y-1 col-span-2">
+                                <label className="text-xs font-bold text-slate-500 uppercase">Plats / Ort</label>
+                                <input
+                                    type="text"
+                                    placeholder="T.ex. Stockholm, Båstad..."
+                                    value={editForm.location}
+                                    onChange={e => setEditForm({ ...editForm, location: e.target.value })}
+                                    className="w-full bg-slate-800 border-white/5 rounded-xl p-3 text-white text-xs focus:outline-none focus:border-emerald-500/50"
+                                />
+                            </div>
                         </div>
 
                         <div className="space-y-1">
