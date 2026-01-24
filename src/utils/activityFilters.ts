@@ -17,6 +17,61 @@ export function parseSmartQuery(query: string): { filters: SmartFilter[], remain
     const filters: SmartFilter[] = [];
     let remainingText = query;
 
+    // 0a. EXACT DATE: 2025-09-15
+    const dateExactRegex = /\b(20\d{2})-(\d{2})-(\d{2})\b/g;
+    remainingText = remainingText.replace(dateExactRegex, (match, y, m, d) => {
+        filters.push({
+            id: crypto.randomUUID(),
+            type: 'date',
+            operator: 'equal',
+            value: `${y}-${m}-${d}`,
+            label: `${y}-${m}-${d}`,
+            originalQuery: match.trim()
+        });
+        return '';
+    });
+
+    // 0b. YEAR-MONTH: 2025-09
+    const dateMonthRegex = /\b(20\d{2})-(\d{2})\b/g;
+    remainingText = remainingText.replace(dateMonthRegex, (match, y, m) => {
+        filters.push({
+            id: crypto.randomUUID(),
+            type: 'date',
+            operator: 'equal',
+            value: `${y}-${m}`,
+            label: `${y}-${m}`, // e.g. "Sep 2025"
+            originalQuery: match.trim()
+        });
+        return '';
+    });
+
+    // 0c. TEXT MONTH YEAR: "September 2025", "Sep 25"
+    const textMonthRegex = /\b(jan|feb|mar|apr|may|maj|jun|jul|aug|sep|oct|okt|nov|dec)[a-z]*\s+(20\d{2}|\d{2})\b/gi;
+    const monthMap: Record<string, string> = {
+        'jan': '01', 'feb': '02', 'mar': '03', 'apr': '04', 'may': '05', 'maj': '05',
+        'jun': '06', 'jul': '07', 'aug': '08', 'sep': '09', 'oct': '10', 'okt': '10',
+        'nov': '11', 'dec': '12'
+    };
+    remainingText = remainingText.replace(textMonthRegex, (match, mStr, yStr) => {
+        const mKey = mStr.toLowerCase().substring(0, 3);
+        const month = monthMap[mKey];
+        let year = yStr;
+        if (year.length === 2) year = '20' + year; // Assume 20xx
+
+        if (month) {
+            filters.push({
+                id: crypto.randomUUID(),
+                type: 'date',
+                operator: 'equal',
+                value: `${year}-${month}`,
+                label: `${mStr} ${year}`,
+                originalQuery: match.trim()
+            });
+            return '';
+        }
+        return match;
+    });
+
     // 0. DATE/YEAR: >2025, <2024, 2023
     const yearRegex = /(?:([<>])\s*)?(20\d{2})\b/g;
     remainingText = remainingText.replace(yearRegex, (match, op, year) => {
@@ -32,6 +87,8 @@ export function parseSmartQuery(query: string): { filters: SmartFilter[], remain
         });
         return '';
     });
+
+
 
     // 1. DISTANCE: >10km, <5km, 10-20km, 12km, 10km +- 500m, ~10km
     const distRegex = /(~)?\s*(?:([<>])\s*)?(\d+(?:[.,]\d+)?)(?:\s*-\s*(\d+(?:[.,]\d+)?))?\s*(?:km|k|m)?(?:\s*\+-\s*(\d+(?:[.,]\d+)?)\s*(km|k|m)?)?/gi;
@@ -231,6 +288,11 @@ export function applySmartFilters<T extends ExerciseEntry>(activities: T[], filt
                     return Math.abs(pace - f.value) < 0.05;
 
                 case 'date':
+                    // If value is a string (YYYY-MM or YYYY-MM-DD), use string prefix match
+                    if (typeof f.value === 'string') {
+                        return activity.date.startsWith(f.value);
+                    }
+
                     const year = new Date(activity.date).getFullYear();
                     if (f.operator === 'greater') return year > f.value;
                     if (f.operator === 'less') return year < f.value;
