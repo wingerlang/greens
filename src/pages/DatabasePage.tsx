@@ -27,6 +27,14 @@ const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
     frozen: '❄️ Fryst',
 };
 
+const CATEGORY_GROUPS: Record<string, FoodCategory[]> = {
+    'Grönt & Frukt': ['vegetables', 'fruits'],
+    'Protein & Baljväxter': ['protein', 'legumes', 'dairy-alt', 'nuts-seeds', 'supplements'],
+    'Skafferi & Bas': ['grains', 'cereals', 'baking', 'spices', 'condiments', 'sauces', 'sweeteners', 'fats'],
+    'Dryck': ['beverages'],
+    'Övrigt': ['other']
+};
+
 const EMPTY_FORM: FoodItemFormData = {
     name: '',
     brand: '',
@@ -58,7 +66,7 @@ const EMPTY_FORM: FoodItemFormData = {
 };
 
 type ViewMode = 'grid' | 'list';
-type DatabaseTab = 'items' | 'my-content' | 'activity-log' | 'stats';
+type DatabaseTab = 'items' | 'my-content' | 'activity-log' | 'stats' | 'brands';
 
 export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const { foodItems, recipes, mealEntries, quickMeals, addFoodItem, updateFoodItem, deleteFoodItem, foodAliases, updateFoodAlias, users, currentUser, databaseActions } = useData();
@@ -365,6 +373,52 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         };
     }, [activeTab, mealEntries, foodItems]);
 
+    const brandStats = useMemo(() => {
+        if (activeTab !== 'brands') return null;
+        const stats: Record<string, { count: number; products: number; lastUsed: string; topProduct: string; topProductCount: number }> = {};
+
+        // Initialize with products
+        foodItems.forEach(item => {
+            const brand = item.brand ? item.brand.trim() : 'Okänt märke';
+            if (!brand) return;
+
+            if (!stats[brand]) {
+                stats[brand] = { count: 0, products: 0, lastUsed: '', topProduct: '', topProductCount: -1 };
+            }
+            stats[brand].products++;
+
+            const freq = itemFrequencyMap[item.id] || 0;
+            stats[brand].count += freq;
+
+            if (freq > stats[brand].topProductCount) {
+                 stats[brand].topProductCount = freq;
+                 stats[brand].topProduct = item.name;
+            }
+        });
+
+        // Usage dates
+        mealEntries.forEach(entry => {
+            entry.items.forEach(mi => {
+                 if (mi.type === 'foodItem' && mi.referenceId) {
+                     const item = foodItems.find(f => f.id === mi.referenceId);
+                     if (item) {
+                         const brand = item.brand ? item.brand.trim() : 'Okänt märke';
+                         if (stats[brand]) {
+                             if (!stats[brand].lastUsed || entry.date > stats[brand].lastUsed) {
+                                 stats[brand].lastUsed = entry.date;
+                             }
+                         }
+                     }
+                 }
+            });
+        });
+
+        return Object.entries(stats)
+            .map(([name, data]) => ({ name, ...data }))
+            .filter(b => b.products > 0)
+            .sort((a, b) => b.count - a.count);
+    }, [activeTab, foodItems, mealEntries, itemFrequencyMap]);
+
     const myContentData = useMemo(() => {
         if (activeTab !== 'my-content') return null;
 
@@ -489,7 +543,14 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     // --- SMART PARSING LOGIC ---
     const applyParsedData = (parsed: any) => {
         const knownBrands = Array.from(new Set(foodItems.map(f => f.brand).filter(Boolean))) as string[];
-        const brand = parsed.brand || extractBrand(parsed.text || '', knownBrands);
+        let brand = parsed.brand || extractBrand(parsed.text || '', knownBrands);
+
+        // Safety cleanup for pricing text
+        if (brand) {
+            brand = brand.replace(/\b(nuvarande|ordinarie|jmf|kampanj|medlems)\s*pris.*$/i, '').trim();
+            brand = brand.replace(/\bpris\s*[:\d].*$/i, '').trim();
+        }
+
         const packageWeight = parsed.packageWeight || extractPackagingWeight(parsed.text || '');
 
         setFormData(prev => ({
@@ -718,6 +779,12 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             >
                                 📈 Statistik
                             </button>
+                            <button
+                                className={`px-4 py-2 rounded-lg transition-all text-sm font-bold ${activeTab === 'brands' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+                                onClick={() => setActiveTab('brands')}
+                            >
+                                🏷️ Märken
+                            </button>
                         </div>
                         <div className="w-[1px] bg-slate-800 mx-2" />
                         <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
@@ -846,6 +913,60 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             </div>
                         )}
                     </section>
+                </div>
+            )}
+
+            {activeTab === 'brands' && brandStats && (
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden">
+                        <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                            <h3 className="text-lg font-black text-white">Varumärken</h3>
+                            <div className="text-xs text-slate-500 font-bold uppercase tracking-wider">
+                                {brandStats.length} st hittades
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm text-slate-400">
+                                <thead className="bg-slate-900/80 text-[10px] uppercase font-bold text-slate-500">
+                                    <tr>
+                                        <th className="p-4">Märke</th>
+                                        <th className="p-4 text-center">Produkter</th>
+                                        <th className="p-4 text-center">Loggningar</th>
+                                        <th className="p-4">Populärast</th>
+                                        <th className="p-4 text-right">Senast använd</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800/50">
+                                    {brandStats.map((brand) => (
+                                        <tr key={brand.name} className="hover:bg-slate-800/30 transition-colors">
+                                            <td className="p-4 font-bold text-slate-200">
+                                                {brand.name === 'Okänt märke' ? <span className="text-slate-600 italic">{brand.name}</span> : brand.name}
+                                            </td>
+                                            <td className="p-4 text-center">
+                                                <span className="bg-slate-800 px-2 py-1 rounded text-xs font-bold">{brand.products}</span>
+                                            </td>
+                                            <td className="p-4 text-center font-mono text-emerald-400 font-bold">
+                                                {brand.count}
+                                            </td>
+                                            <td className="p-4">
+                                                {brand.topProduct ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="truncate max-w-[150px]">{brand.topProduct}</span>
+                                                        <span className="text-[10px] text-slate-600 bg-slate-900 px-1.5 py-0.5 rounded">
+                                                            {brand.topProductCount}x
+                                                        </span>
+                                                    </div>
+                                                ) : '-'}
+                                            </td>
+                                            <td className="p-4 text-right text-xs font-mono">
+                                                {brand.lastUsed ? brand.lastUsed : '-'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -1036,8 +1157,12 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             onChange={(e) => setSelectedCategory(e.target.value as FoodCategory | 'all')}
                         >
                             <option value="all">Alla kategorier</option>
-                            {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                                <option key={key} value={key}>{label}</option>
+                            {Object.entries(CATEGORY_GROUPS).map(([group, keys]) => (
+                                <optgroup key={group} label={group}>
+                                    {keys.map(key => (
+                                        <option key={key} value={key}>{CATEGORY_LABELS[key]}</option>
+                                    ))}
+                                </optgroup>
                             ))}
                         </select>
                         <select
@@ -1507,8 +1632,12 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                         onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
                                         className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                                     >
-                                        {Object.entries(CATEGORY_LABELS).map(([key, label]) => (
-                                            <option key={key} value={key}>{label}</option>
+                                        {Object.entries(CATEGORY_GROUPS).map(([group, keys]) => (
+                                            <optgroup key={group} label={group}>
+                                                {keys.map(key => (
+                                                    <option key={key} value={key}>{CATEGORY_LABELS[key]}</option>
+                                                ))}
+                                            </optgroup>
                                         ))}
                                     </select>
                                 </div>

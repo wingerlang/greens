@@ -5,66 +5,79 @@ const MAX_LOGS = 2000;
 const PORT = Number(Deno.env.get("GUARDIAN_PORT") || "9999");
 const BACKEND_PORT = Number(Deno.env.get("PORT") || "8000");
 const FRONTEND_PORT = 3000;
+
+// Config
 const RESTART_DELAY_MS = 3000;
 
-// State Interfaces
+async function clearPort(port: number) {
+    if (Deno.build.os === "windows") {
+        try {
+            const cmd = new Deno.Command("netstat", { args: ["-ano"] });
+            const { stdout } = await cmd.output();
+            const output = new TextDecoder().decode(stdout);
+            const lines = output.split("\n");
+            const pattern = new RegExp(`:${port}\\s+.*LISTENING\\s+(\\d+)`);
+
+            for (const line of lines) {
+                const match = line.match(pattern);
+                if (match) {
+                    const pid = match[1];
+                    if (parseInt(pid) === Deno.pid) continue;
+                    const killCmd = new Deno.Command("taskkill", { args: ["/F", "/PID", pid] });
+                    await killCmd.output();
+                }
+            }
+        } catch (e) { /* ignore */ }
+    } else {
+        // Linux/Mac
+        try {
+            const cmd = new Deno.Command("lsof", { args: ["-t", "-i", `:${port}`] });
+            const output = await cmd.output();
+            const pids = new TextDecoder().decode(output.stdout).trim().split('\n');
+            for (const pid of pids) {
+                if (pid && parseInt(pid) !== Deno.pid) {
+                     const kill = new Deno.Command("kill", { args: ["-9", pid] });
+                     await kill.output();
+                }
+            }
+        } catch (e) { /* ignore */ }
+    }
+}
+
+// --- Interfaces ---
+
 interface LogEntry {
     id: string;
     timestamp: string;
-    source: "stdout" | "stderr" | "guardian";
+    service: string; // "backend", "frontend", "guardian", "system"
+    source: "stdout" | "stderr" | "info";
     message: string;
 }
 
-interface ProcessStats {
-    status: "running" | "stopped" | "crashed" | "starting";
+interface ServiceStats {
+    name: string;
+    status: "running" | "stopped" | "crashed" | "starting" | "stopping";
     pid: number | null;
-    startTime: number | null;
-    restartCount: number;
-    lastExitCode: number | null;
-    uptimeSeconds: number;
-}
-
-interface SessionInfo {
-    id: string;
-    startTime: string;
-    endTime: string | null;
-    date: string; // YYYY-MM-DD
-}
-
-interface DailyStats {
-    date: string;
+    cpu: number; // Percentage
+    memory: number; // RSS in bytes
+    uptime: number; // Seconds
     restarts: number;
-    gitPulls: number;
-    builds: number;
-    deploys: number;
+    startTime: number | null;
+    lastExitCode: number | null;
 }
 
-// In-memory state (mirrored to KV)
-const logs: LogEntry[] = [];
-const stats: ProcessStats = {
-    status: "stopped",
-    pid: null,
-    startTime: null,
-    restartCount: 0,
-    lastExitCode: null,
-    uptimeSeconds: 0,
-};
+interface ServiceConfig {
+    name: string;
+    command: string[];
+    env?: Record<string, string>;
+    cwd?: string;
+    autoRestart: boolean;
+}
 
-let currentSessionId = crypto.randomUUID();
+// --- Persistence ---
+
 let kv: Deno.Kv;
-
-const interactionStats = {
-    click: { restart: 0, pull: 0, build: 0, deploy: 0 },
-    omnibox: { restart: 0, pull: 0, build: 0, deploy: 0 },
-};
-
-let dbStats = {
-    foodCount: 0,
-    recipeCount: 0,
-    userCount: 0,
-};
-
-// --- Persistence Helpers ---
+let currentSessionId = crypto.randomUUID();
 
 function getTodayStr() {
     return new Date().toISOString().split('T')[0];
@@ -72,196 +85,145 @@ function getTodayStr() {
 
 async function persistLog(entry: LogEntry) {
     if (!kv) return;
-    // Key: ["guardian", "logs", sessionId, timestamp, logId]
-    // Value: LogEntry
-    // Also keeping a recent list in memory for quick access
     try {
+        // Index by Session -> Service -> Time
         await kv.set(
-            ["guardian", "logs", currentSessionId, entry.timestamp, entry.id],
+            ["guardian", "logs", currentSessionId, entry.service, entry.timestamp, entry.id],
             entry,
-            { expireIn: 30 * 24 * 60 * 60 * 1000 } // Auto-expire after 30 days
+            { expireIn: 7 * 24 * 60 * 60 * 1000 } // 7 days retention
         );
     } catch (e) {
         console.error("Failed to persist log:", e);
     }
 }
 
-async function updateDailyStat(type: 'restarts' | 'gitPulls' | 'builds' | 'deploys', count: number = 1) {
+async function updateServiceStat(serviceName: string, type: string, count: number = 1) {
     if (!kv) return;
     const date = getTodayStr();
-    const key = ["guardian", "stats", date];
-
     try {
         await kv.atomic()
             .mutate({
                 type: "sum",
-                key: [...key, type],
+                key: ["guardian", "stats", date, serviceName, type],
                 value: new Deno.KvU64(BigInt(count))
             })
             .commit();
-    } catch (e) {
-        console.error("Failed to update daily stats:", e);
-    }
+    } catch (e) { /* ignore */ }
 }
 
-async function initSession() {
-    if (!kv) return;
-    const now = new Date();
-    const session: SessionInfo = {
-        id: currentSessionId,
-        startTime: now.toISOString(),
-        endTime: null,
-        date: getTodayStr()
-    };
+// --- Service Class ---
 
-    // Save session info
-    await kv.set(["guardian", "sessions", session.date, session.id], session);
-    await kv.set(["guardian", "active_session"], session.id);
+class Service {
+    config: ServiceConfig;
+    stats: ServiceStats;
+    logs: LogEntry[] = [];
+    process: Deno.ChildProcess | null = null;
+    shouldRun: boolean = false;
 
-    addLog("guardian", `Session started: ${currentSessionId}`);
-}
-
-async function loadHistory(sessionId: string): Promise<LogEntry[]> {
-    if (!kv) return [];
-    const entries: LogEntry[] = [];
-    const prefix = ["guardian", "logs", sessionId];
-    for await (const entry of kv.list<LogEntry>({ prefix })) {
-        entries.push(entry.value);
-    }
-    // Sort by timestamp
-    return entries.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
-}
-
-async function getSessionsForDate(date: string): Promise<SessionInfo[]> {
-    if (!kv) return [];
-    const sessions: SessionInfo[] = [];
-    for await (const entry of kv.list<SessionInfo>({ prefix: ["guardian", "sessions", date] })) {
-        sessions.push(entry.value);
-    }
-    return sessions;
-}
-
-// Periodic DB counting
-async function countDbItems() {
-    if (!kv) return;
-
-    try {
-        // We use the same KV for app data and guardian data, potentially dangerous but convenient here
-        // Assuming app data is in the same DB file
-
-        // Actually, let's open a separate connection for app data if needed, 
-        // or just reuse if it's the same file. The Plan implied reuse.
-
-        let foods = 0;
-        for await (const _ of kv.list({ prefix: ["foods"] })) foods++;
-
-        let recipes = 0;
-        for await (const _ of kv.list({ prefix: ["recipes"] })) recipes++;
-
-        let users = 0;
-        for await (const _ of kv.list({ prefix: ["users"] })) users++;
-
-        dbStats = { foodCount: foods, recipeCount: recipes, userCount: users };
-    } catch (e) {
-        addLog("guardian", `Error counting DB items: ${e instanceof Error ? e.message : e}`);
-    }
-}
-
-function addLog(source: "stdout" | "stderr" | "guardian", message: string) {
-    const entry: LogEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        source,
-        message: message.trimEnd(),
-    };
-
-    // Memory buffer
-    logs.push(entry);
-    if (logs.length > MAX_LOGS) {
-        logs.shift();
+    constructor(config: ServiceConfig) {
+        this.config = config;
+        this.stats = {
+            name: config.name,
+            status: "stopped",
+            pid: null,
+            cpu: 0,
+            memory: 0,
+            uptime: 0,
+            restarts: 0,
+            startTime: null,
+            lastExitCode: null,
+        };
+        this.shouldRun = config.autoRestart;
+        this.loadStats();
     }
 
-    // Persist
-    persistLog(entry);
-
-    // Console output
-    if (source === "guardian") {
-        console.log(`[GUARDIAN] ${message}`);
-    } else {
-        console.log(message);
+    async loadStats() {
+        if (!kv) return;
+        try {
+            const date = getTodayStr();
+            const res = await kv.get<Deno.KvU64>(["guardian", "stats", date, this.config.name, "restarts"]);
+            if (res.value) {
+                this.stats.restarts = Number(res.value.value);
+            }
+        } catch (e) { /* ignore */ }
     }
-}
 
-class ProcessManager {
-    private backendChild: Deno.ChildProcess | null = null;
-    private frontendChild: Deno.ChildProcess | null = null;
-    private shouldRun = true;
+    addLog(source: "stdout" | "stderr" | "info", message: string) {
+        const entry: LogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            service: this.config.name,
+            source,
+            message: message.trimEnd(),
+        };
+
+        this.logs.push(entry);
+        if (this.logs.length > MAX_LOGS) {
+            this.logs.shift();
+        }
+
+        persistLog(entry);
+    }
 
     async start() {
+        if (this.stats.status === "running" || this.stats.status === "starting") return;
+
         this.shouldRun = true;
-        stats.status = "starting";
-        addLog("guardian", "Starting application (Backend & Frontend)...");
+        this.stats.status = "starting";
+        this.addLog("info", "Starting service...");
 
-        // Start Backend
-        const backendCmd = new Deno.Command("deno", {
-            args: ["task", "server"],
-            stdout: "piped",
-            stderr: "piped",
-            env: { "PORT": BACKEND_PORT.toString() }
-        });
-        this.backendChild = backendCmd.spawn();
-        this.handleOutput(this.backendChild.stdout, "stdout");
-        this.handleOutput(this.backendChild.stderr, "stderr");
+        try {
+            const cmd = new Deno.Command(this.config.command[0], {
+                args: this.config.command.slice(1),
+                env: { ...Deno.env.toObject(), ...this.config.env },
+                cwd: this.config.cwd || Deno.cwd(),
+                stdout: "piped",
+                stderr: "piped",
+            });
 
-        // Start Frontend
-        const frontendCmd = new Deno.Command("deno", {
-            args: ["task", "dev", "--port", FRONTEND_PORT.toString()],
-            stdout: "piped",
-            stderr: "piped",
-        });
-        this.frontendChild = frontendCmd.spawn();
-        this.handleOutput(this.frontendChild.stdout, "stdout");
-        this.handleOutput(this.frontendChild.stderr, "stderr");
+            this.process = cmd.spawn();
+            this.stats.pid = this.process.pid;
+            this.stats.startTime = Date.now();
+            this.stats.status = "running";
+            this.addLog("info", `Service started (PID: ${this.process.pid})`);
 
-        stats.pid = this.backendChild.pid; // Primary PID
-        stats.startTime = Date.now();
-        stats.status = "running";
+            // Stream logs
+            this.readStream(this.process.stdout, "stdout");
+            this.readStream(this.process.stderr, "stderr");
 
-        addLog("guardian", `Processes started. Backend: ${this.backendChild.pid}, Frontend: ${this.frontendChild.pid}`);
+            // Wait for exit
+            this.process.status.then((status) => this.onExit(status.code));
 
-        // Wait for either to exit
-        Promise.race([
-            this.backendChild.status,
-            this.frontendChild.status
-        ]).then((status) => {
-            this.onExit(status.code);
-        });
+        } catch (e) {
+            this.addLog("stderr", `Failed to start: ${e}`);
+            this.stats.status = "crashed";
+            this.retry();
+        }
     }
 
     async stop() {
         this.shouldRun = false;
-        if (this.backendChild) {
-            try { this.backendChild.kill(); } catch (e) { }
-            this.backendChild = null;
+        if (this.process) {
+            this.addLog("info", "Stopping service...");
+            try {
+                this.process.kill();
+            } catch (e) {
+                this.addLog("stderr", `Error stopping: ${e}`);
+            }
         }
-        if (this.frontendChild) {
-            try { this.frontendChild.kill(); } catch (e) { }
-            this.frontendChild = null;
-        }
-        addLog("guardian", "Stopped all processes.");
-        stats.status = "stopped";
+        // Force status update (in case onExit is slow)
+        this.stats.status = "stopping";
     }
 
     async restart() {
         await this.stop();
+        // Wait a bit to ensure process is dead
         setTimeout(() => this.start(), 1000);
-
-        // Track restart
-        stats.restartCount++;
-        await updateDailyStat("restarts");
+        this.stats.restarts++;
+        updateServiceStat(this.config.name, "restarts");
     }
 
-    private async handleOutput(stream: ReadableStream<Uint8Array>, source: "stdout" | "stderr") {
+    private async readStream(stream: ReadableStream<Uint8Array>, source: "stdout" | "stderr") {
         const reader = stream.getReader();
         const decoder = new TextDecoder();
         try {
@@ -271,240 +233,285 @@ class ProcessManager {
                 const text = decoder.decode(value);
                 const lines = text.split('\n');
                 for (const line of lines) {
-                    if (line) addLog(source, line);
+                    if (line) this.addLog(source, line);
                 }
             }
-        } catch (e) { }
+        } catch (e) { /* ignore */ }
     }
 
     private onExit(code: number) {
-        stats.status = "stopped";
-        stats.pid = null;
-        stats.lastExitCode = code;
-        stats.startTime = null;
+        this.stats.pid = null;
+        this.stats.lastExitCode = code;
+        this.process = null;
+        this.stats.cpu = 0;
+        this.stats.memory = 0;
 
-        if (this.shouldRun) {
-            stats.status = "crashed";
-            // Wait before restart
-            addLog("guardian", `Process exited with code ${code}. Restarting everything in ${RESTART_DELAY_MS}ms...`);
+        if (!this.shouldRun) {
+            this.stats.status = "stopped";
+            this.addLog("info", "Service stopped by user.");
+            return;
+        }
 
-            // Track restart due to crash
-            stats.restartCount++;
-            updateDailyStat("restarts");
+        this.stats.status = "crashed";
+        this.addLog("info", `Service exited with code ${code}.`);
+        this.stats.restarts++;
+        updateServiceStat(this.config.name, "restarts");
+        this.retry();
+    }
 
-            setTimeout(() => this.start(), RESTART_DELAY_MS);
+    private retry() {
+        if (!this.shouldRun) return;
+        this.addLog("info", `Restarting in ${RESTART_DELAY_MS}ms...`);
+        setTimeout(() => this.start(), RESTART_DELAY_MS);
+    }
+}
+
+// --- Service Manager ---
+
+class ServiceManager {
+    services: Map<string, Service> = new Map();
+
+    register(config: ServiceConfig) {
+        const service = new Service(config);
+        this.services.set(config.name, service);
+        return service;
+    }
+
+    get(name: string) {
+        return this.services.get(name);
+    }
+
+    getAll() {
+        return Array.from(this.services.values());
+    }
+
+    async startAll() {
+        for (const service of this.services.values()) {
+            if (service.config.autoRestart) {
+                service.start();
+            }
+        }
+    }
+
+    // For manual injection of logs (e.g. Guardian self-logs)
+    getOrAdd(name: string): Service {
+        let s = this.services.get(name);
+        if (!s) {
+            // Virtual service
+            s = new Service({ name, command: [], autoRestart: false });
+            s.stats.status = "running";
+            this.services.set(name, s);
+        }
+        return s;
+    }
+
+    async stopAll() {
+        for (const service of this.services.values()) {
+            await service.stop();
         }
     }
 }
 
-const manager = new ProcessManager();
+const manager = new ServiceManager();
 
-// --- Action Runners ---
+// --- System Monitor ---
 
-async function runCommand(cmd: string, args: string[]) {
-    addLog("guardian", `Running command: ${cmd} ${args.join(" ")}`);
-    const command = new Deno.Command(cmd, {
-        args,
-        stdout: "piped",
-        stderr: "piped",
-    });
-    const process = command.spawn();
+async function updateSystemStats() {
+    if (Deno.build.os === "windows") return; // Skip ps on windows for now
 
-    // Pipe output to logs
-    const decoder = new TextDecoder();
-    const output = await process.output();
-    const stdout = decoder.decode(output.stdout);
-    const stderr = decoder.decode(output.stderr);
+    // Collect PIDs
+    const pids = new Map<number, Service>();
 
-    if (stdout) addLog("stdout", stdout);
-    if (stderr) addLog("stderr", stderr);
+    for (const service of manager.getAll()) {
+        if (service.stats.pid) {
+            pids.set(service.stats.pid, service);
+            // Update uptime
+            if (service.stats.startTime) {
+                service.stats.uptime = Math.floor((Date.now() - service.stats.startTime) / 1000);
+            }
+        }
+    }
 
-    addLog("guardian", `Command finished with code ${output.code}`);
-    return output.code === 0;
+    // Also track Guardian
+    const guardianService = manager.getOrAdd("guardian");
+    guardianService.stats.pid = Deno.pid;
+    guardianService.stats.uptime = Math.floor(performance.now() / 1000);
+    pids.set(Deno.pid, guardianService);
+
+    if (pids.size === 0) return;
+
+    try {
+        const cmd = new Deno.Command("ps", {
+            args: ["-p", Array.from(pids.keys()).join(','), "-o", "pid,pcpu,rss"],
+            stdout: "piped"
+        });
+        const output = await cmd.output();
+        const text = new TextDecoder().decode(output.stdout);
+        const lines = text.trim().split('\n');
+
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            const parts = line.split(/\s+/);
+            if (parts.length >= 3) {
+                const pid = parseInt(parts[0]);
+                const cpu = parseFloat(parts[1]);
+                const rss = parseInt(parts[2]) * 1024;
+
+                const service = pids.get(pid);
+                if (service) {
+                    service.stats.cpu = cpu;
+                    service.stats.memory = rss;
+                }
+            }
+        }
+    } catch (e) { /* ignore */ }
 }
 
-// --- Server ---
+// --- API & Server ---
 
 async function handleRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
 
-    // Serve Dashboard HTML
+    // Serve Dashboard
     if (url.pathname === "/" || url.pathname === "/index.html") {
         try {
             const htmlPath = join(dirname(fromFileUrl(import.meta.url)), "guardian_dashboard.html");
             const html = await Deno.readTextFile(htmlPath);
             return new Response(html, { headers: { "content-type": "text/html" } });
         } catch (e) {
-            return new Response("Dashboard file not found. Please create scripts/guardian_dashboard.html", { status: 404 });
+            return new Response("Dashboard not found.", { status: 404 });
         }
     }
 
-    // API
     if (url.pathname === "/api/status") {
-        const currentUptime = stats.startTime ? Math.floor((Date.now() - stats.startTime) / 1000) : 0;
-
-        let memory = { rss: 0, heapTotal: 0, heapUsed: 0, external: 0 };
-        try {
-            memory = Deno.memoryUsage();
-        } catch { }
-
-        // Get daily stats
-        const date = getTodayStr();
-        const dailyStats: any = {};
-        if (kv) {
-            const keys = ["restarts", "gitPulls", "builds", "deploys"];
-            for (const k of keys) {
-                const res = await kv.get<Deno.KvU64>(["guardian", "stats", date, k]);
-                dailyStats[k] = res.value ? Number(res.value.value) : 0;
-            }
-        }
+        // Ensure Guardian is in the list
+        manager.getOrAdd("guardian");
+        const services = manager.getAll().map(s => s.stats);
 
         return Response.json({
-            ...stats,
-            uptimeSeconds: currentUptime,
-            memory,
-            systemMemory: Deno.systemMemoryInfo(),
-            loadAvg: Deno.loadavg(),
-            hostname: Deno.hostname(),
-            platform: Deno.build.os,
-            appUrl: `http://localhost:${FRONTEND_PORT}`,
-            denoVersion: Deno.version.deno,
-            v8Version: Deno.version.v8,
-            typescriptVersion: Deno.version.typescript,
-            timestamp: Date.now(),
-            dbStats,
-            interactionStats,
-            dailyStats: dailyStats,
-            sessionId: currentSessionId
+            services: services,
+            system: Deno.systemMemoryInfo(),
+            load: Deno.loadavg()
         });
     }
 
     if (url.pathname === "/api/logs") {
-        const sessionId = url.searchParams.get("sessionId");
-        if (sessionId && sessionId !== currentSessionId) {
-            // Fetch history
-            const history = await loadHistory(sessionId);
-            return Response.json(history);
+        const serviceName = url.searchParams.get("service");
+        if (!serviceName) return Response.json([]);
+
+        const service = manager.get(serviceName);
+        if (service) {
+            return Response.json(service.logs);
         }
-        // Return current buffer
-        return Response.json(logs);
+        return Response.json([]);
     }
 
-    if (url.pathname === "/api/history") {
-        // List sessions for a date (default today)
-        const date = url.searchParams.get("date") || getTodayStr();
-        const sessions = await getSessionsForDate(date);
-        return Response.json({ date, sessions });
+    if (req.method === "POST" && url.pathname === "/api/control") {
+        const serviceName = url.searchParams.get("service");
+        const action = url.searchParams.get("action");
+
+        if (!serviceName || !action) return new Response("Missing params", { status: 400 });
+
+        const service = manager.get(serviceName);
+        if (!service) return new Response("Service not found", { status: 404 });
+
+        try {
+            if (action === "start") await service.start();
+            if (action === "stop") await service.stop();
+            if (action === "restart") await service.restart();
+
+            return Response.json({ success: true, status: service.stats.status });
+        } catch (e) {
+            return Response.json({ success: false, error: String(e) });
+        }
     }
 
-    if (req.method === "POST") {
-        if (url.pathname === "/api/restart") {
-            const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
-            interactionStats[source].restart++;
-            manager.restart();
-            return Response.json({ success: true, message: "Restart triggered" });
+    // Git Pull / Build / Deploy - Global Actions
+    if (req.method === "POST" && url.pathname === "/api/global") {
+        const action = url.searchParams.get("action");
+        if (action === "git-pull") {
+             const p = new Deno.Command("git", { args: ["pull"] });
+             const out = await p.output();
+             return Response.json({ success: out.code === 0 });
         }
-
-        if (url.pathname === "/api/git-pull") {
-            const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
-            interactionStats[source].pull++;
-            await updateDailyStat("gitPulls");
-
-            // Run in background to not block
-            runCommand("git", ["pull"]).then(success => {
-                if (success) addLog("guardian", "Git pull successful");
-                else addLog("guardian", "Git pull failed");
-            });
-            return Response.json({ success: true, message: "Git pull started" });
+        if (action === "build") {
+             const p = new Deno.Command("deno", { args: ["task", "build"] });
+             const out = await p.output();
+             return Response.json({ success: out.code === 0 });
         }
-
-        if (url.pathname === "/api/build") {
-            const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
-            interactionStats[source].build++;
-            await updateDailyStat("builds");
-
-            runCommand("deno", ["task", "build"]).then(success => {
-                if (success) addLog("guardian", "Build successful");
-                else addLog("guardian", "Build failed");
-            });
-            return Response.json({ success: true, message: "Build started" });
-        }
-
-        if (url.pathname === "/api/deploy") {
-            const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
-            interactionStats[source].deploy++;
-            await updateDailyStat("deploys");
-
-            // Chain commands
-            (async () => {
-                const pull = await runCommand("git", ["pull"]);
-                if (!pull) return;
-                const build = await runCommand("deno", ["task", "build"]);
-                if (!build) return;
-                manager.restart();
-            })();
-            return Response.json({ success: true, message: "Deploy sequence started" });
+        if (action === "restart-all") {
+             // Restart each managed service
+             for(const s of manager.getAll()) {
+                 if (s.config.autoRestart) await s.restart();
+             }
+             return Response.json({ success: true });
         }
     }
 
     return new Response("Not Found", { status: 404 });
 }
 
-// --- Cleanup ---
-async function clearPort(port: number) {
-    if (Deno.build.os !== "windows") return;
 
-    try {
-        const cmd = new Deno.Command("netstat", { args: ["-ano"] });
-        const { stdout } = await cmd.output();
-        const output = new TextDecoder().decode(stdout);
-        const lines = output.split("\n");
-        const pattern = new RegExp(`:${port}\\s+.*LISTENING\\s+(\\d+)`);
+// --- Init ---
 
-        for (const line of lines) {
-            const match = line.match(pattern);
-            if (match) {
-                const pid = match[1];
-                if (parseInt(pid) === Deno.pid) continue;
+// --- Console Override ---
 
-                addLog("guardian", `Found existing process on port ${port} (PID: ${pid}). Killing it...`);
-                const killCmd = new Deno.Command("taskkill", { args: ["/F", "/PID", pid] });
-                await killCmd.output();
-            }
-        }
-    } catch (e) {
-        addLog("guardian", `Error clearing port ${port}: ${e}`);
-    }
+function setupGuardianLogging() {
+    const guardian = manager.getOrAdd("guardian");
+    const originalLog = console.log;
+    const originalError = console.error;
+
+    console.log = (...args) => {
+        const msg = args.map(a => String(a)).join(" ");
+        guardian.addLog("info", msg);
+        originalLog(...args);
+    };
+
+    console.error = (...args) => {
+        const msg = args.map(a => String(a)).join(" ");
+        guardian.addLog("stderr", msg);
+        originalError(...args);
+    };
 }
 
-// Start everything
 async function bootstrap() {
-    // Open KV
+    setupGuardianLogging();
+
     try {
         kv = await Deno.openKv("./greens.db");
     } catch (e) {
-        console.error("Failed to open KV:", e);
+        console.error("KV Init failed", e);
     }
 
-    await initSession();
+    console.log("[GUARDIAN] Initializing services...");
 
-    // Check if we recovered from a crash/restart based on previous stats?
-    // For now, simpler to just say we started a new session.
-    addLog("guardian", "Guardian initialized. State persistence enabled.");
-
-    addLog("guardian", `Clearing ports and initializing...`);
     await clearPort(PORT);
-    await clearPort(FRONTEND_PORT);
     await clearPort(BACKEND_PORT);
+    await clearPort(FRONTEND_PORT);
 
-    addLog("guardian", `Guardian starting on port ${PORT}...`);
-    addLog("guardian", `Application will be available at http://localhost:${FRONTEND_PORT}`);
-    manager.start();
+    // Register Services
+    manager.register({
+        name: "backend",
+        command: ["deno", "task", "server"],
+        env: { "PORT": String(BACKEND_PORT) },
+        autoRestart: true
+    });
 
-    // Initial Db count
-    countDbItems();
-    setInterval(countDbItems, 60000);
+    manager.register({
+        name: "frontend",
+        command: ["deno", "task", "dev", "--port", String(FRONTEND_PORT)],
+        autoRestart: true
+    });
 
+    // Start
+    await manager.startAll();
+
+    // Start Monitor Loop
+    setInterval(updateSystemStats, 2000);
+
+    // Start Server
+    console.log(`[GUARDIAN] Dashboard on port ${PORT}`);
     Deno.serve({ port: PORT, handler: handleRequest });
 }
 

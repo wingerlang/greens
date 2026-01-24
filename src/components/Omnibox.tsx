@@ -1657,10 +1657,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 <span>🍎</span> Råvaror ({foodResults.length})
                             </div>
                             {foodResults.map((item, idx) => {
-                                // Use parsed quantity from intent, or user's typical amount, or 100g
+                                // Use parsed quantity from intent, or default portion, or user's typical amount, or 100g
                                 const logQuantity = (intent.type === 'food' && intent.data.quantity)
                                     ? intent.data.quantity
-                                    : (item.usageStats?.avgGrams || 100);
+                                    : (item.defaultPortionGrams || item.usageStats?.avgGrams || 100);
                                 const displayKcal = Math.round(item.calories * logQuantity / 100);
 
                                 return (
