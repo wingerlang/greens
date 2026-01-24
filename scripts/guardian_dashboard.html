@@ -9,6 +9,7 @@
         :root {
             --bg: #0f172a;
             --card-bg: #1e293b;
+            --sidebar-bg: #111827;
             --text: #e2e8f0;
             --text-dim: #94a3b8;
             --accent: #3b82f6;
@@ -22,12 +23,71 @@
             background: var(--bg);
             color: var(--text);
             margin: 0;
-            padding: 20px;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            border-bottom: 1px solid #334155;
+            font-weight: bold;
+            font-size: 1.2em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .sidebar-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .log-file-item {
+            padding: 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-bottom: 4px;
+            font-size: 0.9em;
+            color: var(--text-dim);
+            transition: all 0.2s;
+        }
+
+        .log-file-item:hover {
+            background: #1f2937;
+            color: var(--text);
+        }
+
+        .log-file-item.active {
+            background: var(--accent);
+            color: white;
+        }
+
+        .log-file-item .meta {
+            font-size: 0.8em;
+            opacity: 0.7;
+            margin-top: 2px;
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
 
         .header {
@@ -44,63 +104,48 @@
             font-size: 0.9em;
         }
 
-        .badge.running {
-            background: var(--success);
-            color: #000;
-        }
-
-        .badge.stopped {
-            background: var(--danger);
-            color: #fff;
-        }
-
-        .badge.crashed {
-            background: var(--danger);
-            color: #fff;
-        }
-
-        .badge.starting {
-            background: var(--warning);
-            color: #000;
-        }
+        .badge.running { background: var(--success); color: #000; }
+        .badge.stopped { background: var(--danger); color: #fff; }
+        .badge.crashed { background: var(--danger); color: #fff; }
+        .badge.starting { background: var(--warning); color: #000; }
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
             margin-bottom: 20px;
         }
 
         .card {
             background: var(--card-bg);
-            padding: 20px;
+            padding: 15px;
             border-radius: 12px;
             border: 1px solid #334155;
         }
 
         .card h3 {
-            margin: 0 0 10px 0;
+            margin: 0 0 5px 0;
             color: var(--text-dim);
-            font-size: 0.9em;
+            font-size: 0.8em;
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
 
         .card .value {
-            font-size: 1.8em;
+            font-size: 1.5em;
             font-weight: bold;
         }
 
         .card .sub {
-            font-size: 0.8em;
+            font-size: 0.7em;
             color: var(--text-dim);
-            margin-top: 5px;
+            margin-top: 2px;
         }
 
         .actions {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             flex-wrap: wrap;
         }
 
@@ -108,166 +153,186 @@
             background: var(--card-bg);
             color: var(--text);
             border: 1px solid #334155;
-            padding: 10px 20px;
+            padding: 8px 16px;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 600;
             transition: all 0.2s;
+            font-size: 0.9em;
         }
 
-        button:hover {
-            background: #334155;
+        button:hover { background: #334155; }
+        button.primary { background: var(--accent); color: white; border: none; }
+        button.primary:hover { background: #2563eb; }
+        button.danger { border-color: var(--danger); color: var(--danger); }
+        button.danger:hover { background: var(--danger); color: white; }
+
+        /* Terminal / Log Viewer */
+        .terminal-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #000;
+            border-radius: 12px;
+            border: 1px solid #334155;
+            overflow: hidden;
+            min-height: 400px;
         }
 
-        button.primary {
-            background: var(--accent);
-            color: white;
-            border: none;
-        }
-
-        button.primary:hover {
-            background: #2563eb;
-        }
-
-        button.danger {
-            border-color: var(--danger);
-            color: var(--danger);
-        }
-
-        button.danger:hover {
-            background: var(--danger);
-            color: white;
+        .terminal-header {
+            padding: 10px;
+            background: #111827;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            gap: 10px;
+            align-items: center;
         }
 
         .terminal {
-            background: #000;
-            border-radius: 12px;
-            padding: 20px;
-            height: 500px;
+            flex: 1;
+            padding: 15px;
             overflow-y: auto;
             font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
             font-size: 0.9em;
-            border: 1px solid #334155;
         }
 
         .log-entry {
-            margin-bottom: 4px;
+            margin-bottom: 2px;
             line-height: 1.4;
             white-space: pre-wrap;
             word-break: break-all;
+            font-size: 0.85em;
         }
 
-        .log-entry.stderr {
-            color: #fca5a5;
-        }
+        .log-entry:hover { background: #1f2937; }
 
-        .log-entry.guardian {
-            color: #7dd3fc;
-            font-style: italic;
-        }
-
-        .log-entry.stdout {
-            color: #d1d5db;
-        }
+        .log-entry.stderr { color: #fca5a5; }
+        .log-entry.guardian { color: #7dd3fc; font-style: italic; }
+        .log-entry.stdout { color: #d1d5db; }
+        .log-entry.backend { color: #86efac; } /* Greenish */
+        .log-entry.frontend { color: #c4b5fd; } /* Purpleish */
 
         .timestamp {
             color: #4b5563;
-            margin-right: 10px;
+            margin-right: 8px;
+            user-select: none;
+            font-size: 0.9em;
+        }
+
+        .source-tag {
+            display: inline-block;
+            width: 70px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.8em;
+            opacity: 0.8;
+        }
+
+        /* Controls */
+        input[type="text"], input[type="search"] {
+            background: #1f2937;
+            border: 1px solid #334155;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .filter-check {
+            font-size: 0.8em;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
             user-select: none;
         }
+
+        .live-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            margin-right: 5px;
+            display: inline-block;
+        }
+
+        .live-indicator.inactive { background: var(--text-dim); }
+
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🛡️ Guardian Dashboard</h1>
-            <div id="status-badge" class="badge stopped">OFFLINE</div>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <span>🛡️ Guardian</span>
         </div>
-
-        <div class="card" style="margin-bottom: 20px; padding: 10px;">
-            <input type="text" id="omnibox" placeholder="Type a command (ex: !restart, !pull) or search..."
-                style="width: 100%; background: transparent; border: none; color: white; font-size: 1.2em; outline: none; padding: 10px; font-family: 'Menlo', 'Monaco', monospace;">
-        </div>
-
-        <div class="card"
-            style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <h3 style="margin: 0">Application URL</h3>
-                <div class="value" id="app-url" style="font-size: 1.2em">http://localhost:3000</div>
+        <div class="sidebar-content">
+            <div id="live-btn" class="log-file-item active" onclick="switchToLive()">
+                <div style="font-weight: bold;">🔴 LIVE LOGS</div>
+                <div class="meta">Monitoring current session</div>
             </div>
-            <a id="open-app" href="http://localhost:3000" target="_blank" class="button primary"
-                style="text-decoration: none; display: inline-block; padding: 10px 20px;">🚀 Open App</a>
+
+            <div style="margin: 15px 0 5px 0; font-size: 0.8em; text-transform: uppercase; color: var(--text-dim); font-weight: bold; padding-left: 5px;">
+                History
+            </div>
+            <div id="history-list">
+                <!-- Populated via JS -->
+                <div style="padding: 10px; color: var(--text-dim); font-style: italic;">Loading...</div>
+            </div>
+        </div>
+        <div style="padding: 10px; font-size: 0.7em; color: var(--text-dim); text-align: center; border-top: 1px solid #334155;">
+            v2.0 • Persisted Logs
+        </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main">
+        <div class="header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <h2 style="margin: 0;">Dashboard</h2>
+                <div id="status-badge" class="badge stopped">OFFLINE</div>
+            </div>
+
+             <a id="open-app" href="http://localhost:3000" target="_blank" class="button primary"
+                style="text-decoration: none; display: inline-block;">🚀 Open App</a>
+        </div>
+
+        <div class="card" style="margin-bottom: 20px; padding: 10px; display: flex; gap: 10px;">
+            <div style="flex: 1; display: flex; align-items: center; color: var(--text-dim);">
+                <span style="margin-right: 10px;">⚡ Quick Action:</span>
+                <input type="text" id="omnibox" placeholder="Type !restart, !pull, !deploy..."
+                    style="flex: 1; background: transparent; border: none; font-family: 'Menlo', monospace; font-size: 1.1em; outline: none; color: white;">
+            </div>
         </div>
 
         <div class="grid">
             <div class="card">
                 <h3>Uptime</h3>
                 <div class="value" id="uptime">0s</div>
-                <div class="sub">Since last start</div>
             </div>
             <div class="card">
                 <h3>Restarts</h3>
                 <div class="value" id="restarts">0</div>
-                <div class="sub" id="last-exit">No exits yet</div>
             </div>
             <div class="card">
-                <h3>Memory (RSS)</h3>
+                <h3>Memory</h3>
                 <div class="value" id="memory">0 MB</div>
                 <div class="sub">Guardian Process</div>
             </div>
-            <div class="card">
-                <h3>System Memory</h3>
+             <div class="card">
+                <h3>System</h3>
                 <div class="value" id="sys-memory">0%</div>
-                <div class="sub" id="sys-memory-sub">0/0 GB</div>
-            </div>
-            <div class="card">
-                <h3>Host & OS</h3>
-                <div class="value" id="host-info" style="font-size: 1.2em">Loading...</div>
-                <div class="sub" id="os-info">...</div>
-            </div>
-            <div class="card">
-                <h3>Load Average</h3>
-                <div class="value" id="load-avg">0.00</div>
-                <div class="sub">1m, 5m, 15m</div>
-            </div>
-            <div class="card">
-                <h3>Database Stats</h3>
-                <div class="value" id="db-counts" style="font-size: 1.2em">0 / 0</div>
-                <div class="sub" id="db-sub">Råvaror / Recept</div>
-            </div>
-            <div class="card">
-                <h3>Omnibox Interactions</h3>
-                <div class="value" id="inter-counts" style="font-size: 1.2em">0 / 0</div>
-                <div class="sub">Omnibox / Totalt</div>
+                <div class="sub" id="host-info">...</div>
             </div>
         </div>
-        <style>
-            .button {
-                background: var(--card-bg);
-                color: var(--text);
-                border: 1px solid #334155;
-                padding: 10px 20px;
-                border-radius: 8px;
-                cursor: pointer;
-                font-weight: 600;
-                transition: all 0.2s;
-            }
-
-            .button:hover {
-                background: #334155;
-            }
-
-            .button.primary {
-                background: var(--accent);
-                color: white;
-                border: none;
-            }
-
-            .button.primary:hover {
-                background: #2563eb;
-            }
-        </style>
 
         <div class="actions">
             <button class="primary" onclick="doAction('restart')">🔄 Restart Server</button>
@@ -276,20 +341,42 @@
             <button class="danger" onclick="doAction('deploy')">🚀 Full Deploy</button>
         </div>
 
-        <div class="terminal" id="terminal">
-            <div class="log-entry guardian">Connecting to Guardian...</div>
+        <!-- Terminal Area -->
+        <div class="terminal-container">
+            <div class="terminal-header">
+                <span id="log-title" style="font-weight: bold; font-size: 0.9em; flex: 1;">🔴 Live Logs</span>
+
+                <input type="search" id="log-search" placeholder="Search logs..." oninput="renderCurrentLogs()">
+
+                <div class="filter-group">
+                    <label class="filter-check"><input type="checkbox" id="filter-guardian" checked onchange="renderCurrentLogs()"> Guardian</label>
+                    <label class="filter-check"><input type="checkbox" id="filter-backend" checked onchange="renderCurrentLogs()"> Backend</label>
+                    <label class="filter-check"><input type="checkbox" id="filter-frontend" checked onchange="renderCurrentLogs()"> Frontend</label>
+                </div>
+
+                <button onclick="clearTerminal()" style="padding: 4px 8px; font-size: 0.8em;">Clear View</button>
+            </div>
+            <div class="terminal" id="terminal">
+                <div class="log-entry guardian">Connecting to Guardian...</div>
+            </div>
         </div>
 
-        <div style="margin-top: 20px; text-align: center; color: var(--text-dim); font-size: 0.8em;">
-            Deno <span id="deno-version">...</span> • TypeScript <span id="ts-version">...</span> • V8 <span
-                id="v8-version">...</span>
+        <div style="margin-top: 10px; font-size: 0.8em; color: var(--text-dim); display: flex; justify-content: space-between;">
+             <span id="db-counts">DB: 0 / 0</span>
+             <span id="deno-version">Deno ...</span>
         </div>
     </div>
 
     <script>
-        const terminal = document.getElementById('terminal');
-        let lastLogCount = 0;
+        // State
+        let isLive = true;
+        let currentLogs = []; // The logs currently held in memory for display
+        let lastLiveLogCount = 0;
+        let selectedLogFile = null;
 
+        const terminal = document.getElementById('terminal');
+
+        // Utils
         function formatBytes(bytes) {
             if (bytes === 0) return '0 B';
             const k = 1024;
@@ -306,131 +393,216 @@
             return h + 'h ' + (m % 60) + 'm';
         }
 
+        function formatDate(str) {
+            return new Date(str).toLocaleString();
+        }
+
+        // API Calls
         async function updateStatus() {
             try {
                 const res = await fetch('/api/status');
                 const data = await res.json();
 
-                // Update badge
+                // Status Badge
                 const badge = document.getElementById('status-badge');
                 badge.className = 'badge ' + data.status;
                 badge.textContent = data.status.toUpperCase();
 
-                // Update cards
+                // Metrics
                 document.getElementById('uptime').textContent = formatTime(data.uptimeSeconds);
                 document.getElementById('restarts').textContent = data.restartCount;
-                document.getElementById('last-exit').textContent = data.lastExitCode !== null ? `Last Code: ${data.lastExitCode}` : 'Clean run';
-
-                // Memory
                 document.getElementById('memory').textContent = formatBytes(data.memory.rss);
+                document.getElementById('host-info').textContent = data.hostname;
 
-                // System Memory
                 if (data.systemMemory) {
                     const free = data.systemMemory.free;
                     const total = data.systemMemory.total;
                     const used = total - free;
                     const pct = Math.round((used / total) * 100);
                     document.getElementById('sys-memory').textContent = pct + '%';
-                    document.getElementById('sys-memory-sub').textContent = formatBytes(used) + ' / ' + formatBytes(total);
                 }
 
-                // New Data
-                if (data.appUrl) {
-                    document.getElementById('app-url').textContent = data.appUrl;
-                    document.getElementById('open-app').href = data.appUrl;
-                }
-                document.getElementById('host-info').textContent = data.hostname;
-                document.getElementById('os-info').textContent = data.platform + ' (' + data.status + ')';
-                document.getElementById('load-avg').textContent = data.loadAvg ? data.loadAvg.map(n => n.toFixed(2)).join(', ') : 'N/A';
-
-                // Database Stats
                 if (data.dbStats) {
-                    document.getElementById('db-counts').textContent = `${data.dbStats.foodCount} / ${data.dbStats.recipeCount}`;
-                    document.getElementById('db-sub').textContent = `Råvaror / Recept (${data.dbStats.userCount} users)`;
+                    document.getElementById('db-counts').textContent = `DB: ${data.dbStats.foodCount} foods, ${data.dbStats.recipeCount} recipes`;
                 }
+                 document.getElementById('deno-version').textContent = `Deno ${data.denoVersion}`;
 
-                // Interaction Stats
-                if (data.interactionStats) {
-                    const omniRestarts = data.interactionStats.omnibox.restart;
-                    const omniPull = data.interactionStats.omnibox.pull;
-                    const omniBuild = data.interactionStats.omnibox.build;
-                    const omniDeploy = data.interactionStats.omnibox.deploy;
+                 // Links
+                 if (data.appUrl) document.getElementById('open-app').href = data.appUrl;
 
-                    const totalOmni = omniRestarts + omniPull + omniBuild + omniDeploy;
-
-                    const clickRestarts = data.interactionStats.click.restart;
-                    const clickPull = data.interactionStats.click.pull;
-                    const clickBuild = data.interactionStats.click.build;
-                    const clickDeploy = data.interactionStats.click.deploy;
-
-                    const totalClick = clickRestarts + clickPull + clickBuild + clickDeploy;
-                    const grandTotal = totalOmni + totalClick;
-
-                    document.getElementById('inter-counts').textContent = `${totalOmni} / ${grandTotal}`;
-                }
-
-                // Version Info
-                document.getElementById('deno-version').textContent = data.denoVersion;
-                document.getElementById('ts-version').textContent = data.typescriptVersion;
-                document.getElementById('v8-version').textContent = data.v8Version;
-
-            } catch (e) {
-                console.error(e);
-            }
+            } catch (e) { console.error("Status fetch failed", e); }
         }
 
-        async function updateLogs() {
+        async function fetchLogList() {
+             try {
+                const res = await fetch('/api/logs/list');
+                const files = await res.json();
+
+                const listEl = document.getElementById('history-list');
+                listEl.innerHTML = '';
+
+                files.forEach(file => {
+                    const el = document.createElement('div');
+                    el.className = 'log-file-item ' + (selectedLogFile === file.name ? 'active' : '');
+                    el.onclick = () => loadHistoryLog(file.name);
+
+                    const name = file.name.replace('session-', '').replace('.jsonl', '').replace(/-/g, ' ');
+
+                    el.innerHTML = `
+                        <div style="font-weight:500">${name}</div>
+                        <div class="meta">${formatBytes(file.size)} • ${new Date(file.created).toLocaleTimeString()}</div>
+                    `;
+                    listEl.appendChild(el);
+                });
+             } catch(e) { console.error("Log list fetch failed", e); }
+        }
+
+        async function updateLiveLogs() {
+            if (!isLive) return;
+
             try {
                 const res = await fetch('/api/logs');
                 const logs = await res.json();
 
-                if (logs.length > lastLogCount) {
-                    const newLogs = logs.slice(lastLogCount);
-                    const wasAtBottom = terminal.scrollHeight - terminal.scrollTop === terminal.clientHeight;
+                if (logs.length > lastLiveLogCount || logs.length < lastLiveLogCount) { // < means reset happened
+                    // If reset happened
+                    if (logs.length < lastLiveLogCount) {
+                         currentLogs = logs;
+                         lastLiveLogCount = logs.length;
+                         renderCurrentLogs(); // Re-render all
+                    } else {
+                         // Append only new ones to our model
+                         const newOnes = logs.slice(lastLiveLogCount);
+                         currentLogs = currentLogs.concat(newOnes);
+                         lastLiveLogCount = logs.length;
 
-                    newLogs.forEach(log => {
-                        const div = document.createElement('div');
-                        div.className = 'log-entry ' + log.source;
-                        // Escape HTML to prevent injection
-                        const text = document.createTextNode(log.message);
-                        const timeSpan = document.createElement('span');
-                        timeSpan.className = 'timestamp';
-                        timeSpan.textContent = `[${new Date(log.timestamp).toLocaleTimeString()}] `;
-
-                        div.appendChild(timeSpan);
-                        div.appendChild(text);
-                        terminal.appendChild(div);
-                    });
-
-                    lastLogCount = logs.length;
-
-                    if (wasAtBottom) {
-                        terminal.scrollTop = terminal.scrollHeight;
+                         // Optimization: only render appended lines if no filter is active?
+                         // For simplicity, re-render filtered view or append to DOM
+                         renderCurrentLogs(true); // true = try to append
                     }
                 }
-            } catch (e) {
-                console.error(e);
+            } catch (e) { console.error("Log fetch failed", e); }
+        }
+
+        async function loadHistoryLog(filename) {
+            isLive = false;
+            selectedLogFile = filename;
+            document.getElementById('live-btn').classList.remove('active');
+            document.getElementById('log-title').textContent = `📄 ${filename}`;
+
+            // Highlight sidebar
+            fetchLogList(); // Refresh list to update active class
+
+            terminal.innerHTML = '<div class="log-entry guardian">Loading archived log...</div>';
+
+            try {
+                const res = await fetch(`/api/logs/view?file=${filename}`);
+                const logs = await res.json();
+                currentLogs = logs;
+                renderCurrentLogs();
+            } catch(e) {
+                terminal.innerHTML = '<div class="log-entry stderr">Failed to load log file.</div>';
+            }
+        }
+
+        function switchToLive() {
+            isLive = true;
+            selectedLogFile = null;
+            document.getElementById('live-btn').classList.add('active');
+            document.getElementById('log-title').textContent = '🔴 Live Logs';
+            fetchLogList(); // Clear active state in list
+
+            // Reset state
+            currentLogs = [];
+            lastLiveLogCount = 0;
+            terminal.innerHTML = '';
+            updateLiveLogs();
+        }
+
+        function renderCurrentLogs(appendOnly = false) {
+            const search = document.getElementById('log-search').value.toLowerCase();
+            const showGuardian = document.getElementById('filter-guardian').checked;
+            const showBackend = document.getElementById('filter-backend').checked;
+            const showFrontend = document.getElementById('filter-frontend').checked;
+
+            const shouldScroll = terminal.scrollHeight - terminal.scrollTop === terminal.clientHeight;
+
+            // If appendOnly is requested, we assume we only need to add the last few items of currentLogs
+            // But if filters are active, we might need to re-evaluate.
+            // For robustness, let's just re-render cleanly if not too massive,
+            // or implement smart append.
+            // Let's do full re-render for simplicity first, performance check later.
+
+            // Actually, for "Live" mode with thousands of logs, innerHTML reset is flickering.
+            // We should use DOM appending if possible.
+
+            // If appendOnly is true, we need to know where we left off.
+            // But we have filters.
+            // Let's keep it simple: clear and render.
+
+            terminal.innerHTML = '';
+
+            const fragment = document.createDocumentFragment();
+
+            currentLogs.forEach(log => {
+                // Filters
+                if (!showGuardian && (log.source === 'guardian' || log.source === 'stdout' || log.source === 'stderr')) return;
+                if (!showBackend && log.source === 'backend') return;
+                if (!showFrontend && log.source === 'frontend') return;
+
+                // Search
+                if (search && !log.message.toLowerCase().includes(search)) return;
+
+                const div = document.createElement('div');
+                div.className = 'log-entry ' + log.source;
+
+                // Content
+                const time = new Date(log.timestamp).toLocaleTimeString();
+
+                // Source label
+                let sourceTag = log.source.toUpperCase().padEnd(8);
+
+                div.textContent = `[${time}] [${sourceTag}] ${log.message}`;
+
+                fragment.appendChild(div);
+            });
+
+            terminal.appendChild(fragment);
+
+            if (shouldScroll || isLive) {
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
+        function clearTerminal() {
+            if(isLive) {
+                // Just clear view, but next update will refill it?
+                // No, we should probably clear `currentLogs`?
+                // But `currentLogs` tracks the server state in live mode.
+                // Let's just clear the DOM temporarily.
+                terminal.innerHTML = '';
             }
         }
 
         async function doAction(action, source = 'click') {
             if (confirm(`Execute ${action}?`)) {
                 await fetch(`/api/${action}?source=${source}`, { method: 'POST' });
+                if (action === 'restart') {
+                    // Expect a disconnect/reconnect
+                    setTimeout(() => {
+                        if(isLive) switchToLive(); // Reset log view
+                    }, 3500);
+                }
             }
         }
 
-        // Omnibox Handler
+        // Omnibox
         document.getElementById('omnibox').addEventListener('keydown', async (e) => {
             if (e.key === 'Enter') {
                 const val = e.target.value.trim();
                 if (val.startsWith('!')) {
                     const cmd = val.substring(1);
-                    const actionMap = {
-                        'restart': 'restart',
-                        'pull': 'git-pull',
-                        'build': 'build',
-                        'deploy': 'deploy'
-                    };
+                    const actionMap = { 'restart': 'restart', 'pull': 'git-pull', 'build': 'build', 'deploy': 'deploy' };
                     const action = actionMap[cmd];
                     if (action) {
                         e.target.value = '';
@@ -444,10 +616,12 @@
 
         // Init
         setInterval(updateStatus, 1000);
-        setInterval(updateLogs, 2000);
+        setInterval(fetchLogList, 10000); // Refresh list every 10s
+        setInterval(updateLiveLogs, 2000); // Poll live logs
+
         updateStatus();
-        updateLogs();
+        fetchLogList();
+        updateLiveLogs();
     </script>
 </body>
-
 </html>

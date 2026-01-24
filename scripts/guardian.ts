@@ -1,18 +1,22 @@
 
-import { join, dirname, fromFileUrl } from "https://deno.land/std@0.224.0/path/mod.ts";
+import { join, dirname, fromFileUrl, basename } from "https://deno.land/std@0.224.0/path/mod.ts";
+import { ensureDir } from "https://deno.land/std@0.224.0/fs/mod.ts";
 
-const MAX_LOGS = 2000;
+const MAX_MEM_LOGS = 2000; // Keep recent logs in memory for quick access
 const PORT = Number(Deno.env.get("GUARDIAN_PORT") || "9999");
 const BACKEND_PORT = Number(Deno.env.get("PORT") || "8000");
 const FRONTEND_PORT = 3000;
 const RESTART_DELAY_MS = 3000;
+const LOG_RETENTION_MS = 90 * 24 * 60 * 60 * 1000; // 3 months
+const LOG_DIR = "logs";
 
 // State
 interface LogEntry {
     id: string;
     timestamp: string;
-    source: "stdout" | "stderr" | "guardian";
+    source: "stdout" | "stderr" | "guardian" | "backend" | "frontend";
     message: string;
+    pid?: number;
 }
 
 interface ProcessStats {
@@ -24,7 +28,9 @@ interface ProcessStats {
     uptimeSeconds: number;
 }
 
-const logs: LogEntry[] = [];
+// In-memory buffer for the "Live" view
+let liveLogs: LogEntry[] = [];
+
 const stats: ProcessStats = {
     status: "stopped",
     pid: null,
@@ -45,10 +51,139 @@ let dbStats = {
     userCount: 0,
 };
 
+class LogManager {
+    private currentLogPath: string | null = null;
+
+    async init() {
+        try {
+            await ensureDir(LOG_DIR);
+            await this.cleanupOldLogs();
+            await this.rotate();
+        } catch (e) {
+            console.error("Failed to initialize LogManager:", e);
+        }
+    }
+
+    async rotate() {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const filename = `session-${timestamp}.jsonl`;
+        this.currentLogPath = join(LOG_DIR, filename);
+
+        // Clear in-memory live logs on rotation if desired,
+        // OR we keep them to show context.
+        // User said: "If we restart - its a new session with clean log."
+        // So we clear the live buffer.
+        liveLogs = [];
+
+        this.log("guardian", `--- New Session Started: ${filename} ---`);
+    }
+
+    async cleanupOldLogs() {
+        try {
+            const now = Date.now();
+            for await (const entry of Deno.readDir(LOG_DIR)) {
+                if (!entry.isFile || !entry.name.startsWith("session-")) continue;
+
+                const filePath = join(LOG_DIR, entry.name);
+                const stat = await Deno.stat(filePath);
+
+                // If created/modified > 3 months ago
+                if (now - (stat.birthtime?.getTime() || stat.mtime?.getTime() || now) > LOG_RETENTION_MS) {
+                    try {
+                        await Deno.remove(filePath);
+                        console.log(`[GUARDIAN] Deleted old log: ${entry.name}`);
+                    } catch (e) {
+                        console.error(`Failed to delete ${entry.name}:`, e);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error("Error cleaning logs:", e);
+        }
+    }
+
+    log(source: LogEntry["source"], message: string, pid?: number) {
+        const entry: LogEntry = {
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            source,
+            message: message.trimEnd(),
+            pid
+        };
+
+        // 1. Add to Memory
+        liveLogs.push(entry);
+        if (liveLogs.length > MAX_MEM_LOGS) {
+            liveLogs.shift();
+        }
+
+        // 2. Persist to File
+        if (this.currentLogPath) {
+            // We use JSONL (JSON Lines) for structured, searchable logging
+            const line = JSON.stringify(entry) + "\n";
+            Deno.writeTextFile(this.currentLogPath, line, { append: true }).catch(e => {
+                console.error("Failed to write to log file:", e);
+            });
+        }
+
+        // 3. Print to stdout (for the person running the guardian)
+        if (source === "guardian") {
+            console.log(`[GUARDIAN] ${message}`);
+        } else {
+             // Optional: suppress verbose child output if you only rely on dashboard
+             // but usually safe to keep
+             console.log(`[${source}] ${message}`);
+        }
+    }
+
+    async listLogs() {
+        const files = [];
+        try {
+            for await (const entry of Deno.readDir(LOG_DIR)) {
+                if (entry.isFile && entry.name.endsWith(".jsonl")) {
+                    const stat = await Deno.stat(join(LOG_DIR, entry.name));
+                    files.push({
+                        name: entry.name,
+                        size: stat.size,
+                        created: stat.birthtime || stat.mtime
+                    });
+                }
+            }
+        } catch(e) { /* ignore */ }
+        // Sort newest first
+        return files.sort((a, b) => (b.created?.getTime() || 0) - (a.created?.getTime() || 0));
+    }
+
+    async readLog(filename: string): Promise<LogEntry[]> {
+        // Security check
+        if (filename.includes("..") || !filename.endsWith(".jsonl")) {
+            throw new Error("Invalid filename");
+        }
+
+        try {
+            const path = join(LOG_DIR, filename);
+            const content = await Deno.readTextFile(path);
+            return content.trim().split('\n').map(line => {
+                try { return JSON.parse(line); } catch { return null; }
+            }).filter(Boolean);
+        } catch (e) {
+            return [{
+                id: "err",
+                timestamp: new Date().toISOString(),
+                source: "guardian",
+                message: `Error reading log file: ${e}`
+            }];
+        }
+    }
+}
+
+const logManager = new LogManager();
+
+
 // Periodic DB counting
 async function countDbItems() {
     if (typeof Deno.openKv !== "function") {
-        addLog("guardian", "Error counting DB items: Deno.openKv is not available. Please run with --unstable-kv");
+        logManager.log("guardian", "Error counting DB items: Deno.openKv is not available. Please run with --unstable-kv");
         return;
     }
 
@@ -67,7 +202,7 @@ async function countDbItems() {
         dbStats = { foodCount: foods, recipeCount: recipes, userCount: users };
         await kv.close();
     } catch (e) {
-        addLog("guardian", `Error counting DB items: ${e instanceof Error ? e.message : e}`);
+        logManager.log("guardian", `Error counting DB items: ${e instanceof Error ? e.message : e}`);
     }
 }
 
@@ -75,26 +210,6 @@ async function countDbItems() {
 countDbItems();
 setInterval(countDbItems, 60000); // Every minute
 
-function addLog(source: "stdout" | "stderr" | "guardian", message: string) {
-    const entry: LogEntry = {
-        id: crypto.randomUUID(),
-        timestamp: new Date().toISOString(),
-        source,
-        message: message.trimEnd(),
-    };
-    logs.push(entry);
-    if (logs.length > MAX_LOGS) {
-        logs.shift();
-    }
-    // Also print to real console so we can see it in the terminal running the guardian
-    if (source === "guardian") {
-        console.log(`[GUARDIAN] ${message}`);
-    } else {
-        // We don't re-print child logs to avoid double logging if piping,
-        // but usually we want to see them.
-        console.log(message);
-    }
-}
 
 class ProcessManager {
     private backendChild: Deno.ChildProcess | null = null;
@@ -104,42 +219,48 @@ class ProcessManager {
     async start() {
         this.shouldRun = true;
         stats.status = "starting";
-        addLog("guardian", "Starting application (Backend & Frontend)...");
+        logManager.log("guardian", "Starting application (Backend & Frontend)...");
 
-        // Start Backend
-        const backendCmd = new Deno.Command("deno", {
-            args: ["task", "server"],
-            stdout: "piped",
-            stderr: "piped",
-            env: { "PORT": BACKEND_PORT.toString() }
-        });
-        this.backendChild = backendCmd.spawn();
-        this.handleOutput(this.backendChild.stdout, "stdout");
-        this.handleOutput(this.backendChild.stderr, "stderr");
+        try {
+            // Start Backend
+            const backendCmd = new Deno.Command("deno", {
+                args: ["task", "server"],
+                stdout: "piped",
+                stderr: "piped",
+                env: { "PORT": BACKEND_PORT.toString() }
+            });
+            this.backendChild = backendCmd.spawn();
+            this.handleOutput(this.backendChild.stdout, "backend");
+            this.handleOutput(this.backendChild.stderr, "backend"); // or stderr
 
-        // Start Frontend
-        const frontendCmd = new Deno.Command("deno", {
-            args: ["task", "dev", "--port", FRONTEND_PORT.toString()],
-            stdout: "piped",
-            stderr: "piped",
-        });
-        this.frontendChild = frontendCmd.spawn();
-        this.handleOutput(this.frontendChild.stdout, "stdout");
-        this.handleOutput(this.frontendChild.stderr, "stderr");
+            // Start Frontend
+            const frontendCmd = new Deno.Command("deno", {
+                args: ["task", "dev", "--port", FRONTEND_PORT.toString()],
+                stdout: "piped",
+                stderr: "piped",
+            });
+            this.frontendChild = frontendCmd.spawn();
+            this.handleOutput(this.frontendChild.stdout, "frontend");
+            this.handleOutput(this.frontendChild.stderr, "frontend");
 
-        stats.pid = this.backendChild.pid; // Primary PID
-        stats.startTime = Date.now();
-        stats.status = "running";
+            stats.pid = this.backendChild.pid; // Primary PID (Backend)
+            stats.startTime = Date.now();
+            stats.status = "running";
 
-        addLog("guardian", `Processes started. Backend: ${this.backendChild.pid}, Frontend: ${this.frontendChild.pid}`);
+            logManager.log("guardian", `Processes started. Backend: ${this.backendChild.pid}, Frontend: ${this.frontendChild.pid}`);
 
-        // Wait for either to exit
-        Promise.race([
-            this.backendChild.status,
-            this.frontendChild.status
-        ]).then((status) => {
-            this.onExit(status.code);
-        });
+            // Wait for either to exit
+            Promise.race([
+                this.backendChild.status,
+                this.frontendChild.status
+            ]).then((status) => {
+                this.onExit(status.code);
+            });
+
+        } catch (e) {
+            logManager.log("guardian", `CRITICAL: Failed to spawn processes: ${e}`);
+            stats.status = "crashed";
+        }
     }
 
     async stop() {
@@ -152,16 +273,21 @@ class ProcessManager {
             try { this.frontendChild.kill(); } catch (e) { }
             this.frontendChild = null;
         }
-        addLog("guardian", "Stopped all processes.");
+        logManager.log("guardian", "Stopped all processes.");
         stats.status = "stopped";
     }
 
     async restart() {
+        logManager.log("guardian", "Restarting system...");
         await this.stop();
+
+        // Rotate logs on restart to ensure "Clean log" as requested
+        await logManager.rotate();
+
         setTimeout(() => this.start(), 1000);
     }
 
-    private async handleOutput(stream: ReadableStream<Uint8Array>, source: "stdout" | "stderr") {
+    private async handleOutput(stream: ReadableStream<Uint8Array>, source: "backend" | "frontend") {
         const reader = stream.getReader();
         const decoder = new TextDecoder();
         try {
@@ -171,10 +297,12 @@ class ProcessManager {
                 const text = decoder.decode(value);
                 const lines = text.split('\n');
                 for (const line of lines) {
-                    if (line) addLog(source, line);
+                    if (line.trim()) logManager.log(source, line);
                 }
             }
-        } catch (e) { }
+        } catch (e) {
+            // Stream closed or error
+        }
     }
 
     private onExit(code: number) {
@@ -186,8 +314,18 @@ class ProcessManager {
         if (this.shouldRun) {
             stats.status = "crashed";
             stats.restartCount++;
-            addLog("guardian", `Process exited with code ${code}. Restarting everything in ${RESTART_DELAY_MS}ms...`);
-            setTimeout(() => this.start(), RESTART_DELAY_MS);
+            logManager.log("guardian", `Process exited with code ${code}. Restarting everything in ${RESTART_DELAY_MS}ms...`);
+
+            // Auto-restart
+            // We do NOT rotate logs on crash auto-restart usually, to keep context of the crash?
+            // User said: "If we restart- its a new session with clean log."
+            // Assuming this applies to manual restarts or full resets.
+            // For a crash-loop, keeping the log might be better, but let's stick to the directive strictly:
+            // "If we restart- its a new session with clean log."
+            // I will rotate here too to be safe.
+            logManager.rotate().then(() => {
+                setTimeout(() => this.start(), RESTART_DELAY_MS);
+            });
         }
     }
 }
@@ -197,25 +335,30 @@ const manager = new ProcessManager();
 // --- Action Runners ---
 
 async function runCommand(cmd: string, args: string[]) {
-    addLog("guardian", `Running command: ${cmd} ${args.join(" ")}`);
-    const command = new Deno.Command(cmd, {
-        args,
-        stdout: "piped",
-        stderr: "piped",
-    });
-    const process = command.spawn();
+    logManager.log("guardian", `Running command: ${cmd} ${args.join(" ")}`);
+    try {
+        const command = new Deno.Command(cmd, {
+            args,
+            stdout: "piped",
+            stderr: "piped",
+        });
+        const process = command.spawn();
 
-    // Pipe output to logs
-    const decoder = new TextDecoder();
-    const output = await process.output();
-    const stdout = decoder.decode(output.stdout);
-    const stderr = decoder.decode(output.stderr);
+        // Pipe output to logs
+        const decoder = new TextDecoder();
+        const output = await process.output();
+        const stdout = decoder.decode(output.stdout);
+        const stderr = decoder.decode(output.stderr);
 
-    if (stdout) addLog("stdout", stdout);
-    if (stderr) addLog("stderr", stderr);
+        if (stdout) logManager.log("stdout", stdout);
+        if (stderr) logManager.log("stderr", stderr);
 
-    addLog("guardian", `Command finished with code ${output.code}`);
-    return output.code === 0;
+        logManager.log("guardian", `Command finished with code ${output.code}`);
+        return output.code === 0;
+    } catch (e) {
+        logManager.log("guardian", `Command execution failed: ${e}`);
+        return false;
+    }
 }
 
 // --- Server ---
@@ -234,7 +377,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
     }
 
-    // API
+    // API Status
     if (url.pathname === "/api/status") {
         const currentUptime = stats.startTime ? Math.floor((Date.now() - stats.startTime) / 1000) : 0;
 
@@ -261,9 +404,23 @@ async function handleRequest(req: Request): Promise<Response> {
         });
     }
 
+    // API Logs
     if (url.pathname === "/api/logs") {
-        // Optional: filter by source or last N
-        return Response.json(logs);
+        // Return live logs
+        return Response.json(liveLogs);
+    }
+
+    // API Log History
+    if (url.pathname === "/api/logs/list") {
+        const files = await logManager.listLogs();
+        return Response.json(files);
+    }
+
+    if (url.pathname.startsWith("/api/logs/view")) {
+        const filename = url.searchParams.get("file");
+        if (!filename) return new Response("Missing file param", { status: 400 });
+        const content = await logManager.readLog(filename);
+        return Response.json(content);
     }
 
     if (req.method === "POST") {
@@ -279,8 +436,8 @@ async function handleRequest(req: Request): Promise<Response> {
             interactionStats[source].pull++;
             // Run in background to not block
             runCommand("git", ["pull"]).then(success => {
-                if (success) addLog("guardian", "Git pull successful");
-                else addLog("guardian", "Git pull failed");
+                if (success) logManager.log("guardian", "Git pull successful");
+                else logManager.log("guardian", "Git pull failed");
             });
             return Response.json({ success: true, message: "Git pull started" });
         }
@@ -289,8 +446,8 @@ async function handleRequest(req: Request): Promise<Response> {
             const source = url.searchParams.get("source") === "omnibox" ? "omnibox" : "click";
             interactionStats[source].build++;
             runCommand("deno", ["task", "build"]).then(success => {
-                if (success) addLog("guardian", "Build successful");
-                else addLog("guardian", "Build failed");
+                if (success) logManager.log("guardian", "Build successful");
+                else logManager.log("guardian", "Build failed");
             });
             return Response.json({ success: true, message: "Build started" });
         }
@@ -315,7 +472,7 @@ async function handleRequest(req: Request): Promise<Response> {
 
 // --- Cleanup ---
 async function clearPort(port: number) {
-    if (Deno.build.os !== "windows") return;
+    if (Deno.build.os !== "windows") return; // Linux/Mac usually handle reuse addr better or require 'lsof'
 
     try {
         const cmd = new Deno.Command("netstat", { args: ["-ano"] });
@@ -330,25 +487,27 @@ async function clearPort(port: number) {
                 const pid = match[1];
                 if (parseInt(pid) === Deno.pid) continue;
 
-                addLog("guardian", `Found existing process on port ${port} (PID: ${pid}). Killing it...`);
+                logManager.log("guardian", `Found existing process on port ${port} (PID: ${pid}). Killing it...`);
                 const killCmd = new Deno.Command("taskkill", { args: ["/F", "/PID", pid] });
                 await killCmd.output();
             }
         }
     } catch (e) {
-        addLog("guardian", `Error clearing port ${port}: ${e}`);
+        logManager.log("guardian", `Error clearing port ${port}: ${e}`);
     }
 }
 
 // Start everything
 async function bootstrap() {
-    addLog("guardian", `Clearing ports and initializing...`);
+    await logManager.init(); // Init logging first
+
+    logManager.log("guardian", `Clearing ports and initializing...`);
     await clearPort(PORT);
     await clearPort(FRONTEND_PORT);
     await clearPort(BACKEND_PORT);
 
-    addLog("guardian", `Guardian starting on port ${PORT}...`);
-    addLog("guardian", `Application will be available at http://localhost:${FRONTEND_PORT}`);
+    logManager.log("guardian", `Guardian starting on port ${PORT}...`);
+    logManager.log("guardian", `Application will be available at http://localhost:${FRONTEND_PORT}`);
     manager.start();
 
     Deno.serve({ port: PORT, handler: handleRequest });
