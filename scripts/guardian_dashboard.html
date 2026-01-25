@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Guardian 2.0</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg-dark: #0f172a;
@@ -125,6 +126,22 @@
         .stat-value { font-size: 1.8rem; font-weight: bold; margin-top: 5px; }
         .stat-sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 5px; }
 
+        /* Charts */
+        .charts-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            height: 200px;
+        }
+
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 10px;
+            position: relative;
+        }
+
         /* Terminal */
         .terminal-container {
             flex: 1;
@@ -134,7 +151,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            min-height: 400px;
+            min-height: 300px;
         }
 
         .terminal-header {
@@ -145,6 +162,13 @@
             color: #888;
             display: flex;
             justify-content: space-between;
+            align-items: center;
+        }
+
+        .terminal-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
         }
 
         .terminal-body {
@@ -179,6 +203,7 @@
         button.primary:hover { background: #2563eb; }
         button.danger { border-color: var(--danger); color: var(--danger); }
         button.danger:hover { background: var(--danger); color: white; }
+        button.active { background: var(--accent); color: white; border-color: var(--accent); }
 
         /* Split View */
         .split-view {
@@ -230,6 +255,10 @@
     let dualView = false;
     let secondaryTab = null; // for dual view
     let logBuffers = {}; // serviceName -> logs[]
+    let errorFilter = false;
+
+    // Charts
+    let chartInstances = {}; // "serviceName-type": Chart
 
     // --- API ---
 
@@ -252,13 +281,21 @@
             const res = await fetch(`/api/logs?service=${serviceName}`);
             const logs = await res.json();
 
-            // Simple check to see if we need to update DOM
-            // In a real app we'd use a smarter diff or append
-            const currentLen = (logBuffers[serviceName] || []).length;
-            if (logs.length > currentLen) {
+            const oldLogs = logBuffers[serviceName] || [];
+            // Update if length changed OR last entry ID changed (new logs)
+            if (logs.length !== oldLogs.length || (logs.length > 0 && logs[logs.length - 1].id !== oldLogs[oldLogs.length - 1].id)) {
                 logBuffers[serviceName] = logs;
                 updateTerminal(serviceName);
             }
+        } catch (e) { console.error(e); }
+    }
+
+    async function fetchMetrics(serviceName) {
+        if (!serviceName) return;
+        try {
+            const res = await fetch(`/api/metrics?service=${serviceName}&limit=60`); // Last 60 points
+            const data = await res.json();
+            updateServiceCharts(serviceName, data);
         } catch (e) { console.error(e); }
     }
 
@@ -319,7 +356,6 @@
                 <button onclick="toggleDualView()">Close Dual</button>
             `;
 
-            // Only re-render structure if needed, update contents dynamically
             if (!document.getElementById('dual-split')) {
                 container.innerHTML = `
                     <div id="dual-split" class="split-view">
@@ -343,7 +379,6 @@
             title.textContent = capitalize(service.name);
             globalControls.innerHTML = getServiceControls(service);
 
-            // Check if we already have the structure to avoid clearing terminal
             if (!document.getElementById(`service-view-${service.name}`)) {
                 container.innerHTML = `<div id="service-view-${service.name}" style="display:flex; flex-direction:column; height:100%; gap:20px;"></div>`;
             }
@@ -406,42 +441,119 @@
         // Create structure if missing
         if (!container.querySelector('.service-stats')) {
             container.innerHTML = `
-                <div class="grid service-stats" style="grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px;">
+                <div class="grid service-stats" style="grid-template-columns: repeat(4, 1fr); gap: 10px;">
                     <!-- Stats injected here -->
                 </div>
+
+                <div class="charts-container">
+                    <div class="chart-card">
+                        <canvas id="chart-cpu-${serviceName}"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <canvas id="chart-mem-${serviceName}"></canvas>
+                    </div>
+                </div>
+
                 <div class="terminal-container">
                     <div class="terminal-header">
                         <span>Terminal (${s.name})</span>
-                        <span class="log-count">0 lines</span>
+                        <div class="terminal-controls">
+                            <button id="btn-filter-${serviceName}" class="${errorFilter ? 'active' : ''}" onclick="toggleErrorFilter()" style="padding: 2px 8px; font-size: 0.8rem;">
+                                ${errorFilter ? 'Errors Only' : 'All Logs'}
+                            </button>
+                            <span class="log-count">0 lines</span>
+                        </div>
                     </div>
                     <div class="terminal-body" id="term-${s.name}"></div>
                 </div>
             `;
+
+            // Init charts
+            createChart(serviceName, 'cpu', 'CPU Usage (%)', '#3b82f6');
+            createChart(serviceName, 'mem', 'Memory (MB)', '#22c55e');
         }
 
         // Update Stats
         const statsEl = container.querySelector('.service-stats');
-        statsEl.innerHTML = `
-            <div class="card" style="padding:15px">
-                <div class="stat-label">Status</div>
-                <div style="color:${getStatusColor(s.status)}; font-weight:bold">${s.status.toUpperCase()}</div>
-            </div>
-             <div class="card" style="padding:15px">
-                <div class="stat-label">CPU</div>
-                <div>${s.cpu?.toFixed(1)}%</div>
-            </div>
-             <div class="card" style="padding:15px">
-                <div class="stat-label">Memory</div>
-                <div>${formatBytes(s.memory)}</div>
-            </div>
-             <div class="card" style="padding:15px">
-                <div class="stat-label">Uptime</div>
-                <div>${formatTime(s.uptime)}</div>
-            </div>
-        `;
+        if (statsEl) {
+             statsEl.innerHTML = `
+                <div class="card" style="padding:15px">
+                    <div class="stat-label">Status</div>
+                    <div style="color:${getStatusColor(s.status)}; font-weight:bold">${s.status.toUpperCase()}</div>
+                </div>
+                 <div class="card" style="padding:15px">
+                    <div class="stat-label">CPU</div>
+                    <div>${s.cpu?.toFixed(1)}%</div>
+                </div>
+                 <div class="card" style="padding:15px">
+                    <div class="stat-label">Memory</div>
+                    <div>${formatBytes(s.memory)}</div>
+                </div>
+                 <div class="card" style="padding:15px">
+                    <div class="stat-label">Uptime</div>
+                    <div>${formatTime(s.uptime)}</div>
+                </div>
+            `;
+        }
+    }
 
-        // We trigger log update check separately to not spam DOM
-        // The fetchLogs loop handles the data, updateTerminal handles the DOM
+    // --- Charting ---
+
+    function createChart(serviceName, type, label, color) {
+        const ctx = document.getElementById(`chart-${type}-${serviceName}`);
+        if(!ctx) return;
+
+        const key = `${serviceName}-${type}`;
+        if (chartInstances[key]) {
+             chartInstances[key].destroy();
+        }
+
+        chartInstances[key] = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: label,
+                    data: [],
+                    borderColor: color,
+                    backgroundColor: color + '20',
+                    tension: 0.4,
+                    fill: true,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: { display: false },
+                    y: { beginAtZero: true, grid: { color: '#334155' } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    }
+
+    function updateServiceCharts(serviceName, data) {
+        // Data is [{ timestamp, cpu, memory }, ...] chrono ordered
+        const labels = data.map(d => new Date(d.timestamp).toLocaleTimeString());
+
+        const cpuChart = chartInstances[`${serviceName}-cpu`];
+        if (cpuChart) {
+            cpuChart.data.labels = labels;
+            cpuChart.data.datasets[0].data = data.map(d => d.cpu);
+            cpuChart.update();
+        }
+
+        const memChart = chartInstances[`${serviceName}-mem`];
+        if (memChart) {
+            memChart.data.labels = labels;
+            memChart.data.datasets[0].data = data.map(d => d.memory / 1024 / 1024); // MB
+            memChart.update();
+        }
     }
 
     function updateTerminal(serviceName) {
@@ -449,13 +561,19 @@
         const termBody = document.getElementById(termId);
         if (!termBody) return;
 
-        const logs = logBuffers[serviceName] || [];
+        let logs = logBuffers[serviceName] || [];
+
+        // Filtering
+        if (errorFilter) {
+            logs = logs.filter(l => l.source === 'stderr');
+        }
+
         const wasAtBottom = termBody.scrollHeight - termBody.scrollTop <= termBody.clientHeight + 50;
 
-        // Optimization: Only append new logs if possible, but simplest is full rebuild for now
-        // To avoid flicker and performance issues with massive DOM, we'll just take last 1000
+        // Render last 1000 lines max to prevent DOM lag
+        const renderLogs = logs.slice(-1000);
 
-        termBody.innerHTML = logs.map(l => `
+        termBody.innerHTML = renderLogs.map(l => `
             <div class="log-entry log-${l.source}">
                 <span class="log-ts">[${formatDate(l.timestamp)}]</span>${escapeHtml(l.message)}
             </div>
@@ -465,7 +583,21 @@
 
         // Update count
         const header = termBody.parentElement.querySelector('.log-count');
-        if (header) header.textContent = `${logs.length} lines`;
+        if (header) header.textContent = `${logs.length} lines`; // Total lines in buffer
+
+        const btn = document.getElementById(`btn-filter-${serviceName}`);
+        if(btn) {
+             if(errorFilter) btn.classList.add('active');
+             else btn.classList.remove('active');
+             btn.textContent = errorFilter ? 'Errors Only' : 'All Logs';
+        }
+    }
+
+    function toggleErrorFilter() {
+        errorFilter = !errorFilter;
+        // Re-render active tabs
+        if (activeTab !== 'overview') updateTerminal(activeTab);
+        if (dualView && secondaryTab) updateTerminal(secondaryTab);
     }
 
     function getServiceControls(s) {
@@ -551,8 +683,14 @@
     setInterval(fetchStatus, 1000);
     setInterval(() => {
         // Fetch logs for active views
-        if (activeTab !== 'overview') fetchLogs(activeTab);
-        if (dualView && secondaryTab) fetchLogs(secondaryTab);
+        if (activeTab !== 'overview') {
+            fetchLogs(activeTab);
+            fetchMetrics(activeTab);
+        }
+        if (dualView && secondaryTab) {
+            fetchLogs(secondaryTab);
+            fetchMetrics(secondaryTab);
+        }
     }, 2000);
 
     // Init
