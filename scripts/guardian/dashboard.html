@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guardian 2.5.1</title>
+    <title>Guardian 2.6.0</title>
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- Chart.js -->
@@ -190,7 +190,7 @@
 <!-- Sidebar -->
 <div class="sidebar">
     <div class="brand">
-        <span style="font-size:1.5rem">🛡️</span> Guardian 2.5
+        <span style="font-size:1.5rem">🛡️</span> Guardian 2.6
     </div>
 
     <div class="nav-group">
@@ -203,6 +203,9 @@
         </div>
         <div class="nav-item" :class="{ 'active': tab === 'sessions' }" @click="tab = 'sessions'">
             <span>Sessions</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'console' }" @click="tab = 'console'">
+            <span>Live Console</span>
         </div>
     </div>
 
@@ -220,6 +223,12 @@
         <div class="nav-label">Protection</div>
         <div class="nav-item" :class="{ 'active': tab === 'security' }" @click="tab = 'security'">
             <span>Security</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'waf' }" @click="tab = 'waf'">
+            <span>WAF Events</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'tools' }" @click="tab = 'tools'">
+            <span>Tools</span>
         </div>
         <div class="nav-item" :class="{ 'active': tab === 'settings' }" @click="tab = 'settings'">
             <span>Settings</span>
@@ -393,6 +402,83 @@
             </div>
         </div>
 
+        <!-- Live Console Tab -->
+        <div x-show="tab === 'console'" style="display:flex; flex-direction:column; height:100%">
+            <div class="card" style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden; background:#000; border:1px solid #333">
+                <div style="padding:10px 20px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; background:#111">
+                    <div style="font-family:monospace; color:#22c55e">>_ GUARDIAN LIVE STREAM</div>
+                    <div style="display:flex; gap:10px">
+                        <label style="font-size:0.8rem"><input type="checkbox" x-model="autoScroll"> Auto-Scroll</label>
+                        <button style="padding:2px 8px; font-size:0.8rem" @click="liveLogs = []">Clear</button>
+                    </div>
+                </div>
+                <div class="code-block" style="flex:1; border:none; border-radius:0; padding:20px; font-family:'Courier New', monospace; font-size:0.9rem" x-ref="consoleContainer">
+                    <template x-for="log in liveLogs" :key="log.id">
+                        <div style="margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:2px">
+                            <span style="color:#666" x-text="new Date(log.timestamp).toLocaleTimeString()"></span>
+
+                            <template x-if="log.type === 'request'">
+                                <span>
+                                    <span style="color:#3b82f6">[REQ]</span>
+                                    <span :style="{color: log.status >= 500 ? '#ef4444' : (log.status >= 400 ? '#f59e0b' : '#22c55e')}" x-text="log.status"></span>
+                                    <span style="color:#e2e8f0" x-text="log.method"></span>
+                                    <span style="color:#94a3b8" x-text="log.path"></span>
+                                    <span style="color:#666; font-size:0.8rem" x-text="'(' + log.duration.toFixed(1) + 'ms)'"></span>
+                                    <span style="color:#666; font-size:0.8rem" x-text="log.ip"></span>
+                                </span>
+                            </template>
+
+                            <template x-if="log.type === 'log'">
+                                <span>
+                                    <span style="color:#a855f7">[SYS]</span>
+                                    <span style="color:#e2e8f0" x-text="log.service?.toUpperCase()"></span>
+                                    <span x-text="log.message"></span>
+                                </span>
+                            </template>
+                        </div>
+                    </template>
+                    <div x-show="liveLogs.length === 0" style="color:#444; text-align:center; margin-top:50px">Waiting for events...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools Tab -->
+        <div x-show="tab === 'tools'">
+             <div class="card">
+                <h3 style="margin-top:0">Shadow Recorder</h3>
+                <p style="color:var(--text-secondary); margin-bottom:20px">Record incoming traffic to trace files for replay debugging.</p>
+
+                <div style="margin-bottom:20px; padding:15px; border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <div style="font-weight:bold" x-text="isRecording ? 'Recording Active' : 'Recording Inactive'"></div>
+                        <div style="font-size:0.8rem; color:var(--text-secondary)" x-text="isRecording ? 'Capturing requests...' : 'Recorder is idle.'"></div>
+                    </div>
+                    <button :class="isRecording ? 'danger' : 'primary'" @click="toggleRecording()" x-text="isRecording ? 'Stop Recording' : 'Start Recording'"></button>
+                </div>
+
+                <div class="table-container">
+                    <div style="padding:15px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold">Recorded Traces</span>
+                        <button style="font-size:0.8rem; padding:4px 8px;" @click="refreshTraces()">Refresh</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Filename</th><th>Action</th></tr></thead>
+                        <tbody>
+                            <template x-for="trace in traces" :key="trace">
+                                <tr>
+                                    <td style="font-family:monospace" x-text="trace"></td>
+                                    <td>
+                                        <button style="padding:4px 8px; font-size:0.8rem" @click="replayTrace(trace)">Replay</button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="traces.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No traces found</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+             </div>
+        </div>
+
         <!-- Service Detail Tab -->
         <div x-show="tab.startsWith('service-')" style="display:flex; flex-direction:column; gap:20px;">
             <div class="grid">
@@ -413,6 +499,21 @@
                     <button class="danger" @click="controlService(currentService.name, 'stop')">Stop</button>
                     <button @click="controlService(currentService.name, 'restart')">Restart</button>
                     <a x-show="currentService?.url" :href="currentService?.url" target="_blank" style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500">Open</a>
+                </div>
+            </div>
+
+            <!-- Circuit Breaker Info -->
+            <div class="card" x-show="currentService?.circuit">
+                <h3 style="margin-top:0">Circuit Breaker</h3>
+                <div style="display:flex; gap:20px; align-items:center">
+                    <div>
+                        <div class="stat-label">State</div>
+                        <div class="stat-value" :style="{color: currentService?.circuit?.status === 'CLOSED' ? '#22c55e' : '#ef4444'}" x-text="currentService?.circuit?.status"></div>
+                    </div>
+                    <div>
+                        <div class="stat-label">Recent Failures</div>
+                        <div class="stat-value" x-text="currentService?.circuit?.failures"></div>
+                    </div>
                 </div>
             </div>
 
@@ -453,6 +554,35 @@
                     </div>
                 </div>
             </div>
+        </div>
+
+        <!-- WAF Tab -->
+        <div x-show="tab === 'waf'">
+             <div class="card">
+                <h3 style="margin-top:0">WAF Blocked Events (Last 50)</h3>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>Time</th><th>IP</th><th>Path</th><th>Rule</th><th>Risk</th></tr></thead>
+                        <tbody>
+                            <template x-for="event in wafEvents" :key="event.timestamp + event.ip">
+                                <tr>
+                                    <td x-text="formatTime(event.timestamp)"></td>
+                                    <td x-text="event.ip"></td>
+                                    <td style="font-family:monospace; max-width:300px; overflow:hidden; text-overflow:ellipsis" x-text="event.path"></td>
+                                    <td>
+                                        <span class="badge badge-purple" x-text="event.ruleId"></span>
+                                        <div style="font-size:0.8rem; color:#999" x-text="event.reason"></div>
+                                    </td>
+                                    <td>
+                                        <span class="badge" :class="event.risk === 'high' ? 'badge-blue' : 'badge-green'" style="color: #ef4444; background: rgba(239, 68, 68, 0.2)" x-text="event.risk"></span>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="wafEvents.length === 0"><td colspan="5" style="text-align:center; padding:20px; color:#666">No threats detected</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+             </div>
         </div>
 
          <!-- Settings Tab -->
@@ -500,9 +630,76 @@
             banInput: '',
             charts: {},
 
+            // Console
+            liveLogs: [],
+            eventSource: null,
+            autoScroll: true,
+
+            // Tools
+            isRecording: false,
+            traces: [],
+
+            // WAF
+            wafEvents: [],
+
             async init() {
                 await this.refreshData();
                 this.startTimers();
+
+                // Watch tab changes to enable/disable stream
+                this.$watch('tab', (val) => {
+                    if (val === 'console') this.connectStream();
+                    else this.disconnectStream();
+                    if (val === 'tools') this.refreshTraces();
+                    if (val === 'waf') this.refreshWaf();
+                });
+            },
+
+            async refreshWaf() {
+                 this.wafEvents = await fetch('/api/waf/events').then(r => r.json());
+            },
+
+            async toggleRecording() {
+                const newState = !this.isRecording;
+                await fetch(`/api/recording?enabled=${newState}`, { method: 'POST' });
+                this.isRecording = newState;
+                await this.refreshData(); // To sync config
+            },
+
+            async refreshTraces() {
+                this.traces = await fetch('/api/traces').then(r => r.json());
+            },
+
+            async replayTrace(file) {
+                if(!confirm(`Replay ${file}?`)) return;
+                const res = await fetch(`/api/replay?file=${file}`, { method: 'POST' });
+                const json = await res.json();
+                alert(json.success ? `Replay Successful! Status: ${json.result.status}` : `Failed: ${json.error}`);
+            },
+
+            connectStream() {
+                if (this.eventSource) return;
+                this.eventSource = new EventSource('/api/live-logs');
+                this.eventSource.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    data.id = Math.random().toString(36).substr(2, 9); // Client-side ID
+                    this.liveLogs.push(data);
+                    if (this.liveLogs.length > 200) this.liveLogs.shift();
+
+                    if (this.autoScroll) {
+                        this.$nextTick(() => {
+                            const el = this.$refs.consoleContainer;
+                            if (el) el.scrollTop = el.scrollHeight;
+                        });
+                    }
+                };
+            },
+
+            disconnectStream() {
+                if (this.eventSource) {
+                    this.eventSource.close();
+                    this.eventSource = null;
+                }
             },
 
             async refreshData() {
@@ -524,6 +721,11 @@
                 this.sessions = sessionRes;
                 this.bannedIps = bannedRes;
                 this.config = configRes;
+
+                // Sync local recording state from config
+                if (this.config.recording !== undefined) {
+                    this.isRecording = this.config.recording;
+                }
 
                 // Update current service ref if selected
                 if (this.currentService) {
@@ -644,7 +846,10 @@
                 if (this.tab === 'overview') return 'System Overview';
                 if (this.tab === 'traffic') return 'Traffic Analytics';
                 if (this.tab === 'sessions') return 'Active Sessions';
+                if (this.tab === 'console') return 'Live Console';
                 if (this.tab === 'security') return 'Security Control';
+                if (this.tab === 'waf') return 'WAF Events';
+                if (this.tab === 'tools') return 'System Tools';
                 if (this.tab === 'settings') return 'Settings';
                 if (this.tab.startsWith('service-')) return 'Service: ' + this.capitalize(this.currentService?.name || '');
                 return '';
