@@ -5,9 +5,11 @@ const MAX_LOGS = 2000;
 const PORT = Number(Deno.env.get("GUARDIAN_PORT") || "9999");
 const BACKEND_PORT = Number(Deno.env.get("PORT") || "8000");
 const FRONTEND_PORT = 3000;
+const LOG_DIR = "logs";
 
 // Config
 const RESTART_DELAY_MS = 3000;
+const METRIC_RETENTION_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 async function clearPort(port: number) {
     if (Deno.build.os === "windows") {
@@ -66,6 +68,12 @@ interface ServiceStats {
     lastExitCode: number | null;
 }
 
+interface MetricEntry {
+    timestamp: number;
+    cpu: number;
+    memory: number;
+}
+
 interface ServiceConfig {
     name: string;
     command: string[];
@@ -86,14 +94,27 @@ function getTodayStr() {
 async function persistLog(entry: LogEntry) {
     if (!kv) return;
     try {
-        // Index by Session -> Service -> Time
+        // 1. KV Persistence (Short term / Searchable index if needed)
+        // We reduce KV retention for logs if we have files, but user asked for search/filter so keeping it is useful
+        // But maybe 24h in KV is enough if we have files?
+        // Let's keep 7 days in KV as requested originally, but files are forever.
         await kv.set(
             ["guardian", "logs", currentSessionId, entry.service, entry.timestamp, entry.id],
             entry,
-            { expireIn: 7 * 24 * 60 * 60 * 1000 } // 7 days retention
+            { expireIn: 7 * 24 * 60 * 60 * 1000 }
         );
     } catch (e) {
         console.error("Failed to persist log:", e);
+    }
+
+    // 2. File Persistence
+    try {
+        const line = `[${entry.timestamp}] [${entry.source.toUpperCase()}] ${entry.message}\n`;
+        const fileName = `${getTodayStr()}_${entry.service}.log`;
+        const filePath = join(LOG_DIR, fileName);
+        await Deno.writeTextFile(filePath, line, { append: true });
+    } catch (e) {
+        console.error(`Failed to write log file: ${e}`);
     }
 }
 
@@ -111,6 +132,19 @@ async function updateServiceStat(serviceName: string, type: string, count: numbe
     } catch (e) { /* ignore */ }
 }
 
+async function saveMetric(serviceName: string, cpu: number, memory: number) {
+    if (!kv) return;
+    const now = Date.now();
+    try {
+        const metric: MetricEntry = { timestamp: now, cpu, memory };
+        await kv.set(
+            ["guardian", "metrics", serviceName, now],
+            metric,
+            { expireIn: METRIC_RETENTION_MS }
+        );
+    } catch (e) { /* ignore */ }
+}
+
 // --- Service Class ---
 
 class Service {
@@ -119,6 +153,7 @@ class Service {
     logs: LogEntry[] = [];
     process: Deno.ChildProcess | null = null;
     shouldRun: boolean = false;
+    lastMetricSave: number = 0;
 
     constructor(config: ServiceConfig) {
         this.config = config;
@@ -163,6 +198,16 @@ class Service {
         }
 
         persistLog(entry);
+    }
+
+    // Call this periodically
+    async persistMetrics() {
+        // Save every 60 seconds to avoid KV bloat
+        const now = Date.now();
+        if (now - this.lastMetricSave > 60000) {
+            await saveMetric(this.config.name, this.stats.cpu, this.stats.memory);
+            this.lastMetricSave = now;
+        }
     }
 
     async start() {
@@ -316,16 +361,87 @@ const manager = new ServiceManager();
 
 // --- System Monitor ---
 
+async function updateWindowsStats(pids: Map<number, Service>) {
+    if (pids.size === 0) return;
+    const pidList = Array.from(pids.keys());
+    // wmic WHERE clause: IDProcess=123 OR IDProcess=456
+    const whereClause = pidList.map(p => `IDProcess=${p}`).join(" OR ");
+
+    try {
+        const cmd = new Deno.Command("wmic", {
+            args: [
+                "path", "Win32_PerfFormattedData_PerfProc_Process",
+                "where", whereClause,
+                "get", "IDProcess,PercentProcessorTime,WorkingSet",
+                "/format:csv"
+            ],
+            stdout: "piped"
+        });
+        const output = await cmd.output();
+        const text = new TextDecoder().decode(output.stdout);
+        // Output example:
+        // Node,IDProcess,PercentProcessorTime,WorkingSet
+        // MYPC,1234,0,500000
+
+        const lines = text.trim().split('\n');
+        // Skip headers. CSV format might repeat headers or have blank lines.
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith("Node,")) continue;
+
+            const parts = trimmed.split(",");
+            // Node, IDProcess, PercentProcessorTime, WorkingSet
+            // Note: wmic csv order depends on the GET list but usually alphabetical?
+            // Actually /format:csv outputs sorted by property name?
+            // Let's rely on the order we requested OR better, the fact that wmic CSV output is consistent.
+            // Wait, wmic csv output IS usually alphabetical by property name!
+            // IDProcess, PercentProcessorTime, WorkingSet -> IDProcess, PercentProcessorTime, WorkingSet (I, P, W).
+            // Actually: IDProcess, PercentProcessorTime, WorkingSetPrivate?
+            // "IDProcess,PercentProcessorTime,WorkingSet" -> Sorted: IDProcess, PercentProcessorTime, WorkingSet.
+            // If the order is unknown, we can't parse safely by index unless we parse the header.
+            // But wmic output order for specific query is often preserved or alphabetical.
+            // To be safe, we can check the header. But parsing header in this loop is complex.
+            // Let's assume standard behavior: Node is first. Then the rest.
+            // If I request specific columns, wmic returns them.
+            // Let's assume index 1=ID, 2=CPU, 3=Mem.
+
+            // Re-checking wmic behavior: It sorts columns alphabetically!
+            // IDProcess (I), PercentProcessorTime (P), WorkingSet (W).
+            // I, P, W.
+            // So: Node, IDProcess, PercentProcessorTime, WorkingSet.
+
+            if (parts.length >= 4) {
+                 // Try to find the PID in the parts to be sure
+                 // We know PID is one of them.
+                 // But let's trust the alphabetical sort for now:
+                 // 1: IDProcess
+                 // 2: PercentProcessorTime
+                 // 3: WorkingSet
+
+                 const pid = parseInt(parts[1]);
+                 const cpu = parseFloat(parts[2]);
+                 const mem = parseInt(parts[3]);
+
+                 const service = pids.get(pid);
+                 if (service) {
+                     // CPU on Windows (PerfFormattedData) is usually 0-100 * Cores
+                     // We take it as is.
+                     service.stats.cpu = cpu;
+                     service.stats.memory = mem;
+                 }
+            }
+        }
+    } catch (e) {
+        // Fallback or ignore
+    }
+}
+
 async function updateSystemStats() {
-    if (Deno.build.os === "windows") return; // Skip ps on windows for now
-
-    // Collect PIDs
+    // 1. Collect PIDs and track uptime
     const pids = new Map<number, Service>();
-
     for (const service of manager.getAll()) {
         if (service.stats.pid) {
             pids.set(service.stats.pid, service);
-            // Update uptime
             if (service.stats.startTime) {
                 service.stats.uptime = Math.floor((Date.now() - service.stats.startTime) / 1000);
             }
@@ -340,32 +456,44 @@ async function updateSystemStats() {
 
     if (pids.size === 0) return;
 
-    try {
-        const cmd = new Deno.Command("ps", {
-            args: ["-p", Array.from(pids.keys()).join(','), "-o", "pid,pcpu,rss"],
-            stdout: "piped"
-        });
-        const output = await cmd.output();
-        const text = new TextDecoder().decode(output.stdout);
-        const lines = text.trim().split('\n');
+    // 2. Fetch Stats (OS specific)
+    if (Deno.build.os === "windows") {
+        await updateWindowsStats(pids);
+    } else {
+        try {
+            const cmd = new Deno.Command("ps", {
+                args: ["-p", Array.from(pids.keys()).join(','), "-o", "pid,pcpu,rss"],
+                stdout: "piped"
+            });
+            const output = await cmd.output();
+            const text = new TextDecoder().decode(output.stdout);
+            const lines = text.trim().split('\n');
 
-        for (let i = 1; i < lines.length; i++) {
-            const line = lines[i].trim();
-            if (!line) continue;
-            const parts = line.split(/\s+/);
-            if (parts.length >= 3) {
-                const pid = parseInt(parts[0]);
-                const cpu = parseFloat(parts[1]);
-                const rss = parseInt(parts[2]) * 1024;
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                const parts = line.split(/\s+/);
+                if (parts.length >= 3) {
+                    const pid = parseInt(parts[0]);
+                    const cpu = parseFloat(parts[1]);
+                    const rss = parseInt(parts[2]) * 1024;
 
-                const service = pids.get(pid);
-                if (service) {
-                    service.stats.cpu = cpu;
-                    service.stats.memory = rss;
+                    const service = pids.get(pid);
+                    if (service) {
+                        service.stats.cpu = cpu;
+                        service.stats.memory = rss;
+                    }
                 }
             }
-        }
-    } catch (e) { /* ignore */ }
+        } catch (e) { /* ignore */ }
+    }
+
+    // 3. Persist Metrics (Throttle handled inside)
+    for (const service of manager.getAll()) {
+        await service.persistMetrics();
+    }
+    // Also persist guardian
+    await guardianService.persistMetrics();
 }
 
 // --- API & Server ---
@@ -385,7 +513,6 @@ async function handleRequest(req: Request): Promise<Response> {
     }
 
     if (url.pathname === "/api/status") {
-        // Ensure Guardian is in the list
         manager.getOrAdd("guardian");
         const services = manager.getAll().map(s => s.stats);
 
@@ -405,6 +532,27 @@ async function handleRequest(req: Request): Promise<Response> {
             return Response.json(service.logs);
         }
         return Response.json([]);
+    }
+
+    if (url.pathname === "/api/metrics") {
+        const serviceName = url.searchParams.get("service");
+        if (!serviceName) return Response.json([]);
+
+        // Default to last 24h
+        const limit = Number(url.searchParams.get("limit") || "100");
+        const entries: MetricEntry[] = [];
+
+        if (kv) {
+            const iter = kv.list<MetricEntry>({ prefix: ["guardian", "metrics", serviceName] }, {
+                limit: limit,
+                reverse: true
+            });
+            for await (const res of iter) {
+                entries.push(res.value);
+            }
+        }
+        // Return chrono order
+        return Response.json(entries.reverse());
     }
 
     if (req.method === "POST" && url.pathname === "/api/control") {
@@ -427,7 +575,7 @@ async function handleRequest(req: Request): Promise<Response> {
         }
     }
 
-    // Git Pull / Build / Deploy - Global Actions
+    // Global Actions
     if (req.method === "POST" && url.pathname === "/api/global") {
         const action = url.searchParams.get("action");
         if (action === "git-pull") {
@@ -441,7 +589,6 @@ async function handleRequest(req: Request): Promise<Response> {
              return Response.json({ success: out.code === 0 });
         }
         if (action === "restart-all") {
-             // Restart each managed service
              for(const s of manager.getAll()) {
                  if (s.config.autoRestart) await s.restart();
              }
@@ -454,8 +601,6 @@ async function handleRequest(req: Request): Promise<Response> {
 
 
 // --- Init ---
-
-// --- Console Override ---
 
 function setupGuardianLogging() {
     const guardian = manager.getOrAdd("guardian");
@@ -476,6 +621,12 @@ function setupGuardianLogging() {
 }
 
 async function bootstrap() {
+    try {
+        await Deno.mkdir(LOG_DIR, { recursive: true });
+    } catch (e) {
+        console.error("Failed to create logs dir", e);
+    }
+
     setupGuardianLogging();
 
     try {
