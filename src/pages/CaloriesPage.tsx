@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
@@ -26,6 +26,7 @@ import { DatePicker } from '../components/shared/DatePicker.tsx';
 import { CalorieRing } from '../components/shared/CalorieRing.tsx';
 import { MacroBars } from '../components/shared/MacroBars.tsx';
 import { EstimateLunchModal } from '../components/calories/EstimateLunchModal.tsx';
+import { Calendar as CalendarIcon, ChevronLeft, ChevronRight } from 'lucide-react';
 import './CaloriesPage.css';
 
 export function CaloriesPage() {
@@ -137,12 +138,18 @@ export function CaloriesPage() {
         if (e.key === 'Escape') setEditing(null);
     };
 
+    const changeDate = useCallback((days: number) => {
+        const d = new Date(selectedDate);
+        d.setUTCDate(d.getUTCDate() + days);
+        setSelectedDate(d.toISOString().split('T')[0]);
+    }, [selectedDate, setSelectedDate]);
+
     const dailyNutrition = useMemo(
         () => calculateDailyNutrition(selectedDate),
         [calculateDailyNutrition, selectedDate]
     );
 
-    // View mode toggle hotkey
+    // View mode toggle hotkey and navigation
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Only toggle if not in an input field
@@ -151,11 +158,21 @@ export function CaloriesPage() {
             if (e.key.toLowerCase() === 'v') {
                 setViewMode(prev => prev === 'compact' ? 'normal' : 'compact');
             }
+
+            if (e.ctrlKey) {
+                if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    changeDate(-1);
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    changeDate(1);
+                }
+            }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, []);
+    }, [changeDate]);
 
     const entriesByMeal = useMemo(() => {
         const grouped: Record<MealType, MealEntry[]> = {
@@ -537,34 +554,34 @@ export function CaloriesPage() {
             <div className={`fixed top-16 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-sm py-2 transition-all`}>
                 <div className="max-w-3xl mx-auto px-4 flex items-center justify-center gap-4">
                     <button
-                        onClick={() => {
-                            const d = new Date(selectedDate);
-                            d.setDate(d.getDate() - 1);
-                            setSelectedDate(d.toISOString().split('T')[0]);
-                        }}
+                        onClick={() => changeDate(-1)}
                         className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500"
                     >
-                        ←
+                        <ChevronLeft size={18} />
                     </button>
                     <div
                         onClick={() => setSelectedDate(getISODate())}
-                        className={`font-bold text-sm cursor-pointer px-3 py-1 rounded-lg transition-all ${!isToday
-                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
-                            : 'text-slate-900 dark:text-white'
+                        className={`flex flex-col items-center cursor-pointer px-4 py-1 rounded-xl transition-all ${!isToday
+                            ? 'bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700'
+                            : ''
                             }`}
                     >
-                        {isToday ? 'Idag' : selectedDate === getISODate(new Date(Date.now() - 86400000)) ? 'Igår' : new Date(selectedDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
-                        {!isToday && <span className="ml-2 text-[10px] opacity-70">← Klicka för idag</span>}
+                        <div className="flex items-center gap-2">
+                            <CalendarIcon size={14} className="text-slate-400" />
+                            <span className={`font-bold text-sm ${!isToday ? 'text-amber-700 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>
+                                {isToday ? 'Idag' : selectedDate === getISODate(new Date(Date.now() - 86400000)) ? 'Igår' : new Date(selectedDate).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}
+                            </span>
+                            {!isToday && <span className="text-[10px] text-amber-600/70 dark:text-amber-400/50">←</span>}
+                        </div>
+                        <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wider opacity-60">
+                            {new Date(selectedDate).toLocaleDateString('sv-SE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                        </div>
                     </div>
                     <button
-                        onClick={() => {
-                            const d = new Date(selectedDate);
-                            d.setDate(d.getDate() + 1);
-                            setSelectedDate(d.toISOString().split('T')[0]);
-                        }}
+                        onClick={() => changeDate(1)}
                         className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors text-slate-500"
                     >
-                        →
+                        <ChevronRight size={18} />
                     </button>
 
                     {/* View Mode Toggle - Right side */}
@@ -587,13 +604,6 @@ export function CaloriesPage() {
                 </div>
             </div>
 
-            <div className="pt-14 my-6">
-                <DatePicker
-                    selectedDate={selectedDate}
-                    onDateChange={setSelectedDate}
-                    size="lg"
-                />
-            </div>
 
 
             {unloggedPlannedMeals.length > 0 && (

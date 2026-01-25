@@ -506,7 +506,7 @@ export function DashboardPage() {
                 </div>
             </div>
 
-            <div className="w-full max-w-5xl mx-auto pt-12">
+            <div className="w-full max-w-5xl mx-auto pt-2">
                 <header className={`${density === 'compact' ? 'mb-4' : 'mb-10'} flex flex-col md:flex-row justify-between items-start md:items-center gap-4`}>
                     <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-4">
@@ -531,17 +531,6 @@ export function DashboardPage() {
                 <div className={`grid grid-cols-1 md:grid-cols-12 ${density === 'compact' ? 'gap-3' : density === 'slim' ? 'gap-4' : 'gap-6'} items-stretch`}>
                     {/* Top Section: Daily Summary & Active Goals */}
                     <div className="md:col-span-12 flex flex-col gap-4 mb-4">
-                        <DailySummaryCard
-                            calories={{ current: consumed, target: target }}
-                            protein={{ current: proteinCurrent, target: proteinTarget }}
-                            trainingMinutes={completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0)}
-                            burnedCalories={burned}
-                            measurementsCount={0}
-                            weighInDone={unifiedHistory.some(w => w.date === today && w.weight)}
-                            sleepHours={vitals.sleep || 0}
-                            alcoholUnits={vitals.alcohol || 0}
-                            density={density === 'compact' ? 'compact' : 'normal'}
-                        />
                         <div className="md:col-span-12 mt-2 mb-4">
                             <WeeklySummary selectedDate={selectedDate} activities={unifiedActivities} history={unifiedHistory} />
                         </div>
@@ -757,6 +746,21 @@ export function DashboardPage() {
                                 </div>
                             </div>
                         </div>
+                    </div>
+
+                    {/* Daily Summary at the bottom */}
+                    <div className="md:col-span-12 mt-6">
+                        <DailySummaryCard
+                            calories={{ current: consumed, target: target }}
+                            protein={{ current: proteinCurrent, target: proteinTarget }}
+                            trainingMinutes={completedTraining.reduce((sum, act) => sum + act.durationMinutes, 0)}
+                            burnedCalories={burned}
+                            measurementsCount={0}
+                            weighInDone={unifiedHistory.some(w => w.date === today && w.weight)}
+                            sleepHours={vitals.sleep || 0}
+                            alcoholUnits={vitals.alcohol || 0}
+                            density={density === 'compact' ? 'compact' : 'normal'}
+                        />
                     </div>
                 </div>
             </div>

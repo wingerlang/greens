@@ -42,6 +42,9 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
         mainTitle = 'NUVARANDE VECKA SUMMARY';
     }
 
+    const rangeText = `${new Date(monday).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(sunday).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`;
+    const currentTime = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+
     // Measurement Diffs
     const getDiff = (type: 'weight' | 'waist' | 'chest') => {
         const records = history
@@ -78,12 +81,17 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
 
     return (
         <div className="flex flex-col items-center">
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 opacity-70">
-                {mainTitle}
+            <div className="flex flex-col items-center mb-4">
+                <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] opacity-70">
+                    {mainTitle}
+                </div>
+                <div className="text-[9px] font-bold text-slate-400/60 uppercase tracking-widest mt-1">
+                    {rangeText} • {currentTime}
+                </div>
             </div>
             <div className="flex flex-wrap justify-center gap-4 w-full">
                 {/* Running Box */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-8 py-5 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-4 py-3 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
                     <div className="text-xl mb-1">🏃‍♂️</div>
                     <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">Löpning</div>
                     <div className="text-lg font-bold text-emerald-500">
@@ -92,7 +100,7 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
                 </div>
 
                 {/* Strength Box */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-8 py-5 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-4 py-3 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
                     <div className="text-xl mb-1">💪</div>
                     <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">Styrka</div>
                     <div className="text-lg font-bold text-indigo-500">
@@ -101,7 +109,7 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
                 </div>
 
                 {/* Measurement Diffs Card */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-8 py-5 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-4 py-3 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
                     <div className="text-xl mb-1">⚖️</div>
                     <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2">Framsteg</div>
                     <div className="grid grid-cols-3 gap-4 w-full">
