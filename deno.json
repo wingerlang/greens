@@ -1,7 +1,7 @@
 {
   "tasks": {
     "dev": "deno run -A npm:vite@^5.4.0",
-    "go": "deno run -A --unstable-kv scripts/guardian.ts",
+    "go": "deno run -A --unstable-kv scripts/guardian/main.ts",
     "server": "DEBUG_MODE=true deno run -A --unstable-kv --watch --env src/api/main.ts",
     "build": "deno run -A npm:vite@^5.4.0 build",
     "preview": "deno run -A npm:vite@^5.4.0 preview"
