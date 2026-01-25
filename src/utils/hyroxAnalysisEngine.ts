@@ -101,14 +101,22 @@ export function analyzeHyroxRace(session: HyroxSessionSummary): HyroxMetrics {
             : "Tävlingsanalysen visar på ett starkt öppningstempo, men tröttheten tar ut sin rätt under andra halvan.";
     }
 
-    // 5. Projected Finish (if applicable)
+    // 5. Projected Finish (only if not a full race with known result)
     let projectedFullRaceTime: number | undefined = undefined;
-    if (totalRunTime > 0 && totalStationTime > 0) {
-        // Simple projection: sum of current splits + average of missing ones + estimated 5 min roxzone
+    const isFullRace = validRuns.length >= 8 && Object.keys(stations).length >= 8;
+    const actualTotalSeconds = session.totalDuration ? session.totalDuration * 60 : undefined;
+
+    if (isFullRace && actualTotalSeconds) {
+        // For a complete race, use the actual total (this IS the result)
+        projectedFullRaceTime = actualTotalSeconds;
+    } else if (totalRunTime > 0 && totalStationTime > 0) {
+        // For partial simulations, estimate based on available splits
         const avgRun = totalRunTime / validRuns.length;
         const stationValues = Object.values(stations).filter((v): v is number => typeof v === 'number');
         const avgStation = stationValues.length > 0 ? stationValues.reduce((a, b) => a + b, 0) / stationValues.length : 300;
-        projectedFullRaceTime = (avgRun * 8) + (avgStation * 8) + 300; // +5 mins transitions
+        const missingRuns = 8 - validRuns.length;
+        const missingStations = 8 - stationValues.length;
+        projectedFullRaceTime = totalRunTime + totalStationTime + (avgRun * missingRuns) + (avgStation * missingStations) + 180; // +3 min roxzone
     }
 
     return {

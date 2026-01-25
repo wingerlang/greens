@@ -9,6 +9,7 @@ import { HYROX_WORKOUTS, DEEP_TIPS, HyroxWorkout } from '../../utils/hyroxWorkou
 import { HYROX_ENCYCLOPEDIA } from '../../utils/hyroxEncyclopedia.ts';
 import { HyroxDuoLab } from './HyroxDuoLab.tsx';
 import { HyroxRaceAnalysis } from './HyroxRaceAnalysis.tsx';
+import { HyroxStandardsSection } from './HyroxStandardsSection.tsx';
 
 // Feature 1: Class Selector Options
 const CLASSES: { id: HyroxClass; label: string }[] = [
@@ -56,7 +57,7 @@ export function HyroxDashboard() {
     const [selectedClass, setSelectedClass] = useState<HyroxClass>('MEN_OPEN');
     // Feature 7.0: 'pro_stats' tab
     // Feature 7.0: 'pro_stats' tab
-    const [viewMode, setViewMode] = useState<'status' | 'races' | 'workouts' | 'history' | 'simulate' | 'goals' | 'duo' | 'guide' | 'training' | 'pro_stats'>('status');
+    const [viewMode, setViewMode] = useState<'status' | 'races' | 'workouts' | 'history' | 'simulate' | 'goals' | 'duo' | 'guide' | 'training' | 'pro_stats' | 'standards'>('status');
     const [runImprovement, setRunImprovement] = useState(0);
     const [stationEfficiency, setStationEfficiency] = useState(0);
     const [roxzoneImprovement, setRoxzoneImprovement] = useState(0);
@@ -272,6 +273,7 @@ export function HyroxDashboard() {
                     <TabBtn label="Målpacing" active={viewMode === 'goals'} onClick={() => setViewMode('goals')} color="emerald" />
                     <TabBtn label="Duo Lab" active={viewMode === 'duo'} onClick={() => setViewMode('duo')} color="sky" />
                     <TabBtn label="Historik" active={viewMode === 'history'} onClick={() => setViewMode('history')} color="indigo" />
+                    <TabBtn label="Standards" active={viewMode === 'standards'} onClick={() => setViewMode('standards')} color="amber" />
                     <TabBtn label="Guide" active={viewMode === 'guide'} onClick={() => setViewMode('guide')} color="slate" />
                 </div>
             </div>
@@ -699,9 +701,16 @@ export function HyroxDashboard() {
                                 {hyroxHistory.filter(s => s.isRace).map(session => (
                                     <div key={session.id} className="bg-slate-950/50 p-6 rounded-2xl border border-white/5 hover:border-rose-500/30 transition-all group">
                                         <div className="flex justify-between items-start mb-4">
-                                            <div>
+                                            <div onClick={() => {
+                                                if (session.stations.length > 0 || session.runSplits?.length > 0) {
+                                                    setSelectedStation(session.stations[0] || 'run_1km');
+                                                }
+                                            }} className="cursor-pointer hover:bg-white/5 p-2 -ml-2 rounded-xl transition-all group/title">
                                                 <div className="text-[10px] font-black text-rose-500 uppercase tracking-widest mb-1">{session.date}</div>
-                                                <h4 className="text-lg font-black text-white uppercase tracking-tight">{session.name}</h4>
+                                                <h4 className="text-lg font-black text-white uppercase tracking-tight group-hover/title:text-rose-400 flex items-center gap-2">
+                                                    {session.name}
+                                                    <span className="text-[10px] opacity-0 group-hover/title:opacity-100 transition-opacity">↗</span>
+                                                </h4>
                                             </div>
                                             <div className="flex gap-2">
                                                 <button
@@ -716,7 +725,15 @@ export function HyroxDashboard() {
 
                                         {analyzingSessionId === session.id ? (
                                             <div className="pt-4 border-t border-white/10 mt-4">
-                                                <HyroxRaceAnalysis session={session} />
+                                                {session.stations.length === 0 && (session.runSplits?.length === 0) ? (
+                                                    <div className="bg-slate-900/50 p-8 rounded-2xl border border-dashed border-white/10 text-center">
+                                                        <div className="text-3xl mb-3">📋</div>
+                                                        <h5 className="text-white font-bold mb-1">Ingen detaljdata hittades</h5>
+                                                        <p className="text-xs text-slate-500">Logga stationer eller löpsteg för att se prestandaanalysen här.</p>
+                                                    </div>
+                                                ) : (
+                                                    <HyroxRaceAnalysis session={session} />
+                                                )}
                                             </div>
                                         ) : (
                                             <>
@@ -968,6 +985,12 @@ export function HyroxDashboard() {
                 {viewMode === 'duo' && (
                     <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
                         <HyroxDuoLab />
+                    </div>
+                )}
+
+                {viewMode === 'standards' && (
+                    <div className="col-span-1 lg:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                        <HyroxStandardsSection gender={selectedClass.includes('WOMEN') ? 'female' : 'male'} />
                     </div>
                 )}
 

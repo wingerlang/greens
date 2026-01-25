@@ -75,11 +75,39 @@ export function HyroxStationDetailModal({ stationId, onClose, stats }: Props) {
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-emerald-500/10 border border-emerald-500/20 p-4 rounded-xl">
                                             <div className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-1">Personbästa (PB)</div>
-                                            <div className="text-3xl font-black text-white">{fmtSec(stats.pb)}</div>
+                                            {/* Show weight×distance for sled/carry exercises, time for others */}
+                                            {['sled_push', 'sled_pull', 'farmers_carry', 'sandbag_lunges'].includes(stationId) ? (() => {
+                                                const maxWeight = Math.max(...stats.history.history.map(ev => ev.weight || 0), 0);
+                                                const maxDistance = Math.max(...stats.history.history.map(ev => ev.distance || 0), 0);
+                                                return maxWeight > 0 || maxDistance > 0 ? (
+                                                    <div className="text-2xl font-black text-white">{maxWeight}<span className="text-sm text-slate-400">kg</span> × {maxDistance}<span className="text-sm text-slate-400">m</span></div>
+                                                ) : <div className="text-3xl font-black text-slate-500">-</div>;
+                                            })() : stats.pb > 0 ? (
+                                                <div className="text-3xl font-black text-white">{fmtSec(stats.pb)}</div>
+                                            ) : (
+                                                <div className="text-3xl font-black text-slate-500">-</div>
+                                            )}
                                         </div>
                                         <div className="bg-indigo-500/10 border border-indigo-500/20 p-4 rounded-xl">
-                                            <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">Snittid</div>
-                                            <div className="text-3xl font-black text-white">{fmtSec(stats.average)}</div>
+                                            {['sled_push', 'sled_pull', 'farmers_carry', 'sandbag_lunges'].includes(stationId) ? (() => {
+                                                const weights = stats.history.history.map(ev => ev.weight || 0).filter(w => w > 0);
+                                                const distances = stats.history.history.map(ev => ev.distance || 0).filter(d => d > 0);
+                                                const avgWeight = weights.length > 0 ? Math.round(weights.reduce((a, b) => a + b, 0) / weights.length) : 0;
+                                                const avgDist = distances.length > 0 ? Math.round(distances.reduce((a, b) => a + b, 0) / distances.length) : 0;
+                                                return (
+                                                    <>
+                                                        <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">Snitt</div>
+                                                        {avgWeight > 0 || avgDist > 0 ? (
+                                                            <div className="text-2xl font-black text-white">{avgWeight}<span className="text-sm text-slate-400">kg</span> × {avgDist}<span className="text-sm text-slate-400">m</span></div>
+                                                        ) : <div className="text-3xl font-black text-slate-500">-</div>}
+                                                    </>
+                                                );
+                                            })() : (
+                                                <>
+                                                    <div className="text-xs font-bold text-indigo-400 uppercase tracking-widest mb-1">Snittid</div>
+                                                    <div className="text-3xl font-black text-white">{stats.average > 0 ? fmtSec(stats.average) : '-'}</div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
 
@@ -87,30 +115,49 @@ export function HyroxStationDetailModal({ stationId, onClose, stats }: Props) {
                                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Historik (Alla Pass)</h4>
                                         <div className="space-y-3">
                                             {stats.history.history.map((ev, i) => (
-                                                <div key={i} className="flex justify-between items-start p-3 rounded-xl bg-white/5 border border-white/5 hover:bg-white/10 transition-all">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-[10px] font-bold text-slate-500 uppercase">{ev.date}</span>
-                                                        <span className={`text-xs font-black uppercase tracking-tight ${ev.type === 'simulation' ? 'text-amber-400' : 'text-slate-300'}`}>
-                                                            {ev.type === 'simulation' ? '🏎️ Simulation' : '🏋️ Styrkepass'}
-                                                        </span>
-                                                        {ev.notes && <p className="text-[10px] text-slate-500 italic mt-1 max-w-[200px] truncate">{ev.notes}</p>}
-                                                    </div>
-                                                    <div className="flex flex-col items-end">
-                                                        {ev.timeSeconds ? (
-                                                            <div className="flex items-center gap-2">
-                                                                {ev.timeSeconds === stats.pb && <span className="text-[8px] bg-emerald-500 text-black px-1 rounded font-black">PB</span>}
-                                                                <span className="text-sm font-mono font-bold text-white">{fmtSec(ev.timeSeconds)}</span>
-                                                            </div>
-                                                        ) : (
-                                                            <div className="flex flex-col items-end gap-1">
+                                                <div key={i} className="bg-white/5 border border-white/5 rounded-xl overflow-hidden hover:border-white/10 transition-all">
+                                                    <div className="flex justify-between items-start p-3 bg-slate-900/40">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-[10px] font-bold text-slate-500 uppercase">{ev.date}</span>
+                                                            <span className={`text-xs font-black uppercase tracking-tight ${ev.type === 'simulation' ? 'text-amber-400' : 'text-slate-300'}`}>
+                                                                {ev.type === 'simulation' ? '🏎️ Simulation' : '🏋️ Styrkepass'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex flex-col items-end">
+                                                            {ev.timeSeconds ? (
+                                                                <div className="flex items-center gap-2">
+                                                                    {ev.timeSeconds === stats.pb && <span className="text-[8px] bg-emerald-500 text-black px-1 rounded font-black">PB</span>}
+                                                                    <span className="text-sm font-mono font-bold text-white">{fmtSec(ev.timeSeconds)}</span>
+                                                                </div>
+                                                            ) : (
                                                                 <div className="flex gap-2">
                                                                     {ev.distance && <span className="text-[10px] font-mono font-bold text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded">{ev.distance}m</span>}
                                                                     {ev.weight && <span className="text-[10px] font-mono font-bold text-sky-400 bg-sky-400/10 px-1.5 py-0.5 rounded">{ev.weight}kg</span>}
+                                                                    {ev.reps && <span className="text-[10px] text-slate-500 font-bold uppercase">{ev.reps} totala reps</span>}
                                                                 </div>
-                                                                {ev.reps && <span className="text-[10px] text-slate-500 font-bold uppercase">{ev.reps} totala reps</span>}
-                                                            </div>
-                                                        )}
+                                                            )}
+                                                        </div>
                                                     </div>
+
+                                                    {/* DETAILED SETS */}
+                                                    {ev.sets && ev.sets.length > 0 && (
+                                                        <div className="px-3 pb-3 pt-1 border-t border-white/5 bg-slate-950/20">
+                                                            <div className="space-y-1 mt-2">
+                                                                {ev.sets.map((set, si) => (
+                                                                    <div key={si} className="grid grid-cols-4 gap-2 text-[10px] py-1 border-b border-white/[0.02] last:border-0 border-dashed">
+                                                                        <span className="text-slate-500 font-bold">Set {set.setNumber || si + 1}</span>
+                                                                        <span className="text-white font-mono">{set.reps} reps</span>
+                                                                        <span className="text-sky-400 font-mono">{set.weight > 0 ? `${set.weight}kg` : '-'}</span>
+                                                                        <span className="text-emerald-400 font-mono text-right">
+                                                                            {set.timeSeconds ? fmtSec(set.timeSeconds) : set.distance ? `${set.distance}m` : '-'}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {ev.notes && <div className="px-3 pb-3 text-[10px] text-slate-500 italic border-t border-white/[0.02] pt-2">{ev.notes}</div>}
                                                 </div>
                                             ))}
                                         </div>

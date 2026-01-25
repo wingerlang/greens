@@ -477,10 +477,11 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
             totalSets: w.totalSets || 0,
             totalReps: w.totalReps || 0,
             title: w.name || w.title || 'Styrkepass',
-            notes: w.name || w.title,
+            notes: w.notes,
             source: 'strength',
             createdAt: w.createdAt || new Date().toISOString(),
-            subType: undefined,
+            subType: w.subType,
+            hyroxStats: (w as any).hyroxStats,
             externalId: undefined,
             movingTime: (w.duration || w.durationMinutes || 60) * 60,
             excludeFromStats: w.excludeFromStats
@@ -585,7 +586,8 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
                         strength: se,
                         strengthWorkout: sw,
                         universalActivity: universalMatch,
-                    }
+                    },
+                    hyroxStats: se.hyroxStats || (sw as any)?.hyroxStats || (universalMatch?.performance as any)?.hyroxStats
                 });
             } else {
                 mergedStrengthEntries.push(se);

@@ -615,7 +615,7 @@ export type ExerciseType =
 export type ExerciseIntensity = 'low' | 'moderate' | 'high' | 'ultra';
 
 /** Available sub-types for deep exercise analysis */
-export type ExerciseSubType = 'default' | 'interval' | 'long-run' | 'race' | 'tonnage' | 'ultra' | 'competition';
+export type ExerciseSubType = 'default' | 'interval' | 'long-run' | 'race' | 'tonnage' | 'ultra' | 'competition' | 'simulation' | 'simulering';
 
 /** Exercise tracking entry */
 export interface ExerciseEntry {

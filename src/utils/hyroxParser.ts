@@ -31,7 +31,7 @@ const parseTime = (timeStr: string): number | null => {
 
 // Moving these to be accessible in all functions
 const STATION_MAPPING: Record<HyroxStation, string[]> = {
-    'ski_erg': ['ski_erg', 'skierg', 'skiing', 'ski'],
+    'ski_erg': ['ski_erg', 'skierg', 'skiing', 'ski', 'stakmaskin', 'skidmaskin', 'concept2ski'],
     'sled_push': ['sled_push', 'sled', 'släde push', 'prowler'],
     'sled_pull': ['sled_pull', 'sled rope pull', 'släde pull'],
     'burpee_broad_jumps': ['burpee_broad_jump', 'burpee_broad_jumps', 'bbj'],
@@ -132,6 +132,7 @@ export interface HyroxStationStats {
     totalReps: number;
     totalTonnage: number;
     totalDistance: number;
+    bestWeightedDistance?: number; // weight × distance for sled exercises
     lastDate?: string;
     sessions: Set<string>; // Dates of sessions
     history: HyroxStationEvent[];
@@ -173,13 +174,24 @@ export const parseHyroxStats = (exercises: ExerciseEntry[], strength: StrengthWo
         (session.exercises || []).forEach(exercise => {
             // Use the unified mapper to find what exercise this is in our database
             const match = findExerciseMatch(exercise.exerciseName, exerciseDB);
-            if (!match) return;
+            let matchedId = match?.exercise?.id || '';
 
-            const matchedId = match.exercise.id;
+            // FALLBACK: If no database match, check raw name against station mapping directly
+            if (!match) {
+                const normalizedName = exercise.exerciseName.toLowerCase().replace(/[^a-zåäö0-9]/g, '');
+                for (const [stationId, ids] of Object.entries(STATION_MAPPING)) {
+                    if (ids.some(id => normalizedName.includes(id) || id.includes(normalizedName))) {
+                        matchedId = stationId; // Use the station ID itself as the matched ID
+                        break;
+                    }
+                }
+            }
+
+            if (!matchedId) return;
 
             // Check if this matched exercise belongs to any Hyrox station
             for (const [stationId, ids] of Object.entries(STATION_MAPPING)) {
-                if (ids.includes(matchedId) || ids.some(id => matchedId.includes(id))) {
+                if (ids.includes(matchedId) || ids.some(id => matchedId.includes(id)) || stationId === matchedId) {
                     const st = stats[stationId as HyroxStation];
                     const dateKey = session.date.split('T')[0];
                     st.sessions.add(dateKey);
@@ -223,6 +235,14 @@ export const parseHyroxStats = (exercises: ExerciseEntry[], strength: StrengthWo
                         }
                     });
 
+                    // Calculate weighted distance for sled-type exercises (weight × distance PB)
+                    if (stationId === 'sled_push' || stationId === 'sled_pull' || stationId === 'farmers_carry' || stationId === 'sandbag_lunges') {
+                        const weightedDistance = (event.weight || 0) * (event.distance || 0);
+                        if (weightedDistance > 0) {
+                            st.bestWeightedDistance = Math.max(st.bestWeightedDistance || 0, weightedDistance);
+                        }
+                    }
+
                     st.history.push(event);
 
                     // Update last date
@@ -264,13 +284,15 @@ export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: Strength
 
     // Unified Processing: Process everything in the master list (exercises)
     exercises.forEach(ex => {
-        const isExplicitRace = ex.subType === 'race' || ex.subType === 'competition';
+        const isExplicitRace = ex.subType === 'race' || ex.subType === 'competition' || ex.subType === 'simulation' || ex.subType === 'simulering';
         const hStats = (ex as any).hyroxStats || { stations: {}, runSplits: [] };
         const stationsFromStats = Object.keys(hStats.stations || {}) as HyroxStation[];
         const hasRuns = hStats.runSplits?.some((r: number) => r > 0);
 
-        // Detect stations from strength names if it's a strength activity or merged
+        // Detect stations and times from strength names if it's a strength activity or merged
         const detectedStations: Set<HyroxStation> = new Set(stationsFromStats);
+        const sessionSplits: Partial<Record<HyroxStation, number>> = { ...hStats.stations };
+        const sessionRunSplits: number[] = hStats.runSplits?.length > 0 ? [...hStats.runSplits] : [];
         let tonnage = 0;
 
         // Check for underlying strength data (either mapped or merged)
@@ -284,10 +306,36 @@ export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: Strength
                     const matchedId = match.exercise.id;
                     for (const [stationId, ids] of Object.entries(STATION_MAPPING)) {
                         if (ids.includes(matchedId) || ids.some(id => matchedId.includes(id))) {
-                            detectedStations.add(stationId as HyroxStation);
+                            const sid = stationId as HyroxStation;
+                            detectedStations.add(sid);
+
+                            let exerciseTime = 0;
                             (e.sets || []).forEach((set: any) => {
                                 tonnage += (set.reps || 0) * (set.weight || 0);
+                                if (set.timeSeconds && !exerciseTime) {
+                                    exerciseTime = set.timeSeconds;
+                                }
                             });
+
+                            // Fallback: Extract time from exercise notes if still missing
+                            if (!exerciseTime && e.notes) {
+                                const timeMatch = e.notes.match(/(\d{1,2}:\d{2})/);
+                                if (timeMatch) {
+                                    const time = parseTime(timeMatch[1]);
+                                    if (time !== null) exerciseTime = time;
+                                }
+                            }
+
+                            if (exerciseTime > 0) {
+                                if (sid === 'run_1km') {
+                                    // If we are filling from strength, and runSplits is empty or looks like we are building it
+                                    if (hStats.runSplits?.length === 0 || sessionRunSplits.length < 8) {
+                                        sessionRunSplits.push(exerciseTime);
+                                    }
+                                } else if (!sessionSplits[sid]) {
+                                    sessionSplits[sid] = exerciseTime;
+                                }
+                            }
                             break;
                         }
                     }
@@ -296,10 +344,50 @@ export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: Strength
         }
 
         const stations = Array.from(detectedStations);
+        const functionalStations = stations.filter(s => s !== 'run_1km');
 
-        if (stations.length > 0 || hasRuns || isExplicitRace) {
+        // ONLY include if it's explicitly a Hyrox type OR has functional Hyrox stations
+        // Stiffer check: if it's just 'running' it shouldn't be hyroxRelated unless it has non-run stations
+        const hasHyroxMetadata = ex.type === 'hyrox' || (ex as any).hyroxStats?.stations || (ex as any).hyroxStats?.runSplits?.length > 0;
+        const isHyroxRelated = hasHyroxMetadata || functionalStations.length > 0;
+
+        if (isHyroxRelated && (stations.length > 0 || hasRuns || isExplicitRace)) {
             // A Race has most stations OR is explicitly marked as race/competition
-            const isRace = isExplicitRace || stations.filter(s => s !== 'run_1km').length >= 7;
+            const isRace = isExplicitRace || functionalStations.length >= 7;
+
+            // LAST RESORT: Try parsing RX/SX patterns from notes if data is missing
+            if (ex.notes && (Object.keys(sessionSplits).length < 2 || sessionRunSplits.length < 2)) {
+                const noteLines = ex.notes.split('\n');
+                const stationSequence: HyroxStation[] = [
+                    'ski_erg', 'sled_push', 'sled_pull', 'burpee_broad_jumps',
+                    'rowing', 'farmers_carry', 'sandbag_lunges', 'wall_balls'
+                ];
+
+                noteLines.forEach(line => {
+                    // Match Run patterns: R1: 05:31 or R1: 5:31
+                    const runMatch = line.match(/[Rr](\d)[:. ]*(\d{1,2}[:.]\d{2})/);
+                    if (runMatch) {
+                        const runIdx = parseInt(runMatch[1]) - 1;
+                        const time = parseTime(runMatch[2]);
+                        if (time !== null && runIdx >= 0 && runIdx < 8) {
+                            if (!sessionRunSplits[runIdx]) sessionRunSplits[runIdx] = time;
+                            if (!detectedStations.has('run_1km')) detectedStations.add('run_1km');
+                        }
+                    }
+
+                    // Match Station patterns: S1: 03:58 or S1 (SkiErg): 03:58
+                    const stationMatch = line.match(/[Ss](\d).*?[:. ]*(\d{1,2}[:.]\d{2})/);
+                    if (stationMatch) {
+                        const stationIdx = parseInt(stationMatch[1]) - 1;
+                        const time = parseTime(stationMatch[2]);
+                        if (time !== null && stationIdx >= 0 && stationIdx < 8) {
+                            const sid = stationSequence[stationIdx];
+                            if (!sessionSplits[sid]) sessionSplits[sid] = time;
+                            if (!detectedStations.has(sid)) detectedStations.add(sid);
+                        }
+                    }
+                });
+            }
 
             history.push({
                 id: ex.id,
@@ -312,8 +400,8 @@ export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: Strength
                 totalDuration: ex.durationMinutes,
                 totalTonnage: tonnage > 0 ? tonnage : undefined,
                 notes: ex.notes,
-                splits: hStats.stations,
-                runSplits: hStats.runSplits,
+                splits: sessionSplits,
+                runSplits: sessionRunSplits,
                 stationDistances: hStats.stationDistances
             });
             processedIds.add(ex.id);
@@ -325,6 +413,8 @@ export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: Strength
         if (processedIds.has(session.id)) return;
 
         const matchingStations: Set<HyroxStation> = new Set();
+        const sessionSplits: Partial<Record<HyroxStation, number>> = {};
+        const sessionRunSplits: number[] = [];
         let sessionTonnage = 0;
 
         (session.exercises || []).forEach(exercise => {
@@ -334,26 +424,55 @@ export const parseHyroxHistory = (exercises: ExerciseEntry[], strength: Strength
             const matchedId = match.exercise.id;
             for (const [stationId, ids] of Object.entries(STATION_MAPPING)) {
                 if (ids.includes(matchedId) || ids.some(id => matchedId.includes(id))) {
-                    matchingStations.add(stationId as HyroxStation);
+                    const sid = stationId as HyroxStation;
+                    matchingStations.add(sid);
+
+                    let exerciseTime = 0;
                     (exercise.sets || []).forEach(set => {
                         sessionTonnage += (set.reps || 0) * (set.weight || 0);
+                        if (set.timeSeconds && !exerciseTime) {
+                            exerciseTime = set.timeSeconds;
+                        }
                     });
+
+                    // Fallback: Extract time from exercise notes
+                    if (!exerciseTime && exercise.notes) {
+                        const timeMatch = exercise.notes.match(/(\d{1,2}:\d{2})/);
+                        if (timeMatch) {
+                            const time = parseTime(timeMatch[1]);
+                            if (time !== null) exerciseTime = time;
+                        }
+                    }
+
+                    if (exerciseTime > 0) {
+                        if (sid === 'run_1km') {
+                            if (sessionRunSplits.length < 8) sessionRunSplits.push(exerciseTime);
+                        } else if (!sessionSplits[sid]) {
+                            sessionSplits[sid] = exerciseTime;
+                        }
+                    }
                     break;
                 }
             }
         });
 
         if (matchingStations.size > 0) {
+            const functionalStations = Array.from(matchingStations).filter(s => s !== 'run_1km');
+            const isRace = functionalStations.length >= 7;
+
             history.push({
                 id: session.id,
                 date: session.date,
-                name: session.name || 'Strength Session',
-                type: 'strength',
+                name: session.name || (isRace ? 'Hyrox Race' : 'Hyrox Simulation'),
+                type: isRace ? 'simulation' : 'strength',
                 stations: Array.from(matchingStations),
-                totalTonnage: sessionTonnage,
+                isRace,
+                isWorkout: !isRace,
+                totalDuration: session.duration || 60,
+                totalTonnage: sessionTonnage > 0 ? sessionTonnage : undefined,
                 notes: session.notes,
-                isRace: false,
-                isWorkout: true
+                splits: sessionSplits,
+                runSplits: sessionRunSplits
             });
         }
     });
