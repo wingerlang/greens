@@ -1,5 +1,6 @@
 import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
-import { LogEntry, MetricEntry, RequestMetric } from "./types.ts";
+import { LogEntry, MetricEntry, RequestMetric, SessionStats } from "./types.ts";
+import { encodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
 
 const LOG_DIR = "logs";
 const MAX_LOGS = 2000;
@@ -65,9 +66,7 @@ export async function saveMetric(serviceName: string, cpu: number, memory: numbe
 
 export async function saveRequestMetric(metric: RequestMetric) {
     if (!kv) return;
-    // Store individual request for deep analysis (24h retention for raw requests to save space?)
-    // Or 7 days? User wants "ALLT". Let's go with 7 days but be mindful of space.
-    // KV is efficient.
+    // Store individual request for deep analysis (7 days retention)
     try {
         await kv.set(
             ["guardian", "requests", metric.timestamp, crypto.randomUUID()],
@@ -77,34 +76,90 @@ export async function saveRequestMetric(metric: RequestMetric) {
 
         // Update aggregations (Daily stats)
         const date = new Date(metric.timestamp).toISOString().split('T')[0];
+        const atomic = kv.atomic();
 
-        // Total Requests
-        await kv.atomic()
-            .mutate({
-                type: "sum",
-                key: ["guardian", "stats", date, "total_requests"],
-                value: new Deno.KvU64(1n)
-            })
-            .commit();
+        // 1. Total Requests
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats", date, "total_requests"],
+            value: new Deno.KvU64(1n)
+        });
 
-        // IP Tracking (for unique visitors / DDoS check)
-        // We just log the IP hit count for the day
-         await kv.atomic()
-            .mutate({
-                type: "sum",
-                key: ["guardian", "stats", date, "ip", metric.ip],
-                value: new Deno.KvU64(1n)
-            })
-            // Endpoint Discovery (Aggregate Hit Count)
-            .mutate({
-                type: "sum",
-                key: ["guardian", "stats", date, "endpoint", metric.path],
-                value: new Deno.KvU64(1n)
-            })
-            .commit();
+        // 2. IP Tracking
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats", date, "ip", metric.ip],
+            value: new Deno.KvU64(1n)
+        });
+
+        // 3. Endpoint Discovery
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats", date, "endpoint", metric.path],
+            value: new Deno.KvU64(1n)
+        });
+
+        // 4. Service Breakdown
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats", date, "service", metric.targetService],
+            value: new Deno.KvU64(1n)
+        });
+
+        // 5. Resource Type Breakdown
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats", date, "type", metric.resourceType],
+            value: new Deno.KvU64(1n)
+        });
+
+        // 6. Session Management
+        await updateSession(metric, date);
+
+        await atomic.commit();
 
     } catch (e) { /* ignore */ }
 }
+
+async function updateSession(metric: RequestMetric, date: string) {
+    if (!kv) return;
+    // Session Key: ["guardian", "sessions", date, sessionId]
+    const key = ["guardian", "sessions", date, metric.sessionId];
+
+    // We need to fetch existing session to update it, or create new.
+    // Optimistic locking via check() could be used, but for high throughput logging
+    // we might just accept last-write-wins for metadata, or use atomic for counters.
+    // Since we need to append paths, we have to read-modify-write.
+
+    try {
+        const res = await kv.get<SessionStats>(key);
+        let session: SessionStats;
+
+        if (res.value) {
+            session = res.value;
+            session.lastSeen = metric.timestamp;
+            session.requestCount++;
+            // Keep last 10 paths
+            session.paths.push(metric.path);
+            if (session.paths.length > 10) session.paths.shift();
+        } else {
+            session = {
+                id: metric.sessionId,
+                ip: metric.ip,
+                userAgent: metric.userAgent || "unknown",
+                firstSeen: metric.timestamp,
+                lastSeen: metric.timestamp,
+                requestCount: 1,
+                paths: [metric.path]
+            };
+        }
+
+        await kv.set(key, session, { expireIn: 24 * 60 * 60 * 1000 }); // 24h retention for session objects
+    } catch (e) {
+        // ignore
+    }
+}
+
 
 export async function updateServiceStat(serviceName: string, type: string, count: number = 1) {
     if (!kv) return;
@@ -118,4 +173,46 @@ export async function updateServiceStat(serviceName: string, type: string, count
             })
             .commit();
     } catch (e) { /* ignore */ }
+}
+
+export function determineResourceType(path: string, mimeType?: string): string {
+    if (path.startsWith("/api")) return "api";
+    const ext = path.split('.').pop()?.toLowerCase();
+
+    if (!ext || path === "/" || !path.includes('.')) return "document";
+
+    switch (ext) {
+        case "js":
+        case "mjs":
+        case "ts":
+        case "map":
+            return "script";
+        case "css":
+        case "less":
+        case "scss":
+            return "style";
+        case "png":
+        case "jpg":
+        case "jpeg":
+        case "gif":
+        case "svg":
+        case "webp":
+        case "ico":
+            return "image";
+        case "json":
+        case "xml":
+            return "api";
+        case "woff":
+        case "woff2":
+        case "ttf":
+            return "font";
+        default:
+            return "other";
+    }
+}
+
+export async function generateSessionId(ip: string, userAgent: string): Promise<string> {
+    const data = new TextEncoder().encode(ip + userAgent + getTodayStr());
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    return encodeHex(hashBuffer).slice(0, 12);
 }

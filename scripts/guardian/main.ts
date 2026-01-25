@@ -6,37 +6,42 @@ import { handleProxyRequest } from "./proxy.ts";
 import { clearPort } from "./utils.ts";
 import { loadBannedIps } from "./security.ts";
 
-const PROXY_PORT = 3000;
+// Configuration (Defaults)
+// TODO: Load from KV if customized
+const PROXY_FE_PORT = 3000;
+const PROXY_BE_PORT = 8000;
 const DASHBOARD_PORT = 9999;
-const BACKEND_PORT = 8001;
-const FRONTEND_PORT = 3001;
+const INTERNAL_BE_PORT = 8001;
+const INTERNAL_FE_PORT = 3001;
 
 async function bootstrap() {
-    console.log("[GUARDIAN] Booting System 2.5...");
+    console.log("[GUARDIAN] Booting System 2.5.1...");
 
     await initLogger();
     await loadBannedIps();
 
-    await clearPort(PROXY_PORT);
+    // Clear all relevant ports to avoid EADDRINUSE
+    await clearPort(PROXY_FE_PORT);
+    await clearPort(PROXY_BE_PORT);
     await clearPort(DASHBOARD_PORT);
-    await clearPort(BACKEND_PORT);
-    await clearPort(FRONTEND_PORT);
+    await clearPort(INTERNAL_BE_PORT);
+    await clearPort(INTERNAL_FE_PORT);
 
     // 1. Register Services
     manager.register({
         name: "backend",
         command: ["deno", "task", "server"],
-        env: { "PORT": String(BACKEND_PORT) },
+        env: { "PORT": String(INTERNAL_BE_PORT) },
         autoRestart: true,
-        port: BACKEND_PORT
+        port: INTERNAL_BE_PORT
     });
 
     manager.register({
         name: "frontend",
         // We override Vite's port via CLI
-        command: ["deno", "task", "dev", "--port", String(FRONTEND_PORT)],
+        command: ["deno", "task", "dev", "--port", String(INTERNAL_FE_PORT)],
         autoRestart: true,
-        port: FRONTEND_PORT
+        port: INTERNAL_FE_PORT
     });
 
     // 2. Start Services
@@ -53,11 +58,19 @@ async function bootstrap() {
         onListen: () => {}
     });
 
-    // 5. Start Proxy (Public Gateway)
-    console.log(`[GUARDIAN] Gateway listening on http://localhost:${PROXY_PORT}`);
+    // 5. Start Frontend Gateway (3000 -> 3001)
+    console.log(`[GUARDIAN] Frontend Gateway listening on http://localhost:${PROXY_FE_PORT}`);
     Deno.serve({
-        port: PROXY_PORT,
-        handler: handleProxyRequest,
+        port: PROXY_FE_PORT,
+        handler: (req, info) => handleProxyRequest(req, info, INTERNAL_FE_PORT, "frontend"),
+        onListen: () => {}
+    });
+
+    // 6. Start Backend Gateway (8000 -> 8001)
+    console.log(`[GUARDIAN] Backend Gateway listening on http://localhost:${PROXY_BE_PORT}`);
+    Deno.serve({
+        port: PROXY_BE_PORT,
+        handler: (req, info) => handleProxyRequest(req, info, INTERNAL_BE_PORT, "backend"),
         onListen: () => {}
     });
 }

@@ -2,7 +2,7 @@ import { manager } from "./services.ts";
 import { getKv } from "./logger.ts";
 import { MetricEntry } from "./types.ts";
 import { join, dirname, fromFileUrl } from "https://deno.land/std@0.224.0/path/mod.ts";
-import { getTopEndpoints, getTopIps, getTrafficStats } from "./analytics.ts";
+import { getTopEndpoints, getTopIps, getTrafficStats, getServiceStats, getTypeStats, getSessions } from "./analytics.ts";
 import { bannedIps, banIp, unbanIp } from "./security.ts";
 
 export async function handleDashboardRequest(req: Request): Promise<Response> {
@@ -50,8 +50,30 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
         return Response.json({ endpoints, ips, traffic });
     }
 
+    if (url.pathname === "/api/analytics/granular") {
+        const [services, types] = await Promise.all([
+            getServiceStats(),
+            getTypeStats()
+        ]);
+        return Response.json({ services, types });
+    }
+
+    if (url.pathname === "/api/sessions") {
+        const sessions = await getSessions();
+        return Response.json(sessions);
+    }
+
     if (url.pathname === "/api/banned") {
         return Response.json(Array.from(bannedIps));
+    }
+
+    if (url.pathname === "/api/config") {
+        // TODO: Load from KV when implemented
+        return Response.json({
+            frontendPort: 3000,
+            backendPort: 8000,
+            dashboardPort: 9999
+        });
     }
 
     if (url.pathname === "/api/metrics") {

@@ -1,13 +1,40 @@
-import { saveRequestMetric } from "./logger.ts";
+import { saveRequestMetric, determineResourceType, generateSessionId } from "./logger.ts";
 import { checkRateLimit, isBanned } from "./security.ts";
+import { manager } from "./services.ts";
 
-const BACKEND_URL = "http://127.0.0.1:8001";
-const FRONTEND_URL = "http://127.0.0.1:3001";
+const MAINTENANCE_HTML = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Maintenance - Guardian</title>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: system-ui; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { text-align: center; }
+        h1 { color: #3b82f6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>System Maintenance</h1>
+        <p>This service is currently stopped or restarting.</p>
+        <p>Please try again in a moment.</p>
+        <div style="margin-top:20px; font-size:0.8rem; color:#94a3b8">Guardian 2.5</div>
+    </div>
+</body>
+</html>
+`;
 
-export async function handleProxyRequest(req: Request, info: Deno.ServeHandlerInfo): Promise<Response> {
+export async function handleProxyRequest(
+    req: Request,
+    info: Deno.ServeHandlerInfo,
+    targetPort: number,
+    serviceName: string
+): Promise<Response> {
     const start = performance.now();
     const url = new URL(req.url);
     const ip = info.remoteAddr.hostname;
+    const userAgent = req.headers.get("user-agent") || "unknown";
 
     // 1. Security Check
     if (await isBanned(ip)) {
@@ -18,10 +45,18 @@ export async function handleProxyRequest(req: Request, info: Deno.ServeHandlerIn
         return new Response("Too Many Requests", { status: 429 });
     }
 
-    // 2. Routing
-    const isApi = url.pathname.startsWith("/api");
-    const targetBase = isApi ? BACKEND_URL : FRONTEND_URL;
-    const targetUrl = new URL(targetBase + url.pathname + url.search);
+    // 2. Service Status Check
+    const service = manager.get(serviceName);
+    if (service && service.stats.status === "stopped") {
+         return new Response(MAINTENANCE_HTML, {
+             status: 503,
+             headers: { "content-type": "text/html" }
+         });
+    }
+
+    const targetUrl = new URL(`http://127.0.0.1:${targetPort}${url.pathname}${url.search}`);
+    const sessionId = await generateSessionId(ip, userAgent);
+    const resourceType = determineResourceType(url.pathname);
 
     // 3. Proxying
     try {
@@ -33,7 +68,7 @@ export async function handleProxyRequest(req: Request, info: Deno.ServeHandlerIn
         headers.set("X-Forwarded-For", ip);
         headers.set("X-Guardian-ID", crypto.randomUUID());
 
-        // Retry logic for connection errors (Backend startup)
+        // Retry logic for connection errors
         let response: Response | null = null;
         let lastError = null;
         let attempt = 0;
@@ -41,30 +76,19 @@ export async function handleProxyRequest(req: Request, info: Deno.ServeHandlerIn
         for (let i = 0; i < 3; i++) {
             attempt = i;
             try {
-                // We clone the request for retries if it's not a GET,
-                // but actually fetch consumes body.
-                // If we have a body, we can only retry if we buffer it.
-                // For now, simpler: Only retry if body is null or we accept risk.
-                // Safest: Retry only on connection error immediately.
-
                 response = await fetch(targetUrl, {
                     method: req.method,
                     headers: headers,
-                    body: req.body, // Stream is consumed here!
+                    body: req.body,
                     redirect: "manual"
                 });
                 break;
             } catch (e) {
                 lastError = e;
                 const msg = String(e);
-                // Only retry if connection refused (service restarting)
                 if (msg.includes("Connection refused") || msg.includes("reset")) {
                     await new Promise(r => setTimeout(r, 500));
-                    // Check if body is used? If body was stream, it's gone.
-                    // If req.method is GET, we can retry.
-                    if (req.method !== "GET" && req.method !== "HEAD") {
-                        break; // Cannot safe retry
-                    }
+                    if (req.method !== "GET" && req.method !== "HEAD") break;
                     continue;
                 }
                 break;
@@ -72,7 +96,11 @@ export async function handleProxyRequest(req: Request, info: Deno.ServeHandlerIn
         }
 
         if (!response) {
-            throw lastError || new Error("Failed to connect");
+            // Service might be crashing or starting up
+             return new Response(MAINTENANCE_HTML, {
+                 status: 503,
+                 headers: { "content-type": "text/html" }
+             });
         }
 
         const duration = performance.now() - start;
@@ -85,7 +113,11 @@ export async function handleProxyRequest(req: Request, info: Deno.ServeHandlerIn
             status: response.status,
             duration,
             ip,
-            retries: attempt
+            retries: attempt,
+            targetService: serviceName,
+            resourceType,
+            sessionId,
+            userAgent
         });
 
         // 5. Response
@@ -103,7 +135,11 @@ export async function handleProxyRequest(req: Request, info: Deno.ServeHandlerIn
             method: req.method,
             status: 502,
             duration: performance.now() - start,
-            ip
+            ip,
+            targetService: serviceName,
+            resourceType,
+            sessionId,
+            userAgent
         });
         return new Response("Guardian Service Unavailable", { status: 502 });
     }
