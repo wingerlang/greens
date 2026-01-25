@@ -1,4 +1,5 @@
 import { initLogger } from "./logger.ts";
+import { initRecorder } from "./recorder.ts";
 import { manager } from "./services.ts";
 import { updateSystemStats } from "./monitor.ts";
 import { handleDashboardRequest } from "./dashboard.ts";
@@ -15,9 +16,10 @@ const INTERNAL_BE_PORT = 8001;
 const INTERNAL_FE_PORT = 3001;
 
 async function bootstrap() {
-    console.log("[GUARDIAN] Booting System 2.5.1...");
+    console.log("[GUARDIAN] Booting System 2.6.0...");
 
     await initLogger();
+    await initRecorder();
     await loadBannedIps();
 
     // Clear all relevant ports to avoid EADDRINUSE

@@ -1,9 +1,12 @@
 import { manager } from "./services.ts";
-import { getKv } from "./logger.ts";
+import { getKv, registerLogClient, removeLogClient } from "./logger.ts";
 import { MetricEntry } from "./types.ts";
 import { join, dirname, fromFileUrl } from "https://deno.land/std@0.224.0/path/mod.ts";
 import { getTopEndpoints, getTopIps, getTrafficStats, getServiceStats, getTypeStats, getSessions } from "./analytics.ts";
 import { bannedIps, banIp, unbanIp } from "./security.ts";
+import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
+import { getWafEvents } from "./waf.ts";
+import { getCircuitsSnapshot } from "./circuitBreaker.ts";
 
 export async function handleDashboardRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
@@ -22,12 +25,24 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     if (url.pathname === "/api/status") {
         manager.getOrAdd("guardian");
         const services = manager.getAll().map(s => s.stats);
+        const circuits = getCircuitsSnapshot();
+
+        // Enrich services with circuit data
+        const enriched = services.map(s => ({
+            ...s,
+            circuit: circuits[s.name] || { status: "CLOSED", failures: 0 }
+        }));
 
         return Response.json({
-            services: services,
+            services: enriched,
             system: Deno.systemMemoryInfo(),
             load: Deno.loadavg()
         });
+    }
+
+    if (url.pathname === "/api/waf/events") {
+        const events = await getWafEvents();
+        return Response.json(events);
     }
 
     if (url.pathname === "/api/logs") {
@@ -39,6 +54,24 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             return Response.json(service.logs);
         }
         return Response.json([]);
+    }
+
+    if (url.pathname === "/api/live-logs") {
+        const body = new ReadableStream({
+            start(controller) {
+                registerLogClient(controller);
+            },
+            cancel(controller) {
+                removeLogClient(controller);
+            }
+        });
+        return new Response(body, {
+            headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive"
+            }
+        });
     }
 
     if (url.pathname === "/api/analytics") {
@@ -72,8 +105,32 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
         return Response.json({
             frontendPort: 3000,
             backendPort: 8000,
-            dashboardPort: 9999
+            dashboardPort: 9999,
+            recording: getRecordingStatus()
         });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/recording") {
+        const enabled = url.searchParams.get("enabled") === "true";
+        setRecording(enabled);
+        return Response.json({ success: true, enabled });
+    }
+
+    if (url.pathname === "/api/traces") {
+        const traces = await listTraces();
+        return Response.json(traces);
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/replay") {
+        const file = url.searchParams.get("file");
+        if (file) {
+            try {
+                const result = await replayTrace(file);
+                return Response.json({ success: true, result });
+            } catch (e) {
+                return Response.json({ success: false, error: String(e) });
+            }
+        }
     }
 
     if (url.pathname === "/api/metrics") {
