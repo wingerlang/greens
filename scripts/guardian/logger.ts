@@ -1,3 +1,5 @@
+/// <reference lib="deno.unstable" />
+/// <reference lib="deno.ns" />
 import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
 import { LogEntry, MetricEntry, RequestMetric, SessionStats } from "./types.ts";
 import { encodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
@@ -6,6 +8,28 @@ const LOG_DIR = "logs";
 const MAX_LOGS = 2000;
 let kv: Deno.Kv | null = null;
 let currentSessionId = crypto.randomUUID();
+
+const logClients = new Set<ReadableStreamDefaultController>();
+
+export function registerLogClient(controller: ReadableStreamDefaultController) {
+    logClients.add(controller);
+}
+
+export function removeLogClient(controller: ReadableStreamDefaultController) {
+    logClients.delete(controller);
+}
+
+function broadcastLog(data: any) {
+    const msg = `data: ${JSON.stringify(data)}\n\n`;
+    const encoded = new TextEncoder().encode(msg);
+    for (const client of logClients) {
+        try {
+            client.enqueue(encoded);
+        } catch (e) {
+            logClients.delete(client);
+        }
+    }
+}
 
 export async function initLogger() {
     try {
@@ -48,6 +72,9 @@ export async function persistLog(entry: LogEntry) {
     } catch (e) {
         // Silent fail
     }
+
+    // 3. Broadcast
+    broadcastLog({ type: 'log', ...entry });
 }
 
 export async function saveMetric(serviceName: string, cpu: number, memory: number) {
@@ -117,6 +144,9 @@ export async function saveRequestMetric(metric: RequestMetric) {
         await updateSession(metric, date);
 
         await atomic.commit();
+
+        // Broadcast Request Log
+        broadcastLog({ type: 'request', ...metric });
 
     } catch (e) { /* ignore */ }
 }
