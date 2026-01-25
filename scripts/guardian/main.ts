@@ -3,76 +3,110 @@ import { initRecorder } from "./recorder.ts";
 import { manager } from "./services.ts";
 import { updateSystemStats } from "./monitor.ts";
 import { handleDashboardRequest } from "./dashboard.ts";
-import { handleProxyRequest } from "./proxy.ts";
 import { clearPort } from "./utils.ts";
 import { loadBannedIps } from "./security.ts";
+import { CONFIG } from "./config.ts";
 
-// Configuration (Defaults)
-// TODO: Load from KV if customized
-const PROXY_FE_PORT = 3000;
-const PROXY_BE_PORT = 8000;
-const DASHBOARD_PORT = 9999;
-const INTERNAL_BE_PORT = 8001;
-const INTERNAL_FE_PORT = 3001;
+import { Pipeline } from "./middleware/pipeline.ts";
+import { LoggerMiddleware } from "./middleware/logger.ts";
+import { BlockListMiddleware } from "./middleware/blockList.ts";
+import { TokenBucketRateLimitMiddleware } from "./middleware/rateLimit.ts";
+import { BotDefenseMiddleware } from "./middleware/botDefense.ts";
+import { WafMiddleware } from "./middleware/waf.ts";
+import { SmartCacheMiddleware } from "./middleware/smartCache.ts";
+import { CircuitBreakerMiddleware } from "./middleware/circuitBreaker.ts";
+import { RecorderMiddleware } from "./middleware/recorder.ts";
+import { ProxyMiddleware } from "./middleware/proxy.ts";
+import { GuardianContext } from "./middleware/types.ts";
 
 async function bootstrap() {
-    console.log("[GUARDIAN] Booting System 2.6.0...");
+    console.log("[GUARDIAN] Booting System 2.7.0 (Middleware Architecture)...");
 
     await initLogger();
     await initRecorder();
     await loadBannedIps();
 
-    // Clear all relevant ports to avoid EADDRINUSE
-    await clearPort(PROXY_FE_PORT);
-    await clearPort(PROXY_BE_PORT);
-    await clearPort(DASHBOARD_PORT);
-    await clearPort(INTERNAL_BE_PORT);
-    await clearPort(INTERNAL_FE_PORT);
+    // Clear ports
+    await clearPort(CONFIG.ports.frontend);
+    await clearPort(CONFIG.ports.backend);
+    await clearPort(CONFIG.ports.dashboard);
+    await clearPort(CONFIG.ports.internalBackend);
+    await clearPort(CONFIG.ports.internalFrontend);
 
     // 1. Register Services
     manager.register({
         name: "backend",
         command: ["deno", "task", "server"],
-        env: { "PORT": String(INTERNAL_BE_PORT) },
+        env: { "PORT": String(CONFIG.ports.internalBackend) },
         autoRestart: true,
-        port: INTERNAL_BE_PORT
+        port: CONFIG.ports.internalBackend
     });
 
     manager.register({
         name: "frontend",
-        // We override Vite's port via CLI
-        command: ["deno", "task", "dev", "--port", String(INTERNAL_FE_PORT)],
+        command: ["deno", "task", "dev", "--port", String(CONFIG.ports.internalFrontend)],
         autoRestart: true,
-        port: INTERNAL_FE_PORT
+        port: CONFIG.ports.internalFrontend
     });
 
     // 2. Start Services
     await manager.startAll();
 
-    // 3. Start Monitor (System Stats)
+    // 3. Start Monitor
     setInterval(updateSystemStats, 2000);
 
-    // 4. Start Dashboard (Admin UI)
-    console.log(`[GUARDIAN] Dashboard listening on http://localhost:${DASHBOARD_PORT}`);
+    // 4. Start Dashboard
+    console.log(`[GUARDIAN] Dashboard listening on http://localhost:${CONFIG.ports.dashboard}`);
     Deno.serve({
-        port: DASHBOARD_PORT,
+        port: CONFIG.ports.dashboard,
         handler: handleDashboardRequest,
         onListen: () => {}
     });
 
-    // 5. Start Frontend Gateway (3000 -> 3001)
-    console.log(`[GUARDIAN] Frontend Gateway listening on http://localhost:${PROXY_FE_PORT}`);
+    // Pipeline Setup
+    // Note: We create a fresh pipeline for each request or reuse one?
+    // The Pipeline class maintains state (middlewares array), so reuse is fine.
+    // The middleware instances themselves might maintain state (like cache, buckets), so we reuse them.
+    const pipeline = new Pipeline()
+        .use(new LoggerMiddleware())
+        .use(new RecorderMiddleware())
+        .use(new BlockListMiddleware())
+        .use(new TokenBucketRateLimitMiddleware())
+        .use(new BotDefenseMiddleware())
+        .use(new WafMiddleware())
+        .use(new SmartCacheMiddleware())
+        .use(new CircuitBreakerMiddleware())
+        .use(new ProxyMiddleware());
+
+    const handleRequest = async (req: Request, info: Deno.ServeHandlerInfo, targetPort: number, serviceName: string) => {
+        const ctx: GuardianContext = {
+            req,
+            info,
+            targetPort,
+            serviceName,
+            requestId: crypto.randomUUID(),
+            ip: (info.remoteAddr as Deno.NetAddr).hostname,
+            userAgent: req.headers.get("user-agent") || "unknown",
+            url: new URL(req.url),
+            state: new Map()
+        };
+
+        return await pipeline.execute(ctx);
+    };
+
+    // 5. Start Frontend Gateway
+    console.log(`[GUARDIAN] Frontend Gateway listening on http://localhost:${CONFIG.ports.frontend}`);
     Deno.serve({
-        port: PROXY_FE_PORT,
-        handler: (req, info) => handleProxyRequest(req, info, INTERNAL_FE_PORT, "frontend"),
+        port: CONFIG.ports.frontend,
+        handler: (req, info) => handleRequest(req, info, CONFIG.ports.internalFrontend, "frontend"),
         onListen: () => {}
     });
 
-    // 6. Start Backend Gateway (8000 -> 8001)
-    console.log(`[GUARDIAN] Backend Gateway listening on http://localhost:${PROXY_BE_PORT}`);
+    // 6. Start Backend Gateway
+    console.log(`[GUARDIAN] Backend Gateway listening on http://localhost:${CONFIG.ports.backend}`);
     Deno.serve({
-        port: PROXY_BE_PORT,
-        handler: (req, info) => handleProxyRequest(req, info, INTERNAL_BE_PORT, "backend"),
+        port: CONFIG.ports.backend,
+        handler: (req, info) => handleRequest(req, info, CONFIG.ports.internalBackend, "backend"),
         onListen: () => {}
     });
 }
