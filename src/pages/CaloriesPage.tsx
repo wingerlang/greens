@@ -142,6 +142,21 @@ export function CaloriesPage() {
         [calculateDailyNutrition, selectedDate]
     );
 
+    // View mode toggle hotkey
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Only toggle if not in an input field
+            if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+            if (e.key.toLowerCase() === 'v') {
+                setViewMode(prev => prev === 'compact' ? 'normal' : 'compact');
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, []);
+
     const entriesByMeal = useMemo(() => {
         const grouped: Record<MealType, MealEntry[]> = {
             breakfast: [],
@@ -551,6 +566,24 @@ export function CaloriesPage() {
                     >
                         →
                     </button>
+
+                    {/* View Mode Toggle - Right side */}
+                    <div className="absolute right-4 flex items-center gap-1 p-1 bg-white/50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <button
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'compact' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                            onClick={() => setViewMode('compact')}
+                            title="Hotkeys: V"
+                        >
+                            📊 Tiny
+                        </button>
+                        <button
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'normal' ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'}`}
+                            onClick={() => setViewMode('normal')}
+                            title="Hotkeys: V"
+                        >
+                            📋 Detalj
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -562,20 +595,6 @@ export function CaloriesPage() {
                 />
             </div>
 
-            <div className="flex justify-center gap-2 mb-4">
-                <button
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'compact' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}
-                    onClick={() => setViewMode('compact')}
-                >
-                    📊 Kompakt
-                </button>
-                <button
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === 'normal' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}
-                    onClick={() => setViewMode('normal')}
-                >
-                    📋 Detaljerad
-                </button>
-            </div>
 
             {unloggedPlannedMeals.length > 0 && (
                 <div className="planned-meals-banner">
@@ -651,6 +670,87 @@ export function CaloriesPage() {
                                 fatGoal={goals.fat || 80}
                                 size="md"
                             />
+
+                            {/* Integrated Vitals */}
+                            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-2">
+                                <div
+                                    className="flex flex-col items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition-colors p-2"
+                                    onClick={() => handleCardClick('water', currentVitals.water || 0)}
+                                >
+                                    <span className="text-[9px] font-black uppercase text-slate-400 mb-1">Vatten</span>
+                                    <div className="flex items-center gap-1.5 min-h-[1.5rem]">
+                                        {editing === 'water' ? (
+                                            <input
+                                                autoFocus
+                                                type="number"
+                                                value={tempValue}
+                                                onChange={(e) => setTempValue(e.target.value)}
+                                                onBlur={() => handleSave('water')}
+                                                onKeyDown={(e) => handleKeyDown(e, 'water')}
+                                                onClick={e => e.stopPropagation()}
+                                                className="bg-slate-100 dark:bg-slate-800 border-none rounded text-center font-bold text-slate-900 dark:text-white w-10 text-xs focus:ring-1 focus:ring-emerald-500"
+                                            />
+                                        ) : (
+                                            <>
+                                                <span className="text-sm">💧</span>
+                                                <span className="text-sm font-bold text-slate-700 dark:text-white">{currentVitals.water || 0}</span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div
+                                    className="flex flex-col items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition-colors p-2"
+                                    onClick={() => handleCardClick('caffeine', currentVitals.caffeine || 0)}
+                                >
+                                    <span className="text-[9px] font-black uppercase text-slate-400 mb-1">Koffein</span>
+                                    <div className="flex items-center gap-1.5 min-h-[1.5rem]">
+                                        {editing === 'caffeine' ? (
+                                            <input
+                                                autoFocus
+                                                type="number"
+                                                value={tempValue}
+                                                onChange={(e) => setTempValue(e.target.value)}
+                                                onBlur={() => handleSave('caffeine')}
+                                                onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
+                                                onClick={e => e.stopPropagation()}
+                                                className="bg-slate-100 dark:bg-slate-800 border-none rounded text-center font-bold text-slate-900 dark:text-white w-10 text-xs focus:ring-1 focus:ring-emerald-500"
+                                            />
+                                        ) : (
+                                            <>
+                                                <span className="text-sm">☕</span>
+                                                <span className="text-sm font-bold text-slate-700 dark:text-white">{currentVitals.caffeine || 0}<span className="text-[8px] text-slate-400 ml-0.5 font-normal">mg</span></span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div
+                                    className="flex flex-col items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-white/5 rounded-xl transition-colors p-2"
+                                    onClick={() => handleCardClick('alcohol', currentVitals.alcohol || 0)}
+                                >
+                                    <span className="text-[9px] font-black uppercase text-slate-400 mb-1">Alkohol</span>
+                                    <div className="flex items-center gap-1.5 min-h-[1.5rem]">
+                                        {editing === 'alcohol' ? (
+                                            <input
+                                                autoFocus
+                                                type="number"
+                                                value={tempValue}
+                                                onChange={(e) => setTempValue(e.target.value)}
+                                                onBlur={() => handleSave('alcohol')}
+                                                onKeyDown={(e) => handleKeyDown(e, 'alcohol')}
+                                                onClick={e => e.stopPropagation()}
+                                                className="bg-slate-100 dark:bg-slate-800 border-none rounded text-center font-bold text-slate-900 dark:text-white w-10 text-xs focus:ring-1 focus:ring-emerald-500"
+                                            />
+                                        ) : (
+                                            <>
+                                                <span className="text-sm">🍷</span>
+                                                <span className="text-sm font-bold text-slate-700 dark:text-white">{currentVitals.alcohol || 0}<span className="text-[8px] text-slate-400 ml-0.5 font-normal">e</span></span>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -664,85 +764,6 @@ export function CaloriesPage() {
                 </div>
             </div>
 
-            <div className="mx-4 mt-6 p-4 bg-slate-900/50 border border-white/5 rounded-2xl grid grid-cols-3 gap-4">
-                <div
-                    className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                    onClick={() => handleCardClick('water', currentVitals.water || 0)}
-                >
-                    <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Vatten</span>
-                    <div className="flex items-center gap-1.5 h-8">
-                        {editing === 'water' ? (
-                            <input
-                                autoFocus
-                                type="number"
-                                value={tempValue}
-                                onChange={(e) => setTempValue(e.target.value)}
-                                onBlur={() => handleSave('water')}
-                                onKeyDown={(e) => handleKeyDown(e, 'water')}
-                                onClick={e => e.stopPropagation()}
-                                className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                            />
-                        ) : (
-                            <>
-                                <span className="text-xl">💧</span>
-                                <span className="text-lg font-bold text-white">{currentVitals.water || 0}</span>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                <div
-                    className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                    onClick={() => handleCardClick('caffeine', currentVitals.caffeine || 0)}
-                >
-                    <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Koffein</span>
-                    <div className="flex items-center gap-1.5 h-8">
-                        {editing === 'caffeine' ? (
-                            <input
-                                autoFocus
-                                type="number"
-                                value={tempValue}
-                                onChange={(e) => setTempValue(e.target.value)}
-                                onBlur={() => handleSave('caffeine')}
-                                onKeyDown={(e) => handleKeyDown(e, 'caffeine')}
-                                onClick={e => e.stopPropagation()}
-                                className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                            />
-                        ) : (
-                            <>
-                                <span className="text-xl">☕</span>
-                                <span className="text-lg font-bold text-white">{currentVitals.caffeine || 0}<span className="text-[10px] text-slate-500 ml-0.5">mg</span></span>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                <div
-                    className="flex flex-col items-center cursor-pointer hover:bg-white/5 rounded-xl transition-colors p-2"
-                    onClick={() => handleCardClick('alcohol', currentVitals.alcohol || 0)}
-                >
-                    <span className="text-[10px] font-black uppercase text-slate-500 mb-1">Alkohol</span>
-                    <div className="flex items-center gap-1.5 h-8">
-                        {editing === 'alcohol' ? (
-                            <input
-                                autoFocus
-                                type="number"
-                                value={tempValue}
-                                onChange={(e) => setTempValue(e.target.value)}
-                                onBlur={() => handleSave('alcohol')}
-                                onKeyDown={(e) => handleKeyDown(e, 'alcohol')}
-                                onClick={e => e.stopPropagation()}
-                                className="bg-slate-800 border-none rounded text-center font-bold text-white w-12 text-sm focus:ring-1 focus:ring-emerald-500"
-                            />
-                        ) : (
-                            <>
-                                <span className="text-xl">🍷</span>
-                                <span className="text-lg font-bold text-white">{currentVitals.alcohol || 0}<span className="text-[10px] text-slate-500 ml-0.5">e</span></span>
-                            </>
-                        )}
-                    </div>
-                </div>
-            </div>
 
             <MealTimeline
                 viewMode={viewMode}
