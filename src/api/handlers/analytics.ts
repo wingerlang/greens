@@ -173,6 +173,32 @@ export async function handleAnalyticsRoutes(req: Request, url: URL, headers: Hea
             return json({ deadClicks });
         }
 
+        // GET /health - Get user health scoring
+        if (path === "/health" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const health = await analyticsRepository.getUserHealthStats(daysBack);
+            return json({ health });
+        }
+
+        // GET /live-feed - Get most recent events for live stream
+        if (path === "/live-feed" && method === "GET") {
+            const eventsRes = await analyticsRepository.getEventsFiltered({ limit: 50 });
+            return json({ events: eventsRes.events });
+        }
+
+        // GET /experiments/results - Get A/B testing stats
+        if (path === "/experiments/results" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '30');
+            const experiments = await analyticsRepository.getExperimentStats(daysBack);
+            return json({ experiments });
+        }
+
+        // GET /ai-insights - Get automated UX suggestions
+        if (path === "/ai-insights" && method === "GET") {
+            const insights = await analyticsRepository.getAIInsights();
+            return json({ insights });
+        }
+
         return json({ error: "Not Found" }, 404);
 
     } catch (error) {

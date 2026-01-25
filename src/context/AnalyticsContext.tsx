@@ -52,6 +52,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
     const startTimeRef = useRef(Date.now());
     const currentPathRef = useRef(location.pathname);
+    const lastInteractionRef = useRef<{ time: number, target: string } | null>(null);
 
     // 1. Navigation Tracking
     useEffect(() => {
@@ -93,6 +94,11 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         if (!user) return;
+
+        const handleMouseDown = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            lastInteractionRef.current = { time: Date.now(), target: target.tagName };
+        };
 
         const handleClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
@@ -165,6 +171,14 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 if (!label) return; // Skip if no meaningful label
 
                 const rect = element.getBoundingClientRect();
+
+                // PERFORMANCE: Calculate duration from mousedown
+                let interactionDuration = 0;
+                if (lastInteractionRef.current) {
+                    interactionDuration = Date.now() - lastInteractionRef.current.time;
+                    lastInteractionRef.current = null;
+                }
+
                 const event: InteractionEvent = {
                     id: generateId(),
                     userId: user.id,
@@ -174,6 +188,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                     label: label,
                     path: location.pathname,
                     timestamp: new Date().toISOString(),
+                    metadata: { interactionDuration },
                     coordinates: {
                         x, y,
                         pctX: Math.round((x / viewportW) * 100),
@@ -232,9 +247,11 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             }
         };
 
+        window.addEventListener('mousedown', handleMouseDown, true);
         window.addEventListener('click', handleClick, true); // Capture phase
 
         return () => {
+            window.removeEventListener('mousedown', handleMouseDown, true);
             window.removeEventListener('click', handleClick, true);
         };
     }, [user, location.pathname]);
