@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardian 2.5</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-sidebar: #020617;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent: #3b82f6;
+            --success: #22c55e;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --border: #334155;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+        }
+
+        .brand {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent);
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-group { margin-bottom: 20px; }
+        .nav-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 10px; letter-spacing: 0.05em; font-weight: 600; }
+
+        .nav-item {
+            padding: 10px 15px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-primary); }
+        .nav-item.active { background: var(--accent); color: white; }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+        }
+        .status-dot.running { background: var(--success); }
+        .status-dot.stopped { background: var(--danger); }
+        .status-dot.starting { background: var(--warning); }
+
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .top-bar {
+            height: 60px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            justify-content: space-between;
+            background: var(--bg-card);
+        }
+
+        .view-content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
+        .stat-value { font-size: 1.8rem; font-weight: bold; margin-top: 5px; }
+
+        .table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th, td { padding: 12px 20px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background: rgba(0,0,0,0.2); color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background: rgba(255,255,255,0.02); }
+
+        button {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+        button.danger { border-color: var(--danger); color: var(--danger); }
+        button.danger:hover { background: var(--danger); color: white; }
+    </style>
+</head>
+<body>
+
+<div class="sidebar">
+    <div class="brand">🛡️ Guardian 2.5</div>
+
+    <div class="nav-group">
+        <div class="nav-label">Monitor</div>
+        <div id="nav-overview" class="nav-item active" onclick="setTab('overview')">Overview</div>
+        <div id="nav-traffic" class="nav-item" onclick="setTab('traffic')">Traffic & Analytics</div>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-label">Services</div>
+        <div id="nav-services"></div>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-label">Protection</div>
+        <div id="nav-security" class="nav-item" onclick="setTab('security')">Security</div>
+    </div>
+</div>
+
+<div class="main">
+    <div class="top-bar">
+        <h2 id="page-title" style="margin:0; font-size: 1.2rem;">Overview</h2>
+        <div id="global-controls" style="display:flex; gap:10px;"></div>
+    </div>
+
+    <div class="view-content" id="content-area"></div>
+</div>
+
+<script>
+    let activeTab = 'overview';
+    let services = [];
+    let systemStats = {};
+    let analytics = { endpoints: [], ips: [], traffic: { total: 0 } };
+    let bannedIps = [];
+
+    // --- API ---
+    async function fetchStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+            services = data.services;
+            systemStats = data;
+            renderNav();
+            if(activeTab === 'overview' || activeTab.startsWith('service-')) renderContent();
+        } catch(e) {}
+    }
+
+    async function fetchAnalytics() {
+        try {
+            const res = await fetch('/api/analytics');
+            analytics = await res.json();
+            if(activeTab === 'traffic' || activeTab === 'overview') renderContent();
+        } catch(e) {}
+    }
+
+    async function fetchBanned() {
+        try {
+            const res = await fetch('/api/banned');
+            bannedIps = await res.json();
+            if(activeTab === 'security') renderContent();
+        } catch(e) {}
+    }
+
+    async function controlService(name, action) {
+        if(!confirm(action + " " + name + "?")) return;
+        await fetch(`/api/control?service=${name}&action=${action}`, { method: 'POST' });
+        fetchStatus();
+    }
+
+    async function banIp(ip) {
+        await fetch(`/api/global?action=ban&ip=${ip}`, { method: 'POST' });
+        fetchBanned();
+    }
+
+    async function unbanIp(ip) {
+        await fetch(`/api/global?action=unban&ip=${ip}`, { method: 'POST' });
+        fetchBanned();
+    }
+
+    async function globalAction(action) {
+        if(!confirm("Run " + action + "?")) return;
+        await fetch(`/api/global?action=${action}`, { method: 'POST' });
+    }
+
+    // --- Render ---
+
+    function setTab(tab) {
+        activeTab = tab;
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        const el = document.getElementById(tab.startsWith('service-') ? `nav-${tab}` : `nav-${tab}`);
+        if(el) el.classList.add('active');
+        renderContent();
+    }
+
+    function renderNav() {
+        const list = document.getElementById('nav-services');
+        list.innerHTML = services.map(s => `
+            <div id="nav-service-${s.name}" class="nav-item ${activeTab === 'service-' + s.name ? 'active' : ''}" onclick="setTab('service-${s.name}')">
+                <span>${s.name.charAt(0).toUpperCase() + s.name.slice(1)}</span>
+                <div class="status-dot ${s.status}"></div>
+            </div>
+        `).join('');
+    }
+
+    function renderContent() {
+        const container = document.getElementById('content-area');
+        const title = document.getElementById('page-title');
+        const controls = document.getElementById('global-controls');
+
+        if (activeTab === 'overview') {
+            title.textContent = "System Overview";
+            controls.innerHTML = `<button class="danger" onclick="globalAction('restart-all')">Restart All</button>`;
+
+            container.innerHTML = `
+                <div class="grid">
+                    <div class="card">
+                        <div class="stat-label">System Load</div>
+                        <div class="stat-value">${(systemStats.load || [0])[0].toFixed(2)}</div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Active Services</div>
+                        <div class="stat-value">${services.filter(s => s.status === 'running').length}/${services.length}</div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Total Requests (Today)</div>
+                        <div class="stat-value">${analytics.traffic.total}</div>
+                    </div>
+                    <div class="card">
+                         <div class="stat-label">Unique IPs (Today)</div>
+                        <div class="stat-value">${analytics.ips.length}</div>
+                    </div>
+                </div>
+
+                <h3>Service Health</h3>
+                <div class="grid">
+                    ${services.map(s => `
+                        <div class="card" style="border-left: 4px solid ${getStatusColor(s.status)}">
+                            <div style="display:flex; justify-content:space-between">
+                                <strong>${s.name}</strong>
+                                <span>${s.status.toUpperCase()}</span>
+                            </div>
+                            <div style="font-size:0.8rem; color:#94a3b8; margin-top:5px">
+                                CPU: ${s.cpu?.toFixed(1)}% | Mem: ${(s.memory/1024/1024).toFixed(0)} MB
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        else if (activeTab === 'traffic') {
+            title.textContent = "Traffic Analytics";
+            controls.innerHTML = `<button onclick="fetchAnalytics()">Refresh</button>`;
+
+            container.innerHTML = `
+                <div class="grid" style="grid-template-columns: 1fr 1fr;">
+                    <div class="table-container">
+                        <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Endpoints</div>
+                        <table>
+                            <thead><tr><th>Path</th><th>Hits</th></tr></thead>
+                            <tbody>
+                                ${analytics.endpoints.length ? analytics.endpoints.map(e => `
+                                    <tr>
+                                        <td>${e.path}</td>
+                                        <td>${e.count}</td>
+                                    </tr>
+                                `).join('') : '<tr><td colspan="2" style="text-align:center; padding:20px; color:#666">No data yet</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                     <div class="table-container">
+                        <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Active IPs</div>
+                        <table>
+                            <thead><tr><th>IP Address</th><th>Hits</th><th>Action</th></tr></thead>
+                            <tbody>
+                                ${analytics.ips.length ? analytics.ips.map(e => `
+                                    <tr>
+                                        <td>${e.ip}</td>
+                                        <td>${e.count}</td>
+                                        <td><button class="danger" style="padding:4px 8px; font-size:0.8rem" onclick="banIp('${e.ip}')">Ban</button></td>
+                                    </tr>
+                                `).join('') : '<tr><td colspan="3" style="text-align:center; padding:20px; color:#666">No data yet</td></tr>'}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }
+        else if (activeTab === 'security') {
+            title.textContent = "Security & Access Control";
+            controls.innerHTML = ``;
+
+            container.innerHTML = `
+                <div class="card" style="max-width: 600px">
+                    <h3 style="margin-top:0">Manual Ban</h3>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" id="ban-input" placeholder="IP Address" style="flex:1; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px;">
+                        <button class="danger" onclick="banIp(document.getElementById('ban-input').value)">Ban IP</button>
+                    </div>
+                </div>
+
+                <h3>Banned IPs</h3>
+                <div class="table-container">
+                    <table>
+                        <thead><tr><th>IP Address</th><th>Action</th></tr></thead>
+                        <tbody>
+                            ${bannedIps.length ? bannedIps.map(ip => `
+                                <tr>
+                                    <td>${ip}</td>
+                                    <td><button onclick="unbanIp('${ip}')">Unban</button></td>
+                                </tr>
+                            `).join('') : '<tr><td colspan="2" style="text-align:center; padding:20px; color:#666">No banned IPs</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+        else if (activeTab.startsWith('service-')) {
+            const sName = activeTab.replace('service-', '');
+            const s = services.find(x => x.name === sName);
+            if(s) {
+                title.textContent = "Service: " + s.name;
+                controls.innerHTML = `
+                    <button class="primary" onclick="controlService('${s.name}', 'start')">Start</button>
+                    <button class="danger" onclick="controlService('${s.name}', 'stop')">Stop</button>
+                    <button onclick="controlService('${s.name}', 'restart')">Restart</button>
+                    <a href="${s.name === 'frontend' ? 'http://localhost:3000' : 'http://localhost:8000'}" target="_blank" style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500">Open</a>
+                `;
+                container.innerHTML = `
+                    <div class="grid">
+                        <div class="card"><div class="stat-label">Status</div><div class="stat-value" style="color:${getStatusColor(s.status)}">${s.status.toUpperCase()}</div></div>
+                        <div class="card"><div class="stat-label">CPU</div><div class="stat-value">${s.cpu?.toFixed(1)}%</div></div>
+                        <div class="card"><div class="stat-label">Memory</div><div class="stat-value">${(s.memory/1024/1024).toFixed(0)} MB</div></div>
+                        <div class="card"><div class="stat-label">Restarts</div><div class="stat-value">${s.restarts}</div></div>
+                    </div>
+
+                    <div class="card" style="flex:1; display:flex; flex-direction:column;">
+                         <div style="margin-bottom:10px; font-weight:bold; color:#94a3b8">Logs (Last 100 lines)</div>
+                         <div id="logs-${s.name}" style="flex:1; background:#000; color:#ccc; font-family:monospace; padding:10px; overflow-y:auto; font-size:0.9rem; white-space:pre-wrap;">Loading logs...</div>
+                    </div>
+                `;
+                fetchLogs(s.name);
+            }
+        }
+    }
+
+    async function fetchLogs(serviceName) {
+        if(!document.getElementById(`logs-${serviceName}`)) return;
+        const res = await fetch(`/api/logs?service=${serviceName}`);
+        const logs = await res.json();
+        const el = document.getElementById(`logs-${serviceName}`);
+        el.textContent = logs.slice(-100).map(l => `[${l.source.toUpperCase()}] ${l.message}`).join('\n');
+        el.scrollTop = el.scrollHeight;
+    }
+
+    function getStatusColor(status) {
+        if(status === 'running') return 'var(--success)';
+        if(status === 'stopped') return 'var(--danger)';
+        if(status === 'starting') return 'var(--warning)';
+        return 'gray';
+    }
+
+    // Loop
+    setInterval(fetchStatus, 1000);
+    setInterval(fetchAnalytics, 5000);
+    setInterval(fetchBanned, 5000);
+    fetchStatus();
+    fetchAnalytics();
+    fetchBanned();
+
+</script>
+</body>
+</html>
