@@ -24,6 +24,8 @@ export class Service {
             restarts: 0,
             startTime: null,
             lastExitCode: null,
+            port: config.port,
+            url: config.port ? `http://localhost:${config.port}` : undefined
         };
         this.shouldRun = config.autoRestart;
         this.loadStats();

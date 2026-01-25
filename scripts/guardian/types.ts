@@ -18,6 +18,8 @@ export interface ServiceStats {
     restarts: number;
     startTime: number | null;
     lastExitCode: number | null;
+    port?: number;
+    url?: string;
 }
 
 export interface MetricEntry {
@@ -34,6 +36,10 @@ export interface RequestMetric {
     duration: number;
     ip: string;
     retries?: number;
+    targetService: string; // "frontend" | "backend" | "guardian"
+    resourceType: string; // "api", "script", "style", "image", "document", "other"
+    sessionId: string;
+    userAgent?: string;
 }
 
 export interface ServiceConfig {
@@ -43,4 +49,22 @@ export interface ServiceConfig {
     cwd?: string;
     autoRestart: boolean;
     port?: number; // Internal port
+}
+
+export interface GuardianConfig {
+    frontendPort: number; // 3000
+    backendPort: number;  // 8000
+    dashboardPort: number; // 9999
+    internalFrontendPort: number; // 3001
+    internalBackendPort: number; // 8001
+}
+
+export interface SessionStats {
+    id: string; // Hashed IP+UA
+    ip: string;
+    userAgent: string;
+    firstSeen: number;
+    lastSeen: number;
+    requestCount: number;
+    paths: string[]; // Last 10 paths
 }
