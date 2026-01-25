@@ -3,8 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guardian 2.5</title>
+    <title>Guardian 2.5.1</title>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         :root {
             --bg-dark: #0f172a;
@@ -20,7 +24,7 @@
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
             background: var(--bg-dark);
             color: var(--text-primary);
             margin: 0;
@@ -29,13 +33,20 @@
             overflow: hidden;
         }
 
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
         .sidebar {
-            width: 250px;
+            width: 260px;
             background: var(--bg-sidebar);
             border-right: 1px solid var(--border);
             display: flex;
             flex-direction: column;
             padding: 20px;
+            flex-shrink: 0;
         }
 
         .brand {
@@ -48,8 +59,8 @@
             gap: 10px;
         }
 
-        .nav-group { margin-bottom: 20px; }
-        .nav-label { font-size: 0.75rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 10px; letter-spacing: 0.05em; font-weight: 600; }
+        .nav-group { margin-bottom: 25px; }
+        .nav-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 10px; letter-spacing: 0.05em; font-weight: 700; }
 
         .nav-item {
             padding: 10px 15px;
@@ -62,6 +73,7 @@
             justify-content: space-between;
             align-items: center;
             font-size: 0.9rem;
+            font-weight: 500;
         }
 
         .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-primary); }
@@ -73,9 +85,11 @@
             border-radius: 50%;
             background: var(--text-secondary);
         }
-        .status-dot.running { background: var(--success); }
+        .status-dot.running { background: var(--success); box-shadow: 0 0 8px var(--success); }
         .status-dot.stopped { background: var(--danger); }
-        .status-dot.starting { background: var(--warning); }
+        .status-dot.starting { background: var(--warning); animation: pulse 1s infinite; }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
 
         .main {
             flex: 1;
@@ -85,35 +99,37 @@
         }
 
         .top-bar {
-            height: 60px;
+            height: 64px;
             border-bottom: 1px solid var(--border);
             display: flex;
             align-items: center;
-            padding: 0 20px;
+            padding: 0 30px;
             justify-content: space-between;
             background: var(--bg-card);
         }
 
         .view-content {
             flex: 1;
-            padding: 20px;
+            padding: 30px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 25px;
         }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 
         .card {
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 20px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
-        .stat-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; }
-        .stat-value { font-size: 1.8rem; font-weight: bold; margin-top: 5px; }
+        .stat-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
+        .stat-value { font-size: 1.8rem; font-weight: bold; }
 
         .table-container {
             background: var(--bg-card);
@@ -123,9 +139,20 @@
         }
         table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
         th, td { padding: 12px 20px; text-align: left; border-bottom: 1px solid var(--border); }
-        th { background: rgba(0,0,0,0.2); color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; }
+        th { background: rgba(0,0,0,0.2); color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
         tr:last-child td { border-bottom: none; }
         tr:hover { background: rgba(255,255,255,0.02); }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .badge-blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .badge-green { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
+        .badge-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
 
         button {
             background: var(--bg-card);
@@ -135,284 +162,495 @@
             border-radius: 6px;
             cursor: pointer;
             font-weight: 500;
+            transition: all 0.2s;
         }
+        button:hover { background: rgba(255,255,255,0.05); }
         button.primary { background: var(--accent); border-color: var(--accent); color: white; }
+        button.primary:hover { background: #2563eb; }
         button.danger { border-color: var(--danger); color: var(--danger); }
         button.danger:hover { background: var(--danger); color: white; }
+
+        .code-block {
+            background: #000;
+            color: #ccc;
+            font-family: 'SF Mono', monospace;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            white-space: pre-wrap;
+            border: 1px solid var(--border);
+        }
+
+        .chart-container { position: relative; height: 250px; width: 100%; }
     </style>
 </head>
-<body>
+<body x-data="app()">
 
+<!-- Sidebar -->
 <div class="sidebar">
-    <div class="brand">🛡️ Guardian 2.5</div>
+    <div class="brand">
+        <span style="font-size:1.5rem">🛡️</span> Guardian 2.5
+    </div>
 
     <div class="nav-group">
         <div class="nav-label">Monitor</div>
-        <div id="nav-overview" class="nav-item active" onclick="setTab('overview')">Overview</div>
-        <div id="nav-traffic" class="nav-item" onclick="setTab('traffic')">Traffic & Analytics</div>
+        <div class="nav-item" :class="{ 'active': tab === 'overview' }" @click="tab = 'overview'">
+            <span>Overview</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'traffic' }" @click="tab = 'traffic'">
+            <span>Traffic</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'sessions' }" @click="tab = 'sessions'">
+            <span>Sessions</span>
+        </div>
     </div>
 
     <div class="nav-group">
         <div class="nav-label">Services</div>
-        <div id="nav-services"></div>
+        <template x-for="service in services" :key="service.name">
+            <div class="nav-item" :class="{ 'active': tab === 'service-' + service.name }" @click="selectService(service)">
+                <span x-text="capitalize(service.name)"></span>
+                <div class="status-dot" :class="service.status"></div>
+            </div>
+        </template>
     </div>
 
     <div class="nav-group">
         <div class="nav-label">Protection</div>
-        <div id="nav-security" class="nav-item" onclick="setTab('security')">Security</div>
+        <div class="nav-item" :class="{ 'active': tab === 'security' }" @click="tab = 'security'">
+            <span>Security</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'settings' }" @click="tab = 'settings'">
+            <span>Settings</span>
+        </div>
     </div>
 </div>
 
+<!-- Main Content -->
 <div class="main">
     <div class="top-bar">
-        <h2 id="page-title" style="margin:0; font-size: 1.2rem;">Overview</h2>
-        <div id="global-controls" style="display:flex; gap:10px;"></div>
+        <h2 style="margin:0; font-size: 1.2rem;" x-text="pageTitle"></h2>
+        <div style="display:flex; gap:10px;">
+            <template x-if="tab === 'overview'">
+                <button class="danger" @click="restartAll()">Restart All Services</button>
+            </template>
+            <template x-if="tab === 'traffic' || tab === 'sessions'">
+                <button @click="refreshData()">Refresh</button>
+            </template>
+        </div>
     </div>
 
-    <div class="view-content" id="content-area"></div>
-</div>
+    <div class="view-content">
 
-<script>
-    let activeTab = 'overview';
-    let services = [];
-    let systemStats = {};
-    let analytics = { endpoints: [], ips: [], traffic: { total: 0 } };
-    let bannedIps = [];
-
-    // --- API ---
-    async function fetchStatus() {
-        try {
-            const res = await fetch('/api/status');
-            const data = await res.json();
-            services = data.services;
-            systemStats = data;
-            renderNav();
-            if(activeTab === 'overview' || activeTab.startsWith('service-')) renderContent();
-        } catch(e) {}
-    }
-
-    async function fetchAnalytics() {
-        try {
-            const res = await fetch('/api/analytics');
-            analytics = await res.json();
-            if(activeTab === 'traffic' || activeTab === 'overview') renderContent();
-        } catch(e) {}
-    }
-
-    async function fetchBanned() {
-        try {
-            const res = await fetch('/api/banned');
-            bannedIps = await res.json();
-            if(activeTab === 'security') renderContent();
-        } catch(e) {}
-    }
-
-    async function controlService(name, action) {
-        if(!confirm(action + " " + name + "?")) return;
-        await fetch(`/api/control?service=${name}&action=${action}`, { method: 'POST' });
-        fetchStatus();
-    }
-
-    async function banIp(ip) {
-        await fetch(`/api/global?action=ban&ip=${ip}`, { method: 'POST' });
-        fetchBanned();
-    }
-
-    async function unbanIp(ip) {
-        await fetch(`/api/global?action=unban&ip=${ip}`, { method: 'POST' });
-        fetchBanned();
-    }
-
-    async function globalAction(action) {
-        if(!confirm("Run " + action + "?")) return;
-        await fetch(`/api/global?action=${action}`, { method: 'POST' });
-    }
-
-    // --- Render ---
-
-    function setTab(tab) {
-        activeTab = tab;
-        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-        const el = document.getElementById(tab.startsWith('service-') ? `nav-${tab}` : `nav-${tab}`);
-        if(el) el.classList.add('active');
-        renderContent();
-    }
-
-    function renderNav() {
-        const list = document.getElementById('nav-services');
-        list.innerHTML = services.map(s => `
-            <div id="nav-service-${s.name}" class="nav-item ${activeTab === 'service-' + s.name ? 'active' : ''}" onclick="setTab('service-${s.name}')">
-                <span>${s.name.charAt(0).toUpperCase() + s.name.slice(1)}</span>
-                <div class="status-dot ${s.status}"></div>
+        <!-- Overview Tab -->
+        <div x-show="tab === 'overview'" style="display:flex; flex-direction:column; gap:20px;">
+            <div class="grid">
+                <div class="card">
+                    <div class="stat-label">System Load</div>
+                    <div class="stat-value" x-text="(system.load[0] || 0).toFixed(2)"></div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Memory Usage</div>
+                    <div class="stat-value" x-text="formatBytes(system.memory.rss)"></div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Active Services</div>
+                    <div class="stat-value">
+                        <span x-text="services.filter(s => s.status === 'running').length"></span>
+                        <span style="font-size:1rem; color:#666" x-text="'/ ' + services.length"></span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Total Requests</div>
+                    <div class="stat-value" x-text="traffic.total"></div>
+                </div>
             </div>
-        `).join('');
-    }
 
-    function renderContent() {
-        const container = document.getElementById('content-area');
-        const title = document.getElementById('page-title');
-        const controls = document.getElementById('global-controls');
+            <div class="card">
+                <h3 style="margin-top:0; margin-bottom:15px; border-bottom:1px solid var(--border); padding-bottom:10px;">Process List</h3>
+                <table style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Service</th>
+                            <th>PID</th>
+                            <th>Internal Port</th>
+                            <th>URL</th>
+                            <th>Status</th>
+                            <th>CPU</th>
+                            <th>Memory</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="s in services" :key="s.name">
+                            <tr>
+                                <td style="font-weight:bold" x-text="capitalize(s.name)"></td>
+                                <td x-text="s.pid || '-'"></td>
+                                <td x-text="s.port || '-'"></td>
+                                <td>
+                                    <template x-if="s.url">
+                                        <a :href="s.url" target="_blank" style="color:var(--accent); text-decoration:none" x-text="s.url"></a>
+                                    </template>
+                                    <template x-if="!s.url">-</template>
+                                </td>
+                                <td>
+                                    <span class="badge"
+                                          :class="s.status === 'running' ? 'badge-green' : (s.status === 'stopped' ? 'badge-purple' : 'badge-blue')"
+                                          x-text="s.status"></span>
+                                </td>
+                                <td x-text="s.cpu.toFixed(1) + '%'"></td>
+                                <td x-text="formatBytes(s.memory)"></td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
-        if (activeTab === 'overview') {
-            title.textContent = "System Overview";
-            controls.innerHTML = `<button class="danger" onclick="globalAction('restart-all')">Restart All</button>`;
-
-            container.innerHTML = `
-                <div class="grid">
-                    <div class="card">
-                        <div class="stat-label">System Load</div>
-                        <div class="stat-value">${(systemStats.load || [0])[0].toFixed(2)}</div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">Active Services</div>
-                        <div class="stat-value">${services.filter(s => s.status === 'running').length}/${services.length}</div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">Total Requests (Today)</div>
-                        <div class="stat-value">${analytics.traffic.total}</div>
-                    </div>
-                    <div class="card">
-                         <div class="stat-label">Unique IPs (Today)</div>
-                        <div class="stat-value">${analytics.ips.length}</div>
-                    </div>
-                </div>
-
-                <h3>Service Health</h3>
-                <div class="grid">
-                    ${services.map(s => `
-                        <div class="card" style="border-left: 4px solid ${getStatusColor(s.status)}">
-                            <div style="display:flex; justify-content:space-between">
-                                <strong>${s.name}</strong>
-                                <span>${s.status.toUpperCase()}</span>
-                            </div>
-                            <div style="font-size:0.8rem; color:#94a3b8; margin-top:5px">
-                                CPU: ${s.cpu?.toFixed(1)}% | Mem: ${(s.memory/1024/1024).toFixed(0)} MB
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-        }
-        else if (activeTab === 'traffic') {
-            title.textContent = "Traffic Analytics";
-            controls.innerHTML = `<button onclick="fetchAnalytics()">Refresh</button>`;
-
-            container.innerHTML = `
-                <div class="grid" style="grid-template-columns: 1fr 1fr;">
-                    <div class="table-container">
-                        <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Endpoints</div>
-                        <table>
-                            <thead><tr><th>Path</th><th>Hits</th></tr></thead>
-                            <tbody>
-                                ${analytics.endpoints.length ? analytics.endpoints.map(e => `
-                                    <tr>
-                                        <td>${e.path}</td>
-                                        <td>${e.count}</td>
-                                    </tr>
-                                `).join('') : '<tr><td colspan="2" style="text-align:center; padding:20px; color:#666">No data yet</td></tr>'}
-                            </tbody>
-                        </table>
-                    </div>
-                     <div class="table-container">
-                        <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Active IPs</div>
-                        <table>
-                            <thead><tr><th>IP Address</th><th>Hits</th><th>Action</th></tr></thead>
-                            <tbody>
-                                ${analytics.ips.length ? analytics.ips.map(e => `
-                                    <tr>
-                                        <td>${e.ip}</td>
-                                        <td>${e.count}</td>
-                                        <td><button class="danger" style="padding:4px 8px; font-size:0.8rem" onclick="banIp('${e.ip}')">Ban</button></td>
-                                    </tr>
-                                `).join('') : '<tr><td colspan="3" style="text-align:center; padding:20px; color:#666">No data yet</td></tr>'}
-                            </tbody>
-                        </table>
+        <!-- Traffic Tab -->
+        <div x-show="tab === 'traffic'" style="display:flex; flex-direction:column; gap:20px;">
+             <div class="grid-2">
+                <div class="card">
+                    <div class="stat-label">Service Distribution</div>
+                    <div class="chart-container">
+                        <canvas id="serviceChart"></canvas>
                     </div>
                 </div>
-            `;
-        }
-        else if (activeTab === 'security') {
-            title.textContent = "Security & Access Control";
-            controls.innerHTML = ``;
-
-            container.innerHTML = `
-                <div class="card" style="max-width: 600px">
-                    <h3 style="margin-top:0">Manual Ban</h3>
-                    <div style="display:flex; gap:10px;">
-                        <input type="text" id="ban-input" placeholder="IP Address" style="flex:1; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px;">
-                        <button class="danger" onclick="banIp(document.getElementById('ban-input').value)">Ban IP</button>
+                <div class="card">
+                    <div class="stat-label">Resource Types</div>
+                    <div class="chart-container">
+                        <canvas id="typeChart"></canvas>
                     </div>
                 </div>
+             </div>
 
-                <h3>Banned IPs</h3>
-                <div class="table-container">
+             <div class="grid-2">
+                 <div class="table-container">
+                    <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Endpoints</div>
                     <table>
-                        <thead><tr><th>IP Address</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Path</th><th>Hits</th></tr></thead>
                         <tbody>
-                            ${bannedIps.length ? bannedIps.map(ip => `
+                            <template x-for="ep in analytics.endpoints" :key="ep.path">
                                 <tr>
-                                    <td>${ip}</td>
-                                    <td><button onclick="unbanIp('${ip}')">Unban</button></td>
+                                    <td x-text="ep.path"></td>
+                                    <td x-text="ep.count"></td>
                                 </tr>
-                            `).join('') : '<tr><td colspan="2" style="text-align:center; padding:20px; color:#666">No banned IPs</td></tr>'}
+                            </template>
+                             <tr x-show="analytics.endpoints.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td></tr>
                         </tbody>
                     </table>
                 </div>
-            `;
-        }
-        else if (activeTab.startsWith('service-')) {
-            const sName = activeTab.replace('service-', '');
-            const s = services.find(x => x.name === sName);
-            if(s) {
-                title.textContent = "Service: " + s.name;
-                controls.innerHTML = `
-                    <button class="primary" onclick="controlService('${s.name}', 'start')">Start</button>
-                    <button class="danger" onclick="controlService('${s.name}', 'stop')">Stop</button>
-                    <button onclick="controlService('${s.name}', 'restart')">Restart</button>
-                    <a href="${s.name === 'frontend' ? 'http://localhost:3000' : 'http://localhost:8000'}" target="_blank" style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500">Open</a>
-                `;
-                container.innerHTML = `
-                    <div class="grid">
-                        <div class="card"><div class="stat-label">Status</div><div class="stat-value" style="color:${getStatusColor(s.status)}">${s.status.toUpperCase()}</div></div>
-                        <div class="card"><div class="stat-label">CPU</div><div class="stat-value">${s.cpu?.toFixed(1)}%</div></div>
-                        <div class="card"><div class="stat-label">Memory</div><div class="stat-value">${(s.memory/1024/1024).toFixed(0)} MB</div></div>
-                        <div class="card"><div class="stat-label">Restarts</div><div class="stat-value">${s.restarts}</div></div>
-                    </div>
+                <div class="table-container">
+                    <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Source IPs</div>
+                    <table>
+                        <thead><tr><th>IP Address</th><th>Hits</th><th>Action</th></tr></thead>
+                        <tbody>
+                            <template x-for="ip in analytics.ips" :key="ip.ip">
+                                <tr>
+                                    <td x-text="ip.ip"></td>
+                                    <td x-text="ip.count"></td>
+                                    <td><button class="danger" style="padding:4px 8px; font-size:0.8rem" @click="banIp(ip.ip)">Ban</button></td>
+                                </tr>
+                            </template>
+                            <tr x-show="analytics.ips.length === 0"><td colspan="3" style="text-align:center; padding:20px; color:#666">No data</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+             </div>
+        </div>
 
-                    <div class="card" style="flex:1; display:flex; flex-direction:column;">
-                         <div style="margin-bottom:10px; font-weight:bold; color:#94a3b8">Logs (Last 100 lines)</div>
-                         <div id="logs-${s.name}" style="flex:1; background:#000; color:#ccc; font-family:monospace; padding:10px; overflow-y:auto; font-size:0.9rem; white-space:pre-wrap;">Loading logs...</div>
+        <!-- Sessions Tab -->
+        <div x-show="tab === 'sessions'">
+            <div class="card">
+                <h3 style="margin-top:0">Active Sessions (Last 24h)</h3>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Session ID</th>
+                                <th>IP Address</th>
+                                <th>User Agent</th>
+                                <th>Requests</th>
+                                <th>Last Seen</th>
+                                <th>Recent Path</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="s in sessions" :key="s.id">
+                                <tr>
+                                    <td style="font-family:monospace; color:var(--accent)" x-text="s.id"></td>
+                                    <td x-text="s.ip"></td>
+                                    <td style="font-size:0.8rem; color:#999; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" x-text="s.userAgent"></td>
+                                    <td x-text="s.requestCount"></td>
+                                    <td x-text="formatTime(s.lastSeen)"></td>
+                                    <td style="font-family:monospace; font-size:0.8rem" x-text="s.paths[s.paths.length-1]"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="sessions.length === 0"><td colspan="6" style="text-align:center; padding:20px; color:#666">No active sessions</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Detail Tab -->
+        <div x-show="tab.startsWith('service-')" style="display:flex; flex-direction:column; gap:20px;">
+            <div class="grid">
+                <div class="card">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value" :style="{color: getStatusColor(currentService?.status)}" x-text="currentService?.status?.toUpperCase()"></div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">PID</div>
+                    <div class="stat-value" x-text="currentService?.pid || '-'"></div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Restarts</div>
+                    <div class="stat-value" x-text="currentService?.restarts"></div>
+                </div>
+                <div class="card" style="display:flex; align-items:center; justify-content:center; gap:10px;">
+                    <button class="primary" @click="controlService(currentService.name, 'start')">Start</button>
+                    <button class="danger" @click="controlService(currentService.name, 'stop')">Stop</button>
+                    <button @click="controlService(currentService.name, 'restart')">Restart</button>
+                    <a x-show="currentService?.url" :href="currentService?.url" target="_blank" style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500">Open</a>
+                </div>
+            </div>
+
+            <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:400px;">
+                <div style="margin-bottom:10px; font-weight:bold; color:#94a3b8; display:flex; justify-content:space-between;">
+                    <span>Logs (Last 100 lines)</span>
+                    <button style="padding:4px 8px; font-size:0.8rem" @click="fetchLogs(currentService.name)">Refresh Logs</button>
+                </div>
+                <div class="code-block" style="flex:1;" x-ref="logContainer" x-text="logs"></div>
+            </div>
+        </div>
+
+        <!-- Security Tab -->
+        <div x-show="tab === 'security'">
+            <div class="grid-2">
+                <div class="card">
+                    <h3 style="margin-top:0">Manual Ban</h3>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" x-model="banInput" placeholder="IP Address" style="flex:1; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px;">
+                        <button class="danger" @click="banIp(banInput); banInput = ''">Ban IP</button>
                     </div>
-                `;
-                fetchLogs(s.name);
+                </div>
+                <div class="card">
+                    <h3 style="margin-top:0">Banned IPs</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead><tr><th>IP Address</th><th>Action</th></tr></thead>
+                            <tbody>
+                                <template x-for="ip in bannedIps" :key="ip">
+                                    <tr>
+                                        <td x-text="ip"></td>
+                                        <td><button @click="unbanIp(ip)">Unban</button></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="bannedIps.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No banned IPs</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+         <!-- Settings Tab -->
+        <div x-show="tab === 'settings'">
+            <div class="card" style="max-width:600px">
+                <h3 style="margin-top:0">Configuration</h3>
+                <p style="color:var(--text-secondary); font-size:0.9rem">Current port configuration (Static for now).</p>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:20px;">
+                    <div>
+                        <div class="stat-label">Guardian Dashboard</div>
+                        <input type="text" :value="config.dashboardPort" disabled style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                    </div>
+                     <div></div>
+
+                    <div>
+                        <div class="stat-label">Frontend Proxy Port</div>
+                         <input type="text" :value="config.frontendPort" disabled style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                    </div>
+                    <div>
+                        <div class="stat-label">Backend Proxy Port</div>
+                         <input type="text" :value="config.backendPort" disabled style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('app', () => ({
+            tab: 'overview',
+            services: [],
+            system: { load: [], memory: {} },
+            traffic: { total: 0 },
+            analytics: { endpoints: [], ips: [] },
+            granular: { services: [], types: [] },
+            sessions: [],
+            bannedIps: [],
+            config: {},
+            currentService: null,
+            logs: 'Loading...',
+            banInput: '',
+            charts: {},
+
+            async init() {
+                await this.refreshData();
+                this.startTimers();
+            },
+
+            async refreshData() {
+                // Parallel fetching
+                const [statusRes, analyticsRes, granularRes, sessionRes, bannedRes, configRes] = await Promise.all([
+                    fetch('/api/status').then(r => r.json()),
+                    fetch('/api/analytics').then(r => r.json()),
+                    fetch('/api/analytics/granular').then(r => r.json()),
+                    fetch('/api/sessions').then(r => r.json()),
+                    fetch('/api/banned').then(r => r.json()),
+                    fetch('/api/config').then(r => r.json())
+                ]);
+
+                this.services = statusRes.services;
+                this.system = statusRes.system || { load: [], memory: {} };
+                this.traffic = analyticsRes.traffic;
+                this.analytics = { endpoints: analyticsRes.endpoints, ips: analyticsRes.ips };
+                this.granular = granularRes;
+                this.sessions = sessionRes;
+                this.bannedIps = bannedRes;
+                this.config = configRes;
+
+                // Update current service ref if selected
+                if (this.currentService) {
+                    this.currentService = this.services.find(s => s.name === this.currentService.name) || this.currentService;
+                }
+
+                if (this.tab === 'traffic') {
+                    this.updateCharts();
+                }
+            },
+
+            startTimers() {
+                setInterval(() => this.refreshData(), 1000);
+                // Poll logs if active
+                setInterval(() => {
+                    if (this.tab.startsWith('service-')) {
+                        this.fetchLogs(this.currentService.name);
+                    }
+                }, 2000);
+            },
+
+            selectService(service) {
+                this.currentService = service;
+                this.tab = 'service-' + service.name;
+                this.logs = "Loading logs...";
+                this.fetchLogs(service.name);
+            },
+
+            async fetchLogs(name) {
+                const res = await fetch(`/api/logs?service=${name}`);
+                const logs = await res.json();
+                this.logs = logs.slice(-100).map(l => `[${l.timestamp.split('T')[1].split('.')[0]}] [${l.source.toUpperCase()}] ${l.message}`).join('\n');
+                // Auto scroll?
+                // this.$refs.logContainer.scrollTop = this.$refs.logContainer.scrollHeight;
+            },
+
+            async controlService(name, action) {
+                if(!confirm(action.toUpperCase() + " " + name + "?")) return;
+                await fetch(`/api/control?service=${name}&action=${action}`, { method: 'POST' });
+                await this.refreshData();
+            },
+
+            async restartAll() {
+                if(!confirm("Restart ALL services?")) return;
+                await fetch(`/api/global?action=restart-all`, { method: 'POST' });
+            },
+
+            async banIp(ip) {
+                if(!ip) return;
+                await fetch(`/api/global?action=ban&ip=${ip}`, { method: 'POST' });
+                await this.refreshData();
+            },
+
+            async unbanIp(ip) {
+                await fetch(`/api/global?action=unban&ip=${ip}`, { method: 'POST' });
+                await this.refreshData();
+            },
+
+            updateCharts() {
+                this.$nextTick(() => {
+                    this.renderPieChart('serviceChart', this.granular.services.map(s => s.name), this.granular.services.map(s => s.count), ['#3b82f6', '#22c55e', '#f59e0b']);
+                    this.renderPieChart('typeChart', this.granular.types.map(s => s.type), this.granular.types.map(s => s.count), ['#60a5fa', '#f87171', '#4ade80', '#fbbf24', '#c084fc']);
+                });
+            },
+
+            renderPieChart(id, labels, data, colors) {
+                if (this.charts[id]) {
+                    this.charts[id].data.labels = labels;
+                    this.charts[id].data.datasets[0].data = data;
+                    this.charts[id].update();
+                    return;
+                }
+                const ctx = document.getElementById(id);
+                if (!ctx) return;
+                this.charts[id] = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors,
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'right', labels: { color: '#94a3b8' } }
+                        }
+                    }
+                });
+            },
+
+            capitalize(s) {
+                return s.charAt(0).toUpperCase() + s.slice(1);
+            },
+
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            },
+
+            formatTime(ts) {
+                return new Date(ts).toLocaleTimeString();
+            },
+
+            getStatusColor(status) {
+                if (status === 'running') return 'var(--success)';
+                if (status === 'stopped') return 'var(--danger)';
+                return 'var(--warning)';
+            },
+
+            get pageTitle() {
+                if (this.tab === 'overview') return 'System Overview';
+                if (this.tab === 'traffic') return 'Traffic Analytics';
+                if (this.tab === 'sessions') return 'Active Sessions';
+                if (this.tab === 'security') return 'Security Control';
+                if (this.tab === 'settings') return 'Settings';
+                if (this.tab.startsWith('service-')) return 'Service: ' + this.capitalize(this.currentService?.name || '');
+                return '';
             }
-        }
-    }
-
-    async function fetchLogs(serviceName) {
-        if(!document.getElementById(`logs-${serviceName}`)) return;
-        const res = await fetch(`/api/logs?service=${serviceName}`);
-        const logs = await res.json();
-        const el = document.getElementById(`logs-${serviceName}`);
-        el.textContent = logs.slice(-100).map(l => `[${l.source.toUpperCase()}] ${l.message}`).join('\n');
-        el.scrollTop = el.scrollHeight;
-    }
-
-    function getStatusColor(status) {
-        if(status === 'running') return 'var(--success)';
-        if(status === 'stopped') return 'var(--danger)';
-        if(status === 'starting') return 'var(--warning)';
-        return 'gray';
-    }
-
-    // Loop
-    setInterval(fetchStatus, 1000);
-    setInterval(fetchAnalytics, 5000);
-    setInterval(fetchBanned, 5000);
-    fetchStatus();
-    fetchAnalytics();
-    fetchBanned();
-
+        }));
+    });
 </script>
 </body>
 </html>
