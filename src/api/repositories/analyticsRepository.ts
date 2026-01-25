@@ -780,5 +780,259 @@ export const analyticsRepository = {
             }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 20);
+    },
+
+    /**
+     * Funnel Management
+     */
+    async saveFunnelDefinition(funnel: any): Promise<void> {
+        await kv.set(["analytics_funnels", funnel.id], funnel);
+    },
+
+    async getFunnelDefinitions(): Promise<any[]> {
+        const funnels = [];
+        for await (const entry of kv.list<any>({ prefix: ["analytics_funnels"] })) {
+            funnels.push(entry.value);
+        }
+        return funnels;
+    },
+
+    async deleteFunnelDefinition(id: string): Promise<void> {
+        await kv.delete(["analytics_funnels", id]);
+    },
+
+    /**
+     * Calculate Impact Score of errors on session termination
+     */
+    async getErrorCorrelationStats(daysBack = 7): Promise<any> {
+        const sessions = await this.getSessions(daysBack);
+        const errorCounts = new Map<string, { total: number, exits: number }>();
+
+        for (const session of sessions) {
+            const events = await this.getSessionEvents(session.sessionId);
+            const errors = events.filter(e => e.type === 'error' || e.type === 'rage_click');
+
+            if (errors.length > 0) {
+                errors.forEach(err => {
+                    const key = err.label;
+                    const stats = errorCounts.get(key) || { total: 0, exits: 0 };
+                    stats.total++;
+
+                    // Check if session ended within 30 seconds of this error
+                    const errorTime = new Date(err.timestamp).getTime();
+                    const sessionEndTime = new Date(session.endTime).getTime();
+                    if (sessionEndTime - errorTime < 30000) {
+                        stats.exits++;
+                    }
+                    errorCounts.set(key, stats);
+                });
+            }
+        }
+
+        return Array.from(errorCounts.entries()).map(([message, stats]) => ({
+            message,
+            impactScore: Math.round((stats.exits / stats.total) * 100),
+            totalOccurrences: stats.total,
+            terminalExits: stats.exits
+        })).sort((a, b) => b.impactScore - a.impactScore);
+    },
+
+    /**
+     * Get dead click statistics
+     */
+    async getDeadClickStats(daysBack = 7): Promise<any> {
+        const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+        const deadClicks = new Map<string, { count: number, lastSeen: string, paths: Set<string> }>();
+
+        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
+            const e = entry.value;
+            if (e.timestamp < cutoff) continue;
+            if (e.type !== 'dead_click') continue;
+
+            const key = `${e.target}: ${e.label}`;
+            const existing = deadClicks.get(key) || { count: 0, lastSeen: e.timestamp, paths: new Set<string>() };
+            existing.count++;
+            if (e.timestamp > existing.lastSeen) existing.lastSeen = e.timestamp;
+            if (e.path) existing.paths.add(e.path);
+            deadClicks.set(key, existing);
+        }
+
+        return Array.from(deadClicks.entries())
+            .map(([label, data]) => ({
+                label,
+                count: data.count,
+                lastSeen: data.lastSeen,
+                pathCount: data.paths.size,
+                topPath: Array.from(data.paths)[0]
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 30);
+    },
+
+    /**
+     * Predictive User Health / Churn Risk
+     */
+    async getUserHealthStats(daysBack = 30): Promise<any[]> {
+        const userActivity = await this.getUserActivityStats(daysBack);
+        const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+
+        const healthScores = [];
+
+        for (const user of userActivity) {
+            // Fetch raw events for this user to count friction
+            const eventsRes = await this.getEventsFiltered({ userId: user.userId, daysBack });
+            const events = eventsRes.events;
+
+            const errors = events.filter((e: any) => e.type === 'error').length;
+            const rageClicks = events.filter((e: any) => e.type === 'rage_click').length;
+            const deadClicks = events.filter((e: any) => e.type === 'dead_click').length;
+            const activeDays = new Set(events.map((e: any) => e.timestamp.split('T')[0])).size;
+
+            // Health Formula: Frequency is good, friction is bad
+            // Base score 50, +5 per active day, -10 per error, -15 per rage, -5 per dead
+            let score = 50 + (activeDays * 5) - (errors * 10) - (rageClicks * 15) - (deadClicks * 5);
+            score = Math.max(0, Math.min(100, score));
+
+            healthScores.push({
+                userId: user.userId,
+                score,
+                metrics: {
+                    activeDays,
+                    errors,
+                    rageClicks,
+                    deadClicks,
+                    totalEvents: user.events
+                },
+                status: score > 70 ? 'healthy' : score > 40 ? 'warning' : 'critical'
+            });
+        }
+
+        return healthScores.sort((a, b) => a.score - b.score);
+    },
+
+    /**
+     * Aggregate A/B Testing Results
+     */
+    async getExperimentStats(daysBack = 30): Promise<any[]> {
+        const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+        const experiments = new Map<string, {
+            A: { visitors: Set<string>, conversions: number },
+            B: { visitors: Set<string>, conversions: number }
+        }>();
+
+        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
+            const e = entry.value;
+            if (e.timestamp < cutoff) continue;
+
+            const expId = e.metadata?.experimentId;
+            if (!expId) continue;
+
+            if (!experiments.has(expId)) {
+                experiments.set(expId, {
+                    A: { visitors: new Set(), conversions: 0 },
+                    B: { visitors: new Set(), conversions: 0 }
+                });
+            }
+
+            const stats = experiments.get(expId)!;
+            const variant = e.metadata?.variant as 'A' | 'B';
+            if (!variant) continue;
+
+            if (e.target === 'experiment') {
+                stats[variant].visitors.add(e.userId);
+            } else if (e.target === 'experiment_goal') {
+                stats[variant].conversions++;
+            }
+        }
+
+        return Array.from(experiments.entries()).map(([id, stats]) => {
+            const vA = stats.A.visitors.size || 0;
+            const vB = stats.B.visitors.size || 0;
+            const cA = stats.A.conversions || 0;
+            const cB = stats.B.conversions || 0;
+
+            const rateA = vA > 0 ? (cA / vA) * 100 : 0;
+            const rateB = vB > 0 ? (cB / vB) * 100 : 0;
+
+            return {
+                id,
+                variantA: { visitors: vA, conversions: cA, rate: Math.round(rateA * 10) / 10 },
+                variantB: { visitors: vB, conversions: cB, rate: Math.round(rateB * 10) / 10 },
+                improvement: rateA > 0 ? Math.round(((rateB - rateA) / rateA) * 1000) / 10 : 0,
+                winner: rateB > rateA ? 'B' : 'A'
+            };
+        });
+    },
+
+    /**
+     * AI-Driven UX Insights Generator
+     */
+    async getAIInsights(): Promise<any[]> {
+        const insights = [];
+        const daysBack = 14;
+
+        // 1. Analyze Dead Clicks
+        const deadClicks = await this.getDeadClickStats(daysBack);
+        for (const dc of deadClicks.slice(0, 3)) {
+            if (dc.count > 5) {
+                insights.push({
+                    type: 'dead_click',
+                    severity: dc.count > 20 ? 'high' : 'medium',
+                    element: dc.label,
+                    path: dc.topPath,
+                    title: `Död klick-fälla på ${dc.topPath}`,
+                    description: `Användare klickar upprepade gånger (${dc.count} ggr) på "${dc.label}" men inget händer.`,
+                    suggestion: `Överväg att göra elementet interaktivt eller ändra dess design så det inte ser ut som en knapp.`
+                });
+            }
+        }
+
+        // 2. Analyze Precision (via Events)
+        // (Simplistic heuristic for demo - find elements with high miss-rate)
+        const eventsRes = await this.getEventsFiltered({ daysBack, limit: 1000 });
+        const clicks = eventsRes.events.filter((e: any) => (e.type === 'click' || e.type === 'rage_click') && e.elementRect);
+
+        const elementMisses = new Map<string, { count: number, misses: number, path: string }>();
+        clicks.forEach((c: any) => {
+            const key = `${c.target}-${c.label}`;
+            const stats = elementMisses.get(key) || { count: 0, misses: 0, path: c.path };
+            stats.count++;
+            const { x, y } = c.coordinates;
+            const { top, left, width, height } = c.elementRect;
+            if (x < left || x > left + width || y < top || y > top + height) {
+                stats.misses++;
+            }
+            elementMisses.set(key, stats);
+        });
+
+        for (const [key, stats] of elementMisses.entries()) {
+            const missRate = stats.misses / stats.count;
+            if (stats.count > 10 && missRate > 0.4) {
+                insights.push({
+                    type: 'precision',
+                    severity: missRate > 0.6 ? 'high' : 'medium',
+                    element: key.split('-')[1],
+                    path: stats.path,
+                    title: `Precision-problem på ${stats.path}`,
+                    description: `${Math.round(missRate * 100)}% av klickförsöken på "${key.split('-')[1]}" missar målet.`,
+                    suggestion: `Elementet är för svårt att träffa. Gör klick-ytan (padding) större.`
+                });
+            }
+        }
+
+        // 3. Analyze Churn Risk (Low Health)
+        const health = await this.getUserHealthStats(daysBack);
+        const atRisk = health.filter((u: any) => u.status === 'critical').length;
+        if (atRisk > 0) {
+            insights.push({
+                type: 'retention',
+                severity: atRisk > 5 ? 'high' : 'medium',
+                title: 'Behållnings-risk upptäckt',
+                description: `${atRisk} användare har hamnat i "kritiskt" tillstånd pga upprepad friktion.`,
+                suggestion: `Kolla i Error Correlation-vyn för att se om en specifik bugg driver bort dessa användare.`
+            });
+        }
+
+        return insights;
     }
 };

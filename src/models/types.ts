@@ -1762,6 +1762,12 @@ export interface InteractionEvent {
         viewportW: number;
         viewportH: number;
     };
+    elementRect?: {
+        top: number;
+        left: number;
+        width: number;
+        height: number;
+    };
 }
 
 export interface AnalyticsSession {

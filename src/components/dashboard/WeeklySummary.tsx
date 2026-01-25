@@ -1,5 +1,6 @@
 import React from 'react';
 import { EXERCISE_TYPES } from '../training/ExerciseModal.tsx';
+import { Activity, Dumbbell, Scale } from 'lucide-react';
 
 interface WeeklySummaryProps {
     selectedDate: string;
@@ -42,6 +43,26 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
         mainTitle = 'NUVARANDE VECKA SUMMARY';
     }
 
+    const runningActivities = weekActivities.filter(a => a.type === 'running' || a.type === 'cycling' || a.type === 'walking');
+    const strengthActivities = weekActivities.filter(a => a.type === 'strength');
+
+    const rangeText = `${new Date(monday).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })} - ${new Date(sunday).toLocaleDateString('sv-SE', { day: 'numeric', month: 'short' })}`;
+    const currentTime = new Date().toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+
+    const runningDuration = runningActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+    const strengthDuration = strengthActivities.reduce((sum, a) => sum + (a.durationMinutes || 0), 0);
+
+    const formatMinutes = (mins: number) => {
+        const h = Math.floor(mins / 60);
+        const m = Math.round(mins % 60);
+        if (h === 0) return `${m}min`;
+        if (m === 0) return `${h}h`;
+        return `${h}h ${m}min`;
+    };
+
+    const runningDurationText = formatMinutes(runningDuration);
+    const strengthDurationText = formatMinutes(strengthDuration);
+
     // Measurement Diffs
     const getDiff = (type: 'weight' | 'waist' | 'chest') => {
         const records = history
@@ -78,33 +99,44 @@ export function WeeklySummary({ selectedDate, activities, history }: WeeklySumma
 
     return (
         <div className="flex flex-col items-center">
-            <div className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 opacity-70">
-                {mainTitle}
+            <div className="flex items-center gap-3 mb-4 opacity-70">
+                <div className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">
+                    {mainTitle}
+                </div>
+                <div className="w-1 h-3 bg-slate-300 dark:bg-slate-800 rounded-full" />
+                <div className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                    {rangeText} • {currentTime}
+                </div>
             </div>
             <div className="flex flex-wrap justify-center gap-4 w-full">
                 {/* Running Box */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-8 py-5 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
-                    <div className="text-xl mb-1">🏃‍♂️</div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">Löpning</div>
-                    <div className="text-lg font-bold text-emerald-500">
-                        {weekActivities.filter(a => a.type === 'running' || a.type === 'cycling' || a.type === 'walking').length} pass <span className="text-slate-300 mx-1">|</span> {Math.round(weekDistance)}km
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-4 py-3 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div className="absolute -right-2 -bottom-4 text-7xl opacity-[0.03] dark:opacity-[0.05] pointer-events-none select-none grayscale rotate-12">🏃‍♂️</div>
+                    <Activity size={20} className="mb-2 text-emerald-500 relative z-10" />
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1 relative z-10">Löpning</div>
+                    <div className="text-lg font-bold text-emerald-500 relative z-10 text-center">
+                        <span className="text-sm text-slate-400 font-medium block">{runningActivities.length} pass</span>
+                        {Math.round(weekDistance)}km <span className="text-slate-300 mx-1">•</span> {runningDurationText}
                     </div>
                 </div>
 
                 {/* Strength Box */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-8 py-5 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
-                    <div className="text-xl mb-1">💪</div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1">Styrka</div>
-                    <div className="text-lg font-bold text-indigo-500">
-                        {weekActivities.filter(a => a.type === 'strength').length} pass <span className="text-slate-300 mx-1">|</span> {weekVolume.toFixed(1)} ton
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-4 py-3 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div className="absolute -right-2 -bottom-4 text-7xl opacity-[0.03] dark:opacity-[0.05] pointer-events-none select-none grayscale -rotate-12">💪</div>
+                    <Dumbbell size={20} className="mb-2 text-indigo-500 relative z-10" />
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-1 relative z-10">Styrka</div>
+                    <div className="text-lg font-bold text-indigo-500 relative z-10 text-center">
+                        <span className="text-sm text-slate-400 font-medium block">{strengthActivities.length} pass</span>
+                        {weekVolume.toFixed(1)}t <span className="text-slate-300 mx-1">•</span> {strengthDurationText}
                     </div>
                 </div>
 
                 {/* Measurement Diffs Card */}
-                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-8 py-5 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow">
-                    <div className="text-xl mb-1">⚖️</div>
-                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2">Framsteg</div>
-                    <div className="grid grid-cols-3 gap-4 w-full">
+                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl px-4 md:px-4 py-3 flex flex-col items-center justify-center shadow-sm flex-1 min-w-0 hover:shadow-md transition-shadow relative overflow-hidden">
+                    <div className="absolute -right-2 -bottom-4 text-7xl opacity-[0.03] dark:opacity-[0.05] pointer-events-none select-none grayscale">⚖️</div>
+                    <Scale size={20} className="mb-2 text-slate-400 relative z-10" />
+                    <div className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2 relative z-10">Framsteg</div>
+                    <div className="grid grid-cols-3 gap-4 w-full relative z-10">
                         <div className="flex flex-col items-center">
                             <span className="text-[8px] font-bold text-slate-400 uppercase">Vikt</span>
                             <span className={`text-xs font-black ${wDiff && wDiff.diff !== 0 ? (wDiff.diff < 0 ? 'text-emerald-500' : 'text-rose-500') : 'text-slate-300'}`}>

@@ -1,47 +1,43 @@
 import { initLogger } from "./logger.ts";
+import { initRecorder } from "./recorder.ts";
 import { manager } from "./services.ts";
 import { updateSystemStats } from "./monitor.ts";
 import { handleDashboardRequest } from "./dashboard.ts";
 import { handleProxyRequest } from "./proxy.ts";
 import { clearPort } from "./utils.ts";
 import { loadBannedIps } from "./security.ts";
-
-// Configuration (Defaults)
-// TODO: Load from KV if customized
-const PROXY_FE_PORT = 3000;
-const PROXY_BE_PORT = 8000;
-const DASHBOARD_PORT = 9999;
-const INTERNAL_BE_PORT = 8001;
-const INTERNAL_FE_PORT = 3001;
+import { CONFIG } from "./config.ts";
+import { startHealthChecks } from "./health.ts";
 
 async function bootstrap() {
-    console.log("[GUARDIAN] Booting System 2.5.1...");
+    console.log(`[GUARDIAN] Booting System ${CONFIG.version}...`);
 
     await initLogger();
+    await initRecorder();
     await loadBannedIps();
 
     // Clear all relevant ports to avoid EADDRINUSE
-    await clearPort(PROXY_FE_PORT);
-    await clearPort(PROXY_BE_PORT);
-    await clearPort(DASHBOARD_PORT);
-    await clearPort(INTERNAL_BE_PORT);
-    await clearPort(INTERNAL_FE_PORT);
+    await clearPort(CONFIG.ports.proxyFrontend);
+    await clearPort(CONFIG.ports.proxyBackend);
+    await clearPort(CONFIG.ports.dashboard);
+    await clearPort(CONFIG.ports.internalBackend);
+    await clearPort(CONFIG.ports.internalFrontend);
 
     // 1. Register Services
     manager.register({
         name: "backend",
         command: ["deno", "task", "server"],
-        env: { "PORT": String(INTERNAL_BE_PORT) },
+        env: { "PORT": String(CONFIG.ports.internalBackend) },
         autoRestart: true,
-        port: INTERNAL_BE_PORT
+        port: CONFIG.ports.internalBackend
     });
 
     manager.register({
         name: "frontend",
         // We override Vite's port via CLI
-        command: ["deno", "task", "dev", "--port", String(INTERNAL_FE_PORT)],
+        command: ["deno", "task", "dev", "--port", String(CONFIG.ports.internalFrontend)],
         autoRestart: true,
-        port: INTERNAL_FE_PORT
+        port: CONFIG.ports.internalFrontend
     });
 
     // 2. Start Services
@@ -50,27 +46,30 @@ async function bootstrap() {
     // 3. Start Monitor (System Stats)
     setInterval(updateSystemStats, 2000);
 
-    // 4. Start Dashboard (Admin UI)
-    console.log(`[GUARDIAN] Dashboard listening on http://localhost:${DASHBOARD_PORT}`);
+    // 4. Start Active Health Checks
+    startHealthChecks();
+
+    // 5. Start Dashboard (Admin UI)
+    console.log(`[GUARDIAN] Dashboard listening on http://localhost:${CONFIG.ports.dashboard}`);
     Deno.serve({
-        port: DASHBOARD_PORT,
+        port: CONFIG.ports.dashboard,
         handler: handleDashboardRequest,
         onListen: () => {}
     });
 
-    // 5. Start Frontend Gateway (3000 -> 3001)
-    console.log(`[GUARDIAN] Frontend Gateway listening on http://localhost:${PROXY_FE_PORT}`);
+    // 6. Start Frontend Gateway
+    console.log(`[GUARDIAN] Frontend Gateway listening on http://localhost:${CONFIG.ports.proxyFrontend}`);
     Deno.serve({
-        port: PROXY_FE_PORT,
-        handler: (req, info) => handleProxyRequest(req, info, INTERNAL_FE_PORT, "frontend"),
+        port: CONFIG.ports.proxyFrontend,
+        handler: (req, info) => handleProxyRequest(req, info, CONFIG.ports.internalFrontend, "frontend"),
         onListen: () => {}
     });
 
-    // 6. Start Backend Gateway (8000 -> 8001)
-    console.log(`[GUARDIAN] Backend Gateway listening on http://localhost:${PROXY_BE_PORT}`);
+    // 7. Start Backend Gateway
+    console.log(`[GUARDIAN] Backend Gateway listening on http://localhost:${CONFIG.ports.proxyBackend}`);
     Deno.serve({
-        port: PROXY_BE_PORT,
-        handler: (req, info) => handleProxyRequest(req, info, INTERNAL_BE_PORT, "backend"),
+        port: CONFIG.ports.proxyBackend,
+        handler: (req, info) => handleProxyRequest(req, info, CONFIG.ports.internalBackend, "backend"),
         onListen: () => {}
     });
 }

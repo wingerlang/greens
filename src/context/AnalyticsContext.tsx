@@ -52,6 +52,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
     const startTimeRef = useRef(Date.now());
     const currentPathRef = useRef(location.pathname);
+    const lastInteractionRef = useRef<{ time: number, target: string } | null>(null);
 
     // 1. Navigation Tracking
     useEffect(() => {
@@ -94,6 +95,11 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         if (!user) return;
 
+        const handleMouseDown = (e: MouseEvent) => {
+            const target = e.target as HTMLElement;
+            lastInteractionRef.current = { time: Date.now(), target: target.tagName };
+        };
+
         const handleClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
 
@@ -118,6 +124,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 lastClickRef.current.time = now;
 
                 if (lastClickRef.current.count === 3) { // Trigger on 3rd rapid click
+                    const rect = target.getBoundingClientRect();
                     const rageEvent: InteractionEvent = {
                         id: generateId(),
                         userId: user.id,
@@ -133,6 +140,12 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                             pctY: Math.round((y / viewportH) * 100),
                             viewportW,
                             viewportH
+                        },
+                        elementRect: {
+                            top: Math.round(rect.top),
+                            left: Math.round(rect.left),
+                            width: Math.round(rect.width),
+                            height: Math.round(rect.height)
                         }
                     };
                     fetch('/api/usage/event', {
@@ -157,6 +170,15 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 if (label.length > 50) label = label.substring(0, 50) + '...';
                 if (!label) return; // Skip if no meaningful label
 
+                const rect = element.getBoundingClientRect();
+
+                // PERFORMANCE: Calculate duration from mousedown
+                let interactionDuration = 0;
+                if (lastInteractionRef.current) {
+                    interactionDuration = Date.now() - lastInteractionRef.current.time;
+                    lastInteractionRef.current = null;
+                }
+
                 const event: InteractionEvent = {
                     id: generateId(),
                     userId: user.id,
@@ -166,12 +188,19 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                     label: label,
                     path: location.pathname,
                     timestamp: new Date().toISOString(),
+                    metadata: { interactionDuration },
                     coordinates: {
                         x, y,
                         pctX: Math.round((x / viewportW) * 100),
                         pctY: Math.round((y / viewportH) * 100),
                         viewportW,
                         viewportH
+                    },
+                    elementRect: {
+                        top: Math.round(rect.top),
+                        left: Math.round(rect.left),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height)
                     }
                 };
 
@@ -183,7 +212,8 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             } else {
                 // --- Dead Click Logic ---
                 // If not interactive, and it's text/div/span, user might be confused
-                const isText = ['P', 'SPAN', 'DIV', 'H1', 'H2', 'H3', 'LI'].includes(target.tagName);
+                const rect = target.getBoundingClientRect();
+                const isText = ['P', 'SPAN', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI'].includes(target.tagName);
                 if (isText && target.innerText && target.innerText.length < 50) { // Limit to short texts that look like buttons
                     const deadEvent: InteractionEvent = {
                         id: generateId(),
@@ -200,6 +230,12 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                             pctY: Math.round((y / viewportH) * 100),
                             viewportW,
                             viewportH
+                        },
+                        elementRect: {
+                            top: Math.round(rect.top),
+                            left: Math.round(rect.left),
+                            width: Math.round(rect.width),
+                            height: Math.round(rect.height)
                         }
                     };
                     fetch('/api/usage/event', {
@@ -211,9 +247,11 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             }
         };
 
+        window.addEventListener('mousedown', handleMouseDown, true);
         window.addEventListener('click', handleClick, true); // Capture phase
 
         return () => {
+            window.removeEventListener('mousedown', handleMouseDown, true);
             window.removeEventListener('click', handleClick, true);
         };
     }, [user, location.pathname]);

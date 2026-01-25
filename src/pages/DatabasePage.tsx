@@ -94,6 +94,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
     const [activeTab, setActiveTab] = useState<DatabaseTab>('items');
     const [sourceFilter, setSourceFilter] = useState<'all' | 'user'>('all');
+    const [showAdvanced, setShowAdvanced] = useState(false);
 
     // Drag and drop state
     const [isDragging, setIsDragging] = useState(false);
@@ -391,25 +392,25 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             stats[brand].count += freq;
 
             if (freq > stats[brand].topProductCount) {
-                 stats[brand].topProductCount = freq;
-                 stats[brand].topProduct = item.name;
+                stats[brand].topProductCount = freq;
+                stats[brand].topProduct = item.name;
             }
         });
 
         // Usage dates
         mealEntries.forEach(entry => {
             entry.items.forEach(mi => {
-                 if (mi.type === 'foodItem' && mi.referenceId) {
-                     const item = foodItems.find(f => f.id === mi.referenceId);
-                     if (item) {
-                         const brand = item.brand ? item.brand.trim() : 'Okänt märke';
-                         if (stats[brand]) {
-                             if (!stats[brand].lastUsed || entry.date > stats[brand].lastUsed) {
-                                 stats[brand].lastUsed = entry.date;
-                             }
-                         }
-                     }
-                 }
+                if (mi.type === 'foodItem' && mi.referenceId) {
+                    const item = foodItems.find(f => f.id === mi.referenceId);
+                    if (item) {
+                        const brand = item.brand ? item.brand.trim() : 'Okänt märke';
+                        if (stats[brand]) {
+                            if (!stats[brand].lastUsed || entry.date > stats[brand].lastUsed) {
+                                stats[brand].lastUsed = entry.date;
+                            }
+                        }
+                    }
+                }
             });
         });
 
@@ -1007,8 +1008,8 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 databaseActions.slice(0, 50).map((action) => (
                                     <div key={action.id} className="p-4 flex items-center gap-4 hover:bg-slate-800/30 transition-colors">
                                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${action.actionType === 'CREATE' ? 'bg-emerald-500/10 text-emerald-400' :
-                                                action.actionType === 'UPDATE' ? 'bg-blue-500/10 text-blue-400' :
-                                                    'bg-rose-500/10 text-rose-400'
+                                            action.actionType === 'UPDATE' ? 'bg-blue-500/10 text-blue-400' :
+                                                'bg-rose-500/10 text-rose-400'
                                             }`}>
                                             {action.actionType === 'CREATE' ? '➕' : action.actionType === 'UPDATE' ? '✏️' : '🗑️'}
                                         </div>
@@ -1209,7 +1210,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                         /* LIST VIEW - Modern CSS Grid Table */
                         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
                             {/* Header */}
-                            <div className="grid grid-cols-[auto,1fr,auto,auto,auto,auto,auto,auto,auto,auto,auto,auto,auto,auto] gap-4 p-4 border-b border-slate-800 bg-slate-900/80 text-[10px] font-bold text-slate-500 uppercase tracking-wider items-center">
+                            <div className="grid grid-cols-[3rem_1fr_7.5rem_4rem_3rem_3rem_3rem_4rem_4rem_4rem_5rem_8rem_7rem_6rem] gap-4 p-4 border-b border-slate-800 bg-slate-900/80 text-[10px] font-bold text-slate-500 uppercase tracking-wider items-center">
                                 <div className="w-10">Bild</div>
                                 <div className="cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
                                     Råvara {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
@@ -1241,7 +1242,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                 <div className="hidden 2xl:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('date')}>
                                     Datum {sortConfig?.key === 'date' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="w-20"></div>
+                                <div className="flex justify-end"></div>
                             </div>
 
                             <div className="divide-y divide-slate-800/50">
@@ -1253,7 +1254,7 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                                            className="grid grid-cols-[auto,1fr,auto,auto,auto,auto,auto,auto,auto,auto,auto,auto,auto,auto] gap-4 p-4 hover:bg-slate-800/50 transition-colors items-center group"
+                                            className="grid grid-cols-[3rem_1fr_7.5rem_4rem_3rem_3rem_3rem_4rem_4rem_4rem_5rem_8rem_7rem_6rem] gap-4 p-4 hover:bg-slate-800/50 transition-colors items-center group"
                                         >
                                             <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-800 border border-slate-700">
                                                 {item.imageUrl && (
@@ -1430,18 +1431,29 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                     }}
                 >
                     <div
-                        className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl w-full max-w-2xl max-h-[95vh] md:max-h-[90vh] overflow-y-auto shadow-2xl"
+                        className="bg-slate-900 border border-slate-800 rounded-2xl md:rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header */}
-                        <div className="flex justify-between items-center p-6 border-b border-slate-800 sticky top-0 bg-slate-900 z-10">
-                            <div>
-                                <h2 className="text-xl font-black text-white">
-                                    {editingItem ? '✏️ Redigera Råvara' : '➕ Lägg till Råvara'}
-                                </h2>
-                                <p className="text-xs text-slate-500 mt-1">
-                                    <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] font-mono">ESC</kbd> stäng • <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] font-mono">Ctrl+S</kbd> spara
-                                </p>
+                        <div className="flex justify-between items-center p-6 border-b border-slate-800 bg-slate-900 z-10 shrink-0">
+                            <div className="flex items-center gap-4">
+                                <div>
+                                    <h2 className="text-xl font-black text-white">
+                                        {editingItem ? '✏️ Redigera Råvara' : '➕ Lägg till Råvara'}
+                                    </h2>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] font-mono">ESC</kbd> stäng • <kbd className="px-1.5 py-0.5 bg-slate-800 rounded text-[10px] font-mono">Ctrl+S</kbd> spara
+                                    </p>
+                                </div>
+                                <div className="h-8 w-[1px] bg-slate-800 hidden md:block" />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAdvanced(!showAdvanced)}
+                                    className={`px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${showAdvanced ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}`}
+                                >
+                                    <span>{showAdvanced ? '✨' : '⚙️'}</span>
+                                    {showAdvanced ? 'Visa Mindre' : 'Visa Allt'}
+                                </button>
                             </div>
                             <button
                                 onClick={handleCloseForm}
@@ -1451,303 +1463,291 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-
-                            {/* Smart Parser - Now with Image Support */}
-                            <div
-                                className={`bg-emerald-500/5 rounded-2xl p-4 border relative overflow-hidden transition-all ${isDragging ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-emerald-500/10'}`}
-                                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                                onDragLeave={() => setIsDragging(false)}
-                                onDrop={handleDrop}
-                            >
-                                <label className="block text-[10px] font-bold uppercase tracking-wider text-emerald-500/70 mb-2 flex items-center gap-2">
-                                    <span>✨</span> Smart Närings-tolkare
-                                    {isParsing && (
-                                        <div className="flex items-center gap-1.5 ml-auto">
-                                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                                            <span className="text-[9px] normal-case font-medium text-emerald-500/80">Analyserar...</span>
-                                        </div>
-                                    )}
-                                </label>
-
-                                <div className="flex gap-4">
-                                    <div className="flex-1 relative">
-                                        <textarea
-                                            className={`w-full bg-slate-900/50 border ${parseError ? 'border-red-500/30' : 'border-slate-700/50'} rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 min-h-[80px] resize-none transition-all`}
-                                            placeholder="Klistra in näringstabell, URL eller BILD..."
-                                            disabled={isParsing}
-                                            onChange={(e) => handleTextPaste(e.target.value)}
-                                            onPaste={handlePaste}
-                                        />
-
-                                        {/* Image Upload Button (Hidden input + Label) */}
-                                        <div className="absolute right-2 bottom-2">
-                                            <input
-                                                type="file"
-                                                id="img-upload"
-                                                accept="image/*"
-                                                className="hidden"
-                                                onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])}
-                                            />
-                                            <label
-                                                htmlFor="img-upload"
-                                                className="cursor-pointer p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg flex items-center justify-center transition-colors"
-                                                title="Ladda upp bild"
-                                            >
-                                                📷
+                        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6">
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                {/* Left Column: Basic Info & Macros */}
+                                <div className="space-y-6">
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                                Namn *
                                             </label>
+                                            <input
+                                                type="text"
+                                                autoFocus
+                                                value={formData.name}
+                                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                                placeholder="t.ex. Kikärtor, Havregryn..."
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
+                                                required
+                                            />
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                                    Märke
+                                                </label>
+                                                <input
+                                                    type="text"
+                                                    value={formData.brand || ''}
+                                                    onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                                                    placeholder="t.ex. Zeta"
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+                                                    Kategori
+                                                </label>
+                                                <select
+                                                    value={formData.category}
+                                                    onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                                                >
+                                                    {Object.entries(CATEGORY_GROUPS).map(([group, keys]) => (
+                                                        <optgroup key={group} label={group}>
+                                                            {keys.map(key => (
+                                                                <option key={key} value={key}>{CATEGORY_LABELS[key]}</option>
+                                                            ))}
+                                                        </optgroup>
+                                                    ))}
+                                                </select>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    {/* Image Preview */}
-                                    {formData.imageUrl && (
-                                        <div className="w-24 h-24 shrink-0 bg-slate-900 rounded-xl border border-slate-700/50 overflow-hidden relative group">
-                                            <img
-                                                src={getImgSrc(formData.imageUrl)}
-                                                alt="Preview"
-                                                className="w-full h-full object-cover"
-                                            />
-                                            <button
-                                                type="button"
-                                                className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-xs font-bold transition-opacity"
-                                                onClick={() => setFormData(p => ({ ...p, imageUrl: '' }))}
-                                            >
-                                                Ta bort
-                                            </button>
+                                    {/* Macros Section */}
+                                    <div className="bg-slate-800/40 rounded-2xl p-5 border border-slate-700/50">
+                                        <h3 className="text-sm font-bold text-emerald-400 mb-6 flex items-center gap-2">
+                                            <span>📊</span> Näringsvärden (per 100g)
+                                        </h3>
+                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                            <MacroInput label="Kalorier" value={formData.calories} onChange={v => setFormData({ ...formData, calories: v })} suffix="kcal" />
+                                            <MacroInput label="Protein" value={formData.protein} onChange={v => setFormData({ ...formData, protein: v })} suffix="g" step={0.1} />
+                                            <MacroInput label="Kolhydrater" value={formData.carbs} onChange={v => setFormData({ ...formData, carbs: v })} suffix="g" step={0.1} />
+                                            <MacroInput label="Fett" value={formData.fat} onChange={v => setFormData({ ...formData, fat: v })} suffix="g" step={0.1} />
+                                            {showAdvanced && (
+                                                <>
+                                                    <MacroInput label="Fiber" value={formData.fiber || 0} onChange={v => setFormData({ ...formData, fiber: v })} suffix="g" step={0.1} />
+                                                    <MacroInput label="Koffein" value={formData.extendedDetails?.caffeine || 0} onChange={v => setFormData({ ...formData, extendedDetails: { ...formData.extendedDetails, caffeine: v } })} suffix="mg" />
+                                                    <MacroInput label="Alkohol" value={formData.extendedDetails?.alcohol || 0} onChange={v => setFormData({ ...formData, extendedDetails: { ...formData.extendedDetails, alcohol: v } })} suffix="e" step={0.1} />
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Micronutrients (Advanced Only) */}
+                                    {showAdvanced && (
+                                        <div className="bg-blue-500/5 rounded-2xl p-5 border border-blue-500/10">
+                                            <h3 className="text-sm font-bold text-blue-400 mb-6 flex items-center gap-2">
+                                                <span>🧪</span> Mikronutrienter
+                                            </h3>
+                                            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                                <MacroInput label="Järn" value={formData.iron || 0} onChange={v => setFormData({ ...formData, iron: v })} suffix="mg" step={0.01} />
+                                                <MacroInput label="Zink" value={formData.zinc || 0} onChange={v => setFormData({ ...formData, zinc: v })} suffix="mg" step={0.1} />
+                                                <MacroInput label="Kalcium" value={formData.calcium || 0} onChange={v => setFormData({ ...formData, calcium: v })} suffix="mg" />
+                                                <MacroInput label="B12" value={formData.vitaminB12 || 0} onChange={v => setFormData({ ...formData, vitaminB12: v })} suffix="µg" step={0.1} />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Protein Analysis (Advanced Only) */}
+                                    {showAdvanced && formData.protein > 5 && (
+                                        <div className="bg-amber-500/5 rounded-2xl p-5 border border-amber-500/10">
+                                            <h3 className="text-sm font-bold text-amber-400 mb-6 flex items-center gap-2">
+                                                <span>🧬</span> Protein-analys
+                                            </h3>
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs text-slate-400 font-bold uppercase">Fullvärdigt protein</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData({ ...formData, isCompleteProtein: !formData.isCompleteProtein })}
+                                                        className={`w-12 h-6 rounded-full p-1 transition-colors ${formData.isCompleteProtein ? 'bg-emerald-500 text-white' : 'bg-slate-700 text-slate-400'}`}
+                                                    >
+                                                        <div className={`w-4 h-4 bg-white rounded-full transition-transform ${formData.isCompleteProtein ? 'translate-x-6' : 'translate-x-0'}`} />
+                                                    </button>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-bold uppercase text-slate-500 mb-2">Proteinkategori</label>
+                                                    <select
+                                                        value={formData.proteinCategory || ''}
+                                                        onChange={(e) => setFormData({ ...formData, proteinCategory: e.target.value as any })}
+                                                        className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-3 py-2 text-xs text-white"
+                                                    >
+                                                        <option value="">Välj...</option>
+                                                        <option value="animal">Animaliskt</option>
+                                                        <option value="pulse">Baljväxt (Lysin-rik)</option>
+                                                        <option value="grain">Spannmål (Methionin-rik)</option>
+                                                        <option value="nut-seed">Nöt/Frö</option>
+                                                        <option value="mixed">Blandat</option>
+                                                    </select>
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
 
-                                {parseError && (
-                                    <p className="text-[9px] text-red-400 mt-2 flex items-center gap-1">
-                                        <span>⚠️</span> {parseError}
-                                    </p>
-                                )}
-                                <p className="text-[9px] text-slate-500 mt-2 italic">
-                                    Stödjer text, URL och bilder (OCR). Klistra in bild direkt (Ctrl+V) eller dra & släpp!
-                                </p>
-
-                                {isDragging && (
-                                    <div className="absolute inset-0 bg-emerald-500/20 backdrop-blur-sm flex items-center justify-center border-2 border-emerald-500 border-dashed rounded-2xl pointer-events-none">
-                                        <span className="text-emerald-300 font-bold animate-bounce">Släpp bilden här!</span>
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Primary: Name & Category */}
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                        Namn *
-                                    </label>
-                                    <input
-                                        type="text"
-                                        autoFocus
-                                        value={formData.name}
-                                        onChange={(e) => {
-                                            const name = e.target.value;
-                                            setFormData({ ...formData, name });
-                                            // Auto-suggest category logic (same as before)
-                                        }}
-                                        placeholder="t.ex. Kikärtor, Havregryn..."
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                                        required
-                                    />
-                                </div>
-
-                                {/* Alias Input */}
-                                {editingItem && (
-                                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3">
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-blue-400 mb-2">
-                                            Personligt Alias
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={alias}
-                                            onChange={(e) => setAlias(e.target.value)}
-                                            placeholder={`t.ex. "Shake" (istället för ${formData.name})`}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2 text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500"
-                                        />
-                                        <p className="text-[10px] text-slate-500 mt-2">
-                                            Detta namn visas i din logg och sökning istället för originalnamnet.
-                                        </p>
-                                    </div>
-                                )}
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Märke (frivilligt)
-                                        </label>
-                                        <input
-                                            type="text"
-                                            value={formData.brand || ''}
-                                            onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
-                                            placeholder="t.ex. Zeta, Garant..."
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Förp. Vikt (friv.)
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={formData.packageWeight || ''}
-                                                onChange={(e) => setFormData({ ...formData, packageWeight: Number(e.target.value) })}
-                                                placeholder="t.ex. 275"
-                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
-                                            />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">G</span>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                            Portion (friv.)
-                                        </label>
-                                        <div className="relative">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={formData.defaultPortionGrams || ''}
-                                                onChange={(e) => setFormData({ ...formData, defaultPortionGrams: Number(e.target.value) })}
-                                                placeholder="t.ex. 35"
-                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 pr-12"
-                                            />
-                                            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-slate-500 font-bold">G</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                        Kategori
-                                    </label>
-                                    <select
-                                        value={formData.category}
-                                        onChange={(e) => setFormData({ ...formData, category: e.target.value as FoodCategory })}
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                                {/* Right Column: Parser, Images & Details */}
+                                <div className="space-y-6">
+                                    {/* Smart Parser */}
+                                    <div
+                                        className={`bg-emerald-500/5 rounded-2xl p-5 border relative overflow-hidden transition-all ${isDragging ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-emerald-500/10'}`}
+                                        onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                                        onDragLeave={() => setIsDragging(false)}
+                                        onDrop={handleDrop}
                                     >
-                                        {Object.entries(CATEGORY_GROUPS).map(([group, keys]) => (
-                                            <optgroup key={group} label={group}>
-                                                {keys.map(key => (
-                                                    <option key={key} value={key}>{CATEGORY_LABELS[key]}</option>
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <span className="text-sm">✨</span>
+                                            <span className="text-xs font-bold uppercase tracking-widest text-emerald-500">Smart Tolkare</span>
+                                            {isParsing && (
+                                                <div className="flex items-center gap-2 ml-auto">
+                                                    <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                                                    <span className="text-[10px] text-emerald-500">Analyserar...</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="flex gap-4">
+                                            <div className="flex-1 relative">
+                                                <textarea
+                                                    className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl px-4 py-3 text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none focus:border-emerald-500/50 min-h-[100px] resize-none"
+                                                    placeholder="Klistra in innehållsförteckning, näringsvärden eller en länk..."
+                                                    onChange={(e) => handleTextPaste(e.target.value)}
+                                                    onPaste={handlePaste}
+                                                />
+                                                <div className="absolute right-3 bottom-3 flex gap-2">
+                                                    <input type="file" id="img-upload" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && handleImageUpload(e.target.files[0])} />
+                                                    <label htmlFor="img-upload" className="cursor-pointer p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-colors">📷</label>
+                                                </div>
+                                            </div>
+                                            {formData.imageUrl && (
+                                                <div className="w-24 h-24 shrink-0 bg-slate-900 rounded-xl border border-slate-700/50 overflow-hidden relative group">
+                                                    <img src={getImgSrc(formData.imageUrl)} alt="Preview" className="w-full h-full object-cover" />
+                                                    <button type="button" onClick={() => setFormData(p => ({ ...p, imageUrl: '' }))} className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold">Ta bort</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Portions & Unit */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Standardportion</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="number"
+                                                    value={formData.defaultPortionGrams || ''}
+                                                    onChange={e => setFormData({ ...formData, defaultPortionGrams: Number(e.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                                                    placeholder="t.ex. 35"
+                                                />
+                                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">G</span>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Mätenhet</label>
+                                            <select
+                                                value={formData.unit}
+                                                onChange={e => setFormData({ ...formData, unit: e.target.value as Unit })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                                            >
+                                                {Object.entries(UNIT_LABELS).map(([key, label]) => (
+                                                    <option key={key} value={key}>{label}</option>
                                                 ))}
-                                            </optgroup>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                        Enhet
-                                    </label>
-                                    <select
-                                        value={formData.unit}
-                                        onChange={(e) => setFormData({ ...formData, unit: e.target.value as Unit })}
-                                        className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                    >
-                                        {Object.entries(UNIT_LABELS).map(([key, label]) => (
-                                            <option key={key} value={key}>{label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
+                                            </select>
+                                        </div>
+                                    </div>
 
-                            {/* Ingredient List */}
-                            <div>
-                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
-                                    Ingredienslista (frivilligt)
-                                </label>
-                                <textarea
-                                    value={formData.ingredients || ''}
-                                    onChange={(e) => setFormData({ ...formData, ingredients: e.target.value })}
-                                    placeholder="t.ex. Kikärtor, vatten, salt..."
-                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 min-h-[100px] resize-y"
-                                />
-                            </div>
+                                    {/* Description / Ingredients */}
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Ingredienser</label>
+                                            <textarea
+                                                value={formData.ingredients || ''}
+                                                onChange={e => setFormData({ ...formData, ingredients: e.target.value })}
+                                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white min-h-[80px]"
+                                                placeholder="Vad innehåller produkten?"
+                                            />
+                                        </div>
+                                        {showAdvanced && (
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Beskrivning</label>
+                                                <textarea
+                                                    value={formData.description || ''}
+                                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white min-h-[60px]"
+                                                    placeholder="Extra personliga anteckningar..."
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
 
-                            {/* Primary: Macros */}
-                            <div className="bg-slate-800/50 rounded-2xl p-4 border border-slate-700/50">
-                                <h3 className="text-sm font-bold text-emerald-400 mb-4 flex items-center gap-2">
-                                    <span>📊</span> Näringsvärden (per 100g)
-                                </h3>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div>
-                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Protein</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.1"
-                                            value={formData.protein}
-                                            onChange={(e) => {
-                                                const protein = Number(e.target.value);
-                                                const calories = Math.round(protein * 4 + formData.carbs * 4 + formData.fat * 9);
-                                                setFormData({ ...formData, protein, calories });
-                                            }}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Kolhydrater</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.1"
-                                            value={formData.carbs}
-                                            onChange={(e) => {
-                                                const carbs = Number(e.target.value);
-                                                const calories = Math.round(formData.protein * 4 + carbs * 4 + formData.fat * 9);
-                                                setFormData({ ...formData, carbs, calories });
-                                            }}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Fett</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.1"
-                                            value={formData.fat}
-                                            onChange={(e) => {
-                                                const fat = Number(e.target.value);
-                                                const calories = Math.round(formData.protein * 4 + formData.carbs * 4 + fat * 9);
-                                                setFormData({ ...formData, fat, calories });
-                                            }}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">Kalorier</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            value={formData.calories}
-                                            onChange={(e) => setFormData({ ...formData, calories: Number(e.target.value) })}
-                                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-right focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                                        />
-                                    </div>
+                                    {/* Environmental & Price (Advanced Only) */}
+                                    {showAdvanced && (
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">CO2 Avtryck</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={formData.co2PerUnit || 0}
+                                                    onChange={v => setFormData({ ...formData, co2PerUnit: Number(v.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Pris per enhet</label>
+                                                <input
+                                                    type="number"
+                                                    step="0.1"
+                                                    value={formData.pricePerUnit || 0}
+                                                    onChange={v => setFormData({ ...formData, pricePerUnit: Number(v.target.value) })}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Seasons (Advanced Only) */}
+                                    {showAdvanced && (
+                                        <div>
+                                            <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">I säsong</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {['Vår', 'Sommar', 'Höst', 'Vinter'].map(s => (
+                                                    <button
+                                                        key={s}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const seasons = formData.seasons || [];
+                                                            setFormData({ ...formData, seasons: seasons.includes(s) ? seasons.filter(x => x !== s) : [...seasons, s] });
+                                                        }}
+                                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest ${formData.seasons?.includes(s) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+                                                    >
+                                                        {s}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
-                            {/* Actions */}
-                            <div className="flex gap-3 pt-4 border-t border-slate-800">
+                            {/* Sticky Footer */}
+                            <div className="flex gap-4 pt-8 mt-8 border-t border-slate-800 sticky bottom-0 bg-slate-900 pb-2">
                                 <button
                                     type="button"
                                     onClick={handleCloseForm}
-                                    className="flex-1 py-3 px-6 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors"
+                                    className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-slate-400 font-black uppercase tracking-widest text-xs rounded-2xl transition-all"
                                 >
                                     Avbryt
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex-1 py-3 px-6 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2"
+                                    className="flex-[2] py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-black uppercase tracking-widest text-xs rounded-2xl transition-all shadow-lg shadow-emerald-500/20"
                                 >
-                                    {editingItem ? '💾 Spara' : '➕ Lägg till'}
+                                    {editingItem ? 'Spara Ändringar' : 'Lägg till i databas'}
                                 </button>
                             </div>
                         </form>
@@ -1755,17 +1755,19 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 </div>
             )}
 
-            {detailItem && (
-                <FoodItemDetailModal
-                    item={detailItem}
-                    onClose={() => setDetailItem(null)}
-                    frequency={itemFrequencyMap[detailItem.id] || 0}
-                    categoryLabels={CATEGORY_LABELS}
-                    unitLabels={UNIT_LABELS}
-                    creatorName={getCreatorName(detailItem.createdBy)}
-                />
-            )}
-        </div>
+            {
+                detailItem && (
+                    <FoodItemDetailModal
+                        item={detailItem}
+                        onClose={() => setDetailItem(null)}
+                        frequency={itemFrequencyMap[detailItem.id] || 0}
+                        categoryLabels={CATEGORY_LABELS}
+                        unitLabels={UNIT_LABELS}
+                        creatorName={getCreatorName(detailItem.createdBy)}
+                    />
+                )
+            }
+        </div >
     );
 }
 
@@ -1776,5 +1778,21 @@ const StatCard: React.FC<{ label: string, value: number, icon: string, color?: s
             <div className={`text-2xl md:text-3xl font-black ${color}`}>{value}</div>
         </div>
         <div className="text-2xl md:text-3xl opacity-50">{icon}</div>
+    </div>
+);
+
+const MacroInput: React.FC<{ label: string, value: number, onChange: (v: number) => void, suffix: string, step?: number }> = ({ label, value, onChange, suffix, step = 1 }) => (
+    <div>
+        <label className="block text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1.5">{label}</label>
+        <div className="relative">
+            <input
+                type="number"
+                step={step}
+                value={value}
+                onChange={e => onChange(Number(e.target.value))}
+                className="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 text-right pr-10"
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-bold text-slate-600 pointer-events-none uppercase">{suffix}</span>
+        </div>
     </div>
 );
