@@ -135,6 +135,44 @@ export async function handleAnalyticsRoutes(req: Request, url: URL, headers: Hea
             return json({ errors });
         }
 
+        // --- NEW ENDPOINTS ---
+
+        // GET /funnels - Get all funnel definitions
+        if (path === "/funnels" && method === "GET") {
+            const funnels = await analyticsRepository.getFunnelDefinitions();
+            return json({ funnels });
+        }
+
+        // POST /funnels - Save a funnel definition
+        if (path === "/funnels" && method === "POST") {
+            const body = await req.json();
+            if (!body.id || !body.name || !body.steps) return json({ error: "Missing required fields" }, 400);
+            await analyticsRepository.saveFunnelDefinition(body);
+            return json({ success: true }, 201);
+        }
+
+        // DELETE /funnels - Delete a funnel definition
+        if (path === "/funnels" && method === "DELETE") {
+            const id = url.searchParams.get('id');
+            if (!id) return json({ error: "Missing id" }, 400);
+            await analyticsRepository.deleteFunnelDefinition(id);
+            return json({ success: true });
+        }
+
+        // GET /correlation - Get error-to-exit correlation
+        if (path === "/correlation" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '7');
+            const correlation = await analyticsRepository.getErrorCorrelationStats(daysBack);
+            return json({ correlation });
+        }
+
+        // GET /dead-clicks - Get dead click statistics
+        if (path === "/dead-clicks" && method === "GET") {
+            const daysBack = parseInt(url.searchParams.get('days') || '7');
+            const deadClicks = await analyticsRepository.getDeadClickStats(daysBack);
+            return json({ deadClicks });
+        }
+
         return json({ error: "Not Found" }, 404);
 
     } catch (error) {

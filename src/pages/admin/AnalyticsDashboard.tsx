@@ -67,6 +67,9 @@ export function AnalyticsDashboard() {
     const [exitStats, setExitStats] = useState<any[]>([]);
     const [appDataStats, setAppDataStats] = useState<any | null>(null);
     const [errorStats, setErrorStats] = useState<any[]>([]);
+    const [funnelDefinitions, setFunnelDefinitions] = useState<any[]>([]);
+    const [correlationStats, setCorrelationStats] = useState<any[]>([]);
+    const [deadClickStats, setDeadClickStats] = useState<any[]>([]);
 
     // Sessions Data
     const [sessions, setSessions] = useState<AnalyticsSession[]>([]);
@@ -149,9 +152,21 @@ export function AnalyticsDashboard() {
                 const data = await res.json();
                 setAppDataStats(data);
             } else if (activeTab === 'errors') {
-                const res = await fetch(`/api/usage/errors?days=${daysBack}`);
+                const [errRes, corrRes] = await Promise.all([
+                    fetch(`/api/usage/errors?days=${daysBack}`),
+                    fetch(`/api/usage/correlation?days=${daysBack}`)
+                ]);
+                const [errData, corrData] = await Promise.all([errRes.json(), corrRes.json()]);
+                setErrorStats(errData.errors || []);
+                setCorrelationStats(corrData.correlation || []);
+            } else if (activeTab === 'funnel') {
+                const res = await fetch('/api/usage/funnels');
                 const data = await res.json();
-                setErrorStats(data.errors || []);
+                setFunnelDefinitions(data.funnels || []);
+            } else if (activeTab === 'friction') {
+                const res = await fetch(`/api/usage/dead-clicks?days=${daysBack}`);
+                const data = await res.json();
+                setDeadClickStats(data.deadClicks || []);
             }
             setError(null);
         } catch (err) {
@@ -232,7 +247,7 @@ export function AnalyticsDashboard() {
                             onClick={() => setActiveTab('friction')}
                             className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'friction' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
                         >
-                            🛑 Friction
+                            🛑 Dead Clicks
                         </button>
                         <button
                             onClick={() => setActiveTab('funnel')}
@@ -643,23 +658,51 @@ export function AnalyticsDashboard() {
                             </tbody>
                         </table>
                     </div>
+
+                    {/* Correlation Score */}
+                    {correlationStats.length > 0 && (
+                        <div className="mt-8">
+                            <h3 className="text-lg font-black mb-4 flex items-center gap-2 text-pink-500">
+                                <Activity size={18} />
+                                Error-to-Exit Correlation (Impact Score)
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {correlationStats.map((c, i) => (
+                                    <div key={i} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 relative overflow-hidden">
+                                        <div className={`absolute top-0 right-0 px-2 py-1 text-[10px] font-black uppercase ${c.impactScore > 50 ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                                            IMPACT: {c.impactScore}%
+                                        </div>
+                                        <div className="text-sm font-bold text-white mb-2 pr-12">{c.message}</div>
+                                        <div className="flex justify-between items-end mt-4">
+                                            <div className="text-[10px] text-slate-500 uppercase font-black">
+                                                {c.terminalExits} av {c.totalOccurrences} ledde till avhopp
+                                            </div>
+                                            <div className="h-1 w-24 bg-slate-700 rounded-full overflow-hidden">
+                                                <div className="h-full bg-pink-500" style={{ width: `${c.impactScore}%` }}></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </div>
             ) : activeTab === 'retention' ? (
                 // --- RETENTION TAB ---
                 <RetentionHeatmap data={retention} />
             ) : activeTab === 'pathing' ? (
                 // --- PATHING TAB ---
-                <PathingFlow data={pathing} />
+                <PathingFlow data={pathing} exitStats={exitStats} />
 
             ) : activeTab === 'heatmap' ? (
                 // --- HEATMAP TAB ---
                 <HeatmapView events={rawEvents} />
             ) : activeTab === 'friction' ? (
                 // --- FRICTION TAB ---
-                <FrictionView events={rawEvents} />
+                <DeadClickView stats={deadClickStats} />
             ) : activeTab === 'funnel' ? (
                 // --- FUNNEL TAB ---
-                <FunnelView events={rawEvents} />
+                <FunnelView events={rawEvents} definitions={funnelDefinitions} onRefresh={fetchAllData} />
             ) : (
                 // --- SESSIONS TAB ---
                 <div className="space-y-6">
@@ -797,7 +840,7 @@ function RetentionHeatmap({ data }: { data: any[] }) {
     );
 }
 
-function PathingFlow({ data }: { data: any[] }) {
+function PathingFlow({ data, exitStats }: { data: any[], exitStats: any[] }) {
     // Separate paths and calculate exit dropoffs (simplisticly)
     return (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -807,7 +850,7 @@ function PathingFlow({ data }: { data: any[] }) {
                     Vanliga Navigeringsvägar
                 </h2>
                 <div className="space-y-4">
-                    {data.map((item, i) => {
+                    {data.map((item: any, i: number) => {
                         const [from, to] = item.label.split(' -> ');
                         return (
                             <div key={i} className="flex items-center gap-4 group">
@@ -838,7 +881,7 @@ function PathingFlow({ data }: { data: any[] }) {
                         Exit-Analys
                     </h2>
                     <div className="space-y-4">
-                        {exitStats.map((item, i) => (
+                        {exitStats.map((item: any, i: number) => (
                             <div key={i} className="flex flex-col gap-1">
                                 <div className="flex justify-between text-[10px] font-bold">
                                     <span className="text-slate-400 truncate max-w-[150px]" title={item.label}>{item.label}</span>
@@ -1129,10 +1172,13 @@ function HeatmapView({ events }: { events: InteractionEvent[] }) {
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-black flex items-center gap-2">
-                    <Activity className="text-orange-500" />
-                    Klick-Heatmap
-                </h2>
+                <div>
+                    <h2 className="text-xl font-black flex items-center gap-2">
+                        <Activity className="text-orange-500" />
+                        Smart Heatmap v2
+                    </h2>
+                    <p className="text-xs text-slate-500 font-medium">Använder bounding boxes för att analysera precision.</p>
+                </div>
                 <select
                     value={selectedPath}
                     onChange={e => setSelectedPath(e.target.value)}
@@ -1144,29 +1190,54 @@ function HeatmapView({ events }: { events: InteractionEvent[] }) {
             </div>
 
             <div className="relative w-full aspect-video bg-slate-100 dark:bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner">
-                {/* Mock UI Background (optional, or just grid) */}
-                <div className="absolute inset-0 opacity-10 grid grid-cols-12 grid-rows-6 gap-2 p-4">
-                    {/* Header */}
-                    <div className="col-span-12 row-span-1 bg-slate-500 rounded"></div>
-                    {/* Sidebar */}
-                    <div className="col-span-3 row-span-5 bg-slate-500 rounded"></div>
-                    {/* Content */}
-                    <div className="col-span-9 row-span-5 bg-slate-500 rounded"></div>
+                {/* Mock UI Grid */}
+                <div className="absolute inset-0 opacity-5 pointer-events-none">
+                    <div className="h-full w-full" style={{ backgroundImage: 'radial-gradient(#64748b 0.5px, transparent 0.5px)', backgroundSize: '20px 20px' }}></div>
                 </div>
 
-                {/* Heatmap Points */}
+                {/* Draw Element Bounding Boxes for filtered clicks */}
                 {filteredClicks.map((click, i) => (
-                    <div
-                        key={i}
-                        className={`absolute w-6 h-6 rounded-full blur-md transform -translate-x-1/2 -translate-y-1/2 transition-opacity duration-500 ${click.type === 'rage_click' ? 'bg-red-500 opacity-80 z-20 w-8 h-8' : 'bg-orange-500 opacity-40 hover:opacity-100 z-10'
-                            }`}
-                        style={{
-                            left: `${click.coordinates?.pctX}%`,
-                            top: `${click.coordinates?.pctY}%`,
-                        }}
-                        title={`${click.label} (${click.coordinates?.x}, ${click.coordinates?.y})`}
-                    />
+                    click.elementRect && (
+                        <div
+                            key={`rect-${i}`}
+                            className="absolute border border-blue-500/20 bg-blue-500/5 pointer-events-none"
+                            style={{
+                                left: `${(click.elementRect.left / click.coordinates!.viewportW) * 100}%`,
+                                top: `${(click.elementRect.top / click.coordinates!.viewportH) * 100}%`,
+                                width: `${(click.elementRect.width / click.coordinates!.viewportW) * 100}%`,
+                                height: `${(click.elementRect.height / click.coordinates!.viewportH) * 100}%`,
+                            }}
+                        />
+                    )
                 ))}
+
+                {/* Heatmap Points */}
+                {filteredClicks.map((click, i) => {
+                    // Precision analysis: is coordinate inside rect?
+                    let isMiss = false;
+                    if (click.elementRect && click.coordinates) {
+                        const { x, y } = click.coordinates;
+                        const { top, left, width, height } = click.elementRect;
+                        if (x < left || x > left + width || y < top || y > top + height) {
+                            isMiss = true;
+                        }
+                    }
+
+                    return (
+                        <div
+                            key={i}
+                            className={`absolute w-4 h-4 rounded-full blur-[2px] transform -translate-x-1/2 -translate-y-1/2 transition-opacity duration-500 ${click.type === 'rage_click' ? 'bg-red-500 opacity-90 scale-150 z-20' :
+                                isMiss ? 'bg-amber-400 opacity-80 z-20 ring-4 ring-amber-400/20' :
+                                    'bg-orange-500 opacity-60 z-10'
+                                }`}
+                            style={{
+                                left: `${click.coordinates?.pctX}%`,
+                                top: `${click.coordinates?.pctY}%`,
+                            }}
+                            title={`${click.label} ${isMiss ? '(MISS!)' : ''}`}
+                        />
+                    );
+                })}
 
                 {filteredClicks.length === 0 && (
                     <div className="absolute inset-0 flex items-center justify-center text-slate-500">
@@ -1174,18 +1245,76 @@ function HeatmapView({ events }: { events: InteractionEvent[] }) {
                     </div>
                 )}
             </div>
-            <div className="mt-4 flex gap-4 text-xs text-slate-500">
+
+            <div className="mt-4 flex flex-wrap gap-4 text-xs text-slate-500">
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-orange-500 opacity-50"></div>
-                    <span>Normal Klick</span>
+                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                    <span>Träffat element</span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-full bg-red-500 opacity-80"></div>
-                    <span>Rage Click (Frustration)</span>
+                    <div className="w-3 h-3 rounded-full bg-amber-400 ring-2 ring-amber-400/20"></div>
+                    <span>Precision-tapp (Klickat utanför elementet)</span>
                 </div>
-                <div className="ml-auto">
-                    Visar {filteredClicks.length} datapunkter
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-red-500"></div>
+                    <span>Rage Click</span>
                 </div>
+                <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 border border-blue-500/20 bg-blue-500/5"></div>
+                    <span>Elementets ram (Bounding Box)</span>
+                </div>
+                <div className="ml-auto font-bold text-slate-400">
+                    Analyserar {filteredClicks.length} datapunkter
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function DeadClickView({ stats }: { stats: any[] }) {
+    return (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+            <h2 className="text-xl font-black mb-6 flex items-center gap-2 text-amber-500">
+                <MousePointer2 />
+                Dead Click Explorer
+            </h2>
+            <p className="text-sm text-slate-500 mb-6">
+                Visar element som användare klickar på men som inte har någon interaktivitet.
+                Indikerar ofta att användaren förväntar sig att något ska hända (t.ex. att en bild ska förstoras).
+            </p>
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                    <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 sticky top-0">
+                        <tr>
+                            <th className="px-4 py-3 text-left">Element & Text</th>
+                            <th className="px-4 py-3 text-right">Antal</th>
+                            <th className="px-4 py-3 text-left">Vanligaste Sida</th>
+                            <th className="px-4 py-3 text-right">Senast sett</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                        {stats.map((s, i) => (
+                            <tr key={i} className="hover:bg-amber-500/5 transition-colors">
+                                <td className="px-4 py-4">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] bg-slate-800 px-1.5 py-0.5 rounded font-mono text-slate-400">{s.label.split(':')[0]}</span>
+                                        <span className="font-bold text-slate-300">{s.label.split(':').slice(1).join(':')}</span>
+                                    </div>
+                                </td>
+                                <td className="px-4 py-4 text-right font-black text-amber-500 text-lg">{s.count}</td>
+                                <td className="px-4 py-4 font-mono text-xs text-slate-500">{s.topPath}</td>
+                                <td className="px-4 py-4 text-right text-xs text-slate-500">{formatRelativeTime(s.lastSeen)}</td>
+                            </tr>
+                        ))}
+                        {stats.length === 0 && (
+                            <tr>
+                                <td colSpan={4} className="px-4 py-20 text-center text-slate-500 font-bold">
+                                    Inga döda klick hittade än. Bra UX! 👏
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
             </div>
         </div>
     );
@@ -1267,70 +1396,132 @@ function FrictionView({ events }: { events: InteractionEvent[] }) {
     );
 }
 
-function FunnelView({ events }: { events: InteractionEvent[] }) {
-    // Hardcoded logic for "Meal Logging Funnel" based on event paths/types
+function FunnelView({ events, definitions, onRefresh }: { events: InteractionEvent[], definitions: any[], onRefresh: () => void }) {
+    const [selectedFunnelId, setSelectedFunnelId] = useState<string | null>(definitions[0]?.id || null);
+    const [isCreating, setIsCreating] = useState(false);
+
+    const activeFunnel = definitions.find(d => d.id === selectedFunnelId);
+
     const funnelData = React.useMemo(() => {
-        const totalUsers = new Set(events.map(e => e.userId)).size || 1;
+        if (!activeFunnel) return [];
 
-        // 1. Visited Database
-        const step1Users = new Set(events.filter(e => e.path === '/database').map(e => e.userId));
+        const results = [];
+        let prevUserIds = new Set(events.map(e => e.userId));
 
-        // 2. Clicked "Add Item" (mock selector/label match)
-        const step2Users = new Set(events.filter(e => e.path === '/database' && (e.label.includes('Add') || e.target === 'button')).map(e => e.userId)); // Looser match for demo
+        for (const step of activeFunnel.steps) {
+            const stepUserIds = new Set(
+                events.filter(e => {
+                    // Match by bitmask or specific property
+                    if (step.type === 'path') return e.path === step.value;
+                    if (step.type === 'action') return e.label.includes(step.value) || e.target === step.value;
+                    return false;
+                }).map(e => e.userId)
+            );
 
-        // 3. Submitted (mock)
-        const step3Users = new Set(events.filter(e => e.type === 'submit' || (e.label === 'Spara')).map(e => e.userId));
+            // Users must have been in the previous set to count (funnel flow)
+            const qualifiedUserIds = new Set([...stepUserIds].filter(id => prevUserIds.has(id)));
 
-        return [
-            { name: 'Start Session', value: totalUsers, fill: '#6366f1' },
-            { name: 'View Database', value: step1Users.size, fill: '#8b5cf6' },
-            { name: 'Open Form', value: step2Users.size, fill: '#d946ef' },
-            { name: 'Save Item', value: step3Users.size, fill: '#ec4899' },
-        ];
-    }, [events]);
+            results.push({
+                name: step.name,
+                value: qualifiedUserIds.size,
+                fill: step.color || '#ec4899'
+            });
+
+            prevUserIds = qualifiedUserIds;
+        }
+
+        return results;
+    }, [events, activeFunnel]);
+
+    const handleSaveFunnel = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const obj = {
+            id: generateId(),
+            name: "Ny Tratt",
+            steps: [
+                { name: "Start", type: "path", value: "/calories", color: "#6366f1" },
+                { name: "Mål", type: "action", value: "Spara", color: "#ec4899" }
+            ]
+        };
+        await fetch('/api/usage/funnels', {
+            method: 'POST',
+            body: JSON.stringify(obj)
+        });
+        onRefresh();
+        setIsCreating(false);
+    };
 
     return (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-            <h2 className="text-xl font-black mb-8 flex items-center gap-2">
-                <TrendingUp className="text-pink-500" />
-                Konvertering: Logga Måltid
-            </h2>
-            <div className="w-full h-[400px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                        data={funnelData}
-                        layout="vertical"
-                        barSize={40}
-                        margin={{ top: 20, right: 30, left: 40, bottom: 5 }}
-                    >
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#334155" />
-                        <XAxis type="number" stroke="#94a3b8" />
-                        <YAxis type="category" dataKey="name" stroke="#94a3b8" width={100} />
-                        <Tooltip
-                            cursor={{ fill: 'transparent' }}
-                            contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
-                        />
-                        <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                            {funnelData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.fill} />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-4 gap-4 mt-8">
-                {funnelData.map((step, i) => (
-                    <div key={step.name} className="bg-slate-800 p-4 rounded-xl text-center relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: step.fill }}></div>
-                        <div className="text-2xl font-black text-white">{step.value}</div>
-                        <div className="text-[10px] uppercase font-bold text-slate-500">{step.name}</div>
-                        {i > 0 && (
-                            <div className="absolute top-2 right-2 text-[10px] text-slate-600">
-                                {Math.round((step.value / (funnelData[0].value || 1)) * 100)}%
-                            </div>
-                        )}
+        <div className="space-y-6">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                <div className="flex justify-between items-center mb-8">
+                    <h2 className="text-xl font-black flex items-center gap-2">
+                        <TrendingUp className="text-pink-500" />
+                        Konverterings-Trattar
+                    </h2>
+                    <div className="flex gap-2">
+                        <select
+                            value={selectedFunnelId || ''}
+                            onChange={e => setSelectedFunnelId(e.target.value)}
+                            className="bg-slate-800 text-white px-3 py-1.5 rounded-lg border border-slate-700 text-xs font-bold"
+                        >
+                            <option value="">Välj en vy...</option>
+                            {definitions.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        </select>
+                        <button
+                            onClick={handleSaveFunnel}
+                            className="px-3 py-1.5 bg-pink-500 hover:bg-pink-600 rounded-lg text-xs font-bold text-white shadow-lg shadow-pink-500/20"
+                        >
+                            + Skapa Ny
+                        </button>
                     </div>
-                ))}
+                </div>
+
+                {activeFunnel ? (
+                    <>
+                        <div className="w-full h-[400px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart
+                                    data={funnelData}
+                                    layout="vertical"
+                                    barSize={40}
+                                    margin={{ top: 20, right: 30, left: 40, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#334155" />
+                                    <XAxis type="number" stroke="#94a3b8" />
+                                    <YAxis type="category" dataKey="name" stroke="#94a3b8" width={100} />
+                                    <Tooltip
+                                        cursor={{ fill: 'transparent' }}
+                                        contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', color: '#f8fafc' }}
+                                    />
+                                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                                        {funnelData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.fill} />
+                                        ))}
+                                    </Bar>
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </div>
+                        <div className="grid grid-cols-4 gap-4 mt-8">
+                            {funnelData.map((step, i) => (
+                                <div key={step.name} className="bg-slate-800 p-4 rounded-xl text-center relative overflow-hidden">
+                                    <div className="absolute top-0 left-0 w-1 h-full" style={{ backgroundColor: step.fill }}></div>
+                                    <div className="text-2xl font-black text-white">{step.value}</div>
+                                    <div className="text-[10px] uppercase font-bold text-slate-500">{step.name}</div>
+                                    {i > 0 && (
+                                        <div className="absolute top-2 right-2 text-[10px] text-slate-600 font-bold">
+                                            {funnelData[i - 1].value > 0 ? Math.round((step.value / funnelData[i - 1].value) * 100) : 0}% konv.
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <div className="py-20 text-center text-slate-500 font-bold">
+                        Inga definitioner laddade. Välj eller skapa en ny!
+                    </div>
+                )}
             </div>
         </div>
     );

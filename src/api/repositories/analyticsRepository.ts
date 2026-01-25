@@ -780,5 +780,92 @@ export const analyticsRepository = {
             }))
             .sort((a, b) => b.count - a.count)
             .slice(0, 20);
+    },
+
+    /**
+     * Funnel Management
+     */
+    async saveFunnelDefinition(funnel: any): Promise<void> {
+        await kv.set(["analytics_funnels", funnel.id], funnel);
+    },
+
+    async getFunnelDefinitions(): Promise<any[]> {
+        const funnels = [];
+        for await (const entry of kv.list<any>({ prefix: ["analytics_funnels"] })) {
+            funnels.push(entry.value);
+        }
+        return funnels;
+    },
+
+    async deleteFunnelDefinition(id: string): Promise<void> {
+        await kv.delete(["analytics_funnels", id]);
+    },
+
+    /**
+     * Calculate Impact Score of errors on session termination
+     */
+    async getErrorCorrelationStats(daysBack = 7): Promise<any> {
+        const sessions = await this.getSessions(daysBack);
+        const errorCounts = new Map<string, { total: number, exits: number }>();
+
+        for (const session of sessions) {
+            const events = await this.getSessionEvents(session.sessionId);
+            const errors = events.filter(e => e.type === 'error' || e.type === 'rage_click');
+
+            if (errors.length > 0) {
+                errors.forEach(err => {
+                    const key = err.label;
+                    const stats = errorCounts.get(key) || { total: 0, exits: 0 };
+                    stats.total++;
+
+                    // Check if session ended within 30 seconds of this error
+                    const errorTime = new Date(err.timestamp).getTime();
+                    const sessionEndTime = new Date(session.endTime).getTime();
+                    if (sessionEndTime - errorTime < 30000) {
+                        stats.exits++;
+                    }
+                    errorCounts.set(key, stats);
+                });
+            }
+        }
+
+        return Array.from(errorCounts.entries()).map(([message, stats]) => ({
+            message,
+            impactScore: Math.round((stats.exits / stats.total) * 100),
+            totalOccurrences: stats.total,
+            terminalExits: stats.exits
+        })).sort((a, b) => b.impactScore - a.impactScore);
+    },
+
+    /**
+     * Get dead click statistics
+     */
+    async getDeadClickStats(daysBack = 7): Promise<any> {
+        const cutoff = new Date(Date.now() - daysBack * 86400000).toISOString();
+        const deadClicks = new Map<string, { count: number, lastSeen: string, paths: Set<string> }>();
+
+        for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
+            const e = entry.value;
+            if (e.timestamp < cutoff) continue;
+            if (e.type !== 'dead_click') continue;
+
+            const key = `${e.target}: ${e.label}`;
+            const existing = deadClicks.get(key) || { count: 0, lastSeen: e.timestamp, paths: new Set<string>() };
+            existing.count++;
+            if (e.timestamp > existing.lastSeen) existing.lastSeen = e.timestamp;
+            if (e.path) existing.paths.add(e.path);
+            deadClicks.set(key, existing);
+        }
+
+        return Array.from(deadClicks.entries())
+            .map(([label, data]) => ({
+                label,
+                count: data.count,
+                lastSeen: data.lastSeen,
+                pathCount: data.paths.size,
+                topPath: Array.from(data.paths)[0]
+            }))
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 30);
     }
 };

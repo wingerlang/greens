@@ -118,6 +118,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 lastClickRef.current.time = now;
 
                 if (lastClickRef.current.count === 3) { // Trigger on 3rd rapid click
+                    const rect = target.getBoundingClientRect();
                     const rageEvent: InteractionEvent = {
                         id: generateId(),
                         userId: user.id,
@@ -133,6 +134,12 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                             pctY: Math.round((y / viewportH) * 100),
                             viewportW,
                             viewportH
+                        },
+                        elementRect: {
+                            top: Math.round(rect.top),
+                            left: Math.round(rect.left),
+                            width: Math.round(rect.width),
+                            height: Math.round(rect.height)
                         }
                     };
                     fetch('/api/usage/event', {
@@ -157,6 +164,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 if (label.length > 50) label = label.substring(0, 50) + '...';
                 if (!label) return; // Skip if no meaningful label
 
+                const rect = element.getBoundingClientRect();
                 const event: InteractionEvent = {
                     id: generateId(),
                     userId: user.id,
@@ -172,6 +180,12 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                         pctY: Math.round((y / viewportH) * 100),
                         viewportW,
                         viewportH
+                    },
+                    elementRect: {
+                        top: Math.round(rect.top),
+                        left: Math.round(rect.left),
+                        width: Math.round(rect.width),
+                        height: Math.round(rect.height)
                     }
                 };
 
@@ -183,7 +197,8 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             } else {
                 // --- Dead Click Logic ---
                 // If not interactive, and it's text/div/span, user might be confused
-                const isText = ['P', 'SPAN', 'DIV', 'H1', 'H2', 'H3', 'LI'].includes(target.tagName);
+                const rect = target.getBoundingClientRect();
+                const isText = ['P', 'SPAN', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI'].includes(target.tagName);
                 if (isText && target.innerText && target.innerText.length < 50) { // Limit to short texts that look like buttons
                     const deadEvent: InteractionEvent = {
                         id: generateId(),
@@ -200,6 +215,12 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                             pctY: Math.round((y / viewportH) * 100),
                             viewportW,
                             viewportH
+                        },
+                        elementRect: {
+                            top: Math.round(rect.top),
+                            left: Math.round(rect.left),
+                            width: Math.round(rect.width),
+                            height: Math.round(rect.height)
                         }
                     };
                     fetch('/api/usage/event', {
