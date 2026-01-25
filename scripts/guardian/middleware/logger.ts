@@ -13,6 +13,7 @@ export class LoggerMiddleware implements Middleware {
         const duration = performance.now() - start;
         const status = ctx.response ? ctx.response.status : 500;
         const resourceType = determineResourceType(ctx.url.pathname);
+        const geo = ctx.state.get("geo");
 
         // Fire and forget logging
         saveRequestMetric({
@@ -25,7 +26,8 @@ export class LoggerMiddleware implements Middleware {
             targetService: ctx.serviceName,
             resourceType,
             sessionId,
-            userAgent: ctx.userAgent
+            userAgent: ctx.userAgent,
+            country: geo ? geo.countryCode : undefined
         }).catch(e => console.error("Logger error", e));
     }
 }

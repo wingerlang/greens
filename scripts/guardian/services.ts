@@ -11,6 +11,8 @@ export class Service {
     process: Deno.ChildProcess | null = null;
     shouldRun: boolean = false;
     lastMetricSave: number = 0;
+    retryCount: number = 0;
+    uptimeTimer: number | null = null;
 
     constructor(config: ServiceConfig) {
         this.config = config;
@@ -91,6 +93,12 @@ export class Service {
             this.stats.status = "running";
             this.addLog("info", `Service started (PID: ${this.process.pid})`);
 
+            // Reset backoff if stable for 60s
+            if (this.uptimeTimer) clearTimeout(this.uptimeTimer);
+            this.uptimeTimer = setTimeout(() => {
+                this.retryCount = 0;
+            }, 60000);
+
             this.readStream(this.process.stdout, "stdout");
             this.readStream(this.process.stderr, "stderr");
 
@@ -99,12 +107,15 @@ export class Service {
         } catch (e) {
             this.addLog("stderr", `Failed to start: ${e}`);
             this.stats.status = "crashed";
+            this.retryCount++;
             this.retry();
         }
     }
 
     async stop() {
         this.shouldRun = false;
+        if (this.uptimeTimer) clearTimeout(this.uptimeTimer);
+
         if (this.process) {
             this.addLog("info", "Stopping service...");
             try {
@@ -118,6 +129,7 @@ export class Service {
 
     async restart() {
         await this.stop();
+        this.retryCount = 0; // Manual restart resets backoff
         setTimeout(() => this.start(), 1000);
         this.stats.restarts++;
         updateServiceStat(this.config.name, "restarts");
@@ -140,6 +152,7 @@ export class Service {
     }
 
     private onExit(code: number) {
+        if (this.uptimeTimer) clearTimeout(this.uptimeTimer);
         this.stats.pid = null;
         this.stats.lastExitCode = code;
         this.process = null;
@@ -156,13 +169,16 @@ export class Service {
         this.addLog("info", `Service exited with code ${code}.`);
         this.stats.restarts++;
         updateServiceStat(this.config.name, "restarts");
+
+        this.retryCount++;
         this.retry();
     }
 
     private retry() {
         if (!this.shouldRun) return;
-        this.addLog("info", `Restarting in ${RESTART_DELAY_MS}ms...`);
-        setTimeout(() => this.start(), RESTART_DELAY_MS);
+        const delay = Math.min(30000, 1000 * Math.pow(2, this.retryCount));
+        this.addLog("info", `Restarting in ${delay}ms (Attempt ${this.retryCount})...`);
+        setTimeout(() => this.start(), delay);
     }
 }
 

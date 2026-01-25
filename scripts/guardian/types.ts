@@ -40,6 +40,7 @@ export interface RequestMetric {
     resourceType: string; // "api", "script", "style", "image", "document", "other"
     sessionId: string;
     userAgent?: string;
+    country?: string;
 }
 
 export interface ServiceConfig {
