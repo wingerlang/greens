@@ -82,6 +82,7 @@ import { DeveloperHealth } from './pages/developer/DeveloperHealth.tsx';
 import { DeveloperManagement } from './pages/developer/DeveloperManagement.tsx';
 import { DeveloperCoverage } from './pages/developer/DeveloperCoverage.tsx';
 import { BugReporter } from './components/debug/BugReporter.tsx';
+import { RootHandler } from './components/RootHandler.tsx';
 
 function RequireAuth({ children }: { children: JSX.Element }) {
     const { user, loading } = useAuth();
@@ -117,12 +118,14 @@ export function App() {
                                         <Route path="/login" element={<LoginPage />} />
                                         <Route path="/register" element={<RegisterPage />} />
 
+                                        {/* Root Logic */}
+                                        <Route path="/" element={<RootHandler />} />
+
                                         {/* Protected Routes */}
                                         <Route path="/*" element={
                                             <RequireAuth>
                                                 <Layout>
                                                     <Routes>
-                                                        <Route index element={<DashboardPage />} />
                                                         <Route path="meddelanden" element={<MessagesPage />} />
                                                         <Route path="messages" element={<Navigate to="/meddelanden" replace />} />
                                                         <Route path="veckan" element={<WeeklyPage />} />
