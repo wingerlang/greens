@@ -182,6 +182,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
         if (isOpen && editingGoal) {
             setName(editingGoal.name);
             setType(editingGoal.type);
+            setPreviousGoalId(editingGoal.previousGoalId || '');
             setPeriod(editingGoal.period);
             if (editingGoal.endDate) {
                 setDurationPreset('custom');
@@ -235,6 +236,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
         } else if (isOpen) {
             setName('');
             setType('frequency');
+            setPreviousGoalId('');
             setPeriod('weekly');
             setDurationPreset('ongoing');
             setCustomStartDate(new Date().toISOString().split('T')[0]);
@@ -261,6 +263,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
 
     // Period Link
     const [selectedPeriodId, setSelectedPeriodId] = useState<string>('');
+    const [previousGoalId, setPreviousGoalId] = useState<string>('');
 
     // Pre-fill period based on date or existing
     useEffect(() => {
@@ -279,6 +282,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
         } else if (isOpen && editingGoal) {
             // Edit Goal: Use existing
             setSelectedPeriodId(editingGoal.periodId || '');
+            setPreviousGoalId(editingGoal.previousGoalId || '');
         }
     }, [isOpen, editingGoal, trainingPeriods]);
 
@@ -468,6 +472,7 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                 type === 'measurement' ? (parseFloat(currentMeasurement) || undefined) : undefined,
             nutritionMacros: calculatedMacros || undefined,
             periodId: selectedPeriodId || undefined,
+            previousGoalId: previousGoalId || undefined,
             userId: currentUser?.id || 'unknown'
         };
 
@@ -696,6 +701,31 @@ export function GoalModal({ isOpen, onClose, onSave, cycles, editingGoal }: Goal
                                         ))}
                                     </select>
                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                                        ▼
+                                    </div>
+                                </div>
+
+                                {/* Previous Goal Link (Chaining) */}
+                                <div className="relative md:col-span-2">
+                                    <label className="text-[9px] uppercase font-bold text-slate-500 mb-1 block">
+                                        Fortsättning på tidigare mål (Koppla ihop)
+                                    </label>
+                                    <select
+                                        value={previousGoalId}
+                                        onChange={e => setPreviousGoalId(e.target.value)}
+                                        className="w-full bg-slate-950/50 border border-white/10 rounded-xl p-3.5 text-white focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all outline-none appearance-none"
+                                    >
+                                        <option value="">Inget tidigare mål (Starta ny kedja)</option>
+                                        {performanceGoals
+                                            .filter(g => g.id !== editingGoal?.id && g.type === type) // Only show goals of same type
+                                            .sort((a, b) => new Date(b.endDate || b.startDate).getTime() - new Date(a.endDate || a.startDate).getTime())
+                                            .map(g => (
+                                                <option key={g.id} value={g.id}>
+                                                    {g.name} ({g.status === 'completed' ? '✅' : 'Running'}) - {formatDate(g.endDate || g.startDate)}
+                                                </option>
+                                            ))}
+                                    </select>
+                                    <div className="absolute right-4 bottom-4 pointer-events-none text-slate-400">
                                         ▼
                                     </div>
                                 </div>
