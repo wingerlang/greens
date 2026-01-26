@@ -137,7 +137,7 @@ export interface User {
     householdId?: string; // For shared plans
     createdAt: string;
 
-    // Social & Privacy (Phase 6)
+    // Social & Privacy
     handle?: string; // Unique @handle
     bio?: string;
     location?: string;
@@ -656,7 +656,7 @@ export interface ExerciseEntry {
     maxSpeed?: number;
     kilojoules?: number;
 
-    // Hyrox Specifics (Phase 8)
+    // Hyrox Specifics
     hyroxStats?: HyroxActivityStats;
 }
 
@@ -757,7 +757,7 @@ export interface CoachConfig {
 }
 
 // ============================================
-// Phase 1: Fine-Tuning Configuration
+// Fine-Tuning Configuration
 // ============================================
 
 export interface FineTuningConfig {
@@ -784,7 +784,7 @@ export const DEFAULT_FINE_TUNING: FineTuningConfig = {
 };
 
 // ============================================
-// Phase 2: Strength & Cross-Training
+// Strength & Cross-Training
 // ============================================
 
 export type StrengthMuscleGroup = 'legs' | 'chest' | 'back' | 'arms' | 'shoulders' | 'core' | 'full_body' | 'mobility';
@@ -852,7 +852,7 @@ export const QUICK_NUTRITION_ITEMS: QuickNutritionItem[] = [
 ];
 
 // ============================================
-// Phase 3: Feedback & Adaptation
+// Feedback & Adaptation
 // ============================================
 
 export type RPE = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
@@ -896,7 +896,7 @@ export interface AdaptationSuggestion {
 }
 
 // ============================================
-// Phase 4: Coach-Athlete Mode
+// Coach-Athlete Mode
 // ============================================
 
 export interface CoachAthleteRelation {
@@ -955,7 +955,7 @@ export interface SharedPlan {
 }
 
 // ============================================
-// Phase 5: Social & Community Features
+// Social & Community Features
 // ============================================
 
 export type PlanDifficulty = 'beginner' | 'intermediate' | 'advanced' | 'elite';
@@ -1016,7 +1016,7 @@ export interface LeaderboardEntry {
 }
 
 // ============================================
-// Phase 7: Recovery & Injury Hub ("The Physio-AI")
+// Recovery & Injury Hub ("The Physio-AI")
 // ============================================
 
 export type BodyPart =
@@ -1082,7 +1082,7 @@ export interface DataSourceInfo {
 }
 
 /**
- * Phase 1: The Plan
+ * The Plan
  * Defines what was intended to be done.
  */
 export interface ActivityPlanSection {
@@ -1112,7 +1112,7 @@ export interface ActivityPlanSection {
 }
 
 /**
- * Phase 2: The Performance (Execution)
+ * The Performance (Execution)
  * Defines what was actually done.
  */
 export interface ActivityPerformanceSection {
@@ -1162,7 +1162,7 @@ export interface ActivityPerformanceSection {
 }
 
 /**
- * Phase 3: Analysis & Insights
+ * Analysis & Insights
  * Computed derived values.
  */
 export interface ActivityAnalysisSection {
@@ -1209,7 +1209,7 @@ export interface UniversalActivity {
 }
 
 // ============================================
-// Phase 6: Analytics & AI Insights
+// Analytics & AI Insights
 // ============================================
 
 export interface TrainingLoadData {
@@ -1277,7 +1277,6 @@ export interface PlannedActivity {
     completedDate?: string;
     actualDistance?: number;
     actualTimeSeconds?: number;
-    // Phase 2 enhancements
     scientificBenefit?: string;
     isVolumePR?: boolean;
     isLongestInPlan?: boolean;
@@ -1646,7 +1645,7 @@ export function getWeekdayFromDate(date: string): Weekday | null {
 }
 
 // ============================================
-// Phase 8: Data Persistence & Deep Integration (Garmin/Strava)
+// Data Persistence & Deep Integration (Garmin/Strava)
 // ============================================
 
 export type SleepStage = 'deep' | 'light' | 'rem' | 'awake';
@@ -1680,7 +1679,7 @@ export interface IntakeLog {
 
 
 // ============================================
-// Phase 9: Physio-AI / Rehab Content
+// Physio-AI / Rehab Content
 // ============================================
 
 export interface RehabExercise {
@@ -1703,7 +1702,7 @@ export interface RehabRoutine {
 }
 
 // ============================================
-// Body Measurements (Phase Legacy+)
+// Body Measurements
 // ============================================
 
 export type BodyMeasurementType =
@@ -1731,7 +1730,7 @@ export interface BodyMeasurementEntry {
 }
 
 // ============================================
-// Phase 10: Usage Analytics
+// Usage Analytics
 // ============================================
 
 export interface PageView {
@@ -1786,7 +1785,6 @@ export interface AnalyticsStats {
     popularPages: { path: string; count: number; avgTime: number }[];
     popularInteractions: { label: string; count: number }[];
     activeUsers24h: number;
-    // Phase 2 Metrics
     moduleStats?: Record<string, number>;
     conversionStats?: {
         meals: { planned: number; logged: number };
@@ -1797,7 +1795,7 @@ export interface AnalyticsStats {
     browserBreakdown?: Record<string, number>;
 }
 // ============================================
-// Hyrox Simulation & Race Analysis (Phase R)
+// Hyrox Simulation & Race Analysis
 // ============================================
 
 export interface HyroxStationEvent {
@@ -1828,7 +1826,7 @@ export interface HyroxSessionSummary {
 }
 
 // ============================================
-// Messaging & Support (Phase M)
+// Messaging & Support
 // ============================================
 
 export type ConversationType = 'direct' | 'support';
