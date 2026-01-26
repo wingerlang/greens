@@ -2,6 +2,7 @@ import { initLogger } from "./logger.ts";
 import { initRecorder } from "./recorder.ts";
 import { manager } from "./services.ts";
 import { updateSystemStats } from "./monitor.ts";
+import { startHealthMonitor } from "./health.ts";
 import { handleDashboardRequest } from "./dashboard.ts";
 import { clearPort } from "./utils.ts";
 import { loadBannedIps } from "./security.ts";
@@ -17,10 +18,13 @@ import { SmartCacheMiddleware } from "./middleware/smartCache.ts";
 import { CircuitBreakerMiddleware } from "./middleware/circuitBreaker.ts";
 import { RecorderMiddleware } from "./middleware/recorder.ts";
 import { ProxyMiddleware } from "./middleware/proxy.ts";
+import { GeoIpMiddleware } from "./middleware/geoIp.ts";
+import { CompressionMiddleware } from "./middleware/compression.ts";
+import { SecurityHeadersMiddleware } from "./middleware/securityHeaders.ts";
 import { GuardianContext } from "./middleware/types.ts";
 
 async function bootstrap() {
-    console.log("[GUARDIAN] Booting System 2.7.0 (Middleware Architecture)...");
+    console.log("[GUARDIAN] Booting System 3.0 (Middleware Architecture)...");
 
     await initLogger();
     await initRecorder();
@@ -54,6 +58,7 @@ async function bootstrap() {
 
     // 3. Start Monitor
     setInterval(updateSystemStats, 2000);
+    startHealthMonitor();
 
     // 4. Start Dashboard
     console.log(`[GUARDIAN] Dashboard listening on http://localhost:${CONFIG.ports.dashboard}`);
@@ -71,9 +76,12 @@ async function bootstrap() {
         .use(new LoggerMiddleware())
         .use(new RecorderMiddleware())
         .use(new BlockListMiddleware())
+        .use(new GeoIpMiddleware())
         .use(new TokenBucketRateLimitMiddleware())
         .use(new BotDefenseMiddleware())
         .use(new WafMiddleware())
+        .use(new SecurityHeadersMiddleware())
+        .use(new CompressionMiddleware())
         .use(new SmartCacheMiddleware())
         .use(new CircuitBreakerMiddleware())
         .use(new ProxyMiddleware());
