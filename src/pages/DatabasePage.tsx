@@ -638,6 +638,8 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
         if (brand) {
             brand = brand.replace(/\b(nuvarande|ordinarie|jmf|kampanj|medlems)\s*pris.*$/i, '').trim();
             brand = brand.replace(/\bpris\s*[:\d].*$/i, '').trim();
+            brand = brand.replace(/produktinformation.*$/i, '').trim();
+            brand = brand.replace(/product\s*information.*$/i, '').trim();
         }
 
         const packageWeight = parsed.packageWeight || extractPackagingWeight(parsed.text || '');
@@ -1943,6 +1945,5 @@ const MacroInput: React.FC<{ label: string, value: number, onChange: (v: number)
         </div>
     </div>
 );
-}
 
 export default DatabasePage;
