@@ -291,6 +291,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                             </Link>
 
                             <div className="absolute top-full right-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
+                                <NavLink to="/meddelanden" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
+                                    <span className="w-5 text-center">💬</span>
+                                    <span>Meddelanden</span>
+                                </NavLink>
                                 <NavLink to="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
                                     <span className="w-5 text-center">⚙️</span>
                                     <span>Inställningar</span>
@@ -440,6 +444,10 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                     {user?.username?.substring(0, 1).toUpperCase() || 'U'}
                                 </div>
                                 <span className="font-bold text-slate-200">Min Profil</span>
+                            </NavLink>
+                            <NavLink to="/meddelanden" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
+                                <span className="text-xl">💬</span>
+                                <span className="font-bold text-slate-200">Meddelanden</span>
                             </NavLink>
                             <button onClick={logout} className="flex items-center gap-4 px-3 py-3 rounded-2xl w-full text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors">
                                 <span className="text-xl">🚪</span>
