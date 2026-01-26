@@ -2,7 +2,17 @@ import { manager } from "./services.ts";
 import { getKv, registerLogClient, removeLogClient } from "./logger.ts";
 import { MetricEntry } from "./types.ts";
 import { join, dirname, fromFileUrl } from "https://deno.land/std@0.224.0/path/mod.ts";
-import { getTopEndpoints, getTopIps, getTrafficStats, getServiceStats, getTypeStats, getSessions, getCountryStats } from "./analytics.ts";
+import {
+    getTopEndpoints,
+    getTopEndpointsHistory,
+    getTopIps,
+    getTrafficStats,
+    getServiceStats,
+    getServiceDailyStats,
+    getTypeStats,
+    getSessions,
+    getCountryStats
+} from "./analytics.ts";
 import { bannedIps, banIp, unbanIp } from "./security.ts";
 import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
 import { getWafEvents } from "./waf.ts";
@@ -75,12 +85,13 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     }
 
     if (url.pathname === "/api/analytics") {
-        const [endpoints, ips, traffic] = await Promise.all([
+        const [endpoints, historyEndpoints, ips, traffic] = await Promise.all([
             getTopEndpoints(),
+            getTopEndpointsHistory(7),
             getTopIps(),
             getTrafficStats()
         ]);
-        return Response.json({ endpoints, ips, traffic });
+        return Response.json({ endpoints, historyEndpoints, ips, traffic });
     }
 
     if (url.pathname === "/api/analytics/granular") {
@@ -90,6 +101,15 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             getCountryStats()
         ]);
         return Response.json({ services, types, countries });
+    }
+
+    if (url.pathname === "/api/analytics/service-history") {
+         const serviceName = url.searchParams.get("service");
+         const days = Number(url.searchParams.get("days") || "7");
+         if (!serviceName) return Response.json([]);
+
+         const stats = await getServiceDailyStats(serviceName, days);
+         return Response.json(stats);
     }
 
     if (url.pathname === "/api/sessions") {

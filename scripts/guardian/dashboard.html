@@ -341,7 +341,6 @@
                     </div>
                 </div>
                 <div class="card">
-                    <!-- Placeholder for layout balance or maybe top user agents later -->
                      <div class="stat-label">Top Countries</div>
                      <div class="table-container" style="height:250px; overflow-y:auto; border:none; box-shadow:none;">
                         <table>
@@ -362,17 +361,18 @@
 
              <div class="grid-2">
                  <div class="table-container">
-                    <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Endpoints</div>
+                    <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Endpoints (7 Days)</div>
                     <table>
                         <thead><tr><th>Path</th><th>Hits</th></tr></thead>
                         <tbody>
-                            <template x-for="ep in analytics.endpoints" :key="ep.path">
+                            <!-- Use history endpoints if available, this solves the persistence display issue -->
+                            <template x-for="ep in (analytics.historyEndpoints && analytics.historyEndpoints.length > 0 ? analytics.historyEndpoints : analytics.endpoints)" :key="ep.path">
                                 <tr>
                                     <td x-text="ep.path"></td>
                                     <td x-text="ep.count"></td>
                                 </tr>
                             </template>
-                             <tr x-show="analytics.endpoints.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td></tr>
+                             <tr x-show="(!analytics.historyEndpoints || analytics.historyEndpoints.length === 0) && analytics.endpoints.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -441,26 +441,27 @@
                 </div>
                 <div class="code-block" style="flex:1; border:none; border-radius:0; padding:20px; font-family:'Courier New', monospace; font-size:0.9rem" x-ref="consoleContainer">
                     <template x-for="log in liveLogs" :key="log.id">
-                        <div style="margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:2px">
-                            <span style="color:#666" x-text="new Date(log.timestamp).toLocaleTimeString()"></span>
+                        <!-- Updated layout for console logs to fix formatting issues -->
+                        <div style="margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:2px; display:flex; gap:10px; align-items:center;">
+                            <span style="color:#666; white-space:nowrap" x-text="new Date(log.timestamp).toLocaleTimeString()"></span>
 
                             <template x-if="log.type === 'request'">
-                                <span>
+                                <div style="display:flex; gap:8px; align-items:center;">
                                     <span style="color:#3b82f6">[REQ]</span>
                                     <span :style="{color: log.status >= 500 ? '#ef4444' : (log.status >= 400 ? '#f59e0b' : '#22c55e')}" x-text="log.status"></span>
                                     <span style="color:#e2e8f0" x-text="log.method"></span>
                                     <span style="color:#94a3b8" x-text="log.path"></span>
                                     <span style="color:#666; font-size:0.8rem" x-text="'(' + log.duration.toFixed(1) + 'ms)'"></span>
                                     <span style="color:#666; font-size:0.8rem" x-text="log.ip"></span>
-                                </span>
+                                </div>
                             </template>
 
                             <template x-if="log.type === 'log'">
-                                <span>
+                                <div style="display:flex; gap:8px; align-items:center;">
                                     <span style="color:#a855f7">[SYS]</span>
                                     <span style="color:#e2e8f0" x-text="log.service?.toUpperCase()"></span>
                                     <span x-text="log.message"></span>
-                                </span>
+                                </div>
                             </template>
                         </div>
                     </template>
@@ -528,6 +529,22 @@
                     <a x-show="currentService?.url" :href="currentService?.url" target="_blank" style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500">Open</a>
                 </div>
             </div>
+
+            <!-- New Charts for Services -->
+             <div class="grid-2">
+                <div class="card">
+                    <div class="stat-label">System Load (Recent)</div>
+                    <div class="chart-container">
+                        <canvas id="serviceLoadChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Requests (Last 7 Days)</div>
+                    <div class="chart-container">
+                        <canvas id="serviceRequestsChart"></canvas>
+                    </div>
+                </div>
+             </div>
 
             <!-- Circuit Breaker Info -->
             <div class="card" x-show="currentService?.circuit">
@@ -647,7 +664,7 @@
             services: [],
             system: { load: [], memory: {} },
             traffic: { total: 0 },
-            analytics: { endpoints: [], ips: [] },
+            analytics: { endpoints: [], historyEndpoints: [], ips: [] },
             granular: { services: [], types: [], countries: [] },
             sessions: [],
             bannedIps: [],
@@ -743,7 +760,11 @@
                 this.services = statusRes.services;
                 this.system = statusRes.system || { load: [], memory: {} };
                 this.traffic = analyticsRes.traffic;
-                this.analytics = { endpoints: analyticsRes.endpoints, ips: analyticsRes.ips };
+                this.analytics = {
+                    endpoints: analyticsRes.endpoints,
+                    historyEndpoints: analyticsRes.historyEndpoints || [],
+                    ips: analyticsRes.ips
+                };
                 this.granular = granularRes;
                 this.sessions = sessionRes;
                 this.bannedIps = bannedRes;
@@ -779,14 +800,66 @@
                 this.tab = 'service-' + service.name;
                 this.logs = "Loading logs...";
                 this.fetchLogs(service.name);
+                this.fetchServiceHistory(service.name);
+            },
+
+            async fetchServiceHistory(name) {
+                const [metrics, daily] = await Promise.all([
+                     fetch(`/api/metrics?service=${name}&limit=100`).then(r => r.json()),
+                     fetch(`/api/analytics/service-history?service=${name}`).then(r => r.json())
+                ]);
+
+                this.renderServiceCharts(metrics, daily);
+            },
+
+            renderServiceCharts(metrics, daily) {
+                this.$nextTick(() => {
+                    // Load Chart (Line)
+                    this.renderChart('serviceLoadChart', 'line', {
+                        labels: metrics.map(m => new Date(m.timestamp).toLocaleTimeString()),
+                        datasets: [
+                            { label: 'CPU %', data: metrics.map(m => m.cpu), borderColor: '#3b82f6', tension: 0.4 },
+                            { label: 'Memory (MB)', data: metrics.map(m => (m.memory / 1024 / 1024).toFixed(1)), borderColor: '#a855f7', tension: 0.4 }
+                        ]
+                    });
+
+                    // Requests Chart (Bar)
+                    this.renderChart('serviceRequestsChart', 'bar', {
+                        labels: daily.map(d => d.date),
+                        datasets: [{ label: 'Requests', data: daily.map(d => d.count), backgroundColor: '#22c55e' }]
+                    });
+                });
+            },
+
+            renderChart(id, type, data) {
+                 if (this.charts[id]) {
+                     this.charts[id].destroy();
+                 }
+                 const ctx = document.getElementById(id);
+                 if(!ctx) return;
+
+                 this.charts[id] = new Chart(ctx, {
+                     type: type,
+                     data: {
+                         labels: data.labels,
+                         datasets: data.datasets
+                     },
+                     options: {
+                         responsive: true,
+                         maintainAspectRatio: false,
+                         scales: {
+                             y: { beginAtZero: true, grid: { color: '#334155' } },
+                             x: { grid: { display: false } }
+                         },
+                         plugins: { legend: { labels: { color: '#94a3b8' } } }
+                     }
+                 });
             },
 
             async fetchLogs(name) {
                 const res = await fetch(`/api/logs?service=${name}`);
                 const logs = await res.json();
                 this.logs = logs.slice(-100).map(l => `[${l.timestamp.split('T')[1].split('.')[0]}] [${l.source.toUpperCase()}] ${l.message}`).join('\n');
-                // Auto scroll?
-                // this.$refs.logContainer.scrollTop = this.$refs.logContainer.scrollHeight;
             },
 
             async controlService(name, action) {
