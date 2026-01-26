@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Guardian 2.6.0</title>
+    <title>Guardian 3.0</title>
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <!-- Chart.js -->
@@ -190,7 +190,7 @@
 <!-- Sidebar -->
 <div class="sidebar">
     <div class="brand">
-        <span style="font-size:1.5rem">🛡️</span> Guardian 2.6
+        <span style="font-size:1.5rem">🛡️</span> Guardian 3.0
     </div>
 
     <div class="nav-group">
@@ -330,6 +330,33 @@
                     <div class="chart-container">
                         <canvas id="typeChart"></canvas>
                     </div>
+                </div>
+             </div>
+
+             <div class="grid-2">
+                 <div class="card">
+                    <div class="stat-label">Geo Distribution</div>
+                    <div class="chart-container">
+                        <canvas id="geoChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <!-- Placeholder for layout balance or maybe top user agents later -->
+                     <div class="stat-label">Top Countries</div>
+                     <div class="table-container" style="height:250px; overflow-y:auto; border:none; box-shadow:none;">
+                        <table>
+                            <thead><tr><th>Country</th><th>Hits</th></tr></thead>
+                            <tbody>
+                                <template x-for="c in granular.countries" :key="c.code">
+                                    <tr>
+                                        <td x-text="c.code"></td>
+                                        <td x-text="c.count"></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="!granular.countries || granular.countries.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td></tr>
+                            </tbody>
+                        </table>
+                     </div>
                 </div>
              </div>
 
@@ -621,7 +648,7 @@
             system: { load: [], memory: {} },
             traffic: { total: 0 },
             analytics: { endpoints: [], ips: [] },
-            granular: { services: [], types: [] },
+            granular: { services: [], types: [], countries: [] },
             sessions: [],
             bannedIps: [],
             config: {},
@@ -788,6 +815,10 @@
                 this.$nextTick(() => {
                     this.renderPieChart('serviceChart', this.granular.services.map(s => s.name), this.granular.services.map(s => s.count), ['#3b82f6', '#22c55e', '#f59e0b']);
                     this.renderPieChart('typeChart', this.granular.types.map(s => s.type), this.granular.types.map(s => s.count), ['#60a5fa', '#f87171', '#4ade80', '#fbbf24', '#c084fc']);
+
+                    if (this.granular.countries) {
+                        this.renderPieChart('geoChart', this.granular.countries.map(c => c.code), this.granular.countries.map(c => c.count), ['#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6']);
+                    }
                 });
             },
 

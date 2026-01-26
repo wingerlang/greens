@@ -140,7 +140,16 @@ export async function saveRequestMetric(metric: RequestMetric) {
             value: new Deno.KvU64(1n)
         });
 
-        // 6. Session Management
+        // 6. Country Breakdown
+        if (metric.country) {
+            atomic.mutate({
+                type: "sum",
+                key: ["guardian", "stats", date, "country", metric.country],
+                value: new Deno.KvU64(1n)
+            });
+        }
+
+        // 7. Session Management
         await updateSession(metric, date);
 
         await atomic.commit();

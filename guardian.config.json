@@ -1,0 +1,45 @@
+{
+    "ports": {
+        "frontend": 3000,
+        "backend": 8000,
+        "dashboard": 9999,
+        "internalFrontend": 3001,
+        "internalBackend": 8001
+    },
+    "features": {
+        "waf": true,
+        "botDefense": true,
+        "rateLimit": true,
+        "smartCache": true,
+        "circuitBreaker": true,
+        "recorder": true,
+        "geoIp": true,
+        "compression": true,
+        "securityHeaders": true
+    },
+    "rateLimit": {
+        "windowMs": 10000,
+        "maxRequests": 200,
+        "tokenBucket": {
+            "capacity": 50,
+            "fillRate": 10
+        }
+    },
+    "smartCache": {
+        "maxSize": 52428800,
+        "ttl": 600000,
+        "paths": ["/assets/", ".png", ".jpg", ".jpeg", ".svg", ".css", ".js", ".woff2"]
+    },
+    "timeouts": {
+        "proxyConnect": 3000,
+        "proxyRead": 30000
+    },
+    "securityHeaders": {
+        "hsts": true,
+        "hstsMaxAge": 31536000,
+        "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;",
+        "xFrameOptions": "SAMEORIGIN",
+        "xContentTypeOptions": "nosniff",
+        "referrerPolicy": "strict-origin-when-cross-origin"
+    }
+}

@@ -85,3 +85,15 @@ export async function getSessions(limit = 50) {
     // Sort by last seen desc
     return sessions.sort((a, b) => b.lastSeen - a.lastSeen);
 }
+
+export async function getCountryStats() {
+    const kv = getKv();
+    if (!kv) return [];
+    const date = new Date().toISOString().split('T')[0];
+    const iter = kv.list<Deno.KvU64>({ prefix: ["guardian", "stats", date, "country"] });
+    const stats = [];
+    for await (const res of iter) {
+        stats.push({ code: String(res.key[4]), count: Number(res.value.value) });
+    }
+    return stats.sort((a, b) => b.count - a.count);
+}

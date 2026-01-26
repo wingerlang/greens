@@ -2,7 +2,7 @@ import { manager } from "./services.ts";
 import { getKv, registerLogClient, removeLogClient } from "./logger.ts";
 import { MetricEntry } from "./types.ts";
 import { join, dirname, fromFileUrl } from "https://deno.land/std@0.224.0/path/mod.ts";
-import { getTopEndpoints, getTopIps, getTrafficStats, getServiceStats, getTypeStats, getSessions } from "./analytics.ts";
+import { getTopEndpoints, getTopIps, getTrafficStats, getServiceStats, getTypeStats, getSessions, getCountryStats } from "./analytics.ts";
 import { bannedIps, banIp, unbanIp } from "./security.ts";
 import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
 import { getWafEvents } from "./waf.ts";
@@ -84,11 +84,12 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     }
 
     if (url.pathname === "/api/analytics/granular") {
-        const [services, types] = await Promise.all([
+        const [services, types, countries] = await Promise.all([
             getServiceStats(),
-            getTypeStats()
+            getTypeStats(),
+            getCountryStats()
         ]);
-        return Response.json({ services, types });
+        return Response.json({ services, types, countries });
     }
 
     if (url.pathname === "/api/sessions") {
