@@ -5,15 +5,21 @@
 import React, { useMemo, useEffect } from 'react';
 import { useScrollLock } from '../../hooks/useScrollLock';
 import { useData } from '../../context/DataContext';
-import { useGoalProgress } from '../../hooks/useGoalProgress';
+import { useGoalProgress, useAllGoalsProgress } from '../../hooks/useGoalProgress';
 import { GoalProgressRing } from './GoalProgressRing';
 import type { PerformanceGoal, GoalCategory, WeightEntry } from '../../models/types';
-import { assessGoalDifficulty, calculateAheadBehind } from '../../utils/goalCalculations';
+import {
+    assessGoalDifficulty,
+    calculateAheadBehind,
+    getGoalChain,
+    calculateChainStats
+} from '../../utils/goalCalculations';
 
 interface GoalDetailModalProps {
     goal: PerformanceGoal;
     onClose: () => void;
     onEdit?: () => void;
+    onNewPhase?: (previousGoal: PerformanceGoal) => void;
 }
 
 const CATEGORY_CONFIG: Record<GoalCategory, { label: string; icon: string; color: string }> = {
@@ -23,9 +29,23 @@ const CATEGORY_CONFIG: Record<GoalCategory, { label: string; icon: string; color
     lifestyle: { label: 'Livsstil', icon: '🧘', color: '#8b5cf6' }
 };
 
-export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps) {
-    const { weightEntries = [], universalActivities = [], strengthSessions = [], unifiedActivities = [] } = useData();
+export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase }: GoalDetailModalProps) {
+    const { weightEntries = [], universalActivities = [], strengthSessions = [], unifiedActivities = [], performanceGoals = [] } = useData();
     const progressData = useGoalProgress(goal);
+    const allProgressMap = useAllGoalsProgress();
+
+    // View State (Phase vs Journey)
+    const [viewMode, setViewMode] = React.useState<'phase' | 'journey'>('phase');
+
+    // Chain Data
+    const goalChain = useMemo(() => getGoalChain(goal, performanceGoals), [goal, performanceGoals]);
+    const chainStats = useMemo(() => calculateChainStats(goalChain, allProgressMap), [goalChain, allProgressMap]);
+    const isChain = goalChain.length > 1;
+
+    // Reset view mode if goal changes
+    useEffect(() => {
+        setViewMode('phase');
+    }, [goal.id]);
 
     // Format helpers
     const formatDuration = (seconds: number) => {
@@ -144,6 +164,122 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
             })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [weightEntries, goal]);
+
+    // Calculate Phased Chart Data (Multi-goal)
+    const phasedChartData = useMemo(() => {
+        if (viewMode !== 'journey' || !goalChain.length) return null;
+
+        // Only supports Weight for now (as requested logic implies weight/volume)
+        // Volume logic is harder to "stitch" unless we have per-phase accumulation.
+        // Let's implement for Weight primarily, then generalize.
+        if (goal.type !== 'weight' && goal.type !== 'measurement') return null;
+
+        const allStartDate = new Date(goalChain[0].startDate);
+        const lastGoal = goalChain[goalChain.length - 1];
+        const allEndDate = lastGoal.endDate ? new Date(lastGoal.endDate) : new Date();
+
+        // Collect all relevant measurements across the whole period
+        const measurements = weightEntries
+            .filter(w => {
+                const d = new Date(w.date);
+                return d >= allStartDate && d <= allEndDate;
+            })
+            .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+        if (measurements.length === 0) return null;
+
+        // Determine Y domain (Weight)
+        const weights = measurements.map(w => w.weight);
+        const targets = goalChain.map(g => g.targetWeight || 0).filter(w => w > 0);
+        const starts = goalChain.map(g => g.milestoneProgress || 0).filter(w => w > 0);
+
+        const allValues = [...weights, ...targets, ...starts];
+        const minWeight = Math.min(...allValues) - 2;
+        const maxWeight = Math.max(...allValues) + 2;
+        const weightRange = maxWeight - minWeight;
+
+        // Chart dimensions
+        const chartWidth = 500;
+        const chartHeight = 200;
+        const padding = { top: 20, right: 30, bottom: 30, left: 50 };
+        const graphWidth = chartWidth - padding.left - padding.right;
+        const graphHeight = chartHeight - padding.top - padding.bottom;
+        const totalDuration = allEndDate.getTime() - allStartDate.getTime();
+
+        // Helpers
+        const dateToX = (date: Date) => {
+            const diff = date.getTime() - allStartDate.getTime();
+            return padding.left + (diff / totalDuration) * graphWidth;
+        };
+
+        const weightToY = (weight: number) => {
+            return padding.top + graphHeight - ((weight - minWeight) / weightRange) * graphHeight;
+        };
+
+        // Construct Actual Path
+        let actualPath = '';
+        const actualPoints = measurements.map(w => ({
+            x: dateToX(new Date(w.date)),
+            y: weightToY(w.weight),
+            val: w.weight,
+            date: w.date
+        }));
+
+        if (actualPoints.length > 0) {
+            actualPath = `M ${actualPoints[0].x} ${actualPoints[0].y}`;
+            for (let i = 1; i < actualPoints.length; i++) {
+                actualPath += ` L ${actualPoints[i].x} ${actualPoints[i].y}`;
+            }
+        }
+
+        // Construct Phase Zones & Target Lines
+        const phases = goalChain.map((g, i) => {
+            const start = new Date(g.startDate);
+            const end = g.endDate ? new Date(g.endDate) : (
+                i < goalChain.length - 1 ? new Date(goalChain[i+1].startDate) : new Date()
+            );
+
+            const x1 = dateToX(start);
+            const x2 = dateToX(end);
+
+            // Target Line for this phase
+            // Typically linear from startWeight -> targetWeight over the phase
+            // Or flat if it's maintenance
+            const startW = g.milestoneProgress || (measurements.find(m => m.date >= g.startDate)?.weight) || 0;
+            const targetW = g.targetWeight || startW;
+
+            const y1 = weightToY(startW);
+            const y2 = weightToY(targetW);
+
+            return {
+                id: g.id,
+                name: g.name,
+                x1, x2, width: Math.max(0, x2 - x1),
+                y1, y2,
+                color: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)',
+                isCurrent: g.id === goal.id
+            };
+        });
+
+        // Construct Continuous Target Path (Stepped/Linear chain)
+        let targetPath = '';
+        phases.forEach((p, i) => {
+            if (i === 0) targetPath += `M ${p.x1} ${p.y1}`;
+            else targetPath += ` L ${p.x1} ${p.y1}`; // Jump to start of next phase if gap? Usually continuous
+
+            targetPath += ` L ${p.x2} ${p.y2}`;
+        });
+
+        return {
+            chartWidth, chartHeight,
+            minWeight, maxWeight,
+            phases,
+            actualPath,
+            targetPath,
+            padding,
+            measurements: actualPoints
+        };
+    }, [goalChain, viewMode, weightEntries, goal.type]);
 
     // Calculate chart data for weight goals
     const weightChartData = useMemo(() => {
@@ -593,83 +729,151 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                                         </a>
                                     </div>
                                 )}
+                                {/* View Switcher for Chain */}
+                                {isChain && (
+                                    <div className="flex gap-1 mt-3 bg-slate-900/50 p-1 rounded-lg w-fit border border-white/5">
+                                        <button
+                                            onClick={() => setViewMode('phase')}
+                                            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${viewMode === 'phase'
+                                                ? 'bg-emerald-500 text-slate-950 shadow-sm'
+                                                : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            Nuvarande Fas
+                                        </button>
+                                        <button
+                                            onClick={() => setViewMode('journey')}
+                                            className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${viewMode === 'journey'
+                                                ? 'bg-blue-500 text-white shadow-sm'
+                                                : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                                        >
+                                            Hela Resan
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onClose();
-                            }}
-                            className="p-2 hover:bg-white/5 rounded-xl transition-colors text-slate-400 hover:text-white"
-                        >
-                            ✕
-                        </button>
+                        <div className="flex flex-col gap-2 items-end">
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onClose();
+                                }}
+                                className="p-2 hover:bg-white/5 rounded-xl transition-colors text-slate-400 hover:text-white"
+                            >
+                                ✕
+                            </button>
+                            {progress.isComplete && !goal.endDate && onNewPhase && (
+                                <button
+                                    onClick={() => onNewPhase(goal)}
+                                    className="text-[10px] font-bold px-3 py-1.5 bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-all flex items-center gap-1"
+                                >
+                                    <span>🚀</span> Starta Nästa Fas
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 <div className="p-6 space-y-6 overflow-y-auto max-h-[60vh]">
                     {/* Progress Summary */}
-                    <div className="grid grid-cols-3 gap-4">
-                        {/* Progress % */}
-                        <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/5 rounded-xl border border-indigo-500/20 text-center group relative">
-                            <div className="text-3xl font-black text-white">{(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%</div>
-                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
-                                <span>📊</span> Framsteg
+                    {viewMode === 'journey' && chainStats ? (
+                        <div className="grid grid-cols-3 gap-4">
+                            {/* Total Change */}
+                            <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/5 rounded-xl border border-indigo-500/20 text-center">
+                                <div className="text-3xl font-black text-white">
+                                    {chainStats.totalValueChange.toFixed(1)}
+                                </div>
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                    <span>🏔️</span> Total Förändring
+                                </div>
+                                <div className="text-[9px] text-slate-600 mt-1 italic">Över {chainStats.totalDurationDays} dagar</div>
                             </div>
-                            {goal.type === 'weight' && (
-                                <div className="text-[9px] text-slate-600 mt-1 italic">Hur långt mot målet</div>
-                            )}
-                        </div>
 
-                        {/* Current - different display for different goal types */}
-                        <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 rounded-xl border border-emerald-500/20 text-center">
-                            <div className="text-3xl font-black text-white">
-                                {goal.type === 'speed'
-                                    ? formatDuration(effectiveCurrent)
-                                    : goal.type === 'weight'
-                                        ? (() => {
-                                            const latestWeight = relevantWeights.length > 0
-                                                ? relevantWeights[relevantWeights.length - 1]?.weight
-                                                : 0;
-                                            return latestWeight ? latestWeight.toFixed(1) : '-';
-                                        })()
-                                        : effectiveCurrent.toFixed(0)
-                                }
+                            {/* Average per Phase */}
+                            <div className="p-4 bg-gradient-to-br from-blue-500/10 to-cyan-500/5 rounded-xl border border-blue-500/20 text-center">
+                                <div className="text-3xl font-black text-white">
+                                    {chainStats.averageValuePerPhase.toFixed(1)}
+                                </div>
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                    <span>📊</span> Snitt / Fas
+                                </div>
+                                <div className="text-[9px] text-slate-600 mt-1 italic">{chainStats.phaseCount} faser totalt</div>
                             </div>
-                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
-                                {goal.type === 'speed' ? (
-                                    <><span>⏱️</span> Bästa Tid</>
-                                ) : goal.type === 'weight' ? (
-                                    <><span>⚖️</span> Nuvarande Vikt</>
-                                ) : (
-                                    <><span>📈</span> Nuvarande {goal.targets[0]?.unit || ''}</>
+
+                            {/* Completion % */}
+                            <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 rounded-xl border border-emerald-500/20 text-center">
+                                <div className="text-3xl font-black text-white">
+                                    {Math.round(chainStats.progressPercentage)}%
+                                </div>
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                    <span>🏁</span> Total Progress
+                                </div>
+                                <div className="text-[9px] text-slate-600 mt-1 italic">Mot slutmålet</div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-3 gap-4">
+                            {/* Progress % */}
+                            <div className="p-4 bg-gradient-to-br from-indigo-500/10 to-purple-500/5 rounded-xl border border-indigo-500/20 text-center group relative">
+                                <div className="text-3xl font-black text-white">{(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%</div>
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                    <span>📊</span> Framsteg
+                                </div>
+                                {goal.type === 'weight' && (
+                                    <div className="text-[9px] text-slate-600 mt-1 italic">Hur långt mot målet</div>
                                 )}
                             </div>
-                            {progress.current === 0 && goal.type === 'speed' && topSpeedActivities.length > 0 && (
-                                <div className="text-[9px] text-slate-600 mt-1">(Historiskt bäst)</div>
-                            )}
-                            {goal.type === 'weight' && relevantWeights.length > 0 && (
-                                <div className="text-[9px] text-slate-600 mt-1 italic">
-                                    {formatDate(relevantWeights[relevantWeights.length - 1]?.date)}
-                                </div>
-                            )}
-                        </div>
 
-                        {/* Target */}
-                        <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 rounded-xl border border-amber-500/20 text-center">
-                            <div className="text-3xl font-black text-white">
-                                {goal.type === 'speed'
-                                    ? formatDuration(progress.target)
-                                    : goal.type === 'weight'
-                                        ? (goal.targetWeight?.toFixed(1) || '-')
-                                        : progress.target
-                                }
+                            {/* Current - different display for different goal types */}
+                            <div className="p-4 bg-gradient-to-br from-emerald-500/10 to-teal-500/5 rounded-xl border border-emerald-500/20 text-center">
+                                <div className="text-3xl font-black text-white">
+                                    {goal.type === 'speed'
+                                        ? formatDuration(effectiveCurrent)
+                                        : goal.type === 'weight'
+                                            ? (() => {
+                                                const latestWeight = relevantWeights.length > 0
+                                                    ? relevantWeights[relevantWeights.length - 1]?.weight
+                                                    : 0;
+                                                return latestWeight ? latestWeight.toFixed(1) : '-';
+                                            })()
+                                            : effectiveCurrent.toFixed(0)
+                                    }
+                                </div>
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                    {goal.type === 'speed' ? (
+                                        <><span>⏱️</span> Bästa Tid</>
+                                    ) : goal.type === 'weight' ? (
+                                        <><span>⚖️</span> Nuvarande Vikt</>
+                                    ) : (
+                                        <><span>📈</span> Nuvarande {goal.targets[0]?.unit || ''}</>
+                                    )}
+                                </div>
+                                {progress.current === 0 && goal.type === 'speed' && topSpeedActivities.length > 0 && (
+                                    <div className="text-[9px] text-slate-600 mt-1">(Historiskt bäst)</div>
+                                )}
+                                {goal.type === 'weight' && relevantWeights.length > 0 && (
+                                    <div className="text-[9px] text-slate-600 mt-1 italic">
+                                        {formatDate(relevantWeights[relevantWeights.length - 1]?.date)}
+                                    </div>
+                                )}
                             </div>
-                            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
-                                <span>🎯</span> Mål {goal.type === 'weight' ? 'kg' : (goal.targets[0]?.unit || '')}
+
+                            {/* Target */}
+                            <div className="p-4 bg-gradient-to-br from-amber-500/10 to-orange-500/5 rounded-xl border border-amber-500/20 text-center">
+                                <div className="text-3xl font-black text-white">
+                                    {goal.type === 'speed'
+                                        ? formatDuration(progress.target)
+                                        : goal.type === 'weight'
+                                            ? (goal.targetWeight?.toFixed(1) || '-')
+                                            : progress.target
+                                    }
+                                </div>
+                                <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider flex items-center justify-center gap-1">
+                                    <span>🎯</span> Mål {goal.type === 'weight' ? 'kg' : (goal.targets[0]?.unit || '')}
+                                </div>
                             </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* Top Activities List for Speed Goals */}
                     {goal.type === 'speed' && topSpeedActivities.length > 0 && (
@@ -707,159 +911,260 @@ export function GoalDetailModal({ goal, onClose, onEdit }: GoalDetailModalProps)
                         </div>
                     )}
 
-                    {/* Weight Chart */}
-                    {weightChartData && (goal.type === 'weight' || goal.type === 'measurement') && (
+                    {/* Weight Chart (Single or Phased) */}
+                    {(weightChartData || phasedChartData) && (goal.type === 'weight' || goal.type === 'measurement') && (
                         <div className="p-4 bg-slate-900/50 rounded-xl border border-white/5">
                             <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                                <span>📈</span> Viktutveckling
+                                <span>📈</span> {viewMode === 'journey' ? 'Hela Resan' : 'Viktutveckling'}
                             </h3>
-                            <svg
-                                viewBox={`0 0 ${weightChartData.chartWidth} ${weightChartData.chartHeight}`}
-                                className="w-full h-auto"
-                            >
-                                {/* Grid lines */}
-                                {[0.25, 0.5, 0.75, 1].map((ratio, i) => {
-                                    const y = weightChartData.padding.top + (1 - ratio) * weightChartData.graphHeight;
-                                    const weight = weightChartData.minWeight + ratio * (weightChartData.maxWeight - weightChartData.minWeight);
-                                    return (
-                                        <g key={i}>
-                                            <line
-                                                x1={weightChartData.padding.left}
-                                                y1={y}
-                                                x2={weightChartData.chartWidth - weightChartData.padding.right}
-                                                y2={y}
-                                                stroke="rgba(255,255,255,0.05)"
-                                                strokeWidth="1"
+
+                            {viewMode === 'journey' && phasedChartData ? (
+                                <svg
+                                    viewBox={`0 0 ${phasedChartData.chartWidth} ${phasedChartData.chartHeight}`}
+                                    className="w-full h-auto"
+                                >
+                                    {/* Phase Zones Background */}
+                                    {phasedChartData.phases.map((p, i) => (
+                                        <g key={p.id}>
+                                            <rect
+                                                x={p.x1}
+                                                y={phasedChartData.padding.top}
+                                                width={p.width}
+                                                height={phasedChartData.chartHeight - phasedChartData.padding.top - phasedChartData.padding.bottom}
+                                                fill={p.color}
                                             />
+                                            {/* Phase Label */}
                                             <text
-                                                x={weightChartData.padding.left - 8}
-                                                y={y + 4}
-                                                fill="rgba(148,163,184,0.6)"
-                                                fontSize="10"
-                                                textAnchor="end"
+                                                x={p.x1 + 5}
+                                                y={phasedChartData.padding.top + 10}
+                                                fill="rgba(255,255,255,0.3)"
+                                                fontSize="8"
+                                                fontWeight="bold"
                                             >
-                                                {weight.toFixed(0)}
+                                                Fas {i + 1}
                                             </text>
+                                            {/* Current Indicator */}
+                                            {p.isCurrent && (
+                                                <rect
+                                                    x={p.x1}
+                                                    y={phasedChartData.chartHeight - 5}
+                                                    width={p.width}
+                                                    height={2}
+                                                    fill="#10b981"
+                                                />
+                                            )}
                                         </g>
-                                    );
-                                })}
+                                    ))}
 
-                                {/* Target weight line (horizontal dashed) */}
-                                <line
-                                    x1={weightChartData.padding.left}
-                                    y1={weightChartData.weightToY(weightChartData.targetWeight)}
-                                    x2={weightChartData.chartWidth - weightChartData.padding.right}
-                                    y2={weightChartData.weightToY(weightChartData.targetWeight)}
-                                    stroke="#10b981"
-                                    strokeWidth="1.5"
-                                    strokeDasharray="4 4"
-                                    opacity="0.5"
-                                />
-                                <text
-                                    x={weightChartData.chartWidth - weightChartData.padding.right + 5}
-                                    y={weightChartData.weightToY(weightChartData.targetWeight) + 4}
-                                    fill="#10b981"
-                                    fontSize="10"
-                                    fontWeight="bold"
-                                >
-                                    Mål
-                                </text>
+                                    {/* Grid lines */}
+                                    {[0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                                        const y = phasedChartData.padding.top + (1 - ratio) * (phasedChartData.chartHeight - phasedChartData.padding.top - phasedChartData.padding.bottom);
+                                        const weight = phasedChartData.minWeight + ratio * (phasedChartData.maxWeight - phasedChartData.minWeight);
+                                        return (
+                                            <g key={i}>
+                                                <line
+                                                    x1={phasedChartData.padding.left}
+                                                    y1={y}
+                                                    x2={phasedChartData.chartWidth - phasedChartData.padding.right}
+                                                    y2={y}
+                                                    stroke="rgba(255,255,255,0.05)"
+                                                    strokeWidth="1"
+                                                />
+                                                <text
+                                                    x={phasedChartData.padding.left - 8}
+                                                    y={y + 4}
+                                                    fill="rgba(148,163,184,0.6)"
+                                                    fontSize="10"
+                                                    textAnchor="end"
+                                                >
+                                                    {weight.toFixed(0)}
+                                                </text>
+                                            </g>
+                                        );
+                                    })}
 
-                                {/* Trend line (dashed diagonal) */}
-                                <line
-                                    x1={weightChartData.trendLine.x1}
-                                    y1={weightChartData.trendLine.y1}
-                                    x2={weightChartData.trendLine.x2}
-                                    y2={weightChartData.trendLine.y2}
-                                    stroke={categoryConfig.color}
-                                    strokeWidth="2"
-                                    strokeDasharray="8 4"
-                                    opacity="0.4"
-                                />
-
-                                {/* Today marker */}
-                                <line
-                                    x1={weightChartData.todayX}
-                                    y1={weightChartData.padding.top}
-                                    x2={weightChartData.todayX}
-                                    y2={weightChartData.chartHeight - weightChartData.padding.bottom}
-                                    stroke="rgba(255,255,255,0.2)"
-                                    strokeWidth="1"
-                                    strokeDasharray="3 3"
-                                />
-                                <text
-                                    x={weightChartData.todayX}
-                                    y={weightChartData.chartHeight - 10}
-                                    fill="rgba(255,255,255,0.5)"
-                                    fontSize="9"
-                                    textAnchor="middle"
-                                >
-                                    Idag
-                                </text>
-
-                                {/* Actual weight path */}
-                                {weightChartData.actualPath && (
+                                    {/* Stepped Target Line */}
                                     <path
-                                        d={weightChartData.actualPath}
+                                        d={phasedChartData.targetPath}
+                                        fill="none"
+                                        stroke="#10b981"
+                                        strokeWidth="1.5"
+                                        strokeDasharray="4 4"
+                                        opacity="0.6"
+                                    />
+
+                                    {/* Actual Data Path */}
+                                    <path
+                                        d={phasedChartData.actualPath}
                                         fill="none"
                                         stroke={categoryConfig.color}
                                         strokeWidth="2.5"
                                         strokeLinecap="round"
                                         strokeLinejoin="round"
                                     />
-                                )}
 
-                                {/* Start point */}
-                                <circle
-                                    cx={weightChartData.trendLine.x1}
-                                    cy={weightChartData.trendLine.y1}
-                                    r="5"
-                                    fill={categoryConfig.color}
-                                    opacity="0.5"
-                                />
-
-                                {/* Actual weight points */}
-                                {weightChartData.actualPoints.map((point, i) => (
-                                    <g key={i}>
+                                    {/* Data Points */}
+                                    {phasedChartData.measurements.map((point, i) => (
                                         <circle
+                                            key={i}
                                             cx={point.x}
                                             cy={point.y}
-                                            r="6"
+                                            r="3"
                                             fill={categoryConfig.color}
                                             stroke="white"
-                                            strokeWidth="2"
+                                            strokeWidth="1"
                                         />
-                                        {/* Tooltip on hover would go here */}
-                                    </g>
-                                ))}
-
-                                {/* Start date label */}
-                                <text
-                                    x={weightChartData.padding.left}
-                                    y={weightChartData.chartHeight - 10}
-                                    fill="rgba(148,163,184,0.6)"
-                                    fontSize="9"
-                                    textAnchor="start"
+                                    ))}
+                                </svg>
+                            ) : weightChartData ? (
+                                <svg
+                                    viewBox={`0 0 ${weightChartData.chartWidth} ${weightChartData.chartHeight}`}
+                                    className="w-full h-auto"
                                 >
-                                    {formatDate(goal.startDate)}
-                                </text>
+                                    {/* Grid lines */}
+                                    {[0.25, 0.5, 0.75, 1].map((ratio, i) => {
+                                        const y = weightChartData.padding.top + (1 - ratio) * weightChartData.graphHeight;
+                                        const weight = weightChartData.minWeight + ratio * (weightChartData.maxWeight - weightChartData.minWeight);
+                                        return (
+                                            <g key={i}>
+                                                <line
+                                                    x1={weightChartData.padding.left}
+                                                    y1={y}
+                                                    x2={weightChartData.chartWidth - weightChartData.padding.right}
+                                                    y2={y}
+                                                    stroke="rgba(255,255,255,0.05)"
+                                                    strokeWidth="1"
+                                                />
+                                                <text
+                                                    x={weightChartData.padding.left - 8}
+                                                    y={y + 4}
+                                                    fill="rgba(148,163,184,0.6)"
+                                                    fontSize="10"
+                                                    textAnchor="end"
+                                                >
+                                                    {weight.toFixed(0)}
+                                                </text>
+                                            </g>
+                                        );
+                                    })}
 
-                                {/* End date label */}
-                                {goal.endDate && (
+                                    {/* Target weight line (horizontal dashed) */}
+                                    <line
+                                        x1={weightChartData.padding.left}
+                                        y1={weightChartData.weightToY(weightChartData.targetWeight)}
+                                        x2={weightChartData.chartWidth - weightChartData.padding.right}
+                                        y2={weightChartData.weightToY(weightChartData.targetWeight)}
+                                        stroke="#10b981"
+                                        strokeWidth="1.5"
+                                        strokeDasharray="4 4"
+                                        opacity="0.5"
+                                    />
                                     <text
-                                        x={weightChartData.chartWidth - weightChartData.padding.right}
+                                        x={weightChartData.chartWidth - weightChartData.padding.right + 5}
+                                        y={weightChartData.weightToY(weightChartData.targetWeight) + 4}
+                                        fill="#10b981"
+                                        fontSize="10"
+                                        fontWeight="bold"
+                                    >
+                                        Mål
+                                    </text>
+
+                                    {/* Trend line (dashed diagonal) */}
+                                    <line
+                                        x1={weightChartData.trendLine.x1}
+                                        y1={weightChartData.trendLine.y1}
+                                        x2={weightChartData.trendLine.x2}
+                                        y2={weightChartData.trendLine.y2}
+                                        stroke={categoryConfig.color}
+                                        strokeWidth="2"
+                                        strokeDasharray="8 4"
+                                        opacity="0.4"
+                                    />
+
+                                    {/* Today marker */}
+                                    <line
+                                        x1={weightChartData.todayX}
+                                        y1={weightChartData.padding.top}
+                                        x2={weightChartData.todayX}
+                                        y2={weightChartData.chartHeight - weightChartData.padding.bottom}
+                                        stroke="rgba(255,255,255,0.2)"
+                                        strokeWidth="1"
+                                        strokeDasharray="3 3"
+                                    />
+                                    <text
+                                        x={weightChartData.todayX}
+                                        y={weightChartData.chartHeight - 10}
+                                        fill="rgba(255,255,255,0.5)"
+                                        fontSize="9"
+                                        textAnchor="middle"
+                                    >
+                                        Idag
+                                    </text>
+
+                                    {/* Actual weight path */}
+                                    {weightChartData.actualPath && (
+                                        <path
+                                            d={weightChartData.actualPath}
+                                            fill="none"
+                                            stroke={categoryConfig.color}
+                                            strokeWidth="2.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        />
+                                    )}
+
+                                    {/* Start point */}
+                                    <circle
+                                        cx={weightChartData.trendLine.x1}
+                                        cy={weightChartData.trendLine.y1}
+                                        r="5"
+                                        fill={categoryConfig.color}
+                                        opacity="0.5"
+                                    />
+
+                                    {/* Actual weight points */}
+                                    {weightChartData.actualPoints.map((point, i) => (
+                                        <g key={i}>
+                                            <circle
+                                                cx={point.x}
+                                                cy={point.y}
+                                                r="6"
+                                                fill={categoryConfig.color}
+                                                stroke="white"
+                                                strokeWidth="2"
+                                            />
+                                            {/* Tooltip on hover would go here */}
+                                        </g>
+                                    ))}
+
+                                    {/* Start date label */}
+                                    <text
+                                        x={weightChartData.padding.left}
                                         y={weightChartData.chartHeight - 10}
                                         fill="rgba(148,163,184,0.6)"
                                         fontSize="9"
-                                        textAnchor="end"
+                                        textAnchor="start"
                                     >
-                                        {formatDate(goal.endDate)}
+                                        {formatDate(goal.startDate)}
                                     </text>
-                                )}
-                            </svg>
+
+                                    {/* End date label */}
+                                    {goal.endDate && (
+                                        <text
+                                            x={weightChartData.chartWidth - weightChartData.padding.right}
+                                            y={weightChartData.chartHeight - 10}
+                                            fill="rgba(148,163,184,0.6)"
+                                            fontSize="9"
+                                            textAnchor="end"
+                                        >
+                                            {formatDate(goal.endDate)}
+                                        </text>
+                                    )}
+                                </svg>
+                            ) : null}
 
                             {/* Weight history list */}
-                            {relevantWeights.length > 0 && (
+                            {relevantWeights.length > 0 && viewMode === 'phase' && (
                                 <div className="mt-4 space-y-1">
                                     <div className="text-xs font-bold text-slate-400 mb-2">Vägningshistorik</div>
                                     <div className="max-h-32 overflow-y-auto space-y-1">

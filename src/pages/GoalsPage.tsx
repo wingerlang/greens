@@ -227,6 +227,20 @@ export function GoalsPage() {
         setIsModalOpen(true);
     };
 
+    const handleNewPhase = (previousGoal: PerformanceGoal) => {
+        setEditingGoal({
+            ...previousGoal,
+            id: '', // New ID
+            previousGoalId: previousGoal.id,
+            name: `${previousGoal.name} (Fas 2)`,
+            startDate: new Date().toISOString().split('T')[0],
+            endDate: undefined, // Let user decide
+            status: 'active',
+            createdAt: ''
+        } as any);
+        setIsModalOpen(true);
+    };
+
     const handleSaveGoal = (goalData: Omit<PerformanceGoal, 'id' | 'createdAt'>) => {
         if (editingGoal) {
             updateGoal(editingGoal.id, goalData);
@@ -693,6 +707,12 @@ export function GoalsPage() {
                         const newParams = new URLSearchParams(searchParams);
                         newParams.delete('goal');
                         setSearchParams(newParams);
+                    }}
+                    onNewPhase={(goal) => {
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.delete('goal');
+                        setSearchParams(newParams);
+                        handleNewPhase(goal);
                     }}
                     onEdit={() => {
                         // Keep the URL param or remove it? Usually keep context or close detail to open edit.

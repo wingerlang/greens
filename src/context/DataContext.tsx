@@ -29,23 +29,22 @@ import {
     type CoachGoal,
     type PlannedActivity,
     type StravaActivity,
-    // Phase 8
     type SleepSession,
     type IntakeLog,
     type UniversalActivity,
-    type InjuryLog, // Phase 7
-    type RecoveryMetric, // Phase 7
-    type StrengthSession, // Phase 12
+    type InjuryLog,
+    type RecoveryMetric,
+    type StrengthSession,
     type StrengthWorkout,
-    type BodyMeasurementEntry, // Phase Legacy+
+    type BodyMeasurementEntry,
     type TrainingPeriod,
     type QuickMeal,
     type MealItem,
     type DatabaseAction,
     type DatabaseActionType,
     type DatabaseEntityType,
-    type RaceDefinition, // Phase R
-    type RaceIgnoreRule, // Phase R
+    type RaceDefinition,
+    type RaceIgnoreRule,
     type ExerciseDefinition
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
@@ -194,7 +193,7 @@ interface DataContextType {
     activateCoachGoal: (goalId: string) => void;
     deleteCoachGoal: (goalId: string) => void;
 
-    // Phase 8: Data Integration
+    // Data Integration
     sleepSessions: SleepSession[];
     intakeLogs: IntakeLog[];
     universalActivities: UniversalActivity[];
@@ -567,7 +566,6 @@ export function DataProvider({ children }: DataProviderProps) {
                 trainingPeriods,
                 coachConfig,
                 plannedActivities,
-                // Phase 8
                 sleepSessions,
                 intakeLogs,
                 universalActivities,

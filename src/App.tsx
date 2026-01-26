@@ -11,6 +11,7 @@ import { Layout } from './components/Layout.tsx';
 import { RequireRole } from './components/RequireRole.tsx';
 import DebugBar from './components/debug/DebugBar.tsx';
 import { BugReporter } from './components/debug/BugReporter.tsx';
+import { RootHandler } from './components/RootHandler.tsx';
 
 // Lazy loading pages for better performance
 const WeeklyPage = React.lazy(() => import('./pages/WeeklyPage.tsx'));
@@ -131,12 +132,14 @@ export function App() {
                                                 <Route path="/login" element={<LoginPage />} />
                                                 <Route path="/register" element={<RegisterPage />} />
 
+                                                {/* Root Logic */}
+                                                <Route path="/" element={<RootHandler />} />
+
                                                 {/* Protected Routes */}
                                                 <Route path="/*" element={
                                                     <RequireAuth>
                                                         <Layout>
                                                             <Routes>
-                                                                <Route index element={<DashboardPage />} />
                                                                 <Route path="meddelanden" element={<MessagesPage />} />
                                                                 <Route path="messages" element={<Navigate to="/meddelanden" replace />} />
                                                                 <Route path="veckan" element={<WeeklyPage />} />
@@ -164,7 +167,6 @@ export function App() {
                                                                 <Route path="hälsa" element={<HealthPage />} />
                                                                 <Route path="hälsa/:metric" element={<HealthPage />} />
                                                                 <Route path="coach" element={<CoachPage />} />
-                                                                <Route path="competition" element={<CompetitionPage />} />
                                                                 <Route path="competition" element={<CompetitionPage />} />
                                                                 <Route path="tävling" element={<CompetitionPage />} />
 
