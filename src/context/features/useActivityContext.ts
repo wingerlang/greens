@@ -52,7 +52,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
     const [plannedActivities, setPlannedActivities] = useState<PlannedActivity[]>([]);
     const [universalActivities, setUniversalActivities] = useState<UniversalActivity[]>([]);
 
-    // Phase R: Race Definitions
+    // Race Definitions
     const [raceDefinitions, setRaceDefinitions] = useState<RaceDefinition[]>([]);
     const [raceIgnoreRules, setRaceIgnoreRules] = useState<RaceIgnoreRule[]>([]);
 
@@ -97,7 +97,7 @@ export function useActivityContext({ currentUser, logAction, emitFeedEvent, skip
 
 
     // ============================================
-    // Strength Session CRUD (Phase 12)
+    // Strength Session CRUD
     // ============================================
 
     const addStrengthSession = useCallback((session: Omit<StrengthWorkout, 'id'>): StrengthWorkout => {

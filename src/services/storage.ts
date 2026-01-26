@@ -51,7 +51,7 @@ export interface StorageService {
     // Quick Meals Granular
     saveQuickMeal(meal: QuickMeal): Promise<void>;
     deleteQuickMeal(id: string): Promise<void>;
-    // Race Definitions (Phase R)
+    // Race Definitions
     saveRaceDefinition(def: RaceDefinition): Promise<void>;
     deleteRaceDefinition(id: string): Promise<void>;
     saveRaceIgnoreRule(rule: RaceIgnoreRule): Promise<void>;
@@ -82,7 +82,7 @@ const getDefaultData = (): AppData => ({
     trainingCycles: [],
     performanceGoals: [],
     plannedActivities: [],
-    // Phase 8: Data Persistence & Integration
+    // Data Persistence & Integration
     sleepSessions: [],
     intakeLogs: [],
     universalActivities: [],
@@ -209,7 +209,6 @@ export class LocalStorageService implements StorageService {
             if (!data.pantryQuantities) data.pantryQuantities = {};
             if (!data.plannedActivities) data.plannedActivities = [];
 
-            // Phase 8
             if (!data.intakeLogs) data.intakeLogs = [];
             if (!data.universalActivities) data.universalActivities = [];
             if (!data.quickMeals) data.quickMeals = [];
@@ -785,7 +784,7 @@ export class LocalStorageService implements StorageService {
 
 
     // ============================================
-    // Race Definitions (Phase R)
+    // Race Definitions
     // ============================================
 
     async saveRaceDefinition(def: RaceDefinition): Promise<void> {

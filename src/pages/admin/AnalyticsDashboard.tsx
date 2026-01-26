@@ -95,7 +95,6 @@ export function AnalyticsDashboard() {
     const [rawEvents, setRawEvents] = useState<InteractionEvent[]>([]);
     const [rawPageViews, setRawPageViews] = useState<PageView[]>([]);
 
-    // Phase 8 Micro-Feature States
     const [selectedHeatmapElement, setSelectedHeatmapElement] = useState<string | null>(null);
     const [dismissedInsights, setDismissedInsights] = useState<number[]>([]);
     const [liveSearch, setLiveSearch] = useState('');
