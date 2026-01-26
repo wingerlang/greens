@@ -95,6 +95,16 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
     const [activeTab, setActiveTab] = useState<DatabaseTab>('items');
     const [sourceFilter, setSourceFilter] = useState<'all' | 'user'>('all');
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [inputMode, setInputMode] = useState<'per100g' | 'perPortion'>('per100g');
+    const [portionValues, setPortionValues] = useState({
+        calories: 0,
+        protein: 0,
+        carbs: 0,
+        fat: 0,
+        fiber: 0,
+        caffeine: 0,
+        alcohol: 0
+    });
 
     // Drag and drop state
     const [isDragging, setIsDragging] = useState(false);
@@ -497,11 +507,25 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                 }
             });
             setVariants(item.variants || []);
+            // Initialize portion values based on 100g values
+            const portion = item.defaultPortionGrams || 100;
+            setPortionValues({
+                calories: (item.calories * portion) / 100,
+                protein: (item.protein * portion) / 100,
+                carbs: (item.carbs * portion) / 100,
+                fat: (item.fat * portion) / 100,
+                fiber: (item.fiber || 0) * portion / 100,
+                caffeine: (item.extendedDetails?.caffeine || 0) * portion / 100,
+                alcohol: (item.extendedDetails?.alcohol || 0) * portion / 100
+            });
+            setInputMode('per100g');
         } else {
             setEditingItem(null);
             setAlias('');
             setFormData(EMPTY_FORM);
             setVariants([]);
+            setPortionValues({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, caffeine: 0, alcohol: 0 });
+            setInputMode('per100g');
         }
         setIsFormOpen(true);
     };
@@ -515,7 +539,8 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        // const submission = { ...formData, variants }; // unused?
+        // Ensure formData is correct based on current input values if we were in perPortion mode
+        // Though the sync logic should have handled it, it's safe to have it here.
         if (editingItem) {
             updateFoodItem(editingItem.id, formData);
             if (alias !== (foodAliases[editingItem.id] || '')) {
@@ -525,6 +550,69 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
             addFoodItem(formData);
         }
         handleCloseForm();
+    };
+
+    // Synchronization Logic
+    const updateNutrition = (field: keyof typeof portionValues, value: number) => {
+        const portionGrams = formData.defaultPortionGrams || 100;
+
+        if (inputMode === 'per100g') {
+            // Updating 100g value -> update portion value
+            if (field === 'caffeine' || field === 'alcohol') {
+                setFormData(prev => ({
+                    ...prev,
+                    extendedDetails: { ...prev.extendedDetails, [field]: value }
+                }));
+            } else {
+                setFormData(prev => ({ ...prev, [field]: value }));
+            }
+            setPortionValues(prev => ({ ...prev, [field]: Number(((value * portionGrams) / 100).toFixed(2)) }));
+        } else {
+            // Updating portion value -> update 100g value
+            setPortionValues(prev => ({ ...prev, [field]: value }));
+            const val100g = Number(((value / portionGrams) * 100).toFixed(2));
+            if (field === 'caffeine' || field === 'alcohol') {
+                setFormData(prev => ({
+                    ...prev,
+                    extendedDetails: { ...prev.extendedDetails, [field]: val100g }
+                }));
+            } else {
+                setFormData(prev => ({ ...prev, [field]: val100g }));
+            }
+        }
+    };
+
+    // When portion grams change, we need to decide what to keep constant
+    const handlePortionGramsChange = (newGrams: number) => {
+        setFormData(prev => {
+            const updated = { ...prev, defaultPortionGrams: newGrams };
+            // If we are in perPortion mode, we keep the portion values constant and recalculate 100g
+            if (inputMode === 'perPortion') {
+                const ratio = newGrams > 0 ? 100 / newGrams : 0;
+                updated.calories = Number((portionValues.calories * ratio).toFixed(2));
+                updated.protein = Number((portionValues.protein * ratio).toFixed(2));
+                updated.carbs = Number((portionValues.carbs * ratio).toFixed(2));
+                updated.fat = Number((portionValues.fat * ratio).toFixed(2));
+                updated.fiber = Number((portionValues.fiber * ratio).toFixed(2));
+                updated.extendedDetails = {
+                    ...updated.extendedDetails,
+                    caffeine: Number((portionValues.caffeine * ratio).toFixed(2)),
+                    alcohol: Number((portionValues.alcohol * ratio).toFixed(2))
+                };
+            } else {
+                // If we are in per100g mode, we keep 100g constant and recalculate portion values
+                setPortionValues({
+                    calories: Number(((prev.calories * newGrams) / 100).toFixed(2)),
+                    protein: Number(((prev.protein * newGrams) / 100).toFixed(2)),
+                    carbs: Number(((prev.carbs * newGrams) / 100).toFixed(2)),
+                    fat: Number(((prev.fat * newGrams) / 100).toFixed(2)),
+                    fiber: Number(((prev.fiber || 0) * newGrams / 100).toFixed(2)),
+                    caffeine: Number(((prev.extendedDetails?.caffeine || 0) * newGrams / 100).toFixed(2)),
+                    alcohol: Number(((prev.extendedDetails?.alcohol || 0) * newGrams / 100).toFixed(2))
+                });
+            }
+            return updated;
+        });
     };
 
     // Variant Helper
@@ -1519,19 +1607,78 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
 
                                     {/* Macros Section */}
                                     <div className="bg-slate-800/40 rounded-2xl p-5 border border-slate-700/50">
-                                        <h3 className="text-sm font-bold text-emerald-400 mb-6 flex items-center gap-2">
-                                            <span>📊</span> Näringsvärden (per 100g)
-                                        </h3>
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h3 className="text-sm font-bold text-emerald-400 flex items-center gap-2">
+                                                <span>📊</span> Näringsvärden
+                                            </h3>
+                                            <div className="flex bg-slate-900/80 p-1 rounded-lg border border-slate-700 text-[10px] font-black uppercase tracking-tighter">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setInputMode('per100g')}
+                                                    className={`px-2 py-1 rounded transition-all ${inputMode === 'per100g' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                                >
+                                                    100g
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setInputMode('perPortion')}
+                                                    className={`px-2 py-1 rounded transition-all ${inputMode === 'perPortion' ? 'bg-emerald-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                                                >
+                                                    Portion
+                                                </button>
+                                            </div>
+                                        </div>
+
                                         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                            <MacroInput label="Kalorier" value={formData.calories} onChange={v => setFormData({ ...formData, calories: v })} suffix="kcal" />
-                                            <MacroInput label="Protein" value={formData.protein} onChange={v => setFormData({ ...formData, protein: v })} suffix="g" step={0.1} />
-                                            <MacroInput label="Kolhydrater" value={formData.carbs} onChange={v => setFormData({ ...formData, carbs: v })} suffix="g" step={0.1} />
-                                            <MacroInput label="Fett" value={formData.fat} onChange={v => setFormData({ ...formData, fat: v })} suffix="g" step={0.1} />
+                                            <MacroInput
+                                                label="Kalorier"
+                                                value={inputMode === 'per100g' ? formData.calories : portionValues.calories}
+                                                onChange={v => updateNutrition('calories', v)}
+                                                suffix="kcal"
+                                            />
+                                            <MacroInput
+                                                label="Protein"
+                                                value={inputMode === 'per100g' ? formData.protein : portionValues.protein}
+                                                onChange={v => updateNutrition('protein', v)}
+                                                suffix="g"
+                                                step={0.1}
+                                            />
+                                            <MacroInput
+                                                label="Kolhydrater"
+                                                value={inputMode === 'per100g' ? formData.carbs : portionValues.carbs}
+                                                onChange={v => updateNutrition('carbs', v)}
+                                                suffix="g"
+                                                step={0.1}
+                                            />
+                                            <MacroInput
+                                                label="Fett"
+                                                value={inputMode === 'per100g' ? formData.fat : portionValues.fat}
+                                                onChange={v => updateNutrition('fat', v)}
+                                                suffix="g"
+                                                step={0.1}
+                                            />
                                             {showAdvanced && (
                                                 <>
-                                                    <MacroInput label="Fiber" value={formData.fiber || 0} onChange={v => setFormData({ ...formData, fiber: v })} suffix="g" step={0.1} />
-                                                    <MacroInput label="Koffein" value={formData.extendedDetails?.caffeine || 0} onChange={v => setFormData({ ...formData, extendedDetails: { ...formData.extendedDetails, caffeine: v } })} suffix="mg" />
-                                                    <MacroInput label="Alkohol" value={formData.extendedDetails?.alcohol || 0} onChange={v => setFormData({ ...formData, extendedDetails: { ...formData.extendedDetails, alcohol: v } })} suffix="e" step={0.1} />
+                                                    <MacroInput
+                                                        label="Fiber"
+                                                        value={inputMode === 'per100g' ? (formData.fiber || 0) : portionValues.fiber}
+                                                        onChange={v => updateNutrition('fiber', v)}
+                                                        suffix="g"
+                                                        step={0.1}
+                                                    />
+                                                    <MacroInput
+                                                        label="Koffein"
+                                                        value={inputMode === 'per100g' ? (formData.extendedDetails?.caffeine || 0) : portionValues.caffeine}
+                                                        onChange={v => updateNutrition('caffeine', v)}
+                                                        suffix="mg"
+                                                    />
+                                                    <MacroInput
+                                                        label="Alkohol"
+                                                        value={inputMode === 'per100g' ? (formData.extendedDetails?.alcohol || 0) : portionValues.alcohol}
+                                                        onChange={v => updateNutrition('alcohol', v)}
+                                                        suffix="e"
+                                                        step={0.1}
+                                                    />
                                                 </>
                                             )}
                                         </div>
@@ -1639,8 +1786,8 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                                 <input
                                                     type="number"
                                                     value={formData.defaultPortionGrams || ''}
-                                                    onChange={e => setFormData({ ...formData, defaultPortionGrams: Number(e.target.value) })}
-                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white"
+                                                    onChange={e => handlePortionGramsChange(Number(e.target.value))}
+                                                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500"
                                                     placeholder="t.ex. 35"
                                                 />
                                                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">G</span>

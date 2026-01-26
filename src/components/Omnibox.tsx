@@ -564,7 +564,17 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
                 // If we have a quantity in intent, use it. 
                 // Otherwise use default portion or average.
-                const initialQty = foodData?.quantity || item.defaultPortionGrams || stats?.avgGrams || 100;
+                let initialQty = 100;
+                if (foodData?.quantity) {
+                    if (foodData.unit === 'portion' || foodData.unit === 'st') {
+                        const portionSize = item.defaultPortionGrams || 100;
+                        initialQty = foodData.quantity * portionSize;
+                    } else {
+                        initialQty = foodData.quantity;
+                    }
+                } else {
+                    initialQty = item.defaultPortionGrams || stats?.avgGrams || 100;
+                }
 
                 setDraftFoodQuantity(initialQty);
                 setDraftFoodMealType(foodData?.mealType || null);
@@ -763,8 +773,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         let initialQty = 100;
 
         if (intent.type === 'food' && intent.data.quantity) {
-            // If user explicitly typed "X port", we multiply by default portion size
-            if (intent.data.unit === 'portion') {
+            // If user explicitly typed "X port" or "X st", we multiply by default portion size
+            if (intent.data.unit === 'portion' || intent.data.unit === 'st') {
                 const portionSize = item.defaultPortionGrams || 100;
                 initialQty = intent.data.quantity * portionSize;
             } else {

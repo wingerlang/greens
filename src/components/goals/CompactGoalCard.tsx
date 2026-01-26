@@ -35,6 +35,12 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
         ? Math.min(100, Math.max(0, progress.percentage))
         : 0;
 
+    // Determine status color: Red if over budget for 'down' goals, Green if met for 'up' goals
+    const isOverBudget = (goal.goalDirection === 'down' && (progress?.current || 0) > (progress?.target || 0));
+    const isMet = percentage >= 100;
+
+    const statusColor = isOverBudget ? '#ef4444' : (isMet ? '#10b981' : color);
+
     // Helper to format values compactly
     const formatValue = (val: number, unit?: string) => {
         if (val >= 1000 && unit !== 'kcal') return `${(val / 1000).toFixed(1)}k`;
@@ -91,7 +97,11 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/5">
                 <div
                     className="h-full transition-all duration-500 ease-out"
-                    style={{ width: `${percentage}%`, backgroundColor: color }}
+                    style={{
+                        width: `${percentage}%`,
+                        backgroundColor: statusColor,
+                        boxShadow: isOverBudget ? '0 0 10px rgba(239, 68, 68, 0.4)' : 'none'
+                    }}
                 />
             </div>
 
@@ -121,9 +131,16 @@ export const CompactGoalCard: React.FC<CompactGoalCardProps> = ({ goal, onEdit, 
 
                 <div className="flex flex-col gap-0.5 mt-1">
                     <span className="text-xs text-slate-400 font-medium">{friendlyTargetText}</span>
-                    <span className={`text-xs font-bold ${percentage >= 100 ? 'text-emerald-400' : 'text-slate-300'}`}>
-                        {friendlyProgressText}
-                    </span>
+                    <div className="flex items-center gap-2">
+                        <span className={`text-xs font-bold ${isMet && !isOverBudget ? 'text-emerald-400' : isOverBudget ? 'text-red-400' : 'text-slate-300'}`}>
+                            {friendlyProgressText}
+                        </span>
+                        {progress?.successfulPeriods !== undefined && progress.successfulPeriods > 0 && (
+                            <span className="text-[10px] bg-emerald-500/10 text-emerald-400 px-1.5 py-0.5 rounded font-black uppercase tracking-tighter">
+                                {progress.successfulPeriods}v streak
+                            </span>
+                        )}
+                    </div>
                 </div>
             </div>
 

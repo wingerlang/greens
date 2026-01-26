@@ -348,19 +348,25 @@ export function GoalsPage() {
 
                         {/* New Feature: Active Period Card */}
                         {activePeriod ? (
-                            <button
-                                onClick={() => navigate(`/training/period/${activePeriod.id}`)}
-                                className="mt-4 flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl hover:bg-emerald-500/20 transition-all text-left group"
-                            >
-                                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
-                                    🚀
-                                </div>
-                                <div>
-                                    <div className="text-xs text-emerald-400 font-bold uppercase tracking-wider">Aktiv Period</div>
-                                    <div className="font-bold text-white group-hover:text-emerald-300 transition-colors">{activePeriod.name}</div>
-                                </div>
-                                <div className="ml-auto text-emerald-400/50 group-hover:text-emerald-400">→</div>
-                            </button>
+                            <div className="mt-6 flex flex-col gap-2">
+                                <div className="text-[10px] text-emerald-400/70 font-black uppercase tracking-widest ml-1">Nuvarande fokus</div>
+                                <button
+                                    onClick={() => navigate(`/training/period/${activePeriod.id}`)}
+                                    className="flex items-center gap-4 bg-white/5 border border-white/10 p-4 rounded-2xl hover:bg-white/10 transition-all text-left group relative overflow-hidden"
+                                >
+                                    <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <div className="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-500/20 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform shadow-lg shadow-emerald-900/20">
+                                        🚀
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="font-black text-lg text-white group-hover:text-emerald-300 transition-colors line-height-tight leading-tight">{activePeriod.name}</div>
+                                        <div className="text-xs text-slate-400 font-bold mt-0.5">{activePeriod.focusType === 'weight_loss' ? '🔥 Viktminskning' : '💪 Styrkefokus'}</div>
+                                    </div>
+                                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/30 group-hover:text-emerald-400 group-hover:bg-emerald-500/20 transition-all">
+                                        →
+                                    </div>
+                                </button>
+                            </div>
                         ) : (
                             <button
                                 onClick={() => setIsPeriodWizardOpen(true)}
@@ -404,6 +410,13 @@ export function GoalsPage() {
                         <div className="stat-content">
                             <span className="stat-value">{summary.onTrackCount}</span>
                             <span className="stat-label">På rätt spår</span>
+                        </div>
+                    </div>
+                    <div className="stat-card">
+                        <span className="stat-icon">📅</span>
+                        <div className="stat-content">
+                            <span className="stat-value">{activeGoals.reduce((sum, g) => sum + (g.progress.successfulPeriods || 0), 0)}</span>
+                            <span className="stat-label">Veckor Klarade</span>
                         </div>
                     </div>
                     <div className="stat-card streak">

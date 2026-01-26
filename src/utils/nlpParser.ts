@@ -20,6 +20,7 @@ export function calculateCalories(type: ExerciseType, duration: number, intensit
         walking: { low: 2.5, moderate: 3.5, high: 4.5, ultra: 6 },
         swimming: { low: 6, moderate: 8, high: 10, ultra: 12 },
         yoga: { low: 2, moderate: 3, high: 4, ultra: 5 },
+        hyrox: { low: 8, moderate: 10, high: 13, ultra: 17 },
         other: { low: 4, moderate: 6, high: 8, ultra: 10 }
     };
     const met = METS[type]?.[intensity] || METS.other.moderate;
@@ -550,9 +551,9 @@ function parseFood(input: string): OmniboxIntent | null {
         /([\d.,]+)\s*(kg|kilo)\b/i,
         /([\d.,]+)\s*(ml|milliliter)\b/i,
         /([\d.,]+)\s*(l|liter)\b/i,
-        /([\d.,]+)\s*(st|stycken?|stk|pcs)\b/i, // Added stk
+        /([\d.,]+)\s*(st|stycken?|stk|pcs|stk|x)\b/i, // Added x
         /([\d.,]+)\s*(port|portion(?:er)?)\b/i,
-        /([\d.,]+)(port|st)\b/i,  // Shorthand: "2port", "2st" without space
+        /([\d.,]+)(port|st|x)\b/i,  // Shorthand: "2port", "2st", "2x" without space
         /([\d.,]+)\s*(dl|deciliter)\b/i,
         /([\d.,]+)\s*(msk|matsked(?:ar)?)\b/i,
         /([\d.,]+)\s*(tsk|tesked(?:ar)?)\b/i,
@@ -561,41 +562,51 @@ function parseFood(input: string): OmniboxIntent | null {
     let quantity: number | undefined;
     let unit: string = 'g';
 
-    for (const pattern of quantityPatterns) {
-        const match = working.match(pattern);
-        if (match) {
-            const rawNum = parseFloat(match[1].replace(',', '.'));
-            const rawUnit = match[2].toLowerCase();
+    // 2.1 Check for fractional words first ("halv pizza", "half avocado")
+    const fractionalMatch = working.match(/\b(halv|half)\b/i);
+    if (fractionalMatch) {
+        quantity = 0.5;
+        unit = 'st';
+        working = working.replace(fractionalMatch[0], '').trim();
+    }
 
-            // Convert to grams for common units
-            if (rawUnit.startsWith('kg') || rawUnit.startsWith('kilo')) {
-                quantity = rawNum * 1000;
-                unit = 'g';
-            } else if (rawUnit.startsWith('l') && !rawUnit.startsWith('liter')) {
-                quantity = rawNum * 1000;
-                unit = 'ml';
-            } else if (rawUnit.startsWith('dl')) {
-                quantity = rawNum * 100;
-                unit = 'ml';
-            } else if (rawUnit.startsWith('st') || rawUnit.startsWith('pcs') || rawUnit.startsWith('stk')) {
-                quantity = rawNum;
-                unit = 'st';
-            } else if (rawUnit.startsWith('port')) {
-                quantity = rawNum;
-                unit = 'portion';
-            } else if (rawUnit.startsWith('msk')) {
-                quantity = rawNum * 15; // 15g per msk
-                unit = 'g';
-            } else if (rawUnit.startsWith('tsk')) {
-                quantity = rawNum * 5; // 5g per tsk
-                unit = 'g';
-            } else {
-                quantity = rawNum;
-                unit = rawUnit.replace(/s$/, ''); // Remove trailing 's'
+    if (quantity === undefined) {
+        for (const pattern of quantityPatterns) {
+            const match = working.match(pattern);
+            if (match) {
+                const rawNum = parseFloat(match[1].replace(',', '.'));
+                const rawUnit = match[2].toLowerCase();
+
+                // Convert to grams for common units
+                if (rawUnit.startsWith('kg') || rawUnit.startsWith('kilo')) {
+                    quantity = rawNum * 1000;
+                    unit = 'g';
+                } else if (rawUnit.startsWith('l') && !rawUnit.startsWith('liter')) {
+                    quantity = rawNum * 1000;
+                    unit = 'ml';
+                } else if (rawUnit.startsWith('dl')) {
+                    quantity = rawNum * 100;
+                    unit = 'ml';
+                } else if (rawUnit.startsWith('st') || rawUnit.startsWith('pcs') || rawUnit.startsWith('stk') || rawUnit === 'x') {
+                    quantity = rawNum;
+                    unit = 'st';
+                } else if (rawUnit.startsWith('port')) {
+                    quantity = rawNum;
+                    unit = 'portion';
+                } else if (rawUnit.startsWith('msk')) {
+                    quantity = rawNum * 15; // 15g per msk
+                    unit = 'g';
+                } else if (rawUnit.startsWith('tsk')) {
+                    quantity = rawNum * 5; // 5g per tsk
+                    unit = 'g';
+                } else {
+                    quantity = rawNum;
+                    unit = rawUnit.replace(/s$/, ''); // Remove trailing 's'
+                }
+
+                working = working.replace(match[0], '').trim();
+                break;
             }
-
-            working = working.replace(match[0], '').trim();
-            break;
         }
     }
 

@@ -31,6 +31,8 @@ export interface GoalProgress {
     periodEnd: string;
     actualCurrentValue?: number; // The actual latest value (e.g. latest weight) instead of progress relative to start
     linkedActivityId?: string; // ID of the activity that achieved the goal (e.g. for PBs/Speed)
+    successfulPeriods?: number; // Count of previous periods where goal was met
+    totalPeriodsChecked?: number; // Total number of previous periods analyzed
 }
 
 export interface StreakInfo {
@@ -712,7 +714,6 @@ export function isGoalOnTrack(
     current: number,
     target: number
 ): boolean {
-    if (current >= target) return true;
     if ((goal.period === 'once' || goal.type === 'weight') && !goal.endDate) return true; // No deadline
 
     const { start, end } = getGoalPeriodDates(goal);
@@ -723,8 +724,19 @@ export function isGoalOnTrack(
     const totalDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
     const daysPassed = (today.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
 
-    if (totalDays <= 0) return current >= target;
+    if (totalDays <= 0) {
+        if (goal.goalDirection === 'down') return current <= target;
+        return current >= target;
+    }
 
+    // For "keep under" goals (like calories during weight loss)
+    if (goal.goalDirection === 'down') {
+        const allowanceSoFar = (daysPassed / totalDays) * target;
+        // Allowance + 10% buffer
+        return current <= allowanceSoFar * 1.1;
+    }
+
+    // For "reach target" goals
     const expectedProgress = (daysPassed / totalDays) * target;
     return current >= expectedProgress * 0.9; // 90% of expected is "on track"
 }
@@ -881,13 +893,82 @@ export function calculateGoalProgress(
         else if (last < first * 0.95) trend = 'down';
     }
 
+    // Calculate previous period success (Streaks / Cumulative)
+    let successfulPeriods = 0;
+    let totalPeriodsChecked = 0;
+
+    if (goal.period === 'weekly' && goal.type !== 'weight') {
+        // Check last 8 weeks
+        totalPeriodsChecked = 8;
+        const today = new Date();
+        for (let i = 1; i <= totalPeriodsChecked; i++) {
+            const pastDate = new Date(today);
+            pastDate.setDate(today.getDate() - (i * 7));
+            const pastRange = getGoalPeriodDates(goal, pastDate);
+
+            // This is a bit expensive but precise: recalculate current for each past week
+            // Note: We'd ideally have a more efficient way to slice the data
+            let pastValue = 0;
+            switch (goal.type) {
+                case 'frequency':
+                    pastValue = exerciseEntries.filter(e => {
+                        const d = e.date.split('T')[0];
+                        return d >= pastRange.start && d <= pastRange.end && (!target?.exerciseType || e.type === target.exerciseType);
+                    }).length;
+                    break;
+                case 'distance':
+                    pastValue = exerciseEntries.filter(e => {
+                        const d = e.date.split('T')[0];
+                        return d >= pastRange.start && d <= pastRange.end && (!target?.exerciseType || e.type === target.exerciseType);
+                    }).reduce((sum, e) => sum + (e.distance || 0), 0);
+                    break;
+                case 'nutrition':
+                case 'calories':
+                    const entries = mealEntries.filter(e => {
+                        const d = e.date.split('T')[0];
+                        return d >= pastRange.start && d <= pastRange.end;
+                    });
+
+                    if (goal.type === 'calories') {
+                        pastValue = exerciseEntries
+                            .filter(e => {
+                                const d = e.date.split('T')[0];
+                                return d >= pastRange.start && d <= pastRange.end;
+                            })
+                            .reduce((sum, e) => sum + (e.caloriesBurned || 0), 0);
+                    } else {
+                        // Nutrition (calories/protein) - very simplified for performance
+                        // We'll just look at the total burned or consumed if we have macros cached, 
+                        // but here we have to sum. Let's do a simple sum of calories if target is calories.
+                        const nutritionType = target?.nutritionType || 'calories';
+                        entries.forEach(entry => {
+                            entry.items.forEach(item => {
+                                const food = foodItems.find(f => f.id === item.referenceId);
+                                if (food) {
+                                    const mult = item.servings / 100;
+                                    pastValue += (food[nutritionType as keyof FoodItem] as number || 0) * mult;
+                                }
+                            });
+                        });
+                    }
+                    break;
+            }
+
+            const isPastMet = goal.goalDirection === 'down'
+                ? (pastValue > 0 && pastValue <= targetValue)
+                : (pastValue >= targetValue);
+
+            if (isPastMet) successfulPeriods++;
+        }
+    }
+
     return {
         current,
         target: targetValue,
         percentage,
         trend,
         isComplete,
-        isOnTrack: percentage >= ((100 / (getDaysRemaining(goal) || 1)) * 1), // rudimentary check
+        isOnTrack: isGoalOnTrack(goal, current, targetValue),
         daysRemaining,
         estimatedCompletionDate: !isComplete ? estimateCompletionDate(goal, current, targetValue) : undefined,
         periodStart: getGoalPeriodDates(goal).start,
@@ -895,7 +976,9 @@ export function calculateGoalProgress(
         actualCurrentValue: goal.type === 'weight' ? latestWeightVal :
             goal.type === 'measurement' ? latestMVal :
                 current,
-        linkedActivityId
+        linkedActivityId,
+        successfulPeriods,
+        totalPeriodsChecked
     };
 }
 
