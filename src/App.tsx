@@ -150,18 +150,13 @@ export function App() {
                                                         <Route path="competition" element={<CompetitionPage />} />
                                                         <Route path="tävling" element={<CompetitionPage />} />
 
-                                                        <Route path="admin" element={
+                                                        <Route path="admin/*" element={
                                                             <RequireRole role="admin">
                                                                 <AdminPage />
                                                             </RequireRole>
                                                         } />
-                                                        <Route path="analytics" element={<Navigate to="/admin?tab=analytics" replace />} />
-                                                        <Route path="analys" element={<Navigate to="/admin?tab=analytics" replace />} />
-                                                        <Route path="admin/exercises" element={
-                                                            <RequireRole role="admin">
-                                                                <ExerciseDatabasePage />
-                                                            </RequireRole>
-                                                        } />
+                                                        <Route path="analytics" element={<Navigate to="/admin/analytics" replace />} />
+                                                        <Route path="analys" element={<Navigate to="/admin/analytics" replace />} />
 
                                                         {/* Developer Routes */}
                                                         <Route path="developer" element={

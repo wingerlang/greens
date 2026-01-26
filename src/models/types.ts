@@ -1748,7 +1748,7 @@ export interface InteractionEvent {
     id: string;
     userId: string;
     sessionId: string;
-    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'omnibox_nav' | 'quick_add_log' | 'estimate_lunch_log' | 'error' | 'rage_click' | 'dead_click';
+    type: 'click' | 'submit' | 'change' | 'other' | 'omnibox_search' | 'omnibox_log' | 'omnibox_nav' | 'quick_add_log' | 'estimate_lunch_log' | 'error' | 'rage_click' | 'dead_click' | 'copy';
     target: string; // e.g., "button", "a", "input"
     label: string; // e.g., "Save Workout", "Log Out"
     path: string; // Where it happened

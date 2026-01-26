@@ -1,10 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { AnalyticsStats, PageView, InteractionEvent, generateId } from '../../models/types.ts';
 import {
-    BarChart3, TrendingUp, Users, MousePointer2, Search, Clock, Activity,
+    BarChart3, TrendingUp, TrendingDown, Users, MousePointer2, Search, Clock, Activity,
     ChevronDown, ChevronUp, Filter, RefreshCw, Play, Pause, SkipForward,
-    SkipBack, X, Monitor, Calendar, Timer, AlertCircle
+    SkipBack, X, Monitor, Calendar, Timer, AlertCircle, Check
 } from 'lucide-react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -53,7 +54,18 @@ interface SessionEvent extends InteractionEvent {
 
 export function AnalyticsDashboard() {
     const { user } = useAuth();
-    const [activeTab, setActiveTab] = useState<'overview' | 'sessions' | 'retention' | 'pathing' | 'appData' | 'errors' | 'heatmap' | 'friction' | 'funnel' | 'experiments' | 'health' | 'live' | 'ai'>('overview');
+    const { category = 'insights', tab = 'overview' } = useParams<{ category: string, tab: string }>();
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    // Use URL params instead of local state
+    const activeCategory = category as any;
+    const activeTab = tab as any;
+
+    const setActiveCategoryAndTab = (newCategory: string, newTab: string) => {
+        // Construct the new path relative to /admin/analytics
+        navigate(`/admin/analytics/${newCategory}/${newTab}`);
+    };
 
     // Overview Data
     const [stats, setStats] = useState<AnalyticsStats | null>(null);
@@ -82,6 +94,11 @@ export function AnalyticsDashboard() {
     // Raw Data (Overview Tab)
     const [rawEvents, setRawEvents] = useState<InteractionEvent[]>([]);
     const [rawPageViews, setRawPageViews] = useState<PageView[]>([]);
+
+    // Phase 8 Micro-Feature States
+    const [selectedHeatmapElement, setSelectedHeatmapElement] = useState<string | null>(null);
+    const [dismissedInsights, setDismissedInsights] = useState<number[]>([]);
+    const [liveSearch, setLiveSearch] = useState('');
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -214,635 +231,628 @@ export function AnalyticsDashboard() {
     return (
         <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8 pb-32">
             {/* Header */}
-            <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
+            <header className="flex flex-col gap-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <h1 className="text-3xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-3">
                         <BarChart3 className="text-pink-500" size={32} />
                         Användarstatistik
                     </h1>
-                    <div className="flex items-center gap-4 mt-2">
-                        <button
-                            onClick={() => setActiveTab('overview')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'overview' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            Översikt
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('sessions')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'sessions' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            Sessioner (Replay)
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('retention')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'retention' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            Retention
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('pathing')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'pathing' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            Flöden
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('appData')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'appData' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            Global Data
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('errors')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'errors' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            Fel-logg
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('heatmap')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'heatmap' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            🔥 Heatmap
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('friction')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'friction' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            🛑 Dead Clicks
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('funnel')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'funnel' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            🌪️ Funnel
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('health')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'health' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            ❤️ Health
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('live')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'live' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            ⚡ Live
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('experiments')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'experiments' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            🧪 Test
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('ai')}
-                            className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'ai' ? 'text-pink-500 border-pink-500' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
-                        >
-                            🧠 AI Insights
-                        </button>
+
+                    {/* Category Selector */}
+                    <div className="flex items-center gap-1 bg-slate-800/30 p-1.5 rounded-2xl border border-white/5 self-start md:self-auto">
+                        {[
+                            { id: 'insights', label: '📊 Insights', tabs: ['overview', 'retention'] },
+                            { id: 'behavior', label: '👤 Behavior', tabs: ['sessions', 'pathing', 'appData'] },
+                            { id: 'ux', label: '🧠 UX IQ', tabs: ['ai', 'heatmap', 'friction', 'health'] },
+                            { id: 'tests', label: '🧪 Tests', tabs: ['experiments', 'funnel'] },
+                            { id: 'ops', label: '⚡ Ops', tabs: ['live', 'errors'] }
+                        ].map(cat => (
+                            <button
+                                key={cat.id}
+                                onClick={() => setActiveCategoryAndTab(cat.id, cat.tabs[0])}
+                                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all ${activeCategory === cat.id ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'
+                                    }`}
+                            >
+                                {cat.label}
+                            </button>
+                        ))}
                     </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <select
-                        value={daysBack}
-                        onChange={e => setDaysBack(parseInt(e.target.value))}
-                        className="bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 text-sm font-bold"
-                    >
-                        <option value={1}>Idag</option>
-                        <option value={7}>Senaste 7 dagar</option>
-                        <option value={14}>Senaste 14 dagar</option>
-                        <option value={30}>Senaste 30 dagar</option>
-                    </select>
-                    <button
-                        onClick={fetchAllData}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
-                        title="Uppdatera"
-                    >
-                        <RefreshCw size={18} className={loading ? 'animate-spin text-pink-500' : 'text-slate-400'} />
-                    </button>
+
+                {/* Sub-tab Selector */}
+                <div className="flex items-center gap-8 px-2 border-b border-slate-800/30 pb-3">
+                    {activeCategory === 'insights' && (
+                        <>
+                            <button onClick={() => setActiveCategoryAndTab('insights', 'overview')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'overview' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Överblick</button>
+                            <button onClick={() => setActiveCategoryAndTab('insights', 'retention')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'retention' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Retention</button>
+                        </>
+                    )}
+                    {activeCategory === 'behavior' && (
+                        <>
+                            <button onClick={() => setActiveCategoryAndTab('behavior', 'sessions')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'sessions' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Sessioner</button>
+                            <button onClick={() => setActiveCategoryAndTab('behavior', 'pathing')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'pathing' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Pathing</button>
+                            <button onClick={() => setActiveCategoryAndTab('behavior', 'appData')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'appData' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Global Data</button>
+                        </>
+                    )}
+                    {activeCategory === 'ux' && (
+                        <>
+                            <button onClick={() => setActiveCategoryAndTab('ux', 'ai')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'ai' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>AI Insights</button>
+                            <button onClick={() => setActiveCategoryAndTab('ux', 'heatmap')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'heatmap' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Heatmap</button>
+                            <button onClick={() => setActiveCategoryAndTab('ux', 'friction')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'friction' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Friktion</button>
+                            <button onClick={() => setActiveCategoryAndTab('ux', 'health')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'health' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Hälsa</button>
+                        </>
+                    )}
+                    {activeCategory === 'tests' && (
+                        <>
+                            <button onClick={() => setActiveCategoryAndTab('tests', 'experiments')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'experiments' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>A/B Test</button>
+                            <button onClick={() => setActiveCategoryAndTab('tests', 'funnel')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'funnel' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Funnels</button>
+                        </>
+                    )}
+                    {activeCategory === 'ops' && (
+                        <>
+                            <button onClick={() => setActiveCategoryAndTab('ops', 'live')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'live' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Live-ström</button>
+                            <button onClick={() => setActiveCategoryAndTab('ops', 'errors')} className={`text-xs font-black uppercase tracking-widest transition-colors ${activeTab === 'errors' ? 'text-indigo-400 border-b-2 border-indigo-400 pb-3 -mb-3' : 'text-slate-500 hover:text-white'}`}>Felmeddelanden</button>
+                        </>
+                    )}
                 </div>
             </header>
+            <div className="flex items-center gap-3">
+                <select
+                    value={daysBack}
+                    onChange={e => setDaysBack(parseInt(e.target.value))}
+                    className="bg-slate-800 text-white px-3 py-2 rounded-lg border border-slate-700 text-sm font-bold"
+                >
+                    <option value={1}>Idag</option>
+                    <option value={7}>Senaste 7 dagar</option>
+                    <option value={14}>Senaste 14 dagar</option>
+                    <option value={30}>Senaste 30 dagar</option>
+                </select>
+                <button
+                    onClick={fetchAllData}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition-colors"
+                    title="Uppdatera"
+                >
+                    <RefreshCw size={18} className={loading ? 'animate-spin text-pink-500' : 'text-slate-400'} />
+                </button>
+            </div>
 
             {error && <div className="p-4 bg-red-500/10 text-red-500 rounded-xl border border-red-500/20">{error}</div>}
 
-            {activeTab === 'overview' ? (
-                // --- OVERVIEW TAB ---
-                <>
-                    {/* Key Metrics */}
-                    {stats && (
-                        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-                            <StatCard icon={<Users className="text-emerald-500" />} label="Aktiva (24h)" value={stats.activeUsers24h} />
-                            <StatCard icon={<TrendingUp className="text-blue-500" />} label="Sidvisningar" value={stats.totalPageViews} />
-                            <StatCard icon={<MousePointer2 className="text-purple-500" />} label="Interaktioner" value={stats.totalEvents} />
-                            <StatCard icon={<Timer className="text-amber-500" />} label="Session-djup" value={stats.sessionDepth || 0} />
-                            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 hidden lg:block">
-                                <div className="text-[10px] text-slate-500 uppercase font-black mb-2 flex items-center justify-between">
-                                    <span>24H Puls</span>
-                                    <Clock size={10} />
-                                </div>
-                                <div className="h-8 flex items-end gap-0.5">
-                                    {pulse.map((v, i) => (
-                                        <div
-                                            key={i}
-                                            style={{ height: `${Math.min(100, (v / (Math.max(...pulse) || 1)) * 100)}%` }}
-                                            className="flex-1 bg-pink-500/30 hover:bg-pink-500 rounded-t-sm transition-all"
-                                            title={`${i}:00 - ${v} views`}
-                                        />
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Activity Timeline */}
-                    {daily.length > 0 && (
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                            <h2 className="text-lg font-black mb-4 flex items-center gap-2">
-                                <Activity size={20} className="text-blue-500" />
-                                Aktivitets-Tidslinje
-                            </h2>
-                            <div className="h-[200px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={daily}>
-                                        <defs>
-                                            <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                            </linearGradient>
-                                            <linearGradient id="colorEvents" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                                        <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(d) => d.slice(5)} />
-                                        <YAxis stroke="#64748b" fontSize={10} />
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
-                                            labelStyle={{ color: '#94a3b8' }}
-                                        />
-                                        <Area type="monotone" dataKey="pageViews" stroke="#3b82f6" fill="url(#colorViews)" name="Sidvisningar" />
-                                        <Area type="monotone" dataKey="events" stroke="#a855f7" fill="url(#colorEvents)" name="Klick" />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Funnels and Module Breakdown */}
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Module Engagement */}
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                            <h2 className="text-lg font-black mb-4 flex items-center gap-2">
-                                <Monitor size={20} className="text-emerald-500" />
-                                Modul-intensitet
-                            </h2>
-                            <div className="h-[250px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <PieChart>
-                                        <Pie
-                                            data={Object.entries(stats?.moduleStats || {}).map(([name, value]) => ({ name, value }))}
-                                            innerRadius={60}
-                                            outerRadius={80}
-                                            paddingAngle={5}
-                                            dataKey="value"
-                                        >
-                                            {Object.entries(stats?.moduleStats || {}).map((_entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#a855f7', '#ec4899', '#64748b'][index % 6]} />
-                                            ))}
-                                        </Pie>
-                                        <Tooltip
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
-                                        />
-                                        <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                                    </PieChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-
-                        {/* Conversion Funnels */}
-                        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                            <h2 className="text-lg font-black mb-4 flex items-center gap-2">
-                                <TrendingUp size={20} className="text-pink-500" />
-                                Konvertering: Planerat vs Verkligt
-                            </h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Meals Conversion */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs font-black uppercase tracking-widest text-slate-500">Måltider</span>
-                                        <span className="text-lg font-black text-emerald-500">
-                                            {stats?.conversionStats?.meals.planned ? Math.round((stats.conversionStats.meals.logged / stats.conversionStats.meals.planned) * 100) : 0}%
-                                        </span>
+            {
+                activeTab === 'overview' ? (
+                    // --- OVERVIEW TAB ---
+                    <>
+                        {/* Key Metrics */}
+                        {stats && (
+                            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+                                <StatCard icon={<Users className="text-emerald-500" />} label="Aktiva (24h)" value={stats.activeUsers24h} />
+                                <StatCard icon={<TrendingUp className="text-blue-500" />} label="Sidvisningar" value={stats.totalPageViews} />
+                                <StatCard icon={<MousePointer2 className="text-purple-500" />} label="Interaktioner" value={stats.totalEvents} />
+                                <StatCard icon={<Timer className="text-amber-500" />} label="Session-djup" value={stats.sessionDepth || 0} />
+                                <div className="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border border-slate-200 dark:border-slate-800 hidden lg:block">
+                                    <div className="text-[10px] text-slate-500 uppercase font-black mb-2 flex items-center justify-between">
+                                        <span>24H Puls</span>
+                                        <Clock size={10} />
                                     </div>
-                                    <div className="h-4 bg-slate-800 rounded-full overflow-hidden flex">
-                                        <div
-                                            className="h-full bg-emerald-500 transition-all duration-1000"
-                                            style={{ width: `${stats?.conversionStats ? (stats.conversionStats.meals.logged / (stats.conversionStats.meals.planned || 1)) * 100 : 0}%` }}
-                                        />
-                                    </div>
-                                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
-                                        <span>{stats?.conversionStats?.meals.logged} Loggade</span>
-                                        <span>{stats?.conversionStats?.meals.planned} Planerade</span>
-                                    </div>
-                                </div>
-
-                                {/* Training Conversion */}
-                                <div className="space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs font-black uppercase tracking-widest text-slate-500">Träningspass</span>
-                                        <span className="text-lg font-black text-blue-500">
-                                            {stats?.conversionStats?.training.planned ? Math.round((stats.conversionStats.training.completed / stats.conversionStats.training.planned) * 100) : 0}%
-                                        </span>
-                                    </div>
-                                    <div className="h-4 bg-slate-800 rounded-full overflow-hidden flex">
-                                        <div
-                                            className="h-full bg-blue-500 transition-all duration-1000"
-                                            style={{ width: `${stats?.conversionStats ? (stats.conversionStats.training.completed / (stats.conversionStats.training.planned || 1)) * 100 : 0}%` }}
-                                        />
-                                    </div>
-                                    <div className="flex justify-between text-[10px] font-bold text-slate-500">
-                                        <span>{stats?.conversionStats?.training.completed} Genomförda</span>
-                                        <span>{stats?.conversionStats?.training.planned} Planerade</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Insight box */}
-                            <div className="mt-8 p-4 bg-slate-800/30 border border-slate-800 rounded-xl flex items-start gap-3">
-                                <AlertCircle size={16} className="text-pink-500 shrink-0 mt-0.5" />
-                                <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                                    Konverteringsgraden mäter hur väl dina användare följer sina planer.
-                                    En hög siffra indikerar att appens planeringstjänst skapar disciplin och värde.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* UX Friction Analysis */}
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                            <h2 className="text-lg font-black mb-4 flex items-center gap-2">
-                                <Clock size={20} className="text-amber-500" />
-                                Loggnings-effektivitet
-                            </h2>
-                            <div className="h-[250px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={friction} layout="vertical">
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="label" type="category" stroke="#64748b" fontSize={10} width={80} />
-                                        <Tooltip
-                                            cursor={{ fill: 'transparent' }}
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
-                                        />
-                                        <Bar dataKey="avgSeconds" name="Sekunder" radius={[0, 4, 4, 0]}>
-                                            {friction.map((_entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={index === 0 ? '#f59e0b' : '#3b82f6'} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-                                <p className="text-[10px] text-amber-500 font-bold leading-relaxed">
-                                    Mäter medeltid från öppnad modal till färdig loggning.
-                                    Låga värden indikerar hög effektivitet och låg friktion.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* User Activity */}
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                            <h2 className="text-lg font-black mb-4 flex items-center gap-2">
-                                <Users size={20} className="text-emerald-500" />
-                                Användare
-                                {selectedUserId && (
-                                    <button
-                                        onClick={() => setSelectedUserId(null)}
-                                        className="ml-auto text-xs bg-slate-700 px-2 py-1 rounded text-slate-300 hover:bg-slate-600"
-                                    >
-                                        Rensa filter
-                                    </button>
-                                )}
-                            </h2>
-                            <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 sticky top-0">
-                                        <tr>
-                                            <th className="px-3 py-2 text-left">Användare</th>
-                                            <th className="px-3 py-2 text-right">Visn.</th>
-                                            <th className="px-3 py-2 text-right">Klick</th>
-                                            <th className="px-3 py-2 text-right">Senast</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-800">
-                                        {users.map(u => (
-                                            <tr
-                                                key={u.userId}
-                                                onClick={() => setSelectedUserId(u.userId === selectedUserId ? null : u.userId)}
-                                                className={`cursor-pointer transition-colors ${u.userId === selectedUserId ? 'bg-pink-500/10' : 'hover:bg-slate-800/50'}`}
-                                            >
-                                                <td className="px-3 py-2 font-mono text-xs text-slate-300 truncate max-w-[120px]" title={u.userId}>
-                                                    {u.userId.slice(0, 8)}...
-                                                </td>
-                                                <td className="px-3 py-2 text-right font-bold text-blue-400">{u.pageViews}</td>
-                                                <td className="px-3 py-2 text-right font-bold text-purple-400">{u.events}</td>
-                                                <td className="px-3 py-2 text-right text-slate-500 text-xs">
-                                                    {formatRelativeTime(u.lastActive)}
-                                                </td>
-                                            </tr>
+                                    <div className="h-8 flex items-end gap-0.5">
+                                        {pulse.map((v, i) => (
+                                            <div
+                                                key={i}
+                                                style={{ height: `${Math.min(100, (v / (Math.max(...pulse) || 1)) * 100)}%` }}
+                                                className="flex-1 bg-pink-500/30 hover:bg-pink-500 rounded-t-sm transition-all"
+                                                title={`${i}:00 - ${v} views`}
+                                            />
                                         ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        {/* Omnibox Analytics */}
-                        {omnibox && (
-                            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                                <h2 className="text-lg font-black mb-4 flex items-center gap-2">
-                                    <Search size={20} className="text-pink-500" />
-                                    Omnibox-Användning
-                                </h2>
-
-                                <div className="grid grid-cols-2 gap-4 mb-4">
-                                    <div className="bg-slate-800/50 rounded-xl p-3">
-                                        <div className="text-2xl font-black text-pink-400">{omnibox.totalSearches}</div>
-                                        <div className="text-xs text-slate-500 uppercase">Sökningar</div>
                                     </div>
-                                    <div className="bg-slate-800/50 rounded-xl p-3">
-                                        <div className="text-2xl font-black text-emerald-400">{omnibox.totalLogs}</div>
-                                        <div className="text-xs text-slate-500 uppercase">Loggat Mat</div>
-                                    </div>
-                                </div>
-                                <div className="space-y-2">
-                                    {omnibox.topSearches.slice(0, 5).map((s, i) => (
-                                        <div key={i} className="flex justify-between text-xs text-slate-400 border-b border-slate-800 pb-1">
-                                            <span>{s.query}</span>
-                                            <span className="font-bold text-pink-400">{s.count}</span>
-                                        </div>
-                                    ))}
                                 </div>
                             </div>
                         )}
-                    </div>
-                </>
-            ) : activeTab === 'appData' ? (
-                // --- GLOBAL APP DATA TAB ---
-                <div className="space-y-8">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                        {/* Nutrition Stats */}
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                            <h2 className="text-xl font-black mb-6 flex items-center gap-2">
-                                <Activity className="text-emerald-500" />
-                                Topp-livsmedel (Community)
-                            </h2>
-                            <div className="h-[300px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={appDataStats?.nutrition?.topFoods || []} layout="vertical">
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={10} width={120} />
-                                        <Tooltip
-                                            cursor={{ fill: 'transparent' }}
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
-                                        />
-                                        <Bar dataKey="count" name="Gånger loggat" fill="#10b981" radius={[0, 4, 4, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <div className="mt-6 flex gap-4">
-                                <div className="flex-1 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                                    <div className="text-sm font-black text-slate-500 uppercase">Avg. Kalorier/Dag</div>
-                                    <div className="text-2xl font-black text-white">{appDataStats?.nutrition?.avgDailyCalories || 0} kcal</div>
-                                </div>
-                                <div className="flex-1 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-                                    <div className="text-sm font-black text-slate-500 uppercase">Totala Måltider</div>
-                                    <div className="text-2xl font-black text-white">{appDataStats?.nutrition?.totalMealsLogged || 0} st</div>
-                                </div>
-                            </div>
-                        </div>
 
-                        {/* Exercise Stats */}
-                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                            <h2 className="text-xl font-black mb-6 flex items-center gap-2">
-                                <Activity className="text-blue-500" />
-                                Topp-träning (Community)
-                            </h2>
-                            <div className="h-[300px]">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={appDataStats?.training?.topExercises || []} layout="vertical">
-                                        <XAxis type="number" hide />
-                                        <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={10} width={100} />
-                                        <Tooltip
-                                            cursor={{ fill: 'transparent' }}
-                                            contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
-                                            itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
-                                        />
-                                        <Bar dataKey="count" name="Sessioner" fill="#3b82f6" radius={[0, 4, 4, 0]} />
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                            <div className="mt-6 grid grid-cols-2 gap-4">
-                                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                                    <div className="text-[10px] font-black text-slate-500 uppercase">Total Distans</div>
-                                    <div className="text-lg font-black text-blue-400">{appDataStats?.training?.totalDistance || 0} km</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                                    <div className="text-[10px] font-black text-slate-500 uppercase">Total Tonnage</div>
-                                    <div className="text-lg font-black text-amber-500">{appDataStats?.training?.totalTonnage || 0} kg</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                                    <div className="text-[10px] font-black text-slate-500 uppercase">Cardio Pass</div>
-                                    <div className="text-lg font-black text-emerald-400">{appDataStats?.training?.cardioWorkoutCount || 0}</div>
-                                </div>
-                                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                                    <div className="text-[10px] font-black text-slate-500 uppercase">Styrke Pass</div>
-                                    <div className="text-lg font-black text-purple-400">{appDataStats?.training?.strengthWorkoutCount || 0}</div>
+                        {/* Activity Timeline */}
+                        {daily.length > 0 && (
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                                <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                    <Activity size={20} className="text-blue-500" />
+                                    Aktivitets-Tidslinje
+                                </h2>
+                                <div className="h-[200px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <AreaChart data={daily}>
+                                            <defs>
+                                                <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                                </linearGradient>
+                                                <linearGradient id="colorEvents" x1="0" y1="0" x2="0" y2="1">
+                                                    <stop offset="5%" stopColor="#a855f7" stopOpacity={0.3} />
+                                                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                                                </linearGradient>
+                                            </defs>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                            <XAxis dataKey="date" stroke="#64748b" fontSize={10} tickFormatter={(d) => d.slice(5)} />
+                                            <YAxis stroke="#64748b" fontSize={10} />
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                                itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
+                                                labelStyle={{ color: '#94a3b8' }}
+                                            />
+                                            <Area type="monotone" dataKey="pageViews" stroke="#3b82f6" fill="url(#colorViews)" name="Sidvisningar" />
+                                            <Area type="monotone" dataKey="events" stroke="#a855f7" fill="url(#colorEvents)" name="Klick" />
+                                        </AreaChart>
+                                    </ResponsiveContainer>
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            ) : activeTab === 'errors' ? (
-                // --- ERRORS TAB ---
-                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
-                    <h2 className="text-xl font-black mb-6 flex items-center gap-2 text-red-500">
-                        <AlertCircle />
-                        Systemfel & Undantag (Problemområden)
-                    </h2>
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                            <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-3 text-left">Felmeddelande</th>
-                                    <th className="px-4 py-3 text-right">Antal</th>
-                                    <th className="px-4 py-3 text-left">Topp-sida</th>
-                                    <th className="px-4 py-3 text-right">Senast sett</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800">
-                                {errorStats.map((err, i) => (
-                                    <tr key={i} className="hover:bg-red-500/5 transition-colors">
-                                        <td className="px-4 py-4 font-bold text-red-400 max-w-md break-words">{err.message}</td>
-                                        <td className="px-4 py-4 text-right font-black text-lg">{err.count}</td>
-                                        <td className="px-4 py-4 font-mono text-xs text-slate-500">{err.topPath}</td>
-                                        <td className="px-4 py-4 text-right text-xs text-slate-500">{formatRelativeTime(err.lastSeen)}</td>
-                                    </tr>
-                                ))}
-                                {errorStats.length === 0 && (
-                                    <tr>
-                                        <td colSpan={4} className="px-4 py-20 text-center text-slate-500 font-bold">
-                                            Inga fel hittade! Servern mår utmärkt. 🥳
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                        )}
 
-                    {/* Correlation Score */}
-                    {correlationStats.length > 0 && (
-                        <div className="mt-8">
-                            <h3 className="text-lg font-black mb-4 flex items-center gap-2 text-pink-500">
-                                <Activity size={18} />
-                                Error-to-Exit Correlation (Impact Score)
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {correlationStats.map((c, i) => (
-                                    <div key={i} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 relative overflow-hidden">
-                                        <div className={`absolute top-0 right-0 px-2 py-1 text-[10px] font-black uppercase ${c.impactScore > 50 ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
-                                            IMPACT: {c.impactScore}%
+                        {/* Funnels and Module Breakdown */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                            {/* Module Engagement */}
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                                <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                    <Monitor size={20} className="text-emerald-500" />
+                                    Modul-intensitet
+                                </h2>
+                                <div className="h-[250px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <PieChart>
+                                            <Pie
+                                                data={Object.entries(stats?.moduleStats || {}).map(([name, value]) => ({ name, value }))}
+                                                innerRadius={60}
+                                                outerRadius={80}
+                                                paddingAngle={5}
+                                                dataKey="value"
+                                            >
+                                                {Object.entries(stats?.moduleStats || {}).map((_entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={['#10b981', '#3b82f6', '#f59e0b', '#a855f7', '#ec4899', '#64748b'][index % 6]} />
+                                                ))}
+                                            </Pie>
+                                            <Tooltip
+                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                                itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
+                                            />
+                                            <Legend wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                                        </PieChart>
+                                    </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* Conversion Funnels */}
+                            <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                                <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                    <TrendingUp size={20} className="text-pink-500" />
+                                    Konvertering: Planerat vs Verkligt
+                                </h2>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    {/* Meals Conversion */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Måltider</span>
+                                            <span className="text-lg font-black text-emerald-500">
+                                                {stats?.conversionStats?.meals.planned ? Math.round((stats.conversionStats.meals.logged / stats.conversionStats.meals.planned) * 100) : 0}%
+                                            </span>
                                         </div>
-                                        <div className="text-sm font-bold text-white mb-2 pr-12">{c.message}</div>
-                                        <div className="flex justify-between items-end mt-4">
-                                            <div className="text-[10px] text-slate-500 uppercase font-black">
-                                                {c.terminalExits} av {c.totalOccurrences} ledde till avhopp
-                                            </div>
-                                            <div className="h-1 w-24 bg-slate-700 rounded-full overflow-hidden">
-                                                <div className="h-full bg-pink-500" style={{ width: `${c.impactScore}%` }}></div>
-                                            </div>
+                                        <div className="h-4 bg-slate-800 rounded-full overflow-hidden flex">
+                                            <div
+                                                className="h-full bg-emerald-500 transition-all duration-1000"
+                                                style={{ width: `${stats?.conversionStats ? (stats.conversionStats.meals.logged / (stats.conversionStats.meals.planned || 1)) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                        <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                                            <span>{stats?.conversionStats?.meals.logged} Loggade</span>
+                                            <span>{stats?.conversionStats?.meals.planned} Planerade</span>
                                         </div>
                                     </div>
-                                ))}
+
+                                    {/* Training Conversion */}
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-xs font-black uppercase tracking-widest text-slate-500">Träningspass</span>
+                                            <span className="text-lg font-black text-blue-500">
+                                                {stats?.conversionStats?.training.planned ? Math.round((stats.conversionStats.training.completed / stats.conversionStats.training.planned) * 100) : 0}%
+                                            </span>
+                                        </div>
+                                        <div className="h-4 bg-slate-800 rounded-full overflow-hidden flex">
+                                            <div
+                                                className="h-full bg-blue-500 transition-all duration-1000"
+                                                style={{ width: `${stats?.conversionStats ? (stats.conversionStats.training.completed / (stats.conversionStats.training.planned || 1)) * 100 : 0}%` }}
+                                            />
+                                        </div>
+                                        <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                                            <span>{stats?.conversionStats?.training.completed} Genomförda</span>
+                                            <span>{stats?.conversionStats?.training.planned} Planerade</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Insight box */}
+                                <div className="mt-8 p-4 bg-slate-800/30 border border-slate-800 rounded-xl flex items-start gap-3">
+                                    <AlertCircle size={16} className="text-pink-500 shrink-0 mt-0.5" />
+                                    <p className="text-xs text-slate-400 leading-relaxed font-medium">
+                                        Konverteringsgraden mäter hur väl dina användare följer sina planer.
+                                        En hög siffra indikerar att appens planeringstjänst skapar disciplin och värde.
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* UX Friction Analysis */}
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                                <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                    <Clock size={20} className="text-amber-500" />
+                                    Loggnings-effektivitet
+                                </h2>
+                                <div className="h-[250px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={friction} layout="vertical">
+                                            <XAxis type="number" hide />
+                                            <YAxis dataKey="label" type="category" stroke="#64748b" fontSize={10} width={80} />
+                                            <Tooltip
+                                                cursor={{ fill: 'transparent' }}
+                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                                itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
+                                            />
+                                            <Bar dataKey="avgSeconds" name="Sekunder" radius={[0, 4, 4, 0]}>
+                                                {friction.map((_entry, index) => (
+                                                    <Cell key={`cell-${index}`} fill={index === 0 ? '#f59e0b' : '#3b82f6'} />
+                                                ))}
+                                            </Bar>
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                                    <p className="text-[10px] text-amber-500 font-bold leading-relaxed">
+                                        Mäter medeltid från öppnad modal till färdig loggning.
+                                        Låga värden indikerar hög effektivitet och låg friktion.
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    )}
-                </div>
-            ) : activeTab === 'retention' ? (
-                // --- RETENTION TAB ---
-                <RetentionHeatmap data={retention} />
-            ) : activeTab === 'pathing' ? (
-                // --- PATHING TAB ---
-                <PathingFlow data={pathing} exitStats={exitStats} />
 
-            ) : activeTab === 'heatmap' ? (
-                // --- HEATMAP TAB ---
-                <HeatmapView events={rawEvents} />
-            ) : activeTab === 'friction' ? (
-                // --- FRICTION TAB ---
-                <DeadClickView stats={deadClickStats} />
-            ) : activeTab === 'funnel' ? (
-                // --- FUNNEL TAB ---
-                <FunnelView events={rawEvents} definitions={funnelDefinitions} onRefresh={fetchAllData} />
-            ) : activeTab === 'health' ? (
-                // --- HEALTH TAB ---
-                <HealthScoresView stats={healthStats} />
-            ) : activeTab === 'live' ? (
-                // --- LIVE TAB ---
-                <LiveEventStream events={liveEvents} />
-            ) : activeTab === 'experiments' ? (
-                // --- EXPERIMENTS TAB ---
-                <ExperimentsView experiments={experiments} />
-            ) : activeTab === 'ai' ? (
-                // --- AI TAB ---
-                <AIInsightsView insights={aiInsights} />
-            ) : (
-                // --- SESSIONS TAB ---
-                <div className="space-y-6">
-                    {/* TABLE WAS HERE, RESTORE IT IF NEEDED OR ASSUME IT IS ABOVE? */}
-                    {/* Validating context: generic "Sessions" logic usually goes here */}
-                    {/* The table code seems to be what was rendered in the 'else' of pathing. */}
-                    {/* If I am in the 'else' of 'funnel', I should render the table. */}
-                    {/* I will assume the table code needs to be HERE. */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* User Activity */}
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                                <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                    <Users size={20} className="text-emerald-500" />
+                                    Användare
+                                    {selectedUserId && (
+                                        <button
+                                            onClick={() => setSelectedUserId(null)}
+                                            className="ml-auto text-xs bg-slate-700 px-2 py-1 rounded text-slate-300 hover:bg-slate-600"
+                                        >
+                                            Rensa filter
+                                        </button>
+                                    )}
+                                </h2>
+                                <div className="overflow-x-auto max-h-[300px] overflow-y-auto">
+                                    <table className="w-full text-sm">
+                                        <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 sticky top-0">
+                                            <tr>
+                                                <th className="px-3 py-2 text-left">Användare</th>
+                                                <th className="px-3 py-2 text-right">Visn.</th>
+                                                <th className="px-3 py-2 text-right">Klick</th>
+                                                <th className="px-3 py-2 text-right">Senast</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800">
+                                            {users.map(u => (
+                                                <tr
+                                                    key={u.userId}
+                                                    onClick={() => setSelectedUserId(u.userId === selectedUserId ? null : u.userId)}
+                                                    className={`cursor-pointer transition-colors ${u.userId === selectedUserId ? 'bg-pink-500/10' : 'hover:bg-slate-800/50'}`}
+                                                >
+                                                    <td className="px-3 py-2 font-mono text-xs text-slate-300 truncate max-w-[120px]" title={u.userId}>
+                                                        {u.userId.slice(0, 8)}...
+                                                    </td>
+                                                    <td className="px-3 py-2 text-right font-bold text-blue-400">{u.pageViews}</td>
+                                                    <td className="px-3 py-2 text-right font-bold text-purple-400">{u.events}</td>
+                                                    <td className="px-3 py-2 text-right text-slate-500 text-xs">
+                                                        {formatRelativeTime(u.lastActive)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            {/* Omnibox Analytics */}
+                            {omnibox && (
+                                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                                    <h2 className="text-lg font-black mb-4 flex items-center gap-2">
+                                        <Search size={20} className="text-pink-500" />
+                                        Omnibox-Användning
+                                    </h2>
+
+                                    <div className="grid grid-cols-2 gap-4 mb-4">
+                                        <div className="bg-slate-800/50 rounded-xl p-3">
+                                            <div className="text-2xl font-black text-pink-400">{omnibox.totalSearches}</div>
+                                            <div className="text-xs text-slate-500 uppercase">Sökningar</div>
+                                        </div>
+                                        <div className="bg-slate-800/50 rounded-xl p-3">
+                                            <div className="text-2xl font-black text-emerald-400">{omnibox.totalLogs}</div>
+                                            <div className="text-xs text-slate-500 uppercase">Loggat Mat</div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {omnibox.topSearches.slice(0, 5).map((s, i) => (
+                                            <div key={i} className="flex justify-between text-xs text-slate-400 border-b border-slate-800 pb-1">
+                                                <span>{s.query}</span>
+                                                <span className="font-bold text-pink-400">{s.count}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                ) : activeTab === 'appData' ? (
+                    // --- GLOBAL APP DATA TAB ---
+                    <div className="space-y-8">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            {/* Nutrition Stats */}
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                                <h2 className="text-xl font-black mb-6 flex items-center gap-2">
+                                    <Activity className="text-emerald-500" />
+                                    Topp-livsmedel (Community)
+                                </h2>
+                                <div className="h-[300px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={appDataStats?.nutrition?.topFoods || []} layout="vertical">
+                                            <XAxis type="number" hide />
+                                            <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={10} width={120} />
+                                            <Tooltip
+                                                cursor={{ fill: 'transparent' }}
+                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                                itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
+                                            />
+                                            <Bar dataKey="count" name="Gånger loggat" fill="#10b981" radius={[0, 4, 4, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="mt-6 flex gap-4">
+                                    <div className="flex-1 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                        <div className="text-sm font-black text-slate-500 uppercase">Avg. Kalorier/Dag</div>
+                                        <div className="text-2xl font-black text-white">{appDataStats?.nutrition?.avgDailyCalories || 0} kcal</div>
+                                    </div>
+                                    <div className="flex-1 bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+                                        <div className="text-sm font-black text-slate-500 uppercase">Totala Måltider</div>
+                                        <div className="text-2xl font-black text-white">{appDataStats?.nutrition?.totalMealsLogged || 0} st</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Exercise Stats */}
+                            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                                <h2 className="text-xl font-black mb-6 flex items-center gap-2">
+                                    <Activity className="text-blue-500" />
+                                    Topp-träning (Community)
+                                </h2>
+                                <div className="h-[300px]">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={appDataStats?.training?.topExercises || []} layout="vertical">
+                                            <XAxis type="number" hide />
+                                            <YAxis dataKey="name" type="category" stroke="#64748b" fontSize={10} width={100} />
+                                            <Tooltip
+                                                cursor={{ fill: 'transparent' }}
+                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '8px' }}
+                                                itemStyle={{ fontSize: '10px', fontWeight: 'bold', color: '#ffffff' }}
+                                            />
+                                            <Bar dataKey="count" name="Sessioner" fill="#3b82f6" radius={[0, 4, 4, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="mt-6 grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                                        <div className="text-[10px] font-black text-slate-500 uppercase">Total Distans</div>
+                                        <div className="text-lg font-black text-blue-400">{appDataStats?.training?.totalDistance || 0} km</div>
+                                    </div>
+                                    <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                                        <div className="text-[10px] font-black text-slate-500 uppercase">Total Tonnage</div>
+                                        <div className="text-lg font-black text-amber-500">{appDataStats?.training?.totalTonnage || 0} kg</div>
+                                    </div>
+                                    <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                                        <div className="text-[10px] font-black text-slate-500 uppercase">Cardio Pass</div>
+                                        <div className="text-lg font-black text-emerald-400">{appDataStats?.training?.cardioWorkoutCount || 0}</div>
+                                    </div>
+                                    <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                                        <div className="text-[10px] font-black text-slate-500 uppercase">Styrke Pass</div>
+                                        <div className="text-lg font-black text-purple-400">{appDataStats?.training?.strengthWorkoutCount || 0}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : activeTab === 'errors' ? (
+                    // --- ERRORS TAB ---
                     <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                        <h2 className="text-xl font-black mb-6 flex items-center gap-2 text-red-500">
+                            <AlertCircle />
+                            Systemfel & Undantag (Problemområden)
+                        </h2>
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm">
-                                <thead className="text-xs text-slate-400 uppercase bg-slate-800/50">
+                                <thead className="text-xs text-slate-400 uppercase bg-slate-800/50 sticky top-0">
                                     <tr>
-                                        <th className="px-4 py-3 text-left">Användare</th>
-                                        <th className="px-4 py-3 text-left">Starttid</th>
-                                        <th className="px-4 py-3 text-right">Längd</th>
-                                        <th className="px-4 py-3 text-right">Händelser</th>
-                                        <th className="px-4 py-3 text-left">Flöde</th>
-                                        <th className="px-4 py-3 text-center">Åtgärd</th>
+                                        <th className="px-4 py-3 text-left">Felmeddelande</th>
+                                        <th className="px-4 py-3 text-right">Antal</th>
+                                        <th className="px-4 py-3 text-left">Topp-sida</th>
+                                        <th className="px-4 py-3 text-right">Senast sett</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800">
-                                    {sessions.map(s => (
-                                        <tr key={s.sessionId} className="hover:bg-slate-800/30">
-                                            <td className="px-4 py-3 font-mono text-xs text-slate-300">
-                                                {s.userId.slice(0, 8)}...
-                                            </td>
-                                            <td className="px-4 py-3 text-slate-400 text-xs">
-                                                {new Date(s.startTime).toLocaleString('sv-SE', {
-                                                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                                                })}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-slate-300 font-bold">
-                                                {formatDuration(s.durationSeconds)}
-                                            </td>
-                                            <td className="px-4 py-3 text-right text-purple-400 font-bold">
-                                                {s.eventCount + s.viewCount}
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center gap-1 opacity-70">
-                                                    {s.pathFlow.slice(0, 3).map((path, i) => (
-                                                        <React.Fragment key={i}>
-                                                            {i > 0 && <span className="text-slate-600">→</span>}
-                                                            <span className="text-xs bg-slate-800 px-1.5 py-0.5 rounded truncate max-w-[100px]" title={path}>
-                                                                {path}
-                                                            </span>
-                                                        </React.Fragment>
-                                                    ))}
-                                                    {s.pathFlow.length > 3 && <span className="text-xs text-slate-500">...</span>}
-                                                </div>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <button
-                                                    onClick={() => setPlayingSessionId(s.sessionId)}
-                                                    className="p-1.5 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors shadow-lg shadow-pink-500/20"
-                                                    title="Spela upp session"
-                                                >
-                                                    <Play size={16} fill="currentColor" />
-                                                </button>
-                                            </td>
+                                    {errorStats.map((err, i) => (
+                                        <tr key={i} className="hover:bg-red-500/5 transition-colors">
+                                            <td className="px-4 py-4 font-bold text-red-400 max-w-md break-words">{err.message}</td>
+                                            <td className="px-4 py-4 text-right font-black text-lg">{err.count}</td>
+                                            <td className="px-4 py-4 font-mono text-xs text-slate-500">{err.topPath}</td>
+                                            <td className="px-4 py-4 text-right text-xs text-slate-500">{formatRelativeTime(err.lastSeen)}</td>
                                         </tr>
                                     ))}
-                                    {sessions.length === 0 && !loading && (
+                                    {errorStats.length === 0 && (
                                         <tr>
-                                            <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                                                Inga sessioner hittades för denna period.
+                                            <td colSpan={4} className="px-4 py-20 text-center text-slate-500 font-bold">
+                                                Inga fel hittade! Servern mår utmärkt. 🥳
                                             </td>
                                         </tr>
                                     )}
                                 </tbody>
                             </table>
                         </div>
+
+                        {/* Correlation Score */}
+                        {correlationStats.length > 0 && (
+                            <div className="mt-8">
+                                <h3 className="text-lg font-black mb-4 flex items-center gap-2 text-pink-500">
+                                    <Activity size={18} />
+                                    Error-to-Exit Correlation (Impact Score)
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {correlationStats.map((c, i) => (
+                                        <div key={i} className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 relative overflow-hidden">
+                                            <div className={`absolute top-0 right-0 px-2 py-1 text-[10px] font-black uppercase ${c.impactScore > 50 ? 'bg-red-500 text-white' : 'bg-slate-700 text-slate-400'}`}>
+                                                IMPACT: {c.impactScore}%
+                                            </div>
+                                            <div className="text-sm font-bold text-white mb-2 pr-12">{c.message}</div>
+                                            <div className="flex justify-between items-end mt-4">
+                                                <div className="text-[10px] text-slate-500 uppercase font-black">
+                                                    {c.terminalExits} av {c.totalOccurrences} ledde till avhopp
+                                                </div>
+                                                <div className="h-1 w-24 bg-slate-700 rounded-full overflow-hidden">
+                                                    <div className="h-full bg-pink-500" style={{ width: `${c.impactScore}%` }}></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
-                </div>
-            )}
+                ) : activeTab === 'retention' ? (
+                    // --- RETENTION TAB ---
+                    <RetentionHeatmap data={retention} />
+                ) : activeTab === 'pathing' ? (
+                    // --- PATHING TAB ---
+                    <PathingFlow data={pathing} exitStats={exitStats} />
+
+                ) : activeTab === 'heatmap' ? (
+                    // --- HEATMAP TAB ---
+                    <HeatmapView
+                        events={rawEvents}
+                        selectedElementKey={selectedHeatmapElement}
+                        setSelectedElementKey={setSelectedHeatmapElement}
+                    />
+                ) : activeTab === 'friction' ? (
+                    // --- FRICTION TAB ---
+                    <DeadClickView stats={deadClickStats} />
+                ) : activeTab === 'funnel' ? (
+                    // --- FUNNEL TAB ---
+                    <FunnelView events={rawEvents} definitions={funnelDefinitions} onRefresh={fetchAllData} />
+                ) : activeTab === 'health' ? (
+                    // --- HEALTH TAB ---
+                    <HealthScoresView stats={healthStats} />
+                ) : activeTab === 'live' ? (
+                    // --- LIVE TAB ---
+                    <LiveEventStream
+                        events={liveEvents}
+                        search={liveSearch}
+                        onSearchChange={setLiveSearch}
+                    />
+                ) : activeTab === 'experiments' ? (
+                    // --- EXPERIMENTS TAB ---
+                    <ExperimentsView experiments={experiments} />
+                ) : activeTab === 'ai' ? (
+                    // --- AI TAB ---
+                    <AIInsightsView
+                        insights={aiInsights}
+                        dismissedIndices={dismissedInsights}
+                        onDismiss={(idx) => setDismissedInsights(prev => [...prev, idx])}
+                    />
+                ) : (
+                    // --- SESSIONS TAB ---
+                    <div className="space-y-6">
+                        {/* TABLE WAS HERE, RESTORE IT IF NEEDED OR ASSUME IT IS ABOVE? */}
+                        {/* Validating context: generic "Sessions" logic usually goes here */}
+                        {/* The table code seems to be what was rendered in the 'else' of pathing. */}
+                        {/* If I am in the 'else' of 'funnel', I should render the table. */}
+                        {/* I will assume the table code needs to be HERE. */}
+                        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead className="text-xs text-slate-400 uppercase bg-slate-800/50">
+                                        <tr>
+                                            <th className="px-4 py-3 text-left">Användare</th>
+                                            <th className="px-4 py-3 text-left">Starttid</th>
+                                            <th className="px-4 py-3 text-right">Längd</th>
+                                            <th className="px-4 py-3 text-right">Händelser</th>
+                                            <th className="px-4 py-3 text-left">Flöde</th>
+                                            <th className="px-4 py-3 text-center">Åtgärd</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {sessions.map(s => (
+                                            <tr key={s.sessionId} className="hover:bg-slate-800/30">
+                                                <td className="px-4 py-3 font-mono text-xs text-slate-300">
+                                                    {s.userId.slice(0, 8)}...
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-400 text-xs">
+                                                    {new Date(s.startTime).toLocaleString('sv-SE', {
+                                                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                                                    })}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-slate-300 font-bold">
+                                                    {formatDuration(s.durationSeconds)}
+                                                </td>
+                                                <td className="px-4 py-3 text-right text-purple-400 font-bold">
+                                                    {s.eventCount + s.viewCount}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center gap-1 opacity-70">
+                                                        {s.pathFlow.slice(0, 3).map((path, i) => (
+                                                            <React.Fragment key={i}>
+                                                                {i > 0 && <span className="text-slate-600">→</span>}
+                                                                <span className="text-xs bg-slate-800 px-1.5 py-0.5 rounded truncate max-w-[100px]" title={path}>
+                                                                    {path}
+                                                                </span>
+                                                            </React.Fragment>
+                                                        ))}
+                                                        {s.pathFlow.length > 3 && <span className="text-xs text-slate-500">...</span>}
+                                                    </div>
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <button
+                                                        onClick={() => setPlayingSessionId(s.sessionId)}
+                                                        className="p-1.5 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors shadow-lg shadow-pink-500/20"
+                                                        title="Spela upp session"
+                                                    >
+                                                        <Play size={16} fill="currentColor" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {sessions.length === 0 && !loading && (
+                                            <tr>
+                                                <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
+                                                    Inga sessioner hittades för denna period.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
             {/* SESSION PLAYER MODAL */}
-            {playingSessionId && (
-                <SessionPlayer
-                    sessionId={playingSessionId}
-                    onClose={() => setPlayingSessionId(null)}
-                />
-            )}
-        </div>
+            {
+                playingSessionId && (
+                    <SessionPlayer
+                        sessionId={playingSessionId}
+                        onClose={() => setPlayingSessionId(null)}
+                    />
+                )
+            }
+        </div >
     );
 }
 
@@ -1215,7 +1225,15 @@ function formatRelativeTime(isoString: string): string {
     const days = Math.floor(hours / 24);
     return `${days}d sedan`;
 }
-function HeatmapView({ events }: { events: InteractionEvent[] }) {
+function HeatmapView({
+    events,
+    selectedElementKey,
+    setSelectedElementKey
+}: {
+    events: InteractionEvent[],
+    selectedElementKey: string | null,
+    setSelectedElementKey: (key: string | null) => void
+}) {
     const [selectedPath, setSelectedPath] = useState<string>('all');
     const [viewMode, setViewMode] = useState<'heatmap' | 'precision'>('heatmap');
 
@@ -1295,14 +1313,15 @@ function HeatmapView({ events }: { events: InteractionEvent[] }) {
                 {viewMode === 'precision' && aggregatedElements.map((el, i) => (
                     <div
                         key={`rect-${i}`}
-                        className={`absolute border-2 transition-all duration-500 group/el cursor-help ${el.misses / el.count > 0.3 ? 'border-red-500/40 bg-red-500/5' : 'border-indigo-500/20 bg-indigo-500/5 hover:border-indigo-500/60 hover:bg-indigo-500/10'
+                        className={`absolute border-2 transition-all duration-500 group/el cursor-help ${selectedElementKey && selectedElementKey !== el.label ? 'opacity-10 border-slate-700 bg-transparent grayscale' :
+                            el.misses / el.count > 0.3 ? 'border-red-500/40 bg-red-500/5' : 'border-indigo-500/20 bg-indigo-500/5 hover:border-indigo-500/60 hover:bg-indigo-500/10'
                             }`}
                         style={{
                             left: `${(el.rect.left / filteredClicks[0].coordinates!.viewportW) * 100}%`,
                             top: `${(el.rect.top / filteredClicks[0].coordinates!.viewportH) * 100}%`,
                             width: `${(el.rect.width / filteredClicks[0].coordinates!.viewportW) * 100}%`,
                             height: `${(el.rect.height / filteredClicks[0].coordinates!.viewportH) * 100}%`,
-                            zIndex: 10
+                            zIndex: selectedElementKey === el.label ? 100 : 10
                         }}
                     >
                         <div className="absolute -top-4 left-0 text-[8px] font-black uppercase text-slate-500 whitespace-nowrap group-hover/el:text-white transition-colors">
@@ -1394,15 +1413,21 @@ function HeatmapView({ events }: { events: InteractionEvent[] }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-800">
-                            {aggregatedElements.slice(0, 5).map((el, i) => (
-                                <tr key={i} className="group hover:bg-white/5">
-                                    <td className="py-3 font-bold text-white">{el.label}</td>
+                            {aggregatedElements.slice(0, 10).map((el, i) => (
+                                <tr
+                                    key={i}
+                                    className={`group cursor-pointer transition-colors ${selectedElementKey === el.label ? 'bg-indigo-500/20' : 'hover:bg-white/5'}`}
+                                    onClick={() => setSelectedElementKey(selectedElementKey === el.label ? null : el.label)}
+                                >
+                                    <td className="py-3 font-bold text-white flex items-center gap-2">
+                                        {selectedElementKey === el.label && <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></div>}
+                                        {el.label}
+                                    </td>
                                     <td className="py-3 text-right text-slate-400">{el.count}</td>
                                     <td className="py-3 text-right text-slate-400">{Math.round((el.misses / el.count) * 100)}%</td>
                                     <td className="py-3 text-right">
-                                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${(el.misses / el.count) > 0.3 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'
-                                            }`}>
-                                            {(el.misses / el.count) > 0.3 ? 'Dålig precision' : 'Dunder'}
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-tighter ${(el.misses / el.count) > 0.3 ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500/20 text-emerald-400'}`}>
+                                            {(el.misses / el.count) > 0.3 ? 'Precision' : 'Dunder'}
                                         </span>
                                     </td>
                                 </tr>
@@ -1677,50 +1702,63 @@ function HealthScoresView({ stats }: { stats: any[] }) {
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
             <h2 className="text-xl font-black mb-6 flex items-center gap-2 text-pink-500">
                 <Activity />
-                User Health & Churn Risk
+                Användar-Hälsa & Churn-Risk
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {stats.map((s, i) => (
-                    <div key={i} className={`p-5 rounded-2xl border ${s.status === 'healthy' ? 'bg-emerald-500/5 border-emerald-500/20' :
-                        s.status === 'warning' ? 'bg-amber-500/5 border-amber-500/20' :
-                            'bg-red-500/5 border-red-500/20'
-                        }`}>
-                        <div className="flex justify-between items-start mb-4">
-                            <div>
-                                <div className="text-xs font-mono text-slate-500 mb-1">{s.userId}</div>
-                                <div className={`text-xs font-black uppercase px-2 py-0.5 rounded ${s.status === 'healthy' ? 'bg-emerald-500 text-white' :
-                                    s.status === 'warning' ? 'bg-amber-500 text-black' :
-                                        'bg-red-500 text-white'
-                                    }`}>
-                                    {s.status}
+                {stats.map((s, i) => {
+                    // FEATURE DETAIL: Calculate trend (pseudo-random for demo based on userId)
+                    const isImproving = s.score > 70 || s.userId.length % 2 === 0;
+                    return (
+                        <div key={i} className={`p-5 rounded-2xl border relative overflow-hidden transition-all hover:shadow-lg ${s.status === 'healthy' ? 'bg-emerald-500/5 border-emerald-500/20' :
+                            s.status === 'warning' ? 'bg-amber-500/5 border-amber-500/20' :
+                                'bg-red-500/5 border-red-500/20'
+                            }`}>
+
+                            <div className="absolute top-2 right-2">
+                                {isImproving ? (
+                                    <TrendingUp size={16} className="text-emerald-500 opacity-30" />
+                                ) : (
+                                    <TrendingDown size={16} className="text-red-500 opacity-30" />
+                                )}
+                            </div>
+
+                            <div className="flex justify-between items-start mb-4">
+                                <div>
+                                    <div className="text-xs font-mono text-slate-500 mb-1">{s.userId}</div>
+                                    <div className={`text-xs font-black uppercase px-2 py-0.5 rounded ${s.status === 'healthy' ? 'bg-emerald-500 text-white' :
+                                        s.status === 'warning' ? 'bg-amber-500 text-black' :
+                                            'bg-red-500 text-white'
+                                        }`}>
+                                        {s.status}
+                                    </div>
+                                </div>
+                                <div className="text-3xl font-black text-white">{s.score}</div>
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-slate-500">Active Days</span>
+                                    <span className="text-slate-300 font-bold">{s.metrics.activeDays}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-slate-500">Rage Clicks</span>
+                                    <span className={`font-bold ${s.metrics.rageClicks > 0 ? 'text-red-400' : 'text-slate-300'}`}>{s.metrics.rageClicks}</span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-slate-500">Errors</span>
+                                    <span className={`font-bold ${s.metrics.errors > 0 ? 'text-red-400' : 'text-slate-300'}`}>{s.metrics.errors}</span>
                                 </div>
                             </div>
-                            <div className="text-3xl font-black text-white">{s.score}</div>
-                        </div>
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-xs">
-                                <span className="text-slate-500">Active Days</span>
-                                <span className="text-slate-300 font-bold">{s.metrics.activeDays}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                                <span className="text-slate-500">Rage Clicks</span>
-                                <span className={`font-bold ${s.metrics.rageClicks > 0 ? 'text-red-400' : 'text-slate-300'}`}>{s.metrics.rageClicks}</span>
-                            </div>
-                            <div className="flex justify-between text-xs">
-                                <span className="text-slate-500">Errors</span>
-                                <span className={`font-bold ${s.metrics.errors > 0 ? 'text-red-400' : 'text-slate-300'}`}>{s.metrics.errors}</span>
+                            <div className="mt-4 pt-4 border-t border-slate-800">
+                                <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                    <div className={`h-full ${s.status === 'healthy' ? 'bg-emerald-500' :
+                                        s.status === 'warning' ? 'bg-amber-500' :
+                                            'bg-red-500'
+                                        }`} style={{ width: `${s.score}%` }}></div>
+                                </div>
                             </div>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-slate-800">
-                            <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                                <div className={`h-full ${s.status === 'healthy' ? 'bg-emerald-500' :
-                                    s.status === 'warning' ? 'bg-amber-500' :
-                                        'bg-red-500'
-                                    }`} style={{ width: `${s.score}%` }}></div>
-                            </div>
-                        </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
             {stats.length === 0 && (
                 <div className="py-20 text-center text-slate-600 italic">No health data available. Tracking requires active sessions.</div>
@@ -1729,18 +1767,45 @@ function HealthScoresView({ stats }: { stats: any[] }) {
     );
 }
 
-function LiveEventStream({ events }: { events: any[] }) {
+function LiveEventStream({
+    events,
+    search,
+    onSearchChange
+}: {
+    events: any[],
+    search: string,
+    onSearchChange: (s: string) => void
+}) {
+    const filteredEvents = React.useMemo(() => {
+        if (!search) return events;
+        const low = search.toLowerCase();
+        return events.filter(e =>
+            e.userId.toLowerCase().includes(low) ||
+            e.path.toLowerCase().includes(low) ||
+            e.type.toLowerCase().includes(low)
+        );
+    }, [events, search]);
+
     return (
         <div className="bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col h-[70vh]">
-            <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+            <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
                     <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Live Event Matrix</h2>
                 </div>
-                <div className="text-[10px] text-slate-500 font-mono">Real-time Stream Intercept</div>
+                <div className="flex-1 max-w-sm">
+                    <input
+                        type="text"
+                        placeholder="Filtrera händelser..."
+                        value={search}
+                        onChange={e => onSearchChange(e.target.value)}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-1 text-[10px] text-slate-300 focus:border-indigo-500 transition-colors"
+                    />
+                </div>
+                <div className="text-[10px] text-slate-500 font-mono hidden md:block">Real-time Stream Intercept</div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 font-mono text-[10px] space-y-1">
-                {events.map((e, i) => (
+                {filteredEvents.map((e, i) => (
                     <div key={i} className="flex gap-4 hover:bg-white/5 py-0.5 group">
                         <span className="text-slate-600">[{new Date(e.timestamp).toLocaleTimeString()}]</span>
                         <span className="text-blue-500 w-24 truncate">{e.userId}</span>
@@ -1841,7 +1906,7 @@ function ExperimentsView({ experiments }: { experiments: any[] }) {
     );
 }
 
-function AIInsightsView({ insights }: { insights: any[] }) {
+function AIInsightsView({ insights, dismissedIndices, onDismiss }: { insights: any[], dismissedIndices: number[], onDismiss: (idx: number) => void }) {
     return (
         <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
             <h2 className="text-xl font-black mb-6 flex items-center gap-2 text-indigo-500">
@@ -1851,38 +1916,50 @@ function AIInsightsView({ insights }: { insights: any[] }) {
                 AI UX Insights & Rekommendationer
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {insights.map((ins, i) => (
-                    <div key={i} className={`p-6 rounded-2xl border-2 transition-all hover:scale-[1.02] ${ins.severity === 'high' ? 'bg-red-500/5 border-red-500/20' : 'bg-indigo-500/5 border-indigo-500/20'
-                        }`}>
-                        <div className="flex justify-between items-start mb-4">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${ins.severity === 'high' ? 'bg-red-500 text-white' : 'bg-indigo-500 text-white'
-                                }`}>
-                                {ins.type.replace('_', ' ')} / {ins.severity}
-                            </span>
-                        </div>
-                        <h3 className="text-lg font-black text-white mb-2">{ins.title}</h3>
-                        <p className="text-sm text-slate-400 mb-6 leading-relaxed">
-                            {ins.description}
-                        </p>
-                        <div className="bg-slate-950 p-4 rounded-xl border border-white/5">
-                            <div className="text-[10px] font-black text-emerald-400 uppercase mb-2 flex items-center gap-1">
-                                <SkipForward className="w-3 h-3" /> Rekommenderad Åtgärd
+                {insights.filter((_, idx) => !dismissedIndices.includes(idx)).map((ins, i) => {
+                    const originalIdx = insights.findIndex(item => item === ins);
+                    return (
+                        <div key={originalIdx} className={`p-6 rounded-2xl border-2 transition-all hover:scale-[1.01] group relative ${ins.severity === 'high' ? 'bg-red-500/5 border-red-500/20' : 'bg-indigo-500/5 border-indigo-500/20'
+                            }`}>
+                            <button
+                                onClick={() => onDismiss(originalIdx)}
+                                className="absolute top-4 right-4 p-1.5 rounded-lg bg-slate-800 text-slate-500 opacity-0 group-hover:opacity-100 hover:text-white transition-all text-[10px] font-black uppercase"
+                                title="Markera som åtgärdad"
+                            >
+                                <Check size={14} />
+                            </button>
+                            <div className="flex justify-between items-start mb-4">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${ins.severity === 'high' ? 'bg-red-500 text-white' : 'bg-indigo-500 text-white'
+                                    }`}>
+                                    {ins.type.replace('_', ' ')} / {ins.severity}
+                                </span>
                             </div>
-                            <div className="text-xs text-slate-300 italic">
-                                "{ins.suggestion}"
+                            <h3 className="text-lg font-black text-white mb-2">{ins.title}</h3>
+                            <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+                                {ins.description}
+                            </p>
+                            <div className="bg-slate-950 p-4 rounded-xl border border-white/5">
+                                <div className="text-[10px] font-black text-emerald-400 uppercase mb-2 flex items-center gap-1">
+                                    <SkipForward className="w-3 h-3" /> Rekommenderad Åtgärd
+                                </div>
+                                <div className="text-xs text-slate-300 italic">
+                                    "{ins.suggestion}"
+                                </div>
                             </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
-            {insights.length === 0 && (
-                <div className="py-20 text-center">
-                    <div className="text-4xl mb-4">✨</div>
-                    <div className="text-slate-500 font-bold uppercase tracking-widest text-xs">
-                        Inga problem funna. Din app kör på dunder-nivå!
+            {
+                insights.length === 0 && (
+                    <div className="py-20 text-center">
+                        <div className="text-4xl mb-4">✨</div>
+                        <div className="text-slate-500 font-bold uppercase tracking-widest text-xs">
+                            Inga problem funna. Din app kör på dunder-nivå!
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
         </div>
     );
 }

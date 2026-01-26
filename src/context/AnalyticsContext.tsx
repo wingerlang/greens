@@ -247,12 +247,45 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             }
         };
 
+        const handleCopy = (e: ClipboardEvent) => {
+            const selection = window.getSelection()?.toString();
+            if (!selection || selection.length < 2) return;
+
+            const target = e.target as HTMLElement;
+            const container = target.closest('div, p, pre, code, span') as HTMLElement;
+            const label = container ? (container.innerText.substring(0, 30) + '...') : 'Selection';
+
+            const copyEvent: InteractionEvent = {
+                id: generateId(),
+                userId: user.id,
+                sessionId: sessionIdRef.current,
+                type: 'copy',
+                target: target.tagName.toLowerCase(),
+                label: label,
+                path: location.pathname,
+                timestamp: new Date().toISOString(),
+                metadata: {
+                    textLength: selection.length,
+                    textSnippet: selection.substring(0, 100),
+                    container: container?.tagName.toLowerCase()
+                }
+            };
+
+            fetch('/api/usage/event', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(copyEvent)
+            }).catch(e => console.debug("Analytics copy log failed", e));
+        };
+
         window.addEventListener('mousedown', handleMouseDown, true);
         window.addEventListener('click', handleClick, true); // Capture phase
+        window.addEventListener('copy', handleCopy as EventListener, true);
 
         return () => {
             window.removeEventListener('mousedown', handleMouseDown, true);
             window.removeEventListener('click', handleClick, true);
+            window.removeEventListener('copy', handleCopy as EventListener, true);
         };
     }, [user, location.pathname]);
 

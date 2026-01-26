@@ -1033,6 +1033,29 @@ export const analyticsRepository = {
             });
         }
 
+        // 4. Analyze Copy Trends
+        const copyEvents = eventsRes.events.filter((e: any) => e.type === 'copy');
+        const copyCounts = new Map<string, { count: number, path: string, snippet: string }>();
+
+        copyEvents.forEach((e: any) => {
+            const key = `${e.path}-${e.label}`;
+            const stats = copyCounts.get(key) || { count: 0, path: e.path, snippet: e.metadata?.textSnippet };
+            stats.count++;
+            copyCounts.set(key, stats);
+        });
+
+        for (const [key, stats] of copyCounts.entries()) {
+            if (stats.count >= 3) {
+                insights.push({
+                    type: 'ux_enhancement',
+                    severity: 'medium',
+                    title: 'Fritext-kopiering upptäckt',
+                    description: `Användare kopierar ofta text ("${stats.snippet}...") från ${stats.path}.`,
+                    suggestion: `Överväg att lägga till en dedikerad "Kopiera till urklipp"-knapp här för att förenkla flödet.`
+                });
+            }
+        }
+
         return insights;
     }
 };
