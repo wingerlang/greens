@@ -10,7 +10,7 @@ interface CircuitState {
     nextRetry: number;
 }
 
-const THRESHOLD = 5; // Failures before tripping
+const THRESHOLD = 15; // Failures before tripping
 const TIMEOUT = 30000; // 30s before Half-Open
 
 const circuits = new Map<string, CircuitState>();

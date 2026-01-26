@@ -8,7 +8,7 @@ export function MessagesPage() {
 
     return (
         <div className="flex h-[calc(100vh-64px)] overflow-hidden">
-             {/* Desktop: Show both. Mobile: Show list if no active, show chat if active */}
+            {/* Desktop: Show both. Mobile: Show list if no active, show chat if active */}
             <div className={`${activeConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-auto h-full`}>
                 <ConversationList />
             </div>
@@ -28,3 +28,5 @@ export function MessagesPage() {
         </div>
     );
 }
+
+export default MessagesPage;

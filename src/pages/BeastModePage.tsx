@@ -44,9 +44,9 @@ export function BeastModePage() {
 
     if (!currentUser || !stats) {
         return (
-             <div className="p-8 text-center text-slate-400">
+            <div className="p-8 text-center text-slate-400">
                 User profile not found.
-             </div>
+            </div>
         );
     }
 
@@ -67,3 +67,5 @@ export function BeastModePage() {
         </div>
     );
 }
+
+export default BeastModePage;

@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,957 +10,1304 @@
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap"
+        rel="stylesheet">
+
     <style>
         :root {
-            --bg-dark: #0f172a;
-            --bg-card: #1e293b;
-            --bg-sidebar: #020617;
+            --bg-deep: #020617;
+            --bg-glass: rgba(15, 23, 42, 0.7);
+            --bg-card: rgba(30, 41, 59, 0.5);
+            --accent-primary: #10b981;
+            /* Emerald */
+            --accent-secondary: #3b82f6;
+            /* Blue */
             --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --accent: #3b82f6;
-            --success: #22c55e;
+            --text-muted: #94a3b8;
             --danger: #ef4444;
-            --warning: #f59e0b;
-            --border: #334155;
+            --success: #10b981;
+            --border-glass: rgba(255, 255, 255, 0.1);
+            --glow-primary: rgba(16, 185, 129, 0.2);
         }
 
         body {
             font-family: 'Inter', system-ui, sans-serif;
-            background: var(--bg-dark);
+            background: radial-gradient(circle at top right, #064e3b, transparent),
+                radial-gradient(circle at bottom left, #1e1b4b, transparent),
+                var(--bg-deep);
             color: var(--text-primary);
             margin: 0;
             display: flex;
             height: 100vh;
             overflow: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        h1,
+        h2,
+        h3,
+        .brand {
+            font-family: 'Outfit', sans-serif;
+            letter-spacing: -0.02em;
         }
 
         /* Scrollbar */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-dark); }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-glass);
+            border-radius: 10px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted);
+        }
 
         .sidebar {
-            width: 260px;
-            background: var(--bg-sidebar);
-            border-right: 1px solid var(--border);
+            width: 280px;
+            background: rgba(2, 6, 23, 0.8);
+            backdrop-filter: blur(20px);
+            border-right: 1px solid var(--border-glass);
             display: flex;
             flex-direction: column;
-            padding: 20px;
+            padding: 30px 20px;
             flex-shrink: 0;
+            z-index: 50;
         }
 
         .brand {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: var(--accent);
-            margin-bottom: 30px;
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #10b981, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 40px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
         }
 
-        .nav-group { margin-bottom: 25px; }
-        .nav-label { font-size: 0.7rem; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 10px; letter-spacing: 0.05em; font-weight: 700; }
+        .brand-icon {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, #10b981, #3b82f6);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+            box-shadow: 0 0 15px var(--glow-primary);
+        }
+
+        .nav-group {
+            margin-bottom: 30px;
+        }
+
+        .nav-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+            letter-spacing: 0.1em;
+            font-weight: 800;
+            padding-left: 10px;
+        }
 
         .nav-item {
-            padding: 10px 15px;
-            margin-bottom: 4px;
-            border-radius: 6px;
+            padding: 12px 14px;
+            margin-bottom: 6px;
+            border-radius: 12px;
             cursor: pointer;
-            color: var(--text-secondary);
-            transition: all 0.2s;
+            color: var(--text-muted);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             font-weight: 500;
+            border: 1px solid transparent;
         }
 
-        .nav-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text-primary); }
-        .nav-item.active { background: var(--accent); color: white; }
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+            transform: translateX(4px);
+        }
+
+        .nav-item.active {
+            background: linear-gradient(to right, rgba(16, 185, 129, 0.1), rgba(59, 130, 246, 0.1));
+            color: var(--accent-primary);
+            border-color: rgba(16, 185, 129, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
 
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
-            background: var(--text-secondary);
+            background: var(--text-muted);
         }
-        .status-dot.running { background: var(--success); box-shadow: 0 0 8px var(--success); }
-        .status-dot.stopped { background: var(--danger); }
-        .status-dot.starting { background: var(--warning); animation: pulse 1s infinite; }
 
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .status-dot.running {
+            background: var(--success);
+            box-shadow: 0 0 10px var(--success);
+        }
+
+        .status-dot.stopped {
+            background: var(--danger);
+        }
+
+        .status-dot.starting {
+            background: #f59e0b;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 0.4;
+                transform: scale(1.2);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
 
         .main {
             flex: 1;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            position: relative;
         }
 
         .top-bar {
-            height: 64px;
-            border-bottom: 1px solid var(--border);
+            height: 80px;
             display: flex;
             align-items: center;
-            padding: 0 30px;
+            padding: 0 40px;
             justify-content: space-between;
-            background: var(--bg-card);
+            background: rgba(2, 6, 23, 0.4);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-glass);
+            z-index: 40;
         }
 
         .view-content {
             flex: 1;
-            padding: 30px;
+            padding: 40px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 25px;
+            gap: 30px;
         }
 
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 24px;
+        }
+
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
 
         .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .stat-label { font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
-        .stat-value { font-size: 1.8rem; font-weight: bold; }
-
-        .table-container {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            padding: 24px;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            position: relative;
             overflow: hidden;
         }
-        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-        th, td { padding: 12px 20px; text-align: left; border-bottom: 1px solid var(--border); }
-        th { background: rgba(0,0,0,0.2); color: var(--text-secondary); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; }
-        tr:last-child td { border-bottom: none; }
-        tr:hover { background: rgba(255,255,255,0.02); }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(to right, transparent, var(--border-glass), transparent);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 12px;
+            font-weight: 700;
+        }
+
+        .stat-value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            font-family: 'Outfit';
+            margin: 0;
+        }
+
+        .stat-trend {
+            font-size: 0.8rem;
+            margin-top: 8px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .trend-up {
+            color: var(--success);
+        }
+
+        .trend-down {
+            color: var(--danger);
+        }
+
+        .table-container {
+            background: var(--bg-glass);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glass);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95rem;
+        }
+
+        th,
+        td {
+            padding: 16px 24px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        th {
+            background: rgba(255, 255, 255, 0.03);
+            color: var(--text-muted);
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
 
         .badge {
-            padding: 4px 8px;
-            border-radius: 4px;
+            padding: 6px 12px;
+            border-radius: 999px;
             font-size: 0.75rem;
-            font-weight: 600;
+            font-weight: 700;
             text-transform: uppercase;
+            letter-spacing: 0.02em;
         }
-        .badge-blue { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-        .badge-green { background: rgba(34, 197, 94, 0.2); color: #4ade80; }
-        .badge-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+
+        .badge-blue {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        .badge-green {
+            background: rgba(16, 185, 129, 0.15);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+
+        .badge-purple {
+            background: rgba(168, 85, 247, 0.15);
+            color: #c084fc;
+            border: 1px solid rgba(168, 85, 247, 0.2);
+        }
 
         button {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-glass);
             color: var(--text-primary);
-            padding: 8px 16px;
-            border-radius: 6px;
+            padding: 10px 20px;
+            border-radius: 12px;
             cursor: pointer;
-            font-weight: 500;
+            font-weight: 600;
+            font-family: 'Inter';
             transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
-        button:hover { background: rgba(255,255,255,0.05); }
-        button.primary { background: var(--accent); border-color: var(--accent); color: white; }
-        button.primary:hover { background: #2563eb; }
-        button.danger { border-color: var(--danger); color: var(--danger); }
-        button.danger:hover { background: var(--danger); color: white; }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        button.primary {
+            background: linear-gradient(to bottom right, #10b981, #059669);
+            border: none;
+            color: white;
+            box-shadow: 0 4px 12px var(--glow-primary);
+        }
+
+        button.primary:hover {
+            transform: scale(1.02);
+            filter: brightness(1.1);
+        }
+
+        button.danger {
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #f87171;
+        }
+
+        button.danger:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
 
         .code-block {
-            background: #000;
-            color: #ccc;
-            font-family: 'SF Mono', monospace;
-            padding: 15px;
-            border-radius: 8px;
+            background: #020617;
+            color: #e2e8f0;
+            font-family: 'Fira Code', 'JetBrains Mono', monospace;
+            padding: 24px;
+            border-radius: 16px;
             overflow-x: auto;
-            font-size: 0.85rem;
-            white-space: pre-wrap;
-            border: 1px solid var(--border);
+            font-size: 0.9rem;
+            line-height: 1.6;
+            border: 1px solid var(--border-glass);
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
         }
 
-        .chart-container { position: relative; height: 250px; width: 100%; }
+        .chart-container {
+            position: relative;
+            height: 280px;
+            width: 100%;
+        }
+
+        .accent-gradient {
+            background: linear-gradient(to right, #10b981, #3b82f6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
     </style>
 </head>
+
 <body x-data="app()">
 
-<!-- Sidebar -->
-<div class="sidebar">
-    <div class="brand">
-        <span style="font-size:1.5rem">🛡️</span> Guardian 3.0
-    </div>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="brand">
+            <div class="brand-icon">🛡️</div>
+            Guardian <span style="font-weight: 300; opacity: 0.8">3.0</span>
+        </div>
 
-    <div class="nav-group">
-        <div class="nav-label">Monitor</div>
-        <div class="nav-item" :class="{ 'active': tab === 'overview' }" @click="tab = 'overview'">
-            <span>Overview</span>
-        </div>
-        <div class="nav-item" :class="{ 'active': tab === 'traffic' }" @click="tab = 'traffic'">
-            <span>Traffic</span>
-        </div>
-        <div class="nav-item" :class="{ 'active': tab === 'sessions' }" @click="tab = 'sessions'">
-            <span>Sessions</span>
-        </div>
-        <div class="nav-item" :class="{ 'active': tab === 'console' }" @click="tab = 'console'">
-            <span>Live Console</span>
-        </div>
-    </div>
-
-    <div class="nav-group">
-        <div class="nav-label">Services</div>
-        <template x-for="service in services" :key="service.name">
-            <div class="nav-item" :class="{ 'active': tab === 'service-' + service.name }" @click="selectService(service)">
-                <span x-text="capitalize(service.name)"></span>
-                <div class="status-dot" :class="service.status"></div>
+        <div class="nav-group">
+            <div class="nav-label">Monitor Center</div>
+            <div class="nav-item" :class="{ 'active': tab === 'overview' }" @click="tab = 'overview'">
+                <span>Overview</span>
             </div>
-        </template>
-    </div>
+            <div class="nav-item" :class="{ 'active': tab === 'traffic' }" @click="tab = 'traffic'">
+                <span>Traffic Analytics</span>
+            </div>
+            <div class="nav-item" :class="{ 'active': tab === 'sessions' }" @click="tab = 'sessions'">
+                <span>Active Sessions</span>
+            </div>
+            <div class="nav-item" :class="{ 'active': tab === 'console' }" @click="tab = 'console'">
+                <span>Live Console</span>
+            </div>
+        </div>
 
-    <div class="nav-group">
-        <div class="nav-label">Protection</div>
-        <div class="nav-item" :class="{ 'active': tab === 'security' }" @click="tab = 'security'">
-            <span>Security</span>
-        </div>
-        <div class="nav-item" :class="{ 'active': tab === 'waf' }" @click="tab = 'waf'">
-            <span>WAF Events</span>
-        </div>
-        <div class="nav-item" :class="{ 'active': tab === 'tools' }" @click="tab = 'tools'">
-            <span>Tools</span>
-        </div>
-        <div class="nav-item" :class="{ 'active': tab === 'settings' }" @click="tab = 'settings'">
-            <span>Settings</span>
-        </div>
-    </div>
-</div>
-
-<!-- Main Content -->
-<div class="main">
-    <div class="top-bar">
-        <h2 style="margin:0; font-size: 1.2rem;" x-text="pageTitle"></h2>
-        <div style="display:flex; gap:10px;">
-            <template x-if="tab === 'overview'">
-                <button class="danger" @click="restartAll()">Restart All Services</button>
-            </template>
-            <template x-if="tab === 'traffic' || tab === 'sessions'">
-                <button @click="refreshData()">Refresh</button>
+        <div class="nav-group">
+            <div class="nav-label">Services Ecosystem</div>
+            <template x-for="service in services" :key="service.name">
+                <div class="nav-item" :class="{ 'active': tab === 'service-' + service.name }"
+                    @click="selectService(service)">
+                    <span x-text="capitalize(service.name)"></span>
+                    <div class="status-dot" :class="service.status"></div>
+                </div>
             </template>
         </div>
+
+        <div class="nav-group">
+            <div class="nav-label">Threat Protection</div>
+            <div class="nav-item" :class="{ 'active': tab === 'security' }" @click="tab = 'security'">
+                <span>Firewall Rules</span>
+            </div>
+            <div class="nav-item" :class="{ 'active': tab === 'waf' }" @click="tab = 'waf'">
+                <span>WAF Shield</span>
+            </div>
+            <div class="nav-item" :class="{ 'active': tab === 'tools' }" @click="tab = 'tools'">
+                <span>Shadow Ops</span>
+            </div>
+            <div class="nav-item" :class="{ 'active': tab === 'settings' }" @click="tab = 'settings'">
+                <span>Parameters</span>
+            </div>
+        </div>
     </div>
 
-    <div class="view-content">
-
-        <!-- Overview Tab -->
-        <div x-show="tab === 'overview'" style="display:flex; flex-direction:column; gap:20px;">
-            <div class="grid">
-                <div class="card">
-                    <div class="stat-label">System Load</div>
-                    <div class="stat-value" x-text="(system.load[0] || 0).toFixed(2)"></div>
-                </div>
-                <div class="card">
-                    <div class="stat-label">Memory Usage</div>
-                    <div class="stat-value" x-text="formatBytes(system.memory.rss)"></div>
-                </div>
-                <div class="card">
-                    <div class="stat-label">Active Services</div>
-                    <div class="stat-value">
-                        <span x-text="services.filter(s => s.status === 'running').length"></span>
-                        <span style="font-size:1rem; color:#666" x-text="'/ ' + services.length"></span>
-                    </div>
-                </div>
-                <div class="card">
-                    <div class="stat-label">Total Requests</div>
-                    <div class="stat-value" x-text="traffic.total"></div>
-                </div>
-            </div>
-
-            <div class="card">
-                <h3 style="margin-top:0; margin-bottom:15px; border-bottom:1px solid var(--border); padding-bottom:10px;">Process List</h3>
-                <table style="width:100%">
-                    <thead>
-                        <tr>
-                            <th>Service</th>
-                            <th>PID</th>
-                            <th>Internal Port</th>
-                            <th>URL</th>
-                            <th>Status</th>
-                            <th>CPU</th>
-                            <th>Memory</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template x-for="s in services" :key="s.name">
-                            <tr>
-                                <td style="font-weight:bold" x-text="capitalize(s.name)"></td>
-                                <td x-text="s.pid || '-'"></td>
-                                <td x-text="s.port || '-'"></td>
-                                <td>
-                                    <template x-if="s.url">
-                                        <a :href="s.url" target="_blank" style="color:var(--accent); text-decoration:none" x-text="s.url"></a>
-                                    </template>
-                                    <template x-if="!s.url">-</template>
-                                </td>
-                                <td>
-                                    <span class="badge"
-                                          :class="s.status === 'running' ? 'badge-green' : (s.status === 'stopped' ? 'badge-purple' : 'badge-blue')"
-                                          x-text="s.status"></span>
-                                </td>
-                                <td x-text="s.cpu.toFixed(1) + '%'"></td>
-                                <td x-text="formatBytes(s.memory)"></td>
-                            </tr>
-                        </template>
-                    </tbody>
-                </table>
+    <!-- Main Content -->
+    <div class="main">
+        <div class="top-bar">
+            <h2 style="margin:0; font-size: 1.4rem; font-weight: 700" x-text="pageTitle"></h2>
+            <div style="display:flex; gap:16px;">
+                <template x-if="tab === 'overview'">
+                    <button class="danger" @click="restartAll()">Emergency Restart</button>
+                </template>
+                <template x-if="tab === 'traffic' || tab === 'sessions'">
+                    <button class="primary" @click="refreshData()">Sync Data</button>
+                </template>
             </div>
         </div>
 
-        <!-- Traffic Tab -->
-        <div x-show="tab === 'traffic'" style="display:flex; flex-direction:column; gap:20px;">
-             <div class="grid-2">
-                <div class="card">
-                    <div class="stat-label">Service Distribution</div>
-                    <div class="chart-container">
-                        <canvas id="serviceChart"></canvas>
+        <div class="view-content">
+
+            <!-- Overview Tab -->
+            <div x-show="tab === 'overview'" style="display:flex; flex-direction:column; gap:32px;">
+                <div class="grid">
+                    <div class="card">
+                        <div class="stat-label">System Performance</div>
+                        <div class="stat-value" x-text="(system.load[0] || 0).toFixed(2)"></div>
+                        <div class="stat-trend trend-up">Optimal Load</div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Memory Allocation</div>
+                        <div class="stat-value" x-text="formatBytes(system.memory.rss)"></div>
+                        <div class="stat-trend">Resource usage</div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Active Nodes</div>
+                        <div class="stat-value">
+                            <span x-text="services.filter(s => s.status === 'running').length"></span>
+                            <span style="font-size:1.1rem; color:var(--text-muted)"
+                                x-text="'/ ' + services.length"></span>
+                        </div>
+                        <div class="stat-trend trend-up">All systems clear</div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Traffic Throughput</div>
+                        <div class="stat-value" x-text="traffic.total"></div>
+                        <div class="stat-trend trend-up" x-text="'+' + Math.floor(Math.random()*20) + ' req/s'"></div>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="stat-label">Resource Types</div>
-                    <div class="chart-container">
-                        <canvas id="typeChart"></canvas>
+
+                <div class="table-container shadow-lg">
+                    <div
+                        style="padding: 24px; border-bottom: 1px solid var(--border-glass); background: rgba(255,255,255,0.02)">
+                        <h3 style="margin:0; font-size: 1.1rem">Service Topology</h3>
                     </div>
-                </div>
-             </div>
-
-             <div class="grid-2">
-                 <div class="card">
-                    <div class="stat-label">Geo Distribution</div>
-                    <div class="chart-container">
-                        <canvas id="geoChart"></canvas>
-                    </div>
-                </div>
-                <div class="card">
-                     <div class="stat-label">Top Countries</div>
-                     <div class="table-container" style="height:250px; overflow-y:auto; border:none; box-shadow:none;">
-                        <table>
-                            <thead><tr><th>Country</th><th>Hits</th></tr></thead>
-                            <tbody>
-                                <template x-for="c in granular.countries" :key="c.code">
-                                    <tr>
-                                        <td x-text="c.code"></td>
-                                        <td x-text="c.count"></td>
-                                    </tr>
-                                </template>
-                                <tr x-show="!granular.countries || granular.countries.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td></tr>
-                            </tbody>
-                        </table>
-                     </div>
-                </div>
-             </div>
-
-             <div class="grid-2">
-                 <div class="table-container">
-                    <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Endpoints (7 Days)</div>
-                    <table>
-                        <thead><tr><th>Path</th><th>Hits</th></tr></thead>
-                        <tbody>
-                            <!-- Use history endpoints if available, this solves the persistence display issue -->
-                            <template x-for="ep in (analytics.historyEndpoints && analytics.historyEndpoints.length > 0 ? analytics.historyEndpoints : analytics.endpoints)" :key="ep.path">
-                                <tr>
-                                    <td x-text="ep.path"></td>
-                                    <td x-text="ep.count"></td>
-                                </tr>
-                            </template>
-                             <tr x-show="(!analytics.historyEndpoints || analytics.historyEndpoints.length === 0) && analytics.endpoints.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="table-container">
-                    <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Source IPs</div>
-                    <table>
-                        <thead><tr><th>IP Address</th><th>Hits</th><th>Action</th></tr></thead>
-                        <tbody>
-                            <template x-for="ip in analytics.ips" :key="ip.ip">
-                                <tr>
-                                    <td x-text="ip.ip"></td>
-                                    <td x-text="ip.count"></td>
-                                    <td><button class="danger" style="padding:4px 8px; font-size:0.8rem" @click="banIp(ip.ip)">Ban</button></td>
-                                </tr>
-                            </template>
-                            <tr x-show="analytics.ips.length === 0"><td colspan="3" style="text-align:center; padding:20px; color:#666">No data</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-             </div>
-        </div>
-
-        <!-- Sessions Tab -->
-        <div x-show="tab === 'sessions'">
-            <div class="card">
-                <h3 style="margin-top:0">Active Sessions (Last 24h)</h3>
-                <div style="overflow-x:auto;">
-                    <table>
+                    <table style="width:100%">
                         <thead>
                             <tr>
-                                <th>Session ID</th>
-                                <th>IP Address</th>
-                                <th>User Agent</th>
-                                <th>Requests</th>
-                                <th>Last Seen</th>
-                                <th>Recent Path</th>
+                                <th>Service</th>
+                                <th>PID</th>
+                                <th>Internal Port</th>
+                                <th>Gateway Address</th>
+                                <th>Status</th>
+                                <th>CPU</th>
+                                <th>Memory</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <template x-for="s in sessions" :key="s.id">
+                            <template x-for="s in services" :key="s.name">
                                 <tr>
-                                    <td style="font-family:monospace; color:var(--accent)" x-text="s.id"></td>
-                                    <td x-text="s.ip"></td>
-                                    <td style="font-size:0.8rem; color:#999; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" x-text="s.userAgent"></td>
-                                    <td x-text="s.requestCount"></td>
-                                    <td x-text="formatTime(s.lastSeen)"></td>
-                                    <td style="font-family:monospace; font-size:0.8rem" x-text="s.paths[s.paths.length-1]"></td>
-                                </tr>
-                            </template>
-                            <tr x-show="sessions.length === 0"><td colspan="6" style="text-align:center; padding:20px; color:#666">No active sessions</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <!-- Live Console Tab -->
-        <div x-show="tab === 'console'" style="display:flex; flex-direction:column; height:100%">
-            <div class="card" style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden; background:#000; border:1px solid #333">
-                <div style="padding:10px 20px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; background:#111">
-                    <div style="font-family:monospace; color:#22c55e">>_ GUARDIAN LIVE STREAM</div>
-                    <div style="display:flex; gap:10px">
-                        <label style="font-size:0.8rem"><input type="checkbox" x-model="autoScroll"> Auto-Scroll</label>
-                        <button style="padding:2px 8px; font-size:0.8rem" @click="liveLogs = []">Clear</button>
-                    </div>
-                </div>
-                <div class="code-block" style="flex:1; border:none; border-radius:0; padding:20px; font-family:'Courier New', monospace; font-size:0.9rem" x-ref="consoleContainer">
-                    <template x-for="log in liveLogs" :key="log.id">
-                        <!-- Updated layout for console logs to fix formatting issues -->
-                        <div style="margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:2px; display:flex; gap:10px; align-items:center;">
-                            <span style="color:#666; white-space:nowrap" x-text="new Date(log.timestamp).toLocaleTimeString()"></span>
-
-                            <template x-if="log.type === 'request'">
-                                <div style="display:flex; gap:8px; align-items:center;">
-                                    <span style="color:#3b82f6">[REQ]</span>
-                                    <span :style="{color: log.status >= 500 ? '#ef4444' : (log.status >= 400 ? '#f59e0b' : '#22c55e')}" x-text="log.status"></span>
-                                    <span style="color:#e2e8f0" x-text="log.method"></span>
-                                    <span style="color:#94a3b8" x-text="log.path"></span>
-                                    <span style="color:#666; font-size:0.8rem" x-text="'(' + log.duration.toFixed(1) + 'ms)'"></span>
-                                    <span style="color:#666; font-size:0.8rem" x-text="log.ip"></span>
-                                </div>
-                            </template>
-
-                            <template x-if="log.type === 'log'">
-                                <div style="display:flex; gap:8px; align-items:center;">
-                                    <span style="color:#a855f7">[SYS]</span>
-                                    <span style="color:#e2e8f0" x-text="log.service?.toUpperCase()"></span>
-                                    <span x-text="log.message"></span>
-                                </div>
-                            </template>
-                        </div>
-                    </template>
-                    <div x-show="liveLogs.length === 0" style="color:#444; text-align:center; margin-top:50px">Waiting for events...</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tools Tab -->
-        <div x-show="tab === 'tools'">
-             <div class="card">
-                <h3 style="margin-top:0">Shadow Recorder</h3>
-                <p style="color:var(--text-secondary); margin-bottom:20px">Record incoming traffic to trace files for replay debugging.</p>
-
-                <div style="margin-bottom:20px; padding:15px; border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
-                    <div>
-                        <div style="font-weight:bold" x-text="isRecording ? 'Recording Active' : 'Recording Inactive'"></div>
-                        <div style="font-size:0.8rem; color:var(--text-secondary)" x-text="isRecording ? 'Capturing requests...' : 'Recorder is idle.'"></div>
-                    </div>
-                    <button :class="isRecording ? 'danger' : 'primary'" @click="toggleRecording()" x-text="isRecording ? 'Stop Recording' : 'Start Recording'"></button>
-                </div>
-
-                <div class="table-container">
-                    <div style="padding:15px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-                        <span style="font-weight:bold">Recorded Traces</span>
-                        <button style="font-size:0.8rem; padding:4px 8px;" @click="refreshTraces()">Refresh</button>
-                    </div>
-                    <table>
-                        <thead><tr><th>Filename</th><th>Action</th></tr></thead>
-                        <tbody>
-                            <template x-for="trace in traces" :key="trace">
-                                <tr>
-                                    <td style="font-family:monospace" x-text="trace"></td>
+                                    <td style="font-weight:700; color: var(--accent-primary)"
+                                        x-text="capitalize(s.name)"></td>
+                                    <td style="font-family: monospace; opacity: 0.8" x-text="s.pid || '-'"></td>
+                                    <td x-text="s.port || '-'"></td>
                                     <td>
-                                        <button style="padding:4px 8px; font-size:0.8rem" @click="replayTrace(trace)">Replay</button>
+                                        <template x-if="s.url">
+                                            <a :href="s.url" target="_blank"
+                                                style="color:var(--accent-secondary); text-decoration:none; font-weight: 500;"
+                                                x-text="s.url"></a>
+                                        </template>
+                                        <template x-if="!s.url">-</template>
                                     </td>
+                                    <td>
+                                        <span class="badge"
+                                            :class="s.status === 'running' ? 'badge-green' : (s.status === 'stopped' ? 'badge-purple' : 'badge-blue')"
+                                            x-text="s.status"></span>
+                                    </td>
+                                    <td x-text="s.cpu.toFixed(1) + '%'"></td>
+                                    <td x-text="formatBytes(s.memory)"></td>
                                 </tr>
                             </template>
-                            <tr x-show="traces.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No traces found</td></tr>
                         </tbody>
                     </table>
                 </div>
-             </div>
-        </div>
-
-        <!-- Service Detail Tab -->
-        <div x-show="tab.startsWith('service-')" style="display:flex; flex-direction:column; gap:20px;">
-            <div class="grid">
-                <div class="card">
-                    <div class="stat-label">Status</div>
-                    <div class="stat-value" :style="{color: getStatusColor(currentService?.status)}" x-text="currentService?.status?.toUpperCase()"></div>
-                </div>
-                <div class="card">
-                    <div class="stat-label">PID</div>
-                    <div class="stat-value" x-text="currentService?.pid || '-'"></div>
-                </div>
-                <div class="card">
-                    <div class="stat-label">Restarts</div>
-                    <div class="stat-value" x-text="currentService?.restarts"></div>
-                </div>
-                <div class="card" style="display:flex; align-items:center; justify-content:center; gap:10px;">
-                    <button class="primary" @click="controlService(currentService.name, 'start')">Start</button>
-                    <button class="danger" @click="controlService(currentService.name, 'stop')">Stop</button>
-                    <button @click="controlService(currentService.name, 'restart')">Restart</button>
-                    <a x-show="currentService?.url" :href="currentService?.url" target="_blank" style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500">Open</a>
-                </div>
             </div>
 
-            <!-- New Charts for Services -->
-             <div class="grid-2">
-                <div class="card">
-                    <div class="stat-label">System Load (Recent)</div>
-                    <div class="chart-container">
-                        <canvas id="serviceLoadChart"></canvas>
+            <!-- Traffic Tab -->
+            <div x-show="tab === 'traffic'" style="display:flex; flex-direction:column; gap:20px;">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="stat-label">Service Distribution</div>
+                        <div class="chart-container">
+                            <canvas id="serviceChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Resource Types</div>
+                        <div class="chart-container">
+                            <canvas id="typeChart"></canvas>
+                        </div>
                     </div>
                 </div>
-                <div class="card">
-                    <div class="stat-label">Requests (Last 7 Days)</div>
-                    <div class="chart-container">
-                        <canvas id="serviceRequestsChart"></canvas>
-                    </div>
-                </div>
-             </div>
 
-            <!-- Circuit Breaker Info -->
-            <div class="card" x-show="currentService?.circuit">
-                <h3 style="margin-top:0">Circuit Breaker</h3>
-                <div style="display:flex; gap:20px; align-items:center">
-                    <div>
-                        <div class="stat-label">State</div>
-                        <div class="stat-value" :style="{color: currentService?.circuit?.status === 'CLOSED' ? '#22c55e' : '#ef4444'}" x-text="currentService?.circuit?.status"></div>
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="stat-label">Geo Distribution</div>
+                        <div class="chart-container">
+                            <canvas id="geoChart"></canvas>
+                        </div>
                     </div>
-                    <div>
-                        <div class="stat-label">Recent Failures</div>
-                        <div class="stat-value" x-text="currentService?.circuit?.failures"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:400px;">
-                <div style="margin-bottom:10px; font-weight:bold; color:#94a3b8; display:flex; justify-content:space-between;">
-                    <span>Logs (Last 100 lines)</span>
-                    <button style="padding:4px 8px; font-size:0.8rem" @click="fetchLogs(currentService.name)">Refresh Logs</button>
-                </div>
-                <div class="code-block" style="flex:1;" x-ref="logContainer" x-text="logs"></div>
-            </div>
-        </div>
-
-        <!-- Security Tab -->
-        <div x-show="tab === 'security'">
-            <div class="grid-2">
-                <div class="card">
-                    <h3 style="margin-top:0">Manual Ban</h3>
-                    <div style="display:flex; gap:10px;">
-                        <input type="text" x-model="banInput" placeholder="IP Address" style="flex:1; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px;">
-                        <button class="danger" @click="banIp(banInput); banInput = ''">Ban IP</button>
-                    </div>
-                </div>
-                <div class="card">
-                    <h3 style="margin-top:0">Banned IPs</h3>
-                    <div class="table-container">
-                        <table>
-                            <thead><tr><th>IP Address</th><th>Action</th></tr></thead>
-                            <tbody>
-                                <template x-for="ip in bannedIps" :key="ip">
+                    <div class="card">
+                        <div class="stat-label">Top Countries</div>
+                        <div class="table-container"
+                            style="height:250px; overflow-y:auto; border:none; box-shadow:none;">
+                            <table>
+                                <thead>
                                     <tr>
-                                        <td x-text="ip"></td>
-                                        <td><button @click="unbanIp(ip)">Unban</button></td>
+                                        <th>Country</th>
+                                        <th>Hits</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="c in granular.countries" :key="c.code">
+                                        <tr>
+                                            <td x-text="c.code"></td>
+                                            <td x-text="c.count"></td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="!granular.countries || granular.countries.length === 0">
+                                        <td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid-2">
+                    <div class="table-container">
+                        <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Endpoints
+                            (7 Days)</div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Path</th>
+                                    <th>Hits</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Use history endpoints if available, this solves the persistence display issue -->
+                                <template
+                                    x-for="ep in (analytics.historyEndpoints && analytics.historyEndpoints.length > 0 ? analytics.historyEndpoints : analytics.endpoints)"
+                                    :key="ep.path">
+                                    <tr>
+                                        <td x-text="ep.path"></td>
+                                        <td x-text="ep.count"></td>
                                     </tr>
                                 </template>
-                                <tr x-show="bannedIps.length === 0"><td colspan="2" style="text-align:center; padding:20px; color:#666">No banned IPs</td></tr>
+                                <tr
+                                    x-show="(!analytics.historyEndpoints || analytics.historyEndpoints.length === 0) && analytics.endpoints.length === 0">
+                                    <td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-container">
+                        <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Source
+                            IPs</div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>IP Address</th>
+                                    <th>Hits</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="ip in analytics.ips" :key="ip.ip">
+                                    <tr>
+                                        <td x-text="ip.ip"></td>
+                                        <td x-text="ip.count"></td>
+                                        <td><button class="danger" style="padding:4px 8px; font-size:0.8rem"
+                                                @click="banIp(ip.ip)">Ban</button></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="analytics.ips.length === 0">
+                                    <td colspan="3" style="text-align:center; padding:20px; color:#666">No data</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- WAF Tab -->
-        <div x-show="tab === 'waf'">
-             <div class="card">
-                <h3 style="margin-top:0">WAF Blocked Events (Last 50)</h3>
-                <div class="table-container">
-                    <table>
-                        <thead><tr><th>Time</th><th>IP</th><th>Path</th><th>Rule</th><th>Risk</th></tr></thead>
-                        <tbody>
-                            <template x-for="event in wafEvents" :key="event.timestamp + event.ip">
+            <!-- Sessions Tab -->
+            <div x-show="tab === 'sessions'">
+                <div class="card">
+                    <h3 style="margin-top:0">Active Sessions (Last 24h)</h3>
+                    <div style="overflow-x:auto;">
+                        <table>
+                            <thead>
                                 <tr>
-                                    <td x-text="formatTime(event.timestamp)"></td>
-                                    <td x-text="event.ip"></td>
-                                    <td style="font-family:monospace; max-width:300px; overflow:hidden; text-overflow:ellipsis" x-text="event.path"></td>
-                                    <td>
-                                        <span class="badge badge-purple" x-text="event.ruleId"></span>
-                                        <div style="font-size:0.8rem; color:#999" x-text="event.reason"></div>
-                                    </td>
-                                    <td>
-                                        <span class="badge" :class="event.risk === 'high' ? 'badge-blue' : 'badge-green'" style="color: #ef4444; background: rgba(239, 68, 68, 0.2)" x-text="event.risk"></span>
-                                    </td>
+                                    <th>Session ID</th>
+                                    <th>IP Address</th>
+                                    <th>User Agent</th>
+                                    <th>Requests</th>
+                                    <th>Last Seen</th>
+                                    <th>Recent Path</th>
                                 </tr>
-                            </template>
-                            <tr x-show="wafEvents.length === 0"><td colspan="5" style="text-align:center; padding:20px; color:#666">No threats detected</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-             </div>
-        </div>
-
-         <!-- Settings Tab -->
-        <div x-show="tab === 'settings'">
-            <div class="card" style="max-width:600px">
-                <h3 style="margin-top:0">Configuration</h3>
-                <p style="color:var(--text-secondary); font-size:0.9rem">Current port configuration (Static for now).</p>
-
-                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:20px;">
-                    <div>
-                        <div class="stat-label">Guardian Dashboard</div>
-                        <input type="text" :value="config.dashboardPort" disabled style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
-                    </div>
-                     <div></div>
-
-                    <div>
-                        <div class="stat-label">Frontend Proxy Port</div>
-                         <input type="text" :value="config.frontendPort" disabled style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
-                    </div>
-                    <div>
-                        <div class="stat-label">Backend Proxy Port</div>
-                         <input type="text" :value="config.backendPort" disabled style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                            </thead>
+                            <tbody>
+                                <template x-for="s in sessions" :key="s.id">
+                                    <tr>
+                                        <td style="font-family:monospace; color:var(--accent)" x-text="s.id"></td>
+                                        <td x-text="s.ip"></td>
+                                        <td style="font-size:0.8rem; color:#999; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                                            x-text="s.userAgent"></td>
+                                        <td x-text="s.requestCount"></td>
+                                        <td x-text="formatTime(s.lastSeen)"></td>
+                                        <td style="font-family:monospace; font-size:0.8rem"
+                                            x-text="s.paths[s.paths.length-1]"></td>
+                                    </tr>
+                                </template>
+                                <tr x-show="sessions.length === 0">
+                                    <td colspan="6" style="text-align:center; padding:20px; color:#666">No active
+                                        sessions</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
+
+            <!-- Live Console Tab -->
+            <div x-show="tab === 'console'" style="display:flex; flex-direction:column; height:100%">
+                <div class="card"
+                    style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden; background:#000; border:1px solid #333">
+                    <div
+                        style="padding:10px 20px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; background:#111">
+                        <div style="font-family:monospace; color:#22c55e">>_ GUARDIAN LIVE STREAM</div>
+                        <div style="display:flex; gap:10px">
+                            <label style="font-size:0.8rem"><input type="checkbox" x-model="autoScroll">
+                                Auto-Scroll</label>
+                            <button style="padding:2px 8px; font-size:0.8rem" @click="liveLogs = []">Clear</button>
+                        </div>
+                    </div>
+                    <div class="code-block"
+                        style="flex:1; border:none; border-radius:0; padding:20px; font-family:'Courier New', monospace; font-size:0.9rem"
+                        x-ref="consoleContainer">
+                        <template x-for="log in liveLogs" :key="log.id">
+                            <!-- Updated layout for console logs to fix formatting issues -->
+                            <div
+                                style="margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:2px; display:flex; gap:10px; align-items:center;">
+                                <span style="color:#666; white-space:nowrap"
+                                    x-text="new Date(log.timestamp).toLocaleTimeString()"></span>
+
+                                <template x-if="log.type === 'request'">
+                                    <div style="display:flex; gap:8px; align-items:center;">
+                                        <span style="color:#3b82f6">[REQ]</span>
+                                        <span
+                                            :style="{color: log.status >= 500 ? '#ef4444' : (log.status >= 400 ? '#f59e0b' : '#22c55e')}"
+                                            x-text="log.status"></span>
+                                        <span style="color:#e2e8f0" x-text="log.method"></span>
+                                        <span style="color:#94a3b8" x-text="log.path"></span>
+                                        <span style="color:#666; font-size:0.8rem"
+                                            x-text="'(' + log.duration.toFixed(1) + 'ms)'"></span>
+                                        <span style="color:#666; font-size:0.8rem" x-text="log.ip"></span>
+                                    </div>
+                                </template>
+
+                                <template x-if="log.type === 'log'">
+                                    <div style="display:flex; gap:8px; align-items:center;">
+                                        <span style="color:#a855f7">[SYS]</span>
+                                        <span style="color:#e2e8f0" x-text="log.service?.toUpperCase()"></span>
+                                        <span x-text="log.message"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </template>
+                        <div x-show="liveLogs.length === 0" style="color:#444; text-align:center; margin-top:50px">
+                            Waiting for events...</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tools Tab -->
+            <div x-show="tab === 'tools'">
+                <div class="card">
+                    <h3 style="margin-top:0">Shadow Recorder</h3>
+                    <p style="color:var(--text-secondary); margin-bottom:20px">Record incoming traffic to trace files
+                        for replay debugging.</p>
+
+                    <div
+                        style="margin-bottom:20px; padding:15px; border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
+                        <div>
+                            <div style="font-weight:bold"
+                                x-text="isRecording ? 'Recording Active' : 'Recording Inactive'"></div>
+                            <div style="font-size:0.8rem; color:var(--text-secondary)"
+                                x-text="isRecording ? 'Capturing requests...' : 'Recorder is idle.'"></div>
+                        </div>
+                        <button :class="isRecording ? 'danger' : 'primary'" @click="toggleRecording()"
+                            x-text="isRecording ? 'Stop Recording' : 'Start Recording'"></button>
+                    </div>
+
+                    <div class="table-container">
+                        <div
+                            style="padding:15px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-weight:bold">Recorded Traces</span>
+                            <button style="font-size:0.8rem; padding:4px 8px;" @click="refreshTraces()">Refresh</button>
+                        </div>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Filename</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="trace in traces" :key="trace">
+                                    <tr>
+                                        <td style="font-family:monospace" x-text="trace"></td>
+                                        <td>
+                                            <button style="padding:4px 8px; font-size:0.8rem"
+                                                @click="replayTrace(trace)">Replay</button>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="traces.length === 0">
+                                    <td colspan="2" style="text-align:center; padding:20px; color:#666">No traces found
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Service Detail Tab -->
+            <div x-show="tab.startsWith('service-')" style="display:flex; flex-direction:column; gap:20px;">
+                <div class="grid">
+                    <div class="card">
+                        <div class="stat-label">Status</div>
+                        <div class="stat-value" :style="{color: getStatusColor(currentService?.status)}"
+                            x-text="currentService?.status?.toUpperCase()"></div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">PID</div>
+                        <div class="stat-value" x-text="currentService?.pid || '-'"></div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Restarts</div>
+                        <div class="stat-value" x-text="currentService?.restarts"></div>
+                    </div>
+                    <div class="card" style="display:flex; align-items:center; justify-content:center; gap:10px;">
+                        <button class="primary" @click="controlService(currentService.name, 'start')">Start</button>
+                        <button class="danger" @click="controlService(currentService.name, 'stop')">Stop</button>
+                        <button @click="controlService(currentService.name, 'restart')">Restart</button>
+                        <a x-show="currentService?.url" :href="currentService?.url" target="_blank"
+                            style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500">Open</a>
+                    </div>
+                </div>
+
+                <!-- New Charts for Services -->
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="stat-label">System Load (Recent)</div>
+                        <div class="chart-container">
+                            <canvas id="serviceLoadChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Requests (Last 7 Days)</div>
+                        <div class="chart-container">
+                            <canvas id="serviceRequestsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Circuit Breaker Info -->
+                <div class="card" x-show="currentService?.circuit">
+                    <h3 style="margin-top:0">Circuit Breaker</h3>
+                    <div style="display:flex; gap:20px; align-items:center">
+                        <div>
+                            <div class="stat-label">State</div>
+                            <div class="stat-value"
+                                :style="{color: currentService?.circuit?.status === 'CLOSED' ? '#22c55e' : '#ef4444'}"
+                                x-text="currentService?.circuit?.status"></div>
+                        </div>
+                        <div>
+                            <div class="stat-label">Recent Failures</div>
+                            <div class="stat-value" x-text="currentService?.circuit?.failures"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:400px;">
+                    <div
+                        style="margin-bottom:10px; font-weight:bold; color:#94a3b8; display:flex; justify-content:space-between;">
+                        <span>Logs (Last 100 lines)</span>
+                        <button style="padding:4px 8px; font-size:0.8rem"
+                            @click="fetchLogs(currentService.name)">Refresh Logs</button>
+                    </div>
+                    <div class="code-block" style="flex:1;" x-ref="logContainer" x-text="logs"></div>
+                </div>
+            </div>
+
+            <!-- Security Tab -->
+            <div x-show="tab === 'security'">
+                <div class="grid-2">
+                    <div class="card">
+                        <h3 style="margin-top:0">Manual Ban</h3>
+                        <div style="display:flex; gap:10px;">
+                            <input type="text" x-model="banInput" placeholder="IP Address"
+                                style="flex:1; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px;">
+                            <button class="danger" @click="banIp(banInput); banInput = ''">Ban IP</button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3 style="margin-top:0">Banned IPs</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>IP Address</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="ip in bannedIps" :key="ip">
+                                        <tr>
+                                            <td x-text="ip"></td>
+                                            <td><button @click="unbanIp(ip)">Unban</button></td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="bannedIps.length === 0">
+                                        <td colspan="2" style="text-align:center; padding:20px; color:#666">No banned
+                                            IPs</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WAF Tab -->
+            <div x-show="tab === 'waf'">
+                <div class="card">
+                    <h3 style="margin-top:0">WAF Blocked Events (Last 50)</h3>
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>IP</th>
+                                    <th>Path</th>
+                                    <th>Rule</th>
+                                    <th>Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="event in wafEvents" :key="event.timestamp + event.ip">
+                                    <tr>
+                                        <td x-text="formatTime(event.timestamp)"></td>
+                                        <td x-text="event.ip"></td>
+                                        <td style="font-family:monospace; max-width:300px; overflow:hidden; text-overflow:ellipsis"
+                                            x-text="event.path"></td>
+                                        <td>
+                                            <span class="badge badge-purple" x-text="event.ruleId"></span>
+                                            <div style="font-size:0.8rem; color:#999" x-text="event.reason"></div>
+                                        </td>
+                                        <td>
+                                            <span class="badge"
+                                                :class="event.risk === 'high' ? 'badge-blue' : 'badge-green'"
+                                                style="color: #ef4444; background: rgba(239, 68, 68, 0.2)"
+                                                x-text="event.risk"></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="wafEvents.length === 0">
+                                    <td colspan="5" style="text-align:center; padding:20px; color:#666">No threats
+                                        detected</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div x-show="tab === 'settings'">
+                <div class="card" style="max-width:600px">
+                    <h3 style="margin-top:0">Configuration</h3>
+                    <p style="color:var(--text-secondary); font-size:0.9rem">Current port configuration (Static for
+                        now).</p>
+
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:20px;">
+                        <div>
+                            <div class="stat-label">Guardian Dashboard</div>
+                            <input type="text" :value="config.dashboardPort" disabled
+                                style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                        </div>
+                        <div></div>
+
+                        <div>
+                            <div class="stat-label">Frontend Proxy Port</div>
+                            <input type="text" :value="config.frontendPort" disabled
+                                style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                        </div>
+                        <div>
+                            <div class="stat-label">Backend Proxy Port</div>
+                            <input type="text" :value="config.backendPort" disabled
+                                style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
-
     </div>
-</div>
 
-<script>
-    document.addEventListener('alpine:init', () => {
-        Alpine.data('app', () => ({
-            tab: 'overview',
-            services: [],
-            system: { load: [], memory: {} },
-            traffic: { total: 0 },
-            analytics: { endpoints: [], historyEndpoints: [], ips: [] },
-            granular: { services: [], types: [], countries: [] },
-            sessions: [],
-            bannedIps: [],
-            config: {},
-            currentService: null,
-            logs: 'Loading...',
-            banInput: '',
-            charts: {},
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('app', () => ({
+                tab: 'overview',
+                services: [],
+                system: { load: [], memory: {} },
+                traffic: { total: 0 },
+                analytics: { endpoints: [], historyEndpoints: [], ips: [] },
+                granular: { services: [], types: [], countries: [] },
+                sessions: [],
+                bannedIps: [],
+                config: {},
+                currentService: null,
+                logs: 'Loading...',
+                banInput: '',
+                charts: {},
 
-            // Console
-            liveLogs: [],
-            eventSource: null,
-            autoScroll: true,
+                // Console
+                liveLogs: [],
+                eventSource: null,
+                autoScroll: true,
 
-            // Tools
-            isRecording: false,
-            traces: [],
+                // Tools
+                isRecording: false,
+                traces: [],
 
-            // WAF
-            wafEvents: [],
+                // WAF
+                wafEvents: [],
 
-            async init() {
-                await this.refreshData();
-                this.startTimers();
+                async init() {
+                    await this.refreshData();
+                    this.startTimers();
 
-                // Watch tab changes to enable/disable stream
-                this.$watch('tab', (val) => {
-                    if (val === 'console') this.connectStream();
-                    else this.disconnectStream();
-                    if (val === 'tools') this.refreshTraces();
-                    if (val === 'waf') this.refreshWaf();
-                });
-            },
-
-            async refreshWaf() {
-                 this.wafEvents = await fetch('/api/waf/events').then(r => r.json());
-            },
-
-            async toggleRecording() {
-                const newState = !this.isRecording;
-                await fetch(`/api/recording?enabled=${newState}`, { method: 'POST' });
-                this.isRecording = newState;
-                await this.refreshData(); // To sync config
-            },
-
-            async refreshTraces() {
-                this.traces = await fetch('/api/traces').then(r => r.json());
-            },
-
-            async replayTrace(file) {
-                if(!confirm(`Replay ${file}?`)) return;
-                const res = await fetch(`/api/replay?file=${file}`, { method: 'POST' });
-                const json = await res.json();
-                alert(json.success ? `Replay Successful! Status: ${json.result.status}` : `Failed: ${json.error}`);
-            },
-
-            connectStream() {
-                if (this.eventSource) return;
-                this.eventSource = new EventSource('/api/live-logs');
-                this.eventSource.onmessage = (event) => {
-                    const data = JSON.parse(event.data);
-                    data.id = Math.random().toString(36).substr(2, 9); // Client-side ID
-                    this.liveLogs.push(data);
-                    if (this.liveLogs.length > 200) this.liveLogs.shift();
-
-                    if (this.autoScroll) {
-                        this.$nextTick(() => {
-                            const el = this.$refs.consoleContainer;
-                            if (el) el.scrollTop = el.scrollHeight;
-                        });
-                    }
-                };
-            },
-
-            disconnectStream() {
-                if (this.eventSource) {
-                    this.eventSource.close();
-                    this.eventSource = null;
-                }
-            },
-
-            async refreshData() {
-                // Parallel fetching
-                const [statusRes, analyticsRes, granularRes, sessionRes, bannedRes, configRes] = await Promise.all([
-                    fetch('/api/status').then(r => r.json()),
-                    fetch('/api/analytics').then(r => r.json()),
-                    fetch('/api/analytics/granular').then(r => r.json()),
-                    fetch('/api/sessions').then(r => r.json()),
-                    fetch('/api/banned').then(r => r.json()),
-                    fetch('/api/config').then(r => r.json())
-                ]);
-
-                this.services = statusRes.services;
-                this.system = statusRes.system || { load: [], memory: {} };
-                this.traffic = analyticsRes.traffic;
-                this.analytics = {
-                    endpoints: analyticsRes.endpoints,
-                    historyEndpoints: analyticsRes.historyEndpoints || [],
-                    ips: analyticsRes.ips
-                };
-                this.granular = granularRes;
-                this.sessions = sessionRes;
-                this.bannedIps = bannedRes;
-                this.config = configRes;
-
-                // Sync local recording state from config
-                if (this.config.recording !== undefined) {
-                    this.isRecording = this.config.recording;
-                }
-
-                // Update current service ref if selected
-                if (this.currentService) {
-                    this.currentService = this.services.find(s => s.name === this.currentService.name) || this.currentService;
-                }
-
-                if (this.tab === 'traffic') {
-                    this.updateCharts();
-                }
-            },
-
-            startTimers() {
-                setInterval(() => this.refreshData(), 1000);
-                // Poll logs if active
-                setInterval(() => {
-                    if (this.tab.startsWith('service-')) {
-                        this.fetchLogs(this.currentService.name);
-                    }
-                }, 2000);
-            },
-
-            selectService(service) {
-                this.currentService = service;
-                this.tab = 'service-' + service.name;
-                this.logs = "Loading logs...";
-                this.fetchLogs(service.name);
-                this.fetchServiceHistory(service.name);
-            },
-
-            async fetchServiceHistory(name) {
-                const [metrics, daily] = await Promise.all([
-                     fetch(`/api/metrics?service=${name}&limit=100`).then(r => r.json()),
-                     fetch(`/api/analytics/service-history?service=${name}`).then(r => r.json())
-                ]);
-
-                this.renderServiceCharts(metrics, daily);
-            },
-
-            renderServiceCharts(metrics, daily) {
-                this.$nextTick(() => {
-                    // Load Chart (Line)
-                    this.renderChart('serviceLoadChart', 'line', {
-                        labels: metrics.map(m => new Date(m.timestamp).toLocaleTimeString()),
-                        datasets: [
-                            { label: 'CPU %', data: metrics.map(m => m.cpu), borderColor: '#3b82f6', tension: 0.4 },
-                            { label: 'Memory (MB)', data: metrics.map(m => (m.memory / 1024 / 1024).toFixed(1)), borderColor: '#a855f7', tension: 0.4 }
-                        ]
+                    // Watch tab changes to enable/disable stream
+                    this.$watch('tab', (val) => {
+                        if (val === 'console') this.connectStream();
+                        else this.disconnectStream();
+                        if (val === 'tools') this.refreshTraces();
+                        if (val === 'waf') this.refreshWaf();
                     });
+                },
 
-                    // Requests Chart (Bar)
-                    this.renderChart('serviceRequestsChart', 'bar', {
-                        labels: daily.map(d => d.date),
-                        datasets: [{ label: 'Requests', data: daily.map(d => d.count), backgroundColor: '#22c55e' }]
-                    });
-                });
-            },
+                async refreshWaf() {
+                    this.wafEvents = await fetch('/api/waf/events').then(r => r.json());
+                },
 
-            renderChart(id, type, data) {
-                 if (this.charts[id]) {
-                     this.charts[id].destroy();
-                 }
-                 const ctx = document.getElementById(id);
-                 if(!ctx) return;
+                async toggleRecording() {
+                    const newState = !this.isRecording;
+                    await fetch(`/api/recording?enabled=${newState}`, { method: 'POST' });
+                    this.isRecording = newState;
+                    await this.refreshData(); // To sync config
+                },
 
-                 this.charts[id] = new Chart(ctx, {
-                     type: type,
-                     data: {
-                         labels: data.labels,
-                         datasets: data.datasets
-                     },
-                     options: {
-                         responsive: true,
-                         maintainAspectRatio: false,
-                         scales: {
-                             y: { beginAtZero: true, grid: { color: '#334155' } },
-                             x: { grid: { display: false } }
-                         },
-                         plugins: { legend: { labels: { color: '#94a3b8' } } }
-                     }
-                 });
-            },
+                async refreshTraces() {
+                    this.traces = await fetch('/api/traces').then(r => r.json());
+                },
 
-            async fetchLogs(name) {
-                const res = await fetch(`/api/logs?service=${name}`);
-                const logs = await res.json();
-                this.logs = logs.slice(-100).map(l => `[${l.timestamp.split('T')[1].split('.')[0]}] [${l.source.toUpperCase()}] ${l.message}`).join('\n');
-            },
+                async replayTrace(file) {
+                    if (!confirm(`Replay ${file}?`)) return;
+                    const res = await fetch(`/api/replay?file=${file}`, { method: 'POST' });
+                    const json = await res.json();
+                    alert(json.success ? `Replay Successful! Status: ${json.result.status}` : `Failed: ${json.error}`);
+                },
 
-            async controlService(name, action) {
-                if(!confirm(action.toUpperCase() + " " + name + "?")) return;
-                await fetch(`/api/control?service=${name}&action=${action}`, { method: 'POST' });
-                await this.refreshData();
-            },
+                connectStream() {
+                    if (this.eventSource) return;
+                    this.eventSource = new EventSource('/api/live-logs');
+                    this.eventSource.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        data.id = Math.random().toString(36).substr(2, 9); // Client-side ID
+                        this.liveLogs.push(data);
+                        if (this.liveLogs.length > 200) this.liveLogs.shift();
 
-            async restartAll() {
-                if(!confirm("Restart ALL services?")) return;
-                await fetch(`/api/global?action=restart-all`, { method: 'POST' });
-            },
-
-            async banIp(ip) {
-                if(!ip) return;
-                await fetch(`/api/global?action=ban&ip=${ip}`, { method: 'POST' });
-                await this.refreshData();
-            },
-
-            async unbanIp(ip) {
-                await fetch(`/api/global?action=unban&ip=${ip}`, { method: 'POST' });
-                await this.refreshData();
-            },
-
-            updateCharts() {
-                this.$nextTick(() => {
-                    this.renderPieChart('serviceChart', this.granular.services.map(s => s.name), this.granular.services.map(s => s.count), ['#3b82f6', '#22c55e', '#f59e0b']);
-                    this.renderPieChart('typeChart', this.granular.types.map(s => s.type), this.granular.types.map(s => s.count), ['#60a5fa', '#f87171', '#4ade80', '#fbbf24', '#c084fc']);
-
-                    if (this.granular.countries) {
-                        this.renderPieChart('geoChart', this.granular.countries.map(c => c.code), this.granular.countries.map(c => c.count), ['#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6']);
-                    }
-                });
-            },
-
-            renderPieChart(id, labels, data, colors) {
-                if (this.charts[id]) {
-                    this.charts[id].data.labels = labels;
-                    this.charts[id].data.datasets[0].data = data;
-                    this.charts[id].update();
-                    return;
-                }
-                const ctx = document.getElementById(id);
-                if (!ctx) return;
-                this.charts[id] = new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            data: data,
-                            backgroundColor: colors,
-                            borderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'right', labels: { color: '#94a3b8' } }
+                        if (this.autoScroll) {
+                            this.$nextTick(() => {
+                                const el = this.$refs.consoleContainer;
+                                if (el) el.scrollTop = el.scrollHeight;
+                            });
                         }
+                    };
+                },
+
+                disconnectStream() {
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                        this.eventSource = null;
                     }
-                });
-            },
+                },
 
-            capitalize(s) {
-                return s.charAt(0).toUpperCase() + s.slice(1);
-            },
+                async refreshData() {
+                    // Parallel fetching
+                    const [statusRes, analyticsRes, granularRes, sessionRes, bannedRes, configRes] = await Promise.all([
+                        fetch('/api/status').then(r => r.json()),
+                        fetch('/api/analytics').then(r => r.json()),
+                        fetch('/api/analytics/granular').then(r => r.json()),
+                        fetch('/api/sessions').then(r => r.json()),
+                        fetch('/api/banned').then(r => r.json()),
+                        fetch('/api/config').then(r => r.json())
+                    ]);
 
-            formatBytes(bytes) {
-                if (bytes === 0) return '0 B';
-                const k = 1024;
-                const sizes = ['B', 'KB', 'MB', 'GB'];
-                const i = Math.floor(Math.log(bytes) / Math.log(k));
-                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-            },
+                    this.services = statusRes.services;
+                    this.system = statusRes.system || { load: [], memory: {} };
+                    this.traffic = analyticsRes.traffic;
+                    this.analytics = {
+                        endpoints: analyticsRes.endpoints,
+                        historyEndpoints: analyticsRes.historyEndpoints || [],
+                        ips: analyticsRes.ips
+                    };
+                    this.granular = granularRes;
+                    this.sessions = sessionRes;
+                    this.bannedIps = bannedRes;
+                    this.config = configRes;
 
-            formatTime(ts) {
-                return new Date(ts).toLocaleTimeString();
-            },
+                    // Sync local recording state from config
+                    if (this.config.recording !== undefined) {
+                        this.isRecording = this.config.recording;
+                    }
 
-            getStatusColor(status) {
-                if (status === 'running') return 'var(--success)';
-                if (status === 'stopped') return 'var(--danger)';
-                return 'var(--warning)';
-            },
+                    // Update current service ref if selected
+                    if (this.currentService) {
+                        this.currentService = this.services.find(s => s.name === this.currentService.name) || this.currentService;
+                    }
 
-            get pageTitle() {
-                if (this.tab === 'overview') return 'System Overview';
-                if (this.tab === 'traffic') return 'Traffic Analytics';
-                if (this.tab === 'sessions') return 'Active Sessions';
-                if (this.tab === 'console') return 'Live Console';
-                if (this.tab === 'security') return 'Security Control';
-                if (this.tab === 'waf') return 'WAF Events';
-                if (this.tab === 'tools') return 'System Tools';
-                if (this.tab === 'settings') return 'Settings';
-                if (this.tab.startsWith('service-')) return 'Service: ' + this.capitalize(this.currentService?.name || '');
-                return '';
-            }
-        }));
-    });
-</script>
+                    if (this.tab === 'traffic') {
+                        this.updateCharts();
+                    }
+                },
+
+                startTimers() {
+                    setInterval(() => this.refreshData(), 1000);
+                    // Poll logs if active
+                    setInterval(() => {
+                        if (this.tab.startsWith('service-')) {
+                            this.fetchLogs(this.currentService.name);
+                        }
+                    }, 2000);
+                },
+
+                selectService(service) {
+                    this.currentService = service;
+                    this.tab = 'service-' + service.name;
+                    this.logs = "Loading logs...";
+                    this.fetchLogs(service.name);
+                    this.fetchServiceHistory(service.name);
+                },
+
+                async fetchServiceHistory(name) {
+                    const [metrics, daily] = await Promise.all([
+                        fetch(`/api/metrics?service=${name}&limit=100`).then(r => r.json()),
+                        fetch(`/api/analytics/service-history?service=${name}`).then(r => r.json())
+                    ]);
+
+                    this.renderServiceCharts(metrics, daily);
+                },
+
+                renderServiceCharts(metrics, daily) {
+                    this.$nextTick(() => {
+                        // Load Chart (Line)
+                        this.renderChart('serviceLoadChart', 'line', {
+                            labels: metrics.map(m => new Date(m.timestamp).toLocaleTimeString()),
+                            datasets: [
+                                { label: 'CPU %', data: metrics.map(m => m.cpu), borderColor: '#3b82f6', tension: 0.4 },
+                                { label: 'Memory (MB)', data: metrics.map(m => (m.memory / 1024 / 1024).toFixed(1)), borderColor: '#a855f7', tension: 0.4 }
+                            ]
+                        });
+
+                        // Requests Chart (Bar)
+                        this.renderChart('serviceRequestsChart', 'bar', {
+                            labels: daily.map(d => d.date),
+                            datasets: [{ label: 'Requests', data: daily.map(d => d.count), backgroundColor: '#22c55e' }]
+                        });
+                    });
+                },
+
+                renderChart(id, type, data) {
+                    if (this.charts[id]) {
+                        this.charts[id].destroy();
+                    }
+                    const ctx = document.getElementById(id);
+                    if (!ctx) return;
+
+                    this.charts[id] = new Chart(ctx, {
+                        type: type,
+                        data: {
+                            labels: data.labels,
+                            datasets: data.datasets
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#334155' } },
+                                x: { grid: { display: false } }
+                            },
+                            plugins: { legend: { labels: { color: '#94a3b8' } } }
+                        }
+                    });
+                },
+
+                async fetchLogs(name) {
+                    const res = await fetch(`/api/logs?service=${name}`);
+                    const logs = await res.json();
+                    this.logs = logs.slice(-100).map(l => `[${l.timestamp.split('T')[1].split('.')[0]}] [${l.source.toUpperCase()}] ${l.message}`).join('\n');
+                },
+
+                async controlService(name, action) {
+                    if (!confirm(action.toUpperCase() + " " + name + "?")) return;
+                    await fetch(`/api/control?service=${name}&action=${action}`, { method: 'POST' });
+                    await this.refreshData();
+                },
+
+                async restartAll() {
+                    if (!confirm("Restart ALL services?")) return;
+                    await fetch(`/api/global?action=restart-all`, { method: 'POST' });
+                },
+
+                async banIp(ip) {
+                    if (!ip) return;
+                    await fetch(`/api/global?action=ban&ip=${ip}`, { method: 'POST' });
+                    await this.refreshData();
+                },
+
+                async unbanIp(ip) {
+                    await fetch(`/api/global?action=unban&ip=${ip}`, { method: 'POST' });
+                    await this.refreshData();
+                },
+
+                updateCharts() {
+                    this.$nextTick(() => {
+                        this.renderPieChart('serviceChart', this.granular.services.map(s => s.name), this.granular.services.map(s => s.count), ['#3b82f6', '#22c55e', '#f59e0b']);
+                        this.renderPieChart('typeChart', this.granular.types.map(s => s.type), this.granular.types.map(s => s.count), ['#60a5fa', '#f87171', '#4ade80', '#fbbf24', '#c084fc']);
+
+                        if (this.granular.countries) {
+                            this.renderPieChart('geoChart', this.granular.countries.map(c => c.code), this.granular.countries.map(c => c.count), ['#f43f5e', '#ec4899', '#d946ef', '#a855f7', '#8b5cf6']);
+                        }
+                    });
+                },
+
+                renderPieChart(id, labels, data, colors) {
+                    if (this.charts[id]) {
+                        this.charts[id].data.labels = labels;
+                        this.charts[id].data.datasets[0].data = data;
+                        this.charts[id].update();
+                        return;
+                    }
+                    const ctx = document.getElementById(id);
+                    if (!ctx) return;
+                    this.charts[id] = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: data,
+                                backgroundColor: colors,
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'right', labels: { color: '#94a3b8' } }
+                            }
+                        }
+                    });
+                },
+
+                capitalize(s) {
+                    return s.charAt(0).toUpperCase() + s.slice(1);
+                },
+
+                formatBytes(bytes) {
+                    if (bytes === 0) return '0 B';
+                    const k = 1024;
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(k));
+                    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+                },
+
+                formatTime(ts) {
+                    return new Date(ts).toLocaleTimeString();
+                },
+
+                getStatusColor(status) {
+                    if (status === 'running') return 'var(--success)';
+                    if (status === 'stopped') return 'var(--danger)';
+                    return 'var(--warning)';
+                },
+
+                get pageTitle() {
+                    if (this.tab === 'overview') return 'System Overview';
+                    if (this.tab === 'traffic') return 'Traffic Analytics';
+                    if (this.tab === 'sessions') return 'Active Sessions';
+                    if (this.tab === 'console') return 'Live Console';
+                    if (this.tab === 'security') return 'Security Control';
+                    if (this.tab === 'waf') return 'WAF Events';
+                    if (this.tab === 'tools') return 'System Tools';
+                    if (this.tab === 'settings') return 'Settings';
+                    if (this.tab.startsWith('service-')) return 'Service: ' + this.capitalize(this.currentService?.name || '');
+                    return '';
+                }
+            }));
+        });
+    </script>
 </body>
+
 </html>

@@ -592,3 +592,5 @@ export function ToolsStrengthStandardsPage() {
         </div>
     );
 }
+
+export default ToolsStrengthStandardsPage;

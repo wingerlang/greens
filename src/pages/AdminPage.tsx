@@ -324,3 +324,5 @@ const AdminEditModal: React.FC<{
     );
 };
 
+export default AdminPage;
+

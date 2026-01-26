@@ -90,3 +90,13 @@ export async function getSupportConversation(userId: string): Promise<Conversati
     const conversations = await getUserConversations(userId);
     return conversations.find(c => c.type === 'support') || null;
 }
+
+export async function getDirectConversation(userId1: string, userId2: string): Promise<Conversation | null> {
+    const conversations = await getUserConversations(userId1);
+    return conversations.find(c =>
+        c.type === 'direct' &&
+        c.participants.includes(userId1) &&
+        c.participants.includes(userId2) &&
+        c.participants.length === 2
+    ) || null;
+}

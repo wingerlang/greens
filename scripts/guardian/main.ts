@@ -48,7 +48,7 @@ async function bootstrap() {
 
     manager.register({
         name: "frontend",
-        command: ["deno", "task", "dev", "--port", String(CONFIG.ports.internalFrontend)],
+        command: ["deno", "task", "dev", "--port", String(CONFIG.ports.internalFrontend), "--host", "127.0.0.1"],
         autoRestart: true,
         port: CONFIG.ports.internalFrontend
     });
@@ -65,7 +65,7 @@ async function bootstrap() {
     Deno.serve({
         port: CONFIG.ports.dashboard,
         handler: handleDashboardRequest,
-        onListen: () => {}
+        onListen: () => { }
     });
 
     // Pipeline Setup
@@ -93,7 +93,7 @@ async function bootstrap() {
             targetPort,
             serviceName,
             requestId: crypto.randomUUID(),
-            ip: (info.remoteAddr as Deno.NetAddr).hostname,
+            ip: info.remoteAddr.transport === 'tcp' ? (info.remoteAddr as Deno.NetAddr).hostname : "0.0.0.0",
             userAgent: req.headers.get("user-agent") || "unknown",
             url: new URL(req.url),
             state: new Map()
@@ -106,16 +106,27 @@ async function bootstrap() {
     console.log(`[GUARDIAN] Frontend Gateway listening on http://localhost:${CONFIG.ports.frontend}`);
     Deno.serve({
         port: CONFIG.ports.frontend,
-        handler: (req, info) => handleRequest(req, info, CONFIG.ports.internalFrontend, "frontend"),
-        onListen: () => {}
+        handler: (req: Request, info: any) => {
+            const url = new URL(req.url);
+            let targetPort = CONFIG.ports.internalFrontend;
+            let serviceName = "frontend";
+
+            if (url.pathname === "/ws" || url.pathname.startsWith("/api") || url.pathname.startsWith("/uploads")) {
+                targetPort = CONFIG.ports.internalBackend;
+                serviceName = "backend";
+            }
+
+            return handleRequest(req, info, targetPort, serviceName);
+        },
+        onListen: () => { }
     });
 
     // 6. Start Backend Gateway
     console.log(`[GUARDIAN] Backend Gateway listening on http://localhost:${CONFIG.ports.backend}`);
     Deno.serve({
         port: CONFIG.ports.backend,
-        handler: (req, info) => handleRequest(req, info, CONFIG.ports.internalBackend, "backend"),
-        onListen: () => {}
+        handler: (req: Request, info: any) => handleRequest(req, info, CONFIG.ports.internalBackend, "backend"),
+        onListen: () => { }
     });
 }
 

@@ -2,21 +2,29 @@ import React from 'react';
 import { useMessages } from '../../context/MessageContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
-import { MessageSquare, Users, Shield } from 'lucide-react';
+import { MessageSquare, Users, Shield, Plus } from 'lucide-react';
 import { formatDateRelative } from '../../utils/formatters.ts';
 
 export function ConversationList() {
-    const { conversations, activeConversationId, setActiveConversationId } = useMessages();
+    const { conversations, activeConversationId, setActiveConversationId, createSupportChat } = useMessages();
     const { users } = useData();
     const { user: currentUser } = useAuth();
+    const [searchTerm, setSearchTerm] = React.useState(''); // For future use? Or just local filter
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 w-full md:w-80">
-            <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <MessageSquare className="text-emerald-500" />
                     Meddelanden
                 </h2>
+                <button
+                    onClick={() => createSupportChat()}
+                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-emerald-500 transition-colors"
+                    title="Ny supportchatt"
+                >
+                    <Plus size={20} />
+                </button>
             </div>
 
             <div className="flex-1 overflow-y-auto">

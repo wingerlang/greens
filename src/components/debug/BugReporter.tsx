@@ -15,6 +15,8 @@ export function BugReporter() {
     // Only show in DEV mode
     if (!import.meta.env.DEV) return null;
 
+    console.log("[BugReporter] Initializing safe mode...");
+
     const { user, token } = useAuth();
     const [active, setActive] = useState(false);
     const [selecting, setSelecting] = useState(false);
@@ -49,15 +51,36 @@ export function BugReporter() {
 
         const capture = (type: string, args: any[]) => {
             try {
-                const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+                const msg = args.map(a => {
+                    try {
+                        if (typeof a === 'object') {
+                            return JSON.stringify(a, (key, value) => {
+                                if (key === 'source' && value && value.toString) return value.toString(); // Handle source objects
+                                return value;
+                            });
+                        }
+                        return String(a);
+                    } catch (e) {
+                        return '[Unserializable Object]';
+                    }
+                }).join(' ');
                 logs.current.push(`[${type}] ${msg}`);
                 if (logs.current.length > 50) logs.current.shift();
             } catch (e) { }
         };
 
-        console.log = (...args) => { capture('LOG', args); originalLog.apply(console, args); };
-        console.error = (...args) => { capture('ERR', args); originalError.apply(console, args); };
-        console.warn = (...args) => { capture('WARN', args); originalWarn.apply(console, args); };
+        console.log = (...args) => {
+            try { capture('LOG', args); } catch (e) { }
+            try { originalLog.apply(console, args); } catch (e) { }
+        };
+        console.error = (...args) => {
+            try { capture('ERR', args); } catch (e) { }
+            try { originalError.apply(console, args); } catch (e) { }
+        };
+        console.warn = (...args) => {
+            try { capture('WARN', args); } catch (e) { }
+            try { originalWarn.apply(console, args); } catch (e) { }
+        };
 
         return () => {
             console.log = originalLog;

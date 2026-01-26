@@ -1060,3 +1060,5 @@ export const LoadAnalysisPage: React.FC = () => {
         </div>
     );
 };
+
+export default LoadAnalysisPage;

@@ -113,7 +113,8 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             // --- Rage Click Logic ---
             // Check if clicking same element rapidly (within 500ms)
             // Use a simple selector path as "ID"
-            const selector = target.id ? `#${target.id}` : target.tagName.toLowerCase() + (target.className ? `.${target.className.split(' ')[0]}` : '');
+            const className = target.getAttribute?.('class') || '';
+            const selector = target.id ? `#${target.id}` : target.tagName.toLowerCase() + (className ? `.${String(className).split(' ')[0]}` : '');
             const now = Date.now();
 
             if (lastClickRef.current &&

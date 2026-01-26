@@ -1541,3 +1541,5 @@ export function MatchupPage() {
         </div>
     );
 }
+
+export default MatchupPage;

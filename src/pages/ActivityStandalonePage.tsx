@@ -55,3 +55,5 @@ export function ActivityStandalonePage() {
         </div>
     );
 }
+
+export default ActivityStandalonePage;

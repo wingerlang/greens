@@ -131,3 +131,5 @@ export function CoachPage() {
         </div>
     );
 }
+
+export default CoachPage;

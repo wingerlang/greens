@@ -85,8 +85,8 @@ export function GarminPage() {
                                             <td className="p-4 text-slate-400">{(s.durationSeconds / 3600).toFixed(1)}h</td>
                                             <td className="p-4">
                                                 <span className={`px-2 py-1 rounded text-[10px] font-bold ${(s.score || 0) >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-                                                        (s.score || 0) >= 60 ? 'bg-amber-500/20 text-amber-400' :
-                                                            'bg-rose-500/20 text-rose-400'
+                                                    (s.score || 0) >= 60 ? 'bg-amber-500/20 text-amber-400' :
+                                                        'bg-rose-500/20 text-rose-400'
                                                     }`}>
                                                     {s.score || '-'}
                                                 </span>
@@ -133,3 +133,5 @@ export function GarminPage() {
         </div>
     );
 }
+
+export default GarminPage;

@@ -978,3 +978,5 @@ export function CommunityStatsPage() {
     );
 };
 
+export default CommunityStatsPage;
+

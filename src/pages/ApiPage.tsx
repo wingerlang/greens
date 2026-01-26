@@ -58,3 +58,5 @@ export const ApiPage: React.FC<{ headless?: boolean }> = ({ headless = false }) 
         </div>
     );
 };
+
+export default ApiPage;

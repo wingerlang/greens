@@ -118,3 +118,5 @@ export function ExercisesPage() {
         </div>
     );
 }
+
+export default ExercisesPage;

@@ -959,3 +959,5 @@ export function ActivitiesPage() {
         </div >
     );
 }
+
+export default ActivitiesPage;

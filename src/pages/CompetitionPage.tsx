@@ -399,3 +399,5 @@ export function CompetitionPage() {
         </div>
     );
 }
+
+export default CompetitionPage;

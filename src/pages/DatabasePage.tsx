@@ -1943,3 +1943,6 @@ const MacroInput: React.FC<{ label: string, value: number, onChange: (v: number)
         </div>
     </div>
 );
+}
+
+export default DatabasePage;

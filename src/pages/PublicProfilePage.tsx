@@ -7,10 +7,15 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { FollowMatrixModal } from '../components/feed/FollowMatrixModal.tsx';
 import FeedEventCard from '../components/feed/FeedEventCard.tsx';
 import type { FeedEvent } from '../models/feedTypes.ts';
+import { useMessages } from '../context/MessageContext.tsx';
+import { useNavigate } from 'react-router-dom';
+import { MessageCircle } from 'lucide-react';
 
 export function PublicProfilePage() {
     const { handle } = useParams<{ handle: string }>();
     const { user: currentUser } = useAuth(); // We need to know who is viewing
+    const navigate = useNavigate();
+    const { startConversation } = useMessages();
     const [profile, setProfile] = useState<User | null>(null);
     const [events, setEvents] = useState<FeedEvent[]>([]);
     const [stats, setStats] = useState<{ distance: number; duration: number; count: number } | null>(null);
@@ -140,6 +145,18 @@ export function PublicProfilePage() {
                                         : 'bg-emerald-500 text-slate-950 hover:bg-emerald-400 shadow-lg shadow-emerald-500/20'}`}
                                 >
                                     {following ? 'Följer' : 'Följ'}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        if (profile) {
+                                            startConversation(profile.id);
+                                            navigate('/meddelanden');
+                                        }
+                                    }}
+                                    className="px-6 py-2 rounded-full bg-slate-800 text-slate-300 border border-white/10 font-bold hover:bg-slate-700 transition-all flex items-center gap-2"
+                                >
+                                    <MessageCircle size={18} />
+                                    Meddelande
                                 </button>
                                 {following && (
                                     <button

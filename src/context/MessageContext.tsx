@@ -9,6 +9,7 @@ interface MessageContextType {
     setActiveConversationId: (id: string | null) => void;
     sendMessage: (conversationId: string, content: string) => void;
     createSupportChat: () => void;
+    startConversation: (userId: string) => void;
     isConnected: boolean;
     getHistory: (conversationId: string) => void;
 }
@@ -16,7 +17,7 @@ interface MessageContextType {
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
 
 export function MessageProvider({ children }: { children: React.ReactNode }) {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     const [conversations, setConversations] = useState<Conversation[]>([]);
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
@@ -64,7 +65,7 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
                 }
 
                 if (data.type === 'conversation_created') {
-                     setConversations(prev => {
+                    setConversations(prev => {
                         const exists = prev.find(c => c.id === data.conversation.id);
                         if (exists) return prev;
                         return [data.conversation, ...prev];
@@ -134,8 +135,18 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const startConversation = (otherUserId: string) => {
+        if (!user) return;
+        if (ws.current?.readyState === WebSocket.OPEN) {
+            ws.current.send(JSON.stringify({
+                type: 'create_conversation',
+                participantIds: [user.id, otherUserId]
+            }));
+        }
+    };
+
     const getHistory = (conversationId: string) => {
-         if (ws.current?.readyState === WebSocket.OPEN) {
+        if (ws.current?.readyState === WebSocket.OPEN) {
             ws.current.send(JSON.stringify({ type: 'get_messages', conversationId }));
         }
     }
@@ -154,6 +165,7 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
             setActiveConversationId,
             sendMessage,
             createSupportChat,
+            startConversation,
             isConnected,
             getHistory
         }}>

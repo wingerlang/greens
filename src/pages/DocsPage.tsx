@@ -15,3 +15,5 @@ export function DocsPage() {
         </div>
     );
 }
+
+export default DocsPage;

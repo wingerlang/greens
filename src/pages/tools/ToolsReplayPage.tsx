@@ -515,3 +515,5 @@ export function ToolsReplayPage() {
         </div>
     );
 }
+
+export default ToolsReplayPage;

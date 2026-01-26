@@ -69,10 +69,10 @@ const DEFAULT_CONFIG: GuardianConfig = {
     },
     rateLimit: {
         windowMs: 10000,
-        maxRequests: 200,
+        maxRequests: 1000,
         tokenBucket: {
-            capacity: 50,
-            fillRate: 10,
+            capacity: 500,
+            fillRate: 100,
         }
     },
     smartCache: {
@@ -87,7 +87,7 @@ const DEFAULT_CONFIG: GuardianConfig = {
     securityHeaders: {
         hsts: true,
         hstsMaxAge: 31536000,
-        csp: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;",
+        csp: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss:;",
         xFrameOptions: "SAMEORIGIN",
         xContentTypeOptions: "nosniff",
         referrerPolicy: "strict-origin-when-cross-origin"
@@ -120,10 +120,10 @@ try {
                 // Debounce slightly?
                 setTimeout(async () => {
                     try {
-                         const text = await Deno.readTextFile(CONFIG_FILE);
-                         const json = JSON.parse(text);
-                         currentConfig = { ...DEFAULT_CONFIG, ...json };
-                         console.log("[CONFIG] Hot-reloaded configuration.");
+                        const text = await Deno.readTextFile(CONFIG_FILE);
+                        const json = JSON.parse(text);
+                        currentConfig = { ...DEFAULT_CONFIG, ...json };
+                        console.log("[CONFIG] Hot-reloaded configuration.");
                     } catch (e) {
                         console.error("[CONFIG] Reload failed:", e);
                     }

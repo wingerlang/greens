@@ -19,16 +19,25 @@
     },
     "rateLimit": {
         "windowMs": 10000,
-        "maxRequests": 200,
+        "maxRequests": 1000,
         "tokenBucket": {
-            "capacity": 50,
-            "fillRate": 10
+            "capacity": 500,
+            "fillRate": 100
         }
     },
     "smartCache": {
         "maxSize": 52428800,
         "ttl": 600000,
-        "paths": ["/assets/", ".png", ".jpg", ".jpeg", ".svg", ".css", ".js", ".woff2"]
+        "paths": [
+            "/assets/",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".svg",
+            ".css",
+            ".js",
+            ".woff2"
+        ]
     },
     "timeouts": {
         "proxyConnect": 3000,
@@ -37,7 +46,7 @@
     "securityHeaders": {
         "hsts": true,
         "hstsMaxAge": 31536000,
-        "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;",
+        "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws: wss:;",
         "xFrameOptions": "SAMEORIGIN",
         "xContentTypeOptions": "nosniff",
         "referrerPolicy": "strict-origin-when-cross-origin"

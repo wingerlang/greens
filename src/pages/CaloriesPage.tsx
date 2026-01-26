@@ -932,3 +932,5 @@ export function CaloriesPage() {
         </div>
     );
 }
+
+export default CaloriesPage;

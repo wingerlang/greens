@@ -1,6 +1,6 @@
 import { getSession } from "./db/session.ts";
 import { getUserById, getAdmins } from "./db/user.ts";
-import { addMessage, createConversation, getSupportConversation, getConversation, getUserConversations, getMessages } from "./db/messages.ts";
+import { addMessage, createConversation, getSupportConversation, getConversation, getUserConversations, getMessages, getDirectConversation } from "./db/messages.ts";
 import { Message, Conversation } from "../models/types.ts";
 
 const connectedClients = new Map<string, Set<WebSocket>>(); // userId -> sockets
@@ -69,8 +69,8 @@ export function handleWebSocket(req: Request): Response {
 
                 const conv = await getConversation(conversationId);
                 if (!conv || !conv.participants.includes(userId)) {
-                     socket.send(JSON.stringify({ type: 'error', message: 'Access denied' }));
-                     return;
+                    socket.send(JSON.stringify({ type: 'error', message: 'Access denied' }));
+                    return;
                 }
 
                 const message = await addMessage(conversationId, userId, content);
@@ -83,17 +83,39 @@ export function handleWebSocket(req: Request): Response {
                 if (!conv) {
                     const admins = await getAdmins();
                     const adminIds = admins.map(a => a.id);
-                    // Ensure unique participants (if user is also admin)
                     const participants = Array.from(new Set([userId, ...adminIds]));
 
                     conv = await createConversation('support', participants, 'Support Ärende');
 
-                    // Broadcast new conversation to everyone involved
-                    broadcastConversation(participants, conv);
-                } else {
-                    // Just return existing one to the requester
-                    socket.send(JSON.stringify({ type: 'conversation_created', conversation: conv }));
+                    // Broadcast "added" to everyone ELSE
+                    const others = participants.filter(id => id !== userId);
+                    broadcastConversation(others, conv);
                 }
+
+                // Always send "created" to the initiator to trigger activation
+                socket.send(JSON.stringify({ type: 'conversation_created', conversation: conv }));
+                return;
+            }
+
+            if (data.type === 'create_conversation') {
+                const { participantIds } = data;
+                if (!participantIds || !participantIds.includes(userId)) return;
+
+                // For now only supports direct (2 people)
+                if (participantIds.length !== 2) return;
+
+                const otherId = participantIds.find(id => id !== userId);
+                if (!otherId) return;
+
+                let conv = await getDirectConversation(userId, otherId);
+                if (!conv) {
+                    conv = await createConversation('direct', participantIds);
+                    // Broadcast "added" to the OTHER person
+                    broadcastConversation([otherId], conv);
+                }
+
+                // Send "created" to the initiator
+                socket.send(JSON.stringify({ type: 'conversation_created', conversation: conv }));
                 return;
             }
 

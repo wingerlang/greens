@@ -743,3 +743,5 @@ export function GoalsPage() {
         </div>
     );
 }
+
+export default GoalsPage;
