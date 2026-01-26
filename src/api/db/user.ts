@@ -119,3 +119,15 @@ export async function resetUserData(userId: string, type: 'meals' | 'exercises' 
 
     await saveUserData(userId, data);
 }
+
+export async function getAdmins(): Promise<DBUser[]> {
+    const iter = kv.list({ prefix: ['users'] });
+    const admins: DBUser[] = [];
+    for await (const entry of iter) {
+        const user = entry.value as DBUser;
+        if (user.role === 'admin' || user.role === 'developer') {
+            admins.push(user);
+        }
+    }
+    return admins;
+}

@@ -6,9 +6,11 @@ import { SettingsProvider } from './context/SettingsContext.tsx';
 import { AnalyticsProvider } from './context/AnalyticsContext.tsx';
 import { CookingModeProvider } from './context/CookingModeProvider.tsx';
 import { AuthProvider, useAuth } from './context/AuthContext.tsx';
+import { MessageProvider } from './context/MessageContext.tsx';
 import { Layout } from './components/Layout.tsx';
 import { WeeklyPage } from './pages/WeeklyPage.tsx';
 import { DashboardPage } from './pages/DashboardPage.tsx';
+import { MessagesPage } from './pages/MessagesPage.tsx';
 import { DatabasePage } from './pages/DatabasePage.tsx';
 import ExerciseDatabasePage from './pages/admin/ExerciseDatabasePage.tsx';
 import { PantryPage } from './pages/PantryPage.tsx';
@@ -107,9 +109,10 @@ export function App() {
                         <CookingModeProvider>
                             <BrowserRouter>
                                 <AnalyticsProvider>
-                                    <DebugBar />
-                                    <BugReporter />
-                                    <Routes>
+                                    <MessageProvider>
+                                        <DebugBar />
+                                        <BugReporter />
+                                        <Routes>
                                         {/* Public Routes */}
                                         <Route path="/login" element={<LoginPage />} />
                                         <Route path="/register" element={<RegisterPage />} />
@@ -120,6 +123,8 @@ export function App() {
                                                 <Layout>
                                                     <Routes>
                                                         <Route index element={<DashboardPage />} />
+                                                        <Route path="meddelanden" element={<MessagesPage />} />
+                                                        <Route path="messages" element={<Navigate to="/meddelanden" replace />} />
                                                         <Route path="veckan" element={<WeeklyPage />} />
                                                         <Route path="weekly" element={<WeeklyPage />} />
                                                         <Route path="vecka" element={<WeeklyPage />} />
@@ -254,6 +259,7 @@ export function App() {
                                             </RequireAuth>
                                         } />
                                     </Routes>
+                                    </MessageProvider>
                                 </AnalyticsProvider>
                             </BrowserRouter>
                         </CookingModeProvider>
