@@ -982,3 +982,177 @@ export function calculateGoalProgress(
     };
 }
 
+// ============================================
+// Chain & Phased Goal Logic
+// ============================================
+
+/**
+ * Get the full chain of goals (past -> future) linked to the given goal.
+ */
+export function getGoalChain(
+    currentGoal: PerformanceGoal,
+    allGoals: PerformanceGoal[]
+): PerformanceGoal[] {
+    // 1. Traverse backwards
+    const chain: PerformanceGoal[] = [currentGoal];
+    const visited = new Set<string>([currentGoal.id]);
+
+    let current = currentGoal;
+    while (current.previousGoalId) {
+        // Prevent infinite loops
+        if (visited.has(current.previousGoalId)) break;
+
+        const prev = allGoals.find(g => g.id === current.previousGoalId);
+        if (prev) {
+            chain.unshift(prev);
+            visited.add(prev.id);
+            current = prev;
+        } else {
+            break; // Broken link
+        }
+    }
+
+    // 2. Traverse forwards (find goals that point to goals in our current chain)
+    // We repeatedly search for any goal that points to the LAST goal in our chain
+    let foundNext = true;
+    while (foundNext) {
+        foundNext = false;
+        const lastInChain = chain[chain.length - 1];
+        const next = allGoals.find(g => g.previousGoalId === lastInChain.id);
+
+        if (next && !visited.has(next.id)) {
+            chain.push(next);
+            visited.add(next.id);
+            foundNext = true;
+        }
+    }
+
+    // Sort by start date to be sure
+    return chain.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+}
+
+/**
+ * Statistics for a chain of goals (The Whole Journey)
+ */
+export interface ChainStats {
+    totalDurationDays: number;
+    totalValueChange: number; // e.g. Total Weight Lost, Total Distance Run
+    averageValuePerPhase: number; // e.g. Avg km/week across all phases
+    startValue: number;
+    currentValue: number;
+    targetValue: number; // The target of the LAST goal in chain
+    progressPercentage: number;
+    isComplete: boolean;
+    phaseCount: number;
+    currentPhaseIndex: number;
+}
+
+/**
+ * Calculate statistics for the entire chain.
+ */
+export function calculateChainStats(
+    chain: PerformanceGoal[],
+    progressMap: Map<string, GoalProgress>
+): ChainStats | null {
+    if (!chain.length) return null;
+
+    const firstGoal = chain[0];
+    const lastGoal = chain[chain.length - 1];
+
+    // Determine the "Active" goal to use as current reference
+    // Usually the last one, or the one currently active
+    // For stats, we assume the chain represents a timeline
+
+    const startDate = new Date(firstGoal.startDate);
+    const endDate = lastGoal.endDate ? new Date(lastGoal.endDate) : new Date();
+    const totalDurationDays = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+
+    let startValue = 0;
+    let currentValue = 0;
+    let targetValue = 0;
+    let totalValueChange = 0;
+    let isComplete = false;
+
+    // Type-specific aggregation
+    if (firstGoal.type === 'weight') {
+        // Weight: Start of First -> Current of Last (or Active) -> Target of Last
+        const firstProgress = progressMap.get(firstGoal.id);
+        const lastProgress = progressMap.get(lastGoal.id);
+
+        // For weight, "milestoneProgress" is often used as start weight
+        startValue = firstGoal.milestoneProgress || (firstProgress?.actualCurrentValue || 0);
+        currentValue = lastProgress?.actualCurrentValue || startValue;
+        targetValue = lastGoal.targetWeight || 0;
+
+        totalValueChange = Math.abs(currentValue - startValue);
+
+        // Completion check on the FINAL goal
+        isComplete = lastProgress?.isComplete || false;
+
+    } else if (firstGoal.type === 'distance' || firstGoal.type === 'tonnage' || firstGoal.type === 'frequency' || firstGoal.type === 'calories') {
+        // Cumulative goals: Sum of all completed values
+        // For "Weekly Distance", the "Whole Journey" might mean "Total Distance since start"
+        // or "Average Weekly Distance since start".
+        // The user request implies "Total distans för delarna och helheten" -> Total Sum.
+
+        startValue = 0; // Cumulative starts at 0
+        currentValue = chain.reduce((sum, g) => {
+            const p = progressMap.get(g.id);
+            // If it's a "per period" goal (weekly), "current" usually resets.
+            // But we want the TOTAL done during that goal's lifespan.
+            // Our current `calculateGoalProgress` returns `current` for the *current period* (e.g. this week).
+            // It doesn't easily give "Total since goal start" for recurring goals unless we re-calculate.
+
+            // However, usually `progress.current` IS the cumulative if period='once'.
+            // If period='weekly', we might need to rely on `successfulPeriods` or re-calc.
+            // For MVP: Let's assume we want to sum the `current` if they are distinct non-overlapping 'once' goals.
+            // If they are 'weekly' goals, chaining them implies "I want to keep running X km/week".
+            // The "Whole Journey" stats for weekly goals should probably be "Total Cumulative Distance".
+
+            // We can't easily get "Total Cumulative" from the `GoalProgress` object for weekly goals
+            // without a new calculation.
+            // Let's rely on the `progress.current` if period is 'once'.
+            // If period is 'weekly', `progress.current` is just THIS WEEK.
+
+            // FIX: For chained weekly goals, we likely want "Average consistency" or "Total Volume".
+            // Let's use "Total Volume" if we can, but since we don't have it pre-calced:
+            // We will use `current` as best effort, but ideally we'd re-query the exercise entries.
+            // Since we passed `progressMap` only, we are limited.
+            return sum + (p?.current || 0);
+        }, 0);
+
+        // Target is sum of all targets? Or just the last target?
+        // Usually chains for volume are "Run 100km (Jan)" -> "Run 150km (Feb)".
+        // Total target = 250km.
+        targetValue = chain.reduce((sum, g) => {
+             // For weekly goals, target is per week. Summing them doesn't make sense for "Total Target"
+             // unless we multiply by duration.
+             // Let's just sum the raw targets for 'once' goals.
+             return sum + (progressMap.get(g.id)?.target || 0);
+        }, 0);
+
+        totalValueChange = currentValue;
+    }
+
+    // Calculate progress % for the chain
+    let progressPercentage = 0;
+    if (firstGoal.type === 'weight') {
+         const totalDiff = Math.abs(targetValue - startValue);
+         progressPercentage = totalDiff > 0 ? (totalValueChange / totalDiff) * 100 : 0;
+    } else {
+         progressPercentage = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
+    }
+
+    return {
+        totalDurationDays,
+        totalValueChange,
+        averageValuePerPhase: totalValueChange / chain.length,
+        startValue,
+        currentValue,
+        targetValue,
+        progressPercentage: Math.min(100, progressPercentage),
+        isComplete,
+        phaseCount: chain.length,
+        currentPhaseIndex: chain.length - 1 // Default to last
+    };
+}

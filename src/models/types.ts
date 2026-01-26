@@ -574,6 +574,7 @@ export interface PerformanceGoal {
     measurementType?: 'waist' | 'hip' | 'chest' | 'arm' | 'thigh' | 'neck';
     goalDirection?: 'up' | 'down' | 'stable';
     periodId?: string;            // Link to TrainingPeriod
+    previousGoalId?: string;      // For chained goals (phases)
 }
 
 // ============================================
