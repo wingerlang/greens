@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Ruler, Dumbbell, Flame } from 'lucide-react';
+import { Plus, Ruler, Dumbbell, Flame, LifeBuoy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useMessages } from '../../context/MessageContext.tsx';
 
 interface DashboardActionFABProps {
     onLogMeasurements: () => void;
@@ -9,6 +11,8 @@ interface DashboardActionFABProps {
 
 export function DashboardActionFAB({ onLogMeasurements, onImportWorkout, onQuickEstimate }: DashboardActionFABProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const navigate = useNavigate();
+    const { createSupportChat } = useMessages();
 
     return (
         <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end gap-3"
@@ -17,6 +21,22 @@ export function DashboardActionFAB({ onLogMeasurements, onImportWorkout, onQuick
         >
             {/* Secondary Actions */}
             <div className={`flex flex-col gap-3 transition-all duration-300 ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}>
+
+                {/* Support Chat */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        createSupportChat();
+                        navigate('/meddelanden');
+                        setIsOpen(false);
+                    }}
+                    className="flex items-center gap-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2 rounded-full shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors group border border-slate-200 dark:border-slate-700"
+                >
+                    <span className="text-xs font-bold uppercase tracking-wider">Support</span>
+                    <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-500 group-hover:bg-rose-500 group-hover:text-white transition-colors">
+                        <LifeBuoy size={16} />
+                    </div>
+                </button>
 
                 {/* Quick Estimate */}
                 <button

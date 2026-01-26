@@ -1826,3 +1826,30 @@ export interface HyroxSessionSummary {
     runSplits?: number[]; // [r1, r2, ... r8] in seconds
     stationDistances?: Partial<Record<HyroxStation, number>>;
 }
+
+// ============================================
+// Messaging & Support (Phase M)
+// ============================================
+
+export type ConversationType = 'direct' | 'support';
+
+export interface Message {
+    id: string;
+    conversationId: string;
+    senderId: string;
+    content: string;
+    createdAt: string;
+    readBy?: string[]; // userIds who have read this message
+    type?: 'text' | 'image' | 'system';
+}
+
+export interface Conversation {
+    id: string;
+    type: ConversationType;
+    participants: string[]; // User IDs
+    updatedAt: string;
+    createdAt: string;
+    lastMessage?: Message;
+    title?: string; // Optional title for group/support chats
+    metadata?: Record<string, any>;
+}
