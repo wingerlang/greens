@@ -9,6 +9,16 @@ interface GeoData {
     isp: string;
 }
 
+function isPrivateIp(ip: string): boolean {
+    return ip === "127.0.0.1" ||
+           ip === "::1" ||
+           ip.startsWith("192.168.") ||
+           ip.startsWith("10.") ||
+           // Simplified check for 172.16.0.0/12
+           (ip.startsWith("172.") && parseInt(ip.split('.')[1]) >= 16 && parseInt(ip.split('.')[1]) <= 31) ||
+           ip.startsWith("fc00:");
+}
+
 export class GeoIpMiddleware implements Middleware {
     name = "GeoIP";
 
@@ -18,9 +28,30 @@ export class GeoIpMiddleware implements Middleware {
             return;
         }
 
-        const ip = ctx.ip;
-        // Skip local IPs
-        if (ip === "127.0.0.1" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
+        let ip = ctx.ip;
+
+        // If local/private IP, try to find real IP from headers
+        // This handles cases where Guardian is behind a Load Balancer or Proxy (e.g., Cloudflare, Nginx)
+        if (isPrivateIp(ip)) {
+             const cfIp = ctx.req.headers.get("cf-connecting-ip");
+             const realIp = ctx.req.headers.get("x-real-ip");
+             const forwarded = ctx.req.headers.get("x-forwarded-for");
+
+             if (cfIp) {
+                 ip = cfIp;
+             } else if (realIp) {
+                 ip = realIp;
+             } else if (forwarded) {
+                 // X-Forwarded-For can be a comma-separated list, first one is the client
+                 const ips = forwarded.split(',').map(s => s.trim());
+                 if (ips.length > 0) {
+                     ip = ips[0];
+                 }
+             }
+        }
+
+        // If STILL private, mark as local and skip lookup
+        if (isPrivateIp(ip)) {
             ctx.state.set("geo", { country: "Local", countryCode: "XX", city: "Local", isp: "Local" });
             await next();
             return;
