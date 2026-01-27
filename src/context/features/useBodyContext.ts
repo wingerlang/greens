@@ -246,7 +246,7 @@ export function useBodyContext({ currentUser, logAction, emitFeedEvent, skipAuto
 
                 if (Object.keys(updates).length > 0) {
                     const updatedWeight = { ...existing, ...updates, updatedAt: new Date().toISOString() };
-                    storageService.updateWeightEntry(updatedWeight).catch(e => console.error("Failed to sync weight measurement:", e));
+                    storageService.updateWeightEntry(updatedWeight, { skipNotification: true }).catch(e => console.error("Failed to sync weight measurement:", e));
                     return prev.map(w => w.id === existing.id ? updatedWeight : w);
                 }
             }

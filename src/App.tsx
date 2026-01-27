@@ -22,8 +22,8 @@ const ExerciseDatabasePage = React.lazy(() => import('./pages/admin/ExerciseData
 const PantryPage = React.lazy(() => import('./pages/PantryPage.tsx'));
 const RecipesPage = React.lazy(() => import('./pages/RecipesPage.tsx'));
 const CaloriesPage = React.lazy(() => import('./pages/CaloriesPage.tsx'));
-const ProfilePage = React.lazy(() => import('./pages/ProfilePage.tsx'));
-const TrainingPeriodPage = React.lazy(() => import('./pages/TrainingPeriodPage.tsx'));
+const ProfilePage = React.lazy(() => import('./pages/ProfilePage.tsx').then(m => ({ default: m.ProfilePage })));
+const TrainingPeriodPage = React.lazy(() => import('./pages/TrainingPeriodPage.tsx').then(m => ({ default: m.TrainingPeriodPage })));
 const TrainingPage = React.lazy(() => import('./pages/TrainingPage.tsx'));
 const PlanningPage = React.lazy(() => import('./pages/PlanningPage.tsx'));
 const TrainingPlanningPage = React.lazy(() => import('./pages/TrainingPlanningPage.tsx'));
@@ -37,7 +37,7 @@ const LoginPage = React.lazy(() => import('./pages/LoginPage.tsx').then(m => ({ 
 const RegisterPage = React.lazy(() => import('./pages/RegisterPage.tsx').then(m => ({ default: m.RegisterPage })));
 const WorkoutsPage = React.lazy(() => import('./pages/WorkoutsPage.tsx'));
 const CoachPage = React.lazy(() => import('./pages/CoachPage.tsx'));
-const PublicProfilePage = React.lazy(() => import('./pages/PublicProfilePage.tsx'));
+const PublicProfilePage = React.lazy(() => import('./pages/PublicProfilePage.tsx').then(m => ({ default: m.PublicProfilePage })));
 const UsersPage = React.lazy(() => import('./pages/UsersPage.tsx'));
 const GarminPage = React.lazy(() => import('./pages/GarminPage.tsx'));
 const IntegrationsPage = React.lazy(() => import('./pages/IntegrationsPage.tsx'));

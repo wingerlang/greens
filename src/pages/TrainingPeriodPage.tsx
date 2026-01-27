@@ -165,3 +165,5 @@ export const TrainingPeriodPage: React.FC = () => {
         </div>
     );
 };
+
+export default TrainingPeriodPage;

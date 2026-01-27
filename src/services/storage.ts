@@ -40,7 +40,7 @@ export interface StorageService {
     // Granular updates
     updateMealEntry(meal: any): Promise<void>;
     deleteMealEntry(id: string, date: string): Promise<void>;
-    updateWeightEntry(entry: any): Promise<void>;
+    updateWeightEntry(entry: any, options?: { skipNotification?: boolean }): Promise<void>;
     deleteWeightEntry(id: string, date: string): Promise<void>;
     saveBodyMeasurement(entry: any): Promise<void>;
     deleteBodyMeasurement(id: string): Promise<void>;
@@ -424,7 +424,7 @@ export class LocalStorageService implements StorageService {
         }
     }
 
-    async updateWeightEntry(entry: any): Promise<void> {
+    async updateWeightEntry(entry: any, options?: { skipNotification?: boolean }): Promise<void> {
         const token = getToken();
         if (token && ENABLE_CLOUD_SYNC) {
             try {
@@ -437,7 +437,9 @@ export class LocalStorageService implements StorageService {
                     body: JSON.stringify(entry)
                 });
                 if (res.ok) {
-                    notificationService.notify('success', 'Vikt uppdaterad');
+                    if (!options?.skipNotification) {
+                        notificationService.notify('success', 'Vikt uppdaterad');
+                    }
                 } else {
                     throw new Error('API sync failed');
                 }

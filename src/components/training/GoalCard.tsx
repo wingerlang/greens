@@ -69,7 +69,7 @@ export function GoalCard({ goal, progress, onEdit, onDelete }: GoalCardProps) {
                     {/* Progress Text */}
                     <div className="flex justify-between mt-1">
                         <span className="text-[10px] text-slate-500">
-                            {progress.current} / {progress.target}
+                            {+progress.current.toFixed(1).replace(/\.0$/, '')} / {+progress.target.toFixed(1).replace(/\.0$/, '')}
                         </span>
                         <span className={`text-[10px] font-bold ${isComplete ? 'text-emerald-400' : 'text-slate-400'}`}>
                             {(progress.percentage && !isNaN(progress.percentage)) ? Math.round(progress.percentage) : 0}%
