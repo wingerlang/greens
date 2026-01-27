@@ -45,31 +45,31 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                 <div className="flex flex-wrap justify-between items-center gap-2 mb-0.5 px-0.5">
                     <div className="text-[9px] font-bold uppercase text-slate-400">Dagens Totalt</div>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
-                        <span className="font-bold text-slate-900 dark:text-white">{Math.round(totalDuration)} min</span>
-                        <span className="opacity-20 text-slate-300">|</span>
-                        <span>{totalSessions} {totalSessions === 1 ? 'pass' : 'pass'}</span>
+                        <span className="font-bold text-slate-900 dark:text-white whitespace-nowrap">{Math.round(totalDuration)} min</span>
+                        <span className="opacity-20 text-slate-300 hidden md:inline">|</span>
+                        <span className="whitespace-nowrap">{totalSessions} {totalSessions === 1 ? 'pass' : 'pass'}</span>
                         {totalDistance > 0 && (
                             <>
-                                <span className="opacity-20 text-slate-300">|</span>
-                                <span className="text-blue-600 dark:text-blue-400 font-bold">{totalDistance.toFixed(1)} km</span>
+                                <span className="opacity-20 text-slate-300 hidden md:inline">|</span>
+                                <span className="text-blue-600 dark:text-blue-400 font-bold whitespace-nowrap">{totalDistance.toFixed(1)} km</span>
                             </>
                         )}
                         {totalSets > 0 && (
                             <>
-                                <span className="opacity-20 text-slate-300">|</span>
-                                <span className="text-emerald-600 dark:text-emerald-400 font-bold">{totalSets} set</span>
+                                <span className="opacity-20 text-slate-300 hidden md:inline">|</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-bold whitespace-nowrap">{totalSets} set</span>
                             </>
                         )}
                         {totalReps > 0 && (
                             <>
-                                <span className="opacity-20 text-slate-300">|</span>
-                                <span className="text-amber-600 dark:text-amber-400 font-bold">{totalReps} reps</span>
+                                <span className="opacity-20 text-slate-300 hidden md:inline">|</span>
+                                <span className="text-amber-600 dark:text-amber-400 font-bold whitespace-nowrap">{totalReps} reps</span>
                             </>
                         )}
                         {totalTonnage > 0 && (
                             <>
-                                <span className="opacity-20 text-slate-300">|</span>
-                                <span className="text-purple-600 dark:text-purple-400 font-bold">{(totalTonnage / 1000).toFixed(1)} ton</span>
+                                <span className="opacity-20 text-slate-300 hidden md:inline">|</span>
+                                <span className="text-purple-600 dark:text-purple-400 font-bold whitespace-nowrap">{(totalTonnage / 1000).toFixed(1)} ton</span>
                             </>
                         )}
                     </div>
@@ -116,13 +116,33 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                                 e.stopPropagation();
                                 navigate(`/logg?activityId=${act.id}`);
                             }}
-                            className={`flex items-center ${density === 'compact' ? 'gap-1.5 p-1 rounded-lg' : 'gap-2 p-2 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md -translate-y-[1px]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
+                            className={`flex flex-col sm:flex-row items-stretch sm:items-center ${density === 'compact' ? 'gap-2 p-2 rounded-lg' : 'gap-3 p-2.5 rounded-xl'} group/item cursor-pointer hover:bg-white dark:hover:bg-slate-800 transition-all border ${isHoveringTraining ? 'border-emerald-500 bg-emerald-500/5 shadow-md -translate-y-[1px]' : 'border-transparent'} hover:border-slate-100 dark:hover:border-slate-700 hover:shadow-sm relative bg-white/40 dark:bg-slate-900/40`}
                         >
-                            <div className={`${density === 'compact' ? 'text-sm p-1' : 'text-lg p-1.5'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50`}>
-                                {typeDef?.icon || '💪'}
+                            <div className="flex items-center gap-3">
+                                <div className={`${density === 'compact' ? 'text-sm p-1.5' : 'text-lg p-2'} bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-100 dark:border-slate-700/50 shrink-0`}>
+                                    {typeDef?.icon || '💪'}
+                                </div>
+                                <div className="sm:hidden flex-1 font-bold text-slate-900 dark:text-white capitalize truncate">
+                                    {typeDef?.label || act.type}
+                                    {hrString && <span className="ml-2 text-[8px] font-black text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1 py-0.5 rounded tracking-wide align-middle">{hrString}</span>}
+                                </div>
+                                <div className="sm:hidden flex items-center gap-1 opacity-100">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (confirm('Ta bort aktivitet?')) {
+                                                deleteExercise(act.id);
+                                            }
+                                        }}
+                                        className="p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-full transition-colors"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </div>
                             </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="font-bold text-slate-900 dark:text-white leading-tight capitalize flex items-center gap-1.5 truncate">
+
+                            <div className="flex-1 min-w-0 md:ml-0 ml-10 -mt-2 sm:mt-0">
+                                <div className="hidden sm:flex font-bold text-slate-900 dark:text-white leading-tight capitalize items-center gap-1.5 truncate">
                                     {typeDef?.label || act.type}
                                     {hrString && <span className="text-[8px] font-black text-rose-500 bg-rose-50 dark:bg-rose-900/20 px-1 py-0.5 rounded tracking-wide">{hrString}</span>}
                                 </div>
@@ -136,7 +156,7 @@ export const TrainingCard: React.FC<TrainingCardProps> = ({
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-all">
+                            <div className="hidden sm:flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-all">
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();

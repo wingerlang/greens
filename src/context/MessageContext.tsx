@@ -12,6 +12,8 @@ interface MessageContextType {
     startConversation: (userId: string) => void;
     isConnected: boolean;
     getHistory: (conversationId: string) => void;
+    unreadCount: number;
+    markAsRead: (conversationId: string) => void;
 }
 
 const MessageContext = createContext<MessageContextType | undefined>(undefined);
@@ -56,11 +58,15 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
                     setConversations(data.conversations);
                 }
 
-                if (data.type === 'conversation_added') {
+                if (data.type === 'conversation_added' || data.type === 'conversation_updated') {
                     setConversations(prev => {
                         const exists = prev.find(c => c.id === data.conversation.id);
-                        if (exists) return prev;
-                        return [data.conversation, ...prev];
+                        if (exists) {
+                            return prev.map(c => c.id === data.conversation.id ? data.conversation : c)
+                                .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+                        }
+                        return [data.conversation, ...prev]
+                            .sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
                     });
                 }
 
@@ -140,7 +146,7 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
 
         // Check if we already have a conversation with this user
         const existing = conversations.find(c =>
-            c.type === 'private' && c.participants.includes(otherUserId)
+            c.type === 'direct' && c.participants.includes(otherUserId)
         );
 
         if (existing) {
@@ -168,6 +174,56 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
         }
     }, [activeConversationId]);
 
+    const [unreadCount, setUnreadCount] = useState(0);
+
+    // Calculate unread count whenever conversations change
+    useEffect(() => {
+        if (!user) return;
+        const count = conversations.reduce((acc, c) => {
+            const hasUnread = c.lastMessage &&
+                c.lastMessage.senderId !== user.id &&
+                (!c.lastMessage.readBy || !c.lastMessage.readBy.includes(user.id));
+            return acc + (hasUnread ? 1 : 0);
+        }, 0);
+        setUnreadCount(count);
+    }, [conversations, user]);
+
+    const markAsRead = (conversationId: string) => {
+        if (!user || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
+
+        // Optimistic update
+        setConversations(prev => prev.map(c => {
+            if (c.id === conversationId && c.lastMessage) {
+                const readBy = c.lastMessage.readBy || [];
+                if (!readBy.includes(user.id)) {
+                    return {
+                        ...c,
+                        lastMessage: {
+                            ...c.lastMessage,
+                            readBy: [...readBy, user.id]
+                        }
+                    };
+                }
+            }
+            return c;
+        }));
+
+        ws.current.send(JSON.stringify({ type: 'mark_read', conversationId }));
+    };
+
+    // Auto-mark read if looking at the conversation
+    useEffect(() => {
+        if (activeConversationId) {
+            const conv = conversations.find(c => c.id === activeConversationId);
+            if (conv && conv.lastMessage && conv.lastMessage.senderId !== user?.id) {
+                const isUnread = !conv.lastMessage.readBy || !conv.lastMessage.readBy.includes(user?.id || '');
+                if (isUnread) {
+                    markAsRead(activeConversationId);
+                }
+            }
+        }
+    }, [activeConversationId, conversations, user]);
+
     return (
         <MessageContext.Provider value={{
             conversations,
@@ -178,7 +234,9 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
             createSupportChat,
             startConversation,
             isConnected,
-            getHistory
+            getHistory,
+            unreadCount,
+            markAsRead
         }}>
             {children}
         </MessageContext.Provider>

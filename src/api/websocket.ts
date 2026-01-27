@@ -1,6 +1,6 @@
 import { getSession } from "./db/session.ts";
 import { getUserById, getAdmins } from "./db/user.ts";
-import { addMessage, createConversation, getSupportConversation, getConversation, getUserConversations, getMessages, getDirectConversation } from "./db/messages.ts";
+import { addMessage, createConversation, getSupportConversation, getConversation, getUserConversations, getMessages, getDirectConversation, markRead } from "./db/messages.ts";
 import { Message, Conversation } from "../models/types.ts";
 
 const connectedClients = new Map<string, Set<WebSocket>>(); // userId -> sockets
@@ -10,6 +10,7 @@ export function handleWebSocket(req: Request): Response {
         return new Response(null, { status: 501 });
     }
 
+    // @ts-ignore
     const { socket, response } = Deno.upgradeWebSocket(req);
     let userId: string | null = null;
 
@@ -17,7 +18,7 @@ export function handleWebSocket(req: Request): Response {
         // Wait for auth
     };
 
-    socket.onmessage = async (e) => {
+    socket.onmessage = async (e: MessageEvent) => {
         try {
             const data = JSON.parse(e.data);
 
@@ -75,6 +76,24 @@ export function handleWebSocket(req: Request): Response {
 
                 const message = await addMessage(conversationId, userId, content);
                 broadcastMessage(conv.participants, message);
+                return;
+            }
+
+            if (data.type === 'mark_read') {
+                const { conversationId } = data;
+                if (!conversationId) return;
+
+                const conv = await getConversation(conversationId);
+                if (!conv || !conv.participants.includes(userId)) return;
+
+                await markRead(conversationId, userId);
+
+                // Re-fetch to get updated state
+                const updatedConv = await getConversation(conversationId);
+                if (updatedConv) {
+                    // Notify everyone involved so their list updates (e.g. read receipts)
+                    broadcastConversation(updatedConv.participants, updatedConv);
+                }
                 return;
             }
 

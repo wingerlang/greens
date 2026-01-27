@@ -83,7 +83,16 @@ export async function getMessages(conversationId: string, limit: number = 50, cu
 }
 
 export async function markRead(conversationId: string, userId: string): Promise<void> {
-    return;
+    const conv = await getConversation(conversationId);
+    if (!conv || !conv.lastMessage) return;
+
+    if (conv.lastMessage.readBy && conv.lastMessage.readBy.includes(userId)) return;
+
+    // Update last message in conversation
+    const readBy = conv.lastMessage.readBy || [];
+    conv.lastMessage.readBy = [...readBy, userId];
+
+    await kv.set(['conversations', conversationId], conv);
 }
 
 export async function getSupportConversation(userId: string): Promise<Conversation | null> {

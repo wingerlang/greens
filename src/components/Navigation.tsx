@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext.tsx';
 import { useSettings } from '../context/SettingsContext.tsx';
 import { useHealth } from '../hooks/useHealth.ts';
+import { useMessages } from '../context/MessageContext.tsx';
 import './Navigation.css';
 import { Logo } from './Logo.tsx';
 import { Star, MoreHorizontal, Edit2, X, ChevronDown, ChevronRight, Pin } from 'lucide-react';
@@ -78,6 +79,7 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
     const { user, logout } = useAuth();
     const { settings, updateSettings } = useSettings();
     const { cycleProgress, currentGoal, dailyCaloriesConsumed, targetCalories, activeCycle } = useHealth();
+    const { unreadCount } = useMessages();
 
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
@@ -282,8 +284,13 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                         <div className="h-6 w-px bg-white/10 mx-2" />
                         <div className="relative group">
                             <Link to="/profile" className={`${linkClasses({ isActive: location.pathname === '/profile' })} flex items-center gap-2 !px-3 !py-2 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border border-white/5`}>
-                                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-emerald-500/20">
-                                    {user?.username?.substring(0, 1).toUpperCase() || 'U'}
+                                <div className="relative">
+                                    <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-[10px] font-bold text-white shadow-lg shadow-emerald-500/20">
+                                        {user?.username?.substring(0, 1).toUpperCase() || 'U'}
+                                    </div>
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 rounded-full border border-slate-800"></span>
+                                    )}
                                 </div>
                                 <span className="hidden xl:inline text-xs font-bold text-slate-300 group-hover:text-white transition-colors">
                                     {user?.username || 'Gäst'}
@@ -292,7 +299,12 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
 
                             <div className="absolute top-full right-0 mt-1 w-48 bg-slate-900 border border-white/10 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] opacity-0 invisible translate-y-2 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200 z-[100] p-1.5 backdrop-blur-xl">
                                 <NavLink to="/meddelanden" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
-                                    <span className="w-5 text-center">💬</span>
+                                    <div className="relative w-5 text-center">
+                                        <span>💬</span>
+                                        {unreadCount > 0 && (
+                                            <span className="absolute -top-1 -right-0 w-2 h-2 bg-rose-500 rounded-full"></span>
+                                        )}
+                                    </div>
                                     <span>Meddelanden</span>
                                 </NavLink>
                                 <NavLink to="/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all w-full text-left">
@@ -446,7 +458,12 @@ export const Navigation: React.FC<NavigationProps> = ({ onOpenOmnibox }) => {
                                 <span className="font-bold text-slate-200">Min Profil</span>
                             </NavLink>
                             <NavLink to="/meddelanden" className={mobileLinkClasses} onClick={() => setIsMenuOpen(false)}>
-                                <span className="text-xl">💬</span>
+                                <div className="relative">
+                                    <span className="text-xl">💬</span>
+                                    {unreadCount > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border border-slate-900"></span>
+                                    )}
+                                </div>
                                 <span className="font-bold text-slate-200">Meddelanden</span>
                             </NavLink>
                             <button onClick={logout} className="flex items-center gap-4 px-3 py-3 rounded-2xl w-full text-slate-400 hover:bg-rose-500/10 hover:text-rose-400 transition-colors">

@@ -74,26 +74,31 @@ export function ConversationList() {
                                         {isSupport ? <Shield size={20} /> : <Users size={20} />}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between mb-0.5">
-                                            <span className="font-semibold text-sm text-slate-900 dark:text-white truncate pr-2">
+                                        <div className="flex items-center gap-2 mb-0.5">
+                                            <span className={`font-semibold text-sm truncate pr-2 ${isActive ? 'text-emerald-900 dark:text-emerald-100' : 'text-slate-900 dark:text-white'}`}>
                                                 {title}
                                             </span>
+                                            {conv.lastMessage && conv.lastMessage.senderId !== currentUser?.id && (!conv.lastMessage.readBy || !conv.lastMessage.readBy.includes(currentUser?.id || '')) && (
+                                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Oläst meddelande" />
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 pr-2">
+                                                {conv.lastMessage ? (
+                                                    <>
+                                                        {conv.lastMessage.senderId === currentUser?.id ? 'Du: ' : ''}
+                                                        {conv.lastMessage.content}
+                                                    </>
+                                                ) : (
+                                                    <span className="italic opacity-70">Inga meddelanden</span>
+                                                )}
+                                            </p>
                                             {conv.updatedAt && (
-                                                <span className="text-[10px] text-slate-400 shrink-0">
+                                                <span className={`text-[10px] shrink-0 ${isActive ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
                                                     {formatDateRelative(conv.updatedAt)}
                                                 </span>
                                             )}
                                         </div>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                            {conv.lastMessage ? (
-                                                <>
-                                                    {conv.lastMessage.senderId === currentUser?.id ? 'Du: ' : ''}
-                                                    {conv.lastMessage.content}
-                                                </>
-                                            ) : (
-                                                <span className="italic opacity-70">Inga meddelanden</span>
-                                            )}
-                                        </p>
                                     </div>
                                 </button>
                             );
@@ -101,6 +106,6 @@ export function ConversationList() {
                     </div>
                 )}
             </div>
-        </div>
+        </div >
     );
 }

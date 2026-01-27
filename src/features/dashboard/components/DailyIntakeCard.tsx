@@ -60,27 +60,29 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
         >
             <div
                 onClick={() => navigate(`/calories?date=${selectedDate}`)}
-                className={`flex-1 flex items-start ${density === 'compact' ? 'gap-2 p-2' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full relative cursor-pointer hover:scale-[1.01] transition-transform`}>
-                <DoubleCircularProgress
-                    value={consumed}
-                    max={target}
-                    innerValue={proteinCurrent}
-                    innerMax={proteinTarget}
-                    displayValue={Math.round(target - consumed)}
-                    label="Kvar"
-                />
-                <div className="flex-1 ml-4 min-w-0 pb-6">
+                className={`flex-1 flex flex-col md:flex-row items-center md:items-start ${density === 'compact' ? 'gap-2 p-3' : 'gap-4 p-4'} border rounded-2xl bg-white dark:bg-slate-900 shadow-sm border-slate-100 dark:border-slate-800 h-full relative cursor-pointer hover:scale-[1.01] transition-transform`}>
+                <div className="shrink-0">
+                    <DoubleCircularProgress
+                        value={consumed}
+                        max={target}
+                        innerValue={proteinCurrent}
+                        innerMax={proteinTarget}
+                        displayValue={Math.round(target - consumed)}
+                        label="Kvar"
+                    />
+                </div>
+                <div className="flex-1 w-full md:w-auto md:ml-4 mt-2 md:mt-0 min-w-0 pb-2 md:pb-6 text-center md:text-left">
                     <div className={`font-black text-slate-900 dark:text-white uppercase tracking-tighter ${density === 'compact' ? 'text-[10px] mb-2' : 'text-sm mb-4'}`}>Dagens Intag</div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-2 gap-x-4 gap-y-4">
                         {/* Protein */}
                         <div>
-                            <div className={`flex justify-between items-baseline mb-1`}>
+                            <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
                                 <div className="flex items-center gap-1.5">
                                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Protein</span>
                                     {latestWeightVal > 0 && (
                                         <div className="group relative">
                                             <Info size={10} className="text-slate-300 hover:text-emerald-500 cursor-help transition-colors" />
-                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-slate-900 text-[10px] text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all group-hover:translate-y-[-4px] pointer-events-none shadow-2xl border border-white/10 z-[100] leading-tight text-center">
+                                            <div className="hidden md:block absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-3 bg-slate-900 text-[10px] text-white rounded-xl opacity-0 group-hover:opacity-100 transition-all group-hover:translate-y-[-4px] pointer-events-none shadow-2xl border border-white/10 z-[100] leading-tight text-center">
                                                 <div className="flex justify-between items-center mb-2 px-1">
                                                     <div className="flex flex-col items-center">
                                                         <span className="text-[8px] uppercase opacity-50 font-bold">Nuvarande</span>
@@ -107,7 +109,7 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                                     )}
                                 </div>
                             </div>
-                            <div className="flex items-baseline gap-1">
+                            <div className="flex flex-col md:flex-row items-center md:items-baseline justify-center md:justify-start gap-1">
                                 <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-slate-900 dark:text-white`}>
                                     {Math.round(proteinCurrent)}
                                 </span>
@@ -120,10 +122,10 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
 
                         {/* Carbs */}
                         <div>
-                            <div className={`flex justify-between items-baseline mb-1`}>
+                            <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kolh.</span>
                             </div>
-                            <div className="flex items-baseline gap-1">
+                            <div className="flex flex-col md:flex-row items-center md:items-baseline justify-center md:justify-start gap-1">
                                 <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-slate-900 dark:text-white`}>
                                     {Math.round(carbsCurrent)}
                                 </span>
@@ -136,10 +138,10 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
 
                         {/* Fat */}
                         <div>
-                            <div className={`flex justify-between items-baseline mb-1`}>
+                            <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Fett</span>
                             </div>
-                            <div className="flex items-baseline gap-1">
+                            <div className="flex flex-col md:flex-row items-center md:items-baseline justify-center md:justify-start gap-1">
                                 <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-slate-900 dark:text-white`}>
                                     {Math.round(fatCurrent)}
                                 </span>
@@ -152,10 +154,10 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
 
                         {/* Calories */}
                         <div>
-                            <div className={`flex justify-between items-baseline mb-1`}>
+                            <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Kcal</span>
                             </div>
-                            <div className="flex items-baseline gap-1">
+                            <div className="flex flex-col md:flex-row items-center md:items-baseline justify-center md:justify-start gap-1">
                                 <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} ${consumed > target ? 'text-rose-500' : 'text-slate-900 dark:text-white'}`}>
                                     {Math.round(consumed)}
                                 </span>
@@ -173,10 +175,10 @@ export const DailyIntakeCard: React.FC<DailyIntakeCardProps> = ({
                                 onMouseLeave={() => { setIsHoveringTraining(false); onHoverTraining?.(false); }}
                                 className={`transition-all rounded-lg p-1 -m-1 ${isHoveringTraining ? 'bg-emerald-500/10 ring-1 ring-emerald-500/20' : ''}`}
                             >
-                                <div className={`flex justify-between items-baseline mb-1`}>
+                                <div className={`flex justify-center md:justify-between items-baseline mb-1`}>
                                     <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Träning</span>
                                 </div>
-                                <div className="flex items-baseline gap-1">
+                                <div className="flex flex-col md:flex-row items-center md:items-baseline justify-center md:justify-start gap-1">
                                     <span className={`font-black tracking-tighter ${density === 'compact' ? 'text-sm' : 'text-lg'} text-emerald-500`}>
                                         -{Math.round(burned)}
                                     </span>

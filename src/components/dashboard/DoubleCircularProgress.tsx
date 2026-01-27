@@ -66,11 +66,14 @@ export const DoubleCircularProgress = ({
     const innerStrokeDashoffset = innerCircumference - (Math.min(innerValue, innerMax) / innerMax) * innerCircumference;
 
     return (
-        <div className="relative flex items-center justify-center">
+        <div
+            className="relative flex items-center justify-center shrink-0"
+            style={{ width: r * 2, height: r * 2 }}
+        >
             <svg
                 height={r * 2}
                 width={r * 2}
-                className="transform -rotate-90"
+                className="transform -rotate-90 block"
             >
                 <circle
                     stroke="currentColor"
