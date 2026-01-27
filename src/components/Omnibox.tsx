@@ -24,9 +24,15 @@ import {
     ArrowRight,
     MapPin,
     Heart,
-    Info
+    Info,
+    Calculator
 } from 'lucide-react';
 import { NutritionLabel } from './shared/NutritionLabel.tsx';
+
+// Helper to check if a QuickMeal is an estimate
+const isSavedEstimate = (qm: QuickMeal) => {
+    return qm.items.length === 1 && qm.items[0].type === 'estimate';
+};
 
 interface OmniboxProps {
     isOpen: boolean;
@@ -492,15 +498,20 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     };
 
     // Quick Meal results
-    const quickMealResults = useMemo(() => {
-        if (isSlashMode) return [];
-        if (!input.trim() || input.length < 2) return [];
-        if (['exercise', 'vitals', 'weight', 'user'].includes(intent.type)) return [];
+    const { standardQuickMeals, savedEstimates } = useMemo(() => {
+        if (isSlashMode) return { standardQuickMeals: [], savedEstimates: [] };
+        if (!input.trim() || input.length < 2) return { standardQuickMeals: [], savedEstimates: [] };
+        if (['exercise', 'vitals', 'weight', 'user'].includes(intent.type)) return { standardQuickMeals: [], savedEstimates: [] };
 
-        return performSmartSearch(input, quickMeals, {
+        const allMatches = performSmartSearch(input, quickMeals, {
             textFn: (item) => item.name,
-            limit: 4
-        }).map(qm => {
+            limit: 8 // Increased limit to accommodate both types
+        });
+
+        const standard: any[] = [];
+        const estimates: any[] = [];
+
+        allMatches.forEach(qm => {
             const totals = qm.items.reduce((acc, item) => {
                 const n = getItemNutrition(item);
                 return {
@@ -515,13 +526,22 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                 return `${servings} ${name}`;
             }).join(', ');
 
-            return {
+            const isEstimate = isSavedEstimate(qm);
+            const enriched = {
                 ...qm,
-                itemType: 'quickMeal' as const,
+                itemType: isEstimate ? 'savedEstimate' as const : 'quickMeal' as const,
                 totals,
                 summary
             };
+
+            if (isEstimate) {
+                if (estimates.length < 3) estimates.push(enriched);
+            } else {
+                if (standard.length < 4) standard.push(enriched);
+            }
         });
+
+        return { standardQuickMeals: standard, savedEstimates: estimates };
     }, [input, quickMeals, isSlashMode, intent, foodItems, recipes]);
 
 
@@ -591,13 +611,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         if (isActionMode) return actionSuggestions.map(a => ({ itemType: 'action' as const, ...a }));
 
         const items: any[] = [];
-        if (quickMealResults.length > 0) items.push(...quickMealResults);
+        if (savedEstimates.length > 0) items.push(...savedEstimates);
+        if (standardQuickMeals.length > 0) items.push(...standardQuickMeals);
         if (userResults.length > 0) items.push(...userResults.map(u => ({ itemType: 'user' as const, ...u })));
         if (foodResults.length > 0) items.push(...foodResults.map(f => ({ itemType: 'food' as const, ...f })));
         if (!input && recentFoods.length > 0) items.push(...recentFoods.map(f => ({ itemType: 'recent' as const, ...f })));
 
         return items;
-    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, userResults, quickMealResults, input, recentFoods, lockedFood]);
+    }, [isSlashMode, isActionMode, navSuggestions, actionSuggestions, foodResults, userResults, standardQuickMeals, savedEstimates, input, recentFoods, lockedFood]);
 
 
     // Reset selection when results change
@@ -932,6 +953,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
         // Handle quick meal selection
         if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'quickMeal') {
+            const selectedMeal = selectableItems[selectedIndex] as QuickMeal;
+            logQuickMeal(selectedMeal);
+            return;
+        }
+
+        // Handle saved estimate selection
+        if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'savedEstimate') {
             const selectedMeal = selectableItems[selectedIndex] as QuickMeal;
             logQuickMeal(selectedMeal);
             return;
@@ -1573,13 +1601,53 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                         </div>
                     )}
 
-                    {/* Quick Meal Results */}
-                    {!isSlashMode && !lockedFood && quickMealResults.length > 0 && (
+                    {/* Saved Estimates Results */}
+                    {!isSlashMode && !lockedFood && savedEstimates.length > 0 && (
                         <div className="px-2 py-2">
                             <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
-                                <span>⚡</span> Snabbval ({quickMealResults.length})
+                                <span>🧮</span> Estimeringar ({savedEstimates.length})
                             </div>
-                            {quickMealResults.map((meal, idx) => {
+                            {savedEstimates.map((meal, idx) => {
+                                const globalIdx = selectableItems.findIndex(i => i.itemType === 'savedEstimate' && i.id === meal.id);
+                                return (
+                                    <div
+                                        key={meal.id}
+                                        onClick={() => logQuickMeal(meal)}
+                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                            ? 'bg-purple-500/20 text-purple-400'
+                                            : 'hover:bg-white/5 text-white'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-sm font-bold text-purple-400">
+                                                <Calculator size={16} />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="font-medium">{meal.name}</div>
+                                                    <span className="text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                        {(meal as any).totals.calories} kcal
+                                                    </span>
+                                                </div>
+                                                <div className="text-[10px] text-slate-500">Sparad estimering</div>
+                                            </div>
+                                        </div>
+                                        <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded">
+                                            Enter = Logga
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {/* Quick Meal Results (Updated to use standardQuickMeals) */}
+                    {!isSlashMode && !lockedFood && standardQuickMeals.length > 0 && (
+                        <div className="px-2 py-2">
+                            <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                <span>⚡</span> Snabbval ({standardQuickMeals.length})
+                            </div>
+                            {standardQuickMeals.map((meal, idx) => {
                                 const globalIdx = selectableItems.findIndex(i => i.itemType === 'quickMeal' && i.id === meal.id);
                                 return (
                                     <div
@@ -1597,38 +1665,16 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <div className="font-medium">{meal.name}</div>
-                                                    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-tight">
-                                                        <span className="text-emerald-500">{Math.round((meal as any).totals.calories)} kcal</span>
-                                                        <span className="text-rose-400">{Math.round((meal as any).totals.protein)}g P</span>
-                                                    </div>
+                                                    <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                        {(meal as any).totals.calories} kcal
+                                                    </span>
                                                 </div>
-                                                <div className="text-[10px] text-slate-500 flex flex-wrap gap-x-1 leading-tight">
-                                                    {(meal.items || []).map((item: any, i: number) => {
-                                                        const name = item.type === 'foodItem' ? foodItems.find(f => f.id === item.referenceId)?.name : recipes.find(r => r.id === item.referenceId)?.name;
-                                                        const isLast = i === meal.items.length - 1;
-                                                        const isHighlighted = hoveredResultId === meal.id && hoveredIngredientIdx === i;
-                                                        return (
-                                                            <span
-                                                                key={i}
-                                                                className={`transition-colors ${isHighlighted ? 'text-emerald-400 font-bold bg-emerald-500/10 rounded px-0.5' : 'hover:text-slate-300'}`}
-                                                                onMouseEnter={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setHoveredResultId(meal.id);
-                                                                    setHoveredIngredientIdx(i);
-                                                                }}
-                                                                onMouseLeave={() => {
-                                                                    setHoveredResultId(null);
-                                                                    setHoveredIngredientIdx(null);
-                                                                }}
-                                                            >
-                                                                {item.type === 'recipe' ? `${item.servings}p` : `${item.servings}g`} {name || 'Okänd'}{!isLast && ','}
-                                                            </span>
-                                                        );
-                                                    })}
-                                                </div>
+                                                <div className="text-[10px] text-slate-500 truncate max-w-[200px]">{(meal as any).summary}</div>
                                             </div>
                                         </div>
-                                        <ArrowRight size={14} className="opacity-0 group-hover:opacity-100 transition-opacity" />
+                                        <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded">
+                                            Enter = Logga
+                                        </div>
                                     </div>
                                 );
                             })}
