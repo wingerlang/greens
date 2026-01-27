@@ -38,8 +38,10 @@ interface OmniboxProps {
     isOpen: boolean;
     onClose: () => void;
     onOpenTraining?: (defaults: { type?: ExerciseType; input?: string }) => void;
-    onOpenNutrition?: (item: { type: 'recipe' | 'foodItem'; referenceId: string; servings: number }) => void;
+    onOpenNutrition?: (item: { type: 'recipe' | 'foodItem' | 'estimate'; referenceId: string; servings: number; estimateDetails?: any }) => void;
 }
+
+
 
 
 // Navigation routes for slash commands
@@ -1612,7 +1614,15 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 return (
                                     <div
                                         key={meal.id}
-                                        onClick={() => logQuickMeal(meal)}
+                                        onClick={() => {
+                                            onOpenNutrition?.({
+                                                type: 'estimate',
+                                                referenceId: meal.id,
+                                                servings: 1,
+                                                estimateDetails: meal.items[0].estimateDetails
+                                            });
+                                            onClose();
+                                        }}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
                                             ? 'bg-purple-500/20 text-purple-400'
                                             : 'hover:bg-white/5 text-white'
@@ -1625,15 +1635,16 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <div className="font-medium">{meal.name}</div>
-                                                    <span className="text-[10px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                        {(meal as any).totals.calories} kcal
-                                                    </span>
+                                                    <div className="text-[10px] text-slate-500">
+                                                        {Math.round((meal as any).totals.calories)} kcal
+                                                        {meal.items[0].estimateDetails?.caloriesMin &&
+                                                            ` (${meal.items[0].estimateDetails.caloriesMin}-${meal.items[0].estimateDetails.caloriesMax})`}
+                                                    </div>
                                                 </div>
-                                                <div className="text-[10px] text-slate-500">Sparad estimering</div>
                                             </div>
                                         </div>
                                         <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded">
-                                            Enter = Logga
+                                            Visa
                                         </div>
                                     </div>
                                 );

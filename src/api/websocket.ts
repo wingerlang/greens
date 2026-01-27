@@ -117,27 +117,28 @@ export function handleWebSocket(req: Request): Response {
                     { replyToId, metadata }
                 );
                 broadcastMessage(conv.participants, message);
+            }
 
-                if (data.type === 'mark_read') {
-                    const { conversationId } = data;
-                    if (!conversationId) return;
+            if (data.type === 'mark_read') {
+                const { conversationId } = data;
+                if (!conversationId) return;
 
-                    const conv = await getConversation(conversationId);
-                    if (!conv || !conv.participants.includes(userId)) return;
+                const conv = await getConversation(conversationId);
+                if (!conv || !conv.participants.includes(userId)) return;
 
-                    await markRead(conversationId, userId);
+                await markRead(conversationId, userId);
 
-                    // Re-fetch to get updated state
-                    const updatedConv = await getConversation(conversationId);
-                    if (updatedConv) {
-                        // Notify everyone involved so their list updates (e.g. read receipts)
-                        broadcastConversation(updatedConv.participants, updatedConv);
-                    }
-                    return;
+                // Re-fetch to get updated state
+                const updatedConv = await getConversation(conversationId);
+                if (updatedConv) {
+                    // Notify everyone involved so their list updates (e.g. read receipts)
+                    broadcastConversation(updatedConv.participants, updatedConv);
                 }
+                return;
+            }
 
-                // Also broadcast conversation update to move it to top
-                broadcastConversation(conv.participants, conv);
+            if (data.type === 'create_conversation') {
+                const { participantIds } = data;
                 if (!participantIds || !participantIds.includes(userId)) return;
 
                 // For now only supports direct (2 people)

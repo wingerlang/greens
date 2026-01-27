@@ -319,19 +319,7 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
         }
     }, [activeConversationId]);
 
-    const [unreadCount, setUnreadCount] = useState(0);
 
-    // Calculate unread count whenever conversations change
-    useEffect(() => {
-        if (!user) return;
-        const count = conversations.reduce((acc, c) => {
-            const hasUnread = c.lastMessage &&
-                c.lastMessage.senderId !== user.id &&
-                (!c.lastMessage.readBy || !c.lastMessage.readBy.includes(user.id));
-            return acc + (hasUnread ? 1 : 0);
-        }, 0);
-        setUnreadCount(count);
-    }, [conversations, user]);
 
     const markAsRead = (conversationId: string) => {
         if (!user || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;

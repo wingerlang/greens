@@ -39,7 +39,7 @@ export function Layout({ children }: LayoutProps) {
     }, []);
 
     const { recipes, foodItems, getFoodItem, unifiedActivities } = useData();
-    const [nutritionBreakdownItem, setNutritionBreakdownItem] = useState<{ type: 'recipe' | 'foodItem'; referenceId: string; servings: number } | null>(null);
+    const [nutritionBreakdownItem, setNutritionBreakdownItem] = useState<{ type: 'recipe' | 'foodItem' | 'estimate'; referenceId: string; servings: number; estimateDetails?: any } | null>(null);
 
     // Universal Activity Modal
     const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
