@@ -505,16 +505,21 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         if (!input.trim() || input.length < 2) return { standardQuickMeals: [], savedEstimates: [] };
         if (['exercise', 'vitals', 'weight', 'user'].includes(intent.type)) return { standardQuickMeals: [], savedEstimates: [] };
 
-        const allMatches = performSmartSearch(input, quickMeals, {
+        const sourceEstimates = quickMeals.filter(qm => isSavedEstimate(qm));
+        const sourceQuickMeals = quickMeals.filter(qm => !isSavedEstimate(qm));
+
+        const standardMatches = performSmartSearch(input, sourceQuickMeals, {
             textFn: (item) => item.name,
-            limit: 8 // Increased limit to accommodate both types
+            limit: 5
         });
 
-        const standard: any[] = [];
-        const estimates: any[] = [];
+        const estimateMatches = performSmartSearch(input, sourceEstimates, {
+            textFn: (item) => item.name,
+            limit: 3
+        });
 
-        allMatches.forEach(qm => {
-            const totals = qm.items.reduce((acc, item) => {
+        const processItem = (qm: any, type: 'quickMeal' | 'savedEstimate') => {
+            const totals = qm.items.reduce((acc: any, item: any) => {
                 const n = getItemNutrition(item);
                 return {
                     calories: acc.calories + n.calories,
@@ -522,28 +527,24 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                 };
             }, { calories: 0, protein: 0 });
 
-            const summary = qm.items.map(item => {
+            const summary = qm.items.map((item: any) => {
                 const name = getItemName(item);
                 const servings = item.type === 'recipe' ? `${item.servings}p` : `${item.servings}g`;
                 return `${servings} ${name}`;
             }).join(', ');
 
-            const isEstimate = isSavedEstimate(qm);
-            const enriched = {
+            return {
                 ...qm,
-                itemType: isEstimate ? 'savedEstimate' as const : 'quickMeal' as const,
+                itemType: type,
                 totals,
                 summary
             };
+        };
 
-            if (isEstimate) {
-                if (estimates.length < 3) estimates.push(enriched);
-            } else {
-                if (standard.length < 4) standard.push(enriched);
-            }
-        });
-
-        return { standardQuickMeals: standard, savedEstimates: estimates };
+        return {
+            standardQuickMeals: standardMatches.map(m => processItem(m, 'quickMeal')),
+            savedEstimates: estimateMatches.map(m => processItem(m, 'savedEstimate'))
+        };
     }, [input, quickMeals, isSlashMode, intent, foodItems, recipes]);
 
 
@@ -1677,7 +1678,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                                 <div className="flex items-center gap-2">
                                                     <div className="font-medium">{meal.name}</div>
                                                     <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase">
-                                                        {(meal as any).totals.calories} kcal
+                                                        {Math.round((meal as any).totals.calories)} kcal
                                                     </span>
                                                 </div>
                                                 <div className="text-[10px] text-slate-500 truncate max-w-[200px]">{(meal as any).summary}</div>

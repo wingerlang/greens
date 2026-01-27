@@ -15,7 +15,7 @@ interface MessageContextType {
     addReaction: (conversationId: string, messageId: string, emoji: string) => void;
 
     // Management
-    createSupportChat: () => void;
+    createSupportChat: (title?: string, description?: string) => void;
     startConversation: (userId: string) => void;
     toggleLock: (conversationId: string, isLocked: boolean) => void;
     toggleHide: (conversationId: string, isHidden: boolean) => void;
@@ -27,6 +27,7 @@ interface MessageContextType {
     supportQueue: Conversation[]; // For admins
 
     isConnected: boolean;
+    isAuthenticated: boolean;
     getHistory: (conversationId: string) => void;
     unreadCount: number;
     markAsRead: (conversationId: string) => void;
@@ -41,6 +42,7 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
     const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
     const [messages, setMessages] = useState<Record<string, Message[]>>({});
     const [isConnected, setIsConnected] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(false); // Track actual auth state
 
     const ws = useRef<WebSocket | null>(null);
     const reconnectTimeout = useRef<any>(null);
@@ -84,6 +86,8 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
                 const data = JSON.parse(event.data);
 
                 if (data.type === 'auth_success') {
+                    console.log('WS Authenticated');
+                    setIsAuthenticated(true);
                     socket.send(JSON.stringify({ type: 'get_conversations' }));
                     if (data.isAdmin) {
                         socket.send(JSON.stringify({ type: 'get_support_queue' }));
@@ -199,6 +203,7 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
         socket.onclose = () => {
             console.log('WS Disconnected');
             setIsConnected(false);
+            setIsAuthenticated(false);
             ws.current = null;
             reconnectTimeout.current = setTimeout(connect, 3000);
         };
@@ -245,9 +250,17 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const createSupportChat = () => {
+    const createSupportChat = (title?: string, description?: string) => {
+        console.log("Creating support chat...");
+        if (!isAuthenticated) {
+            console.error("Cannot create support chat: Not authenticated.");
+            // Could add a toast/notification here if we had access to one
+            return;
+        }
         if (ws.current?.readyState === WebSocket.OPEN) {
-            ws.current.send(JSON.stringify({ type: 'create_support' }));
+            ws.current.send(JSON.stringify({ type: 'create_support', title, description }));
+        } else {
+            console.error("Cannot create support chat: Socket not open.");
         }
     };
 

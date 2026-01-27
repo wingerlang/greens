@@ -308,7 +308,7 @@ export function DataProvider({ children }: DataProviderProps) {
 
     // 3. Nutrition Context
     const {
-        foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, quickMeals, foodAliases,
+        foodItems, recipes, mealEntries, weeklyPlans, pantryItems, pantryQuantities, quickMeals: storedQuickMeals, foodAliases,
         setFoodItems, setRecipes, setMealEntries, setWeeklyPlans, setPantryItems, setPantryQuantitiesState, setQuickMeals, setFoodAliases,
         togglePantryItem, setPantryQuantity, getPantryQuantity,
         addFoodItem, updateFoodItem, deleteFoodItem, getFoodItem,
@@ -572,7 +572,7 @@ export function DataProvider({ children }: DataProviderProps) {
                 injuryLogs,
                 recoveryMetrics,
                 bodyMeasurements,
-                quickMeals,
+                quickMeals: storedQuickMeals,
                 foodAliases,
                 exercises
             }, { skipApi: true });
@@ -585,7 +585,7 @@ export function DataProvider({ children }: DataProviderProps) {
         sleepSessions, intakeLogs, universalActivities,
         injuryLogs, recoveryMetrics,
         bodyMeasurements,
-        quickMeals, foodAliases, exercises
+        storedQuickMeals, foodAliases, exercises
     ]);
 
     // ============================================
@@ -618,6 +618,46 @@ export function DataProvider({ children }: DataProviderProps) {
         if (!currentUser?.settings) return 0;
         return calculateCalorieGoalStreakUtil(calculateDailyNutrition, currentUser.settings, referenceDate);
     }, [calculateDailyNutrition, currentUser]);
+
+
+    // ============================================
+    // Derived Quick Meals (Estimates from History)
+    // ============================================
+    const derivedEstimates = React.useMemo(() => {
+        const estimatesMap = new Map<string, QuickMeal>();
+
+        // Iterate backwards to prefer recent entries
+        for (let i = mealEntries.length - 1; i >= 0; i--) {
+            const entry = mealEntries[i];
+            for (const item of entry.items) {
+                // Check if it looks like an estimate (has details), even if type might be mis-logged
+                if (item.estimateDetails) {
+                    const name = item.estimateDetails.name;
+                    if (!name) continue;
+
+                    // Key by lower case name to avoid "Lunch" and "lunch" duplicates
+                    const key = name.toLowerCase().trim();
+
+                    if (!estimatesMap.has(key)) {
+                        estimatesMap.set(key, {
+                            id: `derived_est_${key}_${entry.id}`, // Unique ID
+                            userId: currentUser?.id || 'unknown',
+                            name: item.estimateDetails.name,
+                            items: [{ ...item, type: 'estimate' }], // Force type to 'estimate' to ensure Omnibox categorization
+                            createdAt: entry.date // Use entry date as creation date
+                        });
+                    }
+                }
+            }
+        }
+        return Array.from(estimatesMap.values());
+    }, [mealEntries, currentUser?.id]);
+
+    const effectiveQuickMeals = React.useMemo(() => {
+        const explicitNames = new Set(storedQuickMeals.map(qm => qm.name.toLowerCase().trim()));
+        const uniqueDerived = derivedEstimates.filter(qm => !explicitNames.has(qm.name.toLowerCase().trim()));
+        return [...storedQuickMeals, ...uniqueDerived];
+    }, [storedQuickMeals, derivedEstimates]);
 
 
 
@@ -733,7 +773,7 @@ export function DataProvider({ children }: DataProviderProps) {
         addBodyMeasurement,
         updateBodyMeasurement,
         deleteBodyMeasurement,
-        quickMeals,
+        quickMeals: effectiveQuickMeals,
         addQuickMeal,
         updateQuickMeal,
         deleteQuickMeal,

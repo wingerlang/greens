@@ -1,20 +1,23 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, Suspense } from 'react';
 import { useNavigate, useLocation, Routes, Route, Navigate } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { type FoodItem, CATEGORY_LABELS, UNIT_LABELS } from '../models/types.ts';
-import ExerciseDatabasePage from './admin/ExerciseDatabasePage.tsx';
-import { UsersModule } from '../components/admin/UsersModule.tsx';
-import { RoadmapModule } from '../components/admin/RoadmapModule.tsx';
-import { SystemGeneratorModule } from '../components/admin/SystemGeneratorModule.tsx';
-import { HealthModule } from '../components/admin/HealthModule.tsx';
-import { SystemDBModule } from '../components/admin/SystemDBModule.tsx';
-import { DatabasePage } from './DatabasePage.tsx';
-import { ApiPage } from './ApiPage.tsx';
-import { DocumentationPage } from '../components/DocumentationPage.tsx';
-import { BackupModule } from '../components/admin/backup/BackupModule.tsx';
-import { AnalyticsDashboard } from './admin/AnalyticsDashboard.tsx';
-import { SessionsModule } from '../components/admin/SessionsModule.tsx';
-import { SupportDashboard } from '../components/admin/SupportDashboard.tsx';
+// Lazy load all administration modules to prevent circular dependencies and improve load times
+const UsersModule = React.lazy(() => import('../components/admin/UsersModule.tsx').then(m => ({ default: m.UsersModule })));
+const RoadmapModule = React.lazy(() => import('../components/admin/RoadmapModule.tsx').then(m => ({ default: m.RoadmapModule })));
+const SystemGeneratorModule = React.lazy(() => import('../components/admin/SystemGeneratorModule.tsx').then(m => ({ default: m.SystemGeneratorModule })));
+const HealthModule = React.lazy(() => import('../components/admin/HealthModule.tsx').then(m => ({ default: m.HealthModule })));
+const SystemDBModule = React.lazy(() => import('../components/admin/SystemDBModule.tsx').then(m => ({ default: m.SystemDBModule })));
+const SessionsModule = React.lazy(() => import('../components/admin/SessionsModule.tsx').then(m => ({ default: m.SessionsModule })));
+const SupportDashboard = React.lazy(() => import('../components/admin/SupportDashboard.tsx').then(m => ({ default: m.SupportDashboard })));
+const BackupModule = React.lazy(() => import('../components/admin/backup/BackupModule.tsx').then(m => ({ default: m.BackupModule })));
+
+// Lazy load potentially heavy or cyclic dependencies
+const ExerciseDatabasePage = React.lazy(() => import('./admin/ExerciseDatabasePage.tsx'));
+const DatabasePage = React.lazy(() => import('./DatabasePage.tsx').then(m => ({ default: m.DatabasePage })));
+const ApiPage = React.lazy(() => import('./ApiPage.tsx').then(m => ({ default: m.ApiPage || m.default })));
+const DocumentationPage = React.lazy(() => import('../components/DocumentationPage.tsx').then(m => ({ default: m.DocumentationPage })));
+const AnalyticsDashboard = React.lazy(() => import('./admin/AnalyticsDashboard.tsx').then(m => ({ default: m.AnalyticsDashboard })));
 
 export const AdminPage: React.FC = () => {
     const { foodItems, recipes, updateFoodItem } = useData();
@@ -326,6 +329,8 @@ const AdminEditModal: React.FC<{
         </div>
     );
 };
+
+export default AdminPage;
 
 
 

@@ -180,6 +180,8 @@ export function handleWebSocket(req: Request): Response {
             // ============================================
 
             if (data.type === 'create_support') {
+                const { title, description } = data;
+
                 // Check if user already has an open ticket? Maybe allowed multiple?
                 // Let's stick to one active support thread per user for simplicity, or just create new.
                 // Re-using existing logic: "getSupportConversation" finds THE support conversation.
@@ -192,8 +194,11 @@ export function handleWebSocket(req: Request): Response {
                     conv = await createConversation(
                         'support',
                         [userId],
-                        'Support Ärende',
-                        { supportStatus: 'open' }
+                        title || 'Support Ärende',
+                        {
+                            supportStatus: 'open',
+                            metadata: description ? { description } : undefined
+                        }
                     );
 
                     // Broadcast to ALL connected admins that a new ticket exists

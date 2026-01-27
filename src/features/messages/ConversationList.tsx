@@ -2,19 +2,45 @@ import React, { useState } from 'react';
 import { useMessages } from '../../context/MessageContext.tsx';
 import { useData } from '../../context/DataContext.tsx';
 import { useAuth } from '../../context/AuthContext.tsx';
+import { useSettings } from '../../context/SettingsContext.tsx';
 import { MessageSquare, Users, Shield, Plus, Lock, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 import { formatDateRelative } from '../../utils/formatters.ts';
 
 import { NewChatModal } from './NewChatModal.tsx';
+import { SupportTicketModal } from './SupportTicketModal.tsx';
 
 export function ConversationList() {
-    const { conversations, activeConversationId, setActiveConversationId, createSupportChat, verifyPassword } = useMessages();
+    const { conversations, activeConversationId, setActiveConversationId, createSupportChat, verifyPassword, isConnected, isAuthenticated } = useMessages();
     const { users } = useData();
     const { user: currentUser } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+    const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
     const [showHidden, setShowHidden] = useState(false);
     const [unlockedIds, setUnlockedIds] = useState<Set<string>>(new Set());
+
+    // View Settings
+    const { settings, setDensityMode } = useSettings();
+    const isCompact = settings.densityMode === 'compact';
+    const [densityFeedback, setDensityFeedback] = useState<{ visible: boolean, mode: string } | null>(null);
+
+    // Hotkey Listener
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.shiftKey && e.key.toLowerCase() === 'd') {
+                e.preventDefault();
+                const newMode = isCompact ? 'cozy' : 'compact';
+                setDensityMode(newMode);
+
+                // Show feedback
+                setDensityFeedback({ visible: true, mode: newMode });
+                setTimeout(() => setDensityFeedback(null), 1500);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isCompact, setDensityMode]);
 
     // Modal State
     const [modalOpen, setModalOpen] = useState(false);
@@ -83,10 +109,14 @@ export function ConversationList() {
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
                     <MessageSquare className="text-emerald-500" />
                     Meddelanden
+                    {densityFeedback?.visible && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400 animate-in fade-in zoom-in duration-200">
+                            {densityFeedback.mode === 'compact' ? '🔍 Tiny' : '🖼️ Detalj'}
+                        </span>
+                    )}
                 </h2>
                 <div className="flex gap-1">
                     <button
-                        <button
                         onClick={toggleShowHidden}
                         className={`p-1.5 rounded-lg transition-colors ${showHidden ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-500' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
                         title={showHidden ? "Dölj gömda" : "Visa gömda"}
@@ -94,8 +124,9 @@ export function ConversationList() {
                         {showHidden ? <EyeOff size={20} /> : <Eye size={20} />}
                     </button>
                     <button
-                        onClick={() => createSupportChat()}
-                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-amber-500 transition-colors"
+                        onClick={() => setIsSupportModalOpen(true)}
+                        disabled={!isConnected || !isAuthenticated}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-amber-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Ny supportchatt"
                     >
                         <Shield size={20} />
@@ -111,6 +142,7 @@ export function ConversationList() {
             </div>
 
             <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)} />
+            <SupportTicketModal isOpen={isSupportModalOpen} onClose={() => setIsSupportModalOpen(false)} />
 
             <div className="flex-1 overflow-y-auto">
                 {conversations.length === 0 ? (
@@ -141,10 +173,10 @@ export function ConversationList() {
                                 <button
                                     key={conv.id}
                                     onClick={() => handleConversationClick(conv.id, !!conv.isLocked)}
-                                    className={`flex items-start gap-3 p-4 text-left transition-colors border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isActive ? 'bg-emerald-50 dark:bg-emerald-900/10 border-l-4 border-l-emerald-500' : 'border-l-4 border-l-transparent'}`}
+                                    className={`flex items-start gap-3 text-left transition-colors border-b border-slate-100 dark:border-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${isActive ? 'bg-emerald-50 dark:bg-emerald-900/10 border-l-4 border-l-emerald-500' : 'border-l-4 border-l-transparent'} ${isCompact ? 'p-2' : 'p-4'}`}
                                 >
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 relative ${isSupport ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-500' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
-                                        {isSupport ? <Shield size={20} /> : <Users size={20} />}
+                                    <div className={`${isCompact ? 'w-8 h-8' : 'w-10 h-10'} rounded-full flex items-center justify-center shrink-0 relative ${isSupport ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-500' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
+                                        {isSupport ? <Shield size={isCompact ? 16 : 20} /> : <Users size={isCompact ? 16 : 20} />}
                                         {conv.isLocked && (
                                             <div className="absolute -bottom-1 -right-1 bg-white dark:bg-slate-900 rounded-full p-0.5 shadow-sm">
                                                 {isLockedState ? <Lock size={12} className="text-rose-500" /> : <ShieldAlert size={12} className="text-emerald-500" />}
@@ -158,35 +190,51 @@ export function ConversationList() {
                                                 {conv.isHidden && <span className="text-[9px] bg-slate-200 dark:bg-slate-700 px-1 rounded uppercase text-slate-500">Gömd</span>}
                                             </span>
                                             {conv.lastMessage && conv.lastMessage.senderId !== currentUser?.id && (!conv.lastMessage.readBy || !conv.lastMessage.readBy.includes(currentUser?.id || '')) && (
-                                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" title="Oläst meddelande" />
+                                                <span className={`${isCompact ? 'w-1.5 h-1.5' : 'w-2 h-2'} rounded-full bg-emerald-500 animate-pulse`} title="Oläst meddelande" />
                                             )}
                                         </div>
-                                        <div className="flex items-center justify-between">
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 pr-2">
-                                                {isLockedState ? (
-                                                    <span className="italic text-slate-400 flex items-center gap-1">
-                                                        <Lock size={10} />
-                                                        Låst meddelande
-                                                    </span>
-                                                ) : (
-                                                    conv.lastMessage ? (
-                                                        <>
-                                                            {conv.lastMessage.senderId === currentUser?.id ? 'Du: ' : ''}
-                                                            {conv.lastMessage.content}
-                                                        </>
+                                        {!isCompact && (
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 truncate flex-1 pr-2">
+                                                    {isLockedState ? (
+                                                        <span className="italic text-slate-400 flex items-center gap-1">
+                                                            <Lock size={10} />
+                                                            Låst meddelande
+                                                        </span>
                                                     ) : (
-                                                        <span className="italic opacity-70">Inga meddelanden</span>
-                                                    )
+                                                        conv.lastMessage ? (
+                                                            <>
+                                                                {conv.lastMessage.senderId === currentUser?.id ? 'Du: ' : ''}
+                                                                {conv.lastMessage.content}
+                                                            </>
+                                                        ) : (
+                                                            <span className="italic opacity-70">Inga meddelanden</span>
+                                                        )
+                                                    )}
+
+                                                </p>
+                                                {conv.updatedAt && (
+                                                    <span className={`text-[10px] shrink-0 ${isActive ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
+                                                        {formatDateRelative(conv.updatedAt)}
+                                                    </span>
                                                 )}
-                                            </p>
-                                            {conv.updatedAt && (
-                                                <span className={`text-[10px] shrink-0 ${isActive ? 'text-emerald-700 dark:text-emerald-300' : 'text-slate-400'}`}>
-                                                    {formatDateRelative(conv.updatedAt)}
+                                            </div>
+                                        )}
+                                        {/* Compact Time & Preview Hint */}
+                                        {isCompact && (
+                                            <div className="flex items-center justify-between text-xs text-slate-500">
+                                                <span className="truncate opacity-70 max-w-[140px]">
+                                                    {conv.lastMessage?.content || 'Inga meddelanden'}
                                                 </span>
-                                            )}
-                                        </div>
-                                    </div >
-                                </button >
+                                                {conv.updatedAt && (
+                                                    <span className="text-[9px] shrink-0 opacity-50">
+                                                        {formatDateRelative(conv.updatedAt)}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </button>
                             );
                         })}
                     </div >
