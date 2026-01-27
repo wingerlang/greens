@@ -57,15 +57,15 @@ const DEFAULT_CONFIG: GuardianConfig = {
         internalBackend: 8001
     },
     features: {
-        waf: true,
-        botDefense: true,
-        rateLimit: true,
-        smartCache: true,
-        circuitBreaker: true,
-        recorder: true,
-        geoIp: true,
+        waf: false,
+        botDefense: false,
+        rateLimit: false,
+        smartCache: false,
+        circuitBreaker: false,
+        recorder: true, // Keep remote logging
+        geoIp: false,
         compression: true,
-        securityHeaders: true
+        securityHeaders: false // CSP can be annoying in dev
     },
     rateLimit: {
         windowMs: 10000,

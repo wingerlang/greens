@@ -5,11 +5,14 @@ import { useAuth } from '../../context/AuthContext.tsx';
 import { MessageSquare, Users, Shield, Plus } from 'lucide-react';
 import { formatDateRelative } from '../../utils/formatters.ts';
 
+import { NewChatModal } from './NewChatModal.tsx';
+
 export function ConversationList() {
     const { conversations, activeConversationId, setActiveConversationId, createSupportChat } = useMessages();
     const { users } = useData();
     const { user: currentUser } = useAuth();
     const [searchTerm, setSearchTerm] = React.useState(''); // For future use? Or just local filter
+    const [isNewChatOpen, setIsNewChatOpen] = React.useState(false);
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 w-full md:w-80">
@@ -18,19 +21,30 @@ export function ConversationList() {
                     <MessageSquare className="text-emerald-500" />
                     Meddelanden
                 </h2>
-                <button
-                    onClick={() => createSupportChat()}
-                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-emerald-500 transition-colors"
-                    title="Ny supportchatt"
-                >
-                    <Plus size={20} />
-                </button>
+                <div className="flex gap-1">
+                    <button
+                        onClick={() => createSupportChat()}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-amber-500 transition-colors"
+                        title="Ny supportchatt"
+                    >
+                        <Shield size={20} />
+                    </button>
+                    <button
+                        onClick={() => setIsNewChatOpen(true)}
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-500 hover:text-emerald-500 transition-colors"
+                        title="Nytt meddelande"
+                    >
+                        <Plus size={20} />
+                    </button>
+                </div>
             </div>
+
+            <NewChatModal isOpen={isNewChatOpen} onClose={() => setIsNewChatOpen(false)} />
 
             <div className="flex-1 overflow-y-auto">
                 {conversations.length === 0 ? (
                     <div className="p-8 text-center text-slate-400 text-sm">
-                        Inga konversationer än. Starta en supportchatt via plus-menyn!
+                        Inga konversationer än. Starta en chatt via plus-menyn!
                     </div>
                 ) : (
                     <div className="flex flex-col">

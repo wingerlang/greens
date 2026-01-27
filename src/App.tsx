@@ -28,7 +28,7 @@ const TrainingPage = React.lazy(() => import('./pages/TrainingPage.tsx'));
 const PlanningPage = React.lazy(() => import('./pages/PlanningPage.tsx'));
 const TrainingPlanningPage = React.lazy(() => import('./pages/TrainingPlanningPage.tsx'));
 const ApiPage = React.lazy(() => import('./pages/ApiPage.tsx'));
-const AdminPage = React.lazy(() => import('./pages/AdminPage.tsx'));
+const AdminPage = React.lazy(() => import('./pages/AdminPage.tsx').then(m => ({ default: m.AdminPage })));
 const AnalyticsDashboard = React.lazy(() => import('./pages/admin/AnalyticsDashboard.tsx').then(m => ({ default: m.AnalyticsDashboard })));
 const DocumentationPage = React.lazy(() => import('./components/DocumentationPage.tsx').then(m => ({ default: m.DocumentationPage })));
 const HealthPage = React.lazy(() => import('./pages/HealthPage.tsx'));

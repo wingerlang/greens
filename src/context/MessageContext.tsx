@@ -137,6 +137,17 @@ export function MessageProvider({ children }: { children: React.ReactNode }) {
 
     const startConversation = (otherUserId: string) => {
         if (!user) return;
+
+        // Check if we already have a conversation with this user
+        const existing = conversations.find(c =>
+            c.type === 'private' && c.participants.includes(otherUserId)
+        );
+
+        if (existing) {
+            setActiveConversationId(existing.id);
+            return;
+        }
+
         if (ws.current?.readyState === WebSocket.OPEN) {
             ws.current.send(JSON.stringify({
                 type: 'create_conversation',

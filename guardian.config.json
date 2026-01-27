@@ -7,15 +7,15 @@
         "internalBackend": 8001
     },
     "features": {
-        "waf": true,
-        "botDefense": true,
-        "rateLimit": true,
-        "smartCache": true,
-        "circuitBreaker": true,
+        "waf": false,
+        "botDefense": false,
+        "rateLimit": false,
+        "smartCache": false,
+        "circuitBreaker": false,
         "recorder": true,
-        "geoIp": true,
+        "geoIp": false,
         "compression": true,
-        "securityHeaders": true
+        "securityHeaders": false
     },
     "rateLimit": {
         "windowMs": 10000,
