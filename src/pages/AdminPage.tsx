@@ -14,6 +14,7 @@ import { DocumentationPage } from '../components/DocumentationPage.tsx';
 import { BackupModule } from '../components/admin/backup/BackupModule.tsx';
 import { AnalyticsDashboard } from './admin/AnalyticsDashboard.tsx';
 import { SessionsModule } from '../components/admin/SessionsModule.tsx';
+import { SupportDashboard } from '../components/admin/SupportDashboard.tsx';
 
 export const AdminPage: React.FC = () => {
     const { foodItems, recipes, updateFoodItem } = useData();
@@ -72,6 +73,7 @@ export const AdminPage: React.FC = () => {
             {/* Tab Navigation */}
             <div className="flex border-b border-slate-800 gap-6 overflow-x-auto no-scrollbar">
                 <button onClick={() => setActiveTab('sessions')} className={getTabClass('sessions', 'text-amber-400')}>📡 Sessions</button>
+                <button onClick={() => setActiveTab('support')} className={getTabClass('support', 'text-orange-400')}>🛡️ Support</button>
                 <button onClick={() => setActiveTab('health')} className={getTabClass('health', 'text-emerald-400')}>🩺 Health</button>
                 <button onClick={() => setActiveTab('audit')} className={getTabClass('audit', 'text-blue-400')}>🔍 Audit</button>
                 <button onClick={() => setActiveTab('api')} className={getTabClass('api', 'text-sky-400')}>⚡ API</button>
@@ -84,6 +86,7 @@ export const AdminPage: React.FC = () => {
             {/* Tab Modules */}
             <Routes>
                 <Route path="sessions" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><SessionsModule /></div>} />
+                <Route path="support" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><SupportDashboard /></div>} />
                 <Route path="health" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><HealthModule /></div>} />
                 <Route path="analytics/:category?/:tab?" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><AnalyticsDashboard /></div>} />
                 <Route path="exercises" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><ExerciseDatabasePage /></div>} />

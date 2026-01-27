@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import * as child_process from "node:child_process";
 import { openKv } from "@deno/kv";
+import { WebSocketServer, WebSocket as NodeWebSocket } from 'ws';
 
 // Ensure globalThis.Deno exists
 if (!globalThis.Deno) {
@@ -20,30 +21,13 @@ Deno.env = {
 };
 
 // Database Polyfill
-// Use a unique symbol or property to avoid recursive calls if @deno/kv tries to use Deno.openKv
 Deno.openKv = async (path?: string) => {
-    // We must call the library's openKv, but make sure it doesn't call us back.
-    // The @deno/kv library checks if `Deno.openKv` exists and uses it if available!
-    // This causes infinite recursion.
-    // We need to hide Deno.openKv from @deno/kv OR use the implementation directly.
-
-    // Workaround: Temporarily hide Deno.openKv while calling the library?
-    // Or simpler: Don't set Deno.openKv on the global object if @deno/kv is smart enough?
-    // But our application code calls Deno.openKv.
-
-    // Solution: When we polyfill Deno, we are mocking the runtime.
-    // But @deno/kv is a "ponyfill" that tries to use native if available.
-    // If we mock native, it uses our mock, which calls it, which uses our mock...
-
-    // We can try to bind the original implementation if possible, or
-    // modify the global Deno object during the call.
-
     const originalOpenKv = Deno.openKv;
-    delete (globalThis as any).Deno.openKv; // Hide it
+    delete (globalThis as any).Deno.openKv;
     try {
         return await openKv(path);
     } finally {
-        (globalThis as any).Deno.openKv = originalOpenKv; // Restore it
+        (globalThis as any).Deno.openKv = originalOpenKv;
     }
 };
 
@@ -121,8 +105,6 @@ Deno.Command = class Command {
     output() {
         return new Promise((resolve, reject) => {
             const args = this.options.args || [];
-            // Handle piped stdout/stderr options if needed, but for now we default to capturing
-
             const proc = child_process.spawn(this.command, args, {
                 cwd: this.options.cwd,
                 env: { ...process.env, ...(this.options.env || {}) },
@@ -151,10 +133,6 @@ Deno.Command = class Command {
 
             proc.on('error', (err: any) => {
                 if (err.code === 'ENOENT') {
-                    // Deno throws NotFound if command not found? Or rejects?
-                    // To match Deno.Command behavior closer, we might just return a failed result
-                    // or let the validation above handle it.
-                    // For now, resolving with failure is safer than crashing.
                     resolve({
                          code: 1,
                          stdout: new Uint8Array(),
@@ -173,11 +151,70 @@ Deno.Command = class Command {
 Deno.errors = {
     AlreadyExists: class AlreadyExists extends Error { constructor(msg: string) { super(msg); this.name = "AlreadyExists"; } },
     NotFound: class NotFound extends Error { constructor(msg: string) { super(msg); this.name = "NotFound"; } },
-    // Add others if needed
 };
 
-// Patch fs functions to throw Deno compatible errors if needed
-// For now relying on standard errors or loose catching in codebase
+// WebSocket Logic
+const wss = new WebSocketServer({ noServer: true });
+
+Deno.upgradeWebSocket = (req: Request) => {
+    // Check if we attached the node request
+    const nodeReq = (req as any)._nodeReq;
+    const nodeSocket = (req as any)._nodeSocket;
+    const nodeHead = (req as any)._nodeHead;
+
+    if (!nodeReq || !nodeSocket || !nodeHead) {
+        throw new Error("Cannot upgrade WebSocket: Missing Node.js request context. This polyfill requires Deno.serve to be used.");
+    }
+
+    // Create a shim socket that will be bridged to the real one
+    // We implement a minimal subset of WebSocket for the handler
+    const socketShim = new EventTarget() as any;
+    socketShim.send = (data: any) => {
+        if (socketShim._realWs && socketShim._realWs.readyState === NodeWebSocket.OPEN) {
+            socketShim._realWs.send(data);
+        }
+    };
+    socketShim.close = (code?: number, reason?: string) => {
+        if (socketShim._realWs) socketShim._realWs.close(code, reason);
+    };
+
+    // We attach the upgrade logic to the response so Deno.serve can execute it
+    const response = new Response(null, { status: 101, headers: { "Upgrade": "websocket", "Connection": "Upgrade" } });
+    (response as any)._upgradeAction = () => {
+        wss.handleUpgrade(nodeReq, nodeSocket, nodeHead, (ws) => {
+            socketShim._realWs = ws;
+            socketShim._readyState = NodeWebSocket.OPEN;
+
+            // Bridge events
+            ws.on('message', (data, isBinary) => {
+                const event = new MessageEvent('message', { data: isBinary ? data : data.toString() });
+                socketShim.dispatchEvent(event);
+                if (socketShim.onmessage) socketShim.onmessage(event);
+            });
+
+            ws.on('close', (code, reason) => {
+                const event = new CloseEvent('close', { code, reason: reason.toString(), wasClean: true });
+                socketShim.dispatchEvent(event);
+                if (socketShim.onclose) socketShim.onclose(event);
+            });
+
+            ws.on('error', (err) => {
+                const event = new Event('error');
+                (event as any).error = err;
+                socketShim.dispatchEvent(event);
+                if (socketShim.onerror) socketShim.onerror(event);
+            });
+
+            // Trigger open
+            const openEvent = new Event('open');
+            socketShim.dispatchEvent(openEvent);
+            if (socketShim.onopen) socketShim.onopen(openEvent);
+        });
+    };
+
+    return { socket: socketShim, response };
+};
+
 
 // Server Polyfill
 Deno.serve = (options: any, handler: any) => {
@@ -189,9 +226,11 @@ Deno.serve = (options: any, handler: any) => {
     const port = options.port || 8000;
     const hostname = options.hostname || "0.0.0.0";
 
-    const server = http.createServer(async (req, res) => {
+    const server = http.createServer();
+
+    // Handle standard requests
+    server.on('request', async (req, res) => {
         try {
-            // Convert IncomingMessage to Web Standard Request
             const url = `http://${req.headers.host || 'localhost'}${req.url}`;
             const headers = new Headers();
             for (const [key, value] of Object.entries(req.headers)) {
@@ -216,11 +255,21 @@ Deno.serve = (options: any, handler: any) => {
                 method,
                 headers,
                 body,
-                // @ts-ignore: Node generic duplex issues
+                // @ts-ignore: Node duplex
                 duplex: body ? 'half' : undefined
             });
 
-            // Mock Deno.ServeHandlerInfo
+            // Attach Node context for WebSocket upgrade later if needed (though upgrade event usually handles it separately)
+            // But if the handler returns 101 based on this request, we are too late for `server.on('upgrade')`?
+            // `server.on('upgrade')` is for the initial handshake.
+            // Deno.serve logic: The handler is called. If it returns response, we send it.
+            // But for WS, standard Node http server does NOT emit 'request' event for upgrades if 'upgrade' listener exists.
+            // So we must handle 'upgrade' separately and create a synthetic Request?
+
+            // Wait, if I add 'upgrade' listener, 'request' is NOT emitted for upgrade requests.
+            // So I need to route 'upgrade' events into the handler too?
+            // Yes.
+
             const info = {
                 remoteAddr: {
                     transport: "tcp",
@@ -229,12 +278,11 @@ Deno.serve = (options: any, handler: any) => {
                 }
             };
 
-            // Handle
             const response = await handler(request, info);
 
-            // Send Response
+            // Normal response handling
             res.statusCode = response.status;
-            response.headers.forEach((value, key) => {
+            response.headers.forEach((value: string, key: string) => {
                 res.setHeader(key, value);
             });
 
@@ -257,18 +305,61 @@ Deno.serve = (options: any, handler: any) => {
         }
     });
 
+    // Handle Upgrade Requests
+    server.on('upgrade', async (req, socket, head) => {
+        try {
+            const url = `http://${req.headers.host || 'localhost'}${req.url}`;
+            const headers = new Headers();
+            for (const [key, value] of Object.entries(req.headers)) {
+                if (Array.isArray(value)) {
+                    value.forEach(v => headers.append(key, v));
+                } else if (value) {
+                    headers.append(key, value);
+                }
+            }
+
+            const request = new Request(url, {
+                method: req.method,
+                headers,
+            });
+
+            // Attach context
+            (request as any)._nodeReq = req;
+            (request as any)._nodeSocket = socket;
+            (request as any)._nodeHead = head;
+
+            const info = {
+                remoteAddr: {
+                    transport: "tcp",
+                    hostname: socket.remoteAddress || "127.0.0.1",
+                    port: socket.remotePort || 0
+                }
+            };
+
+            const response = await handler(request, info);
+
+            if (response.status === 101 && (response as any)._upgradeAction) {
+                (response as any)._upgradeAction();
+            } else {
+                socket.destroy();
+            }
+
+        } catch (e) {
+            console.error("Upgrade error:", e);
+            socket.destroy();
+        }
+    });
+
     server.listen(port, hostname, () => {
-        // Console log is handled by the caller usually, but Deno.serve prints automatically?
-        // Deno.serve returns a Server object, the callback is printed by user code usually.
+        // console.log(`Server listening on ${hostname}:${port}`);
     });
 
     return {
-        finished: new Promise(() => {}), // Never finishes
+        finished: new Promise(() => {}),
         shutdown: () => server.close()
     };
 };
 
-// Misc
 Deno.version = {
     deno: "node-polyfill",
     v8: process.versions.v8,
@@ -287,5 +378,4 @@ Deno.memoryUsage = () => {
     };
 };
 
-// Flag to help utils detect Node environment explicitly if needed
 (globalThis as any).IS_NODE_COMPAT_MODE = true;

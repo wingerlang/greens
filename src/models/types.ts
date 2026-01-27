@@ -1839,8 +1839,15 @@ export interface Message {
     content: string;
     createdAt: string;
     readBy?: string[]; // userIds who have read this message
-    type?: 'text' | 'image' | 'system';
+    type?: 'text' | 'image' | 'system' | 'component';
+
+    // Rich Features
+    replyToId?: string; // ID of the message being replied to
+    reactions?: Record<string, string[]>; // emoji -> [userIds]
+    metadata?: Record<string, any>; // Flexible data for future components (e.g. pasted workout)
 }
+
+export type SupportStatus = 'open' | 'assigned' | 'resolved';
 
 export interface Conversation {
     id: string;
@@ -1851,4 +1858,12 @@ export interface Conversation {
     lastMessage?: Message;
     title?: string; // Optional title for group/support chats
     metadata?: Record<string, any>;
+
+    // Security & Visibility
+    isLocked?: boolean; // Requires password to view content
+    isHidden?: boolean; // Hidden from main list (archived/secret)
+
+    // Support Specific
+    supportStatus?: SupportStatus;
+    assignedTo?: string; // Admin User ID who claimed the ticket
 }
