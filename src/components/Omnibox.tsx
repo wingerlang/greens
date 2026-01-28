@@ -1615,15 +1615,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 return (
                                     <div
                                         key={meal.id}
-                                        onClick={() => {
-                                            onOpenNutrition?.({
-                                                type: 'estimate',
-                                                referenceId: meal.id,
-                                                servings: 1,
-                                                estimateDetails: meal.items[0].estimateDetails
-                                            });
-                                            onClose();
-                                        }}
+                                        onClick={() => logQuickMeal(meal)}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
                                             ? 'bg-purple-500/20 text-purple-400'
                                             : 'hover:bg-white/5 text-white'
@@ -1636,16 +1628,39 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                             <div>
                                                 <div className="flex items-center gap-2">
                                                     <div className="font-medium">{meal.name}</div>
-                                                    <div className="text-[10px] text-slate-500">
-                                                        {Math.round((meal as any).totals.calories)} kcal
-                                                        {meal.items[0].estimateDetails?.caloriesMin &&
-                                                            ` (${meal.items[0].estimateDetails.caloriesMin}-${meal.items[0].estimateDetails.caloriesMax})`}
+                                                    <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                                        <span className="font-bold text-slate-400">{Math.round((meal as any).totals.calories)} kcal</span>
+                                                        {(meal as any).totals.protein > 0 && <span className="text-slate-600">• P: {Math.round((meal as any).totals.protein)}g</span>}
+                                                        {(meal as any).totals.carbs > 0 && <span className="text-slate-600">• K: {Math.round((meal as any).totals.carbs)}g</span>}
+                                                        {(meal as any).totals.fat > 0 && <span className="text-slate-600">• F: {Math.round((meal as any).totals.fat)}g</span>}
                                                     </div>
                                                 </div>
+                                                {meal.items[0].estimateDetails?.caloriesMin && (
+                                                    <div className="text-[9px] text-slate-600">
+                                                        Range: {meal.items[0].estimateDetails.caloriesMin}-{meal.items[0].estimateDetails.caloriesMax} kcal
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded">
-                                            Visa
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                className="p-1.5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onOpenNutrition?.({
+                                                        type: 'estimate',
+                                                        referenceId: meal.id,
+                                                        servings: 1,
+                                                        estimateDetails: meal.items[0].estimateDetails
+                                                    });
+                                                    onClose();
+                                                }}
+                                            >
+                                                <Info size={14} />
+                                            </button>
+                                            <div className="text-[10px] uppercase font-bold text-slate-600 bg-black/20 px-2 py-1 rounded">
+                                                Enter = Log
+                                            </div>
                                         </div>
                                     </div>
                                 );
