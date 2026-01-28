@@ -15,6 +15,7 @@ import { BackupModule } from '../components/admin/backup/BackupModule.tsx';
 import { AnalyticsDashboard } from './admin/AnalyticsDashboard.tsx';
 import { SessionsModule } from '../components/admin/SessionsModule.tsx';
 import { SupportDashboard } from '../components/admin/SupportDashboard.tsx';
+import { SubscriptionConfig } from '../components/admin/SubscriptionConfig.tsx';
 
 export const AdminPage: React.FC = () => {
     const { foodItems, recipes, updateFoodItem } = useData();
@@ -79,6 +80,7 @@ export const AdminPage: React.FC = () => {
                 <button onClick={() => setActiveTab('api')} className={getTabClass('api', 'text-sky-400')}>⚡ API</button>
                 <button onClick={() => setActiveTab('generator')} className={getTabClass('generator', 'text-rose-400')}>🔧 Verktyg</button>
                 <button onClick={() => setActiveTab('backup')} className={getTabClass('backup', 'text-cyan-400')}>💾 Backup</button>
+                <button onClick={() => setActiveTab('gatekeeper')} className={getTabClass('gatekeeper', 'text-lime-400')}>🚪 Gatekeeper</button>
                 <button onClick={() => setActiveTab('systemdb')} className={getTabClass('systemdb', 'text-purple-400')}>🧬 System DB</button>
                 <button onClick={() => setActiveTab('analytics')} className={getTabClass('analytics', 'text-pink-400')}>📊 Analytics</button>
             </div>
@@ -97,6 +99,7 @@ export const AdminPage: React.FC = () => {
                 <Route path="users" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><UsersModule /></div>} />
                 <Route path="generator" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><SystemGeneratorModule /></div>} />
                 <Route path="backup" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><BackupModule /></div>} />
+                <Route path="gatekeeper" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><SubscriptionConfig /></div>} />
                 <Route path="audit" element={
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <section className="bg-slate-900/50 rounded-3xl border border-slate-800 p-6 md:p-8 shadow-2xl overflow-hidden">

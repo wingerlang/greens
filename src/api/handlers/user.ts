@@ -255,6 +255,43 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
         }
     }
 
+    // Subscription Update (POST)
+    if (url.pathname === "/api/user/subscription" && method === "POST") {
+        try {
+            const body = await req.json();
+            const { tier } = body;
+            if (tier !== 'free' && tier !== 'evergreen') {
+                return new Response(JSON.stringify({ error: "Invalid tier" }), { status: 400, headers });
+            }
+
+            const user = await getUserById(session.userId);
+            if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            // Update subscription
+            user.subscription = {
+                ...user.subscription,
+                tier,
+                status: 'active',
+                history: [
+                    {
+                        id: crypto.randomUUID(),
+                        date: new Date().toISOString(),
+                        type: tier === 'evergreen' ? 'upgrade' : 'downgrade',
+                        tier,
+                        note: 'Manual update via user settings'
+                    },
+                    ...(user.subscription.history || [])
+                ]
+            };
+
+            await saveUser(user);
+
+            return new Response(JSON.stringify({ success: true, subscription: user.subscription }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
     // Community Users List (GET)
     if (url.pathname === "/api/users" && method === "GET") {
         try {
