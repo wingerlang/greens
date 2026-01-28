@@ -122,8 +122,52 @@ export interface WeeklyStats {
 /** User roles for permissions */
 export type UserRole = 'admin' | 'user' | 'coach' | 'athlete' | 'developer';
 
-/** Subscription plans for monetization */
-export type SubscriptionPlan = 'free' | 'evergreen';
+/** Subscription System */
+export type SubscriptionTier = 'free' | 'evergreen';
+
+export interface SubscriptionEvent {
+    id: string;
+    date: string;
+    type: 'upgrade' | 'downgrade' | 'renew' | 'cancel' | 'payment_failed';
+    tier: SubscriptionTier;
+    price?: number;
+    currency?: string;
+    note?: string;
+}
+
+export interface SubscriptionStatus {
+    tier: SubscriptionTier;
+    status: 'active' | 'cancelled' | 'expired' | 'past_due';
+    validUntil?: string; // ISO date
+    startedAt: string; // ISO date
+    provider: 'manual' | 'stripe';
+    providerSubscriptionId?: string;
+    history: SubscriptionEvent[];
+}
+
+export type FeatureKey = 'MAX_ACTIVE_GOALS' | 'CALORIE_DETAILS' | 'MAX_WORKOUTS' | 'MAX_CUSTOM_FOODS' | 'MAX_RECIPES';
+
+export type PermissionConfig = Record<SubscriptionTier, Record<FeatureKey, number | boolean>>;
+
+export const DEFAULT_PERMISSION_CONFIG: PermissionConfig = {
+    free: {
+        MAX_ACTIVE_GOALS: 5,
+        CALORIE_DETAILS: false,
+        MAX_WORKOUTS: 100,
+        MAX_CUSTOM_FOODS: 50,
+        MAX_RECIPES: 20
+    },
+    evergreen: {
+        MAX_ACTIVE_GOALS: 9999, // Unlimited
+        CALORIE_DETAILS: true,
+        MAX_WORKOUTS: 9999,
+        MAX_CUSTOM_FOODS: 9999,
+        MAX_RECIPES: 9999
+    }
+};
+
+/** @deprecated Use subscription.tier instead */
+export type SubscriptionPlan = SubscriptionTier;
 
 /** User model */
 export interface User {
@@ -132,7 +176,9 @@ export interface User {
     name: string;
     email: string;
     role: UserRole;
-    plan: SubscriptionPlan;
+    /** @deprecated Use subscription.tier instead. Kept for backward compatibility during migration. */
+    plan?: SubscriptionPlan;
+    subscription: SubscriptionStatus;
     settings: UserSettings;
     householdId?: string; // For shared plans
     createdAt: string;

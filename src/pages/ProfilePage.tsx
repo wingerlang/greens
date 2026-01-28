@@ -25,6 +25,7 @@ import {
 import { MeasurementsModule } from '../components/profile/sections/MeasurementsModule.tsx';
 import { ProfileFeedSection } from '../components/profile/sections/ProfileFeedSection.tsx';
 import { ProfilePreviewMode } from '../components/profile/ProfilePreviewMode.tsx';
+import { SubscriptionManager } from '../components/profile/SubscriptionManager.tsx';
 
 import './ProfilePage.css';
 
@@ -953,6 +954,9 @@ export function ProfilePage() {
                 {/* === KONTO TAB === */}
                 {activeTab === 'account' && (
                     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                        {/* Subscription Manager */}
+                        <SubscriptionManager />
+
                         {/* Account Info */}
                         <section className="bg-slate-900/50 border border-white/5 rounded-2xl p-6">
                             <h3 className="text-lg font-bold text-white mb-4">Inloggning & Konto</h3>

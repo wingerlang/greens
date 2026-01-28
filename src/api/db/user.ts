@@ -1,5 +1,5 @@
 import { kv } from "../kv.ts";
-import { User, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY, UserRole } from "../../models/types.ts";
+import { User, DEFAULT_USER_SETTINGS, DEFAULT_PRIVACY, UserRole, SubscriptionStatus, SubscriptionTier } from "../../models/types.ts";
 
 export interface DBUser extends User {
     passHash: string;
@@ -8,12 +8,32 @@ export interface DBUser extends User {
 
 import { hashPassword } from "../utils/crypto.ts";
 
+// Helper to ensure subscription object exists (Lazy Migration)
+export function ensureUserSubscription(user: any): DBUser {
+    if (!user.subscription) {
+        // Migration logic
+        const tier: SubscriptionTier = user.plan === 'evergreen' ? 'evergreen' : 'free';
+        user.subscription = {
+            tier,
+            status: 'active',
+            startedAt: user.createdAt || new Date().toISOString(),
+            provider: 'manual',
+            history: []
+        };
+    }
+    // Ensure new fields are present even if object exists
+    if (!user.subscription.status) user.subscription.status = 'active';
+
+    return user as DBUser;
+}
+
 export async function createUser(username: string, password: string, email?: string, role: UserRole = 'user'): Promise<DBUser | null> {
     const existing = await kv.get(['users_by_username', username]);
     if (existing.value) return null;
 
     const salt = crypto.randomUUID();
     const passHash = await hashPassword(password, salt);
+    const now = new Date().toISOString();
 
     const user: DBUser = {
         id: crypto.randomUUID(),
@@ -21,8 +41,15 @@ export async function createUser(username: string, password: string, email?: str
         passHash,
         salt,
         role,
-        plan: 'free',
-        createdAt: new Date().toISOString(),
+        // plan is deprecated, but we can set it for safety or omit it
+        subscription: {
+            tier: 'free',
+            status: 'active',
+            startedAt: now,
+            provider: 'manual',
+            history: []
+        },
+        createdAt: now,
         email: email || '',
         name: username,
         handle: username.toLowerCase(),
@@ -44,14 +71,15 @@ export async function getUser(username: string): Promise<DBUser | null> {
     const idEntry = await kv.get(['users_by_username', username]);
     if (!idEntry.value) return null;
     const userEntry = await kv.get(['users', idEntry.value as string]);
-    return userEntry.value as DBUser;
+    if (!userEntry.value) return null;
+    return ensureUserSubscription(userEntry.value);
 }
 
 export async function getUserById(id: string): Promise<DBUser | null> {
     const entry = await kv.get(['users', id]);
     if (!entry.value) return null;
 
-    const user = entry.value as DBUser;
+    const user = ensureUserSubscription(entry.value);
 
     // Merge dynamic stats
     const followersRes = await kv.get<Deno.KvU64>(['stats', id, 'followersCount']);
@@ -67,7 +95,7 @@ export async function getAllUsers(limit: number = 100, cursor?: string): Promise
     const iter = kv.list({ prefix: ['users'] }, { limit, cursor });
     const users: DBUser[] = [];
     for await (const entry of iter) {
-        users.push(entry.value as DBUser);
+        users.push(ensureUserSubscription(entry.value));
     }
     return { users, cursor: iter.cursor };
 }
@@ -124,7 +152,7 @@ export async function getAdmins(): Promise<DBUser[]> {
     const iter = kv.list({ prefix: ['users'] });
     const admins: DBUser[] = [];
     for await (const entry of iter) {
-        const user = entry.value as DBUser;
+        const user = ensureUserSubscription(entry.value);
         if (user.role === 'admin' || user.role === 'developer') {
             admins.push(user);
         }

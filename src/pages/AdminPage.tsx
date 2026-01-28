@@ -11,6 +11,7 @@ const SystemDBModule = React.lazy(() => import('../components/admin/SystemDBModu
 const SessionsModule = React.lazy(() => import('../components/admin/SessionsModule.tsx').then(m => ({ default: m.SessionsModule })));
 const SupportDashboard = React.lazy(() => import('../components/admin/SupportDashboard.tsx').then(m => ({ default: m.SupportDashboard })));
 const BackupModule = React.lazy(() => import('../components/admin/backup/BackupModule.tsx').then(m => ({ default: m.BackupModule })));
+const SubscriptionConfig = React.lazy(() => import('../components/admin/SubscriptionConfig.tsx').then(m => ({ default: m.SubscriptionConfig })));
 
 // Lazy load potentially heavy or cyclic dependencies
 const ExerciseDatabasePage = React.lazy(() => import('./admin/ExerciseDatabasePage.tsx'));
@@ -82,24 +83,26 @@ export const AdminPage: React.FC = () => {
                 <button onClick={() => setActiveTab('api')} className={getTabClass('api', 'text-sky-400')}>⚡ API</button>
                 <button onClick={() => setActiveTab('generator')} className={getTabClass('generator', 'text-rose-400')}>🔧 Verktyg</button>
                 <button onClick={() => setActiveTab('backup')} className={getTabClass('backup', 'text-cyan-400')}>💾 Backup</button>
+                <button onClick={() => setActiveTab('gatekeeper')} className={getTabClass('gatekeeper', 'text-lime-400')}>🚪 Gatekeeper</button>
                 <button onClick={() => setActiveTab('systemdb')} className={getTabClass('systemdb', 'text-purple-400')}>🧬 System DB</button>
                 <button onClick={() => setActiveTab('analytics')} className={getTabClass('analytics', 'text-pink-400')}>📊 Analytics</button>
             </div>
 
             {/* Tab Modules */}
             <Routes>
-                <Route path="sessions" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><SessionsModule /></div>} />
-                <Route path="support" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><SupportDashboard /></div>} />
-                <Route path="health" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><HealthModule /></div>} />
-                <Route path="analytics/:category?/:tab?" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><AnalyticsDashboard /></div>} />
-                <Route path="exercises" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><ExerciseDatabasePage /></div>} />
-                <Route path="systemdb" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><SystemDBModule /></div>} />
-                <Route path="api" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><ApiPage headless={true} /></div>} />
-                <Route path="database" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><DatabasePage headless={true} /></div>} />
-                <Route path="docs" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><DocumentationPage headless={true} /></div>} />
-                <Route path="users" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><UsersModule /></div>} />
-                <Route path="generator" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><SystemGeneratorModule /></div>} />
-                <Route path="backup" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><BackupModule /></div>} />
+                <Route path="sessions" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><SessionsModule /></Suspense></div>} />
+                <Route path="support" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><SupportDashboard /></Suspense></div>} />
+                <Route path="health" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><HealthModule /></Suspense></div>} />
+                <Route path="analytics/:category?/:tab?" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><AnalyticsDashboard /></Suspense></div>} />
+                <Route path="exercises" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><ExerciseDatabasePage /></Suspense></div>} />
+                <Route path="systemdb" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><SystemDBModule /></Suspense></div>} />
+                <Route path="api" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><ApiPage headless={true} /></Suspense></div>} />
+                <Route path="database" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><DatabasePage headless={true} /></Suspense></div>} />
+                <Route path="docs" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><DocumentationPage headless={true} /></Suspense></div>} />
+                <Route path="users" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><UsersModule /></Suspense></div>} />
+                <Route path="generator" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><SystemGeneratorModule /></Suspense></div>} />
+                <Route path="backup" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><BackupModule /></Suspense></div>} />
+                <Route path="gatekeeper" element={<div className="animate-in fade-in slide-in-from-bottom-2 duration-300"><Suspense fallback={null}><SubscriptionConfig /></Suspense></div>} />
                 <Route path="audit" element={
                     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <section className="bg-slate-900/50 rounded-3xl border border-slate-800 p-6 md:p-8 shadow-2xl overflow-hidden">

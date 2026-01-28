@@ -3,6 +3,7 @@ import { getAllSessions } from "../db/session.ts";
 import { authenticate, hasRole } from "../middleware.ts";
 import { getErrorLogs, getMetrics } from "../utils/logger.ts";
 import { kv } from "../kv.ts";
+import { getPermissionConfig, updatePermissionConfig } from "../db/permissions.ts";
 
 export async function handleAdminRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const ctx = await authenticate(req);
@@ -98,6 +99,23 @@ export async function handleAdminRoutes(req: Request, url: URL, headers: Headers
     if (url.pathname === "/api/admin/sessions") {
         const sessions = await getAllSessions();
         return new Response(JSON.stringify({ sessions }), { headers });
+    }
+
+    // Permission Config
+    if (url.pathname === "/api/admin/permissions") {
+        if (req.method === "GET") {
+            const config = await getPermissionConfig();
+            return new Response(JSON.stringify({ config }), { headers });
+        }
+        if (req.method === "PUT") {
+            try {
+                const body = await req.json();
+                await updatePermissionConfig(body);
+                return new Response(JSON.stringify({ success: true }), { headers });
+            } catch (e) {
+                return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+            }
+        }
     }
 
     // Update User Role
