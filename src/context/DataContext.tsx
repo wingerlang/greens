@@ -45,7 +45,9 @@ import {
     type DatabaseEntityType,
     type RaceDefinition,
     type RaceIgnoreRule,
-    type ExerciseDefinition
+    type ExerciseDefinition,
+    type PermissionConfig,
+    DEFAULT_PERMISSION_CONFIG
 } from '../models/types.ts';
 import { storageService } from '../services/storage.ts';
 import { safeFetch } from '../utils/http.ts';
@@ -242,6 +244,7 @@ interface DataContextType {
     isLoading: boolean;
     databaseActions: DatabaseAction[];
     exercises: ExerciseDefinition[];
+    permissionConfig: PermissionConfig;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -259,6 +262,7 @@ export function DataProvider({ children }: DataProviderProps) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [databaseActions, setDatabaseActions] = useState<DatabaseAction[]>([]);
     const [exercises, setExercises] = useState<ExerciseDefinition[]>([]);
+    const [permissionConfig, setPermissionConfig] = useState<PermissionConfig>(DEFAULT_PERMISSION_CONFIG);
     const skipAutoSave = useRef(false);
     const refreshCounterRef = useRef(0);
 
@@ -388,13 +392,14 @@ export function DataProvider({ children }: DataProviderProps) {
                 console.log('[DataContext] Starting parallel sync...');
 
                 // execute all independent fetches in parallel
-                const [userPayload, mePayload, planData, strengthData, quickMealsData, exerciseData] = await Promise.all([
+                const [userPayload, mePayload, planData, strengthData, quickMealsData, exerciseData, permissionData] = await Promise.all([
                     safeFetch<{ users: User[] }>('/api/users', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
                     safeFetch<{ user: User }>('/api/auth/me', { headers: { 'Authorization': `Bearer ${token}` }, signal }),
                     safeFetch<{ activities: PlannedActivity[] }>('/api/planned-activities', { headers: { 'Authorization': `Bearer ${token}` } }),
                     safeFetch<{ workouts: StrengthWorkout[] }>('/api/strength/workouts', { headers: { 'Authorization': `Bearer ${token}` } }),
                     safeFetch<QuickMeal[]>('/api/quick-meals', { headers: { 'Authorization': `Bearer ${token}` } }),
-                    safeFetch<ExerciseDefinition[]>('/api/exercises', { headers: { 'Authorization': `Bearer ${token}` } })
+                    safeFetch<ExerciseDefinition[]>('/api/exercises', { headers: { 'Authorization': `Bearer ${token}` } }),
+                    safeFetch<{ config: PermissionConfig }>('/api/admin/permissions', { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
 
                 // 1. Handle Users
@@ -460,6 +465,11 @@ export function DataProvider({ children }: DataProviderProps) {
                     console.log('[DataContext] Loaded exercises:', exerciseData.length);
                     data.exercises = exerciseData;
                     setExercises(exerciseData);
+                }
+
+                // 7. Handle Permissions
+                if (permissionData && permissionData.config) {
+                    setPermissionConfig(permissionData.config);
                 }
 
             } catch (e: unknown) {
@@ -753,7 +763,8 @@ export function DataProvider({ children }: DataProviderProps) {
         raceIgnoreRules,
         addRaceIgnoreRule,
         deleteRaceIgnoreRule,
-        exercises
+        exercises,
+        permissionConfig
     };
 
     return (
