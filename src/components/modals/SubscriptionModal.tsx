@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { safeFetch } from '../../utils/http.ts';
 import { useData } from '../../context/DataContext.tsx';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 interface SubscriptionModalProps {
     isOpen: boolean;
@@ -9,6 +10,7 @@ interface SubscriptionModalProps {
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, onClose }) => {
     const { currentUser, updateCurrentUser } = useData();
+    const { token } = useAuth();
     const [step, setStep] = useState<'info' | 'processing' | 'success'>('info');
     const [error, setError] = useState<string | null>(null);
 
@@ -24,6 +26,9 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ isOpen, on
         try {
             const res = await safeFetch<any>('/api/user/subscription', {
                 method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({ tier: 'evergreen' })
             });
 
