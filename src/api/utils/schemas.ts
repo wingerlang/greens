@@ -6,12 +6,14 @@ import { z } from "zod";
 
 export const LoginSchema = z.object({
     username: z.string().min(3).max(50),
-    password: z.string().min(6),
+    password: z.string().min(1), // Allow any length for login to support legacy users/migrations
 });
 
 export const RegisterSchema = z.object({
     username: z.string().min(3).max(50),
-    password: z.string().min(6),
+    password: z.string()
+        .min(8, "Password must be at least 8 characters")
+        .regex(/[!@#$%^&*(),.?":{}|<>]/, "Password must contain at least one special character"),
     email: z.string().email().optional().or(z.literal("")),
 });
 

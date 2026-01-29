@@ -11,7 +11,13 @@ export interface AuthContext {
  * Validates the Authorization header and returns the authenticated user context.
  */
 export async function authenticate(req: Request): Promise<AuthContext | null> {
-    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+    let token = req.headers.get("Authorization")?.replace("Bearer ", "");
+
+    if (!token) {
+        const cookie = req.headers.get("cookie");
+        token = cookie?.split("auth_token=")[1]?.split(";")[0];
+    }
+
     if (!token) return null;
 
     const session = await getSession(token);

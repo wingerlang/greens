@@ -192,6 +192,10 @@ export interface User {
     followersCount?: number;
     followingCount?: number;
     privacy?: UserPrivacy;
+
+    // Security
+    mfaEnabled?: boolean;
+    mfaSecret?: string;
 }
 
 export type VisibilityLevel = 'PUBLIC' | 'FRIENDS' | 'PRIVATE' | 'INDIVIDUAL';
