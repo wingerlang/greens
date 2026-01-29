@@ -64,16 +64,38 @@ async function bootstrap() {
     await clearPort(CONFIG.ports.frontend);
     await clearPort(CONFIG.ports.backend);
     await clearPort(CONFIG.ports.dashboard);
-    await clearPort(CONFIG.ports.internalBackend);
+    await clearPort(CONFIG.ports.internalBackend); // 8001
+    await clearPort(CONFIG.ports.internalBackend + 1); // 8002
+    await clearPort(CONFIG.ports.internalBackend + 2); // 8003
     await clearPort(CONFIG.ports.internalFrontend);
 
     // 1. Register Services
+
+    // Primary Backend (Always On)
     manager.register({
         name: "backend",
         command: ["deno", "task", "server"],
         env: { "PORT": String(CONFIG.ports.internalBackend) },
         autoRestart: true,
         port: CONFIG.ports.internalBackend
+    });
+
+    // Replica Backend 1 (On Demand)
+    manager.register({
+        name: "backend-2",
+        command: ["deno", "task", "server"],
+        env: { "PORT": String(CONFIG.ports.internalBackend + 1) },
+        autoRestart: false,
+        port: CONFIG.ports.internalBackend + 1
+    });
+
+    // Replica Backend 2 (On Demand)
+    manager.register({
+        name: "backend-3",
+        command: ["deno", "task", "server"],
+        env: { "PORT": String(CONFIG.ports.internalBackend + 2) },
+        autoRestart: false,
+        port: CONFIG.ports.internalBackend + 2
     });
 
     manager.register({
