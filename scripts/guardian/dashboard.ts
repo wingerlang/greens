@@ -20,6 +20,7 @@ import { getWafEvents } from "./waf.ts";
 import { getCircuitsSnapshot } from "./circuitBreaker.ts";
 import { generatePrometheusMetrics, getLatencyStats, getMemoryHistory } from "./prometheus.ts";
 import { CONFIG } from "./config.ts";
+import { loadBalancer } from "./loadBalancer.ts";
 
 // WebSocket clients for real-time updates
 const wsClients: Set<WebSocket> = new Set();
@@ -376,6 +377,19 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
                 return Response.json({ success: true });
             }
         }
+    }
+
+    // Load Balancer API
+    if (url.pathname === "/api/load-balancer") {
+        if (req.method === "POST") {
+            const threshold = Number(url.searchParams.get("threshold"));
+            if (!isNaN(threshold) && threshold > 0) {
+                loadBalancer.setThreshold(threshold);
+                return Response.json({ success: true, threshold });
+            }
+            return Response.json({ success: false, error: "Invalid threshold" });
+        }
+        return Response.json(loadBalancer.getStats());
     }
 
     // Prometheus metrics endpoint
