@@ -382,12 +382,73 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     // Load Balancer API
     if (url.pathname === "/api/load-balancer") {
         if (req.method === "POST") {
-            const threshold = Number(url.searchParams.get("threshold"));
-            if (!isNaN(threshold) && threshold > 0) {
-                loadBalancer.setThreshold(threshold);
-                return Response.json({ success: true, threshold });
+            const action = url.searchParams.get("action");
+
+            switch (action) {
+                case "threshold": {
+                    const threshold = Number(url.searchParams.get("value"));
+                    if (!isNaN(threshold) && threshold > 0) {
+                        loadBalancer.setThreshold(threshold);
+                        return Response.json({ success: true, threshold });
+                    }
+                    return Response.json({ success: false, error: "Invalid threshold" });
+                }
+
+                case "simulator-start": {
+                    const rps = Number(url.searchParams.get("rps") || 10);
+                    loadBalancer.setSimulatorRps(rps);
+                    return Response.json({ success: true, rps });
+                }
+
+                case "simulator-stop": {
+                    loadBalancer.stopSimulator();
+                    return Response.json({ success: true });
+                }
+
+                case "simulator-set": {
+                    const rps = Number(url.searchParams.get("rps") || 0);
+                    loadBalancer.setSimulatorRps(rps);
+                    return Response.json({ success: true, rps });
+                }
+
+                case "reset-stats": {
+                    loadBalancer.resetStats();
+                    return Response.json({ success: true });
+                }
+
+                case "scale-up": {
+                    const nodeName = url.searchParams.get("node");
+                    if (nodeName) {
+                        const service = manager.get(nodeName);
+                        if (service) {
+                            service.start();
+                            return Response.json({ success: true, node: nodeName });
+                        }
+                    }
+                    return Response.json({ success: false, error: "Invalid node" });
+                }
+
+                case "scale-down": {
+                    const nodeName = url.searchParams.get("node");
+                    if (nodeName && nodeName !== "backend") {
+                        const service = manager.get(nodeName);
+                        if (service) {
+                            service.stop();
+                            return Response.json({ success: true, node: nodeName });
+                        }
+                    }
+                    return Response.json({ success: false, error: "Invalid node or cannot stop primary" });
+                }
+
+                default:
+                    // Legacy threshold support
+                    const threshold = Number(url.searchParams.get("threshold"));
+                    if (!isNaN(threshold) && threshold > 0) {
+                        loadBalancer.setThreshold(threshold);
+                        return Response.json({ success: true, threshold });
+                    }
+                    return Response.json({ success: false, error: "Unknown action" });
             }
-            return Response.json({ success: false, error: "Invalid threshold" });
         }
         return Response.json(loadBalancer.getStats());
     }

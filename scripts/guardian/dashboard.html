@@ -464,6 +464,9 @@
 
         <div class="nav-group">
             <div class="nav-label">Threat Protection</div>
+            <div class="nav-item" :class="{ 'active': tab === 'load-balancer' }" @click="tab = 'load-balancer'">
+                <span>⚖️ Load Balancer</span>
+            </div>
             <div class="nav-item" :class="{ 'active': tab === 'security' }" @click="tab = 'security'">
                 <span>Firewall Rules</span>
             </div>
@@ -527,26 +530,34 @@
                     <div class="card">
                         <div class="stat-label">Load Balancer</div>
                         <div style="display:flex; justify-content:space-between; align-items:center;">
-                             <div style="font-size: 1.8rem; font-weight: 800; color: #f59e0b;" x-text="loadBalancer.activeNodes.length"></div>
-                             <div style="font-size: 0.8rem; color: var(--text-muted); text-align:right;">
-                                 <div>Nodes Active</div>
-                                 <div x-text="loadBalancer.cooldown ? '(Scaling...)' : ''" style="color: #fbbf24; font-size: 0.7rem;"></div>
-                             </div>
+                            <div style="font-size: 1.8rem; font-weight: 800; color: #f59e0b;"
+                                x-text="loadBalancer.activeNodes.length"></div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); text-align:right;">
+                                <div>Nodes Active</div>
+                                <div x-text="loadBalancer.cooldown ? '(Scaling...)' : ''"
+                                    style="color: #fbbf24; font-size: 0.7rem;"></div>
+                            </div>
                         </div>
-                         <div style="margin-top: 16px; font-size: 0.9rem;">
-                             <div style="display:flex; justify-content:space-between; margin-bottom: 6px; color: var(--text-muted); font-size: 0.8rem;">
-                                 <span>Load / Threshold</span>
-                                 <span x-text="loadBalancer.rps.toFixed(1) + ' / ' + loadBalancer.threshold + ' RPS'"></span>
-                             </div>
-                             <div style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
-                                  <div :style="`width: ${Math.min(100, (loadBalancer.rps / (loadBalancer.threshold * loadBalancer.activeNodes.length)) * 100)}%; background: #f59e0b; height: 100%; transition: width 0.5s ease;`"></div>
-                             </div>
-                             <div style="display: flex; gap: 4px; margin-top: 8px;">
+                        <div style="margin-top: 16px; font-size: 0.9rem;">
+                            <div
+                                style="display:flex; justify-content:space-between; margin-bottom: 6px; color: var(--text-muted); font-size: 0.8rem;">
+                                <span>Load / Threshold</span>
+                                <span
+                                    x-text="loadBalancer.rps.toFixed(1) + ' / ' + loadBalancer.threshold + ' RPS'"></span>
+                            </div>
+                            <div
+                                style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                                <div
+                                    :style="`width: ${Math.min(100, (loadBalancer.rps / (loadBalancer.threshold * loadBalancer.activeNodes.length)) * 100)}%; background: #f59e0b; height: 100%; transition: width 0.5s ease;`">
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 4px; margin-top: 8px;">
                                 <template x-for="node in loadBalancer.activeNodes">
-                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;" :title="node"></div>
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"
+                                        :title="node"></div>
                                 </template>
-                             </div>
-                         </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1173,6 +1184,210 @@
                 </div>
             </div>
 
+            <!-- Load Balancer Tab -->
+            <div x-show="tab === 'load-balancer'" style="display:flex; flex-direction:column; gap:24px;">
+
+                <!-- Traffic Simulator Control Panel -->
+                <div class="card"
+                    style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(16, 185, 129, 0.05)); border: 1px solid rgba(245, 158, 11, 0.3);">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size: 1.5rem;">🚀</span>
+                            Traffic Simulator
+                        </h3>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="danger" @click="lbResetStats()"
+                                style="font-size: 0.8rem; padding: 6px 12px;">Reset Stats</button>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div
+                            style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                            <div style="font-size: 2rem; font-weight: 800; color: #f59e0b;"
+                                x-text="loadBalancer.simulator?.rps || 0"></div>
+                            <div style="color: var(--text-muted); font-size: 0.85rem;">Simulator RPS</div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                            <div style="font-size: 2rem; font-weight: 800; color: #10b981;"
+                                x-text="loadBalancer.rps?.toFixed(1) || 0"></div>
+                            <div style="color: var(--text-muted); font-size: 0.85rem;">Actual RPS</div>
+                        </div>
+                        <div
+                            style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                            <div style="font-size: 2rem; font-weight: 800; color: #3b82f6;"
+                                x-text="loadBalancer.simulator?.totalSent?.toLocaleString() || 0"></div>
+                            <div style="color: var(--text-muted); font-size: 0.85rem;">Total Sent</div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 16px;">
+                        <div style="display: flex; align-items: center; gap: 16px;">
+                            <label style="min-width: 120px; color: var(--text-muted);">RPS Target:</label>
+                            <input type="range" min="0" max="200" step="5" x-model="simulatorRpsTarget"
+                                style="flex: 1; accent-color: #f59e0b; height: 8px;">
+                            <span style="min-width: 60px; font-weight: 700; color: #f59e0b;"
+                                x-text="simulatorRpsTarget + ' RPS'"></span>
+                        </div>
+
+                        <div style="display: flex; gap: 12px;">
+                            <button class="primary" @click="lbStartSimulator()"
+                                :disabled="loadBalancer.simulator?.running"
+                                style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
+                                :style="loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
+                                <span>▶️</span> Start Simulation
+                            </button>
+                            <button class="danger" @click="lbStopSimulator()"
+                                :disabled="!loadBalancer.simulator?.running"
+                                style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
+                                :style="!loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
+                                <span>⏹️</span> Stop
+                            </button>
+                            <button @click="lbSetSimulatorRps()" :disabled="!loadBalancer.simulator?.running"
+                                style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
+                                :style="!loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
+                                <span>⚡</span> Update RPS
+                            </button>
+                        </div>
+
+                        <div style="display: flex; gap: 8px;">
+                            <template x-for="preset in [10, 25, 50, 75, 100, 150, 200]">
+                                <button
+                                    @click="simulatorRpsTarget = preset; if(loadBalancer.simulator?.running) lbSetSimulatorRps()"
+                                    style="flex: 1; padding: 8px; font-size: 0.8rem;"
+                                    :style="simulatorRpsTarget == preset ? 'background: #f59e0b; color: black;' : ''">
+                                    <span x-text="preset"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Node Grid -->
+                <div class="grid-2">
+                    <template x-for="node in loadBalancer.nodes || []" :key="node.name">
+                        <div class="card"
+                            :style="node.active ? 'border: 2px solid #10b981;' : 'border: 2px solid #334155; opacity: 0.6;'">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                                <div>
+                                    <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                        <span :style="node.active ? 'color: #10b981;' : 'color: #ef4444;'"
+                                            x-text="node.active ? '🟢' : '🔴'"></span>
+                                        <span x-text="node.name.toUpperCase()"></span>
+                                    </h3>
+                                    <div style="color: var(--text-muted); font-size: 0.85rem;">Port <span
+                                            x-text="node.port"></span></div>
+                                </div>
+                                <div style="display: flex; gap: 6px;">
+                                    <button x-show="!node.active" @click="lbScaleUp(node.name)" class="primary"
+                                        style="padding: 6px 12px; font-size: 0.75rem;">
+                                        Start
+                                    </button>
+                                    <button x-show="node.active && node.name !== 'backend'"
+                                        @click="lbScaleDown(node.name)" class="danger"
+                                        style="padding: 6px 12px; font-size: 0.75rem;">
+                                        Stop
+                                    </button>
+                                    <span x-show="node.name === 'backend' && node.active" class="badge badge-green"
+                                        style="font-size: 0.7rem;">PRIMARY</span>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                                <div
+                                    style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;"
+                                        x-text="node.requests?.toLocaleString() || 0"></div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Requests</div>
+                                </div>
+                                <div
+                                    style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 1.5rem; font-weight: 700; color: #a855f7;"
+                                        x-text="(node.avgLatency || 0) + 'ms'"></div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Avg Latency</div>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 12px;">
+                                <div
+                                    style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.75rem; color: var(--text-muted);">
+                                    <span>Traffic Share</span>
+                                    <span
+                                        x-text="loadBalancer.totalRequests > 0 ? Math.round((node.requests / loadBalancer.totalRequests) * 100) + '%' : '0%'"></span>
+                                </div>
+                                <div
+                                    style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                    <div
+                                        :style="`width: ${loadBalancer.totalRequests > 0 ? (node.requests / loadBalancer.totalRequests) * 100 : 0}%; background: linear-gradient(90deg, #3b82f6, #10b981); height: 100%; transition: width 0.5s ease;`">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+
+                <!-- Scaling Configuration & History -->
+                <div class="grid-2">
+                    <div class="card">
+                        <h3 style="margin-top: 0;">Scaling Configuration</h3>
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <label style="min-width: 140px; color: var(--text-muted);">Scale-Up Threshold:</label>
+                                <input type="range" min="5" max="100" step="5" x-model="lbThresholdTarget"
+                                    style="flex: 1; accent-color: #10b981;">
+                                <span style="min-width: 70px; font-weight: 700; color: #10b981;"
+                                    x-text="lbThresholdTarget + ' RPS'"></span>
+                            </div>
+                            <button @click="lbSetThreshold()" class="primary">Apply Threshold</button>
+                            <div
+                                style="padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; font-size: 0.85rem;">
+                                <strong>Current:</strong> <span x-text="loadBalancer.threshold || 10"></span> RPS per
+                                node<br>
+                                <strong>Status:</strong> <span
+                                    x-text="loadBalancer.cooldown ? 'Scaling in progress...' : 'Ready'"></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h3 style="margin-top: 0;">Scaling History</h3>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            <template x-for="event in (loadBalancer.scalingHistory || []).slice().reverse()"
+                                :key="event.timestamp">
+                                <div
+                                    style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                    <span x-text="event.action === 'scale-up' ? '📈' : '📉'"
+                                        style="font-size: 1.2rem;"></span>
+                                    <div style="flex: 1;">
+                                        <div style="font-weight: 600;"
+                                            x-text="event.action === 'scale-up' ? 'Scaled Up' : 'Scaled Down'"></div>
+                                        <div style="font-size: 0.75rem; color: var(--text-muted);" x-text="event.node">
+                                        </div>
+                                    </div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);"
+                                        x-text="new Date(event.timestamp).toLocaleTimeString()"></div>
+                                </div>
+                            </template>
+                            <div x-show="!loadBalancer.scalingHistory?.length"
+                                style="text-align: center; padding: 20px; color: var(--text-muted);">
+                                No scaling events yet
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live Traffic Distribution Chart -->
+                <div class="card">
+                    <h3 style="margin-top: 0;">Traffic Distribution</h3>
+                    <div style="height: 200px;">
+                        <canvas id="lbDistributionChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
             <!-- Settings Tab -->
             <div x-show="tab === 'settings'">
                 <div class="card" style="max-width:600px">
@@ -1251,6 +1466,11 @@
                 latencyData: {},
                 memoryHistory: [],
                 actionMessage: '',
+
+                // Load Balancer Tab
+                simulatorRpsTarget: 25,
+                lbThresholdTarget: 10,
+                lbDistributionChart: null,
 
                 async init() {
                     // Deep connection: Read hash to set initial tab
@@ -1378,6 +1598,10 @@
 
                     if (this.tab === 'overview') {
                         this.loadOverviewData();
+                    }
+
+                    if (this.tab === 'load-balancer') {
+                        this.$nextTick(() => this.renderLbDistributionChart());
                     }
                 },
 
@@ -1765,6 +1989,79 @@
                     }
                 },
 
+                // Load Balancer Methods
+                async lbStartSimulator() {
+                    await fetch(`/api/load-balancer?action=simulator-start&rps=${this.simulatorRpsTarget}`, { method: 'POST' });
+                    this.refreshData();
+                },
+
+                async lbStopSimulator() {
+                    await fetch('/api/load-balancer?action=simulator-stop', { method: 'POST' });
+                    this.refreshData();
+                },
+
+                async lbSetSimulatorRps() {
+                    await fetch(`/api/load-balancer?action=simulator-set&rps=${this.simulatorRpsTarget}`, { method: 'POST' });
+                    this.refreshData();
+                },
+
+                async lbSetThreshold() {
+                    await fetch(`/api/load-balancer?action=threshold&value=${this.lbThresholdTarget}`, { method: 'POST' });
+                    this.refreshData();
+                },
+
+                async lbResetStats() {
+                    await fetch('/api/load-balancer?action=reset-stats', { method: 'POST' });
+                    this.refreshData();
+                },
+
+                async lbScaleUp(nodeName) {
+                    await fetch(`/api/load-balancer?action=scale-up&node=${nodeName}`, { method: 'POST' });
+                    this.refreshData();
+                },
+
+                async lbScaleDown(nodeName) {
+                    await fetch(`/api/load-balancer?action=scale-down&node=${nodeName}`, { method: 'POST' });
+                    this.refreshData();
+                },
+
+                renderLbDistributionChart() {
+                    const ctx = document.getElementById('lbDistributionChart');
+                    if (!ctx || !this.loadBalancer.nodes) return;
+
+                    const nodes = this.loadBalancer.nodes;
+                    const labels = nodes.map(n => n.name.toUpperCase());
+                    const data = nodes.map(n => n.requests || 0);
+                    const colors = nodes.map(n => n.active ? 'rgba(16, 185, 129, 0.7)' : 'rgba(100, 100, 100, 0.3)');
+
+                    if (this.lbDistributionChart) {
+                        this.lbDistributionChart.data.labels = labels;
+                        this.lbDistributionChart.data.datasets[0].data = data;
+                        this.lbDistributionChart.data.datasets[0].backgroundColor = colors;
+                        this.lbDistributionChart.update('none');
+                        return;
+                    }
+
+                    this.lbDistributionChart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                data: data,
+                                backgroundColor: colors,
+                                borderWidth: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'right', labels: { color: '#94a3b8' } }
+                            }
+                        }
+                    });
+                },
+
                 getStatusColor(status) {
                     if (status === 'running') return 'var(--success)';
                     if (status === 'stopped') return 'var(--danger)';
@@ -1778,6 +2075,7 @@
                     if (this.tab === 'console') return 'Live Console';
                     if (this.tab === 'security') return 'Security Control';
                     if (this.tab === 'waf') return 'WAF Events';
+                    if (this.tab === 'load-balancer') return 'Load Balancer Control';
                     if (this.tab === 'tools') return 'System Tools';
                     if (this.tab === 'settings') return 'Settings';
                     if (this.tab.startsWith('service-')) return 'Service: ' + this.capitalize(this.currentService?.name || '');

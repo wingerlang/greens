@@ -9,7 +9,22 @@ export class LoadBalancer {
     private checkInterval: number | null = null;
     private scalingCooldown = false;
 
+    // Enhanced stats tracking
+    private nodeRequestCounts: Map<string, number> = new Map();
+    private nodeLatencies: Map<string, number[]> = new Map();
+    private scalingHistory: { timestamp: number; action: string; node: string }[] = [];
+
+    // Traffic simulator state
+    private simulatorInterval: number | null = null;
+    private simulatorRps: number = 0;
+    private simulatorTotalSent: number = 0;
+
     private constructor() {
+        // Initialize node stats
+        for (const backend of this.backends) {
+            this.nodeRequestCounts.set(backend, 0);
+            this.nodeLatencies.set(backend, []);
+        }
         // Start monitoring loop
         this.checkInterval = setInterval(() => this.monitor(), 1000);
         console.log("[LOAD BALANCER] Initialized. Monitoring load...");
@@ -30,7 +45,7 @@ export class LoadBalancer {
         const windowStart = now - 10000;
         // Optimization: only shift if needed
         if (this.requestCounts[0] < windowStart) {
-             this.requestCounts = this.requestCounts.filter(t => t >= windowStart);
+            this.requestCounts = this.requestCounts.filter(t => t >= windowStart);
         }
     }
 
@@ -55,7 +70,7 @@ export class LoadBalancer {
             if (svc?.stats.status === "running") {
                 this.activeBackends.add(name);
             } else if (name !== "backend") { // Don't remove primary if it's just restarting
-                 this.activeBackends.delete(name);
+                this.activeBackends.delete(name);
             }
         }
 
@@ -80,6 +95,7 @@ export class LoadBalancer {
         const nextBackend = this.backends.find(b => !this.activeBackends.has(b));
         if (nextBackend) {
             console.log(`[LOAD BALANCER] High Load (${this.getRps().toFixed(1)} RPS). Spinning up ${nextBackend}...`);
+            this.scalingHistory.push({ timestamp: Date.now(), action: "scale-up", node: nextBackend });
             const service = manager.get(nextBackend);
             if (service) {
                 await service.start();
@@ -99,6 +115,7 @@ export class LoadBalancer {
         const toStop = candidates[0];
         if (toStop) {
             console.log(`[LOAD BALANCER] Load Decreased (${this.getRps().toFixed(1)} RPS). Stopping ${toStop}...`);
+            this.scalingHistory.push({ timestamp: Date.now(), action: "scale-down", node: toStop });
             const service = manager.get(toStop);
             if (service) {
                 await service.stop();
@@ -136,16 +153,112 @@ export class LoadBalancer {
     }
 
     public getStats() {
+        const nodeStats = Array.from(this.backends).map(name => {
+            const latencies = this.nodeLatencies.get(name) || [];
+            const avgLatency = latencies.length > 0
+                ? latencies.reduce((a, b) => a + b, 0) / latencies.length
+                : 0;
+            const isActive = this.activeBackends.has(name);
+            const service = manager.get(name);
+
+            return {
+                name,
+                active: isActive,
+                status: service?.stats.status || "unknown",
+                requests: this.nodeRequestCounts.get(name) || 0,
+                avgLatency: Math.round(avgLatency),
+                port: service?.config.port || 0
+            };
+        });
+
+        const totalRequests = Array.from(this.nodeRequestCounts.values()).reduce((a, b) => a + b, 0);
+
         return {
             rps: this.getRps(),
             activeNodes: Array.from(this.activeBackends),
             threshold: this.threshold,
-            cooldown: this.scalingCooldown
+            cooldown: this.scalingCooldown,
+            nodes: nodeStats,
+            totalRequests,
+            scalingHistory: this.scalingHistory.slice(-20),
+            simulator: {
+                running: this.simulatorInterval !== null,
+                rps: this.simulatorRps,
+                totalSent: this.simulatorTotalSent
+            }
         };
     }
 
     public setThreshold(val: number) {
         this.threshold = val;
+    }
+
+    // Track request to a specific node
+    public recordNodeRequest(nodeName: string, latencyMs: number) {
+        const count = this.nodeRequestCounts.get(nodeName) || 0;
+        this.nodeRequestCounts.set(nodeName, count + 1);
+
+        const latencies = this.nodeLatencies.get(nodeName) || [];
+        latencies.push(latencyMs);
+        // Keep last 100 latencies
+        if (latencies.length > 100) latencies.shift();
+        this.nodeLatencies.set(nodeName, latencies);
+    }
+
+    // Traffic Simulator Controls
+    public startSimulator(rps: number) {
+        if (this.simulatorInterval) this.stopSimulator();
+
+        this.simulatorRps = rps;
+        console.log(`[LOAD BALANCER] Traffic simulator started: ${rps} RPS`);
+
+        // Distributor: send requests at specified RPS
+        const msPerRequest = 1000 / rps;
+        this.simulatorInterval = setInterval(async () => {
+            try {
+                const start = performance.now();
+                const target = this.getTarget(new Request("http://localhost/api/health"));
+
+                // Make actual request to backend
+                await fetch(`http://localhost:${target.port}/health`, {
+                    method: "GET",
+                    signal: AbortSignal.timeout(5000)
+                }).catch(() => { });
+
+                const latency = performance.now() - start;
+                this.recordRequest();
+                this.recordNodeRequest(target.name, latency);
+                this.simulatorTotalSent++;
+            } catch (e) {
+                // Ignore errors
+            }
+        }, msPerRequest);
+    }
+
+    public stopSimulator() {
+        if (this.simulatorInterval) {
+            clearInterval(this.simulatorInterval);
+            this.simulatorInterval = null;
+            this.simulatorRps = 0;
+            console.log("[LOAD BALANCER] Traffic simulator stopped");
+        }
+    }
+
+    public setSimulatorRps(rps: number) {
+        if (rps <= 0) {
+            this.stopSimulator();
+        } else {
+            this.startSimulator(rps);
+        }
+    }
+
+    public resetStats() {
+        for (const backend of this.backends) {
+            this.nodeRequestCounts.set(backend, 0);
+            this.nodeLatencies.set(backend, []);
+        }
+        this.scalingHistory = [];
+        this.simulatorTotalSent = 0;
     }
 }
 
