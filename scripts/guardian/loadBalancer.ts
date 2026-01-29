@@ -2,32 +2,50 @@ import { manager } from "./services.ts";
 
 export class LoadBalancer {
     private static instance: LoadBalancer;
-    private backends = ["backend", "backend-2", "backend-3"];
+    private backends: string[] = [];
     private activeBackends: Set<string> = new Set(["backend"]);
-    private requestCounts: number[] = []; // Timestamps of requests
-    private threshold = 10; // Requests per second to trigger scale up (Start low for testing)
+
+    // RPS Tracking
+    private requestCounts: number[] = [];
+
+    // Bandwidth Tracking
+    private bandwidthCounts: { timestamp: number, bytes: number, node: string }[] = [];
+
+    private threshold = 10; // Requests per second per node
     private checkInterval: number | null = null;
     private scalingCooldown = false;
+    private lastScaleTime = 0;
 
-    // Enhanced stats tracking
+    // Predictive Stats
+    private rpsTrend = 0;
+    private timeToNextScale: number | null = null;
+
+    // Enhanced stats tracking (from HEAD)
     private nodeRequestCounts: Map<string, number> = new Map();
     private nodeLatencies: Map<string, number[]> = new Map();
     private scalingHistory: { timestamp: number; action: string; node: string }[] = [];
 
-    // Traffic simulator state
+    // Traffic simulator state (from HEAD)
     private simulatorInterval: number | null = null;
     private simulatorRps: number = 0;
     private simulatorTotalSent: number = 0;
 
     private constructor() {
+        // Initialize backends list (backend, backend-2 ... backend-10)
+        this.backends.push("backend");
+        for (let i = 2; i <= 10; i++) {
+            this.backends.push(`backend-${i}`);
+        }
+
         // Initialize node stats
         for (const backend of this.backends) {
             this.nodeRequestCounts.set(backend, 0);
             this.nodeLatencies.set(backend, []);
         }
+
         // Start monitoring loop
         this.checkInterval = setInterval(() => this.monitor(), 1000);
-        console.log("[LOAD BALANCER] Initialized. Monitoring load...");
+        console.log("[LOAD BALANCER] Initialized 10-Node Pool. Monitoring load...");
     }
 
     public static getInstance(): LoadBalancer {
@@ -40,11 +58,22 @@ export class LoadBalancer {
     public recordRequest() {
         const now = Date.now();
         this.requestCounts.push(now);
+        this.pruneData();
+    }
 
-        // Prune old (keep last 10s)
+    public recordBytes(node: string, bytes: number) {
+        this.bandwidthCounts.push({ timestamp: Date.now(), bytes, node });
+        if (this.bandwidthCounts.length > 5000) {
+            const windowStart = Date.now() - 10000;
+            this.bandwidthCounts = this.bandwidthCounts.filter(b => b.timestamp >= windowStart);
+        }
+    }
+
+    private pruneData() {
+        const now = Date.now();
         const windowStart = now - 10000;
-        // Optimization: only shift if needed
-        if (this.requestCounts[0] < windowStart) {
+
+        if (this.requestCounts.length > 0 && this.requestCounts[0] < windowStart) {
             this.requestCounts = this.requestCounts.filter(t => t >= windowStart);
         }
     }
@@ -52,49 +81,105 @@ export class LoadBalancer {
     public getRps(): number {
         const now = Date.now();
         const windowStart = now - 10000;
-        // Filter purely for calculation to be accurate
         const count = this.requestCounts.filter(t => t >= windowStart).length;
         return count / 10;
     }
 
+    public getBandwidth(): number {
+        const now = Date.now();
+        const windowStart = now - 10000;
+        const totalBytes = this.bandwidthCounts
+            .filter(b => b.timestamp >= windowStart)
+            .reduce((acc, curr) => acc + curr.bytes, 0);
+
+        return (totalBytes / 1024 / 1024) / 10; // MB/s
+    }
+
+    public getNodeStats() {
+        const now = Date.now();
+        const windowStart = now - 10000;
+        const stats: Record<string, { rps: number, mbs: number }> = {};
+
+        this.backends.forEach(b => stats[b] = { rps: 0, mbs: 0 });
+
+        this.bandwidthCounts.filter(b => b.timestamp >= windowStart).forEach(b => {
+            if (stats[b.node]) {
+                stats[b.node].mbs += b.bytes;
+            }
+        });
+
+        for (const node in stats) {
+            stats[node].mbs = (stats[node].mbs / 1024 / 1024) / 10;
+        }
+
+        const totalRps = this.getRps();
+        const activeCount = this.activeBackends.size;
+
+        this.activeBackends.forEach(node => {
+            if (stats[node]) stats[node].rps = totalRps / activeCount;
+        });
+
+        return stats;
+    }
+
     private async monitor() {
-        if (this.scalingCooldown) return;
+        this.pruneData();
+
+        // Calculate Trend
+        const now = Date.now();
+        const midPoint = now - 5000;
+        const windowStart = now - 10000;
+
+        const firstHalf = this.requestCounts.filter(t => t >= windowStart && t < midPoint).length / 5;
+        const secondHalf = this.requestCounts.filter(t => t >= midPoint).length / 5;
+
+        this.rpsTrend = secondHalf - firstHalf;
 
         const rps = this.getRps();
         const activeCount = this.activeBackends.size;
 
-        // Ensure we know what's really running (in case of manual stops/crashes)
-        // This sync step ensures activeBackends matches reality
+        // Predict Time to Next Scale
+        const capacity = activeCount * this.threshold;
+        const remainingCapacity = capacity - rps;
+
+        if (this.rpsTrend > 0 && remainingCapacity > 0) {
+            this.timeToNextScale = remainingCapacity / (Math.max(0.1, this.rpsTrend) * 0.2);
+        } else if (remainingCapacity <= 0) {
+            this.timeToNextScale = 0;
+        } else {
+            this.timeToNextScale = null;
+        }
+
+        if (this.scalingCooldown) return;
+
+        // Sync with reality
         for (const name of this.backends) {
             const svc = manager.get(name);
             if (svc?.stats.status === "running") {
                 this.activeBackends.add(name);
-            } else if (name !== "backend") { // Don't remove primary if it's just restarting
+            } else if (name !== "backend") {
                 this.activeBackends.delete(name);
             }
         }
-
-        // Always keep primary in the set for logic, even if briefly crashed
         this.activeBackends.add("backend");
 
-        // Scale Up
-        // If RPS > Threshold * ActiveNodes -> Need more nodes
-        if (rps > this.threshold * activeCount && activeCount < this.backends.length) {
+        // Scale Up Logic
+        if (rps > (this.threshold * activeCount) && activeCount < this.backends.length) {
             await this.scaleUp();
         }
-        // Scale Down
-        // If RPS < Threshold * (ActiveNodes - 1) * 0.8 -> Can remove one node
-        // (Factor 0.8 provides buffer so we don't flap)
-        else if (activeCount > 1 && rps < (this.threshold * (activeCount - 1) * 0.8)) {
+        // Scale Down Logic
+        else if (activeCount > 1 && rps < (this.threshold * (activeCount - 1) * 0.7)) {
             await this.scaleDown();
         }
     }
 
     private async scaleUp() {
         this.scalingCooldown = true;
+        this.lastScaleTime = Date.now();
+
         const nextBackend = this.backends.find(b => !this.activeBackends.has(b));
         if (nextBackend) {
-            console.log(`[LOAD BALANCER] High Load (${this.getRps().toFixed(1)} RPS). Spinning up ${nextBackend}...`);
+            console.log(`[LOAD BALANCER] Scale UP (${this.getRps().toFixed(1)} RPS). Starting ${nextBackend}...`);
             this.scalingHistory.push({ timestamp: Date.now(), action: "scale-up", node: nextBackend });
             const service = manager.get(nextBackend);
             if (service) {
@@ -102,19 +187,23 @@ export class LoadBalancer {
                 this.activeBackends.add(nextBackend);
             }
         }
-        setTimeout(() => { this.scalingCooldown = false; }, 5000); // 5s cooldown
+        setTimeout(() => { this.scalingCooldown = false; }, 3000);
     }
 
     private async scaleDown() {
         this.scalingCooldown = true;
-        // Don't stop primary "backend"
+        this.lastScaleTime = Date.now();
+
         const candidates = Array.from(this.activeBackends).filter(b => b !== "backend");
-        // Sort to stop highest index first (backend-3 before backend-2)
-        candidates.sort().reverse();
+        candidates.sort((a, b) => {
+            const numA = parseInt(a.split('-')[1] || "1");
+            const numB = parseInt(b.split('-')[1] || "1");
+            return numB - numA;
+        });
 
         const toStop = candidates[0];
         if (toStop) {
-            console.log(`[LOAD BALANCER] Load Decreased (${this.getRps().toFixed(1)} RPS). Stopping ${toStop}...`);
+            console.log(`[LOAD BALANCER] Scale DOWN (${this.getRps().toFixed(1)} RPS). Stopping ${toStop}...`);
             this.scalingHistory.push({ timestamp: Date.now(), action: "scale-down", node: toStop });
             const service = manager.get(toStop);
             if (service) {
@@ -122,11 +211,10 @@ export class LoadBalancer {
                 this.activeBackends.delete(toStop);
             }
         }
-        setTimeout(() => { this.scalingCooldown = false; }, 5000);
+        setTimeout(() => { this.scalingCooldown = false; }, 10000);
     }
 
     public getTarget(req: Request): { name: string, port: number } {
-        // Sticky Session Logic
         const cookieHeader = req.headers.get("cookie");
         let assigned: string | undefined;
 
@@ -134,7 +222,6 @@ export class LoadBalancer {
             const match = cookieHeader.match(/G_NODE=([^;]+)/);
             if (match) {
                 const node = match[1];
-                // Check if the requested node is active
                 if (this.activeBackends.has(node)) {
                     assigned = node;
                 }
@@ -142,17 +229,20 @@ export class LoadBalancer {
         }
 
         if (!assigned) {
-            // Round Robin or Random
             const candidates = Array.from(this.activeBackends);
             assigned = candidates[Math.floor(Math.random() * candidates.length)];
         }
 
         const service = manager.get(assigned);
-        // Fallback to 8001 if something goes wrong
         return { name: assigned, port: service?.config.port || 8001 };
     }
 
     public getStats() {
+        const activeCount = this.activeBackends.size;
+        const rps = this.getRps();
+        const capacity = activeCount * this.threshold;
+        const util = capacity > 0 ? (rps / capacity) * 100 : 0;
+
         const nodeStats = Array.from(this.backends).map(name => {
             const latencies = this.nodeLatencies.get(name) || [];
             const avgLatency = latencies.length > 0
@@ -174,8 +264,10 @@ export class LoadBalancer {
         const totalRequests = Array.from(this.nodeRequestCounts.values()).reduce((a, b) => a + b, 0);
 
         return {
-            rps: this.getRps(),
+            rps: rps,
+            totalMbs: this.getBandwidth(),
             activeNodes: Array.from(this.activeBackends),
+            nodeStats: this.getNodeStats(),
             threshold: this.threshold,
             cooldown: this.scalingCooldown,
             nodes: nodeStats,
@@ -185,7 +277,11 @@ export class LoadBalancer {
                 running: this.simulatorInterval !== null,
                 rps: this.simulatorRps,
                 totalSent: this.simulatorTotalSent
-            }
+            },
+            utilization: Math.min(100, util),
+            totalCapacity: this.backends.length * this.threshold,
+            timeToNextScale: this.timeToNextScale,
+            activeCount
         };
     }
 
@@ -193,33 +289,28 @@ export class LoadBalancer {
         this.threshold = val;
     }
 
-    // Track request to a specific node
     public recordNodeRequest(nodeName: string, latencyMs: number) {
         const count = this.nodeRequestCounts.get(nodeName) || 0;
         this.nodeRequestCounts.set(nodeName, count + 1);
 
         const latencies = this.nodeLatencies.get(nodeName) || [];
         latencies.push(latencyMs);
-        // Keep last 100 latencies
         if (latencies.length > 100) latencies.shift();
         this.nodeLatencies.set(nodeName, latencies);
     }
 
-    // Traffic Simulator Controls
     public startSimulator(rps: number) {
         if (this.simulatorInterval) this.stopSimulator();
 
         this.simulatorRps = rps;
         console.log(`[LOAD BALANCER] Traffic simulator started: ${rps} RPS`);
 
-        // Distributor: send requests at specified RPS
         const msPerRequest = 1000 / rps;
         this.simulatorInterval = setInterval(async () => {
             try {
                 const start = performance.now();
                 const target = this.getTarget(new Request("http://localhost/api/health"));
 
-                // Make actual request to backend
                 await fetch(`http://localhost:${target.port}/health`, {
                     method: "GET",
                     signal: AbortSignal.timeout(5000)
@@ -229,7 +320,7 @@ export class LoadBalancer {
                 this.recordRequest();
                 this.recordNodeRequest(target.name, latency);
                 this.simulatorTotalSent++;
-            } catch (e) {
+            } catch {
                 // Ignore errors
             }
         }, msPerRequest);

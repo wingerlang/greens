@@ -29,6 +29,7 @@
             --text-muted: #94a3b8;
             --danger: #ef4444;
             --success: #10b981;
+            --warning: #f59e0b;
             --border-glass: rgba(255, 255, 255, 0.1);
             --glow-primary: rgba(16, 185, 129, 0.2);
         }
@@ -356,6 +357,18 @@
             border: 1px solid rgba(168, 85, 247, 0.2);
         }
 
+        .badge-yellow {
+             background: rgba(245, 158, 11, 0.15);
+             color: #fbbf24;
+             border: 1px solid rgba(245, 158, 11, 0.2);
+        }
+
+        .badge-red {
+             background: rgba(239, 68, 68, 0.15);
+             color: #f87171;
+             border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
         button {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid var(--border-glass);
@@ -417,11 +430,72 @@
             width: 100%;
         }
 
-        .accent-gradient {
-            background: linear-gradient(to right, #10b981, #3b82f6);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
+        /* Cluster Visualizer Styles */
+        .node-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .node-card {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-glass);
+            border-radius: 10px;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .node-card.active {
+            border-color: var(--success);
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.1);
+        }
+
+        .node-card.starting {
+             border-color: var(--warning);
+             animation: pulse 2s infinite;
+        }
+
+        .node-card.inactive {
+            opacity: 0.5;
+            filter: grayscale(1);
+        }
+
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-muted);
+        }
+
+        .node-metric {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+        .node-submetric {
+             font-size: 0.7rem;
+             color: var(--text-muted);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            -webkit-appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: var(--accent-primary);
+            border-radius: 50%;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -439,6 +513,9 @@
             <div class="nav-label">Monitor Center</div>
             <div class="nav-item" :class="{ 'active': tab === 'overview' }" @click="tab = 'overview'">
                 <span>Overview</span>
+            </div>
+             <div class="nav-item" :class="{ 'active': tab === 'simulator' }" @click="tab = 'simulator'">
+                <span>Hyper Simulator</span>
             </div>
             <div class="nav-item" :class="{ 'active': tab === 'traffic' }" @click="tab = 'traffic'">
                 <span>Traffic Analytics</span>
@@ -476,9 +553,6 @@
             <div class="nav-item" :class="{ 'active': tab === 'tools' }" @click="tab = 'tools'">
                 <span>Shadow Ops</span>
             </div>
-            <div class="nav-item" :class="{ 'active': tab === 'settings' }" @click="tab = 'settings'">
-                <span>Parameters</span>
-            </div>
         </div>
     </div>
 
@@ -487,11 +561,13 @@
         <div class="top-bar">
             <h2 style="margin:0; font-size: 1.4rem; font-weight: 700" x-text="pageTitle"></h2>
             <div style="display:flex; gap:16px;">
+                 <template x-if="tab === 'simulator'">
+                    <div style="display:flex; gap:10px; align-items:center; margin-right: 20px;">
+                        <span class="badge" :class="simulator.running > 0 ? 'badge-green' : 'badge-purple'" x-text="simulator.running + ' Active Users'"></span>
+                    </div>
+                </template>
                 <template x-if="tab === 'overview'">
                     <button class="danger" @click="restartAll()">Emergency Restart</button>
-                </template>
-                <template x-if="tab === 'traffic' || tab === 'sessions'">
-                    <button class="primary" @click="refreshData()">Sync Data</button>
                 </template>
             </div>
         </div>
@@ -502,24 +578,31 @@
             <div x-show="tab === 'overview'" style="display:flex; flex-direction:column; gap:32px;">
                 <div class="grid">
                     <div class="card">
-                        <div class="stat-label">System Performance</div>
-                        <div class="stat-value" x-text="(system.load[0] || 0).toFixed(2)"></div>
-                        <div class="stat-trend trend-up">Optimal Load</div>
+                        <div class="stat-label">System Load</div>
+                         <div style="display:flex; justify-content:space-between; align-items:end;">
+                            <div class="stat-value" x-text="(loadBalancer.utilization || 0).toFixed(0) + '%'"></div>
+                            <div class="stat-trend trend-up">Cluster Usage</div>
+                         </div>
                     </div>
                     <div class="card">
-                        <div class="stat-label">Memory Allocation</div>
-                        <div class="stat-value" x-text="formatBytes(system.memory.rss)"></div>
-                        <div class="stat-trend">Resource usage</div>
+                        <div class="stat-label">Total Bandwidth</div>
+                         <div style="display:flex; justify-content:space-between; align-items:end;">
+                            <div class="stat-value" x-text="(loadBalancer.totalMbs || 0).toFixed(2)"></div>
+                            <div class="stat-trend">MB/s</div>
+                        </div>
                     </div>
                     <div class="card">
                         <div class="stat-label">Active Nodes</div>
-                        <div class="stat-value">
-                            <span x-text="services.filter(s => s.status === 'running').length"></span>
-                            <span style="font-size:1.1rem; color:var(--text-muted)"
-                                x-text="'/ ' + services.length"></span>
+                        <div style="display:flex; justify-content:space-between; align-items:end;">
+                            <div class="stat-value">
+                                <span x-text="loadBalancer.activeCount || 1"></span>
+                                <span style="font-size:1.1rem; color:var(--text-muted)"
+                                    x-text="'/ 10'"></span>
+                            </div>
+                            <div class="stat-trend trend-up" x-text="loadBalancer.cooldown ? 'Scaling...' : 'Stable'"></div>
                         </div>
-                        <div class="stat-trend trend-up">All systems clear</div>
                     </div>
+<<<<<<< HEAD
                     <div class="card">
                         <div class="stat-label">Traffic Throughput</div>
                         <div class="stat-value" x-text="traffic.total"></div>
@@ -558,56 +641,53 @@
                                 </template>
                             </div>
                         </div>
+=======
+                     <div class="card">
+                        <div class="stat-label">Forecast</div>
+                        <template x-if="loadBalancer.timeToNextScale && loadBalancer.timeToNextScale > 0">
+                             <div>
+                                <div class="stat-value" style="color: var(--warning)" x-text="loadBalancer.timeToNextScale.toFixed(1) + 's'"></div>
+                                <div class="stat-trend">Time to Scale Up</div>
+                             </div>
+                        </template>
+                        <template x-if="!loadBalancer.timeToNextScale">
+                             <div style="margin-top:10px; opacity:0.6;">No scaling predicted</div>
+                        </template>
+>>>>>>> bbdae2bbacd7612f9d6d6746810df7461d9ae3c7
                     </div>
                 </div>
 
-                <div class="table-container shadow-lg">
-                    <div
-                        style="padding: 24px; border-bottom: 1px solid var(--border-glass); background: rgba(255,255,255,0.02)">
-                        <h3 style="margin:0; font-size: 1.1rem">Service Topology</h3>
+                <!-- Cluster Visualizer -->
+                <div class="card">
+                    <div class="stat-label">Cluster Topology & Load Distribution</div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                        <div style="font-size: 0.8rem; color: var(--text-muted)">
+                            Total Capacity: <span x-text="loadBalancer.totalCapacity"></span> RPS
+                        </div>
+                        <div style="width: 200px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow:hidden;">
+                            <div :style="`width: ${loadBalancer.utilization}%; height: 100%; background: var(--accent-primary); transition: width 0.5s;`"></div>
+                        </div>
                     </div>
-                    <table style="width:100%">
-                        <thead>
-                            <tr>
-                                <th>Service</th>
-                                <th>PID</th>
-                                <th>Internal Port</th>
-                                <th>Gateway Address</th>
-                                <th>Status</th>
-                                <th>Req (10m)</th>
-                                <th>Req (60m)</th>
-                                <th>CPU</th>
-                                <th>Memory</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="s in services" :key="s.name">
-                                <tr>
-                                    <td style="font-weight:700; color:var(--accent-primary)"
-                                        x-text="capitalize(s.name)"></td>
-                                    <td style="font-family: monospace; opacity: 0.8" x-text="s.pid || '-'"></td>
-                                    <td x-text="s.port || '-'"></td>
-                                    <td>
-                                        <template x-if="s.url">
-                                            <a :href="s.url" target="_blank"
-                                                style="color:var(--accent-secondary); text-decoration:none; font-weight: 500;"
-                                                x-text="s.url"></a>
-                                        </template>
-                                        <template x-if="!s.url">-</template>
-                                    </td>
-                                    <td>
-                                        <span class="badge"
-                                            :class="s.status === 'running' ? 'badge-green' : (s.status === 'stopped' ? 'badge-purple' : 'badge-blue')"
-                                            x-text="s.status"></span>
-                                    </td>
-                                    <td style="font-weight:700; color:var(--accent-secondary)" x-text="s.req10m"></td>
-                                    <td style="font-weight:700; color:var(--accent-secondary)" x-text="s.req60m"></td>
-                                    <td x-text="s.cpu.toFixed(1) + '%'"></td>
-                                    <td x-text="formatBytes(s.memory)"></td>
-                                </tr>
-                            </template>
-                        </tbody>
-                    </table>
+
+                    <div class="node-grid">
+                        <template x-for="i in 10">
+                            <div class="node-card"
+                                 :class="getNodeClass(i)"
+                                 :title="'Backend ' + i">
+                                <div class="node-header">
+                                    <span x-text="'NODE-0' + i"></span>
+                                    <div class="status-dot" :class="getNodeStatus(i)"></div>
+                                </div>
+                                <div style="flex:1; display:flex; flex-direction:column; justify-content:center; gap:2px;">
+                                    <div class="node-metric" x-text="getNodeRps(i) + ' RPS'"></div>
+                                    <div class="node-submetric" x-text="getNodeMbs(i) + ' MB/s'"></div>
+                                </div>
+                                <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; margin-top: 4px;">
+                                    <div :style="`width: ${getNodeUtil(i)}%; height: 100%; background: ${getNodeColor(i)};`"></div>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
                 </div>
 
                 <!-- Real-time Charts Row -->
@@ -653,126 +733,76 @@
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Circuit Breaker Status -->
-                <div class="card">
-                    <div
-                        style="padding-bottom: 12px; border-bottom: 1px solid var(--border-glass); margin-bottom: 16px;">
-                        <h3 style="margin: 0; font-size: 1.1rem;">Circuit Breaker Status</h3>
-                    </div>
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
-                        <template x-for="service in services" :key="service.name + '-circuit'">
-                            <div style="padding: 16px; border-radius: 12px; border: 1px solid var(--border-glass);"
-                                :style="service.circuit?.status === 'OPEN' ? 'background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);' : 
-                                        service.circuit?.status === 'HALF-OPEN' ? 'background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3);' :
-                                        'background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3);'">
-                                <div style="display: flex; justify-content: space-between; align-items: center;">
-                                    <span style="font-weight: 700; text-transform: capitalize;"
-                                        x-text="service.name"></span>
-                                    <span class="badge"
-                                        :class="service.circuit?.status === 'OPEN' ? 'badge-red' : 
-                                                service.circuit?.status === 'HALF-OPEN' ? 'badge-yellow' : 'badge-green'"
-                                        :style="service.circuit?.status === 'OPEN' ? 'background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: rgba(239, 68, 68, 0.3);' : 
-                                                service.circuit?.status === 'HALF-OPEN' ? 'background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3);' : ''"
-                                        x-text="service.circuit?.status || 'CLOSED'"></span>
+            <!-- Simulator Tab -->
+            <div x-show="tab === 'simulator'">
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="stat-label">User Population Control</div>
+                        <div style="margin: 20px 0;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                <span>Target Concurrent Users</span>
+                                <span style="font-weight:bold; color:var(--accent-primary)" x-text="simConfig.targetUsers"></span>
+                            </div>
+                            <input type="range" min="0" max="500" step="10" x-model="simConfig.targetUsers" @input="updateSimConfig()">
+                            <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:0.75rem; color:var(--text-muted)">
+                                <span>0</span>
+                                <span>500</span>
+                            </div>
+                        </div>
+
+                        <div style="margin: 20px 0;">
+                             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                                <span>Ramp Up Rate (Users/sec)</span>
+                                <span style="font-weight:bold; color:var(--accent-secondary)" x-text="simConfig.rampRate"></span>
+                            </div>
+                            <input type="range" min="1" max="50" step="1" x-model="simConfig.rampRate" @input="updateSimConfig()">
+                        </div>
+
+                         <div style="margin-top: 30px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                            <div class="stat-label">Simulation Status</div>
+                            <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+                                <div>
+                                    <div style="font-size:1.5rem; font-weight:800; color:var(--success)" x-text="simulator.active">0</div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted)">Active Users</div>
                                 </div>
-                                <div style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
-                                    Failures: <span style="font-weight: 600;"
-                                        x-text="service.circuit?.failures || 0"></span>
+                                <div>
+                                     <div style="font-size:1.5rem; font-weight:800;" x-text="simulator.totalReq">0</div>
+                                     <div style="font-size:0.7rem; color:var(--text-muted)">Requests Sent</div>
+                                </div>
+                                 <div>
+                                     <div style="font-size:1.5rem; font-weight:800; color:var(--danger)" x-text="simulator.totalErr">0</div>
+                                     <div style="font-size:0.7rem; color:var(--text-muted)">Errors</div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="stat-label">Persona Distribution</div>
+                        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">
+                            Configure the behavior mix of the simulated crowd.
+                        </p>
+
+                        <template x-for="(weight, type) in simConfig.personas" :key="type">
+                            <div style="margin-bottom: 20px;">
+                                <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                                    <span style="text-transform:capitalize" x-text="type"></span>
+                                    <span x-text="(weight * 100).toFixed(0) + '%'"></span>
+                                </div>
+                                <!-- Note: Simple sliders for each, ideally they should sum to 100 but loose is fine for sim -->
+                                <input type="range" min="0" max="1" step="0.1"
+                                       x-model="simConfig.personas[type]"
+                                       @input="updateSimConfig()">
+                            </div>
                         </template>
-                    </div>
-                </div>
 
-                <!-- Recent Activity / Quick Actions -->
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="stat-label">Top Endpoints (Last 10min)</div>
-                        <div style="max-height: 200px; overflow-y: auto;">
-                            <template x-for="(ep, i) in analytics.endpoints.slice(0, 8)" :key="ep.path">
-                                <div
-                                    style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <span
-                                            style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(59, 130, 246, 0.2); border-radius: 6px; font-size: 0.75rem; font-weight: 700; color: #3b82f6;"
-                                            x-text="i + 1"></span>
-                                        <span style="font-family: monospace; font-size: 0.85rem;"
-                                            x-text="ep.path"></span>
-                                    </div>
-                                    <span style="font-weight: 700; color: var(--accent-primary);"
-                                        x-text="ep.count"></span>
-                                </div>
-                            </template>
+                        <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border-glass)">
+                            <button class="danger" style="width:100%; justify-content:center;" @click="simConfig.targetUsers = 0; updateSimConfig()">
+                                STOP SIMULATION
+                            </button>
                         </div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">Top IPs (Last 10min)</div>
-                        <div style="max-height: 200px; overflow-y: auto;">
-                            <template x-for="(ip, i) in analytics.ips.slice(0, 8)" :key="ip.ip">
-                                <div
-                                    style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
-                                    <div style="display: flex; align-items: center; gap: 12px;">
-                                        <span
-                                            style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(168, 85, 247, 0.2); border-radius: 6px; font-size: 0.75rem; font-weight: 700; color: #a855f7;"
-                                            x-text="i + 1"></span>
-                                        <span style="font-family: monospace; font-size: 0.85rem;" x-text="ip.ip"></span>
-                                    </div>
-                                    <span style="font-weight: 700; color: var(--accent-secondary);"
-                                        x-text="ip.count"></span>
-                                </div>
-                            </template>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Latency & Memory Charts -->
-                <div class="grid-2">
-                    <!-- Latency Histogram -->
-                    <div class="card">
-                        <div class="stat-label">Latency Distribution</div>
-                        <div class="chart-container" style="height: 200px;">
-                            <canvas id="latencyChart"></canvas>
-                        </div>
-                    </div>
-
-                    <!-- Memory Trend -->
-                    <div class="card">
-                        <div class="stat-label">Memory Usage (Last 10min)</div>
-                        <div class="chart-container" style="height: 200px;">
-                            <canvas id="memoryChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Quick Actions Panel -->
-                <div class="card">
-                    <div
-                        style="padding-bottom: 12px; border-bottom: 1px solid var(--border-glass); margin-bottom: 16px;">
-                        <h3 style="margin: 0; font-size: 1.1rem;">Quick Actions</h3>
-                    </div>
-                    <div style="display: flex; flex-wrap: wrap; gap: 12px;">
-                        <button @click="quickAction('flush-cache')" style="flex: 1; min-width: 150px;">
-                            <span>🗑️</span>
-                            <span>Flush Cache</span>
-                        </button>
-                        <button @click="quickAction('clear-bans')" style="flex: 1; min-width: 150px;">
-                            <span>🔓</span>
-                            <span>Clear IP Bans</span>
-                        </button>
-                        <button @click="quickAction('restart-frontend')" class="primary"
-                            style="flex: 1; min-width: 150px;">
-                            <span>🔄</span>
-                            <span>Restart Frontend</span>
-                        </button>
-                        <button @click="quickAction('restart-backend')" class="primary"
-                            style="flex: 1; min-width: 150px;">
-                            <span>🔄</span>
-                            <span>Restart Backend</span>
-                        </button>
-                    </div>
-                    <div x-show="actionMessage" x-text="actionMessage"
-                        style="margin-top: 12px; padding: 12px; border-radius: 8px; background: rgba(16, 185, 129, 0.1); color: #34d399; font-size: 0.85rem;">
                     </div>
                 </div>
             </div>
@@ -825,62 +855,6 @@
                                 </tbody>
                             </table>
                         </div>
-                    </div>
-                </div>
-
-                <div class="grid-2">
-                    <div class="table-container">
-                        <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Endpoints
-                            (7 Days)</div>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Path</th>
-                                    <th>Hits</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Use history endpoints if available, this solves the persistence display issue -->
-                                <template
-                                    x-for="ep in (analytics.historyEndpoints && analytics.historyEndpoints.length > 0 ? analytics.historyEndpoints : analytics.endpoints)"
-                                    :key="ep.path">
-                                    <tr>
-                                        <td x-text="ep.path"></td>
-                                        <td x-text="ep.count"></td>
-                                    </tr>
-                                </template>
-                                <tr
-                                    x-show="(!analytics.historyEndpoints || analytics.historyEndpoints.length === 0) && analytics.endpoints.length === 0">
-                                    <td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="table-container">
-                        <div style="padding:15px; border-bottom:1px solid var(--border); font-weight:bold">Top Source
-                            IPs</div>
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>IP Address</th>
-                                    <th>Hits</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="ip in analytics.ips" :key="ip.ip">
-                                    <tr>
-                                        <td x-text="ip.ip"></td>
-                                        <td x-text="ip.count"></td>
-                                        <td><button class="danger" style="padding:4px 8px; font-size:0.8rem"
-                                                @click="banIp(ip.ip)">Ban</button></td>
-                                    </tr>
-                                </template>
-                                <tr x-show="analytics.ips.length === 0">
-                                    <td colspan="3" style="text-align:center; padding:20px; color:#666">No data</td>
-                                </tr>
-                            </tbody>
-                        </table>
                     </div>
                 </div>
             </div>
@@ -1432,7 +1406,9 @@
                 sessions: [],
                 bannedIps: [],
                 config: {},
-                loadBalancer: { rps: 0, activeNodes: [], threshold: 10, cooldown: false },
+                loadBalancer: { rps: 0, activeNodes: [], threshold: 10, cooldown: false, nodeStats: {}, totalMbs: 0, utilization: 0, totalCapacity: 0, timeToNextScale: null },
+                simulator: { active: 0, running: 0, totalReq: 0, totalErr: 0 },
+                simConfig: { targetUsers: 0, rampRate: 5, personas: { browser: 0, athlete: 0, social: 0, heavy: 0 } },
                 currentService: null,
                 logs: 'Loading...',
                 banInput: '',
@@ -1558,14 +1534,15 @@
 
                 async refreshData() {
                     // Parallel fetching
-                    const [statusRes, analyticsRes, granularRes, sessionRes, bannedRes, configRes, lbRes] = await Promise.all([
+                    const [statusRes, analyticsRes, granularRes, sessionRes, bannedRes, configRes, lbRes, simRes] = await Promise.all([
                         fetch('/api/status').then(r => r.json()),
                         fetch('/api/analytics').then(r => r.json()),
                         fetch('/api/analytics/granular').then(r => r.json()),
                         fetch('/api/sessions').then(r => r.json()),
                         fetch('/api/banned').then(r => r.json()),
                         fetch('/api/config').then(r => r.json()),
-                        fetch('/api/load-balancer').then(r => r.json())
+                        fetch('/api/load-balancer').then(r => r.json()),
+                        fetch('/api/simulator').then(r => r.json())
                     ]);
 
                     this.services = statusRes.services;
@@ -1581,6 +1558,8 @@
                     this.sessions = sessionRes;
                     this.bannedIps = bannedRes;
                     this.config = configRes;
+                    this.simulator = simRes;
+                    if(simRes.config) this.simConfig = simRes.config;
 
                     // Sync local recording state from config
                     if (this.config.recording !== undefined) {
@@ -1605,6 +1584,13 @@
                     }
                 },
 
+                async updateSimConfig() {
+                    await fetch('/api/simulator', {
+                        method: 'POST',
+                        body: JSON.stringify(this.simConfig)
+                    });
+                },
+
                 startTimers() {
                     // Try WebSocket first for real-time updates
                     this.connectWebSocket();
@@ -1614,7 +1600,7 @@
                         if (!this.wsConnected) {
                             this.refreshData();
                         }
-                    }, 5000);
+                    }, 2000); // 2s polling for responsive sim UI
 
                     // Poll logs if service view active
                     setInterval(() => {
@@ -2068,8 +2054,47 @@
                     return 'var(--warning)';
                 },
 
+                // Helpers for Node Grid
+                getNodeName(i) {
+                    return i === 1 ? 'backend' : 'backend-' + i;
+                },
+                getNodeClass(i) {
+                     const name = this.getNodeName(i);
+                     if (this.loadBalancer.activeNodes.includes(name)) return 'active';
+                     // Check if starting?
+                     const svc = this.services.find(s => s.name === name);
+                     if (svc && svc.status === 'starting') return 'starting';
+                     return 'inactive';
+                },
+                getNodeStatus(i) {
+                    const name = this.getNodeName(i);
+                    const svc = this.services.find(s => s.name === name);
+                    return svc ? svc.status : 'stopped';
+                },
+                getNodeRps(i) {
+                    const name = this.getNodeName(i);
+                    return this.loadBalancer.nodeStats[name] ? this.loadBalancer.nodeStats[name].rps.toFixed(1) : '0.0';
+                },
+                getNodeMbs(i) {
+                     const name = this.getNodeName(i);
+                     return this.loadBalancer.nodeStats[name] ? this.loadBalancer.nodeStats[name].mbs.toFixed(2) : '0.00';
+                },
+                getNodeUtil(i) {
+                     const name = this.getNodeName(i);
+                     if (!this.loadBalancer.nodeStats[name]) return 0;
+                     const rps = this.loadBalancer.nodeStats[name].rps;
+                     return Math.min(100, (rps / this.loadBalancer.threshold) * 100);
+                },
+                getNodeColor(i) {
+                    const util = this.getNodeUtil(i);
+                    if (util > 90) return '#ef4444';
+                    if (util > 70) return '#f59e0b';
+                    return '#10b981';
+                },
+
                 get pageTitle() {
                     if (this.tab === 'overview') return 'System Overview';
+                    if (this.tab === 'simulator') return 'Hyper Simulator';
                     if (this.tab === 'traffic') return 'Traffic Analytics';
                     if (this.tab === 'sessions') return 'Active Sessions';
                     if (this.tab === 'console') return 'Live Console';

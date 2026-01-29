@@ -21,6 +21,7 @@ import { getCircuitsSnapshot } from "./circuitBreaker.ts";
 import { generatePrometheusMetrics, getLatencyStats, getMemoryHistory } from "./prometheus.ts";
 import { CONFIG } from "./config.ts";
 import { loadBalancer } from "./loadBalancer.ts";
+import { simulator } from "./simulator.ts";
 
 // WebSocket clients for real-time updates
 const wsClients: Set<WebSocket> = new Set();
@@ -451,6 +452,20 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             }
         }
         return Response.json(loadBalancer.getStats());
+    }
+
+    // Simulator API
+    if (url.pathname === "/api/simulator") {
+        if (req.method === "POST") {
+            try {
+                const body = await req.json();
+                simulator.updateConfig(body);
+                return Response.json({ success: true, status: simulator.getStatus() });
+            } catch (e) {
+                return Response.json({ success: false, error: "Invalid JSON" });
+            }
+        }
+        return Response.json(simulator.getStatus());
     }
 
     // Prometheus metrics endpoint
