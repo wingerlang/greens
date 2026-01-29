@@ -128,20 +128,20 @@ class VirtualUser {
     private async performAction() {
         const rand = Math.random();
 
-        // Common action: Check Status (Cheap)
+        // Common action: Check Status (Cheap, simulates heartbeat/background polling)
         if (rand < 0.3) {
-            await this.req("GET", "/api/status"); // Assuming exists or just home
+            await this.req("GET", "/api/status");
             return;
         }
 
         switch (this.persona) {
             case "browser":
-                // Just reads
+                // Simulates a user navigating read-only pages (Dashboard, Profile)
                 await this.req("GET", "/api/user/me");
                 break;
 
             case "athlete":
-                // Logs data
+                // Simulates a user actively logging a workout (Data Entry)
                 await this.req("POST", "/api/workouts", {
                     date: new Date().toISOString(),
                     type: "strength",
@@ -150,7 +150,7 @@ class VirtualUser {
                 break;
 
             case "social":
-                // Messages
+                // Simulates a user sending messages (Social Interaction)
                 await this.req("POST", "/api/messages", {
                     to: "admin",
                     content: `Hello from ${this.username} at ${new Date().toISOString()}`,
