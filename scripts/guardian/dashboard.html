@@ -546,7 +546,7 @@
                         <tbody>
                             <template x-for="s in services" :key="s.name">
                                 <tr>
-                                    <td style="font-weight:700; color: var(--accent-primary)"
+                                    <td style="font-weight:700; color:var(--accent-primary)"
                                         x-text="capitalize(s.name)"></td>
                                     <td style="font-family: monospace; opacity: 0.8" x-text="s.pid || '-'"></td>
                                     <td x-text="s.port || '-'"></td>
@@ -571,6 +571,122 @@
                             </template>
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Real-time Charts Row -->
+                <div class="grid-2">
+                    <!-- RPS Chart -->
+                    <div class="card">
+                        <div class="stat-label">Requests Per Second (Live)</div>
+                        <div class="chart-container" style="height: 200px;">
+                            <canvas id="rpsChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Uptime & Quick Stats -->
+                    <div class="card">
+                        <div class="stat-label">System Uptime</div>
+                        <div style="display: flex; flex-direction: column; gap: 16px; padding: 16px 0;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #10b981, #3b82f6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
+                                    x-text="formatUptime(guardianUptime)">0h 0m</div>
+                                <div style="color: var(--text-muted); font-size: 0.85rem;">Guardian Running</div>
+                            </div>
+                            <div
+                                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px;">
+                                <div
+                                    style="text-align: center; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 12px;">
+                                    <div style="font-size: 1.4rem; font-weight: 700; color: #10b981;"
+                                        x-text="currentRps">0</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-muted);">RPS</div>
+                                </div>
+                                <div
+                                    style="text-align: center; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 12px;">
+                                    <div style="font-size: 1.4rem; font-weight: 700; color: #3b82f6;"
+                                        x-text="totalRequests">0</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-muted);">Total Req</div>
+                                </div>
+                                <div
+                                    style="text-align: center; padding: 12px; background: rgba(168, 85, 247, 0.1); border-radius: 12px;">
+                                    <div style="font-size: 1.4rem; font-weight: 700; color: #a855f7;"
+                                        x-text="avgLatency + 'ms'">0ms</div>
+                                    <div style="font-size: 0.7rem; color: var(--text-muted);">Avg Latency</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Circuit Breaker Status -->
+                <div class="card">
+                    <div
+                        style="padding-bottom: 12px; border-bottom: 1px solid var(--border-glass); margin-bottom: 16px;">
+                        <h3 style="margin: 0; font-size: 1.1rem;">Circuit Breaker Status</h3>
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+                        <template x-for="service in services" :key="service.name + '-circuit'">
+                            <div style="padding: 16px; border-radius: 12px; border: 1px solid var(--border-glass);"
+                                :style="service.circuit?.status === 'OPEN' ? 'background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.3);' : 
+                                        service.circuit?.status === 'HALF-OPEN' ? 'background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3);' :
+                                        'background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.3);'">
+                                <div style="display: flex; justify-content: space-between; align-items: center;">
+                                    <span style="font-weight: 700; text-transform: capitalize;"
+                                        x-text="service.name"></span>
+                                    <span class="badge"
+                                        :class="service.circuit?.status === 'OPEN' ? 'badge-red' : 
+                                                service.circuit?.status === 'HALF-OPEN' ? 'badge-yellow' : 'badge-green'"
+                                        :style="service.circuit?.status === 'OPEN' ? 'background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: rgba(239, 68, 68, 0.3);' : 
+                                                service.circuit?.status === 'HALF-OPEN' ? 'background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3);' : ''"
+                                        x-text="service.circuit?.status || 'CLOSED'"></span>
+                                </div>
+                                <div style="margin-top: 8px; font-size: 0.8rem; color: var(--text-muted);">
+                                    Failures: <span style="font-weight: 600;"
+                                        x-text="service.circuit?.failures || 0"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <!-- Recent Activity / Quick Actions -->
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="stat-label">Top Endpoints (Last 10min)</div>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            <template x-for="(ep, i) in analytics.endpoints.slice(0, 8)" :key="ep.path">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <span
+                                            style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(59, 130, 246, 0.2); border-radius: 6px; font-size: 0.75rem; font-weight: 700; color: #3b82f6;"
+                                            x-text="i + 1"></span>
+                                        <span style="font-family: monospace; font-size: 0.85rem;"
+                                            x-text="ep.path"></span>
+                                    </div>
+                                    <span style="font-weight: 700; color: var(--accent-primary);"
+                                        x-text="ep.count"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="stat-label">Top IPs (Last 10min)</div>
+                        <div style="max-height: 200px; overflow-y: auto;">
+                            <template x-for="(ip, i) in analytics.ips.slice(0, 8)" :key="ip.ip">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-glass);">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <span
+                                            style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background: rgba(168, 85, 247, 0.2); border-radius: 6px; font-size: 0.75rem; font-weight: 700; color: #a855f7;"
+                                            x-text="i + 1"></span>
+                                        <span style="font-family: monospace; font-size: 0.85rem;" x-text="ip.ip"></span>
+                                    </div>
+                                    <span style="font-weight: 700; color: var(--accent-secondary);"
+                                        x-text="ip.count"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1046,6 +1162,14 @@
                 statsSocket: null,
                 wsConnected: false,
 
+                // New overview stats
+                guardianUptime: 0,
+                currentRps: 0,
+                totalRequests: 0,
+                avgLatency: 0,
+                rpsHistory: [],
+                rpsChartInstance: null,
+
                 async init() {
                     // Deep connection: Read hash to set initial tab
                     const hash = window.location.hash.slice(1);
@@ -1210,6 +1334,22 @@
                                 if (this.currentService) {
                                     this.currentService = this.services.find(s => s.name === this.currentService.name) || this.currentService;
                                 }
+
+                                // Update overview stats
+                                this.guardianUptime = data.uptime || 0;
+                                this.currentRps = parseFloat(data.rps || 0).toFixed(1);
+                                this.totalRequests = data.totalRequests || 0;
+
+                                // Update RPS history for chart (keep last 60 data points)
+                                this.rpsHistory.push(parseFloat(data.rps || 0));
+                                if (this.rpsHistory.length > 60) {
+                                    this.rpsHistory.shift();
+                                }
+
+                                // Render RPS chart if on overview tab
+                                if (this.tab === 'overview') {
+                                    this.$nextTick(() => this.renderRpsChart());
+                                }
                             }
                         } catch (e) {
                             console.error('WebSocket message parse error:', e);
@@ -1371,6 +1511,57 @@
 
                 formatTime(ts) {
                     return new Date(ts).toLocaleTimeString();
+                },
+
+                formatUptime(seconds) {
+                    if (!seconds || seconds < 0) return '0s';
+                    const days = Math.floor(seconds / 86400);
+                    const hours = Math.floor((seconds % 86400) / 3600);
+                    const mins = Math.floor((seconds % 3600) / 60);
+                    const secs = seconds % 60;
+
+                    if (days > 0) return `${days}d ${hours}h ${mins}m`;
+                    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
+                    if (mins > 0) return `${mins}m ${secs}s`;
+                    return `${secs}s`;
+                },
+
+                renderRpsChart() {
+                    const ctx = document.getElementById('rpsChart');
+                    if (!ctx) return;
+
+                    if (this.rpsChartInstance) {
+                        this.rpsChartInstance.data.labels = this.rpsHistory.map((_, i) => '');
+                        this.rpsChartInstance.data.datasets[0].data = this.rpsHistory;
+                        this.rpsChartInstance.update('none');
+                        return;
+                    }
+
+                    this.rpsChartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: this.rpsHistory.map((_, i) => ''),
+                            datasets: [{
+                                label: 'RPS',
+                                data: this.rpsHistory,
+                                borderColor: '#10b981',
+                                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                                x: { display: false }
+                            },
+                            plugins: { legend: { display: false } },
+                            animation: false
+                        }
+                    });
                 },
 
                 getStatusColor(status) {
