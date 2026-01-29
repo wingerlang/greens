@@ -9,7 +9,16 @@ import FeedEventCard from '../components/feed/FeedEventCard.tsx';
 import type { FeedEvent } from '../models/feedTypes.ts';
 import { useMessages } from '../context/MessageContext.tsx';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, Activity, Trophy, Flame, TrendingUp } from 'lucide-react';
+import {
+    ResponsiveContainer,
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    Tooltip,
+    CartesianGrid
+} from 'recharts';
 
 export function PublicProfilePage() {
     const { handle } = useParams<{ handle: string }>();
@@ -18,7 +27,12 @@ export function PublicProfilePage() {
     const { startConversation } = useMessages();
     const [profile, setProfile] = useState<User | null>(null);
     const [events, setEvents] = useState<FeedEvent[]>([]);
-    const [stats, setStats] = useState<{ distance: number; duration: number; count: number } | null>(null);
+    const [stats, setStats] = useState<{
+        distance: number;
+        duration: number;
+        count: number;
+        dailyStats?: { date: string; runningDistance: number; strengthTonnage: number }[];
+    } | null>(null);
     const [loading, setLoading] = useState(true);
     const [feedLoading, setFeedLoading] = useState(false);
     const [following, setFollowing] = useState(false);
@@ -29,7 +43,8 @@ export function PublicProfilePage() {
         setFeedLoading(true);
         try {
             const token = localStorage.getItem('auth_token');
-            const res = await fetch(`/api/feed/user/${userId}?limit=10`, {
+            // Filter for TRAINING only to make it relevant
+            const res = await fetch(`/api/feed/user/${userId}?limit=20&categories=TRAINING`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (res.ok) {
@@ -182,21 +197,83 @@ export function PublicProfilePage() {
                 {/* Left Column: Stats */}
                 <div className="space-y-6">
                     <div className="content-card">
-                        <h3 className="section-title text-sm mb-4">Senaste 30 dagarna</h3>
+                        <h3 className="section-title text-sm mb-4 flex items-center gap-2">
+                            <TrendingUp size={16} className="text-emerald-500" />
+                            Senaste 30 dagarna
+                        </h3>
                         {stats ? (
                             <div className="space-y-4">
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-400 text-xs">Distans</span>
-                                    <span className="text-white font-bold">{stats.distance} km</span>
+                                <div className="grid grid-cols-3 gap-2">
+                                    <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Distans</div>
+                                        <div className="text-lg font-black text-white">{stats.distance} <span className="text-[10px] text-slate-500">km</span></div>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Tid</div>
+                                        <div className="text-lg font-black text-white">{Math.round(stats.duration / 60)}h <span className="text-[10px] text-slate-500">{stats.duration % 60}m</span></div>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-2xl border border-white/5">
+                                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">Pass</div>
+                                        <div className="text-lg font-black text-white">{stats.count} <span className="text-[10px] text-slate-500">st</span></div>
+                                    </div>
                                 </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-400 text-xs">Tid</span>
-                                    <span className="text-white font-bold">{Math.round(stats.duration / 60)}h {stats.duration % 60}m</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-400 text-xs">Pass</span>
-                                    <span className="text-white font-bold">{stats.count} st</span>
-                                </div>
+
+                                {/* Charts */}
+                                {stats.dailyStats && stats.dailyStats.length > 0 && (
+                                    <div className="space-y-6 pt-2">
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold mb-2 flex justify-between">
+                                                <span>Löpmängd</span>
+                                                <span className="text-emerald-500">KM / DAG</span>
+                                            </div>
+                                            <div className="h-24 w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <AreaChart data={stats.dailyStats}>
+                                                        <defs>
+                                                            <linearGradient id="colorDist" x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                                                                <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
+                                                        <Tooltip
+                                                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
+                                                            itemStyle={{ color: '#10b981' }}
+                                                            labelStyle={{ color: '#64748b', marginBottom: '4px' }}
+                                                        />
+                                                        <Area type="monotone" dataKey="runningDistance" stroke="#10b981" fillOpacity={1} fill="url(#colorDist)" strokeWidth={2} />
+                                                    </AreaChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div className="text-[10px] text-slate-500 uppercase font-bold mb-2 flex justify-between">
+                                                <span>Styrka</span>
+                                                <span className="text-blue-500">TON / DAG</span>
+                                            </div>
+                                            <div className="h-24 w-full">
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <AreaChart data={stats.dailyStats}>
+                                                        <defs>
+                                                            <linearGradient id="colorTon" x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
+                                                        <Tooltip
+                                                            contentStyle={{ backgroundColor: '#0f172a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '10px' }}
+                                                            itemStyle={{ color: '#3b82f6' }}
+                                                            labelStyle={{ color: '#64748b', marginBottom: '4px' }}
+                                                        />
+                                                        <Area type="monotone" dataKey="strengthTonnage" stroke="#3b82f6" fillOpacity={1} fill="url(#colorTon)" strokeWidth={2} />
+                                                    </AreaChart>
+                                                </ResponsiveContainer>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="text-center py-4 text-slate-500 text-xs opacity-50">

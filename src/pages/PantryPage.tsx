@@ -212,3 +212,5 @@ export function PantryPage() {
         </div>
     );
 }
+
+export default PantryPage;

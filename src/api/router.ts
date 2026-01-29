@@ -31,55 +31,66 @@ import { handleRecalculateCaloriesRoutes } from "./handlers/recalculateCalories.
 import { logError, logMetric } from "./utils/logger.ts";
 import { sessionTracker } from "./utils/sessionTracker.ts";
 import { handleAdminSessionRoutes } from "./handlers/adminSessions.ts";
-import { getSession } from "./db/session.ts";
-import { getUserById } from "./db/user.ts";
+import { checkRateLimit } from "./utils/rateLimit.ts";
+import { authenticate } from "./middleware.ts";
+import { serveDir } from "./utils/fileServer.ts";
 
-export async function router(req: Request, remoteAddr: Deno.NetAddr): Promise<Response> {
+export async function router(req: Request, remoteAddr: any): Promise<Response> {
     // Wrap with debug middleware
     return await debugMiddleware(req, async (req) => {
         return await internalRouter(req, remoteAddr);
     });
 }
 
-async function internalRouter(req: Request, remoteAddr: Deno.NetAddr): Promise<Response> {
+async function internalRouter(req: Request, remoteAddr: any): Promise<Response> {
     const start = performance.now();
     const url = new URL(req.url);
     const method = req.method;
-    const clientIp = remoteAddr.hostname;
+    const clientIp = (req.headers.get("x-forwarded-for") || remoteAddr.hostname || "unknown").split(",")[0];
 
-    // Track Session (excluding internal APIs if desired, but good to track all)
-    if (!url.pathname.startsWith("/api/debug/client-error")) {
-        // Try to resolve user if auth header exists
-        let userForTracking = undefined;
-        const authHeader = req.headers.get("Authorization");
-        if (authHeader) {
-            const token = authHeader.replace("Bearer ", "");
-            try {
-                // Determine user without touching session (avoid write overhead)
-                const session = await getSession(token);
-                if (session) {
-                    const user = await getUserById(session.userId);
-                    if (user) {
-                        userForTracking = { id: user.id, username: user.username };
-                    }
-                }
-            } catch (e) {
-                // Ignore tracking errors
-            }
-        }
-        sessionTracker.track(req, clientIp, userForTracking);
-    }
-
-    // CORS / Headers
+    // CORS / Security Headers
     const headers = new Headers({
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+        "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "X-XSS-Protection": "1; mode=block",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
     });
 
     if (method === "OPTIONS") {
         return new Response(null, { headers });
+    }
+
+    // Global Rate Limit (100 requests per minute per IP)
+    const isAllowed = await checkRateLimit(clientIp, 100, 60 * 1000);
+    if (!isAllowed) {
+        return new Response(JSON.stringify({ error: "Too many requests" }), { status: 429, headers });
+    }
+
+    // Auth Middleware for protected routes
+    const publicPaths = ["/api/auth/login", "/api/auth/register", "/api/stats/community"];
+    const isPublicPath = publicPaths.some(path => url.pathname.startsWith(path));
+
+    // Some /api/u/ paths are public profiles
+    const isPublicProfile = url.pathname.startsWith("/api/u/");
+
+    let ctx = null;
+    if (!isPublicPath && !isPublicProfile && url.pathname.startsWith("/api/")) {
+        ctx = await authenticate(req);
+        if (!ctx) {
+            return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+        }
+    } else if (url.pathname.startsWith("/api/")) {
+        // Optional auth for tracking on public paths
+        ctx = await authenticate(req).catch(() => null);
+    }
+
+    // Track Session for analytics
+    if (!url.pathname.startsWith("/api/debug/client-error")) {
+        sessionTracker.track(req, clientIp, ctx?.user ? { id: ctx.user.id, username: ctx.user.username } : undefined);
     }
 
     // Static File Serving for Uploads

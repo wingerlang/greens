@@ -3,6 +3,7 @@ import { createUser, getUser, getUserById, sanitizeUser } from "../db/user.ts";
 import { createSession, getSession } from "../db/session.ts";
 import { logLoginAttempt, getUserLoginStats } from "../db/stats.ts";
 import { checkRateLimit } from "../utils/rateLimit.ts";
+import { LoginSchema, RegisterSchema } from "../utils/schemas.ts";
 
 export async function handleAuthRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const method = req.method;
@@ -11,15 +12,19 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
     if (url.pathname === "/api/auth/register" && method === "POST") {
         try {
             const body = await req.json();
-            if (!body.username || !body.password) throw new Error("Missing fields");
+            const result = RegisterSchema.safeParse(body);
+            if (!result.success) {
+                return new Response(JSON.stringify({ error: result.error.issues[0].message }), { status: 400, headers });
+            }
 
-            const user = await createUser(body.username, body.password, body.email);
+            const { username, password, email } = result.data;
+            const user = await createUser(username, password, email || undefined);
             if (!user) return new Response(JSON.stringify({ error: "Username taken" }), { status: 409, headers });
 
             const sessionId = await createSession(user.id);
             return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { status: 201, headers });
         } catch (e) {
-            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 400, headers });
+            return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
         }
     }
 
@@ -32,12 +37,18 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
 
         try {
             const body = await req.json();
-            const user = await getUser(body.username);
+            const result = LoginSchema.safeParse(body);
+            if (!result.success) {
+                return new Response(JSON.stringify({ error: "Username or password too short" }), { status: 400, headers });
+            }
+
+            const { username, password } = result.data;
+            const user = await getUser(username);
             const ua = req.headers.get("user-agent") || "unknown";
 
             if (!user) return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401, headers });
 
-            const hash = await hashPassword(body.password, user.salt);
+            const hash = await hashPassword(password, user.salt);
             if (hash !== user.passHash) {
                 await logLoginAttempt(user.id, false, ip, ua);
                 return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401, headers });
@@ -47,7 +58,7 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             const sessionId = await createSession(user.id);
             return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { headers });
         } catch (e) {
-            return new Response(JSON.stringify({ error: e instanceof Error ? e.message : String(e) }), { status: 400, headers });
+            return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
         }
     }
 

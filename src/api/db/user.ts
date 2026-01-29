@@ -28,20 +28,23 @@ export function ensureUserSubscription(user: any): DBUser {
 }
 
 export async function createUser(username: string, password: string, email?: string, role: UserRole = 'user'): Promise<DBUser | null> {
-    const existing = await kv.get(['users_by_username', username]);
-    if (existing.value) return null;
+    const usernameKey = ['users_by_username', username.toLowerCase()];
+    const handleKey = ['users_by_handle', username.toLowerCase()];
+
+    const existingUsername = await kv.get(usernameKey);
+    if (existingUsername.value) return null;
 
     const salt = crypto.randomUUID();
     const passHash = await hashPassword(password, salt);
     const now = new Date().toISOString();
+    const userId = crypto.randomUUID();
 
     const user: DBUser = {
-        id: crypto.randomUUID(),
+        id: userId,
         username,
         passHash,
         salt,
         role,
-        // plan is deprecated, but we can set it for safety or omit it
         subscription: {
             tier: 'free',
             status: 'active',
@@ -60,8 +63,10 @@ export async function createUser(username: string, password: string, email?: str
     };
 
     const res = await kv.atomic()
-        .set(['users', user.id], user)
-        .set(['users_by_username', username], user.id)
+        .check(existingUsername)
+        .set(['users', userId], user)
+        .set(usernameKey, userId)
+        .set(handleKey, userId)
         .commit();
 
     return res.ok ? user : null;
@@ -82,8 +87,8 @@ export async function getUserById(id: string): Promise<DBUser | null> {
     const user = ensureUserSubscription(entry.value);
 
     // Merge dynamic stats
-    const followersRes = await kv.get<Deno.KvU64>(['stats', id, 'followersCount']);
-    const followingRes = await kv.get<Deno.KvU64>(['stats', id, 'followingCount']);
+    const followersRes = await kv.get<any>(['stats', id, 'followersCount']);
+    const followingRes = await kv.get<any>(['stats', id, 'followingCount']);
 
     user.followersCount = Number(followersRes.value?.value || 0n);
     user.followingCount = Number(followingRes.value?.value || 0n);
@@ -101,10 +106,30 @@ export async function getAllUsers(limit: number = 100, cursor?: string): Promise
 }
 
 export async function saveUser(user: DBUser): Promise<void> {
-    await kv.set(['users', user.id], user);
-    // Maintain indexes
-    if (user.username) await kv.set(['users_by_username', user.username], user.id);
-    if (user.handle) await kv.set(['users_by_handle', user.handle.toLowerCase()], user.id);
+    const oldUserEntry = await kv.get<DBUser>(['users', user.id]);
+    const oldUser = oldUserEntry.value;
+
+    const op = kv.atomic()
+        .set(['users', user.id], user);
+
+    // Update indexes if they changed
+    if (oldUser) {
+        if (oldUser.username !== user.username) {
+            op.delete(['users_by_username', oldUser.username.toLowerCase()]);
+            op.set(['users_by_username', user.username.toLowerCase()], user.id);
+        }
+        if (oldUser.handle !== user.handle) {
+            if (oldUser.handle) op.delete(['users_by_handle', oldUser.handle.toLowerCase()]);
+            if (user.handle) op.set(['users_by_handle', user.handle.toLowerCase()], user.id);
+        }
+    } else {
+        // New user path (though usually handled by createUser)
+        op.set(['users_by_username', user.username.toLowerCase()], user.id);
+        if (user.handle) op.set(['users_by_handle', user.handle.toLowerCase()], user.id);
+    }
+
+    const res = await op.commit();
+    if (!res.ok) throw new Error("Failed to save user (atomic conflict)");
 }
 
 import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } from "./session.ts";

@@ -396,3 +396,5 @@ I samma panna: tillsätt grönsaker och pressad vitlök.`}
         </div>
     );
 }
+
+export default RecipesPage;

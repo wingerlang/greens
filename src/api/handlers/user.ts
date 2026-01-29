@@ -88,26 +88,10 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
         if (!handle) return new Response(JSON.stringify({ error: "Missing handle" }), { status: 400, headers });
 
         try {
-            // 1. Lookup ID by handle
-            const idEntry = await kv.get(["users_by_handle", handle.toLowerCase()]);
-            let id = idEntry.value || (await kv.get(["users_by_username", handle])).value;
-
-            // Self-Healing Fallback: If index fails, scan users (slow path)
-            if (!id) {
-                console.log(`⚠️ Index miss for ${handle}, attempting slow scan repair...`);
-                const allUsersResult = await getAllUsers();
-                const match = allUsersResult.users.find(u =>
-                    (u.handle && u.handle.toLowerCase() === handle.toLowerCase()) ||
-                    u.username.toLowerCase() === handle.toLowerCase()
-                );
-
-                if (match) {
-                    console.log(`✅ Found user ${match.username} via scan. Repairing index...`);
-                    id = match.id;
-                    // Repair index on the fly
-                    await kv.set(["users_by_handle", handle.toLowerCase()], id);
-                }
-            }
+            // 1. Lookup ID by handle or username (both indexed now)
+            const handleKey = handle.toLowerCase();
+            const idEntry = await kv.get(["users_by_handle", handleKey]);
+            let id = idEntry.value || (await kv.get(["users_by_username", handleKey])).value;
 
             if (!id) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
 
@@ -296,18 +280,103 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     if (url.pathname === "/api/users" && method === "GET") {
         try {
             const allUsersResult = await getAllUsers();
-            // Sanitize and return relevant fields for community view
-            const communityUsers = allUsersResult.users.map(u => ({
-                id: u.id,
-                username: u.username,
-                name: u.name,
-                handle: u.handle,
-                role: u.role,
-                avatarUrl: u.avatarUrl,
-                bio: u.bio,
-                settings: u.settings,
-                createdAt: u.createdAt
+
+            // Period for stats
+            const now = new Date();
+            const thirtyDaysAgo = new Date();
+            thirtyDaysAgo.setDate(now.getDate() - 30);
+
+            // Fetch extra data for all users in parallel
+            const communityUsers = await Promise.all(allUsersResult.users.map(async u => {
+                // Fetch activities for stats
+                const activities: any[] = [];
+                const iter = kv.list({ prefix: ['activities', u.id] });
+                for await (const entry of iter) {
+                    const act = entry.value as any;
+                    // Note: We scan all to find latest, but filter for 30d stats
+                    activities.push(act);
+                }
+
+                // Calculate 30d stats
+                let totalDistance = 0;
+                let totalDuration = 0;
+                let totalTonnage = 0;
+                let sessions = 0;
+                const typeCounts: Record<string, number> = {};
+
+                activities.forEach(act => {
+                    if (act.status === 'COMPLETED' && new Date(act.date) >= thirtyDaysAgo) {
+                        sessions++;
+                        const type = act.type || act.performance?.activityType || 'other';
+                        typeCounts[type] = (typeCounts[type] || 0) + 1;
+
+                        if (act.performance?.distanceKm) totalDistance += act.performance.distanceKm;
+                        if (act.performance?.durationMinutes) totalDuration += act.performance.durationMinutes;
+                        if (act.performance?.tonnage) totalTonnage += act.performance.tonnage;
+                    }
+                });
+
+                // Latest activity
+                const latestAct = activities
+                    .filter(a => a.status === 'COMPLETED')
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+                // Calculate simple streak (last 14 days)
+                const activityDates = new Set(activities
+                    .filter(a => a.status === 'COMPLETED')
+                    .map(a => a.date.split('T')[0])
+                );
+
+                let streak = 0;
+                let check = new Date();
+                while (true) {
+                    const ds = check.toISOString().split('T')[0];
+                    if (activityDates.has(ds)) {
+                        streak++;
+                        check.setDate(check.getDate() - 1);
+                    } else {
+                        // If it's today and not yet logged, check yesterday to maintain streak
+                        if (streak === 0 && ds === new Date().toISOString().split('T')[0]) {
+                            check.setDate(check.getDate() - 1);
+                            continue;
+                        }
+                        break;
+                    }
+                    if (streak > 365) break;
+                }
+
+                return {
+                    id: u.id,
+                    username: u.username,
+                    name: u.name,
+                    handle: u.handle,
+                    role: u.role,
+                    avatarUrl: u.avatarUrl,
+                    bio: u.bio,
+                    settings: u.settings,
+                    subscription: u.subscription,
+                    createdAt: u.createdAt,
+                    stats: {
+                        distance: Math.round(totalDistance * 10) / 10,
+                        duration: Math.round(totalDuration),
+                        tonnage: Math.round(totalTonnage),
+                        sessions
+                    },
+                    latestActivity: latestAct ? {
+                        type: latestAct.type || latestAct.performance?.activityType,
+                        date: latestAct.date,
+                        title: latestAct.title || latestAct.name,
+                        distance: latestAct.performance?.distanceKm,
+                        duration: latestAct.performance?.durationMinutes
+                    } : null,
+                    streak,
+                    topExercises: Object.entries(typeCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 3)
+                        .map(e => e[0])
+                };
             }));
+
             return new Response(JSON.stringify({ users: communityUsers }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
@@ -517,33 +586,52 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             }
 
             // 3. Calculate Stats (Last 30 Days)
-            const activities: UniversalActivity[] = [];
-            const iter = kv.list<UniversalActivity>({ prefix: ['activities', id] });
-
+            const dailyDataMap: Record<string, { date: string; runningDistance: number; strengthTonnage: number }> = {};
             const now = new Date();
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(now.getDate() - 30);
+
+            // Initialize daily map
+            for (let i = 0; i <= 30; i++) {
+                const date = new Date(thirtyDaysAgo);
+                date.setDate(date.getDate() + i);
+                const ds = date.toISOString().split('T')[0];
+                dailyDataMap[ds] = { date: ds, runningDistance: 0, strengthTonnage: 0 };
+            }
 
             let totalDistance = 0;
             let totalDuration = 0;
             let count = 0;
 
+            const iter = kv.list<UniversalActivity>({ prefix: ['activities', id] });
             for await (const entry of iter) {
                 const act = entry.value;
                 const date = new Date(act.date);
+                const ds = act.date.split('T')[0];
+
                 if (date >= thirtyDaysAgo && date <= now && act.status === 'COMPLETED') {
-                    activities.push(act); // Keep if needed, or just aggregate
                     count++;
-                    if (act.performance?.distanceKm) totalDistance += act.performance.distanceKm;
-                    if (act.performance?.durationMinutes) totalDuration += act.performance.durationMinutes;
+                    const dist = act.performance?.distanceKm || 0;
+                    const ton = act.performance?.tonnage || 0;
+
+                    totalDistance += dist;
+                    totalDuration += act.performance?.durationMinutes || 0;
+
+                    if (dailyDataMap[ds]) {
+                        dailyDataMap[ds].runningDistance += dist;
+                        dailyDataMap[ds].strengthTonnage += ton;
+                    }
                 }
             }
+
+            const dailyStats = Object.values(dailyDataMap).sort((a, b) => a.date.localeCompare(b.date));
 
             return new Response(JSON.stringify({
                 stats: {
                     distance: Math.round(totalDistance * 10) / 10,
                     duration: Math.round(totalDuration), // minutes
-                    count
+                    count,
+                    dailyStats
                 }
             }), { headers });
 

@@ -58,14 +58,17 @@ export async function handleFeedRoutes(req: Request, url: URL, headers: Headers)
             return new Response(JSON.stringify({ events }), { headers });
         }
 
-        // ============================================
-        // GET /api/feed/user/:userId - User's profile feed
-        // ============================================
         if (url.pathname.match(/^\/api\/feed\/user\/[^/]+$/) && method === "GET") {
             const targetUserId = url.pathname.split('/').pop()!;
             const limit = parseInt(url.searchParams.get("limit") || "50");
+            const categories = url.searchParams.get("categories")?.split(",") as FeedEventCategory[] | undefined;
+            const types = url.searchParams.get("types")?.split(",") as FeedEventType[] | undefined;
 
-            const events = await FeedRepository.getUserEvents(targetUserId, { limit });
+            const events = await FeedRepository.getUserEvents(targetUserId, {
+                limit,
+                categories,
+                types
+            });
 
             // Filter out private events for non-owners
             const visibleEvents = targetUserId === userId

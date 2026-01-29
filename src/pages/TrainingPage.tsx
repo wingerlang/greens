@@ -909,3 +909,5 @@ export function TrainingPage() {
         </div >
     );
 }
+
+export default TrainingPage;
