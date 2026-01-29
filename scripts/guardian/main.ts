@@ -3,11 +3,12 @@ import { initRecorder } from "./recorder.ts";
 import { manager } from "./services.ts";
 import { updateSystemStats } from "./monitor.ts";
 import { startHealthMonitor } from "./health.ts";
-import { handleDashboardRequest } from "./dashboard.ts";
+import { handleDashboardRequest, stopBroadcasting } from "./dashboard.ts";
 import { clearPort } from "./utils.ts";
 import { loadBannedIps } from "./security.ts";
 import { CONFIG } from "./config.ts";
 import { stats } from "./logger.ts";
+import { recordLatency } from "./prometheus.ts";
 
 import { Pipeline } from "./middleware/pipeline.ts";
 import { LoggerMiddleware } from "./middleware/logger.ts";
@@ -22,7 +23,35 @@ import { ProxyMiddleware } from "./middleware/proxy.ts";
 import { GeoIpMiddleware } from "./middleware/geoIp.ts";
 import { CompressionMiddleware } from "./middleware/compression.ts";
 import { SecurityHeadersMiddleware } from "./middleware/securityHeaders.ts";
+import { CorsMiddleware } from "./middleware/cors.ts";
+import { BodySizeLimitMiddleware } from "./middleware/bodySizeLimit.ts";
 import { GuardianContext } from "./middleware/types.ts";
+
+// Graceful shutdown
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal: string) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+
+    console.log(`\n[GUARDIAN] Received ${signal}, initiating graceful shutdown...`);
+
+    // Stop accepting new connections (dashboard WS)
+    stopBroadcasting();
+
+    // Stop all managed services
+    console.log("[GUARDIAN] Stopping managed services...");
+    await manager.stopAll();
+
+    console.log("[GUARDIAN] Shutdown complete.");
+    Deno.exit(0);
+}
+
+// Register signal handlers (Windows only supports SIGINT and SIGBREAK)
+Deno.addSignalListener("SIGINT", () => gracefulShutdown("SIGINT"));
+if (Deno.build.os !== "windows") {
+    Deno.addSignalListener("SIGTERM", () => gracefulShutdown("SIGTERM"));
+}
 
 async function bootstrap() {
     console.log("[GUARDIAN] Booting System 3.0 (Middleware Architecture)...");
@@ -89,6 +118,8 @@ async function bootstrap() {
     const pipeline = new Pipeline()
         .use(new LoggerMiddleware())
         .use(new RecorderMiddleware())
+        .use(new CorsMiddleware())  // Handle CORS early for preflight
+        .use(new BodySizeLimitMiddleware())  // Block oversized requests early
         .use(new BlockListMiddleware())
         .use(new GeoIpMiddleware())
         .use(new TokenBucketRateLimitMiddleware())
@@ -116,7 +147,14 @@ async function bootstrap() {
             }
         };
 
-        return await pipeline.execute(ctx);
+        const startTime = Date.now();
+        const result = await pipeline.execute(ctx);
+
+        // Record latency for Prometheus
+        const latency = Date.now() - startTime;
+        recordLatency(serviceName, latency);
+
+        return result;
     };
 
     // 5. Start Frontend Gateway

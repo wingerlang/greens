@@ -335,3 +335,5 @@ export function ToolsRacePredictorPage() {
         </div>
     );
 }
+
+export default ToolsRacePredictorPage;

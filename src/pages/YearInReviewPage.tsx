@@ -2159,3 +2159,5 @@ export function YearInReviewPage() {
         </>
     );
 };
+
+export default YearInReviewPage;

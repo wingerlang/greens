@@ -1,5 +1,5 @@
 import { manager } from "./services.ts";
-import { getKv, registerLogClient, removeLogClient } from "./logger.ts";
+import { getKv, registerLogClient, removeLogClient, stats } from "./logger.ts";
 import { MetricEntry } from "./types.ts";
 import { join, dirname, fromFileUrl } from "https://deno.land/std@0.224.0/path/mod.ts";
 import {
@@ -18,9 +18,113 @@ import { bannedIps, banIp, unbanIp } from "./security.ts";
 import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
 import { getWafEvents } from "./waf.ts";
 import { getCircuitsSnapshot } from "./circuitBreaker.ts";
+import { generatePrometheusMetrics } from "./prometheus.ts";
+import { CONFIG } from "./config.ts";
+
+// WebSocket clients for real-time updates
+const wsClients: Set<WebSocket> = new Set();
+
+// Broadcast stats to all connected clients
+let broadcastInterval: number | null = null;
+
+function startBroadcasting() {
+    if (broadcastInterval) return;
+    broadcastInterval = setInterval(async () => {
+        if (wsClients.size === 0) return;
+
+        try {
+            const circuits = getCircuitsSnapshot();
+            const services = manager.getAll().map(s => ({
+                ...s.stats,
+                circuit: circuits[s.config.name] || { status: "CLOSED", failures: 0 }
+            }));
+
+            const data = JSON.stringify({
+                type: "stats",
+                services,
+                rps: stats.rps,
+                totalRequests: stats.totalRequests,
+                uptime: Math.floor((Date.now() - stats.startTime) / 1000)
+            });
+
+            for (const client of wsClients) {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(data);
+                }
+            }
+        } catch (e) {
+            // Ignore broadcast errors
+        }
+    }, 2000);
+}
+
+export function stopBroadcasting() {
+    if (broadcastInterval) {
+        clearInterval(broadcastInterval);
+        broadcastInterval = null;
+    }
+    for (const client of wsClients) {
+        client.close();
+    }
+    wsClients.clear();
+}
 
 export async function handleDashboardRequest(req: Request): Promise<Response> {
     const url = new URL(req.url);
+
+    // Health check endpoints (no auth required)
+    if (url.pathname === "/health") {
+        return new Response(JSON.stringify({ status: "ok", timestamp: Date.now() }), {
+            headers: { "Content-Type": "application/json" }
+        });
+    }
+
+    if (url.pathname === "/ready") {
+        const services = manager.getAll();
+        const allReady = services.every(s =>
+            s.stats.status === "running" || !s.config.autoRestart
+        );
+
+        return new Response(JSON.stringify({
+            ready: allReady,
+            services: services.map(s => ({ name: s.config.name, status: s.stats.status }))
+        }), {
+            status: allReady ? 200 : 503,
+            headers: { "Content-Type": "application/json" }
+        });
+    }
+
+    // Basic Auth check (skip for metrics, health, ready, and WebSocket)
+    const dashboardAuth = (CONFIG as any).dashboard?.auth;
+    if (dashboardAuth?.enabled &&
+        url.pathname !== "/metrics" &&
+        url.pathname !== "/ws") {
+
+        const authHeader = req.headers.get("authorization");
+        if (!authHeader || !authHeader.startsWith("Basic ")) {
+            return new Response("Unauthorized", {
+                status: 401,
+                headers: { "WWW-Authenticate": 'Basic realm="Guardian Dashboard"' }
+            });
+        }
+
+        try {
+            const credentials = atob(authHeader.slice(6));
+            const [username, password] = credentials.split(":");
+
+            if (username !== dashboardAuth.username || password !== dashboardAuth.password) {
+                return new Response("Unauthorized", {
+                    status: 401,
+                    headers: { "WWW-Authenticate": 'Basic realm="Guardian Dashboard"' }
+                });
+            }
+        } catch {
+            return new Response("Unauthorized", {
+                status: 401,
+                headers: { "WWW-Authenticate": 'Basic realm="Guardian Dashboard"' }
+            });
+        }
+    }
 
     // Serve HTML
     if (url.pathname === "/" || url.pathname === "/index.html") {
@@ -225,6 +329,37 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
                 return Response.json({ success: true });
             }
         }
+    }
+
+    // Prometheus metrics endpoint
+    if (url.pathname === "/metrics") {
+        const metrics = await generatePrometheusMetrics();
+        return new Response(metrics, {
+            headers: { "Content-Type": "text/plain; version=0.0.4; charset=utf-8" }
+        });
+    }
+
+    // WebSocket for real-time updates
+    if (url.pathname === "/ws") {
+        if (req.headers.get("upgrade") === "websocket") {
+            const { socket, response } = Deno.upgradeWebSocket(req);
+
+            socket.onopen = () => {
+                wsClients.add(socket);
+                startBroadcasting();
+            };
+
+            socket.onclose = () => {
+                wsClients.delete(socket);
+            };
+
+            socket.onerror = () => {
+                wsClients.delete(socket);
+            };
+
+            return response;
+        }
+        return new Response("WebSocket upgrade required", { status: 426 });
     }
 
     return new Response("Not Found", { status: 404 });

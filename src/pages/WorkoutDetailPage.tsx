@@ -160,3 +160,5 @@ export function WorkoutDetailPage() {
         </div>
     );
 }
+
+export default WorkoutDetailPage;

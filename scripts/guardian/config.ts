@@ -46,6 +46,30 @@ export interface GuardianConfig {
         xContentTypeOptions: string;
         referrerPolicy: string;
     };
+    cors: {
+        enabled: boolean;
+        allowedOrigins: string[];
+        allowedMethods: string[];
+        allowedHeaders: string[];
+        exposeHeaders: string[];
+        allowCredentials: boolean;
+        maxAge: number;
+    };
+    dashboard: {
+        auth: {
+            enabled: boolean;
+            username: string;
+            password: string;
+        };
+    };
+    limits: {
+        maxBodySize: number;
+    };
+    alerting: {
+        enabled: boolean;
+        webhookUrl: string;
+        debounceMs: number;
+    };
 }
 
 const DEFAULT_CONFIG: GuardianConfig = {
@@ -91,6 +115,30 @@ const DEFAULT_CONFIG: GuardianConfig = {
         xFrameOptions: "SAMEORIGIN",
         xContentTypeOptions: "nosniff",
         referrerPolicy: "strict-origin-when-cross-origin"
+    },
+    cors: {
+        enabled: true,
+        allowedOrigins: ["*"],
+        allowedMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization", "X-Request-ID", "X-Guardian-ID"],
+        exposeHeaders: ["X-Request-ID", "X-Guardian-ID"],
+        allowCredentials: true,
+        maxAge: 86400
+    },
+    dashboard: {
+        auth: {
+            enabled: false,  // Set to true and configure username/password to enable
+            username: "admin",
+            password: "guardian"
+        }
+    },
+    limits: {
+        maxBodySize: 10 * 1024 * 1024  // 10MB default
+    },
+    alerting: {
+        enabled: false,  // Set to true and add webhookUrl to enable
+        webhookUrl: "",  // Discord or Slack webhook URL
+        debounceMs: 60000  // 1 minute debounce
     }
 };
 

@@ -1223,3 +1223,5 @@ export function ToolsRacePlannerPage() {
         </div>
     );
 }
+
+export default ToolsRacePlannerPage;

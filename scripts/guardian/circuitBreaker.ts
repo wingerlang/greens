@@ -1,4 +1,5 @@
 import { updateServiceStat, persistLog } from "./logger.ts";
+import { alertCircuitOpen, alertCircuitClose } from "./alerting.ts";
 
 export type CircuitStatus = "CLOSED" | "OPEN" | "HALF-OPEN";
 
@@ -71,6 +72,9 @@ export function recordSuccess(service: string) {
             source: "info",
             message: msg
         });
+
+        // Send recovery alert
+        alertCircuitClose(service);
     } else if (state.status === "CLOSED") {
         if (state.failures > 0) state.failures = 0;
     }
@@ -95,6 +99,9 @@ export function recordFailure(service: string) {
             source: "stderr",
             message: msg
         });
+
+        // Send circuit open alert
+        alertCircuitOpen(service);
     } else if (state.status === "HALF-OPEN") {
         state.status = "OPEN";
         state.nextRetry = Date.now() + TIMEOUT;

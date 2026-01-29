@@ -35,18 +35,18 @@ export function ToolsPaceConverterPage() {
         const targets = [5, 10, 21.0975, 42.195];
 
         targets.forEach(dist => {
-             const match = exerciseEntries
+            const match = exerciseEntries
                 .filter(e => e.type === 'running' && e.distance && Math.abs(e.distance - dist) < (dist * 0.05))
                 .sort((a, b) => (a.durationMinutes - b.durationMinutes))[0];
 
-             if (match && match.distance && match.durationMinutes) {
-                 const pace = (match.durationMinutes * 60) / match.distance;
-                 found.push({
-                     name: dist > 40 ? 'Maraton' : dist > 20 ? 'Halvmaraton' : `${dist}km`,
-                     pace,
-                     date: match.date
-                 });
-             }
+            if (match && match.distance && match.durationMinutes) {
+                const pace = (match.durationMinutes * 60) / match.distance;
+                found.push({
+                    name: dist > 40 ? 'Maraton' : dist > 20 ? 'Halvmaraton' : `${dist}km`,
+                    pace,
+                    date: match.date
+                });
+            }
         });
         return found;
     }, [exerciseEntries]);
@@ -60,7 +60,7 @@ export function ToolsPaceConverterPage() {
 
     return (
         <div className="space-y-8 animate-fade-in">
-             <div>
+            <div>
                 <h1 className="text-3xl font-bold text-white mb-2">Pace Converter</h1>
                 <p className="text-slate-400">Se hur lång tid olika distanser tar vid ett visst tempo.</p>
             </div>
@@ -127,3 +127,5 @@ export function ToolsPaceConverterPage() {
         </div>
     );
 }
+
+export default ToolsPaceConverterPage;

@@ -1042,6 +1042,10 @@
                 // WAF
                 wafEvents: [],
 
+                // WebSocket for real-time updates
+                statsSocket: null,
+                wsConnected: false,
+
                 async init() {
                     // Deep connection: Read hash to set initial tab
                     const hash = window.location.hash.slice(1);
@@ -1166,13 +1170,62 @@
                 },
 
                 startTimers() {
-                    setInterval(() => this.refreshData(), 1000);
-                    // Poll logs if active
+                    // Try WebSocket first for real-time updates
+                    this.connectWebSocket();
+
+                    // Fallback: Poll only if WebSocket not connected (checked every 5s)
                     setInterval(() => {
-                        if (this.tab.startsWith('service-')) {
+                        if (!this.wsConnected) {
+                            this.refreshData();
+                        }
+                    }, 5000);
+
+                    // Poll logs if service view active
+                    setInterval(() => {
+                        if (this.tab.startsWith('service-') && this.currentService) {
                             this.fetchLogs(this.currentService.name);
                         }
                     }, 2000);
+                },
+
+                connectWebSocket() {
+                    if (this.statsSocket && this.statsSocket.readyState === WebSocket.OPEN) return;
+
+                    const wsUrl = `ws://${window.location.host}/ws`;
+                    this.statsSocket = new WebSocket(wsUrl);
+
+                    this.statsSocket.onopen = () => {
+                        console.log('[Guardian] WebSocket connected');
+                        this.wsConnected = true;
+                    };
+
+                    this.statsSocket.onmessage = (event) => {
+                        try {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'stats') {
+                                // Update services with real-time data
+                                this.services = data.services;
+
+                                // Update current service ref if selected
+                                if (this.currentService) {
+                                    this.currentService = this.services.find(s => s.name === this.currentService.name) || this.currentService;
+                                }
+                            }
+                        } catch (e) {
+                            console.error('WebSocket message parse error:', e);
+                        }
+                    };
+
+                    this.statsSocket.onclose = () => {
+                        console.log('[Guardian] WebSocket closed, will reconnect...');
+                        this.wsConnected = false;
+                        // Reconnect after 3 seconds
+                        setTimeout(() => this.connectWebSocket(), 3000);
+                    };
+
+                    this.statsSocket.onerror = () => {
+                        this.wsConnected = false;
+                    };
                 },
 
                 selectService(service) {

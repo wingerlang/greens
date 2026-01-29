@@ -95,3 +95,5 @@ export function WorkoutsPage() {
         </div>
     );
 }
+
+export default WorkoutsPage;

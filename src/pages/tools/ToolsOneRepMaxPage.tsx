@@ -797,3 +797,5 @@ function getPlateHeight(weight: number): string {
     if (weight >= 5) return 'h-24';
     return 'h-16';
 }
+
+export default ToolsOneRepMaxPage;

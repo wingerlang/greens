@@ -705,3 +705,5 @@ function RunningCard({ label, data, value, sub, date }: { label: string, data?: 
 
     return content;
 }
+
+export default ToolsTrainingReportPage;

@@ -552,3 +552,4 @@ export function WorkoutBuilderPage() {
     );
 }
 
+export default WorkoutBuilderPage;
