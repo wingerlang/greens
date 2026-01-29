@@ -1,6 +1,6 @@
-import { hashPassword } from "../utils/crypto.ts";
-import { createUser, getUser, getUserById, sanitizeUser } from "../db/user.ts";
-import { createSession, getSession } from "../db/session.ts";
+import { hashPassword, verifyPassword, simulatePasswordCheck } from "../utils/crypto.ts";
+import { createUser, getUser, getUserById, sanitizeUser, saveUser } from "../db/user.ts";
+import { createSession, getSession, revokeSession } from "../db/session.ts";
 import { logLoginAttempt, getUserLoginStats } from "../db/stats.ts";
 import { checkRateLimit } from "../utils/rateLimit.ts";
 import { LoginSchema, RegisterSchema } from "../utils/schemas.ts";
@@ -22,7 +22,9 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             if (!user) return new Response(JSON.stringify({ error: "Username taken" }), { status: 409, headers });
 
             const sessionId = await createSession(user.id);
-            return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { status: 201, headers });
+            const isSecure = url.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
+            headers.append("Set-Cookie", `auth_token=${sessionId}; HttpOnly; ${isSecure ? "Secure;" : ""} SameSite=Lax; Path=/; Max-Age=2592000`);
+            return new Response(JSON.stringify({ user: sanitizeUser(user) }), { status: 201, headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
         }
@@ -46,24 +48,58 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
             const user = await getUser(username);
             const ua = req.headers.get("user-agent") || "unknown";
 
-            if (!user) return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401, headers });
+            if (!user) {
+                // Timing attack protection: Simulate work
+                await simulatePasswordCheck();
+                return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401, headers });
+            }
 
-            const hash = await hashPassword(password, user.salt);
-            if (hash !== user.passHash) {
+            const { isValid, needsUpgrade } = await verifyPassword(password, user.salt, user.passHash);
+
+            if (!isValid) {
                 await logLoginAttempt(user.id, false, ip, ua);
                 return new Response(JSON.stringify({ error: "Invalid credentials" }), { status: 401, headers });
             }
 
+            if (needsUpgrade) {
+                // Upgrade hash to new standard
+                user.passHash = await hashPassword(password, user.salt);
+                await saveUser(user);
+            }
+
             await logLoginAttempt(user.id, true, ip, ua);
             const sessionId = await createSession(user.id);
-            return new Response(JSON.stringify({ user: sanitizeUser(user), token: sessionId }), { headers });
+            const isSecure = url.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
+            headers.append("Set-Cookie", `auth_token=${sessionId}; HttpOnly; ${isSecure ? "Secure;" : ""} SameSite=Lax; Path=/; Max-Age=2592000`);
+            return new Response(JSON.stringify({ user: sanitizeUser(user) }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: "Invalid JSON" }), { status: 400, headers });
         }
     }
 
+    if (url.pathname === "/api/auth/logout" && method === "POST") {
+        const cookie = req.headers.get("cookie");
+        const token = cookie?.split("auth_token=")[1]?.split(";")[0];
+
+        if (token) {
+            const session = await getSession(token);
+            if (session) {
+                await revokeSession(token, session.userId);
+            }
+        }
+
+        const isSecure = url.protocol === "https:" || req.headers.get("x-forwarded-proto") === "https";
+        headers.append("Set-Cookie", `auth_token=; HttpOnly; ${isSecure ? "Secure;" : ""} SameSite=Lax; Path=/; Max-Age=0`);
+        return new Response(JSON.stringify({ success: true }), { headers });
+    }
+
     if (url.pathname === "/api/auth/me") {
-        const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+        let token = req.headers.get("Authorization")?.replace("Bearer ", "");
+        if (!token) {
+            const cookie = req.headers.get("cookie");
+            token = cookie?.split("auth_token=")[1]?.split(";")[0];
+        }
+
         if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
 
         const session = await getSession(token);
@@ -76,7 +112,12 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
     }
 
     if (url.pathname === "/api/auth/stats") {
-        const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+        let token = req.headers.get("Authorization")?.replace("Bearer ", "");
+        if (!token) {
+            const cookie = req.headers.get("cookie");
+            token = cookie?.split("auth_token=")[1]?.split(";")[0];
+        }
+
         if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
         const session = await getSession(token);
         if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });

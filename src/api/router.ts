@@ -46,22 +46,61 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
     const start = performance.now();
     const url = new URL(req.url);
     const method = req.method;
-    const clientIp = (req.headers.get("x-forwarded-for") || remoteAddr.hostname || "unknown").split(",")[0];
+
+    // Secure IP Detection (Trust proxy only if local)
+    const isLocal = remoteAddr.hostname === "127.0.0.1" || remoteAddr.hostname === "::1";
+    const clientIp = isLocal
+        ? (req.headers.get("x-forwarded-for") || remoteAddr.hostname).split(",")[0].trim()
+        : remoteAddr.hostname;
 
     // CORS / Security Headers
+    const origin = req.headers.get("Origin");
     const headers = new Headers({
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": origin || "*",
+        "Access-Control-Allow-Credentials": "true",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
         "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
         "X-Content-Type-Options": "nosniff",
         "X-Frame-Options": "DENY",
         "X-XSS-Protection": "1; mode=block",
-        "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Content-Security-Policy": "default-src 'self'; img-src 'self' data: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';",
+        "Referrer-Policy": "strict-origin-when-cross-origin"
     });
 
     if (method === "OPTIONS") {
         return new Response(null, { headers });
+    }
+
+    // CSRF Protection
+    if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+        const hasAuthCookie = (req.headers.get("cookie") || "").includes("auth_token=");
+        if (hasAuthCookie) {
+            const host = req.headers.get("Host");
+            const referer = req.headers.get("Referer");
+
+            let isCsrfSafe = false;
+            if (origin) {
+                try {
+                    const originHost = new URL(origin).host;
+                    if (originHost === host) isCsrfSafe = true;
+                } catch { }
+            } else if (referer) {
+                try {
+                    const refererHost = new URL(referer).host;
+                    if (refererHost === host) isCsrfSafe = true;
+                } catch { }
+            }
+
+            // If we have a cookie but origin/referer don't match host, block it
+            // Note: If origin/referer are missing, we might assume it's a non-browser tool, but for robustness with cookies, we can block.
+            // However, aggressive blocking can break legitimate things.
+            // Let's block ONLY if we have origin/referer mismatch.
+            if ((origin || referer) && !isCsrfSafe) {
+                 return new Response(JSON.stringify({ error: "CSRF Check Failed" }), { status: 403, headers });
+            }
+        }
     }
 
     // Global Rate Limit (100 requests per minute per IP)

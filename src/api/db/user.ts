@@ -136,7 +136,7 @@ import { getSession, getUserSessions, revokeAllUserSessions, revokeSession } fro
 import { getUserData, saveUserData } from "./data.ts";
 
 export function sanitizeUser(user: DBUser): User {
-    const { passHash, salt, ...rest } = user;
+    const { passHash, salt, mfaSecret, ...rest } = user;
     return rest;
 }
 
