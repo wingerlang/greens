@@ -18,7 +18,7 @@ import { bannedIps, banIp, unbanIp } from "./security.ts";
 import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
 import { getWafEvents } from "./waf.ts";
 import { getCircuitsSnapshot } from "./circuitBreaker.ts";
-import { generatePrometheusMetrics } from "./prometheus.ts";
+import { generatePrometheusMetrics, getLatencyStats, getMemoryHistory } from "./prometheus.ts";
 import { CONFIG } from "./config.ts";
 
 // WebSocket clients for real-time updates
@@ -253,6 +253,53 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     if (url.pathname === "/api/traces") {
         const traces = await listTraces();
         return Response.json(traces);
+    }
+
+    // Latency histogram data for dashboard
+    if (url.pathname === "/api/latency") {
+        const latencyStats = getLatencyStats();
+        return Response.json(latencyStats);
+    }
+
+    // Memory history for dashboard chart
+    if (url.pathname === "/api/memory-history") {
+        const history = getMemoryHistory();
+        return Response.json(history);
+    }
+
+    // Quick actions endpoints
+    if (req.method === "POST" && url.pathname === "/api/quick-action") {
+        const action = url.searchParams.get("action");
+
+        switch (action) {
+            case "flush-cache":
+                // Import smartCache and clear it
+                try {
+                    const { clearCache } = await import("./middleware/smartCache.ts");
+                    clearCache();
+                    return Response.json({ success: true, message: "Cache flushed" });
+                } catch {
+                    return Response.json({ success: false, message: "Cache module not found" });
+                }
+
+            case "clear-bans":
+                // Clear all banned IPs
+                for (const ip of [...bannedIps]) {
+                    unbanIp(ip);
+                }
+                return Response.json({ success: true, message: `Cleared ${bannedIps.size} bans` });
+
+            case "restart-frontend":
+                manager.get("frontend")?.restart();
+                return Response.json({ success: true, message: "Frontend restarting" });
+
+            case "restart-backend":
+                manager.get("backend")?.restart();
+                return Response.json({ success: true, message: "Backend restarting" });
+
+            default:
+                return Response.json({ success: false, message: "Unknown action" });
+        }
     }
 
     if (req.method === "POST" && url.pathname === "/api/replay") {

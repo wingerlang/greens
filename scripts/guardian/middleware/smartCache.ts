@@ -10,6 +10,12 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>();
 let currentCacheSize = 0;
 
+// Clear all cached entries
+export function clearCache() {
+    cache.clear();
+    currentCacheSize = 0;
+}
+
 export class SmartCacheMiddleware implements Middleware {
     name = "SmartCache";
 
@@ -63,8 +69,8 @@ export class SmartCacheMiddleware implements Middleware {
                     currentCacheSize += arrayBuffer.byteLength;
                 }).catch(e => console.error("[SmartCache] Failed to cache:", e));
             } catch (e) {
-                 // Clone might fail if body is already used (shouldn't happen here normally)
-                 console.error("[SmartCache] Clone failed:", e);
+                // Clone might fail if body is already used (shouldn't happen here normally)
+                console.error("[SmartCache] Clone failed:", e);
             }
         }
     }

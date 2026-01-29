@@ -688,6 +688,56 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Latency & Memory Charts -->
+                <div class="grid-2">
+                    <!-- Latency Histogram -->
+                    <div class="card">
+                        <div class="stat-label">Latency Distribution</div>
+                        <div class="chart-container" style="height: 200px;">
+                            <canvas id="latencyChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Memory Trend -->
+                    <div class="card">
+                        <div class="stat-label">Memory Usage (Last 10min)</div>
+                        <div class="chart-container" style="height: 200px;">
+                            <canvas id="memoryChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Actions Panel -->
+                <div class="card">
+                    <div
+                        style="padding-bottom: 12px; border-bottom: 1px solid var(--border-glass); margin-bottom: 16px;">
+                        <h3 style="margin: 0; font-size: 1.1rem;">Quick Actions</h3>
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                        <button @click="quickAction('flush-cache')" style="flex: 1; min-width: 150px;">
+                            <span>🗑️</span>
+                            <span>Flush Cache</span>
+                        </button>
+                        <button @click="quickAction('clear-bans')" style="flex: 1; min-width: 150px;">
+                            <span>🔓</span>
+                            <span>Clear IP Bans</span>
+                        </button>
+                        <button @click="quickAction('restart-frontend')" class="primary"
+                            style="flex: 1; min-width: 150px;">
+                            <span>🔄</span>
+                            <span>Restart Frontend</span>
+                        </button>
+                        <button @click="quickAction('restart-backend')" class="primary"
+                            style="flex: 1; min-width: 150px;">
+                            <span>🔄</span>
+                            <span>Restart Backend</span>
+                        </button>
+                    </div>
+                    <div x-show="actionMessage" x-text="actionMessage"
+                        style="margin-top: 12px; padding: 12px; border-radius: 8px; background: rgba(16, 185, 129, 0.1); color: #34d399; font-size: 0.85rem;">
+                    </div>
+                </div>
             </div>
 
             <!-- Traffic Tab -->
@@ -1169,6 +1219,11 @@
                 avgLatency: 0,
                 rpsHistory: [],
                 rpsChartInstance: null,
+                latencyChartInstance: null,
+                memoryChartInstance: null,
+                latencyData: {},
+                memoryHistory: [],
+                actionMessage: '',
 
                 async init() {
                     // Deep connection: Read hash to set initial tab
@@ -1290,6 +1345,10 @@
 
                     if (this.tab === 'traffic') {
                         this.updateCharts();
+                    }
+
+                    if (this.tab === 'overview') {
+                        this.loadOverviewData();
                     }
                 },
 
@@ -1562,6 +1621,119 @@
                             animation: false
                         }
                     });
+                },
+
+                async loadOverviewData() {
+                    try {
+                        const [latency, memory] = await Promise.all([
+                            fetch('/api/latency').then(r => r.json()),
+                            fetch('/api/memory-history').then(r => r.json())
+                        ]);
+                        this.latencyData = latency;
+                        this.memoryHistory = memory;
+                        this.$nextTick(() => {
+                            this.renderLatencyChart();
+                            this.renderMemoryChart();
+                        });
+                    } catch (e) { /* ignore */ }
+                },
+
+                renderLatencyChart() {
+                    const ctx = document.getElementById('latencyChart');
+                    if (!ctx) return;
+
+                    // Combine all services for a single histogram
+                    const allBuckets = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+                    const labels = ['5ms', '10ms', '25ms', '50ms', '100ms', '250ms', '500ms', '1s', '2.5s', '5s', '10s'];
+
+                    for (const [service, data] of Object.entries(this.latencyData)) {
+                        if (data.buckets) {
+                            data.buckets.forEach((v, i) => { allBuckets[i] += v; });
+                        }
+                    }
+
+                    if (this.latencyChartInstance) {
+                        this.latencyChartInstance.data.datasets[0].data = allBuckets;
+                        this.latencyChartInstance.update('none');
+                        return;
+                    }
+
+                    this.latencyChartInstance = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Requests',
+                                data: allBuckets,
+                                backgroundColor: 'rgba(59, 130, 246, 0.6)',
+                                borderColor: '#3b82f6',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                },
+
+                renderMemoryChart() {
+                    const ctx = document.getElementById('memoryChart');
+                    if (!ctx) return;
+
+                    const data = this.memoryHistory.map(m => m.rss / 1024 / 1024); // Convert to MB
+                    const labels = this.memoryHistory.map((_, i) => '');
+
+                    if (this.memoryChartInstance) {
+                        this.memoryChartInstance.data.labels = labels;
+                        this.memoryChartInstance.data.datasets[0].data = data;
+                        this.memoryChartInstance.update('none');
+                        return;
+                    }
+
+                    this.memoryChartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Memory (MB)',
+                                data: data,
+                                borderColor: '#a855f7',
+                                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8', callback: v => v + ' MB' } },
+                                x: { display: false }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                },
+
+                async quickAction(action) {
+                    this.actionMessage = '';
+                    try {
+                        const res = await fetch(`/api/quick-action?action=${action}`, { method: 'POST' });
+                        const data = await res.json();
+                        this.actionMessage = data.message || (data.success ? 'Action completed!' : 'Action failed');
+                        setTimeout(() => { this.actionMessage = ''; }, 3000);
+                        this.refreshData();
+                    } catch (e) {
+                        this.actionMessage = 'Error: ' + e.message;
+                        setTimeout(() => { this.actionMessage = ''; }, 3000);
+                    }
                 },
 
                 getStatusColor(status) {

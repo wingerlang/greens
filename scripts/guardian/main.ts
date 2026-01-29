@@ -8,7 +8,7 @@ import { clearPort } from "./utils.ts";
 import { loadBannedIps } from "./security.ts";
 import { CONFIG } from "./config.ts";
 import { stats } from "./logger.ts";
-import { recordLatency } from "./prometheus.ts";
+import { recordLatency, recordMemorySample } from "./prometheus.ts";
 
 import { Pipeline } from "./middleware/pipeline.ts";
 import { LoggerMiddleware } from "./middleware/logger.ts";
@@ -102,6 +102,12 @@ async function bootstrap() {
         const msg = `Requests: ${stats.totalRequests} | RPS: ${stats.rps.toFixed(2)} | Uptime: ${uptime}s`;
         manager.get("guardian")?.addLog("info", msg);
     }, 30000);
+
+    // Memory sampling for dashboard (every 10s)
+    setInterval(() => {
+        recordMemorySample();
+    }, 10000);
+    recordMemorySample(); // Initial sample
 
     // 4. Start Dashboard
     console.log(`[GUARDIAN] Dashboard listening on http://localhost:${CONFIG.ports.dashboard}`);

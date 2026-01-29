@@ -14,10 +14,14 @@ import { getWafEvents } from "./waf.ts";
  */
 
 // Histogram buckets for latency (in ms)
-const LATENCY_BUCKETS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
+export const LATENCY_BUCKETS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000];
 
 // In-memory latency histogram (reset on restart)
 const latencyHistogram: Map<string, number[]> = new Map();
+
+// Memory history (samples every 10s, keep 60 samples = 10 minutes)
+const memoryHistory: { timestamp: number; rss: number; heapUsed: number }[] = [];
+const MAX_MEMORY_SAMPLES = 60;
 
 export function recordLatency(service: string, latencyMs: number) {
     if (!latencyHistogram.has(service)) {
@@ -34,6 +38,52 @@ export function recordLatency(service: string, latencyMs: number) {
     }
     // Always increment +Inf bucket
     buckets[LATENCY_BUCKETS.length]++;
+}
+
+// Get latency stats for dashboard
+export function getLatencyStats() {
+    const result: Record<string, { buckets: number[]; labels: string[]; total: number; avgMs: number }> = {};
+
+    for (const [service, buckets] of latencyHistogram.entries()) {
+        const total = buckets[LATENCY_BUCKETS.length]; // +Inf has total count
+
+        // Estimate average (rough approximation using bucket midpoints)
+        let weightedSum = 0;
+        let prevBound = 0;
+        for (let i = 0; i < LATENCY_BUCKETS.length; i++) {
+            const midpoint = (prevBound + LATENCY_BUCKETS[i]) / 2;
+            weightedSum += buckets[i] * midpoint;
+            prevBound = LATENCY_BUCKETS[i];
+        }
+
+        result[service] = {
+            buckets: buckets.slice(0, LATENCY_BUCKETS.length),
+            labels: LATENCY_BUCKETS.map(b => `${b}ms`),
+            total,
+            avgMs: total > 0 ? Math.round(weightedSum / total) : 0
+        };
+    }
+
+    return result;
+}
+
+// Record memory sample
+export function recordMemorySample() {
+    const mem = Deno.memoryUsage();
+    memoryHistory.push({
+        timestamp: Date.now(),
+        rss: mem.rss,
+        heapUsed: mem.heapUsed
+    });
+
+    if (memoryHistory.length > MAX_MEMORY_SAMPLES) {
+        memoryHistory.shift();
+    }
+}
+
+// Get memory history for dashboard
+export function getMemoryHistory() {
+    return memoryHistory;
 }
 
 export async function generatePrometheusMetrics(): Promise<string> {
