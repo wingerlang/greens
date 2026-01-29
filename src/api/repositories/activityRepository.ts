@@ -4,6 +4,7 @@ import { UniversalActivity } from '../../models/types.ts';
 /**
  * Keys used in KV store:
  * Activities: ['activities', userId, dateISO, activityId] -> UniversalActivity
+ * Index (ID): ['idx_activities_by_id', activityId] -> primaryKey (['activities', ...])
  * Index (Source): ['idx_activities_source', userId, source, externalId] -> activityKey (['activities', ...])
  */
 
@@ -21,7 +22,10 @@ export class ActivityRepository {
         // 1. Save Primary Data
         atomic.set(primaryKey, activity);
 
-        // 2. Manage Secondary Index (Source -> Activity)
+        // 2. Manage Secondary Index (ID -> Primary Key)
+        atomic.set(['idx_activities_by_id', activity.id], primaryKey);
+
+        // 3. Manage Secondary Index (Source -> Activity)
         if (activity.performance?.source?.externalId && activity.performance.source.source !== 'manual') {
             const indexKey = [
                 'idx_activities_source',
@@ -39,7 +43,19 @@ export class ActivityRepository {
     }
 
     /**
-     * Get a single activity by ID
+     * Get a single activity by ID (using index)
+     */
+    async getActivityById(activityId: string): Promise<UniversalActivity | null> {
+        const indexKey = ['idx_activities_by_id', activityId];
+        const indexRes = await kv.get<string[]>(indexKey);
+        if (!indexRes.value) return null;
+
+        const activityRes = await kv.get<UniversalActivity>(indexRes.value);
+        return activityRes.value;
+    }
+
+    /**
+     * Get a single activity by ID (legacy date-based lookup)
      */
     async getActivity(userId: string, date: string, activityId: string): Promise<UniversalActivity | null> {
         const key = ['activities', userId, date, activityId];
@@ -101,7 +117,10 @@ export class ActivityRepository {
         const primaryKey = ['activities', activity.userId, activity.date, activity.id];
         const atomic = kv.atomic().delete(primaryKey);
 
-        // Remove index if it exists
+        // Remove ID index
+        atomic.delete(['idx_activities_by_id', activity.id]);
+
+        // Remove source index if it exists
         if (activity.performance?.source?.externalId) {
             const indexKey = [
                 'idx_activities_source',

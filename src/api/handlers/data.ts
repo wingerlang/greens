@@ -2,6 +2,10 @@ import { getSession } from "../db/session.ts";
 import { getUserById } from "../db/user.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
 import { mealRepo } from "../repositories/mealRepository.ts";
+import { activityRepo } from "../repositories/activityRepository.ts";
+import { logAudit } from "../utils/audit.ts";
+import { MealEntrySchema, WeightEntrySchema } from "../utils/schemas.ts";
+import { sanitizeObject } from "../utils/sanitize.ts";
 import { weightRepo } from "../repositories/weightRepository.ts";
 import { foodRepo } from "../repositories/foodRepository.ts";
 import { FoodItem } from "../../models/types.ts";
@@ -16,14 +20,24 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
 
     const userId = session.userId;
 
-    // --- Legacy Monolithic Routes ---
     if (url.pathname === "/api/data" && method === "GET") {
         let targetUserId = userId;
         const requestedUserId = url.searchParams.get("userId");
 
         if (requestedUserId && requestedUserId !== userId) {
-            // Allow access for all authenticated users to enable Matchup comparison
-            // In a stricter system, we might want to check for 'friend' status or public profile settings
+            // BOLA PROTECTION
+            const targetUser = await getUserById(requestedUserId);
+            if (!targetUser) {
+                return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+            }
+
+            // Simple BOLA check: Only allow if profile is public or requester is admin
+            const requester = await getUserById(userId);
+            const isAdmin = requester?.role === 'admin' || requester?.role === 'developer';
+
+            if (!isAdmin && !targetUser.privacy?.isPublic) {
+                return new Response(JSON.stringify({ error: "Access denied (Private Profile)" }), { status: 403, headers });
+            }
             targetUserId = requestedUserId;
         }
 
@@ -37,6 +51,32 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
             await saveUserData(userId, body);
             return new Response(JSON.stringify({ success: true }), { headers });
         } catch (e) {
+            return new Response(JSON.stringify({ error: "Invalid data" }), { status: 400, headers });
+        }
+    }
+
+    // POST /api/meals
+    if (url.pathname === "/api/meals" && method === "POST") {
+        try {
+            const body = await req.json();
+            const result = MealEntrySchema.safeParse(body);
+            if (!result.success) {
+                return new Response(JSON.stringify({ error: result.error.issues[0].message }), { status: 400, headers });
+            }
+
+            let entry = result.data;
+            entry = sanitizeObject(entry);
+
+            // Fix createdAt lint by ensuring it's a string
+            const mealToSave = {
+                ...entry,
+                createdAt: entry.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            } as any;
+
+            await mealRepo.saveMeal(userId, mealToSave);
+            return new Response(JSON.stringify({ success: true }), { headers });
+        } catch (e: any) {
             return new Response(JSON.stringify({ error: "Invalid data" }), { status: 400, headers });
         }
     }
@@ -161,7 +201,7 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
             const oldPath = item.imageUrl;
             const newPath = oldPath.replace("uploads/temp/", "uploads/food-images/");
             try {
-                await Deno.rename(oldPath, newPath);
+                await (globalThis as any).Deno.rename(oldPath, newPath);
                 item.imageUrl = newPath;
             } catch (e) {
                 console.error("Failed to move image:", e);
@@ -188,12 +228,12 @@ export async function handleDataRoutes(req: Request, url: URL, headers: Headers)
             const oldPath = updatedItem.imageUrl;
             const newPath = oldPath.replace("uploads/temp/", "uploads/food-images/");
             try {
-                await Deno.rename(oldPath, newPath);
+                await (globalThis as any).Deno.rename(oldPath, newPath);
                 updatedItem.imageUrl = newPath;
 
                 // Delete old image if it existed and was different
                 if (existing.imageUrl && existing.imageUrl !== updatedItem.imageUrl && existing.imageUrl.startsWith("uploads/")) {
-                    try { await Deno.remove(existing.imageUrl); } catch { }
+                    try { await (globalThis as any).Deno.remove(existing.imageUrl); } catch { }
                 }
 
             } catch (e) {

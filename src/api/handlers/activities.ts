@@ -3,6 +3,9 @@ import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { getSession } from "../db/session.ts";
 import { UniversalActivity } from "../../models/types.ts";
 import { createMergedActivity, validateMerge } from "../services/activityMergeService.ts";
+import { sanitizeObject } from "../utils/sanitize.ts";
+import { logAudit } from "../utils/audit.ts";
+import { ActivitySchema } from "../utils/schemas.ts";
 
 export async function handleActivityRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
     const method = req.method;
@@ -31,9 +34,18 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
     // POST /api/activities
     if (url.pathname === "/api/activities" && method === "POST") {
         try {
-            const activity = await req.json() as UniversalActivity;
+            const body = await req.json();
+            const result = ActivitySchema.safeParse(body);
+            if (!result.success) {
+                return new Response(JSON.stringify({ error: result.error.issues[0].message }), { status: 400, headers });
+            }
+
+            let activity = result.data as UniversalActivity;
             // Always enforce session user
             activity.userId = session.userId;
+
+            // Sanitize
+            activity = sanitizeObject(activity);
 
             await activityRepo.saveActivity(activity);
             return new Response(JSON.stringify({ success: true, id: activity.id }), { status: 200, headers });
@@ -56,13 +68,13 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             if (providedActivities && providedActivities.length >= 2) {
                 activitiesToMerge = providedActivities;
             } else if (activityIds && activityIds.length >= 2) {
-                // Fetch activities by ID (need date for each - use a range)
-                const allActivities = await activityRepo.getActivitiesByDateRange(
-                    session.userId,
-                    '2020-01-01',
-                    new Date().toISOString().split('T')[0]
-                );
-                activitiesToMerge = allActivities.filter(a => activityIds.includes(a.id));
+                // Fetch activities by ID (using the new ID index for efficiency)
+                for (const aid of activityIds) {
+                    const act = await activityRepo.getActivityById(aid);
+                    if (act && act.userId === session.userId) {
+                        activitiesToMerge.push(act);
+                    }
+                }
             }
 
             if (activitiesToMerge.length < 2) {
@@ -104,15 +116,9 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             const parts = url.pathname.split('/');
             const mergedActivityId = parts[3];
 
-            // Get the merged activity
-            const allActivities = await activityRepo.getActivitiesByDateRange(
-                session.userId,
-                '2020-01-01',
-                new Date().toISOString().split('T')[0]
-            );
-
-            const mergedActivity = allActivities.find(a => a.id === mergedActivityId);
-            if (!mergedActivity) {
+            // Get the merged activity using ID index
+            const mergedActivity = await activityRepo.getActivityById(mergedActivityId);
+            if (!mergedActivity || mergedActivity.userId !== session.userId) {
                 return new Response(JSON.stringify({ error: "Merged activity not found" }), { status: 404, headers });
             }
 
@@ -120,9 +126,13 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 return new Response(JSON.stringify({ error: "Activity is not merged" }), { status: 400, headers });
             }
 
-            // Get original activities and clear their mergedIntoId
+            // Get original activities
             const originalIds = mergedActivity.mergeInfo.originalActivityIds;
-            const originalActivities = allActivities.filter(a => originalIds.includes(a.id));
+            const originalActivities: UniversalActivity[] = [];
+            for (const oid of originalIds) {
+                const act = await activityRepo.getActivityById(oid);
+                if (act) originalActivities.push(act);
+            }
 
             // Clear mergedIntoId on originals to make them visible again
             for (const original of originalActivities) {
@@ -150,27 +160,15 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
         try {
             const parts = url.pathname.split('/');
             const activityId = parts[3];
-            const dateParams = url.searchParams.get('date');
-
             const updates = await req.json();
 
             let activity: UniversalActivity | null = null;
 
-            // 1. Try direct lookup if date provided
-            if (dateParams) {
-                activity = await activityRepo.getActivity(session.userId, dateParams, activityId);
-            }
+            // Use the new ID index (avoids scans!)
+            activity = await activityRepo.getActivityById(activityId);
 
-            // 2. Fallback: Scan if not found or no date
-            if (!activity) {
-                // Determine search range - could be huge, but for now let's try reasonable bounds or just scan all if needed.
-                // Since this is a "fix" operation, scanning all for user is acceptable performance-wise temporarily.
-                const all = await activityRepo.getAllActivities(session.userId);
-                activity = all.find(a => a.id === activityId) || null;
-            }
-
-            if (!activity) {
-                // 3. Fallback to Strength Repo: Maybe this is a merged activity using a strength ID
+            if (!activity || activity.userId !== session.userId) {
+                // If not found in activities, try strength repo
                 const workout = await strengthRepo.getWorkout(session.userId, activityId);
                 if (workout) {
                     console.log(`[PATCH /api/activities] Found strength workout for ID ${activityId}, applying updates...`);
@@ -179,17 +177,22 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                     if (updates.notes !== undefined) workout.notes = updates.notes;
                     if (updates.durationMinutes !== undefined) workout.duration = updates.durationMinutes;
                     if (updates.excludeFromStats !== undefined) workout.excludeFromStats = updates.excludeFromStats;
-                    if (updates.intensity !== undefined) {
-                        // Strength sessions don't have intensity yet, but we can store it in notes or ignore
-                    }
 
                     workout.updatedAt = new Date().toISOString();
                     await strengthRepo.saveWorkout(workout);
+
+                    await logAudit({ actorId: session.userId, action: "UPDATE_STRENGTH_WORKOUT", targetId: activityId });
 
                     return new Response(JSON.stringify({ success: true, message: "Strength workout updated" }), { status: 200, headers });
                 }
 
                 return new Response(JSON.stringify({ error: "Activity not found" }), { status: 404, headers });
+            }
+
+            // Validate updates if performance or plan is provided
+            if (updates.performance || updates.plan) {
+                // We partial parse here or just validate the relevant section
+                // For now, let's keep it simple as it's a PATCH
             }
 
             // Auto-migrate legacy/flat structure to Universal
@@ -204,7 +207,6 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                     notes: legacy.notes,
                     excludeFromStats: legacy.excludeFromStats
                 };
-                // Ensure date is preserved if moving
             }
             if (!activity.plan && (legacy.title || legacy.type || activity.performance?.notes)) {
                 activity.plan = {
@@ -216,100 +218,48 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             }
 
             // Apply updates
-            // Map flat "title" to plan.title
             if (updates.title !== undefined) {
                 if (!activity.plan) {
-                    // Create minimal valid plan section
                     const type = activity.performance?.activityType || 'other';
-                    activity.plan = {
-                        title: updates.title,
-                        activityType: type,
-                        distanceKm: activity.performance?.distanceKm || 0
-                    };
+                    activity.plan = { title: updates.title, activityType: type, distanceKm: activity.performance?.distanceKm || 0 };
                 } else {
                     activity.plan.title = updates.title;
                 }
             }
-
-            // Map flat "notes" to plan.description or performance.notes
             if (updates.notes !== undefined) {
                 if (!activity.performance) {
-                    activity.performance = {
-                        durationMinutes: 0,
-                        calories: 0,
-                        notes: updates.notes
-                    };
+                    activity.performance = { durationMinutes: 0, calories: 0, notes: updates.notes };
                 } else {
                     activity.performance.notes = updates.notes;
                 }
-
-                // Also update plan description if it exists
                 if (activity.plan) activity.plan.description = updates.notes;
             }
-
-            // Handle excludeFromStats direct update
             if (updates.excludeFromStats !== undefined) {
                 if (!activity.performance) {
-                    activity.performance = {
-                        durationMinutes: 0,
-                        calories: 0,
-                        excludeFromStats: updates.excludeFromStats
-                    };
+                    activity.performance = { durationMinutes: 0, calories: 0, excludeFromStats: updates.excludeFromStats };
                 } else {
                     activity.performance.excludeFromStats = updates.excludeFromStats;
                 }
             }
-
-            // Handle performance object updates (e.g., subType for race marking)
             if (updates.performance !== undefined) {
-                if (!activity.performance) {
-                    activity.performance = {
-                        durationMinutes: 0,
-                        calories: 0,
-                        ...updates.performance
-                    };
-                } else {
-                    // Merge performance updates
-                    activity.performance = {
-                        ...activity.performance,
-                        ...updates.performance
-                    };
-                }
+                activity.performance = { ...(activity.performance || { durationMinutes: 0, calories: 0 }), ...updates.performance };
             }
-
-            // Handle direct subType update (shorthand)
             if (updates.subType !== undefined) {
                 if (!activity.performance) {
-                    activity.performance = {
-                        durationMinutes: 0,
-                        calories: 0,
-                        subType: updates.subType
-                    };
+                    activity.performance = { durationMinutes: 0, calories: 0, subType: updates.subType };
                 } else {
                     activity.performance.subType = updates.subType;
                 }
             }
-
-            // Handle direct activity type update (Recategorization)
             if (updates.type !== undefined || updates.activityType !== undefined) {
                 const newType = updates.type || updates.activityType;
-
                 if (!activity.performance) {
-                    activity.performance = {
-                        durationMinutes: 0,
-                        calories: 0,
-                        activityType: newType
-                    };
+                    activity.performance = { durationMinutes: 0, calories: 0, activityType: newType };
                 } else {
                     activity.performance.activityType = newType;
                 }
-
                 if (!activity.plan) {
-                    activity.plan = {
-                        title: legacy.title || activity.performance?.notes || 'Aktivitet',
-                        activityType: newType,
-                        distanceKm: activity.performance?.distanceKm || 0
-                    };
+                    activity.plan = { title: activity.performance?.notes || 'Aktivitet', activityType: newType, distanceKm: activity.performance?.distanceKm || 0 };
                 } else {
                     activity.plan.activityType = newType;
                 }
@@ -329,32 +279,29 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
         try {
             const parts = url.pathname.split('/');
             const activityId = parts[3];
-            const date = url.searchParams.get('date');
 
-            if (!activityId || !date) {
-                return new Response(JSON.stringify({ error: "Missing ID or Date" }), { status: 400, headers });
+            if (!activityId) {
+                return new Response(JSON.stringify({ error: "Missing ID" }), { status: 400, headers });
             }
 
-            const activity = await activityRepo.getActivity(session.userId, date, activityId);
-            if (!activity) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
+            const activity = await activityRepo.getActivityById(activityId);
+            if (!activity || activity.userId !== session.userId) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 
             // If it's a merged activity, we must restore original activities
             if (activity.mergeInfo?.isMerged && activity.mergeInfo.originalActivityIds) {
-                // We need all activities to find the originals efficiently if we don't know their dates
-                // Actually we can just scan for them or assume they are on the same date (usually they are)
-                // But for safety, let's scan all for user (performance is fine for individual delete)
-                const all = await activityRepo.getAllActivities(session.userId);
                 const originalIds = activity.mergeInfo.originalActivityIds;
-                const originals = all.filter(a => originalIds.includes(a.id));
-
-                for (const original of originals) {
-                    delete original.mergedIntoId;
-                    original.updatedAt = new Date().toISOString();
-                    await activityRepo.saveActivity(original);
+                for (const oid of originalIds) {
+                    const original = await activityRepo.getActivityById(oid);
+                    if (original && original.userId === session.userId) {
+                        delete original.mergedIntoId;
+                        original.updatedAt = new Date().toISOString();
+                        await activityRepo.saveActivity(original);
+                    }
                 }
             }
 
             await activityRepo.deleteActivity(activity);
+            await logAudit({ actorId: session.userId, action: "DELETE_ACTIVITY", targetId: activityId });
             return new Response(JSON.stringify({ success: true }), { status: 200, headers });
         } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
@@ -363,4 +310,3 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
 
     return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 }
-

@@ -19,6 +19,7 @@ import { Message, Conversation } from "../models/types.ts";
 import { hashPassword } from "./utils/crypto.ts";
 
 const connectedClients = new Map<string, Set<WebSocket>>(); // userId -> sockets
+const connectedAdminIds = new Set<string>(); // Tracks which users are admins
 
 export function handleWebSocket(req: Request): Response {
     if (req.headers.get("upgrade") != "websocket") {
@@ -31,7 +32,13 @@ export function handleWebSocket(req: Request): Response {
     let isAdmin = false;
 
     socket.onopen = () => {
-        // Wait for auth
+        // Auth Timeout: Close socket if auth not received in 10s
+        (socket as any).authTimeout = setTimeout(() => {
+            if (!userId) {
+                console.log("[WS] Closing unauthenticated connection (timeout)");
+                socket.close();
+            }
+        }, 10000);
     };
 
     socket.onmessage = async (e: MessageEvent) => {
@@ -49,6 +56,12 @@ export function handleWebSocket(req: Request): Response {
                         connectedClients.set(userId, new Set());
                     }
                     connectedClients.get(userId)!.add(socket);
+                    if (isAdmin) {
+                        connectedAdminIds.add(userId);
+                    }
+
+                    if ((socket as any).authTimeout) clearTimeout((socket as any).authTimeout);
+
                     socket.send(JSON.stringify({ type: 'auth_success', userId, isAdmin }));
                 } else {
                     socket.send(JSON.stringify({ type: 'error', message: 'Invalid token' }));
@@ -292,10 +305,13 @@ export function handleWebSocket(req: Request): Response {
     };
 
     socket.onclose = () => {
+        if ((socket as any).authTimeout) clearTimeout((socket as any).authTimeout);
+
         if (userId && connectedClients.has(userId)) {
             connectedClients.get(userId)!.delete(socket);
             if (connectedClients.get(userId)!.size === 0) {
                 connectedClients.delete(userId);
+                connectedAdminIds.delete(userId);
             }
         }
     };
@@ -328,14 +344,10 @@ function broadcastConversation(userIds: string[], conversation: Conversation) {
 }
 
 async function broadcastToAdmins(payload: any) {
-    // Find all connected admins
-    // This is inefficient if we have to look up every user.
-    // Optimization: Maintain a set of connectedAdminIds.
-    // For now, iterate connectedClients.
-    for (const [uid, sockets] of connectedClients.entries()) {
-        const user = await getUserById(uid);
-        if (user && (user.role === 'admin' || user.role === 'developer')) {
-            for (const socket of sockets) {
+    // Only iterate known connected admins
+    for (const uid of connectedAdminIds) {
+        if (connectedClients.has(uid)) {
+            for (const socket of connectedClients.get(uid)!) {
                 if (socket.readyState === WebSocket.OPEN) {
                     socket.send(JSON.stringify(payload));
                 }
