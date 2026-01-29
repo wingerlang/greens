@@ -522,6 +522,32 @@
                         <div class="stat-value" x-text="traffic.total"></div>
                         <div class="stat-trend trend-up" x-text="'+' + Math.floor(Math.random()*20) + ' req/s'"></div>
                     </div>
+
+                    <!-- Load Balancer Card -->
+                    <div class="card">
+                        <div class="stat-label">Load Balancer</div>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                             <div style="font-size: 1.8rem; font-weight: 800; color: #f59e0b;" x-text="loadBalancer.activeNodes.length"></div>
+                             <div style="font-size: 0.8rem; color: var(--text-muted); text-align:right;">
+                                 <div>Nodes Active</div>
+                                 <div x-text="loadBalancer.cooldown ? '(Scaling...)' : ''" style="color: #fbbf24; font-size: 0.7rem;"></div>
+                             </div>
+                        </div>
+                         <div style="margin-top: 16px; font-size: 0.9rem;">
+                             <div style="display:flex; justify-content:space-between; margin-bottom: 6px; color: var(--text-muted); font-size: 0.8rem;">
+                                 <span>Load / Threshold</span>
+                                 <span x-text="loadBalancer.rps.toFixed(1) + ' / ' + loadBalancer.threshold + ' RPS'"></span>
+                             </div>
+                             <div style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                                  <div :style="`width: ${Math.min(100, (loadBalancer.rps / (loadBalancer.threshold * loadBalancer.activeNodes.length)) * 100)}%; background: #f59e0b; height: 100%; transition: width 0.5s ease;`"></div>
+                             </div>
+                             <div style="display: flex; gap: 4px; margin-top: 8px;">
+                                <template x-for="node in loadBalancer.activeNodes">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;" :title="node"></div>
+                                </template>
+                             </div>
+                         </div>
+                    </div>
                 </div>
 
                 <div class="table-container shadow-lg">
@@ -1191,6 +1217,7 @@
                 sessions: [],
                 bannedIps: [],
                 config: {},
+                loadBalancer: { rps: 0, activeNodes: [], threshold: 10, cooldown: false },
                 currentService: null,
                 logs: 'Loading...',
                 banInput: '',
@@ -1311,17 +1338,19 @@
 
                 async refreshData() {
                     // Parallel fetching
-                    const [statusRes, analyticsRes, granularRes, sessionRes, bannedRes, configRes] = await Promise.all([
+                    const [statusRes, analyticsRes, granularRes, sessionRes, bannedRes, configRes, lbRes] = await Promise.all([
                         fetch('/api/status').then(r => r.json()),
                         fetch('/api/analytics').then(r => r.json()),
                         fetch('/api/analytics/granular').then(r => r.json()),
                         fetch('/api/sessions').then(r => r.json()),
                         fetch('/api/banned').then(r => r.json()),
-                        fetch('/api/config').then(r => r.json())
+                        fetch('/api/config').then(r => r.json()),
+                        fetch('/api/load-balancer').then(r => r.json())
                     ]);
 
                     this.services = statusRes.services;
                     this.system = statusRes.system || { load: [], memory: {} };
+                    this.loadBalancer = lbRes;
                     this.traffic = analyticsRes.traffic;
                     this.analytics = {
                         endpoints: analyticsRes.endpoints,

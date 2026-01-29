@@ -1,4 +1,5 @@
 import { Middleware, GuardianContext, Next } from "./types.ts";
+import { loadBalancer } from "../loadBalancer.ts";
 
 export class ProxyMiddleware implements Middleware {
     name = "Proxy";
@@ -7,7 +8,18 @@ export class ProxyMiddleware implements Middleware {
         // If response already set (e.g. by cache), skip
         if (ctx.response) return;
 
-        const targetUrl = new URL(`http://127.0.0.1:${ctx.targetPort}${ctx.url.pathname}${ctx.url.search}`);
+        let targetPort = ctx.targetPort;
+        let lbNodeName: string | undefined;
+
+        // Load Balancer Logic for Backend Service
+        if (ctx.serviceName === "backend") {
+            loadBalancer.recordRequest();
+            const target = loadBalancer.getTarget(ctx.req);
+            targetPort = target.port;
+            lbNodeName = target.name;
+        }
+
+        const targetUrl = new URL(`http://127.0.0.1:${targetPort}${ctx.url.pathname}${ctx.url.search}`);
 
         if (ctx.req.headers.get("upgrade") === "websocket") {
             const protocol = ctx.req.headers.get("Sec-WebSocket-Protocol") || undefined;
@@ -143,6 +155,11 @@ export class ProxyMiddleware implements Middleware {
                     finalHeaders.set("Location", rewritten);
                 }
             }
+        }
+
+        // Inject Sticky Session Cookie if handled by LoadBalancer
+        if (lbNodeName) {
+            finalHeaders.append("Set-Cookie", `G_NODE=${lbNodeName}; Path=/; HttpOnly; SameSite=Lax`);
         }
 
         ctx.response = new Response(response.body, {
