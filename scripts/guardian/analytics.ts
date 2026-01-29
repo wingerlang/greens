@@ -163,19 +163,31 @@ export async function getRequestCountInWindow(serviceName: string, windowMs: num
     if (!kv) return 0;
 
     const now = Date.now();
-    const start = now - windowMs;
+    const startTs = now - windowMs;
 
-    // We iterate through guardian.requests which is keyed by timestamp
-    const iter = kv.list<RequestMetric>({
-        start: ["guardian", "requests", start],
-        end: ["guardian", "requests", now]
+    // Use prefix to bound search, and manually filter/stop
+    // Start from current time and go backwards
+    const iter = kv.list<RequestMetric>({ prefix: ["guardian", "requests"] }, {
+        reverse: true
     });
 
     let count = 0;
-    for await (const res of iter) {
-        if (serviceName === "guardian" || res.value.targetService === serviceName) {
-            count++;
+    try {
+        for await (const res of iter) {
+            const metric = res.value;
+            // Since we are in reverse, we stop when we pass the startTs
+            if (metric.timestamp < startTs) break;
+
+            // Skip future-dated entries just in case
+            if (metric.timestamp <= now) {
+                if (serviceName === "guardian" || metric.targetService === serviceName) {
+                    count++;
+                }
+            }
         }
+    } catch (e) {
+        console.error(`[ANALYTICS] Error counting requests for ${serviceName}:`, e);
     }
+
     return count;
 }
