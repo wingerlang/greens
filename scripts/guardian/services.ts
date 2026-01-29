@@ -30,18 +30,26 @@ export class Service {
             url: config.port ? `http://localhost:${config.port}` : undefined
         };
         this.shouldRun = config.autoRestart;
-        this.loadStats();
+        if (this.shouldRun) {
+            this.loadHistoricalLogs();
+        }
     }
 
-    async loadStats() {
+    async loadHistoricalLogs() {
         const kv = getKv();
         if (!kv) return;
+
         try {
-            const date = new Date().toISOString().split('T')[0];
-            const res = await kv.get<Deno.KvU64>(["guardian", "stats", date, this.config.name, "restarts"]);
-            if (res.value) {
-                this.stats.restarts = Number(res.value.value);
+            // Load some recent logs from KV if we just started/restarted
+            const iter = kv.list<LogEntry>({ prefix: ["guardian", "logs"] }, { limit: 100, reverse: true });
+            const historical: LogEntry[] = [];
+            for await (const res of iter) {
+                if (res.value.service === this.config.name) {
+                    historical.push(res.value);
+                }
             }
+            // Add them to our local list if they aren't already there (simplified)
+            this.logs = [...historical.reverse(), ...this.logs].slice(-MAX_LOGS);
         } catch (e) { /* ignore */ }
     }
 
@@ -76,6 +84,13 @@ export class Service {
 
         this.shouldRun = true;
         this.stats.status = "starting";
+
+        if (!this.config.command || this.config.command.length === 0) {
+            this.addLog("info", "Service is managed externally or is a system process. Status set to running.");
+            this.stats.status = "running";
+            return;
+        }
+
         this.addLog("info", "Starting service...");
 
         try {
@@ -128,6 +143,10 @@ export class Service {
     }
 
     async restart() {
+        if (!this.config.command || this.config.command.length === 0) {
+            this.addLog("info", "System service cannot be restarted.");
+            return;
+        }
         await this.stop();
         this.retryCount = 0; // Manual restart resets backoff
         setTimeout(() => this.start(), 1000);

@@ -14,7 +14,7 @@ interface ExperimentContextType {
 const ExperimentContext = createContext<ExperimentContextType | undefined>(undefined);
 
 export function ExperimentProvider({ children }: { children: ReactNode }) {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const [assignments, setAssignments] = useState<Record<string, 'A' | 'B'>>({});
 
     useEffect(() => {
@@ -46,6 +46,10 @@ export function ExperimentProvider({ children }: { children: ReactNode }) {
         // Log assignment to analytics
         fetch('/api/usage/event', {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
                 userId: user?.id || 'anon',
                 sessionId: 'exp-init',
@@ -65,6 +69,10 @@ export function ExperimentProvider({ children }: { children: ReactNode }) {
         const variant = getVariant(experimentId);
         fetch('/api/usage/event', {
             method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
                 userId: user?.id || 'anon',
                 sessionId: 'exp-conv',

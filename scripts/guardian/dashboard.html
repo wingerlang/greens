@@ -537,6 +537,8 @@
                                 <th>Internal Port</th>
                                 <th>Gateway Address</th>
                                 <th>Status</th>
+                                <th>Req (10m)</th>
+                                <th>Req (60m)</th>
                                 <th>CPU</th>
                                 <th>Memory</th>
                             </tr>
@@ -561,6 +563,8 @@
                                             :class="s.status === 'running' ? 'badge-green' : (s.status === 'stopped' ? 'badge-purple' : 'badge-blue')"
                                             x-text="s.status"></span>
                                     </td>
+                                    <td style="font-weight:700; color:var(--accent-secondary)" x-text="s.req10m"></td>
+                                    <td style="font-weight:700; color:var(--accent-secondary)" x-text="s.req60m"></td>
                                     <td x-text="s.cpu.toFixed(1) + '%'"></td>
                                     <td x-text="formatBytes(s.memory)"></td>
                                 </tr>

@@ -39,14 +39,18 @@ export class ProxyMiddleware implements Middleware {
                     if (clientSocket.readyState === WebSocket.OPEN) clientSocket.close();
                 };
 
-                serverSocket.onerror = (e: any) => console.error(`[Proxy] Target WS Error (${wsTargetUrl}):`, e);
-                clientSocket.onerror = (e: any) => console.error(`[Proxy] Client WS Error:`, e);
+                serverSocket.onerror = (e: any) => {
+                    const msg = `Target WS Error (${wsTargetUrl}): ${e.message || 'Connection refused/Unexpected EOF'}`;
+                    ctx.log("stderr", msg);
+                };
+                clientSocket.onerror = (e: any) => {
+                    ctx.log("stderr", `Client WS Error: ${e.message || 'Unexpected EOF'}`);
+                };
 
                 ctx.response = response;
-            } catch (err) {
-                console.error(`[Proxy] WS Connection Failed to ${wsTargetUrl}:`, err);
-                // If we can't even create the socket, we should probably fail the upgrade
-                // But Deno already upgraded the request. We might just have to close the client socket.
+            } catch (err: any) {
+                const msg = `WS Connection Failed to ${wsTargetUrl}: ${err.message || err}`;
+                ctx.log("stderr", msg);
                 clientSocket.close(1011, "Internal Proxy Error");
                 ctx.response = response;
             }
@@ -87,13 +91,15 @@ export class ProxyMiddleware implements Middleware {
             } catch (e) {
                 lastError = e;
                 const msg = String(e);
-                const isNetError = msg.includes("Connection refused") || msg.includes("reset") || msg.includes("refused");
+                const isNetError = msg.includes("Connection refused") || msg.includes("reset") || msg.includes("refused") || msg.includes("Unexpected EOF");
 
                 if (!isNetError) {
+                    ctx.log("stderr", `Proxy Fetch Error: ${msg}`);
                     break;
                 }
 
                 if (i < maxRetries && isIdempotent) {
+                    ctx.log("info", `Retrying connection to ${ctx.serviceName} (Attempt ${i + 1})...`);
                     // Retry with backoff
                     await new Promise(r => setTimeout(r, 200 * (i + 1)));
                     continue;
@@ -105,7 +111,7 @@ export class ProxyMiddleware implements Middleware {
         }
 
         if (!response) {
-            console.error(`[Proxy] Connection failed to ${targetUrl}:`, lastError);
+            ctx.log("stderr", `Connection failed to ${targetUrl}: ${(lastError as any)?.message || lastError}`);
             ctx.response = new Response("Guardian Service Unavailable", { status: 502 });
             return;
         }

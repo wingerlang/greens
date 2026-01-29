@@ -7,6 +7,7 @@ import { handleDashboardRequest } from "./dashboard.ts";
 import { clearPort } from "./utils.ts";
 import { loadBannedIps } from "./security.ts";
 import { CONFIG } from "./config.ts";
+import { stats } from "./logger.ts";
 
 import { Pipeline } from "./middleware/pipeline.ts";
 import { LoggerMiddleware } from "./middleware/logger.ts";
@@ -60,6 +61,19 @@ async function bootstrap() {
     setInterval(updateSystemStats, 2000);
     startHealthMonitor();
 
+    // 4. Live Terminal Status
+    setInterval(() => {
+        const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
+        process.stdout.write(`\r\x1b[32m[GUARDIAN LIVE] Requests: ${stats.totalRequests} | RPS: ${stats.rps.toFixed(2)} | Uptime: ${uptime}s\x1b[0m`);
+    }, 1000);
+
+    // Periodically log status to history (every 30s)
+    setInterval(() => {
+        const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
+        const msg = `Requests: ${stats.totalRequests} | RPS: ${stats.rps.toFixed(2)} | Uptime: ${uptime}s`;
+        manager.get("guardian")?.addLog("info", msg);
+    }, 30000);
+
     // 4. Start Dashboard
     console.log(`[GUARDIAN] Dashboard listening on http://localhost:${CONFIG.ports.dashboard}`);
     Deno.serve({
@@ -96,7 +110,10 @@ async function bootstrap() {
             ip: info.remoteAddr.transport === 'tcp' ? (info.remoteAddr as Deno.NetAddr).hostname : "0.0.0.0",
             userAgent: req.headers.get("user-agent") || "unknown",
             url: new URL(req.url),
-            state: new Map()
+            state: new Map(),
+            log: (source, message) => {
+                manager.get(serviceName)?.addLog(source, message);
+            }
         };
 
         return await pipeline.execute(ctx);

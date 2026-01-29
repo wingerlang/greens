@@ -1,5 +1,4 @@
-/// <reference lib="deno.ns" />
-import { updateServiceStat } from "./logger.ts";
+import { updateServiceStat, persistLog } from "./logger.ts";
 
 export type CircuitStatus = "CLOSED" | "OPEN" | "HALF-OPEN";
 
@@ -32,16 +31,24 @@ export function checkCircuit(service: string): boolean {
 
     if (state.status === "OPEN") {
         if (now > state.nextRetry) {
-            console.log(`[GUARDIAN] Circuit HALF-OPEN for ${service}`);
+            const msg = `Circuit HALF-OPEN for ${service}`;
+            console.log(`[GUARDIAN] ${msg}`);
             state.status = "HALF-OPEN";
+
+            persistLog({
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                service: "guardian",
+                source: "info",
+                message: msg
+            });
+
             return true; // Allow one trial request
         }
         return false;
     }
 
     if (state.status === "HALF-OPEN") {
-        // We only allow 1 request at a time in half-open generally,
-        // but for simplicity, we allow traffic. If it fails, it goes back to OPEN immediately.
         return true;
     }
 
@@ -51,13 +58,20 @@ export function checkCircuit(service: string): boolean {
 export function recordSuccess(service: string) {
     const state = getCircuitState(service);
     if (state.status === "HALF-OPEN") {
-        console.log(`[GUARDIAN] Circuit CLOSED for ${service} (Recovered)`);
+        const msg = `Circuit CLOSED for ${service} (Recovered)`;
+        console.log(`[GUARDIAN] ${msg}`);
         state.status = "CLOSED";
         state.failures = 0;
         updateServiceStat(service, "circuit_recovered");
+
+        persistLog({
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            service: "guardian",
+            source: "info",
+            message: msg
+        });
     } else if (state.status === "CLOSED") {
-        // Decay failures over time?
-        // For now, just reset if we have some failures but didn't trip
         if (state.failures > 0) state.failures = 0;
     }
 }
@@ -70,12 +84,30 @@ export function recordFailure(service: string) {
     if (state.status === "CLOSED" && state.failures >= THRESHOLD) {
         state.status = "OPEN";
         state.nextRetry = Date.now() + TIMEOUT;
-        console.log(`[GUARDIAN] Circuit TRIPPED for ${service} (${state.failures} failures)`);
+        const msg = `Circuit TRIPPED for ${service} (${state.failures} failures)`;
+        console.log(`[GUARDIAN] ${msg}`);
         updateServiceStat(service, "circuit_tripped");
+
+        persistLog({
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            service: "guardian",
+            source: "stderr",
+            message: msg
+        });
     } else if (state.status === "HALF-OPEN") {
         state.status = "OPEN";
-        state.nextRetry = Date.now() + TIMEOUT; // Back to timeout
-        console.log(`[GUARDIAN] Circuit TRIPPED again for ${service}`);
+        state.nextRetry = Date.now() + TIMEOUT;
+        const msg = `Circuit TRIPPED again for ${service}`;
+        console.log(`[GUARDIAN] ${msg}`);
+
+        persistLog({
+            id: crypto.randomUUID(),
+            timestamp: new Date().toISOString(),
+            service: "guardian",
+            source: "stderr",
+            message: msg
+        });
     }
 }
 

@@ -15,6 +15,8 @@ export interface GuardianContext {
 
     // If set, the pipeline stops and returns this response
     response?: Response;
+
+    log: (source: "info" | "stdout" | "stderr", message: string) => void;
 }
 
 export type Next = () => Promise<void>;

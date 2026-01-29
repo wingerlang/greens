@@ -9,6 +9,12 @@ const MAX_LOGS = 2000;
 let kv: Deno.Kv | null = null;
 let currentSessionId = crypto.randomUUID();
 
+export const stats = {
+    totalRequests: 0,
+    startTime: Date.now(),
+    rps: 0
+};
+
 const logClients = new Set<ReadableStreamDefaultController>();
 
 export function registerLogClient(controller: ReadableStreamDefaultController) {
@@ -34,9 +40,10 @@ function broadcastLog(data: any) {
 export async function initLogger() {
     try {
         await Deno.mkdir(LOG_DIR, { recursive: true });
-        kv = await Deno.openKv("./greens.db");
+        kv = await Deno.openKv("./guardian.db");
+        console.log("[LOGGER] Guardian KV initialized successfully at ./guardian.db");
     } catch (e) {
-        console.error("Failed to init logger:", e);
+        console.error("[LOGGER] CRITICAL: Failed to init guardian KV:", e);
     }
 }
 
@@ -75,6 +82,11 @@ export async function persistLog(entry: LogEntry) {
 
     // 3. Broadcast
     broadcastLog({ type: 'log', ...entry });
+
+    // 4. Console output (Clean)
+    const color = entry.source === 'stderr' ? '\x1b[31m' : (entry.source === 'info' ? '\x1b[36m' : '');
+    const reset = '\x1b[0m';
+    console.log(`${color}[${entry.service.toUpperCase()}] ${entry.message}${reset}`);
 }
 
 export async function saveMetric(serviceName: string, cpu: number, memory: number) {
@@ -100,6 +112,9 @@ export async function saveRequestMetric(metric: RequestMetric) {
             metric,
             { expireIn: 7 * 24 * 60 * 60 * 1000 }
         );
+
+        stats.totalRequests++;
+        updateLiveStatus();
 
         // Update aggregations (Daily stats)
         const date = new Date(metric.timestamp).toISOString().split('T')[0];
@@ -152,12 +167,17 @@ export async function saveRequestMetric(metric: RequestMetric) {
         // 7. Session Management
         await updateSession(metric, date);
 
-        await atomic.commit();
+        const commitRes = await atomic.commit();
+        if (!commitRes.ok) {
+            console.error("[LOGGER] KV Transaction failed for request metric");
+        }
 
         // Broadcast Request Log
         broadcastLog({ type: 'request', ...metric });
 
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+        console.error("[LOGGER] Error saving request metric:", e);
+    }
 }
 
 async function updateSession(metric: RequestMetric, date: string) {
@@ -254,4 +274,12 @@ export async function generateSessionId(ip: string, userAgent: string): Promise<
     const data = new TextEncoder().encode(ip + userAgent + getTodayStr());
     const hashBuffer = await crypto.subtle.digest("SHA-256", data);
     return encodeHex(hashBuffer).slice(0, 12);
+}
+
+function updateLiveStatus() {
+    const elapsed = (Date.now() - stats.startTime) / 1000;
+    stats.rps = stats.totalRequests / elapsed;
+
+    // Move cursor to bottom or just print?
+    // For now, let's keep it simple. main.ts will handle the TTY status line if possible.
 }

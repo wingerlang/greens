@@ -1,5 +1,5 @@
 import { getKv } from "./logger.ts";
-import { SessionStats } from "./types.ts";
+import { LogEntry, MetricEntry, RequestMetric, SessionStats } from "./types.ts";
 
 export async function getTopEndpoints(limit = 10) {
     const kv = getKv();
@@ -14,6 +14,10 @@ export async function getTopEndpoints(limit = 10) {
             path: String(res.key[4]),
             count: Number(res.value.value)
         });
+    }
+
+    if (stats.length === 0) {
+        // console.log(`[ANALYTICS] No top endpoints found for ${date}`);
     }
 
     return stats.sort((a, b) => b.count - a.count).slice(0, limit);
@@ -67,6 +71,9 @@ export async function getTrafficStats() {
 
     const date = new Date().toISOString().split('T')[0];
     const res = await kv.get<Deno.KvU64>(["guardian", "stats", date, "total_requests"]);
+    if (!res.value) {
+        // console.log(`[ANALYTICS] No total_requests found for ${date}`);
+    }
     return {
         total: res.value ? Number(res.value.value) : 0
     };
@@ -94,15 +101,19 @@ export async function getServiceDailyStats(serviceName: string, days = 7) {
 
     for (let i = days - 1; i >= 0; i--) {
         const date = new Date(now - i * oneDay).toISOString().split('T')[0];
-        // Key: ["guardian", "stats", date, "service", serviceName]
         try {
-            const res = await kv.get<Deno.KvU64>(["guardian", "stats", date, "service", serviceName]);
+            // If serviceName is 'guardian', we show TOTAL requests for the whole system
+            const key = serviceName === "guardian"
+                ? ["guardian", "stats", date, "total_requests"]
+                : ["guardian", "stats", date, "service", serviceName];
+
+            const res = await kv.get<Deno.KvU64>(key);
             stats.push({
                 date,
                 count: res.value ? Number(res.value.value) : 0
             });
-        } catch(e) {
-             stats.push({ date, count: 0 });
+        } catch (e) {
+            stats.push({ date, count: 0 });
         }
     }
 
@@ -145,4 +156,26 @@ export async function getCountryStats() {
         stats.push({ code: String(res.key[4]), count: Number(res.value.value) });
     }
     return stats.sort((a, b) => b.count - a.count);
+}
+
+export async function getRequestCountInWindow(serviceName: string, windowMs: number) {
+    const kv = getKv();
+    if (!kv) return 0;
+
+    const now = Date.now();
+    const start = now - windowMs;
+
+    // We iterate through guardian.requests which is keyed by timestamp
+    const iter = kv.list<RequestMetric>({
+        start: ["guardian", "requests", start],
+        end: ["guardian", "requests", now]
+    });
+
+    let count = 0;
+    for await (const res of iter) {
+        if (serviceName === "guardian" || res.value.targetService === serviceName) {
+            count++;
+        }
+    }
+    return count;
 }

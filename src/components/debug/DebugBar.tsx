@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useDebugInterceptor, RequestSummary, DebugProfile } from '../../hooks/useDebugInterceptor';
+import { useAuth } from '../../context/AuthContext.tsx';
 import { X, Database, Clock, Activity, List, ChevronRight, ChevronDown, Monitor, Cpu, Target, FileCode, Layers, Map as MapIcon, Globe } from 'lucide-react';
 import { getComponentInfo, ComponentDebugInfo } from '../../utils/debug/fiber-inspector.ts';
 
@@ -11,6 +12,7 @@ export default function DebugBar() {
     // Only show in dev mode (localhost)
     if (!import.meta.env.DEV) return null;
 
+    const { user, token } = useAuth();
     const { requests, latestId } = useDebugInterceptor();
     const [isOpen, setIsOpen] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -31,13 +33,15 @@ export default function DebugBar() {
 
     useEffect(() => {
         // Fetch host info
-        fetch('/api/debug/host-info')
+        fetch('/api/debug/host-info', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
             .then(res => res.json())
             .then(data => {
                 if (data.ips) setHostIps(data.ips);
             })
             .catch(console.error);
-    }, []);
+    }, [token]);
 
     useEffect(() => {
         if (selectedId) {
@@ -118,7 +122,9 @@ export default function DebugBar() {
     const fetchDebugProfile = async (id: string) => {
         setLoading(true);
         try {
-            const res = await fetch(`/api/debug/${id}`);
+            const res = await fetch(`/api/debug/${id}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             if (res.ok) {
                 const data = await res.json();
                 setProfile(data);

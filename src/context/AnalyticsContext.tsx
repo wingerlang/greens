@@ -78,7 +78,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             // Send to API (fire and forget)
             fetch('/api/usage/view', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(view)
             }).catch(e => console.debug("Analytics view log failed", e));
         }
@@ -102,6 +105,9 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
         const handleClick = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
+
+            // Ignore clicks inside the debug bar
+            if (target.closest('#debug-bar-root')) return;
 
             // --- Heatmap Data Capture ---
             // Capture ALL clicks, not just interactive ones, for pure heatmap
@@ -151,7 +157,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                     };
                     fetch('/api/usage/event', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
                         body: JSON.stringify(rageEvent)
                     }).catch(e => console.debug("Analytics rage log failed", e));
                 }
@@ -207,7 +216,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
                 fetch('/api/usage/event', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify(event)
                 }).catch(e => console.debug("Analytics event log failed", e));
             } else {
@@ -241,7 +253,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                     };
                     fetch('/api/usage/event', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
                         body: JSON.stringify(deadEvent)
                     }).catch(e => console.debug("Analytics dead log failed", e));
                 }
@@ -274,7 +289,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
             fetch('/api/usage/event', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify(copyEvent)
             }).catch(e => console.debug("Analytics copy log failed", e));
         };
@@ -297,7 +315,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
         const handleError = (event: ErrorEvent) => {
             fetch('/api/usage/event', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     id: generateId(),
                     userId: user.id,
@@ -315,7 +336,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
         const handleRejection = (event: PromiseRejectionEvent) => {
             fetch('/api/usage/event', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     id: generateId(),
                     userId: user.id,
@@ -356,7 +380,10 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
 
         fetch('/api/usage/event', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify(event)
         }).catch(e => console.debug("Analytics custom log failed", e));
     };

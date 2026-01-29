@@ -53,7 +53,7 @@ interface SessionEvent extends InteractionEvent {
 }
 
 export function AnalyticsDashboard() {
-    const { user } = useAuth();
+    const { user, token } = useAuth();
     const { category = 'insights', tab = 'overview' } = useParams<{ category: string, tab: string }>();
     const navigate = useNavigate();
     const location = useLocation();
@@ -111,12 +111,16 @@ export function AnalyticsDashboard() {
         setLoading(true);
         try {
             if (activeTab === 'overview') {
+                const fetchOptions = {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                };
+
                 const [statsRes, usersRes, omniboxRes, dailyRes, eventsRes] = await Promise.all([
-                    fetch('/api/usage/stats?days=' + daysBack),
-                    fetch(`/api/usage/users?days=${daysBack}`),
-                    fetch(`/api/usage/omnibox?days=${daysBack}`),
-                    fetch(`/api/usage/daily?days=${daysBack}`),
-                    fetch(`/api/usage/events?days=${daysBack}&limit=50${selectedUserId ? `&userId=${selectedUserId}` : ''}`)
+                    fetch('/api/usage/stats?days=' + daysBack, fetchOptions),
+                    fetch(`/api/usage/users?days=${daysBack}`, fetchOptions),
+                    fetch(`/api/usage/omnibox?days=${daysBack}`, fetchOptions),
+                    fetch(`/api/usage/daily?days=${daysBack}`, fetchOptions),
+                    fetch(`/api/usage/events?days=${daysBack}&limit=50${selectedUserId ? `&userId=${selectedUserId}` : ''}`, fetchOptions)
                 ]);
 
                 if (!statsRes.ok) throw new Error(`Stats: ${statsRes.status}`);
@@ -138,8 +142,8 @@ export function AnalyticsDashboard() {
 
                 // Fetch pulse & friction
                 const [pulseRes, frictionRes] = await Promise.all([
-                    fetch('/api/usage/pulse'),
-                    fetch(`/api/usage/friction?days=${daysBack}`)
+                    fetch('/api/usage/pulse', fetchOptions),
+                    fetch(`/api/usage/friction?days=${daysBack}`, fetchOptions)
                 ]);
                 const [pulseData, frictionData] = await Promise.all([
                     pulseRes.json(),
@@ -149,17 +153,21 @@ export function AnalyticsDashboard() {
                 setFriction(frictionData.friction || []);
             } else if (activeTab === 'sessions') {
                 // Fetch Sessions
-                const res = await fetch(`/api/usage/sessions?days=${daysBack}`);
+                const res = await fetch(`/api/usage/sessions?days=${daysBack}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setSessions(data.sessions || []);
             } else if (activeTab === 'retention') {
-                const res = await fetch(`/api/usage/retention?days=${daysBack}`);
+                const res = await fetch(`/api/usage/retention?days=${daysBack}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setRetention(data.retention || []);
             } else if (activeTab === 'pathing') {
                 const [pathingRes, exitRes] = await Promise.all([
-                    fetch(`/api/usage/pathing?days=${daysBack}`),
-                    fetch(`/api/usage/exit?days=${daysBack}`)
+                    fetch(`/api/usage/pathing?days=${daysBack}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`/api/usage/exit?days=${daysBack}`, { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
                 const [pathingData, exitData] = await Promise.all([
                     pathingRes.json(),
@@ -168,39 +176,53 @@ export function AnalyticsDashboard() {
                 setPathing(pathingData.pathing || []);
                 setExitStats(exitData.exits || []);
             } else if (activeTab === 'appData') {
-                const res = await fetch(`/api/usage/app-stats?days=${daysBack}`);
+                const res = await fetch(`/api/usage/app-stats?days=${daysBack}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setAppDataStats(data);
             } else if (activeTab === 'errors') {
                 const [errRes, corrRes] = await Promise.all([
-                    fetch(`/api/usage/errors?days=${daysBack}`),
-                    fetch(`/api/usage/correlation?days=${daysBack}`)
+                    fetch(`/api/usage/errors?days=${daysBack}`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                    fetch(`/api/usage/correlation?days=${daysBack}`, { headers: { 'Authorization': `Bearer ${token}` } })
                 ]);
                 const [errData, corrData] = await Promise.all([errRes.json(), corrRes.json()]);
                 setErrorStats(errData.errors || []);
                 setCorrelationStats(corrData.correlation || []);
             } else if (activeTab === 'funnel') {
-                const res = await fetch('/api/usage/funnels');
+                const res = await fetch('/api/usage/funnels', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setFunnelDefinitions(data.funnels || []);
             } else if (activeTab === 'friction') {
-                const res = await fetch(`/api/usage/dead-clicks?days=${daysBack}`);
+                const res = await fetch(`/api/usage/dead-clicks?days=${daysBack}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setDeadClickStats(data.deadClicks || []);
             } else if (activeTab === 'health') {
-                const res = await fetch(`/api/usage/health?days=${daysBack}`);
+                const res = await fetch(`/api/usage/health?days=${daysBack}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setHealthStats(data.health || []);
             } else if (activeTab === 'live') {
-                const res = await fetch('/api/usage/live-feed');
+                const res = await fetch('/api/usage/live-feed', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setLiveEvents(data.events || []);
             } else if (activeTab === 'experiments') {
-                const res = await fetch(`/api/usage/experiments/results?days=${daysBack}`);
+                const res = await fetch(`/api/usage/experiments/results?days=${daysBack}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setExperiments(data.experiments || []);
             } else if (activeTab === 'ai') {
-                const res = await fetch('/api/usage/ai-insights');
+                const res = await fetch('/api/usage/ai-insights', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
                 const data = await res.json();
                 setAiInsights(data.insights || []);
             }

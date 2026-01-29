@@ -11,7 +11,8 @@ import {
     getServiceDailyStats,
     getTypeStats,
     getSessions,
-    getCountryStats
+    getCountryStats,
+    getRequestCountInWindow
 } from "./analytics.ts";
 import { bannedIps, banIp, unbanIp } from "./security.ts";
 import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
@@ -34,13 +35,21 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
 
     if (url.pathname === "/api/status") {
         manager.getOrAdd("guardian");
-        const services = manager.getAll().map(s => s.stats);
+        const services = manager.getAll();
         const circuits = getCircuitsSnapshot();
 
-        // Enrich services with circuit data
-        const enriched = services.map(s => ({
-            ...s,
-            circuit: circuits[s.name] || { status: "CLOSED", failures: 0 }
+        const enriched = await Promise.all(services.map(async s => {
+            const [req10m, req60m] = await Promise.all([
+                getRequestCountInWindow(s.config.name, 10 * 60 * 1000),
+                getRequestCountInWindow(s.config.name, 60 * 60 * 1000)
+            ]);
+
+            return {
+                ...s.stats,
+                req10m,
+                req60m,
+                circuit: circuits[s.config.name] || { status: "CLOSED", failures: 0 }
+            };
         }));
 
         return Response.json({
@@ -104,12 +113,12 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     }
 
     if (url.pathname === "/api/analytics/service-history") {
-         const serviceName = url.searchParams.get("service");
-         const days = Number(url.searchParams.get("days") || "7");
-         if (!serviceName) return Response.json([]);
+        const serviceName = url.searchParams.get("service");
+        const days = Number(url.searchParams.get("days") || "7");
+        if (!serviceName) return Response.json([]);
 
-         const stats = await getServiceDailyStats(serviceName, days);
-         return Response.json(stats);
+        const stats = await getServiceDailyStats(serviceName, days);
+        return Response.json(stats);
     }
 
     if (url.pathname === "/api/sessions") {
@@ -197,10 +206,10 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     if (req.method === "POST" && url.pathname === "/api/global") {
         const action = url.searchParams.get("action");
         if (action === "restart-all") {
-             for(const s of manager.getAll()) {
-                 if (s.config.autoRestart) await s.restart();
-             }
-             return Response.json({ success: true });
+            for (const s of manager.getAll()) {
+                if (s.config.autoRestart) await s.restart();
+            }
+            return Response.json({ success: true });
         }
         if (action === "ban") {
             const ip = url.searchParams.get("ip");
@@ -210,11 +219,11 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             }
         }
         if (action === "unban") {
-             const ip = url.searchParams.get("ip");
-             if (ip) {
-                 await unbanIp(ip);
-                 return Response.json({ success: true });
-             }
+            const ip = url.searchParams.get("ip");
+            if (ip) {
+                await unbanIp(ip);
+                return Response.json({ success: true });
+            }
         }
     }
 
