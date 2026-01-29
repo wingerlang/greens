@@ -160,6 +160,11 @@ export class ProxyMiddleware implements Middleware {
         // Inject Sticky Session Cookie if handled by LoadBalancer
         if (lbNodeName) {
             finalHeaders.append("Set-Cookie", `G_NODE=${lbNodeName}; Path=/; HttpOnly; SameSite=Lax`);
+
+            // Record Bandwidth (Approximate via Content-Length)
+            const reqBytes = Number(ctx.req.headers.get("content-length") || 0);
+            const resBytes = Number(finalHeaders.get("content-length") || 0);
+            loadBalancer.recordBytes(lbNodeName, reqBytes + resBytes);
         }
 
         ctx.response = new Response(response.body, {

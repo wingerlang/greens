@@ -80,23 +80,20 @@ async function bootstrap() {
         port: CONFIG.ports.internalBackend
     });
 
-    // Replica Backend 1 (On Demand)
-    manager.register({
-        name: "backend-2",
-        command: ["deno", "task", "server"],
-        env: { "PORT": String(CONFIG.ports.internalBackend + 1) },
-        autoRestart: false,
-        port: CONFIG.ports.internalBackend + 1
-    });
+    // Replica Backends (On Demand, up to 10 nodes)
+    // backend-2 (8002) to backend-10 (8010)
+    for (let i = 1; i < 10; i++) {
+        const port = CONFIG.ports.internalBackend + i;
+        await clearPort(port); // Ensure port is clear
 
-    // Replica Backend 2 (On Demand)
-    manager.register({
-        name: "backend-3",
-        command: ["deno", "task", "server"],
-        env: { "PORT": String(CONFIG.ports.internalBackend + 2) },
-        autoRestart: false,
-        port: CONFIG.ports.internalBackend + 2
-    });
+        manager.register({
+            name: `backend-${i + 1}`,
+            command: ["deno", "task", "server"],
+            env: { "PORT": String(port) },
+            autoRestart: false, // Started by LoadBalancer
+            port: port
+        });
+    }
 
     manager.register({
         name: "frontend",
