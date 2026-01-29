@@ -20,7 +20,7 @@ export function DashboardActionFAB({ onLogMeasurements, onImportWorkout, onQuick
             onMouseLeave={() => setIsOpen(false)}
         >
             {/* Secondary Actions */}
-            <div className={`flex flex-col gap-3 transition-all duration-300 ${isOpen ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0 pointer-events-none'}`}>
+            <div className={`flex flex-col gap-3 transition-all duration-300 overflow-hidden ${isOpen ? 'max-h-[400px] opacity-100' : 'max-h-0 opacity-0 pointer-events-none'}`}>
 
                 {/* Support Chat */}
                 <button

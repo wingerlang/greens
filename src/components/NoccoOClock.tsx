@@ -169,7 +169,7 @@ export function NoccoOClock() {
         const secs = diffSecs % 60;
 
         return (
-            <div className="fixed bottom-6 right-6 z-50 animate-pulse bg-slate-900/80 border border-blue-500/30 text-blue-400 px-4 py-2 rounded-full font-mono text-xl shadow-[0_0_15px_rgba(59,130,246,0.2)] backdrop-blur-md flex items-center gap-3">
+            <div className="fixed bottom-6 right-24 z-50 animate-pulse bg-slate-900/80 border border-blue-500/30 text-blue-400 px-4 py-2 rounded-full font-mono text-xl shadow-[0_0_15px_rgba(59,130,246,0.2)] backdrop-blur-md flex items-center gap-3">
                 <span>T-minus {mins}:{secs.toString().padStart(2, '0')} 🕒</span>
                 <button
                     onClick={handleDismiss}
