@@ -31,12 +31,17 @@ export default defineConfig({
         hasWarned: false,
     },
     server: {
-        port: 3000,
+        port: parseInt(process.env.VITE_PORT || '3000'),
         host: true,
         allowedHosts: ['greens', 'inanga-lime.ts.net'],
-        hmr: {
-            clientPort: 3000
-        },
+        // HMR must use the PUBLIC port that the browser connects to
+        // When running through Guardian: browser → 3000 (Guardian) → 3001 (Vite)
+        // So HMR client should always connect to 3000 (the public port)
+        hmr: process.env.GUARDIAN_MODE ? {
+            // When behind Guardian proxy, use the public gateway port
+            clientPort: 3000,
+            host: 'localhost'
+        } : true, // Default HMR when running standalone
         proxy: {
             '/api': {
                 target: 'http://127.0.0.1:8000',

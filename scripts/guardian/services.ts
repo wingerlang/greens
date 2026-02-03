@@ -1,5 +1,5 @@
 import { ServiceConfig, ServiceStats, LogEntry } from "./types.ts";
-import { persistLog, updateServiceStat, saveMetric, getKv } from "./logger.ts";
+import { persistLog, updateServiceStat, saveMetric, getKv, recordUptime } from "./logger.ts";
 
 const RESTART_DELAY_MS = 3000;
 const MAX_LOGS = 2000;
@@ -59,7 +59,7 @@ export class Service {
             timestamp: new Date().toISOString(),
             service: this.config.name,
             source,
-            message: message.trimEnd(),
+            message: message.trimEnd().replace(/\x1b\[[0-9;]*[a-zA-Z]/g, ""),
         };
 
         this.logs.push(entry);

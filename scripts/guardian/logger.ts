@@ -1,3 +1,4 @@
+// @ts-nocheck
 /// <reference lib="deno.unstable" />
 /// <reference lib="deno.ns" />
 import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
@@ -14,6 +15,14 @@ export const stats = {
     startTime: Date.now(),
     rps: 0
 };
+
+const requestTimestamps: number[] = [];
+const RPS_WINDOW_MS = 10000; // 10s rolling window
+
+// Background update to ensure RPS drops to 0 when idle
+setInterval(() => {
+    updateLiveStatus();
+}, 1000);
 
 const logClients = new Set<ReadableStreamDefaultController>();
 
@@ -68,7 +77,6 @@ export async function persistLog(entry: LogEntry) {
     } catch (e) {
         // Silent fail
     }
-
     // 2. File Persistence
     try {
         const meta = entry.metadata ? ` ${JSON.stringify(entry.metadata)}` : "";
@@ -114,6 +122,7 @@ export async function saveRequestMetric(metric: RequestMetric) {
         );
 
         stats.totalRequests++;
+        requestTimestamps.push(Date.now());
         updateLiveStatus();
 
         // Update aggregations (Daily stats)
@@ -234,6 +243,43 @@ export async function updateServiceStat(serviceName: string, type: string, count
     } catch (e) { /* ignore */ }
 }
 
+export async function recordUptime(serviceName: string, seconds: number) {
+    if (!kv) return;
+    const date = getTodayStr();
+    try {
+        const atomic = kv.atomic();
+
+        // Ensure first seen is recorded for percentage calculations
+        await trackServiceFirstSeen(serviceName);
+
+        // Daily uptime
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "uptime", date, serviceName],
+            value: new Deno.KvU64(BigInt(seconds))
+        });
+
+        // Lifetime uptime
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "uptime_total", serviceName],
+            value: new Deno.KvU64(BigInt(seconds))
+        });
+
+        await atomic.commit();
+    } catch (e) { /* ignore */ }
+}
+
+async function trackServiceFirstSeen(serviceName: string) {
+    if (!kv) return;
+    const key = ["guardian", "service_first_seen", serviceName];
+    const res = await kv.get<number>(key);
+    if (!res.value) {
+        await kv.set(key, Date.now());
+    }
+}
+
+
 export function determineResourceType(path: string, mimeType?: string): string {
     if (path.startsWith("/api")) return "api";
     const ext = path.split('.').pop()?.toLowerCase();
@@ -277,9 +323,13 @@ export async function generateSessionId(ip: string, userAgent: string): Promise<
 }
 
 function updateLiveStatus() {
-    const elapsed = (Date.now() - stats.startTime) / 1000;
-    stats.rps = stats.totalRequests / elapsed;
+    const now = Date.now();
 
-    // Move cursor to bottom or just print?
-    // For now, let's keep it simple. main.ts will handle the TTY status line if possible.
+    // Cleanup old timestamps
+    while (requestTimestamps.length > 0 && now - requestTimestamps[0] > RPS_WINDOW_MS) {
+        requestTimestamps.shift();
+    }
+
+    // Calculate rolling RPS (over RPS_WINDOW_MS)
+    stats.rps = requestTimestamps.length / (RPS_WINDOW_MS / 1000);
 }

@@ -17,6 +17,15 @@ export interface GuardianContext {
     response?: Response;
 
     log: (source: "info" | "stdout" | "stderr", message: string) => void;
+
+    // Debug tracker for request flow inspection
+    debugTracker?: {
+        middleware(name: string, details?: string): void;
+        proxyStart(targetPort: number): void;
+        proxySuccess(status: number): void;
+        proxyFail(error: string): void;
+        response(status: number): void;
+    };
 }
 
 export type Next = () => Promise<void>;

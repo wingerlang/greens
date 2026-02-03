@@ -12,25 +12,45 @@ import {
     getTypeStats,
     getSessions,
     getCountryStats,
-    getRequestCountInWindow
+    getRequestCountInWindow,
+    getUptimeStats,
+    getServiceUptimeHistory
 } from "./analytics.ts";
 import { bannedIps, banIp, unbanIp } from "./security.ts";
 import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
 import { getWafEvents } from "./waf.ts";
-import { getCircuitsSnapshot } from "./circuitBreaker.ts";
-import { generatePrometheusMetrics, getLatencyStats, getMemoryHistory } from "./prometheus.ts";
+import { getCircuitsSnapshot, resetCircuit } from "./circuitBreaker.ts";
+import { generatePrometheusMetrics, getLatencyStats, getMemoryHistory, getAggregateLatency } from "./prometheus.ts";
 import { CONFIG } from "./config.ts";
 import { loadBalancer } from "./loadBalancer.ts";
 import { simulator } from "./simulator.ts";
+import { getDebugLog, clearDebugLog } from "./debug.ts";
 
 // WebSocket clients for real-time updates
 const wsClients: Set<WebSocket> = new Set();
 
 // Broadcast stats to all connected clients
 let broadcastInterval: number | null = null;
+let initialTotalUptime = 0;
+let initialTotalUptimeFetched = false;
 
-function startBroadcasting() {
+async function startBroadcasting() {
     if (broadcastInterval) return;
+
+    // Fetch initial total uptime if not already fetched
+    if (!initialTotalUptimeFetched) {
+        const kv = getKv();
+        if (kv) {
+            try {
+                const res = await kv.get<Deno.KvU64>(["guardian", "uptime_total", "guardian"]);
+                initialTotalUptime = res.value ? Number(res.value.value) : 0;
+                initialTotalUptimeFetched = true;
+            } catch (e) {
+                // Ignore, will default to 0
+            }
+        }
+    }
+
     broadcastInterval = setInterval(async () => {
         if (wsClients.size === 0) return;
 
@@ -41,12 +61,19 @@ function startBroadcasting() {
                 circuit: circuits[s.config.name] || { status: "CLOSED", failures: 0 }
             }));
 
+            const lbStats = loadBalancer.getStats();
+            const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
+
             const data = JSON.stringify({
                 type: "stats",
                 services,
-                rps: stats.rps,
+                rps: stats.rps || 0,
                 totalRequests: stats.totalRequests,
-                uptime: Math.floor((Date.now() - stats.startTime) / 1000)
+                avgLatency: getAggregateLatency(),
+                uptime: uptime,
+                totalUptime: initialTotalUptime + uptime,
+                startTime: stats.startTime,
+                loadBalancer: lbStats
             });
 
             for (const client of wsClients) {
@@ -57,7 +84,7 @@ function startBroadcasting() {
         } catch (e) {
             // Ignore broadcast errors
         }
-    }, 2000);
+    }, 500); // Update every 500ms for real-time feel
 }
 
 export function stopBroadcasting() {
@@ -143,6 +170,8 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
         manager.getOrAdd("guardian");
         const services = manager.getAll();
         const circuits = getCircuitsSnapshot();
+        const uptimes = await getUptimeStats();
+
 
         const enriched = await Promise.all(services.map(async s => {
             const [req10m, req60m] = await Promise.all([
@@ -154,14 +183,21 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
                 ...s.stats,
                 req10m,
                 req60m,
-                circuit: circuits[s.config.name] || { status: "CLOSED", failures: 0 }
+                circuit: circuits[s.config.name] || { status: "CLOSED", failures: 0 },
+                persistedUptime: uptimes[s.config.name] || { daily: 0, total: 0, firstSeen: Date.now() }
             };
         }));
 
         return Response.json({
             services: enriched,
-            system: Deno.systemMemoryInfo(),
-            load: Deno.loadavg()
+            system: (Deno as any).systemMemoryInfo ? Deno.systemMemoryInfo() : { total: 0, free: 0, available: 0 },
+            load: (Deno as any).loadavg ? Deno.loadavg() : [0, 0, 0],
+            uptime: Math.floor((Date.now() - stats.startTime) / 1000),
+            totalUptime: initialTotalUptime + Math.floor((Date.now() - stats.startTime) / 1000),
+            startTime: stats.startTime,
+            totalRequests: stats.totalRequests,
+            rps: stats.rps || 0,
+            avgLatency: getAggregateLatency()
         });
     }
 
@@ -199,6 +235,14 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
         });
     }
 
+    if (url.pathname === "/api/logs") {
+        const serviceName = url.searchParams.get("service");
+        if (!serviceName) return Response.json([]);
+        const service = manager.get(serviceName);
+        if (!service) return Response.json([]);
+        return Response.json(service.logs);
+    }
+
     if (url.pathname === "/api/analytics") {
         const [endpoints, historyEndpoints, ips, traffic] = await Promise.all([
             getTopEndpoints(),
@@ -227,6 +271,15 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
         return Response.json(stats);
     }
 
+    if (url.pathname === "/api/analytics/uptime-history") {
+        const serviceName = url.searchParams.get("service");
+        const days = Number(url.searchParams.get("days") || "14");
+        if (!serviceName) return Response.json([]);
+
+        const stats = await getServiceUptimeHistory(serviceName, days);
+        return Response.json(stats);
+    }
+
     if (url.pathname === "/api/sessions") {
         const sessions = await getSessions();
         return Response.json(sessions);
@@ -244,6 +297,15 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             dashboardPort: 9999,
             recording: getRecordingStatus()
         });
+    }
+
+    // Debug trace log
+    if (url.pathname === "/api/debug") {
+        if (req.method === "DELETE") {
+            clearDebugLog();
+            return Response.json({ success: true, message: "Debug log cleared" });
+        }
+        return Response.json(getDebugLog());
     }
 
     if (req.method === "POST" && url.pathname === "/api/recording") {
@@ -267,6 +329,52 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     if (url.pathname === "/api/memory-history") {
         const history = getMemoryHistory();
         return Response.json(history);
+    }
+
+    // Load Balancer endpoints
+    // Load Balancer stats (GET)
+    if (req.method === "GET" && url.pathname === "/api/load-balancer") {
+        return Response.json(loadBalancer.getStats());
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/load-balancer/simulator/start") {
+        const rps = parseInt(url.searchParams.get("rps") || "10");
+        loadBalancer.startSimulator(rps);
+        return Response.json({ success: true, message: `Simulator started at ${rps} RPS` });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/load-balancer/simulator/stop") {
+        loadBalancer.stopSimulator();
+        return Response.json({ success: true, message: "Simulator stopped" });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/load-balancer/simulator/set-rps") {
+        const rps = parseInt(url.searchParams.get("rps") || "10");
+        loadBalancer.setSimulatorRps(rps);
+        return Response.json({ success: true, message: `Simulator RPS set to ${rps}` });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/load-balancer/reset-stats") {
+        loadBalancer.resetStats();
+        return Response.json({ success: true, message: "Stats reset" });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/load-balancer/scale-up") {
+        const node = url.searchParams.get("node");
+        if (node) {
+            loadBalancer.scaleUp();
+            return Response.json({ success: true, message: `Node ${node} started` });
+        }
+        return Response.json({ success: false, message: "Node name required" });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/load-balancer/scale-down") {
+        const node = url.searchParams.get("node");
+        if (node) {
+            loadBalancer.scaleDown();
+            return Response.json({ success: true, message: `Node ${node} stopped` });
+        }
+        return Response.json({ success: false, message: "Node name required" });
     }
 
     // Quick actions endpoints
@@ -349,6 +457,7 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             if (action === "start") await service.start();
             if (action === "stop") await service.stop();
             if (action === "restart") await service.restart();
+            if (action === "reset-circuit") resetCircuit(serviceName);
 
             return Response.json({ success: true, status: service.stats.status });
         } catch (e) {

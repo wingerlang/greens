@@ -120,6 +120,45 @@ export async function getServiceDailyStats(serviceName: string, days = 7) {
     return stats;
 }
 
+export async function getServiceUptimeHistory(serviceName: string, days = 7) {
+    const kv = getKv();
+    if (!kv) return [];
+
+    const stats = [];
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    for (let i = days - 1; i >= 0; i--) {
+        const timestamp = now - i * oneDay;
+        const dateObj = new Date(timestamp);
+        const date = dateObj.toISOString().split('T')[0];
+
+        try {
+            const res = await kv.get<Deno.KvU64>(["guardian", "uptime", date, serviceName]);
+            const uptimeSec = res.value ? Number(res.value.value) : 0;
+
+            // Calculate total possible seconds for this day
+            let totalPossible = 86400;
+            const isToday = i === 0;
+            if (isToday) {
+                const startOfDay = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()).getTime();
+                totalPossible = Math.floor((now - startOfDay) / 1000);
+            }
+
+            stats.push({
+                date,
+                uptime: uptimeSec,
+                possible: totalPossible,
+                percent: totalPossible > 0 ? (uptimeSec / totalPossible) * 100 : 0
+            });
+        } catch (e) {
+            stats.push({ date, uptime: 0, possible: 86400, percent: 0 });
+        }
+    }
+
+    return stats;
+}
+
 export async function getTypeStats() {
     const kv = getKv();
     if (!kv) return [];
@@ -190,4 +229,38 @@ export async function getRequestCountInWindow(serviceName: string, windowMs: num
     }
 
     return count;
+}
+
+export async function getUptimeStats() {
+    const kv = getKv();
+    if (!kv) return {};
+    const date = new Date().toISOString().split('T')[0];
+    const result: Record<string, { daily: number; total: number; firstSeen: number }> = {};
+
+    // Get all total strings
+    const totals = kv.list<Deno.KvU64>({ prefix: ["guardian", "uptime_total"] });
+    for await (const entry of totals) {
+        const name = entry.key[2] as string;
+        result[name] = { daily: 0, total: Number(entry.value.value), firstSeen: Date.now() };
+    }
+
+    // Get today's stats
+    const today = kv.list<Deno.KvU64>({ prefix: ["guardian", "uptime", date] });
+    for await (const entry of today) {
+        const name = entry.key[3] as string;
+        if (result[name]) {
+            result[name].daily = Number(entry.value.value);
+        }
+    }
+
+    // Get first seen for %
+    const firstSeen = kv.list<number>({ prefix: ["guardian", "service_first_seen"] });
+    for await (const entry of firstSeen) {
+        const name = entry.key[2] as string;
+        if (result[name]) {
+            result[name].firstSeen = entry.value;
+        }
+    }
+
+    return result;
 }

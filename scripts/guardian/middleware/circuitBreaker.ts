@@ -131,15 +131,20 @@ export class CircuitBreakerMiddleware implements Middleware {
         }
 
         // 3. Proceed
-        await next();
+        let passedThrough = false;
+        try {
+            await next();
+            passedThrough = true;
+        } catch (e) {
+            recordFailure(serviceName);
+            throw e;
+        }
 
-        // 4. Update Circuit State based on result
-        if (ctx.response) {
+        // 4. Update Circuit State based on result (ONLY if we actually tried to call the service)
+        if (passedThrough && ctx.response) {
             if (ctx.response.status >= 502 && ctx.response.status <= 504) {
                 recordFailure(serviceName);
             } else {
-                // We consider anything else as "connection successful" even if it's 404 or 500 (app error)
-                // 502/503/504 usually mean the upstream is down/unreachable/timeout.
                 recordSuccess(serviceName);
             }
         }

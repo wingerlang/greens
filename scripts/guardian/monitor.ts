@@ -1,6 +1,11 @@
-import { Service, manager } from "./services.ts";
+import { manager } from "./services.ts";
+import { recordUptime } from "./logger.ts";
 
-async function updateWindowsStats(pids: Map<number, Service>) {
+let persistenceCounter = 0;
+
+async function updateWindowsStats(pids: Map<number, any>) {
+    // ... (rest of the function remains the same, but using 'any' for service type to avoid import cycle if needed, 
+    // though monitor.ts already imports from services.ts)
     if (pids.size === 0) return;
     const pidList = Array.from(pids.keys());
     const whereClause = pidList.map(p => `IDProcess=${p}`).join(" OR ");
@@ -25,19 +30,19 @@ async function updateWindowsStats(pids: Map<number, Service>) {
 
             const parts = trimmed.split(",");
             if (parts.length >= 4) {
-                 // wmic CSV usually: Node,IDProcess,PercentProcessorTime,WorkingSet (alphabetical per locale? No, consistent)
-                 // But wait, in original I assumed alphabetical.
-                 // Let's assume index 1=ID, 2=CPU, 3=Mem based on alphabetical sort of requested columns.
-                 // IDProcess (I), PercentProcessorTime (P), WorkingSet (W).
-                 const pid = parseInt(parts[1]);
-                 const cpu = parseFloat(parts[2]);
-                 const mem = parseInt(parts[3]);
+                // wmic CSV usually: Node,IDProcess,PercentProcessorTime,WorkingSet (alphabetical per locale? No, consistent)
+                // But wait, in original I assumed alphabetical.
+                // Let's assume index 1=ID, 2=CPU, 3=Mem based on alphabetical sort of requested columns.
+                // IDProcess (I), PercentProcessorTime (P), WorkingSet (W).
+                const pid = parseInt(parts[1]);
+                const cpu = parseFloat(parts[2]);
+                const mem = parseInt(parts[3]);
 
-                 const service = pids.get(pid);
-                 if (service) {
-                     service.stats.cpu = cpu;
-                     service.stats.memory = mem;
-                 }
+                const service = pids.get(pid);
+                if (service) {
+                    service.stats.cpu = cpu;
+                    service.stats.memory = mem;
+                }
             }
         }
     } catch (e) {
@@ -97,10 +102,25 @@ export async function updateSystemStats() {
         } catch (e) { /* ignore */ }
     }
 
-    // 3. Persist Metrics
+    // 3. Persist Metrics & Update Uptime Persistence
+    persistenceCounter++;
+    const shouldPersistUptime = persistenceCounter >= 5; // Every 10s (5 * 2s)
+
     for (const service of manager.getAll()) {
         await service.persistMetrics();
+        if (shouldPersistUptime && service.stats.status === "running") {
+            await recordUptime(service.config.name, 10);
+        }
     }
-    // Also persist guardian
+
+    // Also handle guardian service
     await guardianService.persistMetrics();
+    // Guardian is already included in manager.getAll(), so we don't need to call recordUptime explicitly again
+    // if (shouldPersistUptime) {
+    //    await recordUptime("guardian", 10);
+    // }
+
+    if (shouldPersistUptime) {
+        persistenceCounter = 0;
+    }
 }

@@ -57,32 +57,37 @@
 
         /* Scrollbar */
         ::-webkit-scrollbar {
-            width: 6px;
+            width: 10px;
         }
 
         ::-webkit-scrollbar-track {
-            background: transparent;
+            background: rgba(0, 0, 0, 0.1);
         }
 
         ::-webkit-scrollbar-thumb {
-            background: var(--border-glass);
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 10px;
+            border: 2px solid transparent;
+            background-clip: padding-box;
         }
 
         ::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted);
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid transparent;
+            background-clip: padding-box;
         }
 
         .sidebar {
-            width: 280px;
+            width: 240px;
             background: rgba(2, 6, 23, 0.8);
             backdrop-filter: blur(20px);
             border-right: 1px solid var(--border-glass);
             display: flex;
             flex-direction: column;
-            padding: 30px 20px;
+            padding: 20px 16px;
             flex-shrink: 0;
             z-index: 50;
+            overflow-y: auto;
         }
 
         .brand {
@@ -200,10 +205,10 @@
         }
 
         .top-bar {
-            height: 80px;
+            height: 60px;
             display: flex;
             align-items: center;
-            padding: 0 40px;
+            padding: 0 24px;
             justify-content: space-between;
             background: rgba(2, 6, 23, 0.4);
             backdrop-filter: blur(10px);
@@ -213,31 +218,31 @@
 
         .view-content {
             flex: 1;
-            padding: 40px;
+            padding: 24px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 30px;
+            gap: 20px;
         }
 
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 24px;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
         }
 
         .grid-2 {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 24px;
+            gap: 16px;
         }
 
         .card {
             background: var(--bg-glass);
             backdrop-filter: blur(12px);
             border: 1px solid var(--border-glass);
-            border-radius: 20px;
-            padding: 24px;
+            border-radius: 16px;
+            padding: 16px;
             transition: all 0.3s ease;
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
             position: relative;
@@ -260,24 +265,24 @@
         }
 
         .stat-label {
-            font-size: 0.75rem;
+            font-size: 0.65rem;
             color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.08em;
-            margin-bottom: 12px;
+            margin-bottom: 8px;
             font-weight: 700;
         }
 
         .stat-value {
-            font-size: 2.2rem;
+            font-size: 1.6rem;
             font-weight: 800;
             font-family: 'Outfit';
             margin: 0;
         }
 
         .stat-trend {
-            font-size: 0.8rem;
-            margin-top: 8px;
+            font-size: 0.75rem;
+            margin-top: 4px;
             font-weight: 600;
             display: flex;
             align-items: center;
@@ -358,15 +363,15 @@
         }
 
         .badge-yellow {
-             background: rgba(245, 158, 11, 0.15);
-             color: #fbbf24;
-             border: 1px solid rgba(245, 158, 11, 0.2);
+            background: rgba(245, 158, 11, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(245, 158, 11, 0.2);
         }
 
         .badge-red {
-             background: rgba(239, 68, 68, 0.15);
-             color: #f87171;
-             border: 1px solid rgba(239, 68, 68, 0.2);
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.2);
         }
 
         button {
@@ -412,21 +417,63 @@
 
         .code-block {
             background: #020617;
-            color: #e2e8f0;
-            font-family: 'Fira Code', 'JetBrains Mono', monospace;
-            padding: 24px;
-            border-radius: 16px;
-            overflow-x: auto;
-            font-size: 0.9rem;
-            line-height: 1.6;
+            color: #ecf0f1;
+            font-family: 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+            padding: 16px;
+            border-radius: 12px;
+            overflow: auto;
+            font-size: 0.85rem;
+            line-height: 1.4;
             border: 1px solid var(--border-glass);
-            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.5);
+            box-shadow: inset 0 2px 20px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .code-block::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .code-block::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 4px;
+            align-items: flex-start;
+        }
+
+        .log-time {
+            color: #64748b;
+            font-size: 0.75rem;
+            flex-shrink: 0;
+            padding-top: 2px;
+        }
+
+        .log-message {
             white-space: pre-wrap;
+            word-break: break-word;
+            flex: 1;
+        }
+
+        .log-stdout {
+            color: #22c55e;
+        }
+
+        .log-stderr {
+            color: #ef4444;
+        }
+
+        .log-info {
+            color: #3b82f6;
         }
 
         .chart-container {
             position: relative;
-            height: 280px;
+            height: 200px;
             width: 100%;
         }
 
@@ -439,7 +486,7 @@
         }
 
         .node-card {
-            background: rgba(255,255,255,0.03);
+            background: rgba(255, 255, 255, 0.03);
             border: 1px solid var(--border-glass);
             border-radius: 10px;
             padding: 12px;
@@ -455,8 +502,8 @@
         }
 
         .node-card.starting {
-             border-color: var(--warning);
-             animation: pulse 2s infinite;
+            border-color: var(--warning);
+            animation: pulse 2s infinite;
         }
 
         .node-card.inactive {
@@ -477,18 +524,21 @@
             font-size: 1rem;
             font-weight: 700;
         }
+
         .node-submetric {
-             font-size: 0.7rem;
-             color: var(--text-muted);
+            font-size: 0.7rem;
+            color: var(--text-muted);
         }
 
         input[type="range"] {
             width: 100%;
             height: 6px;
-            background: rgba(255,255,255,0.1);
+            background: rgba(255, 255, 255, 0.1);
             border-radius: 4px;
+            appearance: none;
             -webkit-appearance: none;
         }
+
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             width: 16px;
@@ -496,6 +546,12 @@
             background: var(--accent-primary);
             border-radius: 50%;
             cursor: pointer;
+        }
+
+        @media (max-width: 1200px) {
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
@@ -514,8 +570,8 @@
             <div class="nav-item" :class="{ 'active': tab === 'overview' }" @click="tab = 'overview'">
                 <span>Overview</span>
             </div>
-             <div class="nav-item" :class="{ 'active': tab === 'simulator' }" @click="tab = 'simulator'">
-                <span>Hyper Simulator</span>
+            <div class="nav-item" :class="{ 'active': tab === 'simulator' }" @click="tab = 'simulator'">
+                <span>Traffic Simulator</span>
             </div>
             <div class="nav-item" :class="{ 'active': tab === 'traffic' }" @click="tab = 'traffic'">
                 <span>Traffic Analytics</span>
@@ -526,11 +582,14 @@
             <div class="nav-item" :class="{ 'active': tab === 'console' }" @click="tab = 'console'">
                 <span>Live Console</span>
             </div>
+            <div class="nav-item" :class="{ 'active': tab === 'debug' }" @click="tab = 'debug'; refreshDebugLog()">
+                <span>🔍 Debug Flow</span>
+            </div>
         </div>
 
         <div class="nav-group">
             <div class="nav-label">Services Ecosystem</div>
-            <template x-for="service in services" :key="service.name">
+            <template x-for="service in sortedServices" :key="service.name">
                 <div class="nav-item" :class="{ 'active': tab === 'service-' + service.name }"
                     @click="selectService(service)">
                     <span x-text="capitalize(service.name)"></span>
@@ -561,9 +620,10 @@
         <div class="top-bar">
             <h2 style="margin:0; font-size: 1.4rem; font-weight: 700" x-text="pageTitle"></h2>
             <div style="display:flex; gap:16px;">
-                 <template x-if="tab === 'simulator'">
+                <template x-if="tab === 'simulator'">
                     <div style="display:flex; gap:10px; align-items:center; margin-right: 20px;">
-                        <span class="badge" :class="simulator.running > 0 ? 'badge-green' : 'badge-purple'" x-text="simulator.running + ' Active Users'"></span>
+                        <span class="badge" :class="simulator.running > 0 ? 'badge-green' : 'badge-purple'"
+                            x-text="simulator.running + ' Active Users'"></span>
                     </div>
                 </template>
                 <template x-if="tab === 'overview'">
@@ -578,157 +638,88 @@
             <div x-show="tab === 'overview'" style="display:flex; flex-direction:column; gap:32px;">
                 <div class="grid">
                     <div class="card">
-                        <div class="stat-label">System Load</div>
-                         <div style="display:flex; justify-content:space-between; align-items:end;">
-                            <div class="stat-value" x-text="(loadBalancer.utilization || 0).toFixed(0) + '%'"></div>
-                            <div class="stat-trend trend-up">Cluster Usage</div>
-                         </div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">Total Bandwidth</div>
-                         <div style="display:flex; justify-content:space-between; align-items:end;">
-                            <div class="stat-value" x-text="(loadBalancer.totalMbs || 0).toFixed(2)"></div>
-                            <div class="stat-trend">MB/s</div>
+                        <div class="stat-label">Frontend Uptime</div>
+                        <div
+                            style="text-align: center; padding: 10px 0; display:flex; flex-direction:column; align-items:center;">
+                            <div style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, #ec4899, #f43f5e); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
+                                x-text="getServiceUptime('frontend')">0h 0m</div>
+                            <div style="color: var(--text-muted); font-size: 0.8rem; margin-top:4px">Current Session
+                            </div>
+                            <div style="font-size: 1rem; font-weight: 700; color: #94a3b8; margin-top: 8px;"
+                                x-text="getServiceAvailability('frontend')">100%</div>
+                            <div style="color: var(--text-muted); font-size: 0.7rem;">Availability</div>
                         </div>
                     </div>
                     <div class="card">
-                        <div class="stat-label">Active Nodes</div>
-                        <div style="display:flex; justify-content:space-between; align-items:end;">
-                            <div class="stat-value">
-                                <span x-text="loadBalancer.activeCount || 1"></span>
-                                <span style="font-size:1.1rem; color:var(--text-muted)"
-                                    x-text="'/ 10'"></span>
+                        <div class="stat-label">Backend Uptime</div>
+                        <div
+                            style="text-align: center; padding: 10px 0; display:flex; flex-direction:column; align-items:center;">
+                            <div style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, #a855f7, #8b5cf6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
+                                x-text="getServiceUptime('backend')">0h 0m</div>
+                            <div style="color: var(--text-muted); font-size: 0.8rem; margin-top:4px">Current Session
                             </div>
-                            <div class="stat-trend trend-up" x-text="loadBalancer.cooldown ? 'Scaling...' : 'Stable'"></div>
+                            <div style="font-size: 1rem; font-weight: 700; color: #94a3b8; margin-top: 8px;"
+                                x-text="getServiceAvailability('backend')">100%</div>
+                            <div style="color: var(--text-muted); font-size: 0.7rem;">Availability</div>
                         </div>
                     </div>
-<<<<<<< HEAD
                     <div class="card">
-                        <div class="stat-label">Traffic Throughput</div>
-                        <div class="stat-value" x-text="traffic.total"></div>
-                        <div class="stat-trend trend-up" x-text="'+' + Math.floor(Math.random()*20) + ' req/s'"></div>
-                    </div>
-
-                    <!-- Load Balancer Card -->
-                    <div class="card">
-                        <div class="stat-label">Load Balancer</div>
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div style="font-size: 1.8rem; font-weight: 800; color: #f59e0b;"
-                                x-text="loadBalancer.activeNodes.length"></div>
-                            <div style="font-size: 0.8rem; color: var(--text-muted); text-align:right;">
-                                <div>Nodes Active</div>
-                                <div x-text="loadBalancer.cooldown ? '(Scaling...)' : ''"
-                                    style="color: #fbbf24; font-size: 0.7rem;"></div>
-                            </div>
-                        </div>
-                        <div style="margin-top: 16px; font-size: 0.9rem;">
-                            <div
-                                style="display:flex; justify-content:space-between; margin-bottom: 6px; color: var(--text-muted); font-size: 0.8rem;">
-                                <span>Load / Threshold</span>
-                                <span
-                                    x-text="loadBalancer.rps.toFixed(1) + ' / ' + loadBalancer.threshold + ' RPS'"></span>
-                            </div>
-                            <div
-                                style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
-                                <div
-                                    :style="`width: ${Math.min(100, (loadBalancer.rps / (loadBalancer.threshold * loadBalancer.activeNodes.length)) * 100)}%; background: #f59e0b; height: 100%; transition: width 0.5s ease;`">
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 4px; margin-top: 8px;">
-                                <template x-for="node in loadBalancer.activeNodes">
-                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"
-                                        :title="node"></div>
-                                </template>
-                            </div>
-                        </div>
-=======
-                     <div class="card">
-                        <div class="stat-label">Forecast</div>
-                        <template x-if="loadBalancer.timeToNextScale && loadBalancer.timeToNextScale > 0">
-                             <div>
-                                <div class="stat-value" style="color: var(--warning)" x-text="loadBalancer.timeToNextScale.toFixed(1) + 's'"></div>
-                                <div class="stat-trend">Time to Scale Up</div>
-                             </div>
-                        </template>
-                        <template x-if="!loadBalancer.timeToNextScale">
-                             <div style="margin-top:10px; opacity:0.6;">No scaling predicted</div>
-                        </template>
->>>>>>> bbdae2bbacd7612f9d6d6746810df7461d9ae3c7
+                        <div class="stat-label">Live Traffic</div>
+                        <div class="stat-value" style="color:var(--accent-secondary)" x-text="currentRps"></div>
+                        <div class="stat-trend trend-up">Requests / Sec</div>
                     </div>
                 </div>
 
-                <!-- Cluster Visualizer -->
-                <div class="card">
-                    <div class="stat-label">Cluster Topology & Load Distribution</div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                        <div style="font-size: 0.8rem; color: var(--text-muted)">
-                            Total Capacity: <span x-text="loadBalancer.totalCapacity"></span> RPS
-                        </div>
-                        <div style="width: 200px; height: 6px; background: rgba(255,255,255,0.1); border-radius: 4px; overflow:hidden;">
-                            <div :style="`width: ${loadBalancer.utilization}%; height: 100%; background: var(--accent-primary); transition: width 0.5s;`"></div>
-                        </div>
-                    </div>
-
-                    <div class="node-grid">
-                        <template x-for="i in 10">
-                            <div class="node-card"
-                                 :class="getNodeClass(i)"
-                                 :title="'Backend ' + i">
-                                <div class="node-header">
-                                    <span x-text="'NODE-0' + i"></span>
-                                    <div class="status-dot" :class="getNodeStatus(i)"></div>
-                                </div>
-                                <div style="flex:1; display:flex; flex-direction:column; justify-content:center; gap:2px;">
-                                    <div class="node-metric" x-text="getNodeRps(i) + ' RPS'"></div>
-                                    <div class="node-submetric" x-text="getNodeMbs(i) + ' MB/s'"></div>
-                                </div>
-                                <div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; overflow: hidden; margin-top: 4px;">
-                                    <div :style="`width: ${getNodeUtil(i)}%; height: 100%; background: ${getNodeColor(i)};`"></div>
-                                </div>
-                            </div>
-                        </template>
-                    </div>
-                </div>
-
-                <!-- Real-time Charts Row -->
-                <div class="grid-2">
-                    <!-- RPS Chart -->
+                <!-- Real-time RPS Chart -->
+                <div class="grid-2" style="margin-bottom: 32px">
                     <div class="card">
-                        <div class="stat-label">Requests Per Second (Live)</div>
-                        <div class="chart-container" style="height: 200px;">
+                        <div class="stat-label">Requests Per Second (Live Cluster)</div>
+                        <div class="chart-container">
                             <canvas id="rpsChart"></canvas>
                         </div>
                     </div>
-
-                    <!-- Uptime & Quick Stats -->
                     <div class="card">
-                        <div class="stat-label">System Uptime</div>
-                        <div style="display: flex; flex-direction: column; gap: 16px; padding: 16px 0;">
-                            <div style="text-align: center;">
-                                <div style="font-size: 2.5rem; font-weight: 800; background: linear-gradient(to right, #10b981, #3b82f6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
-                                    x-text="formatUptime(guardianUptime)">0h 0m</div>
-                                <div style="color: var(--text-muted); font-size: 0.85rem;">Guardian Running</div>
+                        <div class="stat-label">Daily Availability % (Precision View)</div>
+                        <div class="chart-container">
+                            <canvas id="availabilityChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Core Stats Row -->
+                <div class="grid-2">
+                    <div class="card">
+                        <div class="stat-label">Guardian Uptime</div>
+                        <div
+                            style="text-align: center; padding: 10px 0; display:flex; flex-direction:column; align-items:center;">
+                            <div style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, #10b981, #3b82f6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
+                                x-text="formatUptime(guardianUptime)">0h 0m</div>
+                            <div style="color: var(--text-muted); font-size: 0.8rem; margin-top:4px">Current Session
+                            </div>
+                            <div style="font-size: 1rem; font-weight: 700; color: #94a3b8; margin-top: 8px;"
+                                x-text="formatUptime(guardianTotalUptime)">0h 0m</div>
+                            <div style="color: var(--text-muted); font-size: 0.7rem;">Total Lifetime</div>
+                            <div style="font-size: 1rem; font-weight: 700; color: #22c55e; margin-top: 8px;"
+                                x-text="calculateUptimePercent({persistedUptime: {total: guardianTotalUptime, firstSeen: 0}, status: 'running', startTime: guardianStartTime, uptime: guardianUptime})">
+                                100%</div>
+                            <div style="color: var(--text-muted); font-size: 0.7rem;">Availability</div>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="stat-label">Quick Analytics</div>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 10px;">
+                            <div
+                                style="text-align: center; padding: 12px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
+                                <div style="font-size: 1.4rem; font-weight: 700; color: #3b82f6;"
+                                    x-text="totalRequests">0</div>
+                                <div style="font-size: 0.7rem; color: var(--text-muted);">Total Requests</div>
                             </div>
                             <div
-                                style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 8px;">
-                                <div
-                                    style="text-align: center; padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 12px;">
-                                    <div style="font-size: 1.4rem; font-weight: 700; color: #10b981;"
-                                        x-text="currentRps">0</div>
-                                    <div style="font-size: 0.7rem; color: var(--text-muted);">RPS</div>
+                                style="text-align: center; padding: 12px; background: rgba(16, 185, 129, 0.05); border-radius: 12px;">
+                                <div style="font-size: 1.4rem; font-weight: 700; color: #10b981;" x-text="currentRps">0
                                 </div>
-                                <div
-                                    style="text-align: center; padding: 12px; background: rgba(59, 130, 246, 0.1); border-radius: 12px;">
-                                    <div style="font-size: 1.4rem; font-weight: 700; color: #3b82f6;"
-                                        x-text="totalRequests">0</div>
-                                    <div style="font-size: 0.7rem; color: var(--text-muted);">Total Req</div>
-                                </div>
-                                <div
-                                    style="text-align: center; padding: 12px; background: rgba(168, 85, 247, 0.1); border-radius: 12px;">
-                                    <div style="font-size: 1.4rem; font-weight: 700; color: #a855f7;"
-                                        x-text="avgLatency + 'ms'">0ms</div>
-                                    <div style="font-size: 0.7rem; color: var(--text-muted);">Avg Latency</div>
-                                </div>
+                                <div style="font-size: 0.7rem; color: var(--text-muted);">Current RPS</div>
                             </div>
                         </div>
                     </div>
@@ -743,37 +734,44 @@
                         <div style="margin: 20px 0;">
                             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                                 <span>Target Concurrent Users</span>
-                                <span style="font-weight:bold; color:var(--accent-primary)" x-text="simConfig.targetUsers"></span>
+                                <span style="font-weight:bold; color:var(--accent-primary)"
+                                    x-text="simConfig.targetUsers"></span>
                             </div>
-                            <input type="range" min="0" max="500" step="10" x-model="simConfig.targetUsers" @input="updateSimConfig()">
-                            <div style="display:flex; justify-content:space-between; margin-top:4px; font-size:0.75rem; color:var(--text-muted)">
+                            <input type="range" min="0" max="500" step="10" x-model.number="simConfig.targetUsers"
+                                @input="updateSimConfig()">
+                            <div
+                                style="display:flex; justify-content:space-between; margin-top:4px; font-size:0.75rem; color:var(--text-muted)">
                                 <span>0</span>
                                 <span>500</span>
                             </div>
                         </div>
 
                         <div style="margin: 20px 0;">
-                             <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                                 <span>Ramp Up Rate (Users/sec)</span>
-                                <span style="font-weight:bold; color:var(--accent-secondary)" x-text="simConfig.rampRate"></span>
+                                <span style="font-weight:bold; color:var(--accent-secondary)"
+                                    x-text="simConfig.rampRate"></span>
                             </div>
-                            <input type="range" min="1" max="50" step="1" x-model="simConfig.rampRate" @input="updateSimConfig()">
+                            <input type="range" min="1" max="50" step="1" x-model.number="simConfig.rampRate"
+                                @input="updateSimConfig()">
                         </div>
 
-                         <div style="margin-top: 30px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                        <div style="margin-top: 30px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
                             <div class="stat-label">Simulation Status</div>
                             <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
                                 <div>
-                                    <div style="font-size:1.5rem; font-weight:800; color:var(--success)" x-text="simulator.active">0</div>
+                                    <div style="font-size:1.5rem; font-weight:800; color:var(--success)"
+                                        x-text="simulator.active">0</div>
                                     <div style="font-size:0.7rem; color:var(--text-muted)">Active Users</div>
                                 </div>
                                 <div>
-                                     <div style="font-size:1.5rem; font-weight:800;" x-text="simulator.totalReq">0</div>
-                                     <div style="font-size:0.7rem; color:var(--text-muted)">Requests Sent</div>
+                                    <div style="font-size:1.5rem; font-weight:800;" x-text="simulator.totalReq">0</div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted)">Requests Sent</div>
                                 </div>
-                                 <div>
-                                     <div style="font-size:1.5rem; font-weight:800; color:var(--danger)" x-text="simulator.totalErr">0</div>
-                                     <div style="font-size:0.7rem; color:var(--text-muted)">Errors</div>
+                                <div>
+                                    <div style="font-size:1.5rem; font-weight:800; color:var(--danger)"
+                                        x-text="simulator.totalErr">0</div>
+                                    <div style="font-size:0.7rem; color:var(--text-muted)">Errors</div>
                                 </div>
                             </div>
                         </div>
@@ -792,606 +790,732 @@
                                     <span x-text="(weight * 100).toFixed(0) + '%'"></span>
                                 </div>
                                 <!-- Note: Simple sliders for each, ideally they should sum to 100 but loose is fine for sim -->
-                                <input type="range" min="0" max="1" step="0.1"
-                                       x-model="simConfig.personas[type]"
-                                       @input="updateSimConfig()">
+                                <input type="range" min="0" max="1" step="0.1" x-model="simConfig.personas[type]"
+                                    @input="updateSimConfig()">
                             </div>
                         </template>
 
                         <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border-glass)">
-                            <button class="danger" style="width:100%; justify-content:center;" @click="simConfig.targetUsers = 0; updateSimConfig()">
+                            <button class="danger" style="width:100%; justify-content:center;"
+                                @click="simConfig.targetUsers = 0; updateSimConfig()">
                                 STOP SIMULATION
                             </button>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <!-- Traffic Tab -->
-            <div x-show="tab === 'traffic'" style="display:flex; flex-direction:column; gap:20px;">
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="stat-label">Service Distribution</div>
-                        <div class="chart-container">
-                            <canvas id="serviceChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">Resource Types</div>
-                        <div class="chart-container">
-                            <canvas id="typeChart"></canvas>
-                        </div>
+        </div>
+        <!-- Traffic Tab -->
+        <div x-show="tab === 'traffic'" style="display:flex; flex-direction:column; gap:20px;">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="stat-label">Service Distribution</div>
+                    <div class="chart-container">
+                        <canvas id="serviceChart"></canvas>
                     </div>
                 </div>
-
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="stat-label">Geo Distribution</div>
-                        <div class="chart-container">
-                            <canvas id="geoChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">Top Countries</div>
-                        <div class="table-container"
-                            style="height:250px; overflow-y:auto; border:none; box-shadow:none;">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Country</th>
-                                        <th>Hits</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="c in granular.countries" :key="c.code">
-                                        <tr>
-                                            <td x-text="c.code"></td>
-                                            <td x-text="c.count"></td>
-                                        </tr>
-                                    </template>
-                                    <tr x-show="!granular.countries || granular.countries.length === 0">
-                                        <td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                <div class="card">
+                    <div class="stat-label">Resource Types</div>
+                    <div class="chart-container">
+                        <canvas id="typeChart"></canvas>
                     </div>
                 </div>
             </div>
 
-            <!-- Sessions Tab -->
-            <div x-show="tab === 'sessions'">
+            <div class="grid-2">
                 <div class="card">
-                    <h3 style="margin-top:0">Active Sessions (Last 24h)</h3>
-                    <div style="overflow-x:auto;">
+                    <div class="stat-label">Geo Distribution</div>
+                    <div class="chart-container">
+                        <canvas id="geoChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Top Countries</div>
+                    <div class="table-container" style="height:250px; overflow-y:auto; border:none; box-shadow:none;">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Session ID</th>
-                                    <th>IP Address</th>
-                                    <th>User Agent</th>
-                                    <th>Requests</th>
-                                    <th>Last Seen</th>
-                                    <th>Recent Path</th>
+                                    <th>Country</th>
+                                    <th>Hits</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="s in sessions" :key="s.id">
+                                <template x-for="c in granular.countries" :key="c.code">
                                     <tr>
-                                        <td style="font-family:monospace; color:var(--accent)" x-text="s.id"></td>
-                                        <td x-text="s.ip"></td>
-                                        <td style="font-size:0.8rem; color:#999; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
-                                            x-text="s.userAgent"></td>
-                                        <td x-text="s.requestCount"></td>
-                                        <td x-text="formatTime(s.lastSeen)"></td>
-                                        <td style="font-family:monospace; font-size:0.8rem"
-                                            x-text="s.paths[s.paths.length-1]"></td>
+                                        <td x-text="c.code"></td>
+                                        <td x-text="c.count"></td>
                                     </tr>
                                 </template>
-                                <tr x-show="sessions.length === 0">
-                                    <td colspan="6" style="text-align:center; padding:20px; color:#666">No active
-                                        sessions</td>
+                                <tr x-show="!granular.countries || granular.countries.length === 0">
+                                    <td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td>
                                 </tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Live Console Tab -->
-            <div x-show="tab === 'console'" style="display:flex; flex-direction:column; height:100%">
-                <div class="card"
-                    style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden; background:#000; border:1px solid #333">
-                    <div
-                        style="padding:10px 20px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; background:#111">
-                        <div style="font-family:monospace; color:#22c55e">>_ GUARDIAN LIVE STREAM</div>
-                        <div style="display:flex; gap:10px">
-                            <label style="font-size:0.8rem"><input type="checkbox" x-model="autoScroll">
-                                Auto-Scroll</label>
-                            <button style="padding:2px 8px; font-size:0.8rem" @click="liveLogs = []">Clear</button>
-                        </div>
+        <!-- Sessions Tab -->
+        <div x-show="tab === 'sessions'">
+            <div class="card">
+                <h3 style="margin-top:0">Active Sessions (Last 24h)</h3>
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Session ID</th>
+                                <th>IP Address</th>
+                                <th>User Agent</th>
+                                <th>Requests</th>
+                                <th>Last Seen</th>
+                                <th>Recent Path</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="s in sessions" :key="s.id">
+                                <tr>
+                                    <td style="font-family:monospace; color:var(--accent)" x-text="s.id"></td>
+                                    <td x-text="s.ip"></td>
+                                    <td style="font-size:0.8rem; color:#999; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                                        x-text="s.userAgent"></td>
+                                    <td x-text="s.requestCount"></td>
+                                    <td x-text="formatTime(s.lastSeen)"></td>
+                                    <td style="font-family:monospace; font-size:0.8rem"
+                                        x-text="s.paths[s.paths.length-1]">
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="sessions.length === 0">
+                                <td colspan="6" style="text-align:center; padding:20px; color:#666">No active
+                                    sessions</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Console Tab -->
+        <div x-show="tab === 'console'" style="display:flex; flex-direction:column; height:100%">
+            <div class="card"
+                style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden; background:#000; border:1px solid #333">
+                <div
+                    style="padding:10px 20px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; background:#111">
+                    <div style="font-family:monospace; color:#22c55e">>_ GUARDIAN LIVE STREAM</div>
+                    <div style="display:flex; gap:10px">
+                        <label style="font-size:0.8rem"><input type="checkbox" x-model="autoScroll">
+                            Auto-Scroll</label>
+                        <button style="padding:2px 8px; font-size:0.8rem" @click="liveLogs = []">Clear</button>
                     </div>
-                    <div class="code-block"
-                        style="flex:1; border:none; border-radius:0; padding:20px; font-family:'Courier New', monospace; font-size:0.9rem"
-                        x-ref="consoleContainer">
-                        <template x-for="log in liveLogs" :key="log.id">
-                            <!-- Updated layout for console logs to fix formatting issues -->
-                            <div
-                                style="margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:2px; display:flex; gap:10px; align-items:center;">
-                                <span style="color:#666; white-space:nowrap"
-                                    x-text="new Date(log.timestamp).toLocaleTimeString()"></span>
+                </div>
+                <div class="code-block"
+                    style="flex:1; border:none; border-radius:0; padding:20px; font-family:'Courier New', monospace; font-size:0.9rem"
+                    x-ref="consoleContainer">
+                    <template x-for="log in liveLogs" :key="log.id">
+                        <!-- Updated layout for console logs to fix formatting issues -->
+                        <div
+                            style="margin-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.05); padding-bottom:2px; display:flex; gap:10px; align-items:center;">
+                            <span style="color:#666; white-space:nowrap"
+                                x-text="new Date(log.timestamp).toLocaleTimeString()"></span>
 
-                                <template x-if="log.type === 'request'">
-                                    <div style="display:flex; gap:8px; align-items:center;">
-                                        <span style="color:#3b82f6">[REQ]</span>
-                                        <span
-                                            :style="{color: log.status >= 500 ? '#ef4444' : (log.status >= 400 ? '#f59e0b' : '#22c55e')}"
-                                            x-text="log.status"></span>
-                                        <span style="color:#e2e8f0" x-text="log.method"></span>
-                                        <span style="color:#94a3b8" x-text="log.path"></span>
-                                        <span style="color:#666; font-size:0.8rem"
-                                            x-text="'(' + log.duration.toFixed(1) + 'ms)'"></span>
-                                        <span style="color:#666; font-size:0.8rem" x-text="log.ip"></span>
-                                    </div>
-                                </template>
+                            <template x-if="log.type === 'request'">
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <span style="color:#3b82f6">[REQ]</span>
+                                    <span
+                                        :style="{color: log.status >= 500 ? '#ef4444' : (log.status >= 400 ? '#f59e0b' : '#22c55e')}"
+                                        x-text="log.status"></span>
+                                    <span style="color:#e2e8f0" x-text="log.method"></span>
+                                    <span style="color:#94a3b8" x-text="log.path"></span>
+                                    <span style="color:#666; font-size:0.8rem"
+                                        x-text="'(' + log.duration.toFixed(1) + 'ms)'"></span>
+                                    <span style="color:#666; font-size:0.8rem" x-text="log.ip"></span>
+                                </div>
+                            </template>
 
-                                <template x-if="log.type === 'log'">
-                                    <div style="display:flex; gap:8px; align-items:center;">
-                                        <span style="color:#a855f7">[SYS]</span>
-                                        <span style="color:#e2e8f0" x-text="log.service?.toUpperCase()"></span>
-                                        <span x-text="log.message"></span>
-                                    </div>
-                                </template>
-                            </div>
-                        </template>
-                        <div x-show="liveLogs.length === 0" style="color:#444; text-align:center; margin-top:50px">
-                            Waiting for events...</div>
+                            <template x-if="log.type === 'log'">
+                                <div style="display:flex; gap:8px; align-items:center;">
+                                    <span style="color:#a855f7">[SYS]</span>
+                                    <span style="color:#e2e8f0" x-text="log.service?.toUpperCase()"></span>
+                                    <span x-text="log.message"></span>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+                    <div x-show="liveLogs.length === 0" style="color:#444; text-align:center; margin-top:50px">
+                        Waiting for events...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tools Tab -->
+        <div x-show="tab === 'tools'">
+            <div class="card">
+                <h3 style="margin-top:0">Shadow Recorder</h3>
+                <p style="color:var(--text-secondary); margin-bottom:20px">Record incoming traffic to trace files
+                    for replay debugging.</p>
+
+                <div
+                    style="margin-bottom:20px; padding:15px; border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
+                    <div>
+                        <div style="font-weight:bold" x-text="isRecording ? 'Recording Active' : 'Recording Inactive'">
+                        </div>
+                        <div style="font-size:0.8rem; color:var(--text-secondary)"
+                            x-text="isRecording ? 'Capturing requests...' : 'Recorder is idle.'"></div>
+                    </div>
+                    <button :class="isRecording ? 'danger' : 'primary'" @click="toggleRecording()"
+                        x-text="isRecording ? 'Stop Recording' : 'Start Recording'"></button>
+                </div>
+
+                <div class="table-container">
+                    <div
+                        style="padding:15px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-weight:bold">Recorded Traces</span>
+                        <button style="font-size:0.8rem; padding:4px 8px;" @click="refreshTraces()">Refresh</button>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Filename</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="trace in traces" :key="trace">
+                                <tr>
+                                    <td style="font-family:monospace" x-text="trace"></td>
+                                    <td>
+                                        <button style="padding:4px 8px; font-size:0.8rem"
+                                            @click="replayTrace(trace)">Replay</button>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="traces.length === 0">
+                                <td colspan="2" style="text-align:center; padding:20px; color:#666">No traces found
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Service Detail Tab -->
+        <div x-show="tab.startsWith('service-')" style="display:flex; flex-direction:column; gap:20px;">
+            <div class="grid">
+                <div class="card">
+                    <div class="stat-label">Status</div>
+                    <div class="stat-value" :style="{color: getStatusColor(currentService?.status)}"
+                        x-text="currentService?.status?.toUpperCase()"></div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">PID</div>
+                    <div class="stat-value" x-text="currentService?.pid || '-'"></div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Restarts</div>
+                    <div class="stat-value" x-text="currentService?.restarts"></div>
+                </div>
+                <div class="card"
+                    style="display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap: wrap; padding: 16px;">
+                    <button class="primary" style="padding: 8px 16px;"
+                        @click="controlService(currentService.name, 'start')">Start</button>
+                    <button class="danger" style="padding: 8px 16px;"
+                        @click="controlService(currentService.name, 'stop')">Stop</button>
+                    <button style="padding: 8px 16px;"
+                        @click="controlService(currentService.name, 'restart')">Restart</button>
+                    <a x-show="currentService?.url" :href="currentService?.url" target="_blank"
+                        style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500; text-align: center;">Open</a>
+                </div>
+            </div>
+
+            <!-- New Charts for Services -->
+            <div class="grid-2">
+                <div class="card">
+                    <div class="stat-label">System Load (Recent)</div>
+                    <div class="chart-container">
+                        <canvas id="serviceLoadChart"></canvas>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="stat-label">Requests (Last 7 Days)</div>
+                    <div class="chart-container">
+                        <canvas id="serviceRequestsChart"></canvas>
                     </div>
                 </div>
             </div>
 
-            <!-- Tools Tab -->
-            <div x-show="tab === 'tools'">
-                <div class="card">
-                    <h3 style="margin-top:0">Shadow Recorder</h3>
-                    <p style="color:var(--text-secondary); margin-bottom:20px">Record incoming traffic to trace files
-                        for replay debugging.</p>
-
-                    <div
-                        style="margin-bottom:20px; padding:15px; border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
-                        <div>
-                            <div style="font-weight:bold"
-                                x-text="isRecording ? 'Recording Active' : 'Recording Inactive'"></div>
-                            <div style="font-size:0.8rem; color:var(--text-secondary)"
-                                x-text="isRecording ? 'Capturing requests...' : 'Recorder is idle.'"></div>
-                        </div>
-                        <button :class="isRecording ? 'danger' : 'primary'" @click="toggleRecording()"
-                            x-text="isRecording ? 'Stop Recording' : 'Start Recording'"></button>
+            <!-- Detailed Uptime Card -->
+            <div class="card" x-show="currentService?.persistedUptime">
+                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+                    <div style="display:flex; align-items:baseline; gap:8px">
+                        <span class="stat-label" style="margin:0">Today:</span>
+                        <span style="font-weight:700; color:var(--success)"
+                            x-text="formatUptime(currentService?.persistedUptime?.daily)"></span>
                     </div>
+                    <div style="display:flex; align-items:baseline; gap:8px">
+                        <span class="stat-label" style="margin:0">Total:</span>
+                        <span style="font-weight:600"
+                            x-text="formatUptime(currentService?.persistedUptime?.total)"></span>
+                    </div>
+                    <div style="display:flex; align-items:baseline; gap:8px">
+                        <span class="stat-label" style="margin:0">Availability:</span>
+                        <span style="font-weight:800; color:var(--accent-secondary)"
+                            x-text="calculateUptimePercent(currentService)"></span>
+                    </div>
+                </div>
+            </div>
 
-                    <div class="table-container">
-                        <div
-                            style="padding:15px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
-                            <span style="font-weight:bold">Recorded Traces</span>
-                            <button style="font-size:0.8rem; padding:4px 8px;" @click="refreshTraces()">Refresh</button>
+            <!-- Circuit Breaker Info -->
+            <div class="card" x-show="currentService?.circuit">
+                <h3 style="margin-top:0">Circuit Breaker</h3>
+                <div style="display:flex; gap:20px; align-items:center">
+                    <div>
+                        <div class="stat-label">State</div>
+                        <div class="stat-value"
+                            :style="{color: currentService?.circuit?.status === 'CLOSED' ? '#22c55e' : '#ef4444'}"
+                            x-text="currentService?.circuit?.status"></div>
+                    </div>
+                    <div>
+                        <div class="stat-label">Recent Failures</div>
+                        <div class="stat-value" x-text="currentService?.circuit?.failures"></div>
+                    </div>
+                    <div x-show="currentService?.circuit?.status !== 'CLOSED'" style="margin-left: auto;">
+                        <button class="primary" style="padding: 10px 20px; background: #3b82f6;"
+                            @click="controlService(currentService.name, 'reset-circuit')">Reset Circuit</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div
+                    style="margin-bottom:10px; font-weight:bold; color:#94a3b8; display:flex; justify-content:space-between;">
+                    <span>Logs (Last 100 lines)</span>
+                    <button style="padding:4px 8px; font-size:0.8rem" @click="fetchLogs(currentService.name)">Refresh
+                        Logs</button>
+                </div>
+                <div class="code-block" style="max-height:300px; overflow-y:auto;" x-ref="logContainer">
+                    <template x-for="log in logEntries" :key="log.id">
+                        <div class="log-entry">
+                            <span class="log-time" x-text="formatTime(log.timestamp)"></span>
+                            <span class="log-message" :class="'log-' + log.source" x-text="log.message"></span>
                         </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security Tab -->
+        <div x-show="tab === 'security'">
+            <div class="grid-2">
+                <div class="card">
+                    <h3 style="margin-top:0">Manual Ban</h3>
+                    <div style="display:flex; gap:10px;">
+                        <input type="text" x-model="banInput" placeholder="IP Address"
+                            style="flex:1; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px;">
+                        <button class="danger" @click="banIp(banInput); banInput = ''">Ban IP</button>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3 style="margin-top:0">Banned IPs</h3>
+                    <div class="table-container">
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Filename</th>
+                                    <th>IP Address</th>
                                     <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <template x-for="trace in traces" :key="trace">
+                                <template x-for="ip in bannedIps" :key="ip">
                                     <tr>
-                                        <td style="font-family:monospace" x-text="trace"></td>
-                                        <td>
-                                            <button style="padding:4px 8px; font-size:0.8rem"
-                                                @click="replayTrace(trace)">Replay</button>
-                                        </td>
+                                        <td x-text="ip"></td>
+                                        <td><button @click="unbanIp(ip)">Unban</button></td>
                                     </tr>
                                 </template>
-                                <tr x-show="traces.length === 0">
-                                    <td colspan="2" style="text-align:center; padding:20px; color:#666">No traces found
+                                <tr x-show="bannedIps.length === 0">
+                                    <td colspan="2" style="text-align:center; padding:20px; color:#666">No banned
+                                        IPs</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- WAF Tab -->
+        <div x-show="tab === 'waf'">
+            <div class="card">
+                <h3 style="margin-top:0">WAF Blocked Events (Last 50)</h3>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>IP</th>
+                                <th>Path</th>
+                                <th>Rule</th>
+                                <th>Risk</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="event in wafEvents" :key="event.timestamp + event.ip">
+                                <tr>
+                                    <td x-text="formatTime(event.timestamp)"></td>
+                                    <td x-text="event.ip"></td>
+                                    <td style="font-family:monospace; max-width:300px; overflow:hidden; text-overflow:ellipsis"
+                                        x-text="event.path"></td>
+                                    <td>
+                                        <span class="badge badge-purple" x-text="event.ruleId"></span>
+                                        <div style="font-size:0.8rem; color:#999" x-text="event.reason"></div>
+                                    </td>
+                                    <td>
+                                        <span class="badge"
+                                            :class="event.risk === 'high' ? 'badge-blue' : 'badge-green'"
+                                            style="color: #ef4444; background: rgba(239, 68, 68, 0.2)"
+                                            x-text="event.risk"></span>
                                     </td>
                                 </tr>
-                            </tbody>
-                        </table>
+                            </template>
+                            <tr x-show="wafEvents.length === 0">
+                                <td colspan="5" style="text-align:center; padding:20px; color:#666">No threats
+                                    detected</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Load Balancer Tab -->
+        <div x-show="tab === 'load-balancer'" style="display:flex; flex-direction:column; gap:24px;">
+
+            <!-- Traffic Simulator Control Panel -->
+            <div class="card"
+                style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(16, 185, 129, 0.05)); border: 1px solid rgba(245, 158, 11, 0.3);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.5rem;">🚀</span>
+                        Traffic Simulator
+                    </h3>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="danger" @click="lbResetStats()"
+                            style="font-size: 0.8rem; padding: 6px 12px;">Reset
+                            Stats</button>
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                        <div style="font-size: 2rem; font-weight: 800; color: #f59e0b;"
+                            x-text="loadBalancer.simulator?.rps || 0"></div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">Simulator RPS</div>
+                    </div>
+                    <div style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                        <div style="font-size: 2rem; font-weight: 800; color: #10b981;"
+                            x-text="loadBalancer.rps?.toFixed(1) || 0"></div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">Actual RPS</div>
+                    </div>
+                    <div style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                        <div style="font-size: 2rem; font-weight: 800; color: #3b82f6;"
+                            x-text="loadBalancer.simulator?.totalSent?.toLocaleString() || 0"></div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">Total Sent</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <label style="min-width: 120px; color: var(--text-muted);">RPS Target:</label>
+                        <input type="range" min="0" max="200" step="5" x-model="simulatorRpsTarget"
+                            style="flex: 1; accent-color: #f59e0b; height: 8px;">
+                        <span style="min-width: 60px; font-weight: 700; color: #f59e0b;"
+                            x-text="simulatorRpsTarget + ' RPS'"></span>
+                    </div>
+
+                    <div style="display: flex; gap: 12px;">
+                        <button class="primary" @click="lbStartSimulator()" :disabled="loadBalancer.simulator?.running"
+                            style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
+                            :style="loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
+                            <span>▶️</span> Start Simulation
+                        </button>
+                        <button class="danger" @click="lbStopSimulator()" :disabled="!loadBalancer.simulator?.running"
+                            style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
+                            :style="!loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
+                            <span>⏹️</span> Stop
+                        </button>
+                        <button @click="lbSetSimulatorRps()" :disabled="!loadBalancer.simulator?.running"
+                            style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
+                            :style="!loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
+                            <span>⚡</span> Update RPS
+                        </button>
+                    </div>
+
+                    <div style="display: flex; gap: 8px;">
+                        <template x-for="preset in [10, 25, 50, 75, 100, 150, 200]">
+                            <button
+                                @click="simulatorRpsTarget = preset; if(loadBalancer.simulator?.running) lbSetSimulatorRps()"
+                                style="flex: 1; padding: 8px; font-size: 0.8rem;"
+                                :style="simulatorRpsTarget == preset ? 'background: #f59e0b; color: black;' : ''">
+                                <span x-text="preset"></span>
+                            </button>
+                        </template>
                     </div>
                 </div>
             </div>
 
-            <!-- Service Detail Tab -->
-            <div x-show="tab.startsWith('service-')" style="display:flex; flex-direction:column; gap:20px;">
-                <div class="grid">
-                    <div class="card">
-                        <div class="stat-label">Status</div>
-                        <div class="stat-value" :style="{color: getStatusColor(currentService?.status)}"
-                            x-text="currentService?.status?.toUpperCase()"></div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">PID</div>
-                        <div class="stat-value" x-text="currentService?.pid || '-'"></div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">Restarts</div>
-                        <div class="stat-value" x-text="currentService?.restarts"></div>
-                    </div>
+            <!-- Node Grid -->
+            <div class="grid-2">
+                <template x-for="node in loadBalancer.nodes || []" :key="node.name">
                     <div class="card"
-                        style="display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap: wrap; padding: 16px;">
-                        <button class="primary" style="padding: 8px 16px;"
-                            @click="controlService(currentService.name, 'start')">Start</button>
-                        <button class="danger" style="padding: 8px 16px;"
-                            @click="controlService(currentService.name, 'stop')">Stop</button>
-                        <button style="padding: 8px 16px;"
-                            @click="controlService(currentService.name, 'restart')">Restart</button>
-                        <a x-show="currentService?.url" :href="currentService?.url" target="_blank"
-                            style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500; text-align: center;">Open</a>
-                    </div>
-                </div>
+                        :style="node.active ? 'border: 2px solid #10b981;' : 'border: 2px solid #334155; opacity: 0.6;'">
+                        <div
+                            style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+                            <div>
+                                <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                                    <span :style="node.active ? 'color: #10b981;' : 'color: #ef4444;'"
+                                        x-text="node.active ? '🟢' : '🔴'"></span>
+                                    <span x-text="node.name.toUpperCase()"></span>
+                                </h3>
+                                <div style="color: var(--text-muted); font-size: 0.85rem;">Port <span
+                                        x-text="node.port"></span></div>
+                            </div>
+                            <div style="display: flex; gap: 6px;">
+                                <button x-show="!node.active" @click="lbScaleUp(node.name)" class="primary"
+                                    style="padding: 6px 12px; font-size: 0.75rem;">
+                                    Start
+                                </button>
+                                <button x-show="node.active && node.name !== 'backend'" @click="lbScaleDown(node.name)"
+                                    class="danger" style="padding: 6px 12px; font-size: 0.75rem;">
+                                    Stop
+                                </button>
+                                <span x-show="node.name === 'backend' && node.active" class="badge badge-green"
+                                    style="font-size: 0.7rem;">PRIMARY</span>
+                            </div>
+                        </div>
 
-                <!-- New Charts for Services -->
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="stat-label">System Load (Recent)</div>
-                        <div class="chart-container">
-                            <canvas id="serviceLoadChart"></canvas>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div
+                                style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;"
+                                    x-text="node.requests?.toLocaleString() || 0"></div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Requests</div>
+                            </div>
+                            <div
+                                style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: #a855f7;"
+                                    x-text="(node.avgLatency || 0) + 'ms'"></div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Avg Latency</div>
+                            </div>
                         </div>
-                    </div>
-                    <div class="card">
-                        <div class="stat-label">Requests (Last 7 Days)</div>
-                        <div class="chart-container">
-                            <canvas id="serviceRequestsChart"></canvas>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Circuit Breaker Info -->
-                <div class="card" x-show="currentService?.circuit">
-                    <h3 style="margin-top:0">Circuit Breaker</h3>
-                    <div style="display:flex; gap:20px; align-items:center">
-                        <div>
-                            <div class="stat-label">State</div>
-                            <div class="stat-value"
-                                :style="{color: currentService?.circuit?.status === 'CLOSED' ? '#22c55e' : '#ef4444'}"
-                                x-text="currentService?.circuit?.status"></div>
-                        </div>
-                        <div>
-                            <div class="stat-label">Recent Failures</div>
-                            <div class="stat-value" x-text="currentService?.circuit?.failures"></div>
+                        <div style="margin-top: 12px;">
+                            <div
+                                style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.75rem; color: var(--text-muted);">
+                                <span>Traffic Share</span>
+                                <span
+                                    x-text="loadBalancer.totalRequests > 0 ? Math.round((node.requests / loadBalancer.totalRequests) * 100) + '%' : '0%'"></span>
+                            </div>
+                            <div
+                                style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                <div
+                                    :style="`width: ${loadBalancer.totalRequests > 0 ? (node.requests / loadBalancer.totalRequests) * 100 : 0}%; background: linear-gradient(90deg, #3b82f6, #10b981); height: 100%; transition: width 0.5s ease;`">
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-
-                <div class="card" style="flex:1; display:flex; flex-direction:column; min-height:400px;">
-                    <div
-                        style="margin-bottom:10px; font-weight:bold; color:#94a3b8; display:flex; justify-content:space-between;">
-                        <span>Logs (Last 100 lines)</span>
-                        <button style="padding:4px 8px; font-size:0.8rem"
-                            @click="fetchLogs(currentService.name)">Refresh Logs</button>
-                    </div>
-                    <div class="code-block" style="flex:1;" x-ref="logContainer" x-text="logs"></div>
-                </div>
+                </template>
             </div>
 
-            <!-- Security Tab -->
-            <div x-show="tab === 'security'">
-                <div class="grid-2">
-                    <div class="card">
-                        <h3 style="margin-top:0">Manual Ban</h3>
-                        <div style="display:flex; gap:10px;">
-                            <input type="text" x-model="banInput" placeholder="IP Address"
-                                style="flex:1; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px;">
-                            <button class="danger" @click="banIp(banInput); banInput = ''">Ban IP</button>
-                        </div>
-                    </div>
-                    <div class="card">
-                        <h3 style="margin-top:0">Banned IPs</h3>
-                        <div class="table-container">
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>IP Address</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <template x-for="ip in bannedIps" :key="ip">
-                                        <tr>
-                                            <td x-text="ip"></td>
-                                            <td><button @click="unbanIp(ip)">Unban</button></td>
-                                        </tr>
-                                    </template>
-                                    <tr x-show="bannedIps.length === 0">
-                                        <td colspan="2" style="text-align:center; padding:20px; color:#666">No banned
-                                            IPs</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- WAF Tab -->
-            <div x-show="tab === 'waf'">
+            <!-- Scaling Configuration & History -->
+            <div class="grid-2">
                 <div class="card">
-                    <h3 style="margin-top:0">WAF Blocked Events (Last 50)</h3>
-                    <div class="table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>IP</th>
-                                    <th>Path</th>
-                                    <th>Rule</th>
-                                    <th>Risk</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <template x-for="event in wafEvents" :key="event.timestamp + event.ip">
-                                    <tr>
-                                        <td x-text="formatTime(event.timestamp)"></td>
-                                        <td x-text="event.ip"></td>
-                                        <td style="font-family:monospace; max-width:300px; overflow:hidden; text-overflow:ellipsis"
-                                            x-text="event.path"></td>
-                                        <td>
-                                            <span class="badge badge-purple" x-text="event.ruleId"></span>
-                                            <div style="font-size:0.8rem; color:#999" x-text="event.reason"></div>
-                                        </td>
-                                        <td>
-                                            <span class="badge"
-                                                :class="event.risk === 'high' ? 'badge-blue' : 'badge-green'"
-                                                style="color: #ef4444; background: rgba(239, 68, 68, 0.2)"
-                                                x-text="event.risk"></span>
-                                        </td>
-                                    </tr>
-                                </template>
-                                <tr x-show="wafEvents.length === 0">
-                                    <td colspan="5" style="text-align:center; padding:20px; color:#666">No threats
-                                        detected</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Load Balancer Tab -->
-            <div x-show="tab === 'load-balancer'" style="display:flex; flex-direction:column; gap:24px;">
-
-                <!-- Traffic Simulator Control Panel -->
-                <div class="card"
-                    style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.1), rgba(16, 185, 129, 0.05)); border: 1px solid rgba(245, 158, 11, 0.3);">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                        <h3 style="margin: 0; display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size: 1.5rem;">🚀</span>
-                            Traffic Simulator
-                        </h3>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="danger" @click="lbResetStats()"
-                                style="font-size: 0.8rem; padding: 6px 12px;">Reset Stats</button>
-                        </div>
-                    </div>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                        <div
-                            style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
-                            <div style="font-size: 2rem; font-weight: 800; color: #f59e0b;"
-                                x-text="loadBalancer.simulator?.rps || 0"></div>
-                            <div style="color: var(--text-muted); font-size: 0.85rem;">Simulator RPS</div>
-                        </div>
-                        <div
-                            style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
-                            <div style="font-size: 2rem; font-weight: 800; color: #10b981;"
-                                x-text="loadBalancer.rps?.toFixed(1) || 0"></div>
-                            <div style="color: var(--text-muted); font-size: 0.85rem;">Actual RPS</div>
-                        </div>
-                        <div
-                            style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
-                            <div style="font-size: 2rem; font-weight: 800; color: #3b82f6;"
-                                x-text="loadBalancer.simulator?.totalSent?.toLocaleString() || 0"></div>
-                            <div style="color: var(--text-muted); font-size: 0.85rem;">Total Sent</div>
-                        </div>
-                    </div>
-
+                    <h3 style="margin-top: 0;">Scaling Configuration</h3>
                     <div style="display: flex; flex-direction: column; gap: 16px;">
                         <div style="display: flex; align-items: center; gap: 16px;">
-                            <label style="min-width: 120px; color: var(--text-muted);">RPS Target:</label>
-                            <input type="range" min="0" max="200" step="5" x-model="simulatorRpsTarget"
-                                style="flex: 1; accent-color: #f59e0b; height: 8px;">
-                            <span style="min-width: 60px; font-weight: 700; color: #f59e0b;"
-                                x-text="simulatorRpsTarget + ' RPS'"></span>
+                            <label style="min-width: 140px; color: var(--text-muted);">Scale-Up Threshold:</label>
+                            <input type="range" min="5" max="100" step="5" x-model="lbThresholdTarget"
+                                style="flex: 1; accent-color: #10b981;">
+                            <span style="min-width: 70px; font-weight: 700; color: #10b981;"
+                                x-text="lbThresholdTarget + ' RPS'"></span>
                         </div>
-
-                        <div style="display: flex; gap: 12px;">
-                            <button class="primary" @click="lbStartSimulator()"
-                                :disabled="loadBalancer.simulator?.running"
-                                style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
-                                :style="loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
-                                <span>▶️</span> Start Simulation
-                            </button>
-                            <button class="danger" @click="lbStopSimulator()"
-                                :disabled="!loadBalancer.simulator?.running"
-                                style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
-                                :style="!loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
-                                <span>⏹️</span> Stop
-                            </button>
-                            <button @click="lbSetSimulatorRps()" :disabled="!loadBalancer.simulator?.running"
-                                style="flex: 1; padding: 12px; font-size: 1rem; gap: 8px;"
-                                :style="!loadBalancer.simulator?.running ? 'opacity: 0.5' : ''">
-                                <span>⚡</span> Update RPS
-                            </button>
-                        </div>
-
-                        <div style="display: flex; gap: 8px;">
-                            <template x-for="preset in [10, 25, 50, 75, 100, 150, 200]">
-                                <button
-                                    @click="simulatorRpsTarget = preset; if(loadBalancer.simulator?.running) lbSetSimulatorRps()"
-                                    style="flex: 1; padding: 8px; font-size: 0.8rem;"
-                                    :style="simulatorRpsTarget == preset ? 'background: #f59e0b; color: black;' : ''">
-                                    <span x-text="preset"></span>
-                                </button>
-                            </template>
+                        <button @click="lbSetThreshold()" class="primary">Apply Threshold</button>
+                        <div
+                            style="padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; font-size: 0.85rem;">
+                            <strong>Current:</strong> <span x-text="loadBalancer.threshold || 10"></span> RPS per
+                            node<br>
+                            <strong>Status:</strong> <span
+                                x-text="loadBalancer.cooldown ? 'Scaling in progress...' : 'Ready'"></span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Node Grid -->
-                <div class="grid-2">
-                    <template x-for="node in loadBalancer.nodes || []" :key="node.name">
-                        <div class="card"
-                            :style="node.active ? 'border: 2px solid #10b981;' : 'border: 2px solid #334155; opacity: 0.6;'">
+                <div class="card">
+                    <h3 style="margin-top: 0;">Scaling History</h3>
+                    <div style="max-height: 200px; overflow-y: auto;">
+                        <template x-for="event in (loadBalancer.scalingHistory || []).slice().reverse()"
+                            :key="event.timestamp">
                             <div
-                                style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-                                <div>
-                                    <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
-                                        <span :style="node.active ? 'color: #10b981;' : 'color: #ef4444;'"
-                                            x-text="node.active ? '🟢' : '🔴'"></span>
-                                        <span x-text="node.name.toUpperCase()"></span>
-                                    </h3>
-                                    <div style="color: var(--text-muted); font-size: 0.85rem;">Port <span
-                                            x-text="node.port"></span></div>
-                                </div>
-                                <div style="display: flex; gap: 6px;">
-                                    <button x-show="!node.active" @click="lbScaleUp(node.name)" class="primary"
-                                        style="padding: 6px 12px; font-size: 0.75rem;">
-                                        Start
-                                    </button>
-                                    <button x-show="node.active && node.name !== 'backend'"
-                                        @click="lbScaleDown(node.name)" class="danger"
-                                        style="padding: 6px 12px; font-size: 0.75rem;">
-                                        Stop
-                                    </button>
-                                    <span x-show="node.name === 'backend' && node.active" class="badge badge-green"
-                                        style="font-size: 0.7rem;">PRIMARY</span>
-                                </div>
-                            </div>
-
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                                <div
-                                    style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
-                                    <div style="font-size: 1.5rem; font-weight: 700; color: #3b82f6;"
-                                        x-text="node.requests?.toLocaleString() || 0"></div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Requests</div>
-                                </div>
-                                <div
-                                    style="padding: 12px; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
-                                    <div style="font-size: 1.5rem; font-weight: 700; color: #a855f7;"
-                                        x-text="(node.avgLatency || 0) + 'ms'"></div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted);">Avg Latency</div>
-                                </div>
-                            </div>
-
-                            <div style="margin-top: 12px;">
-                                <div
-                                    style="display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 0.75rem; color: var(--text-muted);">
-                                    <span>Traffic Share</span>
-                                    <span
-                                        x-text="loadBalancer.totalRequests > 0 ? Math.round((node.requests / loadBalancer.totalRequests) * 100) + '%' : '0%'"></span>
-                                </div>
-                                <div
-                                    style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
-                                    <div
-                                        :style="`width: ${loadBalancer.totalRequests > 0 ? (node.requests / loadBalancer.totalRequests) * 100 : 0}%; background: linear-gradient(90deg, #3b82f6, #10b981); height: 100%; transition: width 0.5s ease;`">
+                                style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                                <span x-text="event.action === 'scale-up' ? '📈' : '📉'"
+                                    style="font-size: 1.2rem;"></span>
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 600;"
+                                        x-text="event.action === 'scale-up' ? 'Scaled Up' : 'Scaled Down'"></div>
+                                    <div style="font-size: 0.75rem; color: var(--text-muted);" x-text="event.node">
                                     </div>
                                 </div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);"
+                                    x-text="new Date(event.timestamp).toLocaleTimeString()"></div>
                             </div>
+                        </template>
+                        <div x-show="!loadBalancer.scalingHistory?.length"
+                            style="text-align: center; padding: 20px; color: var(--text-muted);">
+                            No scaling events yet
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Traffic Distribution Chart -->
+            <div class="card">
+                <h3 style="margin-top: 0;">Traffic Distribution</h3>
+                <div style="height: 200px;">
+                    <canvas id="lbDistributionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Debug Flow Tab -->
+        <div x-show="tab === 'debug'" style="display:flex; flex-direction:column; gap:24px;">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h3 style="margin: 0;">🔍 Request Flow Tracer</h3>
+                    <div style="display: flex; gap: 10px;">
+                        <button @click="refreshDebugLog()" class="primary" style="padding: 8px 16px;">
+                            🔄 Refresh
+                        </button>
+                        <button @click="clearDebugLog()" class="danger" style="padding: 8px 16px;">
+                            🗑️ Clear
+                        </button>
+                    </div>
+                </div>
+
+                <div style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 16px;">
+                    Live trace of all requests through Guardian. Use this to debug why requests may not be completing.
+                </div>
+
+                <!-- Legend -->
+                <div style="display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap;">
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 12px; height: 12px; border-radius: 50%; background: #3b82f6;"></span>
+                        RECEIVED</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 12px; height: 12px; border-radius: 50%; background: #8b5cf6;"></span>
+                        MIDDLEWARE</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 12px; height: 12px; border-radius: 50%; background: #f59e0b;"></span>
+                        PROXY_START</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 12px; height: 12px; border-radius: 50%; background: #10b981;"></span>
+                        PROXY_SUCCESS</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 12px; height: 12px; border-radius: 50%; background: #ef4444;"></span>
+                        PROXY_FAIL</span>
+                    <span style="display: flex; align-items: center; gap: 6px;"><span
+                            style="width: 12px; height: 12px; border-radius: 50%; background: #06b6d4;"></span>
+                        RESPONSE</span>
+                </div>
+
+                <!-- Debug Entries -->
+                <div
+                    style="max-height: 600px; overflow-y: auto; font-family: 'JetBrains Mono', 'Fira Code', monospace; font-size: 0.8rem;">
+                    <template x-if="debugLog.length === 0">
+                        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                            No requests traced yet. Make a request to http://localhost:3000 to see the flow.
+                        </div>
+                    </template>
+
+                    <template x-for="entry in debugLog" :key="entry.id">
+                        <div style="display: grid; grid-template-columns: 140px 100px 80px 120px 1fr; gap: 12px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center;"
+                            :style="entry.phase === 'PROXY_FAIL' ? 'background: rgba(239, 68, 68, 0.1);' : ''">
+                            <!-- Time -->
+                            <span style="color: var(--text-muted);"
+                                x-text="new Date(entry.timestamp).toLocaleTimeString()"></span>
+
+                            <!-- Phase Badge -->
+                            <span
+                                style="padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-align: center;"
+                                :style="{
+                                      'RECEIVED': 'background: rgba(59, 130, 246, 0.2); color: #3b82f6;',
+                                      'MIDDLEWARE': 'background: rgba(139, 92, 246, 0.2); color: #8b5cf6;',
+                                      'PROXY_START': 'background: rgba(245, 158, 11, 0.2); color: #f59e0b;',
+                                      'PROXY_SUCCESS': 'background: rgba(16, 185, 129, 0.2); color: #10b981;',
+                                      'PROXY_FAIL': 'background: rgba(239, 68, 68, 0.2); color: #ef4444;',
+                                      'RESPONSE': 'background: rgba(6, 182, 212, 0.2); color: #06b6d4;'
+                                  }[entry.phase]" x-text="entry.phase"></span>
+
+                            <!-- Method -->
+                            <span style="font-weight: 600;"
+                                :style="{ 'GET': 'color: #10b981;', 'POST': 'color: #3b82f6;', 'PUT': 'color: #f59e0b;', 'DELETE': 'color: #ef4444;' }[entry.method] || 'color: white;'"
+                                x-text="entry.method"></span>
+
+                            <!-- Service + Duration -->
+                            <span>
+                                <span x-text="entry.service" style="color: #a855f7;"></span>
+                                <span x-show="entry.duration" style="color: var(--text-muted); font-size: 0.7rem;"
+                                    x-text="' (' + entry.duration + 'ms)'"></span>
+                            </span>
+
+                            <!-- Path + Details -->
+                            <span
+                                style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                <span x-text="entry.path" style="color: #94a3b8;"></span>
+                                <span x-show="entry.status"
+                                    style="margin-left: 8px; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem;"
+                                    :style="entry.status >= 200 && entry.status < 300 ? 'background: rgba(16, 185, 129, 0.2); color: #10b981;' : 
+                                              entry.status >= 400 ? 'background: rgba(239, 68, 68, 0.2); color: #ef4444;' : 
+                                              'background: rgba(245, 158, 11, 0.2); color: #f59e0b;'"
+                                    x-text="entry.status"></span>
+                                <span x-show="entry.error" style="color: #ef4444; margin-left: 8px;"
+                                    x-text="entry.error"></span>
+                            </span>
                         </div>
                     </template>
                 </div>
-
-                <!-- Scaling Configuration & History -->
-                <div class="grid-2">
-                    <div class="card">
-                        <h3 style="margin-top: 0;">Scaling Configuration</h3>
-                        <div style="display: flex; flex-direction: column; gap: 16px;">
-                            <div style="display: flex; align-items: center; gap: 16px;">
-                                <label style="min-width: 140px; color: var(--text-muted);">Scale-Up Threshold:</label>
-                                <input type="range" min="5" max="100" step="5" x-model="lbThresholdTarget"
-                                    style="flex: 1; accent-color: #10b981;">
-                                <span style="min-width: 70px; font-weight: 700; color: #10b981;"
-                                    x-text="lbThresholdTarget + ' RPS'"></span>
-                            </div>
-                            <button @click="lbSetThreshold()" class="primary">Apply Threshold</button>
-                            <div
-                                style="padding: 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; font-size: 0.85rem;">
-                                <strong>Current:</strong> <span x-text="loadBalancer.threshold || 10"></span> RPS per
-                                node<br>
-                                <strong>Status:</strong> <span
-                                    x-text="loadBalancer.cooldown ? 'Scaling in progress...' : 'Ready'"></span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <h3 style="margin-top: 0;">Scaling History</h3>
-                        <div style="max-height: 200px; overflow-y: auto;">
-                            <template x-for="event in (loadBalancer.scalingHistory || []).slice().reverse()"
-                                :key="event.timestamp">
-                                <div
-                                    style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                    <span x-text="event.action === 'scale-up' ? '📈' : '📉'"
-                                        style="font-size: 1.2rem;"></span>
-                                    <div style="flex: 1;">
-                                        <div style="font-weight: 600;"
-                                            x-text="event.action === 'scale-up' ? 'Scaled Up' : 'Scaled Down'"></div>
-                                        <div style="font-size: 0.75rem; color: var(--text-muted);" x-text="event.node">
-                                        </div>
-                                    </div>
-                                    <div style="font-size: 0.75rem; color: var(--text-muted);"
-                                        x-text="new Date(event.timestamp).toLocaleTimeString()"></div>
-                                </div>
-                            </template>
-                            <div x-show="!loadBalancer.scalingHistory?.length"
-                                style="text-align: center; padding: 20px; color: var(--text-muted);">
-                                No scaling events yet
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Live Traffic Distribution Chart -->
-                <div class="card">
-                    <h3 style="margin-top: 0;">Traffic Distribution</h3>
-                    <div style="height: 200px;">
-                        <canvas id="lbDistributionChart"></canvas>
-                    </div>
-                </div>
             </div>
-
-            <!-- Settings Tab -->
-            <div x-show="tab === 'settings'">
-                <div class="card" style="max-width:600px">
-                    <h3 style="margin-top:0">Configuration</h3>
-                    <p style="color:var(--text-secondary); font-size:0.9rem">Current port configuration (Static for
-                        now).</p>
-
-                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:20px;">
-                        <div>
-                            <div class="stat-label">Guardian Dashboard</div>
-                            <input type="text" :value="config.dashboardPort" disabled
-                                style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
-                        </div>
-                        <div></div>
-
-                        <div>
-                            <div class="stat-label">Frontend Proxy Port</div>
-                            <input type="text" :value="config.frontendPort" disabled
-                                style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
-                        </div>
-                        <div>
-                            <div class="stat-label">Backend Proxy Port</div>
-                            <input type="text" :value="config.backendPort" disabled
-                                style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
-                        </div>
-                    </div>
-                </div>
-            </div>
-
         </div>
+
+        <!-- Settings Tab -->
+        <div x-show="tab === 'settings'">
+            <div class="card" style="max-width:600px">
+                <h3 style="margin-top:0">Configuration</h3>
+                <p style="color:var(--text-secondary); font-size:0.9rem">Current port configuration (Static for
+                    now).</p>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:20px;">
+                    <div>
+                        <div class="stat-label">Guardian Dashboard</div>
+                        <input type="text" :value="config.dashboardPort" disabled
+                            style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                    </div>
+                    <div></div>
+
+                    <div>
+                        <div class="stat-label">Frontend Proxy Port</div>
+                        <input type="text" :value="config.frontendPort" disabled
+                            style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                    </div>
+                    <div>
+                        <div class="stat-label">Backend Proxy Port</div>
+                        <input type="text" :value="config.backendPort" disabled
+                            style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
     </div>
 
     <script>
@@ -1413,6 +1537,41 @@
                 logs: 'Loading...',
                 banInput: '',
                 charts: {},
+                logEntries: [],
+                availabilityHistory: [],
+                availabilityChartInstance: null,
+
+                get sortedServices() {
+                    const priority = ['guardian', 'frontend', 'backend'];
+                    return [...this.services].sort((a, b) => {
+                        const idxA = priority.indexOf(a.name);
+                        const idxB = priority.indexOf(b.name);
+                        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+                        if (idxA !== -1) return -1;
+                        if (idxB !== -1) return 1;
+                        return a.name.localeCompare(b.name);
+                    });
+                },
+
+                get pageTitle() {
+                    if (this.tab === 'overview') return 'Ecosystem Overview';
+                    if (this.tab === 'simulator') return 'Traffic Simulator';
+                    if (this.tab === 'traffic') return 'Traffic Analytics';
+                    if (this.tab === 'sessions') return 'Active Sessions';
+                    if (this.tab === 'console') return 'Live Console';
+                    if (this.tab === 'debug') return 'Debug Flow Tracer';
+                    if (this.tab === 'load-balancer') return 'Load Balancer Dashboard';
+                    if (this.tab === 'security') return 'Firewall & Security';
+                    if (this.tab === 'waf') return 'WAF Shield Ops';
+                    if (this.tab === 'tools') return 'Shadow Ops / Recorder';
+                    if (this.tab.startsWith('service-')) {
+                        return this.capitalize(this.tab.replace('service-', '')) + ' - Dedicated Service Control';
+                    }
+                    return 'Guardian 3.0';
+                },
+
+                // Debug Flow
+                debugLog: [],
 
                 // Console
                 liveLogs: [],
@@ -1432,10 +1591,13 @@
 
                 // New overview stats
                 guardianUptime: 0,
-                currentRps: 0,
+                guardianTotalUptime: 0,
+                guardianStartTime: null,
                 totalRequests: 0,
                 avgLatency: 0,
                 rpsHistory: [],
+                currentRps: 0,
+                now: Date.now(),
                 rpsChartInstance: null,
                 latencyChartInstance: null,
                 memoryChartInstance: null,
@@ -1455,13 +1617,29 @@
                         this.tab = hash;
                         if (hash.startsWith('service-')) {
                             const serviceName = hash.replace('service-', '');
-                            // We need services loaded to select it properly, but we can set the tab
-                            // The selectService logic will be handled after refreshData if needed
-                            // But actually refreshData runs first.
                         }
                     }
 
-                    await this.refreshData();
+                    // FAST INITIAL LOAD: Only load critical data first
+                    try {
+                        const [statusRes, lbRes] = await Promise.all([
+                            fetch('/api/status').then(r => r.json()),
+                            fetch('/api/load-balancer').then(r => r.json())
+                        ]);
+                        this.services = statusRes.services;
+                        this.system = statusRes.system || { load: [], memory: {} };
+                        this.loadBalancer = lbRes;
+                        this.guardianUptime = statusRes.uptime || 0;
+                        this.guardianStartTime = statusRes.startTime || (Date.now() - (this.guardianUptime * 1000));
+                        this.totalRequests = statusRes.totalRequests || 0;
+                        this.currentRps = (lbRes.rps || 0).toFixed(1);
+                    } catch (e) { /* ignore */ }
+
+                    // Start timers immediately for live updates
+                    this.startTimers();
+
+                    // BACKGROUND LOAD: Load remaining data without blocking
+                    this.loadRemainingData();
 
                     // If we have a hash service, try to select it now that we have data
                     if (hash && hash.startsWith('service-')) {
@@ -1472,8 +1650,41 @@
                         }
                     }
 
-                    this.startTimers();
+                    // Setup watchers for tab changes
+                    this.setupWatchers();
+                },
 
+                async loadRemainingData() {
+                    try {
+                        const [analyticsRes, granularRes, sessionRes, bannedRes, configRes, simRes] = await Promise.all([
+                            fetch('/api/analytics').then(r => r.json()),
+                            fetch('/api/analytics/granular').then(r => r.json()),
+                            fetch('/api/sessions').then(r => r.json()),
+                            fetch('/api/banned').then(r => r.json()),
+                            fetch('/api/config').then(r => r.json()),
+                            fetch('/api/simulator').then(r => r.json())
+                        ]);
+
+                        this.traffic = analyticsRes.traffic;
+                        this.analytics = {
+                            endpoints: analyticsRes.endpoints,
+                            historyEndpoints: analyticsRes.historyEndpoints || [],
+                            ips: analyticsRes.ips
+                        };
+                        this.granular = granularRes;
+                        this.sessions = sessionRes;
+                        this.bannedIps = bannedRes;
+                        this.config = configRes;
+                        this.simulator = simRes;
+                        if (simRes.config) this.simConfig = simRes.config;
+
+                        if (this.config.recording !== undefined) {
+                            this.isRecording = this.config.recording;
+                        }
+                    } catch (e) { /* ignore */ }
+                },
+
+                setupWatchers() {
                     // Watch tab changes to enable/disable stream AND update URL
                     this.$watch('tab', (val) => {
                         window.location.hash = val;
@@ -1482,6 +1693,7 @@
                         else this.disconnectStream();
                         if (val === 'tools') this.refreshTraces();
                         if (val === 'waf') this.refreshWaf();
+                        if (val === 'debug') this.refreshDebugLog();
                     });
                 },
 
@@ -1500,9 +1712,26 @@
                     this.traces = await fetch('/api/traces').then(r => r.json());
                 },
 
+                async refreshDebugLog() {
+                    try {
+                        this.debugLog = await fetch('/api/debug').then(r => r.json());
+                    } catch (e) {
+                        console.error('Failed to fetch debug log:', e);
+                    }
+                },
+
+                async clearDebugLog() {
+                    try {
+                        await fetch('/api/debug', { method: 'DELETE' });
+                        this.debugLog = [];
+                    } catch (e) {
+                        console.error('Failed to clear debug log:', e);
+                    }
+                },
+
                 async replayTrace(file) {
-                    if (!confirm(`Replay ${file}?`)) return;
-                    const res = await fetch(`/api/replay?file=${file}`, { method: 'POST' });
+                    if (!confirm(`Replay ${file} ? `)) return;
+                    const res = await fetch(`/ api / replay ? file = ${file}`, { method: 'POST' });
                     const json = await res.json();
                     alert(json.success ? `Replay Successful! Status: ${json.result.status}` : `Failed: ${json.error}`);
                 },
@@ -1559,7 +1788,7 @@
                     this.bannedIps = bannedRes;
                     this.config = configRes;
                     this.simulator = simRes;
-                    if(simRes.config) this.simConfig = simRes.config;
+                    if (simRes.config) this.simConfig = simRes.config;
 
                     // Sync local recording state from config
                     if (this.config.recording !== undefined) {
@@ -1577,6 +1806,7 @@
 
                     if (this.tab === 'overview') {
                         this.loadOverviewData();
+                        this.refreshUptimeHistory();
                     }
 
                     if (this.tab === 'load-balancer') {
@@ -1595,12 +1825,90 @@
                     // Try WebSocket first for real-time updates
                     this.connectWebSocket();
 
-                    // Fallback: Poll only if WebSocket not connected (checked every 5s)
-                    setInterval(() => {
-                        if (!this.wsConnected) {
+                    // Fast 500ms polling for overview and load-balancer tabs
+                    setInterval(async () => {
+                        if (this.tab === 'overview' || this.tab === 'load-balancer') {
+                            try {
+                                const lbRes = await fetch('/api/load-balancer').then(r => r.json());
+
+                                // Update load balancer stats (selective copy)
+                                this.loadBalancer.rps = lbRes.rps || 0;
+                                this.loadBalancer.totalMbs = lbRes.totalMbs || 0;
+                                this.loadBalancer.activeNodes = lbRes.activeNodes || [];
+                                this.loadBalancer.threshold = lbRes.threshold || 10;
+                                this.loadBalancer.cooldown = lbRes.cooldown || false;
+                                this.loadBalancer.nodeStats = lbRes.nodeStats || {};
+                                this.loadBalancer.utilization = lbRes.utilization || 0;
+                                this.loadBalancer.totalCapacity = lbRes.totalCapacity || 0;
+                                this.loadBalancer.timeToNextScale = lbRes.timeToNextScale;
+                                this.loadBalancer.activeCount = lbRes.activeCount || 1;
+                                this.loadBalancer.simulator = lbRes.simulator;
+                                this.loadBalancer.nodes = lbRes.nodes || [];
+                                this.loadBalancer.totalRequests = lbRes.totalRequests || 0;
+
+                                // Only update global stats if they are present in the response
+                                if (lbRes.avgLatency !== undefined) {
+                                    this.avgLatency = lbRes.avgLatency;
+                                }
+
+                                // Update RPS history for chart
+                                // REMOVED: this.rpsHistory.push(lbRes.rps || 0); - This was incorrect (using LB RPS for global chart) and causing double updates
+                                // if (this.rpsHistory.length > 60) this.rpsHistory.shift();
+
+                                if (this.tab === 'overview') {
+                                    // Chart rendering is now handled by the status loop or WS
+                                    // this.$nextTick(() => this.renderRpsChart()); 
+                                }
+                                if (this.tab === 'load-balancer') {
+                                    this.$nextTick(() => this.renderLbDistributionChart());
+                                }
+                            } catch (e) { /* ignore */ }
+                        }
+                        this.now = Date.now();
+                    }, 1000); // Sync with 1s updates to prevent flickering
+
+                    // Poll status for service list and system stats every second
+                    setInterval(async () => {
+                        if (this.tab === 'overview' || this.tab.startsWith('service-')) {
+                            try {
+                                const statusRes = await fetch('/api/status').then(r => r.json());
+                                this.services = statusRes.services;
+
+                                if (statusRes.uptime !== undefined) {
+                                    this.guardianUptime = statusRes.uptime;
+                                    this.guardianTotalUptime = statusRes.totalUptime || statusRes.uptime;
+                                    this.guardianStartTime = statusRes.startTime || this.guardianStartTime;
+                                }
+                                if (statusRes.totalRequests !== undefined) {
+                                    this.totalRequests = statusRes.totalRequests;
+                                }
+
+                                // Update RPS from status poll if WS is not connected
+                                if (!this.wsConnected) {
+                                    this.currentRps = (statusRes.rps || 0).toFixed(1);
+                                    this.rpsHistory.push(statusRes.rps || 0);
+                                    if (this.rpsHistory.length > 60) this.rpsHistory.shift();
+
+                                    if (this.tab === 'overview') {
+                                        this.$nextTick(() => this.renderRpsChart());
+                                    }
+                                }
+                            } catch (e) { /* ignore */ }
+                        } else if (!this.wsConnected) {
                             this.refreshData();
                         }
-                    }, 2000); // 2s polling for responsive sim UI
+                    }, 1000);
+
+                    // Poll simulator status every second when on simulator tab
+                    setInterval(async () => {
+                        if (this.tab === 'simulator') {
+                            try {
+                                const simRes = await fetch('/api/simulator').then(r => r.json());
+                                this.simulator = simRes;
+                                if (simRes.config) this.simConfig = simRes.config;
+                            } catch (e) { /* ignore */ }
+                        }
+                    }, 1000);
 
                     // Poll logs if service view active
                     setInterval(() => {
@@ -1626,7 +1934,11 @@
                             const data = JSON.parse(event.data);
                             if (data.type === 'stats') {
                                 // Update services with real-time data
-                                this.services = data.services;
+                                this.services = data.services.map(newSvc => {
+                                    const existing = this.services.find(s => s.name === newSvc.name);
+                                    if (!existing) return newSvc;
+                                    return { ...existing, ...newSvc };
+                                });
 
                                 // Update current service ref if selected
                                 if (this.currentService) {
@@ -1635,13 +1947,34 @@
 
                                 // Update overview stats
                                 this.guardianUptime = data.uptime || 0;
+                                this.guardianTotalUptime = data.totalUptime || data.uptime;
+                                this.guardianStartTime = data.startTime || this.guardianStartTime;
+                                this.now = Date.now(); // Update reference time on sync
                                 this.currentRps = parseFloat(data.rps || 0).toFixed(1);
                                 this.totalRequests = data.totalRequests || 0;
+                                this.avgLatency = data.avgLatency || 0;
 
                                 // Update RPS history for chart (keep last 60 data points)
                                 this.rpsHistory.push(parseFloat(data.rps || 0));
                                 if (this.rpsHistory.length > 60) {
                                     this.rpsHistory.shift();
+                                }
+
+                                // Update load balancer stats from WebSocket (selective copy to avoid circular refs)
+                                if (data.loadBalancer) {
+                                    const lb = data.loadBalancer;
+                                    this.loadBalancer.rps = lb.rps || 0;
+                                    this.loadBalancer.totalMbs = lb.totalMbs || 0;
+                                    this.loadBalancer.activeNodes = lb.activeNodes || [];
+                                    this.loadBalancer.threshold = lb.threshold || 10;
+                                    this.loadBalancer.cooldown = lb.cooldown || false;
+                                    this.loadBalancer.nodeStats = lb.nodeStats || {};
+                                    this.loadBalancer.utilization = lb.utilization || 0;
+                                    this.loadBalancer.totalCapacity = lb.totalCapacity || 0;
+                                    this.loadBalancer.timeToNextScale = lb.timeToNextScale;
+                                    this.loadBalancer.activeCount = lb.activeCount || 1;
+                                    this.loadBalancer.nodes = lb.nodes || [];
+                                    this.loadBalancer.totalRequests = lb.totalRequests || 0;
                                 }
 
                                 // Render RPS chart if on overview tab
@@ -1730,7 +2063,12 @@
                 async fetchLogs(name) {
                     const res = await fetch(`/api/logs?service=${name}`);
                     const logs = await res.json();
-                    this.logs = logs.slice(-100).map(l => `[${l.timestamp.split('T')[1].split('.')[0]}] [${l.source.toUpperCase()}] ${l.message}`).join('\n');
+                    this.logEntries = logs.slice(-100);
+                    this.$nextTick(() => {
+                        if (this.autoScroll && this.$refs.logContainer) {
+                            this.$refs.logContainer.scrollTop = this.$refs.logContainer.scrollHeight;
+                        }
+                    });
                 },
 
                 async controlService(name, action) {
@@ -1794,11 +2132,20 @@
                         }
                     });
                 },
-
-                capitalize(s) {
-                    return s.charAt(0).toUpperCase() + s.slice(1);
+                capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); },
+                getUptimeColor(percentStr) {
+                    const p = parseFloat(percentStr);
+                    if (p >= 99.9) return '#22c55e';
+                    if (p >= 98) return '#10b981';
+                    if (p >= 95) return '#f59e0b';
+                    return '#ef4444';
                 },
-
+                getStatusColor(status) {
+                    if (status === 'running') return '#22c55e';
+                    if (status === 'stopped') return '#ef4444';
+                    if (status === 'starting') return '#f59e0b';
+                    return '#94a3b8';
+                },
                 formatBytes(bytes) {
                     if (bytes === 0) return '0 B';
                     const k = 1024;
@@ -1812,33 +2159,59 @@
                 },
 
                 formatUptime(seconds) {
-                    if (!seconds || seconds < 0) return '0s';
-                    const days = Math.floor(seconds / 86400);
-                    const hours = Math.floor((seconds % 86400) / 3600);
-                    const mins = Math.floor((seconds % 3600) / 60);
-                    const secs = seconds % 60;
+                    if (seconds === undefined || seconds === null || seconds < 0) return '0s';
+                    const s_int = Math.floor(seconds);
+                    const days = Math.floor(s_int / 86400);
+                    const hours = Math.floor((s_int % 86400) / 3600);
+                    const mins = Math.floor((s_int % 3600) / 60);
+                    const s = s_int % 60;
 
-                    if (days > 0) return `${days}d ${hours}h ${mins}m`;
-                    if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
-                    if (mins > 0) return `${mins}m ${secs}s`;
-                    return `${secs}s`;
+                    let res = '';
+                    if (days > 0) res += `${days}d `;
+                    if (hours > 0 || days > 0) res += `${hours}h `;
+                    res += `${mins}m ${s}s`;
+                    return res.trim() || '0s';
+                },
+
+                calculateUptimePercent(service) {
+                    if (!service || !service.persistedUptime) return '0.0000%';
+                    const { total, firstSeen } = service.persistedUptime;
+                    if (!firstSeen) return '100.0000%';
+
+                    // Calculate real-time total uptime
+                    let realTotal = total;
+                    if (service.status === 'running' && service.startTime) {
+                        const sessionUptime = (this.now - service.startTime) / 1000;
+                        const unloggedUptime = Math.max(0, sessionUptime - (service.uptime || 0));
+                        realTotal += unloggedUptime;
+                    }
+
+                    const elapsedMs = this.now - firstSeen;
+                    const elapsedSec = Math.max(1, Math.floor(elapsedMs / 1000));
+
+                    const percent = (realTotal / elapsedSec) * 100;
+                    if (percent >= 100) return '100.0000%';
+                    if (percent < 0) return '0.0000%';
+                    return percent.toFixed(4) + '%';
                 },
 
                 renderRpsChart() {
                     const ctx = document.getElementById('rpsChart');
                     if (!ctx) return;
 
+                    const labels = this.rpsHistory.map((_, i) => '');
+
                     if (this.rpsChartInstance) {
-                        this.rpsChartInstance.data.labels = this.rpsHistory.map((_, i) => '');
-                        this.rpsChartInstance.data.datasets[0].data = this.rpsHistory;
-                        this.rpsChartInstance.update('none');
+                        this.rpsChartInstance.data.labels = labels;
+                        this.rpsChartInstance.data.datasets[0].data = [...this.rpsHistory]; // Copy array
+                        this.rpsChartInstance.update(); // Force update
                         return;
                     }
 
                     this.rpsChartInstance = new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: this.rpsHistory.map((_, i) => ''),
+                            labels: labels,
                             datasets: [{
                                 label: 'RPS',
                                 data: this.rpsHistory,
@@ -1853,7 +2226,11 @@
                             responsive: true,
                             maintainAspectRatio: false,
                             scales: {
-                                y: { beginAtZero: true, grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                                y: {
+                                    beginAtZero: true,
+                                    grid: { color: '#334155' },
+                                    ticks: { color: '#94a3b8' }
+                                },
                                 x: { display: false }
                             },
                             plugins: { legend: { display: false } },
@@ -1862,26 +2239,76 @@
                     });
                 },
 
-                async loadOverviewData() {
+                async refreshUptimeHistory() {
                     try {
-                        const [latency, memory] = await Promise.all([
-                            fetch('/api/latency').then(r => r.json()),
-                            fetch('/api/memory-history').then(r => r.json())
-                        ]);
-                        this.latencyData = latency;
-                        this.memoryHistory = memory;
-                        this.$nextTick(() => {
-                            this.renderLatencyChart();
-                            this.renderMemoryChart();
-                        });
-                    } catch (e) { /* ignore */ }
+                        // We track uptime for 'guardian' as the system representative on overview
+                        const res = await fetch('/api/analytics/uptime-history?service=guardian&days=14').then(r => r.json());
+                        this.availabilityHistory = res;
+                        this.$nextTick(() => this.renderAvailabilityChart());
+                    } catch (e) { console.error('Failed to update uptime history:', e); }
+                },
+
+                renderAvailabilityChart() {
+                    const ctx = document.getElementById('availabilityChart');
+                    if (!ctx) return;
+
+                    // Handle empty history gracefully
+                    const history = this.availabilityHistory || [];
+                    const labels = history.map(h => h.date ? h.date.split('-').slice(1).join('/') : '');
+                    const data = history.map(h => h.percent || 0);
+
+                    if (this.availabilityChartInstance) {
+                        this.availabilityChartInstance.data.labels = labels;
+                        this.availabilityChartInstance.data.datasets[0].data = data;
+                        this.availabilityChartInstance.update();
+                        return;
+                    }
+
+                    this.availabilityChartInstance = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: labels,
+                            datasets: [{
+                                label: 'Availability %',
+                                data: data,
+                                borderColor: '#3b82f6',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                fill: true,
+                                tension: 0.3,
+                                pointRadius: 4,
+                                pointHoverRadius: 6
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    grid: { color: '#334155' },
+                                    ticks: {
+                                        color: '#94a3b8',
+                                        callback: (v) => v.toFixed(4) + '%'
+                                    }
+                                },
+                                x: { grid: { display: false }, ticks: { color: '#94a3b8' } }
+                            },
+                            plugins: {
+                                legend: { display: false },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => `Availability: ${context.parsed.y.toFixed(8)}%`
+                                    }
+                                }
+                            }
+                        }
+                    });
                 },
 
                 renderLatencyChart() {
                     const ctx = document.getElementById('latencyChart');
                     if (!ctx) return;
 
-                    // Combine all services for a single histogram
                     const allBuckets = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
                     const labels = ['5ms', '10ms', '25ms', '50ms', '100ms', '250ms', '500ms', '1s', '2.5s', '5s', '10s'];
 
@@ -1925,7 +2352,7 @@
                     const ctx = document.getElementById('memoryChart');
                     if (!ctx) return;
 
-                    const data = this.memoryHistory.map(m => m.rss / 1024 / 1024); // Convert to MB
+                    const data = this.memoryHistory.map(m => m.rss / 1024 / 1024);
                     const labels = this.memoryHistory.map((_, i) => '');
 
                     if (this.memoryChartInstance) {
@@ -1961,6 +2388,28 @@
                     });
                 },
 
+                getServiceUptime(name) {
+                    const s = this.services.find(svc => svc.name === name);
+                    if (!s) return '0s';
+                    let total = s.persistedUptime?.total || 0;
+                    if (s.status === 'running' && s.startTime) {
+                        const sessionUptime = (this.now - s.startTime) / 1000;
+                        const unloggedUptime = Math.max(0, sessionUptime - (s.uptime || 0));
+                        total += unloggedUptime;
+                    }
+                    return this.formatUptime(total);
+                },
+
+                get currentGuardianUptime() {
+                    if (!this.guardianStartTime) return this.guardianUptime;
+                    return Math.floor((this.now - this.guardianStartTime) / 1000);
+                },
+
+                getServiceAvailability(name) {
+                    const s = this.services.find(svc => svc.name === name);
+                    return s ? this.calculateUptimePercent(s) : '0%';
+                },
+
                 async quickAction(action) {
                     this.actionMessage = '';
                     try {
@@ -1973,42 +2422,6 @@
                         this.actionMessage = 'Error: ' + e.message;
                         setTimeout(() => { this.actionMessage = ''; }, 3000);
                     }
-                },
-
-                // Load Balancer Methods
-                async lbStartSimulator() {
-                    await fetch(`/api/load-balancer?action=simulator-start&rps=${this.simulatorRpsTarget}`, { method: 'POST' });
-                    this.refreshData();
-                },
-
-                async lbStopSimulator() {
-                    await fetch('/api/load-balancer?action=simulator-stop', { method: 'POST' });
-                    this.refreshData();
-                },
-
-                async lbSetSimulatorRps() {
-                    await fetch(`/api/load-balancer?action=simulator-set&rps=${this.simulatorRpsTarget}`, { method: 'POST' });
-                    this.refreshData();
-                },
-
-                async lbSetThreshold() {
-                    await fetch(`/api/load-balancer?action=threshold&value=${this.lbThresholdTarget}`, { method: 'POST' });
-                    this.refreshData();
-                },
-
-                async lbResetStats() {
-                    await fetch('/api/load-balancer?action=reset-stats', { method: 'POST' });
-                    this.refreshData();
-                },
-
-                async lbScaleUp(nodeName) {
-                    await fetch(`/api/load-balancer?action=scale-up&node=${nodeName}`, { method: 'POST' });
-                    this.refreshData();
-                },
-
-                async lbScaleDown(nodeName) {
-                    await fetch(`/api/load-balancer?action=scale-down&node=${nodeName}`, { method: 'POST' });
-                    this.refreshData();
                 },
 
                 renderLbDistributionChart() {
@@ -2059,12 +2472,11 @@
                     return i === 1 ? 'backend' : 'backend-' + i;
                 },
                 getNodeClass(i) {
-                     const name = this.getNodeName(i);
-                     if (this.loadBalancer.activeNodes.includes(name)) return 'active';
-                     // Check if starting?
-                     const svc = this.services.find(s => s.name === name);
-                     if (svc && svc.status === 'starting') return 'starting';
-                     return 'inactive';
+                    const name = this.getNodeName(i);
+                    if (this.loadBalancer.activeNodes && this.loadBalancer.activeNodes.includes(name)) return 'active';
+                    const svc = this.services.find(s => s.name === name);
+                    if (svc && svc.status === 'starting') return 'starting';
+                    return 'inactive';
                 },
                 getNodeStatus(i) {
                     const name = this.getNodeName(i);
@@ -2073,23 +2485,95 @@
                 },
                 getNodeRps(i) {
                     const name = this.getNodeName(i);
-                    return this.loadBalancer.nodeStats[name] ? this.loadBalancer.nodeStats[name].rps.toFixed(1) : '0.0';
+                    return this.loadBalancer.nodeStats && this.loadBalancer.nodeStats[name] ? this.loadBalancer.nodeStats[name].rps.toFixed(1) : '0.0';
                 },
                 getNodeMbs(i) {
-                     const name = this.getNodeName(i);
-                     return this.loadBalancer.nodeStats[name] ? this.loadBalancer.nodeStats[name].mbs.toFixed(2) : '0.00';
+                    const name = this.getNodeName(i);
+                    return this.loadBalancer.nodeStats && this.loadBalancer.nodeStats[name] ? this.loadBalancer.nodeStats[name].mbs.toFixed(2) : '0.00';
                 },
                 getNodeUtil(i) {
-                     const name = this.getNodeName(i);
-                     if (!this.loadBalancer.nodeStats[name]) return 0;
-                     const rps = this.loadBalancer.nodeStats[name].rps;
-                     return Math.min(100, (rps / this.loadBalancer.threshold) * 100);
+                    const name = this.getNodeName(i);
+                    if (!this.loadBalancer.nodeStats || !this.loadBalancer.nodeStats[name]) return 0;
+                    const rps = this.loadBalancer.nodeStats[name].rps;
+                    return Math.min(100, (rps / this.loadBalancer.threshold) * 100);
                 },
                 getNodeColor(i) {
                     const util = this.getNodeUtil(i);
                     if (util > 90) return '#ef4444';
                     if (util > 70) return '#f59e0b';
                     return '#10b981';
+                },
+
+                // Load Balancer Controls
+                async lbStartSimulator() {
+                    try {
+                        await fetch(`/api/load-balancer/simulator/start?rps=${this.simulatorRpsTarget}`, { method: 'POST' });
+                        this.actionMessage = `Simulator started at ${this.simulatorRpsTarget} RPS`;
+                    } catch (e) {
+                        this.actionMessage = 'Failed to start simulator';
+                    }
+                },
+
+                async lbStopSimulator() {
+                    try {
+                        await fetch('/api/load-balancer/simulator/stop', { method: 'POST' });
+                        this.actionMessage = 'Simulator stopped';
+                    } catch (e) {
+                        this.actionMessage = 'Failed to stop simulator';
+                    }
+                },
+
+                async lbSetSimulatorRps() {
+                    try {
+                        await fetch(`/api/load-balancer/simulator/set-rps?rps=${this.simulatorRpsTarget}`, { method: 'POST' });
+                        this.actionMessage = `Simulator RPS updated to ${this.simulatorRpsTarget}`;
+                    } catch (e) {
+                        this.actionMessage = 'Failed to update RPS';
+                    }
+                },
+
+                async lbResetStats() {
+                    try {
+                        await fetch('/api/load-balancer/reset-stats', { method: 'POST' });
+                        this.actionMessage = 'Load balancer stats reset';
+                    } catch (e) {
+                        this.actionMessage = 'Failed to reset stats';
+                    }
+                },
+
+                async lbScaleUp(nodeName) {
+                    try {
+                        await fetch(`/api/load-balancer/scale-up?node=${nodeName}`, { method: 'POST' });
+                        this.actionMessage = `Started node: ${nodeName}`;
+                    } catch (e) {
+                        this.actionMessage = `Failed to start node: ${nodeName}`;
+                    }
+                },
+
+                async lbScaleDown(nodeName) {
+                    try {
+                        await fetch(`/api/load-balancer/scale-down?node=${nodeName}`, { method: 'POST' });
+                        this.actionMessage = `Stopped node: ${nodeName}`;
+                    } catch (e) {
+                        this.actionMessage = `Failed to stop node: ${nodeName}`;
+                    }
+                },
+
+                async loadOverviewData() {
+                    try {
+                        const [latencyRes, memoryRes] = await Promise.all([
+                            fetch('/api/latency').then(r => r.json()),
+                            fetch('/api/memory-history').then(r => r.json())
+                        ]);
+                        this.latencyData = latencyRes;
+                        this.memoryHistory = memoryRes;
+
+                        this.$nextTick(() => {
+                            this.renderRpsChart();
+                            this.renderLatencyChart();
+                            this.renderMemoryChart();
+                        });
+                    } catch (e) { /* ignore */ }
                 },
 
                 get pageTitle() {

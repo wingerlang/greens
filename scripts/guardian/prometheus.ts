@@ -23,6 +23,10 @@ const latencyHistogram: Map<string, number[]> = new Map();
 const memoryHistory: { timestamp: number; rss: number; heapUsed: number }[] = [];
 const MAX_MEMORY_SAMPLES = 60;
 
+// Track precise rolling latency for dashboard (last 100 samples per service)
+const rollingLatencies: Map<string, number[]> = new Map();
+const MAX_ROLLING_SAMPLES = 100;
+
 export function recordLatency(service: string, latencyMs: number) {
     if (!latencyHistogram.has(service)) {
         latencyHistogram.set(service, new Array(LATENCY_BUCKETS.length + 1).fill(0));
@@ -38,6 +42,16 @@ export function recordLatency(service: string, latencyMs: number) {
     }
     // Always increment +Inf bucket
     buckets[LATENCY_BUCKETS.length]++;
+
+    // Precise rolling average for dashboard
+    if (!rollingLatencies.has(service)) {
+        rollingLatencies.set(service, []);
+    }
+    const samples = rollingLatencies.get(service)!;
+    samples.push(latencyMs);
+    if (samples.length > MAX_ROLLING_SAMPLES) {
+        samples.shift();
+    }
 }
 
 // Get latency stats for dashboard
@@ -50,21 +64,65 @@ export function getLatencyStats() {
         // Estimate average (rough approximation using bucket midpoints)
         let weightedSum = 0;
         let prevBound = 0;
+        let inBucketsCount = 0;
         for (let i = 0; i < LATENCY_BUCKETS.length; i++) {
+            const countInBucket = buckets[i];
             const midpoint = (prevBound + LATENCY_BUCKETS[i]) / 2;
-            weightedSum += buckets[i] * midpoint;
+            weightedSum += countInBucket * midpoint;
             prevBound = LATENCY_BUCKETS[i];
+            inBucketsCount += countInBucket;
         }
+
+        // Include +Inf bucket in average estimate (assume 15s avg for overflow)
+        const infCount = total - inBucketsCount;
+        if (infCount > 0) {
+            weightedSum += infCount * 15000;
+        }
+
+        // Use precise rolling average if samples are available
+        const samples = rollingLatencies.get(service);
+        const preciseAvg = samples && samples.length > 0
+            ? Math.round(samples.reduce((a, b) => a + b, 0) / samples.length)
+            : (total > 0 ? Math.round(weightedSum / total) : 0); // Fallback to bucket estimate
 
         result[service] = {
             buckets: buckets.slice(0, LATENCY_BUCKETS.length),
             labels: LATENCY_BUCKETS.map(b => `${b}ms`),
             total,
-            avgMs: total > 0 ? Math.round(weightedSum / total) : 0
+            avgMs: preciseAvg
         };
     }
 
     return result;
+}
+
+/**
+ * Get aggregate average latency across all services
+ */
+export function getAggregateLatency(): number {
+    let totalMs = 0;
+    let totalSamples = 0;
+
+    for (const samples of rollingLatencies.values()) {
+        if (samples.length > 0) {
+            totalMs += samples.reduce((a, b) => a + b, 0);
+            totalSamples += samples.length;
+        }
+    }
+
+    if (totalSamples > 0) return Math.round(totalMs / totalSamples);
+
+    // Fallback to service stats if no discrete samples (unlikely)
+    const stats = getLatencyStats();
+    let totalLat = 0;
+    let count = 0;
+    for (const service in stats) {
+        if (stats[service].total > 0) {
+            totalLat += stats[service].avgMs * stats[service].total;
+            count += stats[service].total;
+        }
+    }
+    return count > 0 ? Math.round(totalLat / count) : 0;
 }
 
 // Record memory sample

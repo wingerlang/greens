@@ -24,15 +24,15 @@ async function checkService(name: string, port: number) {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), 2000);
 
-        // Use HEAD to minimize load
-        const res = await fetch(`http://localhost:${port}/`, {
+        // Use 127.0.0.1 to avoid IPv6 issues on local dev
+        const res = await fetch(`http://127.0.0.1:${port}/`, {
             method: "HEAD",
             signal: controller.signal
         }).catch(async () => {
-             // Retry with GET if HEAD fails (some dev servers might not handle HEAD well?)
-             // But for standard servers HEAD should be fine.
-             // If fetch throws, it's network error.
-             throw new Error("Network error");
+            // Retry with GET if HEAD fails (some dev servers might not handle HEAD well?)
+            // But for standard servers HEAD should be fine.
+            // If fetch throws, it's network error.
+            throw new Error("Network error");
         });
 
         clearTimeout(id);
@@ -41,10 +41,10 @@ async function checkService(name: string, port: number) {
             // Service is reachable and responding (even if 404 or 500)
             recordSuccess(name);
         } else {
-             // 502, 503, 504 are gateway/proxy errors (if we were proxying)
-             // But here we are hitting direct.
-             // If the service returns 503, it declares itself down.
-             recordFailure(name);
+            // 502, 503, 504 are gateway/proxy errors (if we were proxying)
+            // But here we are hitting direct.
+            // If the service returns 503, it declares itself down.
+            recordFailure(name);
         }
     } catch (e) {
         // Connection refused, timeout

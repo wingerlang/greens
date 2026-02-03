@@ -70,6 +70,7 @@ export class ProxyMiddleware implements Middleware {
         }
 
         const headers = new Headers(ctx.req.headers);
+        headers.set("X-Real-IP", ctx.ip);
         headers.set("X-Forwarded-For", ctx.ip);
         headers.set("X-Forwarded-Host", ctx.url.host);
         headers.set("X-Forwarded-Proto", ctx.url.protocol.replace(':', ''));
@@ -93,12 +94,21 @@ export class ProxyMiddleware implements Middleware {
                 // If the fetch fails (network error), the stream might still be locked/disturbed.
                 // Thus, we can only safely retry requests that typically don't have bodies (Idempotent).
 
+                // Debug: record proxy start
+                if (i === 0) ctx.debugTracker?.proxyStart(targetPort);
+
+                // Don't send body for requests that shouldn't have one
+                const hasBody = !["GET", "HEAD", "OPTIONS", "TRACE"].includes(ctx.req.method);
+
                 response = await fetch(targetUrl, {
                     method: ctx.req.method,
                     headers: headers,
-                    body: ctx.req.body,
+                    body: hasBody ? ctx.req.body : undefined,
                     redirect: "manual",
                 });
+
+                // Debug: record proxy success
+                ctx.debugTracker?.proxySuccess(response.status);
                 break; // Success
             } catch (e) {
                 lastError = e;
@@ -123,7 +133,9 @@ export class ProxyMiddleware implements Middleware {
         }
 
         if (!response) {
-            ctx.log("stderr", `Connection failed to ${targetUrl}: ${(lastError as any)?.message || lastError}`);
+            const errorMsg = (lastError as any)?.message || String(lastError);
+            ctx.log("stderr", `Connection failed to ${targetUrl}: ${errorMsg}`);
+            ctx.debugTracker?.proxyFail(errorMsg);
             ctx.response = new Response("Guardian Service Unavailable", { status: 502 });
             return;
         }
