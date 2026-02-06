@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { findSmartSwaps } from "../src/utils/smartSwaps.ts";
 import { FoodItem, FoodCategory } from "../src/models/types.ts";
 import { ParsedIngredient } from "../src/utils/ingredientParser.ts";

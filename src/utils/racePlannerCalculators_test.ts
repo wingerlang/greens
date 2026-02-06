@@ -7,7 +7,7 @@ import {
     simulateRace,
     calculateDropbagLogistics
 } from "./racePlannerCalculators.ts";
-import { assertEquals, assertAlmostEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals, assertAlmostEquals } from "@std/assert";
 
 Deno.test("Race Planner - Weather Penalty", () => {
     // 15C, 50% humidity -> No penalty

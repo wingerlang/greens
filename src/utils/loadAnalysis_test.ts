@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { calculateEffectiveLoad, generateLoadInsights } from "./loadAnalysis.ts";
 import { WeeklyLoadData } from "../models/loadAnalysisTypes.ts";
 import { StrengthWorkout } from "../models/strengthTypes.ts";

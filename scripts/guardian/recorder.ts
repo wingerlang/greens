@@ -1,5 +1,5 @@
 /// <reference lib="deno.ns" />
-import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
+import { join } from "@std/path";
 
 const TRACE_DIR = "traces";
 let isRecording = false;

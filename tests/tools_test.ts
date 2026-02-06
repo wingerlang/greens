@@ -1,5 +1,5 @@
 
-import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import {
   calculateBMI,
   calculateBMR,
@@ -8,7 +8,7 @@ import {
   calculateMacros,
 } from "../src/utils/healthCalculators.ts";
 import {
-  estimate1RM,
+  calculateEstimated1RM as estimate1RM,
   calculateAverage1RM,
   calculatePlateLoading,
 } from "../src/utils/strengthCalculators.ts";

@@ -1,4 +1,4 @@
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { parseStrengthLogCSV } from './strengthLogParser.ts';
 
 const input = `01-20-2026 06:21 - 07:22

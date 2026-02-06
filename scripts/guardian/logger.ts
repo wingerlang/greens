@@ -1,9 +1,9 @@
 // @ts-nocheck
 /// <reference lib="deno.unstable" />
 /// <reference lib="deno.ns" />
-import { join, dirname } from "https://deno.land/std@0.224.0/path/mod.ts";
+import { join, dirname } from "@std/path";
 import { LogEntry, MetricEntry, RequestMetric, SessionStats } from "./types.ts";
-import { encodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
+import { encodeHex } from "@std/encoding/hex";
 
 const LOG_DIR = "logs";
 const MAX_LOGS = 2000;

@@ -1,6 +1,6 @@
 /// <reference lib="deno.ns" />
 
-import { assertEquals } from "https://deno.land/std@0.208.0/assert/mod.ts";
+import { assertEquals } from "@std/assert";
 import { extractTimer } from './stepParser.ts';
 
 // Helper to check label

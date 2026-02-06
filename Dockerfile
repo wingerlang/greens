@@ -2,34 +2,28 @@ FROM denoland/deno:latest
 
 WORKDIR /app
 
-# Copy dependency definitions
-COPY deno.json .
-COPY package.json .
+# 1. Cache dependencies
+# Copy config files first to leverage Docker layer caching.
+# If these files don't change, this layer is cached, speeding up builds.
+COPY deno.json deno.lock* package.json* ./
 
-# Cache dependencies (including npm packages via Deno)
-# We cache the entrypoint to download deps
-COPY scripts/guardian/main.ts scripts/guardian/main.ts
-# We also need to cache other files that have imports, but main.ts imports most things.
-# To be safe, let's copy everything first since we are building.
-# Or better:
+# Install dependencies defined in deno.json (and package.json if present)
+# --allow-scripts allows packages (like esbuild) to run their install scripts
+RUN deno install --allow-scripts
+
+# 2. Copy source code
 COPY . .
 
-# Cache dependencies
-RUN deno cache --unstable-kv scripts/guardian/main.ts
-
-# Build the frontend
+# 3. Build Frontend
+# This generates the 'dist/' folder which Guardian serves in production
 RUN deno task build
 
-# Expose ports
-# 8000: Main Proxy
-# 9999: Dashboard
-# 3000: Frontend (Direct/Dev) - optional in prod since we serve via internal port
-EXPOSE 8000 9999 3000
+# 4. Runtime Configuration
+EXPOSE 8000 9999
 
-# Set default mode to prod
+# Environment defaults
 ENV DENO_ENV=production
 ENV GUARDIAN_DB_PATH=/app/data/guardian.db
 
-# Start Guardian
-# We pass --mode=prod to force production mode (serving dist/)
+# 5. Start Application
 CMD ["deno", "task", "go", "--", "--mode=prod"]
