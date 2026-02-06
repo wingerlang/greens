@@ -1,4 +1,5 @@
 import { manager } from "./services.ts";
+import { getAggregateLatency } from "./prometheus.ts";
 
 export class LoadBalancer {
     private static instance: LoadBalancer;
@@ -173,7 +174,7 @@ export class LoadBalancer {
         }
     }
 
-    private async scaleUp() {
+    public async scaleUp() {
         this.scalingCooldown = true;
         this.lastScaleTime = Date.now();
 
@@ -190,7 +191,7 @@ export class LoadBalancer {
         setTimeout(() => { this.scalingCooldown = false; }, 3000);
     }
 
-    private async scaleDown() {
+    public async scaleDown() {
         this.scalingCooldown = true;
         this.lastScaleTime = Date.now();
 
@@ -281,7 +282,8 @@ export class LoadBalancer {
             utilization: Math.min(100, util),
             totalCapacity: this.backends.length * this.threshold,
             timeToNextScale: this.timeToNextScale,
-            activeCount
+            activeCount,
+            avgLatency: getAggregateLatency()
         };
     }
 
@@ -306,23 +308,26 @@ export class LoadBalancer {
         console.log(`[LOAD BALANCER] Traffic simulator started: ${rps} RPS`);
 
         const msPerRequest = 1000 / rps;
-        this.simulatorInterval = setInterval(async () => {
-            try {
-                const start = performance.now();
-                const target = this.getTarget(new Request("http://localhost/api/health"));
 
-                await fetch(`http://localhost:${target.port}/health`, {
-                    method: "GET",
-                    signal: AbortSignal.timeout(5000)
-                }).catch(() => { });
+        // Non-blocking fire-and-forget pattern for high RPS
+        this.simulatorInterval = setInterval(() => {
+            const start = performance.now();
+            const target = this.getTarget(new Request("http://localhost/api/health"));
 
+            // Fire and forget - don't await
+            fetch(`http://localhost:${target.port}/health`, {
+                method: "GET",
+                signal: AbortSignal.timeout(5000)
+            }).then(() => {
                 const latency = performance.now() - start;
                 this.recordRequest();
                 this.recordNodeRequest(target.name, latency);
                 this.simulatorTotalSent++;
-            } catch {
-                // Ignore errors
-            }
+            }).catch(() => {
+                // Still count failed requests for stats
+                this.recordRequest();
+                this.simulatorTotalSent++;
+            });
         }, msPerRequest);
     }
 

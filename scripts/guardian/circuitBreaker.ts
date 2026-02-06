@@ -118,6 +118,25 @@ export function recordFailure(service: string) {
     }
 }
 
+export function resetCircuit(service: string) {
+    const state = getCircuitState(service);
+    state.status = "CLOSED";
+    state.failures = 0;
+    state.lastFailure = 0;
+    state.nextRetry = 0;
+
+    const msg = `Circuit RESET manually for ${service}`;
+    console.log(`[GUARDIAN] ${msg}`);
+
+    persistLog({
+        id: crypto.randomUUID(),
+        timestamp: new Date().toISOString(),
+        service: "guardian",
+        source: "info",
+        message: msg
+    });
+}
+
 export function getCircuitsSnapshot() {
     const snapshot: Record<string, CircuitState> = {};
     for (const [key, val] of circuits.entries()) {

@@ -9,6 +9,7 @@ import { loadBannedIps } from "./security.ts";
 import { CONFIG } from "./config.ts";
 import { stats } from "./logger.ts";
 import { recordLatency, recordMemorySample } from "./prometheus.ts";
+import { createRequestTracker } from "./debug.ts";
 
 import { Pipeline } from "./middleware/pipeline.ts";
 import { LoggerMiddleware } from "./middleware/logger.ts";
@@ -109,6 +110,7 @@ async function bootstrap() {
     manager.register({
         name: "frontend",
         command: frontendCmd,
+        env: { "GUARDIAN_MODE": "true" },
         autoRestart: true,
         port: CONFIG.ports.internalFrontend
     });
@@ -169,19 +171,27 @@ async function bootstrap() {
         .use(new ProxyMiddleware());
 
     const handleRequest = async (req: Request, info: Deno.ServeHandlerInfo, targetPort: number, serviceName: string) => {
+        const url = new URL(req.url);
+        const ip = info.remoteAddr.transport === 'tcp' ? (info.remoteAddr as Deno.NetAddr).hostname : "0.0.0.0";
+        const requestId = crypto.randomUUID();
+
+        // Create debug tracker for this request
+        const tracker = createRequestTracker(requestId, serviceName, req.method, url.pathname, ip);
+
         const ctx: GuardianContext = {
             req,
             info,
             targetPort,
             serviceName,
-            requestId: crypto.randomUUID(),
-            ip: info.remoteAddr.transport === 'tcp' ? (info.remoteAddr as Deno.NetAddr).hostname : "0.0.0.0",
+            requestId,
+            ip,
             userAgent: req.headers.get("user-agent") || "unknown",
-            url: new URL(req.url),
+            url,
             state: new Map(),
             log: (source, message) => {
                 manager.get(serviceName)?.addLog(source, message);
-            }
+            },
+            debugTracker: tracker
         };
 
         const startTime = Date.now();
@@ -190,6 +200,11 @@ async function bootstrap() {
         // Record latency for Prometheus
         const latency = Date.now() - startTime;
         recordLatency(serviceName, latency);
+
+        // Record final response in debug log
+        if (result) {
+            tracker.response(result.status);
+        }
 
         return result;
     };

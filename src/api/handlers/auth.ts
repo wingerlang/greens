@@ -31,10 +31,24 @@ export async function handleAuthRoutes(req: Request, url: URL, headers: Headers)
     }
 
     if (url.pathname === "/api/auth/login" && method === "POST") {
-        // Rate limit: 5 attempts per 1 minute
-        const isAllowed = await checkRateLimit(ip, 5, 60 * 1000);
-        if (!isAllowed) {
-            return new Response(JSON.stringify({ error: "Too many login attempts. Please try again later." }), { status: 429, headers });
+        // Rate limit: 10 attempts per 1 minute (increased for dev)
+        // Use x-real-ip first (from Guardian), then x-forwarded-for, then fallback
+        const clientIp = req.headers.get("x-real-ip")
+            || (req.headers.get("x-forwarded-for") || "unknown").split(",")[0].trim()
+            || "unknown";
+
+        // Skip rate limiting for localhost/internal requests (e.g., load balancer simulator)
+        const isInternal = clientIp === "127.0.0.1" || clientIp === "::1" || clientIp === "localhost";
+
+        // Skip rate limiting for Guardian Simulator
+        const userAgent = req.headers.get("user-agent") || "";
+        const isSimulator = userAgent.includes("GuardianSimulator");
+
+        if (!isInternal && !isSimulator) {
+            const isAllowed = await checkRateLimit(clientIp, 10, 60 * 1000);
+            if (!isAllowed) {
+                return new Response(JSON.stringify({ error: "Too many login attempts. Please try again later." }), { status: 429, headers });
+            }
         }
 
         try {

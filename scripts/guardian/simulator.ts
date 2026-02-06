@@ -118,9 +118,9 @@ class VirtualUser {
             });
 
             if (res.status !== 201 && res.status !== 200) {
-               // Maybe already exists but wrong password? (Shouldn't happen with our logic)
-               // Or rate limited/banned
-               if (res.status === 429) console.log(`[SIM] User ${this.id} rate limited during auth`);
+                // Maybe already exists but wrong password? (Shouldn't happen with our logic)
+                // Or rate limited/banned
+                if (res.status === 429) console.log(`[SIM] User ${this.id} rate limited during auth`);
             }
         }
     }
@@ -195,6 +195,13 @@ export class Simulator {
     }
 
     public updateConfig(cfg: Partial<SimulationConfig>) {
+        if (cfg.targetUsers !== undefined) cfg.targetUsers = Number(cfg.targetUsers);
+        if (cfg.rampRate !== undefined) cfg.rampRate = Number(cfg.rampRate);
+        if (cfg.personas !== undefined) {
+            for (const p in cfg.personas) {
+                cfg.personas[p as Persona] = Number(cfg.personas[p as Persona]);
+            }
+        }
         this.config = { ...this.config, ...cfg };
     }
 
@@ -275,7 +282,7 @@ export class Simulator {
     private despawnUsers(count: number) {
         let stopped = 0;
         // Stop highest IDs first
-        const activeIds = Array.from(this.users.keys()).filter(id => this.users.get(id)!.active).sort((a,b) => b-a);
+        const activeIds = Array.from(this.users.keys()).filter(id => this.users.get(id)!.active).sort((a, b) => b - a);
 
         for (const id of activeIds) {
             if (stopped >= count) break;

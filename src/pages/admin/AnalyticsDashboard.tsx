@@ -5,7 +5,7 @@ import { AnalyticsStats, PageView, InteractionEvent, generateId } from '../../mo
 import {
     BarChart3, TrendingUp, TrendingDown, Users, MousePointer2, Search, Clock, Activity,
     ChevronDown, ChevronUp, Filter, RefreshCw, Play, Pause, SkipForward,
-    SkipBack, X, Monitor, Calendar, Timer, AlertCircle, Check
+    SkipBack, X, Monitor, Calendar, Timer, AlertCircle, Check, Star
 } from 'lucide-react';
 import {
     AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -53,7 +53,7 @@ interface SessionEvent extends InteractionEvent {
 }
 
 export function AnalyticsDashboard() {
-    const { user, token } = useAuth();
+    const { user } = useAuth();
     const { category = 'insights', tab = 'overview' } = useParams<{ category: string, tab: string }>();
     const navigate = useNavigate();
     const location = useLocation();
@@ -111,8 +111,9 @@ export function AnalyticsDashboard() {
         setLoading(true);
         try {
             if (activeTab === 'overview') {
+                // Use credentials: 'include' to send cookies for auth
                 const fetchOptions = {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 };
 
                 const [statsRes, usersRes, omniboxRes, dailyRes, eventsRes] = await Promise.all([
@@ -154,20 +155,20 @@ export function AnalyticsDashboard() {
             } else if (activeTab === 'sessions') {
                 // Fetch Sessions
                 const res = await fetch(`/api/usage/sessions?days=${daysBack}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setSessions(data.sessions || []);
             } else if (activeTab === 'retention') {
                 const res = await fetch(`/api/usage/retention?days=${daysBack}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setRetention(data.retention || []);
             } else if (activeTab === 'pathing') {
                 const [pathingRes, exitRes] = await Promise.all([
-                    fetch(`/api/usage/pathing?days=${daysBack}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(`/api/usage/exit?days=${daysBack}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                    fetch(`/api/usage/pathing?days=${daysBack}`, { credentials: 'include' as RequestCredentials }),
+                    fetch(`/api/usage/exit?days=${daysBack}`, { credentials: 'include' as RequestCredentials })
                 ]);
                 const [pathingData, exitData] = await Promise.all([
                     pathingRes.json(),
@@ -177,51 +178,51 @@ export function AnalyticsDashboard() {
                 setExitStats(exitData.exits || []);
             } else if (activeTab === 'appData') {
                 const res = await fetch(`/api/usage/app-stats?days=${daysBack}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setAppDataStats(data);
             } else if (activeTab === 'errors') {
                 const [errRes, corrRes] = await Promise.all([
-                    fetch(`/api/usage/errors?days=${daysBack}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-                    fetch(`/api/usage/correlation?days=${daysBack}`, { headers: { 'Authorization': `Bearer ${token}` } })
+                    fetch(`/api/usage/errors?days=${daysBack}`, { credentials: 'include' as RequestCredentials }),
+                    fetch(`/api/usage/correlation?days=${daysBack}`, { credentials: 'include' as RequestCredentials })
                 ]);
                 const [errData, corrData] = await Promise.all([errRes.json(), corrRes.json()]);
                 setErrorStats(errData.errors || []);
                 setCorrelationStats(corrData.correlation || []);
             } else if (activeTab === 'funnel') {
                 const res = await fetch('/api/usage/funnels', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setFunnelDefinitions(data.funnels || []);
             } else if (activeTab === 'friction') {
                 const res = await fetch(`/api/usage/dead-clicks?days=${daysBack}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setDeadClickStats(data.deadClicks || []);
             } else if (activeTab === 'health') {
                 const res = await fetch(`/api/usage/health?days=${daysBack}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setHealthStats(data.health || []);
             } else if (activeTab === 'live') {
                 const res = await fetch('/api/usage/live-feed', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setLiveEvents(data.events || []);
             } else if (activeTab === 'experiments') {
                 const res = await fetch(`/api/usage/experiments/results?days=${daysBack}`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setExperiments(data.experiments || []);
             } else if (activeTab === 'ai') {
                 const res = await fetch('/api/usage/ai-insights', {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    credentials: 'include' as RequestCredentials
                 });
                 const data = await res.json();
                 setAiInsights(data.insights || []);
@@ -880,49 +881,239 @@ export function AnalyticsDashboard() {
 // --- HELPER COMPONENTS ---
 
 function RetentionHeatmap({ data }: { data: any[] }) {
-    return (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
-            <h2 className="text-lg font-black mb-6 flex items-center gap-2">
-                <Calendar size={20} className="text-pink-500" />
-                Kohort-Retention (14 Dagar)
-            </h2>
-            <table className="w-full text-[10px] border-collapse">
-                <thead>
-                    <tr>
-                        <th className="p-2 text-left bg-slate-800/50 sticky left-0 z-10 w-24">Datum</th>
-                        <th className="p-2 text-center bg-slate-800/50">Antal</th>
-                        {new Array(14).fill(0).map((_, i) => (
-                            <th key={i} className="p-2 text-center bg-slate-800/20 w-8">D{i + 1}</th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                    {data.map(row => (
-                        <tr key={row.date} className="hover:bg-slate-800/30">
-                            <td className="p-2 font-bold text-slate-300 sticky left-0 bg-slate-900 z-10">{row.date}</td>
-                            <td className="p-2 text-center font-bold text-white bg-slate-800/30">{row.total}</td>
-                            {row.retained.map((count: number, i: number) => {
-                                const percent = row.total > 0 ? (count / row.total) * 100 : 0;
-                                let bgColor = 'bg-slate-900';
-                                if (percent > 0) bgColor = 'bg-pink-500/10';
-                                if (percent > 20) bgColor = 'bg-pink-500/30';
-                                if (percent > 50) bgColor = 'bg-pink-500/60';
-                                if (percent > 80) bgColor = 'bg-pink-500';
+    // Calculate aggregate metrics
+    const validData = data.filter(row => row.total > 0);
 
-                                return (
-                                    <td
-                                        key={i}
-                                        className={`p-2 text-center border border-slate-800/50 transition-colors ${bgColor} ${percent > 50 ? 'text-white' : 'text-slate-400'}`}
-                                        title={`${count} användare återvände dag ${i + 1}`}
-                                    >
-                                        {percent > 0 ? `${Math.round(percent)}%` : '-'}
-                                    </td>
-                                );
-                            })}
-                        </tr>
+    // Average retention per day across all cohorts
+    const avgRetentionByDay = new Array(14).fill(0).map((_, dayIndex) => {
+        const validRows = validData.filter(r => r.retained[dayIndex] !== undefined);
+        if (validRows.length === 0) return 0;
+        const totalPercent = validRows.reduce((sum, row) => {
+            return sum + (row.total > 0 ? (row.retained[dayIndex] / row.total) * 100 : 0);
+        }, 0);
+        return totalPercent / validRows.length;
+    });
+
+    // Key metrics
+    const day1Retention = avgRetentionByDay[0] || 0;
+    const day7Retention = avgRetentionByDay[6] || 0;
+    const day14Retention = avgRetentionByDay[13] || 0;
+    const totalUsers = validData.reduce((sum, row) => sum + row.total, 0);
+
+    // Find best and worst cohorts
+    const cohortsWithD7 = validData.filter(r => r.retained[6] !== undefined && r.total > 0)
+        .map(r => ({ date: r.date, retention: (r.retained[6] / r.total) * 100, total: r.total }));
+    const bestCohort = cohortsWithD7.length > 0
+        ? cohortsWithD7.reduce((a, b) => a.retention > b.retention ? a : b)
+        : null;
+
+    // Color function for heatmap
+    const getColor = (percent: number) => {
+        if (percent <= 0) return { bg: 'bg-slate-900/50', text: 'text-slate-600' };
+        if (percent <= 10) return { bg: 'bg-red-500/20', text: 'text-red-400' };
+        if (percent <= 25) return { bg: 'bg-orange-500/30', text: 'text-orange-400' };
+        if (percent <= 40) return { bg: 'bg-yellow-500/40', text: 'text-yellow-300' };
+        if (percent <= 60) return { bg: 'bg-lime-500/50', text: 'text-lime-300' };
+        if (percent <= 80) return { bg: 'bg-emerald-500/60', text: 'text-emerald-200' };
+        return { bg: 'bg-emerald-500', text: 'text-white font-bold' };
+    };
+
+    return (
+        <div className="space-y-6">
+            {/* Header with explanation */}
+            <div className="bg-gradient-to-r from-pink-500/10 via-purple-500/10 to-blue-500/10 rounded-2xl p-6 border border-pink-500/20">
+                <div className="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 className="text-xl font-black flex items-center gap-3 text-white">
+                            <div className="p-2 bg-pink-500/20 rounded-xl">
+                                <Calendar size={24} className="text-pink-400" />
+                            </div>
+                            Kohort-Retention Analys
+                        </h2>
+                        <p className="text-slate-400 mt-2 text-sm max-w-2xl">
+                            Visar hur många användare som återvänder efter sina första besök.
+                            Varje rad representerar en kohort (användare som började samma dag).
+                            <span className="text-pink-400 font-medium"> D1 = dagen efter, D7 = en vecka senare.</span>
+                        </p>
+                    </div>
+                    <div className="flex gap-2">
+                        <div className="text-center px-4 py-2 bg-slate-800/50 rounded-xl border border-slate-700">
+                            <div className="text-2xl font-black text-white">{totalUsers}</div>
+                            <div className="text-[10px] text-slate-500 uppercase tracking-wider">Användare</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-2xl p-5 border border-blue-500/30">
+                    <div className="flex items-center gap-2 text-blue-400 mb-2">
+                        <Users size={16} />
+                        <span className="text-xs font-medium uppercase tracking-wider">Dag 1 Retention</span>
+                    </div>
+                    <div className="text-3xl font-black text-white">{day1Retention.toFixed(1)}%</div>
+                    <div className="text-xs text-slate-500 mt-1">Återvänder nästa dag</div>
+                </div>
+
+                <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-2xl p-5 border border-purple-500/30">
+                    <div className="flex items-center gap-2 text-purple-400 mb-2">
+                        <Activity size={16} />
+                        <span className="text-xs font-medium uppercase tracking-wider">Vecka 1 Retention</span>
+                    </div>
+                    <div className="text-3xl font-black text-white">{day7Retention.toFixed(1)}%</div>
+                    <div className="text-xs text-slate-500 mt-1">Aktiva efter 7 dagar</div>
+                </div>
+
+                <div className="bg-gradient-to-br from-pink-500/20 to-pink-600/10 rounded-2xl p-5 border border-pink-500/30">
+                    <div className="flex items-center gap-2 text-pink-400 mb-2">
+                        <TrendingUp size={16} />
+                        <span className="text-xs font-medium uppercase tracking-wider">14-Dagars Retention</span>
+                    </div>
+                    <div className="text-3xl font-black text-white">{day14Retention.toFixed(1)}%</div>
+                    <div className="text-xs text-slate-500 mt-1">Fortfarande aktiva</div>
+                </div>
+
+                <div className="bg-gradient-to-br from-emerald-500/20 to-emerald-600/10 rounded-2xl p-5 border border-emerald-500/30">
+                    <div className="flex items-center gap-2 text-emerald-400 mb-2">
+                        <Star size={16} />
+                        <span className="text-xs font-medium uppercase tracking-wider">Bästa Kohort</span>
+                    </div>
+                    <div className="text-xl font-black text-white">
+                        {bestCohort ? `${bestCohort.retention.toFixed(0)}%` : '-'}
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">
+                        {bestCohort ? `${bestCohort.date} (${bestCohort.total} användare)` : 'Ingen data'}
+                    </div>
+                </div>
+            </div>
+
+            {/* Retention Curve */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800">
+                <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase tracking-wider">
+                    📉 Genomsnittlig Retention-Kurva
+                </h3>
+                <div className="h-24 flex items-end gap-1">
+                    {avgRetentionByDay.map((percent, i) => (
+                        <div
+                            key={i}
+                            className="flex-1 flex flex-col items-center gap-1"
+                            title={`Dag ${i + 1}: ${percent.toFixed(1)}% retention`}
+                        >
+                            <div
+                                className="w-full rounded-t-md transition-all hover:opacity-80"
+                                style={{
+                                    height: `${Math.max(percent, 2)}%`,
+                                    background: `linear-gradient(to top, 
+                                        ${percent > 50 ? '#10b981' : percent > 25 ? '#f59e0b' : '#ef4444'}, 
+                                        ${percent > 50 ? '#34d399' : percent > 25 ? '#fbbf24' : '#f87171'})`
+                                }}
+                            />
+                            <span className="text-[9px] text-slate-500 font-medium">D{i + 1}</span>
+                        </div>
                     ))}
-                </tbody>
-            </table>
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-600 mt-3 border-t border-slate-800 pt-2">
+                    <span>← Nya användare startar här</span>
+                    <span>Långsiktig retention →</span>
+                </div>
+            </div>
+
+            {/* Heatmap Table */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 shadow-sm border border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">
+                        🔥 Kohort Heatmap
+                    </h3>
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 text-[10px]">
+                        <span className="text-slate-500">Retention:</span>
+                        <div className="flex items-center gap-1">
+                            <div className="w-4 h-4 rounded bg-red-500/20 border border-red-500/30" />
+                            <span className="text-slate-500">&lt;10%</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <div className="w-4 h-4 rounded bg-orange-500/30 border border-orange-500/40" />
+                            <span className="text-slate-500">10-25%</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <div className="w-4 h-4 rounded bg-yellow-500/40 border border-yellow-500/50" />
+                            <span className="text-slate-500">25-40%</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <div className="w-4 h-4 rounded bg-lime-500/50 border border-lime-500/60" />
+                            <span className="text-slate-500">40-60%</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <div className="w-4 h-4 rounded bg-emerald-500 border border-emerald-400" />
+                            <span className="text-slate-500">&gt;80%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <table className="w-full text-[11px] border-collapse">
+                    <thead>
+                        <tr>
+                            <th className="p-2.5 text-left bg-slate-800/60 sticky left-0 z-10 rounded-tl-lg font-bold text-slate-300">
+                                Kohort
+                            </th>
+                            <th className="p-2.5 text-center bg-slate-800/60 font-bold text-slate-300">
+                                Användare
+                            </th>
+                            {new Array(14).fill(0).map((_, i) => (
+                                <th
+                                    key={i}
+                                    className={`p-2.5 text-center font-medium w-12
+                                        ${i === 0 ? 'bg-blue-500/20 text-blue-400' :
+                                            i === 6 ? 'bg-purple-500/20 text-purple-400' :
+                                                i === 13 ? 'bg-pink-500/20 text-pink-400' :
+                                                    'bg-slate-800/40 text-slate-500'}
+                                        ${i === 13 ? 'rounded-tr-lg' : ''}`}
+                                >
+                                    {i === 0 ? '📅 D1' : i === 6 ? '📅 D7' : i === 13 ? '📅 D14' : `D${i + 1}`}
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/30">
+                        {data.map((row, rowIndex) => (
+                            <tr key={row.date} className="hover:bg-slate-800/20 transition-colors">
+                                <td className="p-2.5 font-bold text-slate-200 sticky left-0 bg-slate-900 z-10 whitespace-nowrap">
+                                    <span className="text-slate-500 mr-2">#{rowIndex + 1}</span>
+                                    {row.date}
+                                </td>
+                                <td className="p-2.5 text-center font-bold text-white bg-slate-800/20">
+                                    <span className="px-2 py-1 bg-slate-700/50 rounded-md">{row.total}</span>
+                                </td>
+                                {row.retained.map((count: number, i: number) => {
+                                    const percent = row.total > 0 ? (count / row.total) * 100 : 0;
+                                    const colors = getColor(percent);
+
+                                    return (
+                                        <td
+                                            key={i}
+                                            className={`p-2 text-center border border-slate-800/30 transition-all cursor-default
+                                                ${colors.bg} ${colors.text}
+                                                hover:ring-2 hover:ring-white/30 hover:z-10 relative`}
+                                            title={`${row.date} → Dag ${i + 1}\n${count} av ${row.total} användare återvände (${percent.toFixed(1)}%)`}
+                                        >
+                                            {percent > 0 ? `${Math.round(percent)}%` : '–'}
+                                        </td>
+                                    );
+                                })}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+
+                {data.length === 0 && (
+                    <div className="text-center py-12 text-slate-500">
+                        <Calendar size={48} className="mx-auto mb-4 opacity-30" />
+                        <p>Ingen retention-data tillgänglig ännu.</p>
+                        <p className="text-sm mt-1">Data visas när användare börjar återvända.</p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
@@ -1265,11 +1456,11 @@ function HeatmapView({
 
     // 2. Aggregate Elements (One rect per unique element)
     const aggregatedElements = React.useMemo(() => {
-        const map = new Map<string, { rect: any, count: number, misses: number, label: string }>();
+        const map = new Map<string, { rect: any, count: number, misses: number, rageClicks: number, label: string, target: string, frictionScore: number }>();
         filteredClicks.forEach(c => {
             if (!c.elementRect) return;
             const key = `${c.target}-${c.label}`;
-            const existing = map.get(key) || { rect: c.elementRect, count: 0, misses: 0, label: c.label };
+            const existing = map.get(key) || { rect: c.elementRect, count: 0, misses: 0, rageClicks: 0, label: c.label, target: c.target, frictionScore: 0 };
             existing.count++;
 
             // Precision logic
@@ -1278,10 +1469,52 @@ function HeatmapView({
             if (x < left || x > left + width || y < top || y > top + height) {
                 existing.misses++;
             }
+
+            if (c.type === 'rage_click') {
+                existing.rageClicks++;
+            }
+
+            // Friction Score: Rage clicks are critical, misses are high friction
+            existing.frictionScore = (existing.rageClicks * 5) + (existing.misses * 0.5);
+
             map.set(key, existing);
         });
-        return Array.from(map.values()).sort((a, b) => b.count - a.count);
+        return Array.from(map.values()).sort((a, b) => b.frictionScore - a.frictionScore || b.count - a.count);
     }, [filteredClicks]);
+
+    const actionableAdvice = React.useMemo(() => {
+        const advice = [];
+        aggregatedElements.slice(0, 5).forEach(el => {
+            const missRate = el.misses / el.count;
+            if (el.rageClicks > 0) {
+                advice.push({
+                    type: 'critical',
+                    title: `Rage clicks på "${el.label}"`,
+                    message: `Användare klickar intensivt men inget händer. Kontrollera om elementet är låst eller om laddningstiden är för lång.`,
+                    icon: <AlertCircle className="w-4 h-4 text-red-500" />
+                });
+            }
+            if (missRate > 0.3) {
+                advice.push({
+                    type: 'warning',
+                    title: `Hög miss-rate: ${el.label}`,
+                    message: `${Math.round(missRate * 100)}% av klick hamnar utanför elementet. Öka padding eller klickytan för att förbättra träffsäkerheten.`,
+                    icon: <MousePointer2 className="w-4 h-4 text-amber-500" />
+                });
+            }
+        });
+
+        if (totalMissrate > 25) {
+            advice.push({
+                type: 'info',
+                title: 'Generell layout-analys',
+                message: 'Många klick hamnar mellan element. Överväg att minska "white space" mellan interaktiva knappar.',
+                icon: <Activity className="w-4 h-4 text-indigo-500" />
+            });
+        }
+
+        return advice;
+    }, [aggregatedElements, totalMissrate]);
 
     const totalMissrate = filteredClicks.length > 0
         ? Math.round((aggregatedElements.reduce((acc, curr) => acc + curr.misses, 0) / filteredClicks.length) * 100)
@@ -1325,97 +1558,155 @@ function HeatmapView({
                 </select>
             </div>
 
-            <div className="relative w-full aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl group">
-                {/* Visual Depth Grid */}
-                <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#2d3748 1px, transparent 1px), linear-gradient(90deg, #2d3748 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-                <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/5 to-transparent pointer-events-none"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                {/* Main Visualizer */}
+                <div className="lg:col-span-3">
+                    <div className="relative w-full aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl group">
+                        {/* Visual Depth Grid */}
+                        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#2d3748 1px, transparent 1px), linear-gradient(90deg, #2d3748 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
+                        <div className="absolute inset-0 bg-gradient-to-t from-indigo-500/5 to-transparent pointer-events-none"></div>
 
-                {/* Aggregated Bounding Boxes */}
-                {viewMode === 'precision' && aggregatedElements.map((el, i) => (
-                    <div
-                        key={`rect-${i}`}
-                        className={`absolute border-2 transition-all duration-500 group/el cursor-help ${selectedElementKey && selectedElementKey !== el.label ? 'opacity-10 border-slate-700 bg-transparent grayscale' :
-                            el.misses / el.count > 0.3 ? 'border-red-500/40 bg-red-500/5' : 'border-indigo-500/20 bg-indigo-500/5 hover:border-indigo-500/60 hover:bg-indigo-500/10'
-                            }`}
-                        style={{
-                            left: `${(el.rect.left / filteredClicks[0].coordinates!.viewportW) * 100}%`,
-                            top: `${(el.rect.top / filteredClicks[0].coordinates!.viewportH) * 100}%`,
-                            width: `${(el.rect.width / filteredClicks[0].coordinates!.viewportW) * 100}%`,
-                            height: `${(el.rect.height / filteredClicks[0].coordinates!.viewportH) * 100}%`,
-                            zIndex: selectedElementKey === el.label ? 100 : 10
-                        }}
-                    >
-                        <div className="absolute -top-4 left-0 text-[8px] font-black uppercase text-slate-500 whitespace-nowrap group-hover/el:text-white transition-colors">
-                            {el.label || 'Oidentifierat element'}
-                        </div>
+                        {/* Aggregated Bounding Boxes */}
+                        {viewMode === 'precision' && aggregatedElements.map((el, i) => (
+                            <div
+                                key={`rect-${i}`}
+                                className={`absolute border-2 transition-all duration-500 group/el cursor-help ${selectedElementKey && selectedElementKey !== el.label ? 'opacity-10 border-slate-700 bg-transparent grayscale' :
+                                    el.misses / el.count > 0.3 || el.rageClicks > 0 ? 'border-red-500/40 bg-red-500/5' : 'border-indigo-500/20 bg-indigo-500/5 hover:border-indigo-500/60 hover:bg-indigo-500/10'
+                                    }`}
+                                style={{
+                                    left: `${(el.rect.left / filteredClicks[0].coordinates!.viewportW) * 100}%`,
+                                    top: `${(el.rect.top / filteredClicks[0].coordinates!.viewportH) * 100}%`,
+                                    width: `${(el.rect.width / filteredClicks[0].coordinates!.viewportW) * 100}%`,
+                                    height: `${(el.rect.height / filteredClicks[0].coordinates!.viewportH) * 100}%`,
+                                    zIndex: selectedElementKey === el.label ? 100 : 10
+                                }}
+                            >
+                                {selectedElementKey === el.label && (
+                                    <div className="absolute inset-0 border-4 border-indigo-400 animate-ping opacity-30 rounded-full" />
+                                )}
 
-                        {/* Tooltip on Hover */}
-                        <div className="absolute top-full left-0 mt-2 bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-2xl opacity-0 group-hover/el:opacity-100 transition-opacity z-50 pointer-events-none w-48">
-                            <div className="text-[10px] font-black text-indigo-400 uppercase mb-1">Element-analys</div>
-                            <div className="text-sm font-bold text-white mb-2">{el.label}</div>
-                            <div className="grid grid-cols-2 gap-2 text-[10px]">
-                                <div> Besök: <span className="text-white">{el.count}</span></div>
-                                <div> Missar: <span className="text-red-400">{el.misses}</span></div>
-                                <div className="col-span-2 pt-2 border-t border-slate-800">
-                                    Hit Rate: <span className="text-emerald-400">{Math.round(((el.count - el.misses) / el.count) * 100)}%</span>
+                                <div className="absolute -top-4 left-0 text-[8px] font-black uppercase text-slate-500 whitespace-nowrap group-hover/el:text-white transition-colors">
+                                    {el.label || 'Oidentifierat element'}
                                 </div>
+
+                                {/* Tooltip on Hover */}
+                                <div className="absolute top-full left-0 mt-2 bg-slate-900 border border-slate-700 p-3 rounded-lg shadow-2xl opacity-0 group-hover/el:opacity-100 transition-opacity z-50 pointer-events-none w-48">
+                                    <div className="text-[10px] font-black text-indigo-400 uppercase mb-1">Element-analys</div>
+                                    <div className="text-sm font-bold text-white mb-2">{el.label}</div>
+                                    <div className="grid grid-cols-2 gap-2 text-[10px]">
+                                        <div> Besök: <span className="text-white">{el.count}</span></div>
+                                        <div> Missar: <span className="text-red-400">{el.misses}</span></div>
+                                        <div className="col-span-2 pt-2 border-t border-slate-800">
+                                            Hit Rate: <span className="text-emerald-400">{Math.round(((el.count - el.misses) / el.count) * 100)}%</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+
+                        {/* Intelligent Heat Dots */}
+                        {viewMode === 'heatmap' && filteredClicks.map((click, i) => (
+                            <div
+                                key={i}
+                                className={`absolute w-12 h-12 rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20`}
+                                style={{
+                                    left: `${click.coordinates?.pctX}%`,
+                                    top: `${click.coordinates?.pctY}%`,
+                                    background: click.type === 'rage_click'
+                                        ? 'radial-gradient(circle, rgba(239, 68, 68, 0.4) 0%, rgba(239, 68, 68, 0) 70%)'
+                                        : 'radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(99, 102, 241, 0) 70%)'
+                                }}
+                            />
+                        ))}
+
+                        {/* Core Click Points (The "Incandescence") */}
+                        {filteredClicks.map((click, i) => (
+                            <div
+                                key={`core-${i}`}
+                                className={`absolute w-1.5 h-1.5 rounded-full transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 z-30 shadow-[0_0_8px_rgba(255,255,255,0.5)] ${click.type === 'rage_click' ? 'bg-red-400 scale-150' : 'bg-indigo-300'
+                                    }`}
+                                style={{
+                                    left: `${click.coordinates?.pctX}%`,
+                                    top: `${click.coordinates?.pctY}%`,
+                                }}
+                            />
+                        ))}
+
+                        {filteredClicks.length === 0 && (
+                            <div className="absolute inset-0 flex items-center justify-center text-slate-600 font-bold uppercase tracking-tighter">
+                                Väntar på klick-synk...
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                            <div className="text-[10px] text-slate-500 font-black uppercase">Totalt Antal Klick</div>
+                            <div className="text-xl font-black text-white">{filteredClicks.length}</div>
+                        </div>
+                        <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                            <div className="text-[10px] text-slate-500 font-black uppercase">Unika Element</div>
+                            <div className="text-xl font-black text-white">{aggregatedElements.length}</div>
+                        </div>
+                        <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                            <div className="text-[10px] text-slate-500 font-black uppercase">Genomsnittlig Missrate</div>
+                            <div className={`text-xl font-black ${totalMissrate > 20 ? 'text-red-500' : 'text-emerald-500'}`}>{totalMissrate}%</div>
+                        </div>
+                        <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
+                            <div className="text-[10px] text-slate-500 font-black uppercase">Rage Click Index</div>
+                            <div className="text-xl font-black text-pink-500">
+                                {Math.round((filteredClicks.filter(c => c.type === 'rage_click').length / (filteredClicks.length || 1)) * 100)}%
                             </div>
                         </div>
                     </div>
-                ))}
+                </div>
 
-                {/* Intelligent Heat Dots */}
-                {viewMode === 'heatmap' && filteredClicks.map((click, i) => (
-                    <div
-                        key={i}
-                        className={`absolute w-12 h-12 rounded-full transform -translate-x-1/2 -translate-y-1/2 pointer-events-none z-20`}
-                        style={{
-                            left: `${click.coordinates?.pctX}%`,
-                            top: `${click.coordinates?.pctY}%`,
-                            background: click.type === 'rage_click'
-                                ? 'radial-gradient(circle, rgba(239, 68, 68, 0.4) 0%, rgba(239, 68, 68, 0) 70%)'
-                                : 'radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(99, 102, 241, 0) 70%)'
-                        }}
-                    />
-                ))}
-
-                {/* Core Click Points (The "Incandescence") */}
-                {filteredClicks.map((click, i) => (
-                    <div
-                        key={`core-${i}`}
-                        className={`absolute w-1.5 h-1.5 rounded-full transform -translate-x-1/2 -translate-y-1/2 transition-all duration-300 z-30 shadow-[0_0_8px_rgba(255,255,255,0.5)] ${click.type === 'rage_click' ? 'bg-red-400 scale-150' : 'bg-indigo-300'
-                            }`}
-                        style={{
-                            left: `${click.coordinates?.pctX}%`,
-                            top: `${click.coordinates?.pctY}%`,
-                        }}
-                    />
-                ))}
-
-                {filteredClicks.length === 0 && (
-                    <div className="absolute inset-0 flex items-center justify-center text-slate-600 font-bold uppercase tracking-tighter">
-                        Väntar på klick-synk...
+                {/* Sidebar: Insights & Ranking */}
+                <div className="lg:col-span-1 space-y-6">
+                    {/* Actionable Advice */}
+                    <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-4">
+                        <h3 className="text-xs font-black uppercase text-indigo-400 mb-4 flex items-center gap-2">
+                            <Activity className="w-3 h-3" />
+                            UX Diagnostik
+                        </h3>
+                        <div className="space-y-3">
+                            {actionableAdvice.length > 0 ? actionableAdvice.map((advice, i) => (
+                                <div key={i} className={`p-3 rounded-xl border ${advice.type === 'critical' ? 'bg-red-500/10 border-red-500/20' : advice.type === 'warning' ? 'bg-amber-500/10 border-amber-500/20' : 'bg-indigo-500/10 border-indigo-500/20'}`}>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        {advice.icon}
+                                        <span className="text-[10px] font-black uppercase text-white">{advice.title}</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-400 leading-tight">{advice.message}</p>
+                                </div>
+                            )) : (
+                                <div className="text-[10px] text-slate-500 font-bold text-center py-4">Inga kritiska UX-prolem identifierade. Bra jobbat!</div>
+                            )}
+                        </div>
                     </div>
-                )}
-            </div>
 
-            <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                    <div className="text-[10px] text-slate-500 font-black uppercase">Totalt Antal Klick</div>
-                    <div className="text-xl font-black text-white">{filteredClicks.length}</div>
-                </div>
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                    <div className="text-[10px] text-slate-500 font-black uppercase">Unika Element</div>
-                    <div className="text-xl font-black text-white">{aggregatedElements.length}</div>
-                </div>
-                <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                    <div className="text-[10px] text-slate-500 font-black uppercase">Genomsnittlig Missrate</div>
-                    <div className={`text-xl font-black ${totalMissrate > 20 ? 'text-red-500' : 'text-emerald-500'}`}>{totalMissrate}%</div>
-                </div>
-                <div class="bg-slate-800/50 p-3 rounded-xl border border-slate-700">
-                    <div class="text-[10px] text-slate-500 font-black uppercase">Rage Click Index</div>
-                    <div class="text-xl font-black text-pink-500">
-                        {Math.round((filteredClicks.filter(c => c.type === 'rage_click').length / (filteredClicks.length || 1)) * 100)}%
+                    {/* Top Friction Elements */}
+                    <div className="bg-slate-800/50 rounded-2xl border border-slate-700 p-4">
+                        <h3 className="text-xs font-black uppercase text-slate-400 mb-4">Friction Ranking</h3>
+                        <div className="space-y-2">
+                            {aggregatedElements.slice(0, 8).map((el, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setSelectedElementKey(selectedElementKey === el.label ? null : el.label)}
+                                    className={`w-full text-left p-2 rounded-lg transition-all group ${selectedElementKey === el.label ? 'bg-indigo-500' : 'hover:bg-slate-700'}`}
+                                >
+                                    <div className="flex justify-between items-center">
+                                        <span className={`text-[10px] font-bold ${selectedElementKey === el.label ? 'text-white' : 'text-slate-300'}`}>{el.label}</span>
+                                        <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${el.frictionScore > 10 ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-400'}`}>
+                                            {Math.round(el.frictionScore)} FR
+                                        </span>
+                                    </div>
+                                    <div className="mt-1 flex gap-2">
+                                        <div className="text-[8px] text-slate-500 group-hover:text-slate-300 italic">{el.target}</div>
+                                        <div className="text-[8px] text-slate-500 group-hover:text-slate-300">{el.count} klick</div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
