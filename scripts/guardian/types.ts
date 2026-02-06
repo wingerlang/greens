@@ -34,6 +34,7 @@ export interface RequestMetric {
     method: string;
     status: number;
     duration: number;
+    size?: number;
     ip: string;
     retries?: number;
     targetService: string; // "frontend" | "backend" | "guardian"

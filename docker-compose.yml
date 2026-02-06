@@ -1,0 +1,23 @@
+services:
+  guardian:
+    build: .
+    container_name: guardian
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "9999:9999"
+    volumes:
+      # Data Directory (DB + WAL)
+      - ./data:/app/data
+
+      # Persist Configuration
+      - ./guardian.config.json:/app/guardian.config.json
+
+      # Persist Logs
+      - ./logs:/app/logs
+
+    # Enable TTY for nice colored logs
+    tty: true
+    stdin_open: true
+    environment:
+      - TERM=xterm-256color

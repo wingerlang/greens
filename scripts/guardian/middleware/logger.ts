@@ -12,6 +12,7 @@ export class LoggerMiddleware implements Middleware {
 
         const duration = performance.now() - start;
         const status = ctx.response ? ctx.response.status : 500;
+        const size = ctx.response ? Number(ctx.response.headers.get("content-length")) || 0 : 0;
         const resourceType = determineResourceType(ctx.url.pathname);
         const geo = ctx.state.get("geo");
 
@@ -22,6 +23,7 @@ export class LoggerMiddleware implements Middleware {
             method: ctx.req.method,
             status: status,
             duration,
+            size,
             ip: ctx.ip,
             targetService: ctx.serviceName,
             resourceType,

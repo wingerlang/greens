@@ -12,7 +12,8 @@ import {
     getTypeStats,
     getSessions,
     getCountryStats,
-    getRequestCountInWindow
+    getRequestCountInWindow,
+    getSizeStats
 } from "./analytics.ts";
 import { bannedIps, banIp, unbanIp } from "./security.ts";
 import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
@@ -20,6 +21,7 @@ import { getWafEvents } from "./waf.ts";
 import { getCircuitsSnapshot } from "./circuitBreaker.ts";
 import { generatePrometheusMetrics, getLatencyStats, getMemoryHistory } from "./prometheus.ts";
 import { CONFIG } from "./config.ts";
+import { TextLineStream } from "jsr:@std/streams/text-line-stream";
 import { loadBalancer } from "./loadBalancer.ts";
 import { simulator } from "./simulator.ts";
 
@@ -216,6 +218,14 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             getCountryStats()
         ]);
         return Response.json({ services, types, countries });
+    }
+
+    if (url.pathname === "/api/analytics/frontend") {
+        const [sizeStats, typeStats] = await Promise.all([
+            getSizeStats(),
+            getTypeStats()
+        ]);
+        return Response.json({ size: sizeStats, counts: typeStats });
     }
 
     if (url.pathname === "/api/analytics/service-history") {
@@ -466,6 +476,73 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             }
         }
         return Response.json(simulator.getStatus());
+    }
+
+    // Database Sync Endpoint
+    if (req.method === "POST" && url.pathname === "/api/db/sync") {
+        const secret = req.headers.get("x-admin-secret");
+        if (secret !== CONFIG.adminSecret) {
+            return new Response("Unauthorized", { status: 401 });
+        }
+
+        const mode = url.searchParams.get("mode") || "merge";
+        const kv = getKv();
+        if (!kv || !req.body) return new Response("KV not ready or body missing", { status: 400 });
+
+        try {
+            const lines = req.body
+                .pipeThrough(new TextDecoderStream())
+                .pipeThrough(new TextLineStream());
+
+            let count = 0;
+            let ops = 0;
+            let atomic = kv.atomic();
+
+            const reader = lines.getReader();
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const line = value;
+
+                    if (!line.trim()) continue;
+                    try {
+                        const entry = JSON.parse(line);
+                        if (entry.key && entry.value !== undefined) {
+                            if (mode === "merge") {
+                                // Check existence
+                                const current = await kv.get(entry.key);
+                                if (!current.value) {
+                                    atomic.set(entry.key, entry.value);
+                                    ops++;
+                                    count++;
+                                }
+                            } else {
+                                // Overwrite (Upsert)
+                                atomic.set(entry.key, entry.value);
+                                ops++;
+                                count++;
+                            }
+
+                            if (ops >= 20) {
+                                await atomic.commit();
+                                atomic = kv.atomic();
+                                ops = 0;
+                            }
+                        }
+                    } catch {
+                        // ignore parse error
+                    }
+                }
+            } finally {
+                reader.releaseLock();
+            }
+            if (ops > 0) await atomic.commit();
+
+            return Response.json({ success: true, count, mode });
+        } catch (e) {
+            return Response.json({ success: false, error: String(e) }, { status: 500 });
+        }
     }
 
     // Prometheus metrics endpoint
