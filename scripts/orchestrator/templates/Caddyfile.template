@@ -1,0 +1,23 @@
+
+dev.greens.se {
+    reverse_proxy localhost:9000
+    basicauth / {
+        admin JDJhJDE0JHZ... # Replace with actual hash or env var
+    }
+}
+
+beta.greens.se {
+    reverse_proxy localhost:{{BETA_PORT}}
+}
+
+preview.greens.se {
+    reverse_proxy localhost:{{PREVIEW_PORT}}
+}
+
+greens.se {
+    reverse_proxy localhost:{{PROD_PORT}}
+}
+
+guardian.greens.se {
+    reverse_proxy localhost:9999
+}

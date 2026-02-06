@@ -1,7 +1,7 @@
 import { existsSync } from "@std/fs";
 import { parseArgs } from "jsr:@std/cli/parse-args";
 
-const CONFIG_FILE = "guardian.config.json";
+const CONFIG_FILE = Deno.env.get("GUARDIAN_CONFIG_FILE") || "guardian.config.json";
 
 export interface GuardianConfig {
     mode: "dev" | "prod";
