@@ -1,7 +1,7 @@
 import { Middleware, GuardianContext, Next } from "./types.ts";
 import { checkCircuit, recordSuccess, recordFailure } from "../circuitBreaker.ts";
 import { manager } from "../services.ts";
-import { CONFIG } from "../config.ts";
+import { CONFIG as GLOBAL_CONFIG } from "../config.ts";
 
 const MAINTENANCE_HTML = `
 <!DOCTYPE html>
@@ -102,9 +102,14 @@ const MAINTENANCE_HTML = `
 
 export class CircuitBreakerMiddleware implements Middleware {
     name = "CircuitBreaker";
+    private config: any;
+
+    constructor(config?: any) {
+        this.config = config || GLOBAL_CONFIG;
+    }
 
     async handle(ctx: GuardianContext, next: Next): Promise<void> {
-        if (!CONFIG.features.circuitBreaker) {
+        if (!this.config.features.circuitBreaker) {
             await next();
             return;
         }

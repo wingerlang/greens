@@ -13,3 +13,5 @@ swe.traineddata
 guardian.db
 guardian.db-shm
 guardian.db-wal
+coverage/
+data/ci_report.json

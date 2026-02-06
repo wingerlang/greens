@@ -1,5 +1,5 @@
 import { Middleware, GuardianContext, Next } from "./types.ts";
-import { CONFIG } from "../config.ts";
+import { CONFIG as GLOBAL_CONFIG } from "../config.ts";
 import { banIp } from "../security.ts";
 
 interface Bucket {
@@ -7,27 +7,31 @@ interface Bucket {
     lastRefill: number;
 }
 
-const buckets = new Map<string, Bucket>();
-
 export class TokenBucketRateLimitMiddleware implements Middleware {
     name = "RateLimit";
+    private buckets = new Map<string, Bucket>();
+    private config: any;
+
+    constructor(config?: any) {
+        this.config = config || GLOBAL_CONFIG;
+    }
 
     handle(ctx: GuardianContext, next: Next): Promise<void> {
-        if (!CONFIG.features.rateLimit) {
+        if (!this.config.features.rateLimit) {
             return next();
         }
 
         const ip = ctx.ip;
         const now = Date.now();
-        const config = CONFIG.rateLimit.tokenBucket;
+        const config = this.config.rateLimit.tokenBucket;
 
-        let bucket = buckets.get(ip);
+        let bucket = this.buckets.get(ip);
         if (!bucket) {
             bucket = {
                 tokens: config.capacity,
                 lastRefill: now
             };
-            buckets.set(ip, bucket);
+            this.buckets.set(ip, bucket);
         }
 
         // Refill
