@@ -19,7 +19,7 @@ export class ProxyMiddleware implements Middleware {
             lbNodeName = target.name;
         }
 
-        const targetUrl = new URL(`http://127.0.0.1:${targetPort}${ctx.url.pathname}${ctx.url.search}`);
+        const targetUrl = new URL(`http://localhost:${targetPort}${ctx.url.pathname}${ctx.url.search}`);
 
         if (ctx.req.headers.get("upgrade") === "websocket") {
             const protocol = ctx.req.headers.get("Sec-WebSocket-Protocol") || undefined;

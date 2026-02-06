@@ -248,6 +248,8 @@ export async function getSizeStats() {
     const total = totalRes.value ? Number(totalRes.value.value) : 0;
 
     return { byType, total };
+}
+
 export async function getUptimeStats() {
     const kv = getKv();
     if (!kv) return {};

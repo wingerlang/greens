@@ -102,15 +102,19 @@ async function bootstrap() {
         : ["deno", "task", "dev", "--port", String(CONFIG.ports.internalFrontend), "--host", "127.0.0.1"];
 
     if (isProd) {
-         console.log("[GUARDIAN] Running in PRODUCTION mode (serving dist/).");
+        console.log("[GUARDIAN] Running in PRODUCTION mode (serving dist/).");
     } else {
-         console.log("[GUARDIAN] Running in DEVELOPMENT mode (Vite).");
+        console.log("[GUARDIAN] Running in DEVELOPMENT mode (Vite).");
     }
 
     manager.register({
         name: "frontend",
         command: frontendCmd,
-        env: { "GUARDIAN_MODE": "true" },
+        env: {
+            "GUARDIAN_MODE": "true",
+            "VITE_PORT": String(CONFIG.ports.internalFrontend),
+            "HOST": "127.0.0.1"
+        },
         autoRestart: true,
         port: CONFIG.ports.internalFrontend
     });

@@ -13,7 +13,7 @@ import {
     getSessions,
     getCountryStats,
     getRequestCountInWindow,
-    getSizeStats
+    getSizeStats,
     getUptimeStats,
     getServiceUptimeHistory
 } from "./analytics.ts";

@@ -200,7 +200,7 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            overflow-y: auto;
             position: relative;
         }
 
@@ -1473,15 +1473,23 @@
                     </template>
 
                     <template x-for="entry in debugLog" :key="entry.id">
-                        <div style="display: grid; grid-template-columns: 140px 100px 80px 120px 1fr; gap: 12px; padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); align-items: center;"
-                            :style="entry.phase === 'PROXY_FAIL' ? 'background: rgba(239, 68, 68, 0.1);' : ''">
+                        <div style="display: flex; gap: 8px; align-items: center; padding: 6px 12px; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 0.75rem;"
+                            :style="getTraceRowStyle(entry)">
                             <!-- Time -->
-                            <span style="color: var(--text-muted);"
+                            <span style="color: var(--text-muted); white-space: nowrap;"
                                 x-text="new Date(entry.timestamp).toLocaleTimeString()"></span>
 
-                            <!-- Phase Badge -->
+                            <span style="color: var(--text-muted); opacity: 0.3;">|</span>
+
+                            <!-- Ago -->
                             <span
-                                style="padding: 4px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; text-align: center;"
+                                style="color: var(--text-muted); opacity: 0.9; white-space: nowrap; min-width: 75px; font-variant-numeric: tabular-nums;"
+                                x-text="getTimeDiff(entry.timestamp)"></span>
+
+                            <span style="color: var(--text-muted); opacity: 0.3;">|</span>
+
+                            <!-- Phase Badge -->
+                            <span style="padding: 2px 6px; border-radius: 4px; font-weight: 600; white-space: nowrap;"
                                 :style="{
                                       'RECEIVED': 'background: rgba(59, 130, 246, 0.2); color: #3b82f6;',
                                       'MIDDLEWARE': 'background: rgba(139, 92, 246, 0.2); color: #8b5cf6;',
@@ -1492,30 +1500,27 @@
                                   }[entry.phase]" x-text="entry.phase"></span>
 
                             <!-- Method -->
-                            <span style="font-weight: 600;"
+                            <span style="font-weight: 600; white-space: nowrap; min-width: 40px;"
                                 :style="{ 'GET': 'color: #10b981;', 'POST': 'color: #3b82f6;', 'PUT': 'color: #f59e0b;', 'DELETE': 'color: #ef4444;' }[entry.method] || 'color: white;'"
                                 x-text="entry.method"></span>
 
-                            <!-- Service + Duration -->
-                            <span>
-                                <span x-text="entry.service" style="color: #a855f7;"></span>
-                                <span x-show="entry.duration" style="color: var(--text-muted); font-size: 0.7rem;"
-                                    x-text="' (' + entry.duration + 'ms)'"></span>
-                            </span>
+                            <!-- Service -->
+                            <span x-text="entry.service" style="color: #a855f7; white-space: nowrap;"></span>
+                            <span x-show="entry.duration" style="color: var(--text-muted);"
+                                x-text="'(' + entry.duration + 'ms)'"></span>
 
-                            <!-- Path + Details -->
+                            <!-- Path -->
                             <span
-                                style="color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                                <span x-text="entry.path" style="color: #94a3b8;"></span>
-                                <span x-show="entry.status"
-                                    style="margin-left: 8px; padding: 2px 6px; border-radius: 3px; font-size: 0.7rem;"
-                                    :style="entry.status >= 200 && entry.status < 300 ? 'background: rgba(16, 185, 129, 0.2); color: #10b981;' : 
-                                              entry.status >= 400 ? 'background: rgba(239, 68, 68, 0.2); color: #ef4444;' : 
-                                              'background: rgba(245, 158, 11, 0.2); color: #f59e0b;'"
-                                    x-text="entry.status"></span>
-                                <span x-show="entry.error" style="color: #ef4444; margin-left: 8px;"
-                                    x-text="entry.error"></span>
-                            </span>
+                                style="color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1;"
+                                x-text="entry.path"></span>
+
+                            <!-- Status -->
+                            <span x-show="entry.status" style="padding: 2px 6px; border-radius: 3px;" :style="entry.status >= 200 && entry.status < 300 ? 'background: rgba(16, 185, 129, 0.2); color: #10b981;' : 
+                                          entry.status >= 400 ? 'background: rgba(239, 68, 68, 0.2); color: #ef4444;' : 
+                                          'background: rgba(245, 158, 11, 0.2); color: #f59e0b;'"
+                                x-text="entry.status"></span>
+
+                            <span x-show="entry.error" style="color: #ef4444;" x-text="entry.error"></span>
                         </div>
                     </template>
                 </div>
@@ -2462,6 +2467,29 @@
                 getServiceAvailability(name) {
                     const s = this.services.find(svc => svc.name === name);
                     return s ? this.calculateUptimePercent(s) : '0%';
+                },
+
+                getTimeDiff(ts) {
+                    const diff = Math.floor((this.now - ts) / 1000);
+                    if (diff < 60) return `${diff}s ago`;
+                    const m = Math.floor(diff / 60);
+                    const s = diff % 60;
+                    if (diff < 3600) return `${m}min ${s}s ago`;
+                    return `${Math.floor(diff / 3600)}h ago`;
+                },
+
+                getTraceRowStyle(entry) {
+                    const diff = (this.now - entry.timestamp) / 1000;
+                    let style = '';
+                    // Stepped aging logic (1-5 min) - Less aggressive
+                    if (diff > 300) style += 'opacity: 0.5; filter: grayscale(0.8);';
+                    else if (diff > 240) style += 'opacity: 0.6; filter: grayscale(0.6);';
+                    else if (diff > 180) style += 'opacity: 0.7; filter: grayscale(0.4);';
+                    else if (diff > 120) style += 'opacity: 0.8; filter: grayscale(0.2);';
+                    else if (diff > 60) style += 'opacity: 0.9;';
+
+                    if (entry.phase === 'PROXY_FAIL') style += 'background: rgba(239, 68, 68, 0.1);';
+                    return style;
                 },
 
                 async quickAction(action) {
