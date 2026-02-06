@@ -96,9 +96,20 @@ async function bootstrap() {
         });
     }
 
+    const isProd = CONFIG.mode === "prod";
+    const frontendCmd = isProd
+        ? ["deno", "run", "-A", "scripts/guardian/serve_frontend.ts", "--port", String(CONFIG.ports.internalFrontend)]
+        : ["deno", "task", "dev", "--port", String(CONFIG.ports.internalFrontend), "--host", "127.0.0.1"];
+
+    if (isProd) {
+         console.log("[GUARDIAN] Running in PRODUCTION mode (serving dist/).");
+    } else {
+         console.log("[GUARDIAN] Running in DEVELOPMENT mode (Vite).");
+    }
+
     manager.register({
         name: "frontend",
-        command: ["deno", "task", "dev", "--port", String(CONFIG.ports.internalFrontend), "--host", "127.0.0.1"],
+        command: frontendCmd,
         env: { "GUARDIAN_MODE": "true" },
         autoRestart: true,
         port: CONFIG.ports.internalFrontend
@@ -114,7 +125,8 @@ async function bootstrap() {
     // 4. Live Terminal Status
     setInterval(() => {
         const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
-        process.stdout.write(`\r\x1b[32m[GUARDIAN LIVE] Requests: ${stats.totalRequests} | RPS: ${stats.rps.toFixed(2)} | Uptime: ${uptime}s\x1b[0m`);
+        const msg = `\r\x1b[32m[GUARDIAN LIVE] Requests: ${stats.totalRequests} | RPS: ${stats.rps.toFixed(2)} | Uptime: ${uptime}s\x1b[0m`;
+        Deno.stdout.write(new TextEncoder().encode(msg));
     }, 1000);
 
     // Periodically log status to history (every 30s)

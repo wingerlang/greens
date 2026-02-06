@@ -1,8 +1,11 @@
 import { existsSync } from "https://deno.land/std@0.224.0/fs/mod.ts";
+import { parseArgs } from "jsr:@std/cli/parse-args";
 
 const CONFIG_FILE = "guardian.config.json";
 
 export interface GuardianConfig {
+    mode: "dev" | "prod";
+    adminSecret: string;
     ports: {
         frontend: number;
         backend: number;
@@ -73,6 +76,8 @@ export interface GuardianConfig {
 }
 
 const DEFAULT_CONFIG: GuardianConfig = {
+    mode: "dev",
+    adminSecret: "change-me",
     ports: {
         frontend: 3000,
         backend: 8000,
@@ -171,6 +176,7 @@ try {
                         const text = await Deno.readTextFile(CONFIG_FILE);
                         const json = JSON.parse(text);
                         currentConfig = { ...DEFAULT_CONFIG, ...json };
+                        applyOverrides();
                         console.log("[CONFIG] Hot-reloaded configuration.");
                     } catch (e) {
                         console.error("[CONFIG] Reload failed:", e);
@@ -182,6 +188,25 @@ try {
         // Ignored
     }
 })();
+
+// CLI Overrides
+function applyOverrides() {
+    try {
+        const args = parseArgs(Deno.args);
+        if (args.mode && (args.mode === "dev" || args.mode === "prod")) {
+            currentConfig.mode = args.mode;
+            console.log(`[CONFIG] CLI Override: mode = ${currentConfig.mode}`);
+        }
+        if (args.adminSecret) {
+            currentConfig.adminSecret = String(args.adminSecret);
+        }
+    } catch (e) {
+        // Ignored - args parsing might fail if unrelated flags passed, but usually fine
+    }
+}
+
+// Apply overrides on initial load
+applyOverrides();
 
 export const CONFIG = new Proxy<GuardianConfig>(currentConfig as GuardianConfig, {
     get: (_target, prop) => {

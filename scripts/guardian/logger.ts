@@ -1,7 +1,7 @@
 // @ts-nocheck
 /// <reference lib="deno.unstable" />
 /// <reference lib="deno.ns" />
-import { join } from "https://deno.land/std@0.224.0/path/mod.ts";
+import { join, dirname } from "https://deno.land/std@0.224.0/path/mod.ts";
 import { LogEntry, MetricEntry, RequestMetric, SessionStats } from "./types.ts";
 import { encodeHex } from "https://deno.land/std@0.224.0/encoding/hex.ts";
 
@@ -49,8 +49,12 @@ function broadcastLog(data: any) {
 export async function initLogger() {
     try {
         await Deno.mkdir(LOG_DIR, { recursive: true });
-        kv = await Deno.openKv("./guardian.db");
-        console.log("[LOGGER] Guardian KV initialized successfully at ./guardian.db");
+        const dbPath = Deno.env.get("GUARDIAN_DB_PATH") || "./guardian.db";
+        if (dbPath.includes("/")) {
+             await Deno.mkdir(dirname(dbPath), { recursive: true });
+        }
+        kv = await Deno.openKv(dbPath);
+        console.log(`[LOGGER] Guardian KV initialized successfully at ${dbPath}`);
     } catch (e) {
         console.error("[LOGGER] CRITICAL: Failed to init guardian KV:", e);
     }
@@ -175,6 +179,20 @@ export async function saveRequestMetric(metric: RequestMetric) {
 
         // 7. Session Management
         await updateSession(metric, date);
+
+        // 8. Size Breakdown
+        if (metric.size && metric.size > 0) {
+            atomic.mutate({
+                type: "sum",
+                key: ["guardian", "stats", date, "size_by_type", metric.resourceType],
+                value: new Deno.KvU64(BigInt(metric.size))
+            });
+            atomic.mutate({
+                type: "sum",
+                key: ["guardian", "stats", date, "total_size"],
+                value: new Deno.KvU64(BigInt(metric.size))
+            });
+        }
 
         const commitRes = await atomic.commit();
         if (!commitRes.ok) {

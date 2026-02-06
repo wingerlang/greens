@@ -231,6 +231,23 @@ export async function getRequestCountInWindow(serviceName: string, windowMs: num
     return count;
 }
 
+export async function getSizeStats() {
+    const kv = getKv();
+    if (!kv) return { byType: [], total: 0 };
+    const date = new Date().toISOString().split('T')[0];
+
+    // By Type
+    const iter = kv.list<Deno.KvU64>({ prefix: ["guardian", "stats", date, "size_by_type"] });
+    const byType = [];
+    for await (const res of iter) {
+        byType.push({ type: String(res.key[4]), size: Number(res.value.value) });
+    }
+
+    // Total
+    const totalRes = await kv.get<Deno.KvU64>(["guardian", "stats", date, "total_size"]);
+    const total = totalRes.value ? Number(totalRes.value.value) : 0;
+
+    return { byType, total };
 export async function getUptimeStats() {
     const kv = getKv();
     if (!kv) return {};
