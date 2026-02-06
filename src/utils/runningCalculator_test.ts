@@ -9,7 +9,7 @@ import {
   formatPace,
   formatSeconds,
 } from "./runningCalculator.ts";
-import { assertEquals, assertAlmostEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assertAlmostEquals } from "@std/assert";
 
 Deno.test("calculateVDOT - 5k in 20min", () => {
   const vdot = calculateVDOT(5, 20 * 60);

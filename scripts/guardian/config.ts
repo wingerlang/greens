@@ -1,4 +1,4 @@
-import { existsSync } from "https://deno.land/std@0.224.0/fs/mod.ts";
+import { existsSync } from "@std/fs";
 import { parseArgs } from "jsr:@std/cli/parse-args";
 
 const CONFIG_FILE = "guardian.config.json";

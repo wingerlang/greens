@@ -6,7 +6,7 @@ import {
   calculateCalorieDeficit,
   calculateMacros
 } from "./healthCalculators.ts";
-import { assertEquals, assertAlmostEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assertAlmostEquals } from "@std/assert";
 
 Deno.test("calculateBMI", () => {
   // 70kg, 175cm (1.75m)

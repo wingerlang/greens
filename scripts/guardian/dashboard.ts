@@ -1,7 +1,7 @@
 import { manager } from "./services.ts";
 import { getKv, registerLogClient, removeLogClient, stats } from "./logger.ts";
 import { MetricEntry } from "./types.ts";
-import { join, dirname, fromFileUrl } from "https://deno.land/std@0.224.0/path/mod.ts";
+import { join, dirname, fromFileUrl } from "@std/path";
 import {
     getTopEndpoints,
     getTopEndpointsHistory,

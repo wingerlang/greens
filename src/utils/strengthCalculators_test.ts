@@ -5,7 +5,7 @@ import {
   calculateEstimated1RM,
   calculatePlateLoading
 } from "./strengthCalculators.ts";
-import { assertEquals, assertAlmostEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assertEquals, assertAlmostEquals } from "@std/assert";
 
 Deno.test("calculateWilks - Male 80kg, 500kg Total", () => {
   // Using online calculator for reference

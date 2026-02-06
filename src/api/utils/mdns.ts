@@ -1,4 +1,4 @@
-import createMdns from "npm:multicast-dns@^7.2.5";
+import createMdns from "multicast-dns";
 
 export function startMdns() {
     try {
