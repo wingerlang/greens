@@ -1004,8 +1004,8 @@ function RetentionHeatmap({ data }: { data: any[] }) {
                                 className="w-full rounded-t-md transition-all hover:opacity-80"
                                 style={{
                                     height: `${Math.max(percent, 2)}%`,
-                                    background: `linear-gradient(to top, 
-                                        ${percent > 50 ? '#10b981' : percent > 25 ? '#f59e0b' : '#ef4444'}, 
+                                    background: `linear-gradient(to top,
+                                        ${percent > 50 ? '#10b981' : percent > 25 ? '#f59e0b' : '#ef4444'},
                                         ${percent > 50 ? '#34d399' : percent > 25 ? '#fbbf24' : '#f87171'})`
                                 }}
                             />

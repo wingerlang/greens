@@ -1,7 +1,7 @@
 /**
  * In-memory rate limiter using sliding window algorithm.
  * Much faster than KV-based rate limiting and avoids database lock issues under high load.
- * 
+ *
  * Note: This resets on server restart and doesn't work across multiple instances.
  * For production multi-instance deployments, use Redis or a dedicated rate limiting service.
  */

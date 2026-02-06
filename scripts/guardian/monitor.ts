@@ -1,10 +1,10 @@
-import { manager } from "./services.ts";
+import { manager, Service } from "./services.ts";
 import { recordUptime } from "./logger.ts";
 
 let persistenceCounter = 0;
 
 async function updateWindowsStats(pids: Map<number, any>) {
-    // ... (rest of the function remains the same, but using 'any' for service type to avoid import cycle if needed, 
+    // ... (rest of the function remains the same, but using 'any' for service type to avoid import cycle if needed,
     // though monitor.ts already imports from services.ts)
     if (pids.size === 0) return;
     const pidList = Array.from(pids.keys());
