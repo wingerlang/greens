@@ -612,6 +612,9 @@
             <div class="nav-item" :class="{ 'active': tab === 'tools' }" @click="tab = 'tools'">
                 <span>Shadow Ops</span>
             </div>
+            <div class="nav-item" :class="{ 'active': tab === 'ci' }" @click="tab = 'ci'">
+                <span>🚀 CI/CD Pipeline</span>
+            </div>
         </div>
     </div>
 
@@ -944,6 +947,39 @@
                     </template>
                     <div x-show="liveLogs.length === 0" style="color:#444; text-align:center; margin-top:50px">
                         Waiting for events...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CI/CD Tab -->
+        <div x-show="tab === 'ci'">
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <h3 style="margin:0">Pipeline Status</h3>
+                    <button class="primary" @click="runCiPipeline()">Run Pipeline</button>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                    <div style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                        <div style="font-size: 2rem; font-weight: 800;"
+                            :style="{color: ciReport.status === 'passed' ? '#22c55e' : (ciReport.status === 'failed' ? '#ef4444' : '#94a3b8')}"
+                            x-text="ciReport.status?.toUpperCase() || 'UNKNOWN'"></div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">Status</div>
+                    </div>
+                    <div style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                        <div style="font-size: 2rem; font-weight: 800; color: #3b82f6;"
+                            x-text="(ciReport.coverage?.percent || 0) + '%'"></div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">Coverage</div>
+                    </div>
+                    <div style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                        <div style="font-size: 2rem; font-weight: 800; color: #a855f7;" x-text="ciReport.totalTests || 0">
+                        </div>
+                        <div style="color: var(--text-muted); font-size: 0.85rem;">Total Tests</div>
+                    </div>
+                </div>
+
+                <div class="code-block" style="max-height: 500px; overflow-y: auto;">
+                    <pre x-text="ciReport.output || 'No output'"></pre>
                 </div>
             </div>
         </div>
@@ -1582,6 +1618,9 @@
                 isRecording: false,
                 traces: [],
 
+                // CI/CD
+                ciReport: {},
+
                 // WAF
                 wafEvents: [],
 
@@ -1694,6 +1733,7 @@
                         if (val === 'tools') this.refreshTraces();
                         if (val === 'waf') this.refreshWaf();
                         if (val === 'debug') this.refreshDebugLog();
+                        if (val === 'ci') this.fetchCiStatus();
                     });
                 },
 
@@ -1710,6 +1750,20 @@
 
                 async refreshTraces() {
                     this.traces = await fetch('/api/traces').then(r => r.json());
+                },
+
+                async fetchCiStatus() {
+                    try {
+                        this.ciReport = await fetch('/api/ci/status').then(r => r.json());
+                    } catch { }
+                },
+
+                async runCiPipeline() {
+                    if (!confirm("Run CI Pipeline? This may take a few seconds.")) return;
+                    await fetch('/api/ci/run', { method: 'POST' });
+                    // Poll for update
+                    setTimeout(() => this.fetchCiStatus(), 2000);
+                    setTimeout(() => this.fetchCiStatus(), 5000);
                 },
 
                 async refreshDebugLog() {

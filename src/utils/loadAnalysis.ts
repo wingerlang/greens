@@ -25,7 +25,7 @@ export function calculateEffectiveLoad(
     }
 ): WeeklyLoadData[] {
     // 1. Sort sessions chronologically
-    const sortedSessions = [...sessions].sort((a, b) => new Date(a.date).getTime() - b.date.getTime());
+    const sortedSessions = [...sessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // 2. Filter sessions (Date range only initially, exercise/muscle filtering happens per set)
     const filteredSessions = sortedSessions.filter(s => {

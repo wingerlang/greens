@@ -27,6 +27,7 @@ import { TextLineStream } from "jsr:@std/streams/text-line-stream";
 import { loadBalancer } from "./loadBalancer.ts";
 import { simulator } from "./simulator.ts";
 import { getDebugLog, clearDebugLog } from "./debug.ts";
+import { runCiPipeline } from "./ci.ts";
 
 // WebSocket clients for real-time updates
 const wsClients: Set<WebSocket> = new Set();
@@ -585,6 +586,21 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             }
         }
         return Response.json(simulator.getStatus());
+    }
+
+    // CI/CD Endpoints
+    if (url.pathname === "/api/ci/status") {
+        try {
+            const report = await Deno.readTextFile("data/ci_report.json");
+            return new Response(report, { headers: { "Content-Type": "application/json" } });
+        } catch {
+            return Response.json({ status: "unknown", coverage: { percent: 0 } });
+        }
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/ci/run") {
+        runCiPipeline(); // Run in background
+        return Response.json({ success: true, message: "Pipeline started" });
     }
 
     // Database Sync Endpoint

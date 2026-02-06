@@ -227,6 +227,7 @@ export function calculateExerciseCalories(
         walking: { low: 2.5, moderate: 3.5, high: 4.5, ultra: 5.5 },
         swimming: { low: 5, moderate: 7, high: 10, ultra: 12 },
         yoga: { low: 2, moderate: 2.5, high: 3.5, ultra: 4 },
+        hyrox: { low: 6, moderate: 8, high: 10, ultra: 12 },
         other: { low: 3, moderate: 4.5, high: 6, ultra: 8 }
     };
 

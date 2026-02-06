@@ -165,7 +165,8 @@ export const analyzeErgPerformance = (
     cardioActivities.forEach(activity => {
         if (!activity.distance || !activity.durationMinutes) return;
 
-        const distMeters = activity.distance * (activity.distanceUnit === 'km' ? 1000 : 1);
+        const distanceUnit = (activity as any).distanceUnit;
+        const distMeters = activity.distance * (distanceUnit === 'km' ? 1000 : 1);
         const totalSeconds = activity.durationMinutes * 60;
 
         // Check if this activity IS a specific distance effort (within tolerance)
