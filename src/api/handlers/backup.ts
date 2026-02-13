@@ -25,6 +25,11 @@ export async function handleBackupRoutes(
 ): Promise<Response> {
     const method = req.method;
 
+    // Check for Deno Deploy environment (Read-only FS)
+    if (Deno.env.get("DENO_DEPLOYMENT_ID")) {
+        return new Response(JSON.stringify({ error: "Local backups not supported in Deno Deploy environment" }), { status: 501, headers });
+    }
+
     // All backup routes require authentication
     const ctx = await authenticate(req);
     if (!ctx) {

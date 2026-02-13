@@ -46,9 +46,12 @@ export async function ensureSeeded() {
             ],
         });
 
+        // Parse returns a Promise in csv.ts
+        const result = await records;
+
         let count = 0;
         const now = new Date().toISOString();
-        for (const record of records) {
+        for (const record of result) {
             const food: FoodItem = {
                 id: `food_${encodeURIComponent(record.Name).toLowerCase()}`,
                 name: record.Name,

@@ -29,7 +29,14 @@ export async function handleDebugRoutes(req: Request, url: URL, headers: Headers
 }
 
 export async function handleGetHostInfo(req: Request): Promise<Response> {
-    const interfaces = Deno.networkInterfaces();
+    let interfaces;
+    try {
+        interfaces = Deno.networkInterfaces();
+    } catch {
+        // Deno Deploy may not allow networkInterfaces
+        return new Response(JSON.stringify({ ips: [], error: "Not supported in this environment" }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+
     const headers = { "Content-Type": "application/json" };
 
     const candidates: { name: string, ip: string }[] = [];

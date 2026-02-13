@@ -8,8 +8,18 @@ import { addDebugLog, getDebugContext } from "./utils/debugContext.ts";
  * Wrapped to intercept operations for debugging
  */
 
+// Check for Deno Deploy environment
+const isDeploy = Deno.env.get("DENO_DEPLOYMENT_ID") !== undefined;
+const kvPath = isDeploy ? undefined : "./greens.db";
+
 // @ts-ignore: Deno is polyfilled
-const baseKv = await (globalThis.Deno ? Deno.openKv("./greens.db") : (globalThis as any).Deno.openKv("./greens.db"));
+const baseKv = await (globalThis.Deno ? Deno.openKv(kvPath) : (globalThis as any).Deno.openKv(kvPath));
+
+if (isDeploy) {
+    console.log("[KV] Connected to Deno Deploy Managed KV");
+} else {
+    console.log(`[KV] Connected to local KV at ${kvPath}`);
+}
 
 // Proxy handler to intercept KV operations
 // @ts-ignore: Deno is polyfilled
@@ -117,7 +127,7 @@ function createAtomicProxy(atomic: Deno.AtomicOperation): Deno.AtomicOperation {
     return new Proxy(atomic, atomicHandler);
 }
 
-export const kv = new Proxy(baseKv, kvHandler);
+export const kv = new Proxy(baseKv, kvHandler) as unknown as Deno.Kv;
 
 export async function closeKv() {
     await baseKv.close();

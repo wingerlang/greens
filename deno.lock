@@ -16,6 +16,7 @@
     "jsr:@std/fs@^1.0.22": "1.0.22",
     "jsr:@std/html@^1.0.5": "1.0.5",
     "jsr:@std/http@*": "1.0.24",
+    "jsr:@std/http@^1.0.13": "1.0.24",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/media-types@^1.1.0": "1.1.0",
     "jsr:@std/net@^1.0.6": "1.0.6",
@@ -74,6 +75,7 @@
     "npm:tailwindcss@^3.4.0": "3.4.17_postcss@8.5.6",
     "npm:tailwindcss@^3.4.16": "3.4.17_postcss@8.5.6",
     "npm:tailwindcss@^3.4.17": "3.4.17_postcss@8.5.6",
+    "npm:tesseract.js@*": "5.1.1",
     "npm:tesseract.js@^5.1.0": "5.1.1",
     "npm:tsx@^4.21.0": "4.21.0",
     "npm:vite@*": "7.3.1_tsx@4.21.0_picomatch@4.0.3",
@@ -157,7 +159,10 @@
       ]
     },
     "@std/streams@1.0.17": {
-      "integrity": "7859f3d9deed83cf4b41f19223d4a67661b3d3819e9fc117698f493bf5992140"
+      "integrity": "7859f3d9deed83cf4b41f19223d4a67661b3d3819e9fc117698f493bf5992140",
+      "dependencies": [
+        "jsr:@std/bytes"
+      ]
     }
   },
   "npm": {
