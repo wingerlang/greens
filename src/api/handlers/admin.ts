@@ -4,9 +4,9 @@ import { authenticate, hasRole } from "../middleware.ts";
 import { getErrorLogs, getMetrics } from "../utils/logger.ts";
 import { kv } from "../kv.ts";
 import { getPermissionConfig, updatePermissionConfig } from "../db/permissions.ts";
+import { AuthContext } from "../middleware.ts";
 
-export async function handleAdminRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
-    const ctx = await authenticate(req);
+export async function handleAdminRoutes(req: Request, url: URL, headers: Headers, ctx: AuthContext | null): Promise<Response> {
     if (!ctx || !hasRole(ctx, 'admin')) {
         return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), { status: 403, headers });
     }

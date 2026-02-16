@@ -6,17 +6,14 @@
 import { getSession } from '../db/session.ts';
 import { strengthRepo } from '../repositories/strengthRepository.ts';
 import { parseStrengthLogCSV } from '../../utils/strengthLogParser.ts';
+import { AuthContext } from '../middleware.ts';
 
-export async function handleStrengthRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
+export async function handleStrengthRoutes(req: Request, url: URL, headers: Headers, ctx: AuthContext | null): Promise<Response> {
     const method = req.method;
 
-    // Auth check
-    const token = req.headers.get('Authorization')?.replace('Bearer ', '');
-    if (!token) return new Response(JSON.stringify({ error: 'No token' }), { status: 401, headers });
-    const session = await getSession(token);
-    if (!session) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers });
-
-    const userId = session.userId;
+    if (!ctx) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    const { user: session, token } = ctx;
+    const userId = session.id;
 
     // ============================================
     // Import CSV

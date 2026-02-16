@@ -2,6 +2,9 @@ import { CONFIG } from "./config.ts";
 import { recordSuccess, recordFailure } from "./circuitBreaker.ts";
 import { manager } from "./services.ts";
 
+const failureCounts = new Map<string, number>();
+const RESTART_THRESHOLD = 3;
+
 export function startHealthMonitor() {
     console.log("[GUARDIAN] Starting Active Health Monitor...");
 
@@ -28,11 +31,14 @@ async function checkService(name: string, port: number) {
         const res = await fetch(`http://127.0.0.1:${port}/`, {
             method: "HEAD",
             signal: controller.signal
-        }).catch(async () => {
+        }).catch(async (err) => {
             // Retry with GET if HEAD fails (some dev servers might not handle HEAD well?)
-            // But for standard servers HEAD should be fine.
-            // If fetch throws, it's network error.
-            throw new Error("Network error");
+            if (err.name === 'AbortError') throw err;
+
+            return await fetch(`http://127.0.0.1:${port}/`, {
+                method: "GET",
+                signal: controller.signal
+            });
         });
 
         clearTimeout(id);
@@ -40,14 +46,24 @@ async function checkService(name: string, port: number) {
         if (res.status && res.status < 502) {
             // Service is reachable and responding (even if 404 or 500)
             recordSuccess(name);
+            failureCounts.set(name, 0);
         } else {
-            // 502, 503, 504 are gateway/proxy errors (if we were proxying)
-            // But here we are hitting direct.
-            // If the service returns 503, it declares itself down.
-            recordFailure(name);
+            handleFailure(name, service);
         }
     } catch (e) {
-        // Connection refused, timeout
-        recordFailure(name);
+        handleFailure(name, service);
+    }
+}
+
+function handleFailure(name: string, service: any) {
+    recordFailure(name);
+
+    const currentFailures = (failureCounts.get(name) || 0) + 1;
+    failureCounts.set(name, currentFailures);
+
+    if (currentFailures >= RESTART_THRESHOLD) {
+        service.addLog("info", `Service unresponsive for ${currentFailures} checks. Forcing restart...`);
+        service.restart();
+        failureCounts.set(name, 0); // Reset after triggering restart
     }
 }

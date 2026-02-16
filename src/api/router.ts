@@ -77,7 +77,7 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
     if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
         const hasAuthCookie = (req.headers.get("cookie") || "").includes("auth_token=");
         if (hasAuthCookie) {
-            const host = req.headers.get("Host");
+            const host = req.headers.get("x-forwarded-host") || req.headers.get("Host");
             const referer = req.headers.get("Referer");
 
             let isCsrfSafe = false;
@@ -95,10 +95,8 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
 
             // If we have a cookie but origin/referer don't match host, block it
             // Note: If origin/referer are missing, we might assume it's a non-browser tool, but for robustness with cookies, we can block.
-            // However, aggressive blocking can break legitimate things.
-            // Let's block ONLY if we have origin/referer mismatch.
             if ((origin || referer) && !isCsrfSafe) {
-                 return new Response(JSON.stringify({ error: "CSRF Check Failed" }), { status: 403, headers });
+                return new Response(JSON.stringify({ error: "CSRF Check Failed" }), { status: 403, headers });
             }
         }
     }
@@ -110,7 +108,13 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
     }
 
     // Auth Middleware for protected routes
-    const publicPaths = ["/api/auth/login", "/api/auth/register", "/api/stats/community"];
+    const publicPaths = [
+        "/api/auth/login",
+        "/api/auth/register",
+        "/api/stats/community",
+        "/api/strava/callback",
+        "/api/strava/auth"
+    ];
     const isPublicPath = publicPaths.some(path => url.pathname.startsWith(path));
 
     // Some /api/u/ paths are public profiles
@@ -147,11 +151,11 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
         if (url.pathname.startsWith("/api/auth")) {
             response = await handleAuthRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/user")) {
-            response = await handleUserRoutes(req, url, headers);
+            response = await handleUserRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/u/")) {
-            response = await handleUserRoutes(req, url, headers);
+            response = await handleUserRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/users")) {
-            response = await handleUserRoutes(req, url, headers);
+            response = await handleUserRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/data")) {
             response = await handleDataRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/meals")) {
@@ -163,19 +167,19 @@ async function internalRouter(req: Request, remoteAddr: any): Promise<Response> 
         } else if (url.pathname.startsWith("/api/foods")) {
             response = await handleDataRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/strava")) {
-            response = await handleStravaRoutes(req, url, headers);
+            response = await handleStravaRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/social")) {
-            response = await handleSocialRoutes(req, url, headers);
+            response = await handleSocialRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/activities")) {
-            response = await handleActivityRoutes(req, url, headers);
+            response = await handleActivityRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/admin/kv")) {
             response = await handleAdminKvRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/admin/sessions")) {
             response = await handleAdminSessionRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/admin")) {
-            response = await handleAdminRoutes(req, url, headers);
+            response = await handleAdminRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/strength")) {
-            response = await handleStrengthRoutes(req, url, headers);
+            response = await handleStrengthRoutes(req, url, headers, ctx);
         } else if (url.pathname.startsWith("/api/feed")) {
             response = await handleFeedRoutes(req, url, headers);
         } else if (url.pathname.startsWith("/api/goals")) {

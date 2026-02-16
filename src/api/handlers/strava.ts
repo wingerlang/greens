@@ -2,6 +2,7 @@ import * as strava from "../strava.ts";
 import { getSession } from "../db/session.ts";
 import { reconciliationService } from "../services/reconciliationService.ts";
 import { kv } from "../kv.ts";
+import { AuthContext } from "../middleware.ts";
 
 // Helper to manage Strava tokens in KV (should ideally be in a db module)
 interface StravaTokens {
@@ -25,8 +26,7 @@ async function deleteStravaTokens(userId: string) {
     await kv.delete(['strava_tokens', userId]);
 }
 
-
-export async function handleStravaRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
+export async function handleStravaRoutes(req: Request, url: URL, headers: Headers, ctx: AuthContext | null): Promise<Response> {
     const method = req.method;
 
     // Public/Callback route (doesn't require standard auth header, handles its own state)
@@ -42,7 +42,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
             const tokens = await strava.exchangeStravaCode(code);
             if (!tokens) return Response.redirect(new URL('/profile?strava_error=token_exchange_failed', origin).toString(), 302);
 
-            const token = req.headers.get("Authorization")?.replace("Bearer ", "") || url.searchParams.get('state');
+            const token = ctx?.token || url.searchParams.get('state');
             if (token) {
                 const session = await getSession(token);
                 if (session) await saveStravaTokens(session.userId, tokens);
@@ -59,15 +59,13 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
         return new Response(JSON.stringify({ authUrl: strava.getStravaAuthUrl(state) }), { headers });
     }
 
-    // Authenticated routes
-    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
-    const session = await getSession(token);
-    if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    // Authenticated routes - using ctx from router
+    if (!ctx) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    const { user, token } = ctx;
 
     // Status
     if (url.pathname === "/api/strava/status" && method === "GET") {
-        const stravaTokens = await getStravaTokens(session.userId);
+        const stravaTokens = await getStravaTokens(user.id);
         if (!stravaTokens) return new Response(JSON.stringify({ connected: false }), { headers });
 
         let accessToken = stravaTokens.accessToken;
@@ -75,9 +73,9 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
             const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
             if (refreshed) {
                 accessToken = refreshed.accessToken;
-                await saveStravaTokens(session.userId, { ...stravaTokens, ...refreshed });
+                await saveStravaTokens(user.id, { ...stravaTokens, ...refreshed });
             } else {
-                await deleteStravaTokens(session.userId);
+                await deleteStravaTokens(user.id);
                 return new Response(JSON.stringify({ connected: false, error: "Token expired" }), { headers });
             }
         }
@@ -107,7 +105,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
     // Scan (Sync 2.0)
     if (url.pathname === "/api/strava/scan" && method === "POST") {
         try {
-            const stravaTokens = await getStravaTokens(session.userId);
+            const stravaTokens = await getStravaTokens(user.id);
             if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
 
             let accessToken = stravaTokens.accessToken;
@@ -115,13 +113,13 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
                 const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
                 if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
                 accessToken = refreshed.accessToken;
-                await saveStravaTokens(session.userId, { ...stravaTokens, ...refreshed });
+                await saveStravaTokens(user.id, { ...stravaTokens, ...refreshed });
             }
 
             const body = await req.json().catch(() => ({}));
             const { fromDate } = body;
 
-            const report = await reconciliationService.scanStravaActivities(session.userId, accessToken, { fromDate });
+            const report = await reconciliationService.scanStravaActivities(user.id, accessToken, { fromDate });
             return new Response(JSON.stringify(report), { headers });
 
         } catch (e) {
@@ -133,13 +131,13 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
     // Import (Sync 2.0)
     if (url.pathname === "/api/strava/import" && method === "POST") {
         try {
-            const stravaTokens = await getStravaTokens(session.userId);
+            const stravaTokens = await getStravaTokens(user.id);
             if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
 
             // Token refresh check (duplicate for safety)
             if (Date.now() > stravaTokens.expiresAt) {
                 const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
-                if (refreshed) await saveStravaTokens(session.userId, { ...stravaTokens, ...refreshed });
+                if (refreshed) await saveStravaTokens(user.id, { ...stravaTokens, ...refreshed });
             }
 
             const { activities, forceUpdate } = await req.json();
@@ -147,11 +145,11 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
                 return new Response(JSON.stringify({ error: "Invalid activities payload" }), { status: 400, headers });
             }
 
-            const result = await reconciliationService.syncActivities(session.userId, activities, { forceUpdate });
+            const result = await reconciliationService.syncActivities(user.id, activities, { forceUpdate });
 
             // Update last sync time? Maybe only if we synced new stuff.
             if (result.created > 0 || result.updated > 0) {
-                await saveStravaTokens(session.userId, { ...stravaTokens, lastSync: new Date().toISOString() });
+                await saveStravaTokens(user.id, { ...stravaTokens, lastSync: new Date().toISOString() });
             }
 
             return new Response(JSON.stringify(result), { headers });
@@ -165,7 +163,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
     // Sync (Legacy - preserved for now)
     if (url.pathname === "/api/strava/sync" && method === "POST") {
         try {
-            const stravaTokens = await getStravaTokens(session.userId);
+            const stravaTokens = await getStravaTokens(user.id);
             if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
 
             let accessToken = stravaTokens.accessToken;
@@ -173,16 +171,16 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
                 const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
                 if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
                 accessToken = refreshed.accessToken;
-                await saveStravaTokens(session.userId, { ...stravaTokens, ...refreshed });
+                await saveStravaTokens(user.id, { ...stravaTokens, ...refreshed });
             }
 
             const fullSync = url.searchParams.get('full') === 'true';
             const lastSyncDate = (!fullSync && stravaTokens.lastSync) ? new Date(stravaTokens.lastSync).getTime() / 1000 : undefined;
 
             const activities = await strava.getStravaActivities(accessToken, { after: lastSyncDate, perPage: 200 });
-            const result = await reconciliationService.reconcileStravaActivities(session.userId, activities);
+            const result = await reconciliationService.reconcileStravaActivities(user.id, activities);
 
-            await saveStravaTokens(session.userId, { ...stravaTokens, lastSync: new Date().toISOString() });
+            await saveStravaTokens(user.id, { ...stravaTokens, lastSync: new Date().toISOString() });
             return new Response(JSON.stringify({ success: true, result }), { headers });
 
         } catch (e) {
@@ -193,7 +191,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
     // NEW: Migrate start times for existing activities
     if (url.pathname === "/api/strava/migrate-start-times" && method === "POST") {
         try {
-            const stravaTokens = await getStravaTokens(session.userId);
+            const stravaTokens = await getStravaTokens(user.id);
             if (!stravaTokens) return new Response(JSON.stringify({ error: "Strava not connected" }), { status: 400, headers });
 
             let accessToken = stravaTokens.accessToken;
@@ -201,7 +199,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
                 const refreshed = await strava.refreshStravaToken(stravaTokens.refreshToken);
                 if (!refreshed) return new Response(JSON.stringify({ error: "Token expired" }), { status: 401, headers });
                 accessToken = refreshed.accessToken;
-                await saveStravaTokens(session.userId, { ...stravaTokens, ...refreshed });
+                await saveStravaTokens(user.id, { ...stravaTokens, ...refreshed });
             }
 
             // Fetch ALL Strava activities
@@ -215,7 +213,7 @@ export async function handleStravaRoutes(req: Request, url: URL, headers: Header
 
             // Iterate all universal activities for this user and update
             const { activityRepo } = await import("../repositories/activityRepository.ts");
-            const allActivities = await activityRepo.getAllActivities(session.userId);
+            const allActivities = await activityRepo.getAllActivities(user.id);
 
             let updated = 0;
             let skipped = 0;

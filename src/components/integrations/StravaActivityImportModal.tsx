@@ -173,7 +173,7 @@ export function StravaActivityImportModal({ isOpen, onClose, initialRange }: Str
     if (!isOpen) return null;
 
     return (
-        <div className="modal-overlay backdrop-blur-md bg-slate-950/80 fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
+        <div className="modal-overlay backdrop-blur-md bg-slate-950/80 fixed inset-0 z-[200] flex items-center justify-center p-4" onClick={onClose}>
             <div
                 className="bg-slate-900 border border-white/10 shadow-2xl rounded-3xl overflow-hidden w-full max-w-3xl flex flex-col h-[95vh] animate-in fade-in zoom-in-95 duration-200"
                 onClick={e => e.stopPropagation()}

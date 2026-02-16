@@ -13,12 +13,15 @@ export interface AuthContext {
 export async function authenticate(req: Request): Promise<AuthContext | null> {
     let token = req.headers.get("Authorization")?.replace("Bearer ", "");
 
-    if (!token) {
+    if (!token || token === "null" || token === "undefined") {
         const cookie = req.headers.get("cookie");
         token = cookie?.split("auth_token=")[1]?.split(";")[0];
     }
 
-    if (!token) return null;
+    if (!token || token === "null" || token === "undefined") {
+        // console.log("[AUTH] No token found in headers or cookies");
+        return null;
+    }
 
     const session = await getSession(token);
     if (!session) return null;

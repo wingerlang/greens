@@ -6,13 +6,13 @@ import { createMergedActivity, validateMerge } from "../services/activityMergeSe
 import { sanitizeObject } from "../utils/sanitize.ts";
 import { logAudit } from "../utils/audit.ts";
 import { ActivitySchema } from "../utils/schemas.ts";
+import { AuthContext } from "../middleware.ts";
 
-export async function handleActivityRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
+export async function handleActivityRoutes(req: Request, url: URL, headers: Headers, ctx: AuthContext | null): Promise<Response> {
     const method = req.method;
-    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
-    const session = await getSession(token);
-    if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    if (!ctx) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    const { user: session, token } = ctx;
+    const userId = session.id; // ctx.user.id is string
 
     // GET /api/activities
     if (url.pathname === "/api/activities" && method === "GET") {
@@ -24,7 +24,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 return new Response(JSON.stringify({ error: "Missing start/end date params" }), { status: 400, headers });
             }
 
-            const activities = await activityRepo.getActivitiesByDateRange(session.userId, startDate, endDate);
+            const activities = await activityRepo.getActivitiesByDateRange(userId, startDate, endDate);
             return new Response(JSON.stringify({ activities }), { headers });
         } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });
@@ -42,7 +42,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
 
             let activity = result.data as UniversalActivity;
             // Always enforce session user
-            activity.userId = session.userId;
+            activity.userId = userId;
 
             // Sanitize
             activity = sanitizeObject(activity);
@@ -71,7 +71,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 // Fetch activities by ID (using the new ID index for efficiency)
                 for (const aid of activityIds) {
                     const act = await activityRepo.getActivityById(aid);
-                    if (act && act.userId === session.userId) {
+                    if (act && act.userId === userId) {
                         activitiesToMerge.push(act);
                     }
                 }
@@ -88,7 +88,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             }
 
             // Create merged activity
-            const mergedActivity = createMergedActivity(activitiesToMerge, session.userId);
+            const mergedActivity = createMergedActivity(activitiesToMerge, userId);
 
             // Save merged activity
             await activityRepo.saveActivity(mergedActivity);
@@ -118,7 +118,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
 
             // Get the merged activity using ID index
             const mergedActivity = await activityRepo.getActivityById(mergedActivityId);
-            if (!mergedActivity || mergedActivity.userId !== session.userId) {
+            if (!mergedActivity || mergedActivity.userId === userId) {
                 return new Response(JSON.stringify({ error: "Merged activity not found" }), { status: 404, headers });
             }
 
@@ -167,9 +167,9 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             // Use the new ID index (avoids scans!)
             activity = await activityRepo.getActivityById(activityId);
 
-            if (!activity || activity.userId !== session.userId) {
+            if (!activity || activity.userId !== userId) {
                 // If not found in activities, try strength repo
-                const workout = await strengthRepo.getWorkout(session.userId, activityId);
+                const workout = await strengthRepo.getWorkout(userId, activityId);
                 if (workout) {
                     console.log(`[PATCH /api/activities] Found strength workout for ID ${activityId}, applying updates...`);
 
@@ -181,7 +181,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                     workout.updatedAt = new Date().toISOString();
                     await strengthRepo.saveWorkout(workout);
 
-                    await logAudit({ actorId: session.userId, action: "UPDATE_STRENGTH_WORKOUT", targetId: activityId });
+                    await logAudit({ actorId: userId, action: "UPDATE_STRENGTH_WORKOUT", targetId: activityId });
 
                     return new Response(JSON.stringify({ success: true, message: "Strength workout updated" }), { status: 200, headers });
                 }
@@ -285,14 +285,14 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             }
 
             const activity = await activityRepo.getActivityById(activityId);
-            if (!activity || activity.userId !== session.userId) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
+            if (!activity || activity.userId !== userId) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 
             // If it's a merged activity, we must restore original activities
             if (activity.mergeInfo?.isMerged && activity.mergeInfo.originalActivityIds) {
                 const originalIds = activity.mergeInfo.originalActivityIds;
                 for (const oid of originalIds) {
                     const original = await activityRepo.getActivityById(oid);
-                    if (original && original.userId === session.userId) {
+                    if (original && original.userId === userId) {
                         delete original.mergedIntoId;
                         original.updatedAt = new Date().toISOString();
                         await activityRepo.saveActivity(original);
@@ -301,7 +301,7 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             }
 
             await activityRepo.deleteActivity(activity);
-            await logAudit({ actorId: session.userId, action: "DELETE_ACTIVITY", targetId: activityId });
+            await logAudit({ actorId: userId, action: "DELETE_ACTIVITY", targetId: activityId });
             return new Response(JSON.stringify({ success: true }), { status: 200, headers });
         } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message }), { status: 500, headers });

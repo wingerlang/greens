@@ -4,6 +4,7 @@ import { strengthRepo } from "../repositories/strengthRepository.ts";
 import { kv } from "../kv.ts";
 import { getUserData, saveUserData } from "../db/data.ts";
 import { UniversalActivity } from "../../models/types.ts";
+import { AuthContext } from "../middleware.ts";
 
 async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weight' | 'sleep' | 'water' | 'caffeine' | 'food' | 'all') {
     if (type === 'all') {
@@ -55,29 +56,52 @@ async function granularReset(userId: string, type: 'meals' | 'exercises' | 'weig
     await saveUserData(userId, data);
 }
 
-export async function handleUserRoutes(req: Request, url: URL, headers: Headers): Promise<Response> {
+export async function handleUserRoutes(req: Request, url: URL, headers: Headers, ctx: AuthContext | null): Promise<Response> {
     const method = req.method;
 
-    // Auth Check
-    const token = req.headers.get("Authorization")?.replace("Bearer ", "");
-    if (!token) return new Response(JSON.stringify({ error: "No token" }), { status: 401, headers });
-    const session = await getSession(token);
-    if (!session) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    // Public Profile by Handle (Moved up as it might not need auth, but we should check privacy)
+    if (url.pathname.startsWith("/api/u/") && method === "GET" && !url.pathname.endsWith("/stats")) {
+        const handle = url.pathname.split("/").pop();
+        if (!handle) return new Response(JSON.stringify({ error: "Missing handle" }), { status: 400, headers });
+
+        try {
+            // 1. Lookup ID by handle or username (both indexed now)
+            const handleKey = handle.toLowerCase();
+            const idEntry = await kv.get(["users_by_handle", handleKey]);
+            let id = idEntry.value || (await kv.get(["users_by_username", handleKey])).value;
+
+            if (!id) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            // 2. Fetch User
+            const user = await getUserById(id as string);
+            if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
+
+            // 3. Return Sanitized User
+            return new Response(JSON.stringify({ ...sanitizeUser(user) }), { headers });
+        } catch (e) {
+            return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
+        }
+    }
+
+    // Authenticated routes - now using ctx from router
+    if (!ctx) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers });
+    const { user, token } = ctx;
+    const userId = user.id;
 
     // Session Management
     if (url.pathname === "/api/user/sessions") {
         if (method === "GET") {
-            const sessions = await getUserSessions(session.userId);
+            const sessions = await getUserSessions(userId);
             const clientSessions = sessions.map(s => ({
                 token: s.id,
                 userId: s.userId,
                 createdAt: s.start,
-                isCurrent: s.id === session.id
+                isCurrent: s.id === token
             }));
             return new Response(JSON.stringify({ sessions: clientSessions }), { headers });
         }
         if (method === "DELETE") {
-            await revokeAllUserSessions(session.userId, session.id);
+            await revokeAllUserSessions(userId, token);
             return new Response(JSON.stringify({ success: true }), { headers });
         }
     }
@@ -107,11 +131,11 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     }
 
     if (url.pathname === "/api/user/profile" && method === "GET") {
-        const data = await getUserData(session.userId);
-        const user = await getUserById(session.userId);
+        const data = await getUserData(userId);
+        const user = await getUserById(userId);
 
         return new Response(JSON.stringify({
-            userId: session.userId,
+            userId: userId,
             name: user?.name,
             handle: user?.handle,
             bio: user?.bio,
@@ -129,7 +153,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
 
     if (url.pathname.startsWith("/api/user/sessions/") && method === "DELETE") {
         const tokenToRevoke = url.pathname.split("/").pop();
-        if (tokenToRevoke) await revokeSession(tokenToRevoke, session.userId);
+        if (tokenToRevoke) await revokeSession(tokenToRevoke, userId);
         return new Response(JSON.stringify({ success: true }), { headers });
     }
 
@@ -140,7 +164,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             if (!['meals', 'exercises', 'weight', 'sleep', 'water', 'caffeine', 'food', 'all'].includes(body.type)) {
                 return new Response(JSON.stringify({ error: "Invalid type" }), { status: 400, headers });
             }
-            await granularReset(session.userId, body.type);
+            await granularReset(userId, body.type);
             return new Response(JSON.stringify({ success: true }), { headers });
         } catch (e: any) {
             return new Response(JSON.stringify({ error: e.message || "Failed" }), { status: 500, headers });
@@ -153,7 +177,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             const body = await req.json();
             if (!body.weight || !body.date) throw new Error("Missing weight or date");
 
-            const currentData = await getUserData(session.userId) || { weightEntries: [] };
+            const currentData = await getUserData(userId) || { weightEntries: [] };
             const newEntry = {
                 id: crypto.randomUUID(),
                 weight: Number(body.weight),
@@ -164,7 +188,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             const updatedEntries = [...(currentData.weightEntries || []), newEntry]
                 .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-            await saveUserData(session.userId, {
+            await saveUserData(userId, {
                 ...currentData,
                 weightEntries: updatedEntries
             } as any);
@@ -178,7 +202,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     // Weight history (GET)
     if (url.pathname === "/api/user/weight" && method === "GET") {
         try {
-            const data = await getUserData(session.userId);
+            const data = await getUserData(userId);
             return new Response(JSON.stringify({ history: data?.weightEntries || [] }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
@@ -192,16 +216,16 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
 
             // Check handle uniqueness if handle is being updated
             if (updates.handle) {
-                const user = await getUserById(session.userId);
+                const user = await getUserById(userId);
                 if (user && updates.handle !== user.handle) {
                     const existingId = (await kv.get(["users_by_handle", updates.handle])).value;
-                    if (existingId && existingId !== session.userId) {
+                    if (existingId && existingId !== userId) {
                         return new Response(JSON.stringify({ error: "Handle already taken" }), { status: 409, headers });
                     }
                 }
             }
 
-            const currentData = await getUserData(session.userId);
+            const currentData = await getUserData(userId);
 
             // Handle AppData updates
             if (currentData) {
@@ -214,11 +238,11 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
                 if (updates.maxHr) newData.userSettings = { ...newData.userSettings, maxHr: updates.maxHr };
                 // ... map other specific fields if necessary or just rely on spread
 
-                await saveUserData(session.userId, newData);
+                await saveUserData(userId, newData);
             }
 
             // Also update the core User object if name/handle/avatar/bio are present
-            const user = await getUserById(session.userId);
+            const user = await getUserById(userId);
             if (user) {
                 let userChanged = false;
                 if (updates.name !== undefined) { user.name = updates.name; userChanged = true; }
@@ -248,7 +272,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
                 return new Response(JSON.stringify({ error: "Invalid tier" }), { status: 400, headers });
             }
 
-            const user = await getUserById(session.userId);
+            const user = await getUserById(userId);
             if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
 
             // Update subscription
@@ -386,7 +410,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     // Personal Records (GET all)
     if (url.pathname === "/api/user/prs" && method === "GET") {
         try {
-            const targetUserId = url.searchParams.get("userId") || session.userId;
+            const targetUserId = url.searchParams.get("userId") || userId;
             const prs: any[] = [];
             const iter = kv.list({ prefix: ['prs', targetUserId] });
             for await (const entry of iter) {
@@ -414,7 +438,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
                 isManual: isManual ?? true,
                 createdAt: new Date().toISOString()
             };
-            await kv.set(['prs', session.userId, category], pr);
+            await kv.set(['prs', userId, category], pr);
             return new Response(JSON.stringify({ success: true, pr }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
@@ -424,7 +448,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     // Personal Records (Detect)
     if (url.pathname === "/api/user/prs/detect" && method === "GET") {
         try {
-            const targetUserId = url.searchParams.get("userId") || session.userId;
+            const targetUserId = url.searchParams.get("userId") || userId;
             const detected: any[] = [];
 
             // 1. Get all activities (simplified list for scanning)
@@ -510,7 +534,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     if (url.pathname === "/api/user/privacy" && method === "PATCH") {
         try {
             const updates = await req.json();
-            const user = await getUserById(session.userId);
+            const user = await getUserById(userId);
             if (!user) return new Response(JSON.stringify({ error: "User not found" }), { status: 404, headers });
 
             // Merge privacy settings
@@ -544,7 +568,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
     if (url.pathname.startsWith("/api/user/prs/") && method === "DELETE") {
         try {
             const category = decodeURIComponent(url.pathname.split('/').pop() || '');
-            await kv.delete(['prs', session.userId, category]);
+            await kv.delete(['prs', userId, category]);
             return new Response(JSON.stringify({ success: true }), { headers });
         } catch (e) {
             return new Response(JSON.stringify({ error: (e as Error).message }), { status: 500, headers });
@@ -569,7 +593,7 @@ export async function handleUserRoutes(req: Request, url: URL, headers: Headers)
             // 2. Privacy Check
             const privacy = user.privacy || { isPublic: true, sharing: { training: 'FRIENDS' } };
             // Allow if public AND training is explicitly PUBLIC, OR if checking my own stats
-            const isMe = session.userId === id;
+            const isMe = userId === id;
 
             // Simplified Privacy Logic:
             // If strictly private -> Block (unless Me)
