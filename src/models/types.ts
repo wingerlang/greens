@@ -572,7 +572,7 @@ export type GoalPeriod = 'daily' | 'weekly' | 'monthly' | 'once';
 export type GoalCategory = 'training' | 'nutrition' | 'body' | 'lifestyle';
 
 /** Goal status */
-export type GoalStatus = 'active' | 'paused' | 'completed' | 'failed';
+export type GoalStatus = 'active' | 'paused' | 'completed' | 'failed' | 'cancelled';
 
 /** Individual target within a goal */
 export interface GoalTarget {
@@ -625,6 +625,8 @@ export interface PerformanceGoal {
     goalDirection?: 'up' | 'down' | 'stable';
     periodId?: string;            // Link to TrainingPeriod
     previousGoalId?: string;      // For chained goals (phases)
+    cancellationReason?: string;
+    archivedAt?: string;
 }
 
 // ============================================
@@ -632,6 +634,7 @@ export interface PerformanceGoal {
 // ============================================
 
 export type PeriodFocus = 'weight_loss' | 'strength' | 'endurance' | 'general' | 'habit';
+export type PeriodStatus = 'active' | 'completed' | 'cancelled';
 
 export interface TrainingPeriod {
     id: string;
@@ -641,6 +644,9 @@ export interface TrainingPeriod {
     startDate: string;
     endDate: string;
     focusType: PeriodFocus;
+    status?: PeriodStatus;
+    cancellationReason?: string;
+    archivedAt?: string;
     nutritionGoal?: {
         calories: number;
         protein?: number;

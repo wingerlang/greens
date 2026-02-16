@@ -7,6 +7,7 @@ import { useScrollLock } from '../../hooks/useScrollLock';
 import { useData } from '../../context/DataContext';
 import { useGoalProgress, useAllGoalsProgress } from '../../hooks/useGoalProgress';
 import { GoalProgressRing } from './GoalProgressRing';
+import { CancellationModal } from './CancellationModal';
 import type { PerformanceGoal, GoalCategory, WeightEntry } from '../../models/types';
 import {
     assessGoalDifficulty,
@@ -20,6 +21,7 @@ interface GoalDetailModalProps {
     onClose: () => void;
     onEdit?: () => void;
     onNewPhase?: (previousGoal: PerformanceGoal) => void;
+    onCancel?: (reason: string) => void;
 }
 
 const CATEGORY_CONFIG: Record<GoalCategory, { label: string; icon: string; color: string }> = {
@@ -29,13 +31,14 @@ const CATEGORY_CONFIG: Record<GoalCategory, { label: string; icon: string; color
     lifestyle: { label: 'Livsstil', icon: '🧘', color: '#8b5cf6' }
 };
 
-export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase }: GoalDetailModalProps) {
+export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase, onCancel }: GoalDetailModalProps) {
     const { weightEntries = [], universalActivities = [], strengthSessions = [], unifiedActivities = [], performanceGoals = [] } = useData();
     const progressData = useGoalProgress(goal);
     const allProgressMap = useAllGoalsProgress();
 
     // View State (Phase vs Journey)
     const [viewMode, setViewMode] = React.useState<'phase' | 'journey'>('phase');
+    const [isCancelling, setIsCancelling] = React.useState(false);
 
     // Chain Data
     const goalChain = useMemo(() => getGoalChain(goal, performanceGoals), [goal, performanceGoals]);
@@ -1637,23 +1640,49 @@ export function GoalDetailModal({ goal, onClose, onEdit, onNewPhase }: GoalDetai
                 </div>
 
                 {/* Footer */}
-                <div className="p-4 border-t border-white/5 flex gap-3 justify-end">
-                    {onEdit && (
+                <div className="p-4 border-t border-white/5 flex gap-3 justify-between items-center">
+                    <div>
+                        {!progress.isComplete && goal.status !== 'cancelled' && goal.status !== 'failed' && onCancel && (
+                            <button
+                                onClick={() => setIsCancelling(true)}
+                                className="px-4 py-2 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 text-sm font-bold transition-colors border border-transparent hover:border-red-500/20"
+                            >
+                                Avbryt Mål
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex gap-3">
+                        {onEdit && (
+                            <button
+                                onClick={onEdit}
+                                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold transition-colors"
+                            >
+                                ✏️ Redigera
+                            </button>
+                        )}
                         <button
-                            onClick={onEdit}
-                            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold transition-colors"
+                            onClick={onClose}
+                            className="px-6 py-2 rounded-xl text-slate-400 hover:text-white text-sm font-bold transition-colors"
                         >
-                            ✏️ Redigera
+                            Stäng
                         </button>
-                    )}
-                    <button
-                        onClick={onClose}
-                        className="px-6 py-2 rounded-xl text-slate-400 hover:text-white text-sm font-bold transition-colors"
-                    >
-                        Stäng
-                    </button>
+                    </div>
                 </div>
             </div>
+
+            {/* Cancellation Modal */}
+            <CancellationModal
+                isOpen={isCancelling}
+                onClose={() => setIsCancelling(false)}
+                onConfirm={(reason) => {
+                    setIsCancelling(false);
+                    onCancel?.(reason);
+                    onClose();
+                }}
+                title="Avbryt Mål"
+                message="Är du säker på att du vill avbryta detta mål? Det kommer att flyttas till arkivet."
+                entityName={goal.name}
+            />
         </div >
     );
 }

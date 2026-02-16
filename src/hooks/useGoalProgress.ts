@@ -129,12 +129,32 @@ export function useActiveGoals() {
 
 /**
  * Hook to get completed goals.
+ * @deprecated Use useArchivedGoals instead
  */
 export function useCompletedGoals() {
     const { performanceGoals = [] } = useData();
 
     return useMemo(() => {
         return performanceGoals.filter(goal => goal.status === 'completed');
+    }, [performanceGoals]);
+}
+
+/**
+ * Hook to get all archived goals (completed, cancelled, failed).
+ */
+export function useArchivedGoals() {
+    const { performanceGoals = [] } = useData();
+
+    return useMemo(() => {
+        return performanceGoals.filter(goal =>
+            goal.status === 'completed' ||
+            goal.status === 'cancelled' ||
+            goal.status === 'failed'
+        ).sort((a, b) => {
+            const dateA = a.completedAt || a.archivedAt || a.endDate || a.createdAt;
+            const dateB = b.completedAt || b.archivedAt || b.endDate || b.createdAt;
+            return new Date(dateB).getTime() - new Date(dateA).getTime();
+        });
     }, [performanceGoals]);
 }
 
