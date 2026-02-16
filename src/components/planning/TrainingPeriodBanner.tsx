@@ -8,7 +8,12 @@ export function TrainingPeriodBanner() {
     // Get active period
     const activePeriod = useMemo(() => {
         const now = new Date().toISOString().split('T')[0];
-        return trainingPeriods.find(p => p.startDate <= now && p.endDate >= now);
+        return trainingPeriods.find(p =>
+            p.startDate <= now &&
+            p.endDate >= now &&
+            p.status !== 'cancelled' &&
+            p.status !== 'completed'
+        );
     }, [trainingPeriods]);
 
     if (!activePeriod) return null;

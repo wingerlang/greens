@@ -8,7 +8,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import {
     useActiveGoals,
-    useCompletedGoals,
+    useArchivedGoals,
     useGoalsSummary,
     useGoalsByCategory,
     useTrainingStreak
@@ -156,7 +156,8 @@ export function GoalsPage() {
     const [isPeriodWizardOpen, setIsPeriodWizardOpen] = useState(false);
     const [editingGoal, setEditingGoal] = useState<PerformanceGoal | null>(null);
     const [celebratingGoal, setCelebratingGoal] = useState<PerformanceGoal | null>(null);
-    const [showCompleted, setShowCompleted] = useState(false);
+    const [showArchived, setShowArchived] = useState(false);
+    const [archiveFilter, setArchiveFilter] = useState<'all' | 'completed' | 'cancelled'>('all');
     const [showTemplates, setShowTemplates] = useState(false);
     const [sortBy, setSortBy] = useState<SortOption>('progress');
     const [sortAsc, setSortAsc] = useState(false);
@@ -172,12 +173,18 @@ export function GoalsPage() {
     // Active Training Period
     const activePeriod = useMemo(() => {
         const today = new Date().toISOString().split('T')[0];
-        return trainingPeriods.find(p => p.startDate <= today && p.endDate >= today) || trainingPeriods[0];
+        // Find current active period (date match + not cancelled/completed)
+        return trainingPeriods.find(p =>
+            p.startDate <= today &&
+            p.endDate >= today &&
+            p.status !== 'cancelled' &&
+            p.status !== 'completed'
+        ) || trainingPeriods.find(p => p.status !== 'cancelled' && p.status !== 'completed');
     }, [trainingPeriods]);
 
     // Hooks
     const activeGoals = useActiveGoals();
-    const completedGoals = useCompletedGoals();
+    const archivedGoals = useArchivedGoals();
     const summary = useGoalsSummary();
     const goalsByCategory = useGoalsByCategory();
     const trainingStreak = useTrainingStreak();
@@ -260,6 +267,14 @@ export function GoalsPage() {
             completedAt: new Date().toISOString().split('T')[0]
         });
         setCelebratingGoal(goal);
+    };
+
+    const handleCancelGoal = (goal: PerformanceGoal, reason: string) => {
+        updateGoal(goal.id, {
+            status: 'cancelled',
+            cancellationReason: reason,
+            archivedAt: new Date().toISOString()
+        });
     };
 
     const handleDeleteGoal = (goalId: string) => {
@@ -629,37 +644,64 @@ export function GoalsPage() {
                 )}
             </section>
 
-            {/* Completed Goals */}
-            {completedGoals.length > 0 && (
+            {/* Archived Goals */}
+            {archivedGoals.length > 0 && (
                 <section className="goals-section completed">
                     <button
                         className="section-header collapsible"
-                        onClick={() => setShowCompleted(!showCompleted)}
+                        onClick={() => setShowArchived(!showArchived)}
                     >
                         <h2>
-                            ✅ Avklarade Mål
-                            <span className="count">({completedGoals.length})</span>
+                            🗄️ Historik & Arkiv
+                            <span className="count">({archivedGoals.length})</span>
                         </h2>
-                        <span className={`chevron ${showCompleted ? 'open' : ''}`}>▼</span>
+                        <span className={`chevron ${showArchived ? 'open' : ''}`}>▼</span>
                     </button>
 
-                    {showCompleted && (
-                        <div className="completed-goals-list">
-                            {completedGoals.map(goal => (
-                                <div key={goal.id} className="completed-goal-item">
-                                    <MiniProgressRing percentage={100} color="#10b981" />
-                                    <div className="completed-goal-info">
-                                        <span className="completed-goal-name">{goal.name}</span>
-                                        <span className="completed-goal-date">
-                                            Avslutat {goal.completedAt || goal.endDate || '—'}
-                                        </span>
-                                    </div>
-                                    <span className="completed-goal-icon">
-                                        {GOAL_TYPE_ICONS[goal.type]}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
+                    {showArchived && (
+                        <>
+                            <div className="flex gap-2 mb-4 px-1 overflow-x-auto">
+                                <button onClick={() => setArchiveFilter('all')} className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${archiveFilter === 'all' ? 'bg-white text-black' : 'bg-white/10 text-slate-400 hover:bg-white/20'}`}>Alla</button>
+                                <button onClick={() => setArchiveFilter('completed')} className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${archiveFilter === 'completed' ? 'bg-emerald-500 text-white' : 'bg-white/10 text-slate-400 hover:bg-white/20'}`}>Avklarade</button>
+                                <button onClick={() => setArchiveFilter('cancelled')} className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${archiveFilter === 'cancelled' ? 'bg-red-500 text-white' : 'bg-white/10 text-slate-400 hover:bg-white/20'}`}>Avbrutna</button>
+                            </div>
+
+                            <div className="completed-goals-list">
+                                {archivedGoals
+                                    .filter(g => archiveFilter === 'all' || g.status === archiveFilter || (archiveFilter === 'cancelled' && g.status === 'failed'))
+                                    .map(goal => (
+                                        <div
+                                            key={goal.id}
+                                            className="completed-goal-item group relative overflow-hidden transition-all hover:bg-white/5 cursor-pointer"
+                                            onClick={() => setSearchParams({ goal: goal.id })}
+                                            style={{
+                                                borderColor: goal.status === 'completed' ? '#10b98130' : '#ef444430',
+                                                background: goal.status === 'completed' ? 'linear-gradient(to right, #10b98105, transparent)' : 'linear-gradient(to right, #ef444405, transparent)'
+                                            }}
+                                        >
+                                            <MiniProgressRing percentage={goal.status === 'completed' ? 100 : 0} color={goal.status === 'completed' ? "#10b981" : "#ef4444"} />
+                                            <div className="completed-goal-info">
+                                                <span className="completed-goal-name flex items-center gap-2">
+                                                    {goal.name}
+                                                    {goal.status === 'cancelled' && <span className="text-[10px] uppercase font-bold text-red-500 bg-red-500/10 px-1.5 rounded border border-red-500/20">Avbruten</span>}
+                                                    {goal.status === 'failed' && <span className="text-[10px] uppercase font-bold text-amber-500 bg-amber-500/10 px-1.5 rounded border border-amber-500/20">Misslyckad</span>}
+                                                </span>
+                                                <span className="completed-goal-date text-slate-500 text-xs">
+                                                    {goal.status === 'completed' ? 'Avslutad' : 'Arkiverad'} {goal.completedAt || goal.archivedAt || goal.endDate || '—'}
+                                                </span>
+                                                {goal.cancellationReason && (
+                                                    <div className="text-xs text-red-400/70 italic mt-1 line-clamp-1">
+                                                        "{goal.cancellationReason}"
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <span className="completed-goal-icon opacity-50 group-hover:opacity-100 transition-opacity">
+                                                {GOAL_TYPE_ICONS[goal.type]}
+                                            </span>
+                                        </div>
+                                    ))}
+                            </div>
+                        </>
                     )}
                 </section>
             )}
@@ -713,6 +755,12 @@ export function GoalsPage() {
                         newParams.delete('goal');
                         setSearchParams(newParams);
                         handleNewPhase(goal);
+                    }}
+                    onCancel={(reason) => {
+                        handleCancelGoal(viewingGoal, reason);
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.delete('goal');
+                        setSearchParams(newParams);
                     }}
                     onEdit={() => {
                         // Keep the URL param or remove it? Usually keep context or close detail to open edit.

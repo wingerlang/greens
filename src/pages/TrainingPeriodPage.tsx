@@ -4,6 +4,7 @@ import { useData } from '../context/DataContext';
 import { ChevronLeft, Calendar, Target, TrendingUp, Trophy } from 'lucide-react';
 import { GoalCard } from '../components/training/GoalCard';
 import { useGoalProgress } from '../hooks/useGoalProgress';
+import { PeriodCancellationModal } from '../components/training/period/PeriodCancellationModal';
 import type { PerformanceGoal } from '../models/types';
 
 // Helper to render GoalCard with calculated progress
@@ -22,14 +23,20 @@ const GoalCardWrapper: React.FC<{ goal: PerformanceGoal; onEdit: (g: Performance
 export const TrainingPeriodPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { trainingPeriods, performanceGoals, deleteTrainingPeriod, deleteGoal } = useData();
+    const { trainingPeriods, performanceGoals, updateTrainingPeriod, updateGoal, deleteGoal } = useData();
+    const [isCancelling, setIsCancelling] = React.useState(false);
 
     // Find period (if ID provided, otherwise active/latest)
     const period = useMemo(() => {
         if (id) return trainingPeriods.find(p => p.id === id);
         // Find active one (today within range)
         const today = new Date().toISOString().split('T')[0];
-        return trainingPeriods.find(p => p.startDate <= today && p.endDate >= today) || trainingPeriods[0];
+        return trainingPeriods.find(p =>
+            p.startDate <= today &&
+            p.endDate >= today &&
+            p.status !== 'cancelled' &&
+            p.status !== 'completed'
+        ) || trainingPeriods.find(p => p.status !== 'cancelled' && p.status !== 'completed');
     }, [id, trainingPeriods]);
 
     const periodGoals = useMemo(() => {
@@ -150,16 +157,40 @@ export const TrainingPeriodPage: React.FC = () => {
                 </div>
 
                 <button
-                    onClick={async () => {
-                        if (confirm('Är du säker på att du vill avsluta och ta bort denna period? Målen kommer ligga kvar men utan period-koppling.')) {
-                            await deleteTrainingPeriod(period.id);
-                            navigate('/mal');
-                        }
-                    }}
+                    onClick={() => setIsCancelling(true)}
                     className="w-full py-4 text-red-400/50 hover:text-red-400 text-sm hover:bg-red-500/5 rounded-xl transition-colors"
                 >
-                    Avsluta/Radera Period
+                    Avbryt Period
                 </button>
+
+                {/* Cancellation Modal */}
+                {period && (
+                    <PeriodCancellationModal
+                        isOpen={isCancelling}
+                        onClose={() => setIsCancelling(false)}
+                        onConfirm={async (reason, goalIdsToCancel) => {
+                            // 1. Cancel Goals
+                            for (const goalId of goalIdsToCancel) {
+                                updateGoal(goalId, {
+                                    status: 'cancelled',
+                                    cancellationReason: `Avbruten via period: ${period.name}`,
+                                    archivedAt: new Date().toISOString()
+                                });
+                            }
+
+                            // 2. Cancel Period
+                            updateTrainingPeriod(period.id, {
+                                status: 'cancelled',
+                                cancellationReason: reason,
+                                archivedAt: new Date().toISOString()
+                            });
+
+                            navigate('/mal');
+                        }}
+                        periodName={period.name}
+                        goals={periodGoals}
+                    />
+                )}
 
             </div>
         </div>
