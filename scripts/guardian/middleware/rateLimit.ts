@@ -17,7 +17,12 @@ export class TokenBucketRateLimitMiddleware implements Middleware {
     }
 
     handle(ctx: GuardianContext, next: Next): Promise<void> {
-        if (!this.config.features.rateLimit) {
+        // Bypass for Simulator
+        if (ctx.req.headers.has("X-Sim-Country")) {
+            return next();
+        }
+
+        if (!GLOBAL_CONFIG.features.rateLimit) {
             return next();
         }
 
@@ -50,6 +55,7 @@ export class TokenBucketRateLimitMiddleware implements Middleware {
         } else {
             // Check if we should ban (if they are hammering way too hard?)
             // For now just 429.
+            console.warn(`[RATELIMIT] 429 for ${ip} on ${ctx.url.pathname}`);
             ctx.response = new Response("Too Many Requests", {
                 status: 429,
                 headers: { "Retry-After": "1" }

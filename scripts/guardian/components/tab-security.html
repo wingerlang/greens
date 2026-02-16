@@ -1,0 +1,38 @@
+<!-- Security Tab -->
+<div x-show="tab === 'security'">
+    <div class="grid-2">
+        <div class="card">
+            <h3 style="margin-top:0">Manual Ban</h3>
+            <div style="display:flex; gap:10px;">
+                <input type="text" x-model="banInput" placeholder="IP Address"
+                    style="flex:1; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px;">
+                <button class="danger" @click="banIp(banInput); banInput = ''">Ban IP</button>
+            </div>
+        </div>
+        <div class="card">
+            <h3 style="margin-top:0">Banned IPs</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>IP Address</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="ip in bannedIps" :key="ip">
+                            <tr>
+                                <td x-text="ip"></td>
+                                <td><button @click="unbanIp(ip)">Unban</button></td>
+                            </tr>
+                        </template>
+                        <tr x-show="bannedIps.length === 0">
+                            <td colspan="2" style="text-align:center; padding:20px; color:#666">No banned
+                                IPs</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

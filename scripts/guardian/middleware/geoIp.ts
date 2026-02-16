@@ -11,18 +11,31 @@ interface GeoData {
 
 function isPrivateIp(ip: string): boolean {
     return ip === "127.0.0.1" ||
-           ip === "::1" ||
-           ip.startsWith("192.168.") ||
-           ip.startsWith("10.") ||
-           // Simplified check for 172.16.0.0/12
-           (ip.startsWith("172.") && parseInt(ip.split('.')[1]) >= 16 && parseInt(ip.split('.')[1]) <= 31) ||
-           ip.startsWith("fc00:");
+        ip === "::1" ||
+        ip.startsWith("192.168.") ||
+        ip.startsWith("10.") ||
+        // Simplified check for 172.16.0.0/12
+        (ip.startsWith("172.") && parseInt(ip.split('.')[1]) >= 16 && parseInt(ip.split('.')[1]) <= 31) ||
+        ip.startsWith("fc00:");
 }
 
 export class GeoIpMiddleware implements Middleware {
     name = "GeoIP";
 
     async handle(ctx: GuardianContext, next: Next): Promise<void> {
+        // Check for simulator header first to allow local testing ALWAYS
+        const simCountry = ctx.req.headers.get("x-sim-country");
+        if (simCountry) {
+            ctx.state.set("geo", {
+                country: getCountryName(simCountry),
+                countryCode: simCountry,
+                city: "Simulated City",
+                isp: "Guardian Simulator"
+            });
+            await next();
+            return;
+        }
+
         if (!CONFIG.features.geoIp) {
             await next();
             return;
@@ -33,25 +46,38 @@ export class GeoIpMiddleware implements Middleware {
         // If local/private IP, try to find real IP from headers
         // This handles cases where Guardian is behind a Load Balancer or Proxy (e.g., Cloudflare, Nginx)
         if (isPrivateIp(ip)) {
-             const cfIp = ctx.req.headers.get("cf-connecting-ip");
-             const realIp = ctx.req.headers.get("x-real-ip");
-             const forwarded = ctx.req.headers.get("x-forwarded-for");
+            const cfIp = ctx.req.headers.get("cf-connecting-ip");
+            const realIp = ctx.req.headers.get("x-real-ip");
+            const forwarded = ctx.req.headers.get("x-forwarded-for");
 
-             if (cfIp) {
-                 ip = cfIp;
-             } else if (realIp) {
-                 ip = realIp;
-             } else if (forwarded) {
-                 // X-Forwarded-For can be a comma-separated list, first one is the client
-                 const ips = forwarded.split(',').map(s => s.trim());
-                 if (ips.length > 0) {
-                     ip = ips[0];
-                 }
-             }
+            if (cfIp) {
+                ip = cfIp;
+            } else if (realIp) {
+                ip = realIp;
+            } else if (forwarded) {
+                // X-Forwarded-For can be a comma-separated list, first one is the client
+                const ips = forwarded.split(',').map(s => s.trim());
+                if (ips.length > 0) {
+                    ip = ips[0];
+                }
+            }
         }
 
         // If STILL private, mark as local and skip lookup
         if (isPrivateIp(ip)) {
+            // Check for simulator header first to allow local testing
+            const simCountry = ctx.req.headers.get("x-sim-country");
+            if (simCountry) {
+                ctx.state.set("geo", {
+                    country: getCountryName(simCountry),
+                    countryCode: simCountry,
+                    city: "Simulated City",
+                    isp: "Guardian Simulator"
+                });
+                await next();
+                return;
+            }
+
             ctx.state.set("geo", { country: "Local", countryCode: "XX", city: "Local", isp: "Local" });
             await next();
             return;
@@ -110,4 +136,18 @@ export class GeoIpMiddleware implements Middleware {
 
         await next();
     }
+}
+
+function getCountryName(code: string): string {
+    const map: Record<string, string> = {
+        "US": "United States",
+        "DE": "Germany",
+        "SE": "Sweden",
+        "GB": "United Kingdom",
+        "JP": "Japan",
+        "BR": "Brazil",
+        "AU": "Australia",
+        "IN": "India"
+    };
+    return map[code] || code;
 }

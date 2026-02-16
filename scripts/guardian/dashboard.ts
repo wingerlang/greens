@@ -1,6 +1,8 @@
 import { manager } from "./services.ts";
 import { getKv, registerLogClient, removeLogClient, stats } from "./logger.ts";
 import { MetricEntry } from "./types.ts";
+// @ts-nocheck
+/// <reference lib="deno.ns" />
 import { join, dirname, fromFileUrl } from "@std/path";
 import {
     getTopEndpoints,
@@ -15,7 +17,11 @@ import {
     getRequestCountInWindow,
     getSizeStats,
     getUptimeStats,
-    getServiceUptimeHistory
+    getServiceUptimeHistory,
+    getActiveSessionBuckets,
+    getHourlyTraffic,
+    getStatusBreakdownHistory,
+    getLatencyHistory
 } from "./analytics.ts";
 import { bannedIps, banIp, unbanIp } from "./security.ts";
 import { setRecording, getRecordingStatus, listTraces, replayTrace } from "./recorder.ts";
@@ -35,22 +41,25 @@ const wsClients: Set<WebSocket> = new Set();
 // Broadcast stats to all connected clients
 let broadcastInterval: number | null = null;
 let initialTotalUptime = 0;
-let initialTotalUptimeFetched = false;
+let initialTotalRequests = 0;
+let initialTotalStatsFetched = false;
 
 async function startBroadcasting() {
     if (broadcastInterval) return;
 
-    // Fetch initial total uptime if not already fetched
-    if (!initialTotalUptimeFetched) {
+    // Ensure initial stats are loaded if broadcast didn't start yet
+    if (!initialTotalStatsFetched) {
         const kv = getKv();
         if (kv) {
             try {
-                const res = await kv.get<Deno.KvU64>(["guardian", "uptime_total", "guardian"]);
-                initialTotalUptime = res.value ? Number(res.value.value) : 0;
-                initialTotalUptimeFetched = true;
-            } catch (e) {
-                // Ignore, will default to 0
-            }
+                const [uptimeRes, requestsRes] = await Promise.all([
+                    kv.get<Deno.KvU64>(["guardian", "uptime_total", "guardian"]),
+                    kv.get<Deno.KvU64>(["guardian", "stats_total", "requests"])
+                ]);
+                initialTotalUptime = uptimeRes.value ? Number(uptimeRes.value.value) : 0;
+                initialTotalRequests = requestsRes.value ? Number(requestsRes.value.value) : 0;
+                initialTotalStatsFetched = true;
+            } catch (e) { /* ignore */ }
         }
     }
 
@@ -71,12 +80,13 @@ async function startBroadcasting() {
                 type: "stats",
                 services,
                 rps: stats.rps || 0,
-                totalRequests: stats.totalRequests,
+                totalRequests: initialTotalRequests + stats.totalRequests,
                 avgLatency: getAggregateLatency(),
                 uptime: uptime,
                 totalUptime: initialTotalUptime + uptime,
                 startTime: stats.startTime,
-                loadBalancer: lbStats
+                loadBalancer: lbStats,
+                activeSessions: await getActiveSessionBuckets()
             });
 
             for (const client of wsClients) {
@@ -158,14 +168,78 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
         }
     }
 
-    // Serve HTML
+    // Serve Assembled Dashboard
     if (url.pathname === "/" || url.pathname === "/index.html") {
         try {
-            const htmlPath = join(dirname(fromFileUrl(import.meta.url)), "dashboard.html");
-            const html = await Deno.readTextFile(htmlPath);
+            const baseDir = dirname(fromFileUrl(import.meta.url));
+            const componentsDir = join(baseDir, "components");
+
+            // Read Layout
+            const layoutPath = join(componentsDir, "layout.html");
+            let html = await Deno.readTextFile(layoutPath);
+
+            // Read Sidebar
+            const sidebarPath = join(componentsDir, "sidebar.html");
+            const sidebar = await Deno.readTextFile(sidebarPath);
+
+            // Read Components
+            const components = [
+                "tab-overview.html",
+                "tab-simulator.html",
+                "tab-traffic.html",
+                "tab-sessions.html",
+                "tab-console.html",
+                "tab-ci.html",
+                "tab-tools.html",
+                "tab-service-detail.html",
+                "tab-security.html",
+                "tab-waf.html",
+                "tab-load-balancer.html",
+                "tab-waf.html",
+                "tab-debug.html",
+                "tab-settings.html",
+                "tab-analytics.html"
+            ];
+
+            let componentsHtml = "";
+            for (const c of components) {
+                try {
+                    const content = await Deno.readTextFile(join(componentsDir, c));
+                    componentsHtml += content + "\n";
+                } catch (e) {
+                    console.error(`Failed to load component ${c}:`, e);
+                }
+            }
+
+            // Assembly
+            html = html.replace("<!-- {{SIDEBAR}} -->", sidebar);
+            html = html.replace("<!-- {{COMPONENTS}} -->", componentsHtml);
+
             return new Response(html, { headers: { "content-type": "text/html" } });
         } catch (e) {
-            return new Response("Dashboard not found.", { status: 404 });
+            console.error("Dashboard assembly failed:", e);
+            return new Response("Dashboard unavailable due to server error.", { status: 500 });
+        }
+    }
+
+    // Serve Component Static Assets
+    if (url.pathname === "/components/styles.css") {
+        try {
+            const path = join(dirname(fromFileUrl(import.meta.url)), "components", "styles.css");
+            const css = await Deno.readTextFile(path);
+            return new Response(css, { headers: { "content-type": "text/css" } });
+        } catch {
+            return new Response("Not found", { status: 404 });
+        }
+    }
+
+    if (url.pathname === "/components/client.js") {
+        try {
+            const path = join(dirname(fromFileUrl(import.meta.url)), "components", "client.js");
+            const js = await Deno.readTextFile(path);
+            return new Response(js, { headers: { "content-type": "application/javascript" } });
+        } catch {
+            return new Response("Not found", { status: 404 });
         }
     }
 
@@ -198,15 +272,23 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
             uptime: Math.floor((Date.now() - stats.startTime) / 1000),
             totalUptime: initialTotalUptime + Math.floor((Date.now() - stats.startTime) / 1000),
             startTime: stats.startTime,
-            totalRequests: stats.totalRequests,
+            totalRequests: initialTotalRequests + stats.totalRequests,
             rps: stats.rps || 0,
-            avgLatency: getAggregateLatency()
+            avgLatency: getAggregateLatency(),
+            firstSeen: initialTotalStatsFetched ? (await getKv()?.get(["guardian", "service_first_seen", "guardian"]).then(r => r?.value) || Date.now()) : Date.now()
         });
     }
 
     if (url.pathname === "/api/waf/events") {
         const events = await getWafEvents();
         return Response.json(events);
+    }
+
+    if (url.pathname === "/api/top-endpoints") {
+        const days = Number(url.searchParams.get("days") || "7");
+        const limit = Number(url.searchParams.get("limit") || "10");
+        const endpoints = await getTopEndpointsHistory(days, limit);
+        return Response.json(endpoints);
     }
 
     if (url.pathname === "/api/logs") {
@@ -296,6 +378,11 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
         return Response.json(sessions);
     }
 
+    if (url.pathname === "/api/analytics/sessions-active") {
+        const buckets = await getActiveSessionBuckets();
+        return Response.json(buckets);
+    }
+
     if (url.pathname === "/api/banned") {
         return Response.json(Array.from(bannedIps));
     }
@@ -340,6 +427,24 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
     if (url.pathname === "/api/memory-history") {
         const history = getMemoryHistory();
         return Response.json(history);
+    }
+
+    if (url.pathname === "/api/analytics/hourly-traffic") {
+        const date = url.searchParams.get("date") || undefined;
+        const stats = await getHourlyTraffic(date);
+        return Response.json(stats);
+    }
+
+    if (url.pathname === "/api/analytics/status-history") {
+        const days = Number(url.searchParams.get("days") || "7");
+        const stats = await getStatusBreakdownHistory(days);
+        return Response.json(stats);
+    }
+
+    if (url.pathname === "/api/analytics/latency-history") {
+        const days = Number(url.searchParams.get("days") || "14");
+        const stats = await getLatencyHistory(days);
+        return Response.json(stats);
     }
 
     // Load Balancer endpoints
@@ -497,6 +602,17 @@ export async function handleDashboardRequest(req: Request): Promise<Response> {
                 await unbanIp(ip);
                 return Response.json({ success: true });
             }
+        }
+        if (action === "restart-guardian") {
+            // Trigger graceful shutdown with special exit code 42
+            setTimeout(() => {
+                console.log("[GUARDIAN] Restart requested via Dashboard.");
+                // Stop all managed services first
+                manager.stopAll().then(() => {
+                    Deno.exit(42);
+                });
+            }, 100);
+            return Response.json({ success: true, message: "Restarting..." });
         }
     }
 

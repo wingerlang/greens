@@ -1,0 +1,101 @@
+<!-- Service Detail Tab -->
+<div x-show="tab.startsWith('service-')" style="display:flex; flex-direction:column; gap:20px;">
+    <div class="grid">
+        <div class="card">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" :style="{color: getStatusColor(currentService?.status)}"
+                x-text="currentService?.status?.toUpperCase()"></div>
+        </div>
+        <div class="card">
+            <div class="stat-label">PID</div>
+            <div class="stat-value" x-text="currentService?.pid || '-'"></div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Restarts</div>
+            <div class="stat-value" x-text="currentService?.restarts"></div>
+        </div>
+        <div class="card"
+            style="display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap: wrap; padding: 16px;">
+            <button class="primary" style="padding: 8px 16px;"
+                @click="controlService(currentService.name, 'start')">Start</button>
+            <button class="danger" style="padding: 8px 16px;"
+                @click="controlService(currentService.name, 'stop')">Stop</button>
+            <button style="padding: 8px 16px;" @click="controlService(currentService.name, 'restart')">Restart</button>
+            <a x-show="currentService?.url" :href="currentService?.url" target="_blank"
+                style="padding:8px 16px; background:var(--bg-card); border:1px solid var(--border); color:white; text-decoration:none; border-radius:6px; font-weight:500; text-align: center;">Open</a>
+        </div>
+    </div>
+
+    <!-- New Charts for Services -->
+    <div class="grid-2">
+        <div class="card">
+            <div class="stat-label">System Load (Recent)</div>
+            <div class="chart-container">
+                <canvas id="serviceLoadChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Requests (Last 7 Days)</div>
+            <div class="chart-container">
+                <canvas id="serviceRequestsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Uptime Card -->
+    <div class="card" x-show="currentService?.persistedUptime">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div style="display:flex; align-items:baseline; gap:8px">
+                <span class="stat-label" style="margin:0">Today:</span>
+                <span style="font-weight:700; color:var(--success)"
+                    x-text="formatUptime(currentService?.persistedUptime?.daily)"></span>
+            </div>
+            <div style="display:flex; align-items:baseline; gap:8px">
+                <span class="stat-label" style="margin:0">Total:</span>
+                <span style="font-weight:600" x-text="formatUptime(currentService?.persistedUptime?.total)"></span>
+            </div>
+            <div style="display:flex; align-items:baseline; gap:8px">
+                <span class="stat-label" style="margin:0">Availability:</span>
+                <span style="font-weight:800; color:var(--accent-secondary)"
+                    x-text="calculateUptimePercent(currentService)"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Circuit Breaker Info -->
+    <div class="card" x-show="currentService?.circuit">
+        <h3 style="margin-top:0">Circuit Breaker</h3>
+        <div style="display:flex; gap:20px; align-items:center">
+            <div>
+                <div class="stat-label">State</div>
+                <div class="stat-value"
+                    :style="{color: currentService?.circuit?.status === 'CLOSED' ? '#22c55e' : '#ef4444'}"
+                    x-text="currentService?.circuit?.status"></div>
+            </div>
+            <div>
+                <div class="stat-label">Recent Failures</div>
+                <div class="stat-value" x-text="currentService?.circuit?.failures"></div>
+            </div>
+            <div x-show="currentService?.circuit?.status !== 'CLOSED'" style="margin-left: auto;">
+                <button class="primary" style="padding: 10px 20px; background: #3b82f6;"
+                    @click="controlService(currentService.name, 'reset-circuit')">Reset Circuit</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div style="margin-bottom:10px; font-weight:bold; color:#94a3b8; display:flex; justify-content:space-between;">
+            <span>Logs (Last 100 lines)</span>
+            <button style="padding:4px 8px; font-size:0.8rem" @click="fetchLogs(currentService.name)">Refresh
+                Logs</button>
+        </div>
+        <div class="code-block" style="max-height:300px; overflow-y:auto;" x-ref="logContainer">
+            <template x-for="log in logEntries" :key="log.id">
+                <div class="log-entry">
+                    <span class="log-time" x-text="formatTime(log.timestamp)"></span>
+                    <span class="log-message" :class="'log-' + log.source" x-text="log.message"></span>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>

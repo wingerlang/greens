@@ -1,0 +1,57 @@
+<!-- Sessions Tab -->
+<div x-show="tab === 'sessions'">
+    <div class="card">
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h2 class="text-2xl font-bold text-white mb-2">Active Sessions</h2>
+                <p class="text-gray-400">Inventory of currently tracked user sessions (Last 24h)</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <span
+                    class="text-sm font-mono text-cyan-400 bg-cyan-400/10 px-3 py-1 rounded-full border border-cyan-400/20"
+                    x-text="sessions.length + ' Sessions Listed'"></span>
+                <button @click="sessions = await fetch('/api/sessions').then(r => r.json())"
+                    class="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg border border-gray-700 transition-colors">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15">
+                        </path>
+                    </svg>
+                    Refresh
+                </button>
+            </div>
+        </div>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Session ID</th>
+                        <th>IP Address</th>
+                        <th>User Agent</th>
+                        <th>Requests</th>
+                        <th>Last Seen</th>
+                        <th>Recent Path</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="s in sessions" :key="s.id">
+                        <tr>
+                            <td style="font-family:monospace; color:var(--accent)" x-text="s.id"></td>
+                            <td x-text="s.ip"></td>
+                            <td style="font-size:0.8rem; color:#999; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"
+                                x-text="s.userAgent"></td>
+                            <td x-text="s.requestCount"></td>
+                            <td x-text="formatTime(s.lastSeen)"></td>
+                            <td style="font-family:monospace; font-size:0.8rem" x-text="s.paths[s.paths.length-1]">
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="sessions.length === 0">
+                        <td colspan="6" style="text-align:center; padding:20px; color:#666">No active
+                            sessions</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

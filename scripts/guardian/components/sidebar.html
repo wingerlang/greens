@@ -1,0 +1,72 @@
+<!-- Sidebar -->
+<div class="sidebar">
+    <div class="brand">
+        <div class="brand-icon">🛡️</div>
+        Guardian <span style="font-weight: 300; opacity: 0.8">3.0</span>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-label">Monitor Center</div>
+        <div class="nav-item" :class="tab === 'overview' ? 'active' : ''" @click="tab = 'overview'">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6">
+                </path>
+            </svg>
+            Overview
+        </div>
+        <div class="nav-item" :class="tab === 'analytics' ? 'active' : ''" @click="tab = 'analytics'; fetchAnalytics()">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                </path>
+            </svg>
+            Analytics
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'simulator' }" @click="tab = 'simulator'">
+            <span>Traffic Simulator</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'traffic' }" @click="tab = 'traffic'">
+            <span>Traffic Analytics</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'sessions' }" @click="tab = 'sessions'">
+            <span>Active Sessions</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'console' }" @click="tab = 'console'">
+            <span>Live Console</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'debug' }" @click="tab = 'debug'; refreshDebugLog()">
+            <span>🔍 Debug Flow</span>
+        </div>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-label">Services Ecosystem</div>
+        <template x-for="service in sortedServices" :key="service.name">
+            <div class="nav-item" :class="{ 'active': tab === 'service-' + service.name }"
+                @click="selectService(service)">
+                <span x-text="capitalize(service.name)" style="flex: 1"></span>
+                <div class="status-dot" :class="service.status"></div>
+            </div>
+        </template>
+    </div>
+
+    <div class="nav-group">
+        <div class="nav-label">Threat Protection</div>
+        <div class="nav-item" :class="{ 'active': tab === 'load-balancer' }" @click="tab = 'load-balancer'">
+            <span>⚖️ Load Balancer</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'security' }" @click="tab = 'security'">
+            <span>Firewall Rules</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'waf' }" @click="tab = 'waf'">
+            <span>WAF Shield</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'tools' }" @click="tab = 'tools'">
+            <span>Shadow Ops</span>
+        </div>
+        <div class="nav-item" :class="{ 'active': tab === 'ci' }" @click="tab = 'ci'">
+            <span>🚀 CI/CD Pipeline</span>
+        </div>
+    </div>
+</div>

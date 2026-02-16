@@ -1,0 +1,50 @@
+<!-- Traffic Tab -->
+<div x-show="tab === 'traffic'" style="display:flex; flex-direction:column; gap:20px;">
+    <div class="grid-2">
+        <div class="card">
+            <div class="stat-label">Service Distribution</div>
+            <div class="chart-container">
+                <canvas id="serviceChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Resource Types</div>
+            <div class="chart-container">
+                <canvas id="typeChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-2">
+        <div class="card">
+            <div class="stat-label">Geo Distribution</div>
+            <div class="chart-container">
+                <canvas id="geoChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Top Countries</div>
+            <div class="table-container" style="height:250px; overflow-y:auto; border:none; box-shadow:none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Country</th>
+                            <th>Hits</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="c in granular.countries" :key="c.code">
+                            <tr>
+                                <td x-text="c.code"></td>
+                                <td x-text="c.count"></td>
+                            </tr>
+                        </template>
+                        <tr x-show="!granular.countries || granular.countries.length === 0">
+                            <td colspan="2" style="text-align:center; padding:20px; color:#666">No data</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>

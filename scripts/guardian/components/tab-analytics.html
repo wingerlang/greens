@@ -1,0 +1,48 @@
+<!-- Analytics Tab -->
+<div x-show="tab === 'analytics'" style="display:flex; flex-direction:column; gap:32px;">
+    <div class="card">
+        <div class="stat-label">Request Volume (Last 24 Hours)</div>
+        <div style="height: 300px; width: 100%;">
+            <canvas id="hourlyTrafficChart"></canvas>
+        </div>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <div class="stat-label">Latency Trend (Last 14 Days)</div>
+            <div style="height: 250px;">
+                <canvas id="latencyHistoryChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">HTTP Status Distribution (7 Days)</div>
+            <div style="height: 250px;">
+                <canvas id="statusHistoryChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="stat-label">Top Endpoints (Historical)</div>
+        <div style="margin-top: 16px; max-height: 400px; overflow-y: auto;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                    <tr style="text-align: left; border-bottom: 1px solid var(--border-color);">
+                        <th style="padding: 12px; color: var(--text-muted); font-size: 0.8rem;">Endpoint</th>
+                        <th style="padding: 12px; color: var(--text-muted); font-size: 0.8rem; text-align: right;">Total
+                            Requests</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="endpoint in topEndpointsHistory" :key="endpoint.path">
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td class="font-mono" style="padding: 12px; font-size: 0.9rem;" x-text="endpoint.path"></td>
+                            <td style="padding: 12px; text-align: right; font-weight: 600; color: var(--accent-primary);"
+                                x-text="endpoint.count.toLocaleString()"></td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

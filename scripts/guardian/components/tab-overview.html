@@ -1,0 +1,111 @@
+<!-- Overview Tab -->
+<div x-show="tab === 'overview'" style="display:flex; flex-direction:column; gap:32px;">
+    <div class="grid">
+        <div class="card">
+            <div class="stat-label">Frontend Uptime</div>
+            <div style="text-align: center; padding: 10px 0; display:flex; flex-direction:column; align-items:center;">
+                <div style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, #ec4899, #f43f5e); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
+                    x-text="getServiceUptime('frontend')">0h 0m</div>
+                <div style="color: var(--text-muted); font-size: 0.8rem; margin-top:4px">Current Session</div>
+
+                <div style="font-size: 1rem; font-weight: 700; color: #94a3b8; margin-top: 8px;"
+                    x-text="getServiceTotalUptime('frontend')">0h 0m</div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">Total Lifetime</div>
+
+                <div style="font-size: 1rem; font-weight: 700; color: #22c55e; margin-top: 8px;"
+                    x-text="getServiceAvailability('frontend')">100%</div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">Availability</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Backend Uptime</div>
+            <div style="text-align: center; padding: 10px 0; display:flex; flex-direction:column; align-items:center;">
+                <div style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, #a855f7, #8b5cf6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
+                    x-text="getServiceUptime('backend')">0h 0m</div>
+                <div style="color: var(--text-muted); font-size: 0.8rem; margin-top:4px">Current Session</div>
+
+                <div style="font-size: 1rem; font-weight: 700; color: #94a3b8; margin-top: 8px;"
+                    x-text="getServiceTotalUptime('backend')">0h 0m</div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">Total Lifetime</div>
+
+                <div style="font-size: 1rem; font-weight: 700; color: #22c55e; margin-top: 8px;"
+                    x-text="getServiceAvailability('backend')">100%</div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">Availability</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Guardian Uptime</div>
+            <div style="text-align: center; padding: 10px 0; display:flex; flex-direction:column; align-items:center;">
+                <div style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, #10b981, #3b82f6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
+                    x-text="getServiceUptime('guardian')">0h 0m</div>
+                <div style="color: var(--text-muted); font-size: 0.8rem; margin-top:4px">Current Session</div>
+
+                <div style="font-size: 1rem; font-weight: 700; color: #94a3b8; margin-top: 8px;"
+                    x-text="getServiceTotalUptime('guardian')">0h 0m</div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">Total Lifetime</div>
+
+                <div style="font-size: 1rem; font-weight: 700; color: #22c55e; margin-top: 8px;"
+                    x-text="getServiceAvailability('guardian')">100%</div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">Availability</div>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Live Traffic</div>
+            <div style="text-align: center; padding: 10px 0; display:flex; flex-direction:column; align-items:center;">
+                <div style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, #3b82f6, #60a5fa); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
+                    x-text="currentRps">0.0</div>
+                <div style="color: var(--text-muted); font-size: 0.8rem; margin-top:4px">Requests / Sec</div>
+
+                <div style="font-size: 1.2rem; font-weight: 700; color: #ec4899; margin-top: 12px;"
+                    x-text="activeUsers30s || 0">0</div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">Active Users (30s)</div>
+
+                <div style="font-size: 1rem; font-weight: 700; color: #94a3b8; margin-top: 10px;"
+                    x-text="totalRequests.toLocaleString()">0</div>
+                <div style="color: var(--text-muted); font-size: 0.7rem;">Total Requests (Session)</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Real-time RPS Chart -->
+    <div class="grid-3" style="margin-bottom: 32px">
+        <div class="card">
+            <div class="stat-label">Requests Per Second (Live Cluster)</div>
+            <div class="chart-container">
+                <canvas id="rpsChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Daily Availability % (Precision View)</div>
+            <div class="chart-container">
+                <canvas id="availabilityChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Active Sessions (Time Windows)</div>
+            <div class="chart-container">
+                <canvas id="activeSessionsChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Core Stats Row -->
+    <div style="margin-top: 16px;">
+        <div class="card">
+            <div class="stat-label">Quick Analytics</div>
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 10px;">
+                <div
+                    style="text-align: center; padding: 12px; background: rgba(59, 130, 246, 0.05); border-radius: 12px;">
+                    <div style="font-size: 1.4rem; font-weight: 700; color: #3b82f6;" x-text="totalRequests">0</div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">Total Requests</div>
+                </div>
+                <div
+                    style="text-align: center; padding: 12px; background: rgba(16, 185, 129, 0.05); border-radius: 12px;">
+                    <div style="font-size: 1.4rem; font-weight: 700; color: #10b981;" x-text="currentRps">0
+                    </div>
+                    <div style="font-size: 0.7rem; color: var(--text-muted);">Current RPS</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

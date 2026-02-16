@@ -1,4 +1,4 @@
-import { initLogger } from "./logger.ts";
+import { initLogger, recordUptime } from "./logger.ts";
 import { initRecorder } from "./recorder.ts";
 import { manager } from "./services.ts";
 import { updateSystemStats } from "./monitor.ts";
@@ -133,11 +133,16 @@ async function bootstrap() {
         Deno.stdout.write(new TextEncoder().encode(msg));
     }, 1000);
 
-    // Periodically log status to history (every 30s)
+    // Periodically log status to history and record uptime (every 30s)
     setInterval(() => {
         const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
         const msg = `Requests: ${stats.totalRequests} | RPS: ${stats.rps.toFixed(2)} | Uptime: ${uptime}s`;
-        manager.get("guardian")?.addLog("info", msg);
+        manager.getOrAdd("guardian")?.addLog("info", msg);
+
+        // Record uptime for core services
+        recordUptime("guardian", 30);
+        if (manager.get("backend")?.stats.status === "running") recordUptime("backend", 30);
+        if (manager.get("frontend")?.stats.status === "running") recordUptime("frontend", 30);
     }, 30000);
 
     // Memory sampling for dashboard (every 10s)
@@ -176,7 +181,12 @@ async function bootstrap() {
 
     const handleRequest = async (req: Request, info: Deno.ServeHandlerInfo, targetPort: number, serviceName: string) => {
         const url = new URL(req.url);
-        const ip = info.remoteAddr.transport === 'tcp' ? (info.remoteAddr as Deno.NetAddr).hostname : "0.0.0.0";
+
+        // Respect X-Forwarded-For for proxies/simulators
+        const forwardedFor = req.headers.get("x-forwarded-for");
+        const ip = forwardedFor ? forwardedFor.split(',')[0].trim() :
+            (info.remoteAddr.transport === 'tcp' ? (info.remoteAddr as Deno.NetAddr).hostname : "0.0.0.0");
+
         const requestId = crypto.randomUUID();
 
         // Create debug tracker for this request

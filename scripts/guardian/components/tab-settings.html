@@ -1,0 +1,28 @@
+<!-- Settings Tab -->
+<div x-show="tab === 'settings'">
+    <div class="card" style="max-width:600px">
+        <h3 style="margin-top:0">Configuration</h3>
+        <p style="color:var(--text-secondary); font-size:0.9rem">Current port configuration (Static for
+            now).</p>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:20px;">
+            <div>
+                <div class="stat-label">Guardian Dashboard</div>
+                <input type="text" :value="config.dashboardPort" disabled
+                    style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+            </div>
+            <div></div>
+
+            <div>
+                <div class="stat-label">Frontend Proxy Port</div>
+                <input type="text" :value="config.frontendPort" disabled
+                    style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+            </div>
+            <div>
+                <div class="stat-label">Backend Proxy Port</div>
+                <input type="text" :value="config.backendPort" disabled
+                    style="width:100%; background:#0f172a; border:1px solid #334155; color:white; padding:8px; border-radius:6px; margin-top:5px;">
+            </div>
+        </div>
+    </div>
+</div>

@@ -622,7 +622,12 @@
     <div class="main">
         <div class="top-bar">
             <h2 style="margin:0; font-size: 1.4rem; font-weight: 700" x-text="pageTitle"></h2>
-            <div style="display:flex; gap:16px;">
+            <div style="display:flex; gap:16px; align-items:center;">
+                <!-- Live Ping Indicator -->
+                <div id="live-ping"
+                    style="width:12px; height:12px; background:#22c55e; border-radius:50%; opacity:0.2; transition:transform 0.1s, opacity 0.5s; box-shadow: 0 0 10px #22c55e;">
+                </div>
+
                 <template x-if="tab === 'simulator'">
                     <div style="display:flex; gap:10px; align-items:center; margin-right: 20px;">
                         <span class="badge" :class="simulator.running > 0 ? 'badge-green' : 'badge-purple'"
@@ -630,7 +635,7 @@
                     </div>
                 </template>
                 <template x-if="tab === 'overview'">
-                    <button class="danger" @click="restartAll()">Emergency Restart</button>
+                    <button class="danger" @click="restartGuardian()">Emergency Restart</button>
                 </template>
             </div>
         </div>
@@ -696,7 +701,7 @@
                         <div
                             style="text-align: center; padding: 10px 0; display:flex; flex-direction:column; align-items:center;">
                             <div style="font-size: 1.8rem; font-weight: 800; background: linear-gradient(to right, #10b981, #3b82f6); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;"
-                                x-text="formatUptime(guardianUptime)">0h 0m</div>
+                                x-text="formatUptime(currentGuardianUptime)">0h 0m</div>
                             <div style="color: var(--text-muted); font-size: 0.8rem; margin-top:4px">Current Session
                             </div>
                             <div style="font-size: 1rem; font-weight: 700; color: #94a3b8; margin-top: 8px;"
@@ -972,7 +977,8 @@
                         <div style="color: var(--text-muted); font-size: 0.85rem;">Coverage</div>
                     </div>
                     <div style="text-align: center; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
-                        <div style="font-size: 2rem; font-weight: 800; color: #a855f7;" x-text="ciReport.totalTests || 0">
+                        <div style="font-size: 2rem; font-weight: 800; color: #a855f7;"
+                            x-text="ciReport.totalTests || 0">
                         </div>
                         <div style="color: var(--text-muted); font-size: 0.85rem;">Total Tests</div>
                     </div>
@@ -1674,7 +1680,9 @@
                         this.system = statusRes.system || { load: [], memory: {} };
                         this.loadBalancer = lbRes;
                         this.guardianUptime = statusRes.uptime || 0;
-                        this.guardianStartTime = statusRes.startTime || (Date.now() - (this.guardianUptime * 1000));
+                        if (!this.guardianStartTime) {
+                            this.guardianStartTime = statusRes.startTime || (Date.now() - (this.guardianUptime * 1000));
+                        }
                         this.totalRequests = statusRes.totalRequests || 0;
                         this.currentRps = (lbRes.rps || 0).toFixed(1);
                     } catch (e) { /* ignore */ }
@@ -1916,7 +1924,7 @@
 
                                 if (this.tab === 'overview') {
                                     // Chart rendering is now handled by the status loop or WS
-                                    // this.$nextTick(() => this.renderRpsChart()); 
+                                    this.$nextTick(() => this.renderRpsChart());
                                 }
                                 if (this.tab === 'load-balancer') {
                                     this.$nextTick(() => this.renderLbDistributionChart());
@@ -1936,7 +1944,11 @@
                                 if (statusRes.uptime !== undefined) {
                                     this.guardianUptime = statusRes.uptime;
                                     this.guardianTotalUptime = statusRes.totalUptime || statusRes.uptime;
-                                    this.guardianStartTime = statusRes.startTime || this.guardianStartTime;
+                                    // Only update start time if it differs significantly (>5s) to prevent jitter
+                                    const newStart = statusRes.startTime || (this.now - (statusRes.uptime * 1000));
+                                    if (!this.guardianStartTime || Math.abs(newStart - this.guardianStartTime) > 5000) {
+                                        this.guardianStartTime = newStart;
+                                    }
                                 }
                                 if (statusRes.totalRequests !== undefined) {
                                     this.totalRequests = statusRes.totalRequests;
@@ -2007,7 +2019,11 @@
                                 // Update overview stats
                                 this.guardianUptime = data.uptime || 0;
                                 this.guardianTotalUptime = data.totalUptime || data.uptime;
-                                this.guardianStartTime = data.startTime || this.guardianStartTime;
+                                // Only update start time if it differs significantly (>5s) to prevent jitter
+                                const newStart = data.startTime || (this.now - (data.uptime * 1000));
+                                if (!this.guardianStartTime || Math.abs(newStart - this.guardianStartTime) > 5000) {
+                                    this.guardianStartTime = newStart;
+                                }
                                 this.now = Date.now(); // Update reference time on sync
                                 this.currentRps = parseFloat(data.rps || 0).toFixed(1);
                                 this.totalRequests = data.totalRequests || 0;
@@ -2326,10 +2342,10 @@
                     this.availabilityChartInstance = new Chart(ctx, {
                         type: 'line',
                         data: {
-                            labels: labels,
+                            labels: labels.length ? labels : ['No Data'],
                             datasets: [{
                                 label: 'Availability %',
-                                data: data,
+                                data: data.length ? data : [0],
                                 borderColor: '#3b82f6',
                                 backgroundColor: 'rgba(59, 130, 246, 0.1)',
                                 fill: true,

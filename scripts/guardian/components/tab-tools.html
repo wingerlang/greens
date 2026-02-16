@@ -1,0 +1,51 @@
+<!-- Tools Tab -->
+<div x-show="tab === 'tools'">
+    <div class="card">
+        <h3 style="margin-top:0">Shadow Recorder</h3>
+        <p style="color:var(--text-secondary); margin-bottom:20px">Record incoming traffic to trace files
+            for replay debugging.</p>
+
+        <div
+            style="margin-bottom:20px; padding:15px; border:1px solid var(--border); border-radius:8px; display:flex; align-items:center; justify-content:space-between;">
+            <div>
+                <div style="font-weight:bold" x-text="isRecording ? 'Recording Active' : 'Recording Inactive'">
+                </div>
+                <div style="font-size:0.8rem; color:var(--text-secondary)"
+                    x-text="isRecording ? 'Capturing requests...' : 'Recorder is idle.'"></div>
+            </div>
+            <button :class="isRecording ? 'danger' : 'primary'" @click="toggleRecording()"
+                x-text="isRecording ? 'Stop Recording' : 'Start Recording'"></button>
+        </div>
+
+        <div class="table-container">
+            <div
+                style="padding:15px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-weight:bold">Recorded Traces</span>
+                <button style="font-size:0.8rem; padding:4px 8px;" @click="refreshTraces()">Refresh</button>
+            </div>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="trace in traces" :key="trace">
+                        <tr>
+                            <td style="font-family:monospace" x-text="trace"></td>
+                            <td>
+                                <button style="padding:4px 8px; font-size:0.8rem"
+                                    @click="replayTrace(trace)">Replay</button>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="traces.length === 0">
+                        <td colspan="2" style="text-align:center; padding:20px; color:#666">No traces found
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

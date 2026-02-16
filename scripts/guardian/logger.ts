@@ -51,7 +51,7 @@ export async function initLogger() {
         await Deno.mkdir(LOG_DIR, { recursive: true });
         const dbPath = Deno.env.get("GUARDIAN_DB_PATH") || "./guardian.db";
         if (dbPath.includes("/")) {
-             await Deno.mkdir(dirname(dbPath), { recursive: true });
+            await Deno.mkdir(dirname(dbPath), { recursive: true });
         }
         kv = await Deno.openKv(dbPath);
         console.log(`[LOGGER] Guardian KV initialized successfully at ${dbPath}`);
@@ -130,13 +130,29 @@ export async function saveRequestMetric(metric: RequestMetric) {
         updateLiveStatus();
 
         // Update aggregations (Daily stats)
-        const date = new Date(metric.timestamp).toISOString().split('T')[0];
+        const dateObj = new Date(metric.timestamp);
+        const date = dateObj.toISOString().split('T')[0];
+        const hour = dateObj.getUTCHours();
         const atomic = kv.atomic();
 
-        // 1. Total Requests
+        // 1. Total Requests (Daily)
         atomic.mutate({
             type: "sum",
             key: ["guardian", "stats", date, "total_requests"],
+            value: new Deno.KvU64(1n)
+        });
+
+        // 1c. Total Requests (Hourly)
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats_hourly", date, hour, "total_requests"],
+            value: new Deno.KvU64(1n)
+        });
+
+        // 1b. Total Requests (Lifetime)
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats_total", "requests"],
             value: new Deno.KvU64(1n)
         });
 
@@ -165,6 +181,25 @@ export async function saveRequestMetric(metric: RequestMetric) {
         atomic.mutate({
             type: "sum",
             key: ["guardian", "stats", date, "type", metric.resourceType],
+            value: new Deno.KvU64(1n)
+        });
+
+        // 5b. Status Code (Hourly)
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats_hourly", date, hour, "status", String(metric.status)],
+            value: new Deno.KvU64(1n)
+        });
+
+        // 5c. Latency (Hourly Sum/Count for Average)
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats_hourly", date, hour, "latency_sum"],
+            value: new Deno.KvU64(BigInt(Math.floor(metric.duration)))
+        });
+        atomic.mutate({
+            type: "sum",
+            key: ["guardian", "stats_hourly", date, hour, "latency_count"],
             value: new Deno.KvU64(1n)
         });
 
@@ -310,6 +345,9 @@ export function determineResourceType(path: string, mimeType?: string): string {
         case "ts":
         case "map":
             return "script";
+        case "html":
+        case "htm":
+            return "document";
         case "css":
         case "less":
         case "scss":

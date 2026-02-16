@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guardian 3.0</title>
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@600;700;800&display=swap"
+        rel="stylesheet">
+
+    <!-- Extracted Styles -->
+    <link rel="stylesheet" href="/components/styles.css">
+</head>
+
+<body x-data="app">
+
+    <!-- {{SIDEBAR}} -->
+
+    <!-- Main Content -->
+    <div class="main">
+        <div class="top-bar">
+            <h2 style="margin:0; font-size: 1.4rem; font-weight: 700" x-text="pageTitle"></h2>
+            <div style="display:flex; gap:16px;">
+                <template x-if="tab === 'simulator'">
+                    <div style="display:flex; gap:10px; align-items:center; margin-right: 20px;">
+                        <span class="badge" :class="simulator.running > 0 ? 'badge-green' : 'badge-purple'"
+                            x-text="simulator.running + ' Active Users'"></span>
+                    </div>
+                </template>
+                <template x-if="tab === 'overview'">
+                    <button class="danger" @click="restartAll()">Emergency Restart</button>
+                </template>
+            </div>
+        </div>
+
+        <div class="view-content">
+            <!-- {{COMPONENTS}} -->
+        </div>
+    </div>
+
+    <!-- Extracted Client Logic -->
+    <script src="/components/client.js"></script>
+</body>
+
+</html>

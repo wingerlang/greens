@@ -1,0 +1,76 @@
+<!-- Simulator Tab -->
+<div x-show="tab === 'simulator'">
+    <div class="grid-2">
+        <div class="card">
+            <div class="stat-label">User Population Control</div>
+            <div style="margin: 20px 0;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Target Concurrent Users</span>
+                    <span style="font-weight:bold; color:var(--accent-primary)" x-text="simConfig.targetUsers"></span>
+                </div>
+                <input type="range" min="0" max="500" step="10" x-model.number="simConfig.targetUsers"
+                    @input="updateSimConfig()">
+                <div
+                    style="display:flex; justify-content:space-between; margin-top:4px; font-size:0.75rem; color:var(--text-muted)">
+                    <span>0</span>
+                    <span>500</span>
+                </div>
+            </div>
+
+            <div style="margin: 20px 0;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                    <span>Ramp Up Rate (Users/sec)</span>
+                    <span style="font-weight:bold; color:var(--accent-secondary)" x-text="simConfig.rampRate"></span>
+                </div>
+                <input type="range" min="1" max="50" step="1" x-model.number="simConfig.rampRate"
+                    @input="updateSimConfig()">
+            </div>
+
+            <div style="margin-top: 30px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 12px;">
+                <div class="stat-label">Simulation Status</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px;">
+                    <div>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--success)" x-text="simulator.active">0
+                        </div>
+                        <div style="font-size:0.7rem; color:var(--text-muted)">Active Users</div>
+                    </div>
+                    <div>
+                        <div style="font-size:1.5rem; font-weight:800;" x-text="simulator.totalReq">0</div>
+                        <div style="font-size:0.7rem; color:var(--text-muted)">Requests Sent</div>
+                    </div>
+                    <div>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--danger)" x-text="simulator.totalErr">
+                            0</div>
+                        <div style="font-size:0.7rem; color:var(--text-muted)">Errors</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="stat-label">Persona Distribution</div>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">
+                Configure the behavior mix of the simulated crowd.
+            </p>
+
+            <template x-for="(weight, type) in simConfig.personas" :key="type">
+                <div style="margin-bottom: 20px;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;">
+                        <span style="text-transform:capitalize" x-text="type"></span>
+                        <span x-text="(weight * 100).toFixed(0) + '%'"></span>
+                    </div>
+                    <!-- Note: Simple sliders for each, ideally they should sum to 100 but loose is fine for sim -->
+                    <input type="range" min="0" max="1" step="0.1" x-model="simConfig.personas[type]"
+                        @input="updateSimConfig()">
+                </div>
+            </template>
+
+            <div style="margin-top:20px; padding-top:20px; border-top:1px solid var(--border-glass)">
+                <button class="danger" style="width:100%; justify-content:center;"
+                    @click="simConfig.targetUsers = 0; updateSimConfig()">
+                    STOP SIMULATION
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

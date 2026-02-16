@@ -79,6 +79,16 @@ export async function getTrafficStats() {
     };
 }
 
+export async function getLifetimeTraffic() {
+    const kv = getKv();
+    if (!kv) return { total: 0 };
+
+    const res = await kv.get<Deno.KvU64>(["guardian", "stats_total", "requests"]);
+    return {
+        total: res.value ? Number(res.value.value) : 0
+    };
+}
+
 export async function getServiceStats() {
     const kv = getKv();
     if (!kv) return [];
@@ -181,8 +191,120 @@ export async function getSessions(limit = 50) {
     for await (const res of iter) {
         sessions.push(res.value);
     }
+    if (sessions.length > 0) {
+        // console.log(`[ANALYTICS] Retrieved ${sessions.length} sessions for ${date}`);
+    }
     // Sort by last seen desc
     return sessions.sort((a, b) => b.lastSeen - a.lastSeen);
+}
+
+export async function getActiveSessionBuckets() {
+    const kv = getKv();
+    if (!kv) return { "1m": 0, "5m": 0, "10m": 0, "30m": 0, "60m": 0 };
+
+    const now = Date.now();
+    const windows = {
+        "30s": now - 30 * 1000,
+        "1m": now - 1 * 60 * 1000,
+        "5m": now - 5 * 60 * 1000,
+        "10m": now - 10 * 60 * 1000,
+        "30m": now - 30 * 60 * 1000,
+        "60m": now - 60 * 60 * 1000,
+    };
+
+    const date = new Date().toISOString().split('T')[0];
+    const iter = kv.list<SessionStats>({ prefix: ["guardian", "sessions", date] });
+
+    const buckets = { "30s": 0, "1m": 0, "5m": 0, "10m": 0, "30m": 0, "60m": 0 };
+    let count = 0;
+
+    for await (const res of iter) {
+        count++;
+        const session = res.value;
+        if (session.lastSeen >= windows["30s"]) buckets["30s"]++;
+        if (session.lastSeen >= windows["1m"]) buckets["1m"]++;
+        if (session.lastSeen >= windows["5m"]) buckets["5m"]++;
+        if (session.lastSeen >= windows["10m"]) buckets["10m"]++;
+        if (session.lastSeen >= windows["30m"]) buckets["30m"]++;
+        if (session.lastSeen >= windows["60m"]) buckets["60m"]++;
+    }
+
+    if (count > 0) {
+        // console.log(`[ANALYTICS] Bucketed ${count} sessions for ${date}`);
+    }
+
+    return buckets;
+}
+
+export async function getHourlyTraffic(date?: string) {
+    const kv = getKv();
+    if (!kv) return [];
+
+    const targetDate = date || new Date().toISOString().split('T')[0];
+    const buckets = Array(24).fill(0);
+
+    // Prefix: ["guardian", "stats_hourly", date]
+    const iter = kv.list<Deno.KvU64>({ prefix: ["guardian", "stats_hourly", targetDate] });
+    for await (const res of iter) {
+        // Key: ["guardian", "stats_hourly", date, hour, metricName]
+        if (res.key[4] === "total_requests") {
+            const hour = Number(res.key[3]);
+            buckets[hour] = Number(res.value.value);
+        }
+    }
+    return buckets;
+}
+
+export async function getStatusBreakdownHistory(days = 7) {
+    const kv = getKv();
+    if (!kv) return {};
+
+    const statusMap: Record<string, number> = {};
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    for (let i = 0; i < days; i++) {
+        const date = new Date(now - i * oneDay).toISOString().split('T')[0];
+        // Scan hourly status codes
+        const iter = kv.list<Deno.KvU64>({ prefix: ["guardian", "stats_hourly", date] });
+        for await (const res of iter) {
+            if (res.key[4] === "status") {
+                const status = String(res.key[5]);
+                const count = Number(res.value.value);
+                statusMap[status] = (statusMap[status] || 0) + count;
+            }
+        }
+    }
+    return statusMap;
+}
+
+export async function getLatencyHistory(days = 7) {
+    const kv = getKv();
+    if (!kv) return [];
+
+    const history = [];
+    const now = Date.now();
+    const oneDay = 24 * 60 * 60 * 1000;
+
+    for (let i = 0; i < days; i++) {
+        const date = new Date(now - i * oneDay).toISOString().split('T')[0];
+        let totalSum = 0n;
+        let totalCount = 0n;
+
+        const iter = kv.list<Deno.KvU64>({ prefix: ["guardian", "stats_hourly", date] });
+        for await (const res of iter) {
+            if (res.key[4] === "latency_sum") totalSum += res.value.value;
+            if (res.key[4] === "latency_count") totalCount += res.value.value;
+        }
+
+        if (totalCount > 0n) {
+            history.push({
+                date,
+                avg: Number(totalSum / totalCount)
+            });
+        }
+    }
+    return history.reverse();
 }
 
 export async function getCountryStats() {

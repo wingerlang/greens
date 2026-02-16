@@ -1,0 +1,42 @@
+<!-- WAF Tab -->
+<div x-show="tab === 'waf'">
+    <div class="card">
+        <h3 style="margin-top:0">WAF Blocked Events (Last 50)</h3>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>IP</th>
+                        <th>Path</th>
+                        <th>Rule</th>
+                        <th>Risk</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-for="event in wafEvents" :key="event.timestamp + event.ip">
+                        <tr>
+                            <td x-text="formatTime(event.timestamp)"></td>
+                            <td x-text="event.ip"></td>
+                            <td style="font-family:monospace; max-width:300px; overflow:hidden; text-overflow:ellipsis"
+                                x-text="event.path"></td>
+                            <td>
+                                <span class="badge badge-purple" x-text="event.ruleId"></span>
+                                <div style="font-size:0.8rem; color:#999" x-text="event.reason"></div>
+                            </td>
+                            <td>
+                                <span class="badge" :class="event.risk === 'high' ? 'badge-blue' : 'badge-green'"
+                                    style="color: #ef4444; background: rgba(239, 68, 68, 0.2)"
+                                    x-text="event.risk"></span>
+                            </td>
+                        </tr>
+                    </template>
+                    <tr x-show="wafEvents.length === 0">
+                        <td colspan="5" style="text-align:center; padding:20px; color:#666">No threats
+                            detected</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

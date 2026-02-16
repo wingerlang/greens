@@ -42,11 +42,7 @@ class VirtualUser {
     requests = 0;
     errors = 0;
 
-    constructor(id: number, persona: Persona) {
-        this.id = id;
-        this.username = `sim_user_${id}`;
-        this.persona = persona;
-    }
+
 
     async start() {
         this.active = true;
@@ -80,13 +76,50 @@ class VirtualUser {
         return `http://127.0.0.1:${CONFIG.ports.frontend}`;
     }
 
+    country: string = "US";
+    ip: string = "127.0.0.1";
+
+    constructor(id: number, persona: Persona) {
+        this.id = id;
+        this.username = `sim_user_${id}`;
+        this.persona = persona;
+        this.assignGeo();
+    }
+
+    private assignGeo() {
+        const geos = [
+            { c: "US", w: 0.4, ip: "104.244.42.1" },
+            { c: "DE", w: 0.15, ip: "85.214.132.117" },
+            { c: "SE", w: 0.15, ip: "193.10.252.19" },
+            { c: "GB", w: 0.1, ip: "81.2.69.142" },
+            { c: "JP", w: 0.05, ip: "202.232.2.164" },
+            { c: "BR", w: 0.05, ip: "177.126.180.1" },
+            { c: "AU", w: 0.05, ip: "1.1.1.1" }, // Cloudflare (often maps to AU/US)
+            { c: "IN", w: 0.05, ip: "103.25.231.1" }
+        ];
+
+        const rand = Math.random();
+        let cumulative = 0;
+        for (const g of geos) {
+            cumulative += g.w;
+            if (rand <= cumulative) {
+                this.country = g.c;
+                // Randomize last octet to avoid exact IP dupes
+                this.ip = g.ip.split('.').slice(0, 3).join('.') + '.' + Math.floor(Math.random() * 254 + 1);
+                break;
+            }
+        }
+    }
+
     private async req(method: string, path: string, body?: any) {
         const opts: RequestInit = {
             method,
             headers: {
                 "Content-Type": "application/json",
                 "Cookie": this.jar.getHeader(),
-                "User-Agent": `GuardianSimulator/1.0 (${this.persona})`
+                "User-Agent": `GuardianSimulator/1.0 (${this.persona})`,
+                "X-Forwarded-For": this.ip,
+                "X-Sim-Country": this.country // Hint for GeoIP middleware to avoid rate limits
             }
         };
         if (body) opts.body = JSON.stringify(body);
@@ -95,10 +128,19 @@ class VirtualUser {
             const res = await fetch(`${this.baseUrl}${path}`, opts);
             this.jar.store(res.headers);
             this.requests++;
+
+            // Log errors for debugging
+            if (!res.ok && res.status !== 404) {
+                console.error(`[SIM] User ${this.id} got ${res.status} on ${method} ${path}`);
+            }
+
             return res;
-        } catch (e) {
+        } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            console.error(`[SIM] User ${this.id} req failed on ${method} ${path}:`, message);
             this.errors++;
-            throw e;
+            // Don't throw - let the user continue with next action
+            return new Response(null, { status: 0 }); // Return dummy response
         }
     }
 
@@ -118,9 +160,7 @@ class VirtualUser {
             });
 
             if (res.status !== 201 && res.status !== 200) {
-                // Maybe already exists but wrong password? (Shouldn't happen with our logic)
-                // Or rate limited/banned
-                if (res.status === 429) console.log(`[SIM] User ${this.id} rate limited during auth`);
+                console.error(`[SIM] Auth failed for User ${this.id}: Login=${res.status}, will continue anyway`);
             }
         }
     }
@@ -128,20 +168,29 @@ class VirtualUser {
     private async performAction() {
         const rand = Math.random();
 
-        // Common action: Check Status (Cheap, simulates heartbeat/background polling)
+        // 30% chance to just ping status (Low impact)
         if (rand < 0.3) {
             await this.req("GET", "/api/status");
             return;
         }
 
+        // 20% chance to hit static assets (Frontend Traffic)
+        if (rand < 0.5) {
+            const assets = ["/", "/index.html", "/components/styles.css", "/components/client.js", "/assets/logo.png"];
+            const asset = assets[Math.floor(Math.random() * assets.length)];
+            await this.req("GET", asset);
+            return;
+        }
+
         switch (this.persona) {
             case "browser":
-                // Simulates a user navigating read-only pages (Dashboard, Profile)
+                // Read heavy
                 await this.req("GET", "/api/user/me");
+                if (Math.random() > 0.5) await this.req("GET", "/api/workouts");
                 break;
 
             case "athlete":
-                // Simulates a user actively logging a workout (Data Entry)
+                // Write heavy
                 await this.req("POST", "/api/workouts", {
                     date: new Date().toISOString(),
                     type: "strength",
@@ -150,10 +199,10 @@ class VirtualUser {
                 break;
 
             case "social":
-                // Simulates a user sending messages (Social Interaction)
+                // Interactive
                 await this.req("POST", "/api/messages", {
                     to: "admin",
-                    content: `Hello from ${this.username} at ${new Date().toISOString()}`,
+                    content: `Hello from ${this.username} in ${this.country}`,
                     isSecret: false
                 });
                 break;
@@ -183,7 +232,7 @@ export class Simulator {
             heavy: 0.1
         }
     };
-    private loopInterval: number | null = null;
+    private loopInterval: any = null;
 
     private constructor() {
         this.loopInterval = setInterval(() => this.tick(), 1000);
@@ -273,7 +322,9 @@ export class Simulator {
             user = new VirtualUser(id, persona);
             this.users.set(id, user);
         } else {
-            user.persona = persona; // Update persona on reuse
+            user.persona = persona;
+            // Re-roll geo for variety on reuse
+            (user as any).assignGeo();
         }
 
         user.start();
