@@ -19,7 +19,8 @@ import {
     EyeOff,
     MoreHorizontal,
     Globe,
-    RefreshCw
+    RefreshCw,
+    MessageSquare
 } from 'lucide-react';
 import type { FeedEvent, FeedEventType } from '../../models/feedTypes.ts';
 import { useData } from '../../context/DataContext.tsx';
@@ -43,6 +44,7 @@ const EVENT_ICONS: Record<FeedEventType, React.ReactNode> = {
     'BODY_METRIC': <Scale className="text-purple-400" size={20} />,
     'MILESTONE': <Trophy className="text-yellow-400" size={20} />,
     'SOCIAL': <Users className="text-pink-400" size={20} />,
+    'SOCIAL_POST': <MessageSquare className="text-emerald-400" size={20} />,
 };
 
 // Background color classes for event types
@@ -55,6 +57,7 @@ const EVENT_COLORS: Record<FeedEventType, string> = {
     'BODY_METRIC': 'from-purple-500/10 to-purple-500/5 border-purple-500/20',
     'MILESTONE': 'from-yellow-500/10 to-yellow-500/5 border-yellow-500/20',
     'SOCIAL': 'from-pink-500/10 to-pink-500/5 border-pink-500/20',
+    'SOCIAL_POST': 'from-emerald-500/10 to-emerald-500/5 border-emerald-500/20',
 };
 
 export function FeedEventCard({
@@ -314,6 +317,10 @@ export function FeedEventCard({
                         <SleepDetails payload={event.payload as any} />
                     )}
 
+                    {event.type === 'SOCIAL_POST' && (
+                        <SocialPostDetails payload={event.payload as any} />
+                    )}
+
                     {/* Timestamp */}
                     <div className="flex items-center gap-2 mt-3 text-[10px] text-slate-600">
                         <Clock size={12} />
@@ -421,6 +428,16 @@ function StatBox({ label, value, accent }: { label: string; value: string | numb
             <div className={`text-sm font-black ${accentClass}`}>{value}</div>
             <div className="text-[9px] text-slate-500 uppercase font-bold">{label}</div>
         </div>
+    );
+}
+
+function SocialPostDetails({ payload }: { payload: any }) {
+    if (!payload.contentHtml) return null;
+    return (
+        <div
+            className="wysiwyg-content min-w-full text-sm leading-relaxed mt-2"
+            dangerouslySetInnerHTML={{ __html: payload.contentHtml }}
+        />
     );
 }
 

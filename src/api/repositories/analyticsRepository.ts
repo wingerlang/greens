@@ -400,6 +400,7 @@ export const analyticsRepository = {
         topSearches: Array<{ query: string; count: number }>;
         topLoggedFoods: Array<{ food: string; count: number }>;
         topNavigations: Array<{ path: string; count: number }>;
+        contextualNavigations: Record<string, Array<{ path: string; count: number }>>;
         hourlyDistribution: number[];
     }> {
         const cutoff = new Date();
@@ -409,6 +410,7 @@ export const analyticsRepository = {
         const searches: string[] = [];
         const loggedFoods: string[] = [];
         const navigations: string[] = [];
+        const contextualNavMap = new Map<string, Map<string, number>>();
         const hourlyDistribution = new Array(24).fill(0);
 
         for await (const entry of kv.list<InteractionEvent>({ prefix: [KEY_PREFIX.EVENT] })) {
@@ -427,7 +429,18 @@ export const analyticsRepository = {
                 hourlyDistribution[hour]++;
             }
             if (e.type === 'omnibox_nav' && e.metadata?.path) {
-                navigations.push(e.metadata.path);
+                const toPath = e.metadata.path;
+                const fromPath = e.path || '/';
+
+                navigations.push(toPath);
+
+                // Track context
+                if (!contextualNavMap.has(fromPath)) {
+                    contextualNavMap.set(fromPath, new Map<string, number>());
+                }
+                const toMap = contextualNavMap.get(fromPath)!;
+                toMap.set(toPath, (toMap.get(toPath) || 0) + 1);
+
                 const hour = new Date(e.timestamp).getHours();
                 hourlyDistribution[hour]++;
             }
@@ -457,6 +470,15 @@ export const analyticsRepository = {
             .sort((a, b) => b.count - a.count)
             .slice(0, 20);
 
+        // Format contextual navigations
+        const contextualNavigations: Record<string, Array<{ path: string; count: number }>> = {};
+        contextualNavMap.forEach((toMap, fromPath) => {
+            contextualNavigations[fromPath] = Array.from(toMap.entries())
+                .map(([path, count]) => ({ path, count }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 20); // keep top 20 transitions from this path
+        });
+
         return {
             totalSearches: searches.length,
             totalLogs: loggedFoods.length,
@@ -464,6 +486,7 @@ export const analyticsRepository = {
             topSearches,
             topLoggedFoods,
             topNavigations,
+            contextualNavigations,
             hourlyDistribution
         };
     },

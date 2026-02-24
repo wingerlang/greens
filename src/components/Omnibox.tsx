@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext.tsx';
 import { useAnalytics } from '../context/AnalyticsContext.tsx';
 import { parseOmniboxInput } from '../utils/nlpParser.ts';
@@ -211,6 +211,7 @@ const canLogAsCooked = (item: FoodItem): { canCook: boolean; effectiveYieldFacto
 
 export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: OmniboxProps) {
     const navigate = useNavigate();
+    const location = useLocation();
     const [input, setInput] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [hoveredResultId, setHoveredResultId] = useState<string | null>(null);
@@ -253,6 +254,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     const [draftFoodQuantity, setDraftFoodQuantity] = useState<number | null>(null);
     const [draftFoodMealType, setDraftFoodMealType] = useState<MealType | null>(null);
     const [draftFoodDate, setDraftFoodDate] = useState<string | null>(null);
+
+    const [lockedQuickMeal, setLockedQuickMeal] = useState<(QuickMeal & { totals?: { calories: number, protein: number, carbs: number, fat: number }, summary?: string, itemType?: 'quickMeal' | 'savedEstimate' }) | null>(null);
+    const [draftQuickMealMealType, setDraftQuickMealMealType] = useState<MealType | null>(null);
+    const [draftQuickMealDate, setDraftQuickMealDate] = useState<string | null>(null);
 
     // Measurement drafts
     const [draftMeasurementType, setDraftMeasurementType] = useState<BodyMeasurementType | null>(null);
@@ -330,6 +335,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             setDraftFoodQuantity(null);
             setDraftFoodMealType(null);
             setDraftFoodDate(null);
+            setLockedQuickMeal(null);
+            setDraftQuickMealMealType(null);
+            setDraftQuickMealDate(null);
             setDraftMeasurementType(null);
             setDraftMeasurementValue(null);
             setDraftMeasurementDate(null);
@@ -366,17 +374,36 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             route.aliases.some(alias => alias.toLowerCase().includes(slashQuery))
         );
 
-        // Sort by omnibox usage first, then total visits
-        return base.sort((a, b) => {
-            const aOmni = visitStats.omniboxNavs[a.path] || 0;
-            const bOmni = visitStats.omniboxNavs[b.path] || 0;
-            if (bOmni !== aOmni) return bOmni - aOmni;
+        const currentPath = location.pathname;
+        const currentContextStats = visitStats.contextualNavs?.[currentPath] || {};
 
-            const aTotal = visitStats.paths[a.path] || 0;
-            const bTotal = visitStats.paths[b.path] || 0;
-            return bTotal - aTotal;
+        // Sort by:
+        // 1. Contextual visits (from current page via omnibox)
+        // 2. Global omnibox usage
+        // 3. Global page views
+        return base.map(route => {
+            const contextCount = currentContextStats[route.path] || 0;
+            const globalOmniCount = visitStats.omniboxNavs[route.path] || 0;
+            const globalTotalCount = visitStats.paths[route.path] || 0;
+
+            return {
+                ...route,
+                // Pass down reasoning for UI
+                sortReason: contextCount > 0
+                    ? `${contextCount} ggr härifrån`
+                    : globalOmniCount > 0
+                        ? `${globalOmniCount} ggr globalt`
+                        : `${globalTotalCount} besök totalt`,
+                contextCount,
+                globalOmniCount,
+                globalTotalCount
+            };
+        }).sort((a, b) => {
+            if (b.contextCount !== a.contextCount) return b.contextCount - a.contextCount;
+            if (b.globalOmniCount !== a.globalOmniCount) return b.globalOmniCount - a.globalOmniCount;
+            return b.globalTotalCount - a.globalTotalCount;
         });
-    }, [isSlashMode, slashQuery, visitStats]);
+    }, [isSlashMode, slashQuery, visitStats, location.pathname]);
 
     // Calculate food usage stats from meal entries
     const foodUsageStats = useMemo(() => {
@@ -524,8 +551,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                 return {
                     calories: acc.calories + n.calories,
                     protein: acc.protein + n.protein,
+                    carbs: acc.carbs + (n.carbs || 0),
+                    fat: acc.fat + (n.fat || 0)
                 };
-            }, { calories: 0, protein: 0 });
+            }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
 
             const summary = qm.items.map((item: any) => {
                 const name = getItemName(item);
@@ -609,7 +638,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
     // Combined selectable items for keyboard nav
     const selectableItems = useMemo(() => {
-        if (lockedFood) return []; // No selection when locked
+        if (lockedFood || lockedQuickMeal) return []; // No selection when locked
         if (isSlashMode) return navSuggestions.map(r => ({ itemType: 'nav' as const, ...r }));
         if (isActionMode) return actionSuggestions.map(a => ({ itemType: 'action' as const, ...a }));
 
@@ -650,18 +679,30 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') onClose();
+            if (selectableItems.length === 0) return;
+
             if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                setSelectedIndex(prev => Math.min(prev + 1, selectableItems.length - 1));
+                setSelectedIndex(prev => (prev + 1) % selectableItems.length);
             }
             if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                setSelectedIndex(prev => Math.max(prev - 1, 0));
+                setSelectedIndex(prev => (prev - 1 + selectableItems.length) % selectableItems.length);
             }
         };
         globalThis.addEventListener('keydown', handleKeyDown);
         return () => globalThis.removeEventListener('keydown', handleKeyDown);
     }, [onClose, selectableItems.length]);
+
+    // Scroll selected item into view
+    useEffect(() => {
+        if (selectableItems.length > 0 && isOpen) {
+            const el = document.getElementById(`omnibox-item-${selectedIndex}`);
+            if (el) {
+                el.scrollIntoView({ block: 'nearest' });
+            }
+        }
+    }, [selectedIndex, selectableItems.length, isOpen]);
 
     // Analytics: Track search queries (debounced)
     useEffect(() => {
@@ -746,12 +787,22 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         // Removed onClose() to allow multiple logging as requested
     };
 
-    const logQuickMeal = (meal: QuickMeal) => {
-        const logDate = intent.date || selectedDate || new Date().toISOString().split('T')[0];
+    const lockQuickMeal = (meal: any) => {
+        setLockedQuickMeal(meal);
+        setDraftQuickMealMealType(intent.type === 'food' && intent.data.mealType ? intent.data.mealType : null);
+        setDraftQuickMealDate(intent.date || selectedDate || new Date().toISOString().split('T')[0]);
+    };
+
+    const handleLockedQuickMealAction = () => {
+        if (!lockedQuickMeal) return;
+
+        const logDate = draftQuickMealDate || intent.date || selectedDate || new Date().toISOString().split('T')[0];
 
         // Determine meal type
         let mealType: MealType = 'snack';
-        if (intent.type === 'food' && intent.data.mealType) {
+        if (draftQuickMealMealType) {
+            mealType = draftQuickMealMealType;
+        } else if (intent.type === 'food' && intent.data.mealType) {
             mealType = intent.data.mealType;
         } else {
             const hour = new Date().getHours();
@@ -763,18 +814,18 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         addMealEntry({
             date: logDate,
             mealType,
-            items: meal.items,
-            title: meal.name,
-            snabbvalId: meal.id, // This is important for grouping on the Calories page
+            items: lockedQuickMeal.items,
+            title: lockedQuickMeal.name,
+            snabbvalId: lockedQuickMeal.id, // This is important for grouping on the Calories page
             pieces: 1 // Default to 1 so stepper is available
         });
 
         // Analytics
         const durationMs = openTimestamp ? Date.now() - openTimestamp : null;
-        logEvent('omnibox_log', meal.name, 'food', {
+        logEvent('omnibox_log', lockedQuickMeal.name, 'food', {
             type: 'quick_meal',
-            mealId: meal.id,
-            itemCount: meal.items.length,
+            mealId: lockedQuickMeal.id,
+            itemCount: lockedQuickMeal.items.length,
             logDate,
             mealType,
             durationMs
@@ -782,8 +833,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
         setShowFeedback(true);
         setInput('');
-        // onClose()? Usually better to keep open if user wants to log more, but for quick meals maybe close?
-        // Let's follow the food item pattern: stay open but clear input.
+        setLockedQuickMeal(null);
     };
 
     // Lock a food item for detailed editing
@@ -906,6 +956,12 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             return;
         }
 
+        // Handle locked quick meal
+        if (lockedQuickMeal) {
+            handleLockedQuickMealAction();
+            return;
+        }
+
         // Handle navigation selection
         if (isSlashMode && selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'nav') {
             const route = selectableItems[selectedIndex] as any;
@@ -956,15 +1012,15 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
         // Handle quick meal selection
         if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'quickMeal') {
-            const selectedMeal = selectableItems[selectedIndex] as QuickMeal;
-            logQuickMeal(selectedMeal);
+            const selectedMeal = selectableItems[selectedIndex];
+            lockQuickMeal(selectedMeal);
             return;
         }
 
         // Handle saved estimate selection
         if (selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'savedEstimate') {
-            const selectedMeal = selectableItems[selectedIndex] as QuickMeal;
-            logQuickMeal(selectedMeal);
+            const selectedMeal = selectableItems[selectedIndex];
+            lockQuickMeal(selectedMeal);
             return;
         }
 
@@ -1090,9 +1146,10 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                             <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                                 <span>🧭</span> Navigera ({navSuggestions.length})
                             </div>
-                            {navSuggestions.map((route, idx) => (
+                            {navSuggestions.map((route: any, idx) => (
                                 <div
                                     key={route.path}
+                                    id={`omnibox-item-${idx}`}
                                     onClick={() => { navigate(route.path); onClose(); }}
                                     className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
                                         ? 'bg-cyan-500/20 text-cyan-400'
@@ -1107,14 +1164,9 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                             <div className="flex items-center gap-2">
                                                 <div className="font-medium">{route.label}</div>
                                                 <div className="flex items-center gap-1">
-                                                    {visitStats.paths[route.path] > 0 && (
-                                                        <span className="text-[9px] bg-slate-500/10 text-slate-400 px-1.5 py-0.5 rounded font-bold uppercase" title="Totala besök">
-                                                            👁️ {visitStats.paths[route.path]}
-                                                        </span>
-                                                    )}
-                                                    {visitStats.omniboxNavs[route.path] > 0 && (
-                                                        <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded font-bold uppercase" title="Via Omnibox">
-                                                            🧭 {visitStats.omniboxNavs[route.path]}
+                                                    {route.sortReason && (
+                                                        <span className="text-[9px] bg-cyan-500/10 text-cyan-400 px-1.5 py-0.5 rounded font-bold uppercase transition-all" title="Varför denna visas först">
+                                                            🧭 {route.sortReason}
                                                         </span>
                                                     )}
                                                 </div>
@@ -1139,6 +1191,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                             {actionSuggestions.map((action, idx) => (
                                 <div
                                     key={action.id}
+                                    id={`omnibox-item-${idx}`}
                                     onClick={() => setInput(action.command)}
                                     className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
                                         ? 'bg-amber-500/20 text-amber-400'
@@ -1352,6 +1405,101 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                             <div className="text-center text-[10px] text-slate-500">
                                 💡 Fortsätt skriva för att ändra mängd, måltid eller datum (t.ex. "120g mellanmål igår")
                             </div>
+                        </div>
+                    )}
+
+                    {/* LOCKED QUICK MEAL MODULE - Shows when a quick meal is selected */}
+                    {!isSlashMode && !lockedFood && lockedQuickMeal && (
+                        <div className="p-4 space-y-4">
+                            <div className="px-3 py-2 bg-amber-500/10 border-l-4 border-amber-500 rounded-r-lg flex items-center gap-2">
+                                <span className="text-lg">{lockedQuickMeal.itemType === 'savedEstimate' ? '🧮' : '⚡'}</span>
+                                <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Logga {lockedQuickMeal.itemType === 'savedEstimate' ? 'Estimering' : 'Snabbval'}</span>
+                                <button
+                                    onClick={() => { setLockedQuickMeal(null); setDraftQuickMealMealType(null); setDraftQuickMealDate(null); }}
+                                    className="ml-auto text-[10px] uppercase font-bold text-slate-400 hover:text-white bg-white/10 px-2 py-0.5 rounded-full"
+                                >
+                                    ✕ Ångra
+                                </button>
+                            </div>
+
+                            {/* Quick Meal Display */}
+                            <div className="flex items-center gap-4 p-4 bg-slate-800/50 rounded-xl">
+                                <div className="w-16 h-16 rounded-xl bg-amber-500/20 flex items-center justify-center text-3xl">
+                                    {lockedQuickMeal.itemType === 'savedEstimate' ? '🧮' : '⚡'}
+                                </div>
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-xl font-bold text-white">{lockedQuickMeal.name}</h3>
+                                    </div>
+                                    <div className="text-xs text-slate-400 mt-1 truncate max-w-[200px] sm:max-w-xs">{lockedQuickMeal.summary}</div>
+                                </div>
+                            </div>
+
+                            {/* Editable Fields Row */}
+                            <div className="grid grid-cols-2 gap-3">
+                                {/* Meal Type */}
+                                <div className="bg-slate-800/50 rounded-xl p-3">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Måltid</label>
+                                    <select
+                                        value={draftQuickMealMealType || ''}
+                                        onChange={(e) => setDraftQuickMealMealType(e.target.value as MealType)}
+                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
+                                    >
+                                        <option value="">Auto</option>
+                                        <option value="breakfast">🌅 Frukost</option>
+                                        <option value="lunch">☀️ Lunch</option>
+                                        <option value="dinner">🌙 Middag</option>
+                                        <option value="snack">🍎 Mellanmål</option>
+                                        <option value="beverage">🥤 Dryck</option>
+                                    </select>
+                                </div>
+
+                                {/* Date */}
+                                <div className="bg-slate-800/50 rounded-xl p-3">
+                                    <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 block">Datum</label>
+                                    <select
+                                        value={draftQuickMealDate || ''}
+                                        onChange={(e) => setDraftQuickMealDate(e.target.value || null)}
+                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
+                                    >
+                                        <option value={new Date().toISOString().split('T')[0]}>📅 Idag</option>
+                                        <option value={new Date(Date.now() - 86400000).toISOString().split('T')[0]}>⏪ Igår</option>
+                                        <option value={new Date(Date.now() + 86400000).toISOString().split('T')[0]}>⏩ Imorgon</option>
+                                        {draftQuickMealDate &&
+                                            draftQuickMealDate !== new Date().toISOString().split('T')[0] &&
+                                            draftQuickMealDate !== new Date(Date.now() - 86400000).toISOString().split('T')[0] &&
+                                            draftQuickMealDate !== new Date(Date.now() + 86400000).toISOString().split('T')[0] && (
+                                                <option value={draftQuickMealDate}>📅 {draftQuickMealDate}</option>
+                                            )}
+                                    </select>
+                                </div>
+                            </div>
+
+                            {/* Calculated Nutrients Preview */}
+                            {lockedQuickMeal.totals && (
+                                <div className="flex items-center justify-between px-4 py-3 bg-slate-800/30 rounded-xl">
+                                    <NutritionLabel
+                                        calories={lockedQuickMeal.totals.calories}
+                                        protein={lockedQuickMeal.totals.protein}
+                                        carbs={lockedQuickMeal.totals.carbs || 0}
+                                        fat={lockedQuickMeal.totals.fat || 0}
+                                        variant="compact"
+                                        size="md"
+                                    />
+                                    <div className="text-xs text-slate-500">
+                                        Totalt
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Action Button */}
+                            <button
+                                className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                                onClick={handleLockedQuickMealAction}
+                            >
+                                <span>Logga {lockedQuickMeal.itemType === 'savedEstimate' ? 'Estimering' : 'Snabbval'}</span>
+                                <ArrowRight size={16} />
+                            </button>
                         </div>
                     )}
 
@@ -1575,6 +1723,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 return (
                                     <div
                                         key={user.id}
+                                        id={`omnibox-item-${globalIdx}`}
                                         onClick={() => { navigate(`/u/${user.handle || user.username}`); onClose(); }}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
                                             ? 'bg-indigo-500/20 text-indigo-400'
@@ -1615,7 +1764,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 return (
                                     <div
                                         key={meal.id}
-                                        onClick={() => logQuickMeal(meal)}
+                                        id={`omnibox-item-${globalIdx}`}
+                                        onClick={() => lockQuickMeal(meal)}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
                                             ? 'bg-purple-500/20 text-purple-400'
                                             : 'hover:bg-white/5 text-white'
@@ -1679,7 +1829,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 return (
                                     <div
                                         key={meal.id}
-                                        onClick={() => logQuickMeal(meal)}
+                                        id={`omnibox-item-${globalIdx}`}
+                                        onClick={() => lockQuickMeal(meal)}
                                         className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
                                             ? 'bg-amber-500/20 text-amber-400'
                                             : 'hover:bg-white/5 text-white'
@@ -1745,12 +1896,14 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                     ? intent.data.quantity
                                     : (item.defaultPortionGrams || item.usageStats?.avgGrams || 100);
                                 const displayKcal = Math.round(item.calories * logQuantity / 100);
+                                const globalIdx = selectableItems.findIndex(sel => sel.itemType === 'food' && sel.id === item.id);
 
                                 return (
                                     <div
                                         key={item.id}
+                                        id={`omnibox-item-${globalIdx}`}
                                         onClick={() => logFoodItem(item, logQuantity)}
-                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${selectableItems.findIndex(sel => sel.itemType === 'food' && sel.id === item.id) === selectedIndex
+                                        className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
                                             ? 'bg-emerald-500/20 text-emerald-400'
                                             : 'hover:bg-white/5 text-white'
                                             }`}
@@ -1822,36 +1975,40 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                     <div className="px-2 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
                                         <span>🕐</span> Senast loggade
                                     </div>
-                                    {recentFoods.map((item, idx) => (
-                                        <div
-                                            key={item.id}
-                                            onClick={() => lockFood(item)}
-                                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
-                                                ? 'bg-emerald-500/20 text-emerald-400'
-                                                : 'hover:bg-white/5 text-white'
-                                                }`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm">
-                                                    {getCategoryEmoji(item.category)}
-                                                </div>
-                                                <div>
-                                                    <div className="font-medium">{item.name}</div>
-                                                    <div className="text-[10px] text-slate-500 flex items-center gap-2">
-                                                        <span className="text-emerald-500/70">{item.usageStats.count}x loggad</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span>{formatRelativeDate(item.usageStats.lastUsed)}</span>
-                                                        <span className="text-slate-600">•</span>
-                                                        <span>~{Math.round(item.usageStats.avgGrams)}g</span>
+                                    {recentFoods.map((item, idx) => {
+                                        const globalIdx = selectableItems.findIndex(sel => sel.itemType === 'recent' && sel.id === item.id);
+                                        return (
+                                            <div
+                                                key={item.id}
+                                                id={`omnibox-item-${globalIdx}`}
+                                                onClick={() => lockFood(item)}
+                                                className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${globalIdx === selectedIndex
+                                                    ? 'bg-emerald-500/20 text-emerald-400'
+                                                    : 'hover:bg-white/5 text-white'
+                                                    }`}
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-sm">
+                                                        {getCategoryEmoji(item.category)}
+                                                    </div>
+                                                    <div>
+                                                        <div className="font-medium">{item.name}</div>
+                                                        <div className="text-[10px] text-slate-500 flex items-center gap-2">
+                                                            <span className="text-emerald-500/70">{item.usageStats.count}x loggad</span>
+                                                            <span className="text-slate-600">•</span>
+                                                            <span>{formatRelativeDate(item.usageStats.lastUsed)}</span>
+                                                            <span className="text-slate-600">•</span>
+                                                            <span>~{Math.round(item.usageStats.avgGrams)}g</span>
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <div className="text-right">
+                                                    <div className="font-bold text-sm">{Math.round(item.calories * item.usageStats.avgGrams / 100)} kcal</div>
+                                                    <div className="text-[10px] text-slate-500">för {Math.round(item.usageStats.avgGrams)}g</div>
+                                                </div>
                                             </div>
-                                            <div className="text-right">
-                                                <div className="font-bold text-sm">{Math.round(item.calories * item.usageStats.avgGrams / 100)} kcal</div>
-                                                <div className="text-[10px] text-slate-500">för {Math.round(item.usageStats.avgGrams)}g</div>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                     <div className="px-2 py-1 text-[10px] text-slate-600 text-center">
                                         ↑↓ navigera • Enter för att logga • eller börja skriva
                                     </div>

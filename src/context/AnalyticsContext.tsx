@@ -10,6 +10,7 @@ interface AnalyticsContextType {
         paths: Record<string, number>;
         users: Record<string, number>;
         omniboxNavs: Record<string, number>;
+        contextualNavs: Record<string, Record<string, number>>;
     };
     refreshStats: () => Promise<void>;
 }
@@ -23,7 +24,8 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
         paths: Record<string, number>;
         users: Record<string, number>;
         omniboxNavs: Record<string, number>;
-    }>({ paths: {}, users: {}, omniboxNavs: {} });
+        contextualNavs: Record<string, Record<string, number>>;
+    }>({ paths: {}, users: {}, omniboxNavs: {}, contextualNavs: {} });
 
     // Session Management
     const [sessionId] = useState(() => {
@@ -406,6 +408,7 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
             const paths: Record<string, number> = {};
             const users: Record<string, number> = {};
             const omniboxNavs: Record<string, number> = {};
+            const contextualNavs: Record<string, Record<string, number>> = {};
 
             if (statsData?.popularPages) {
                 statsData.popularPages.forEach((p: any) => {
@@ -425,7 +428,16 @@ export function AnalyticsProvider({ children }: { children: React.ReactNode }) {
                 });
             }
 
-            setVisitStats({ paths, users, omniboxNavs });
+            if (omniboxData?.contextualNavigations) {
+                Object.entries(omniboxData.contextualNavigations).forEach(([fromPath, toList]: [string, any]) => {
+                    contextualNavs[fromPath] = {};
+                    toList.forEach((t: any) => {
+                        contextualNavs[fromPath][t.path] = t.count;
+                    });
+                });
+            }
+
+            setVisitStats({ paths, users, omniboxNavs, contextualNavs });
         } catch (e) {
             console.error("Failed to refresh visit stats", e);
         }

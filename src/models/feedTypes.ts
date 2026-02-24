@@ -14,7 +14,8 @@ export type FeedEventType =
     | 'HEALTH_SLEEP'      // Sleep session
     | 'BODY_METRIC'       // Weight, measurements
     | 'MILESTONE'         // PBs, streaks, achievements
-    | 'SOCIAL';           // Follows, comments
+    | 'SOCIAL'            // Follows, comments
+    | 'SOCIAL_POST';      // User authored blog-like post
 
 /**
  * Visibility levels for feed events
@@ -44,6 +45,7 @@ export const EVENT_TYPE_TO_CATEGORY: Record<FeedEventType, FeedEventCategory> = 
     'BODY_METRIC': 'HEALTH',
     'MILESTONE': 'TRAINING',
     'SOCIAL': 'SOCIAL',
+    'SOCIAL_POST': 'SOCIAL',
 };
 
 /**
@@ -90,7 +92,8 @@ export type FeedEventPayload =
     | HealthSleepPayload
     | BodyMetricPayload
     | MilestonePayload
-    | SocialPayload;
+    | SocialPayload
+    | SocialPostPayload;
 
 /**
  * Strength workout payload
@@ -190,6 +193,15 @@ export interface SocialPayload {
     targetUserId?: string;
     targetEventId?: string;
     message?: string;
+}
+
+/**
+ * Social Post Payload (WYSIWYG blog post)
+ */
+export interface SocialPostPayload {
+    type: 'SOCIAL_POST';
+    contentHtml: string;
+    dynamicModules?: any[]; // For embedded blocks in the future
 }
 
 /**

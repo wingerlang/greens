@@ -6,10 +6,12 @@ import {
     RefreshCw,
     TrendingUp,
     Users,
-    Search
+    Search,
+    PenLine
 } from 'lucide-react';
 import { useData } from '../context/DataContext.tsx';
 import { FeedEventCard } from '../components/feed/FeedEventCard.tsx';
+import { CreatePostModal } from '../components/feed/CreatePostModal.tsx';
 import { aggregateFeedEvents } from '../api/services/feedAggregator.ts';
 import type { FeedEvent, FeedEventCategory } from '../models/feedTypes.ts';
 
@@ -27,6 +29,7 @@ export function LifeStreamPage() {
     const [loading, setLoading] = useState(true);
     const [activeCategories, setActiveCategories] = useState<FeedEventCategory[]>(['TRAINING', 'NUTRITION', 'HEALTH', 'SOCIAL']);
     const [refreshing, setRefreshing] = useState(false);
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
     const [stats, setStats] = useState<{ followingCount: number; trainingForm: number }>({
         followingCount: 0,
         trainingForm: 0
@@ -115,6 +118,13 @@ export function LifeStreamPage() {
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setIsCreateOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-500 text-black font-black hover:bg-emerald-400 hover:scale-105 transition-all text-xs"
+                        >
+                            <PenLine size={16} />
+                            <span className="hidden sm:inline">Nytt</span>
+                        </button>
                         <button
                             onClick={handleRefresh}
                             className={`p-2 rounded-xl bg-slate-900 border border-white/5 text-slate-400 hover:text-white transition-all ${refreshing ? 'animate-spin' : ''}`}
@@ -219,7 +229,15 @@ export function LifeStreamPage() {
                 </div>
             </main>
 
-            {/* Floating Action? Maybe for quick log */}
+            {/* Create Post Modal */}
+            {isCreateOpen && (
+                <CreatePostModal
+                    onClose={() => setIsCreateOpen(false)}
+                    onPostCreated={() => {
+                        handleRefresh();
+                    }}
+                />
+            )}
         </div>
     );
 }

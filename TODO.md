@@ -109,3 +109,6 @@ Färgkoda axlarna: Gör Y-axlarnas siffror färgade (Grön vs Orange).
 Bredda staplarna: Aggregera data veckovis som default om tidsintervallet är långt (t.ex. >3 månader).
 
 Tydligare Legend: Lägg en liten textruta i grafen: "Mörkgrön = Kvalitetsvolym (>70% 1RM)".
+
+------
+Refactorera guardian - så att INGET går i sönder, men så att grafer osv blir återanvändbart via konfigurerbara komponenter. Håll filerna små och testbara, inget ska gå sönder, allt ska vara återanvändningsbart och riktigt jävla bra kod.
