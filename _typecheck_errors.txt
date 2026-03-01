@@ -1,0 +1,192 @@
+[0m[32mCheck[0m src/pages/YearInReviewPage.tsx
+[0m[1mTS2307 [0m[ERROR]: Cannot find module 'file:///C:/repos/greens/src/models/types'. Maybe add a '.ts' extension or run with --sloppy-imports
+    at [0m[36mfile:///C:/repos/greens/src/pages/YearInReviewPage.tsx[0m:[0m[33m239[0m:[0m[33m38[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'avgHeartRate' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
+[0m[31m                                                                                    ~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m187[0m:[0m[33m85[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'avgHeartRate' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
+[0m[31m                                                                                                             ~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m187[0m:[0m[33m110[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'userId' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+                    userId: activity.userId || '',
+[0m[31m                                     ~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m274[0m:[0m[33m38[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'activity.distance' is possibly 'undefined'.
+                            {activity.distance > 0 && (
+[0m[31m                             ~~~~~~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1175[0m:[0m[33m30[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'activity.distance' is possibly 'undefined'.
+                                                            <span className="text-xl font-black text-white">{activity.distance.toFixed(1)}</span>
+[0m[31m                                                                                                             ~~~~~~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1494[0m:[0m[33m110[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'activity.distance' is possibly 'undefined'.
+                                                                    ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
+[0m[31m                                                                                                                    ~~~~~~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1507[0m:[0m[33m117[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'activity.distance' is possibly 'undefined'.
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1508[0m:[0m[33m116[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'avgHeartRate' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+                                                {(!!perf?.avgHeartRate || !!activity.avgHeartRate) && (
+[0m[31m                                                                                     ~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1543[0m:[0m[33m86[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'avgHeartRate' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1547[0m:[0m[33m152[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'activity.distance' is possibly 'undefined'.
+                                                <p className="text-2xl font-black text-emerald-400">{activity.distance.toFixed(1)}</p>
+[0m[31m                                                                                                     ~~~~~~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1645[0m:[0m[33m102[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'activity.distance' is possibly 'undefined'.
+                                                        ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
+[0m[31m                                                                                                        ~~~~~~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1663[0m:[0m[33m105[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'activity.distance' is possibly 'undefined'.
+                                                        : formatPace((activity.durationMinutes * 60) / activity.distance).replace('/km', '')
+[0m[31m                                                                                                       ~~~~~~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1664[0m:[0m[33m104[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'avgHeartRate' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+                                {(perf?.avgHeartRate || activity.avgHeartRate) && activity.type?.toLowerCase() !== 'strength' && (
+[0m[31m                                                                 ~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1761[0m:[0m[33m66[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'avgHeartRate' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+                                        avgHeartRate={Math.round(perf?.avgHeartRate || activity.avgHeartRate || 0)}
+[0m[31m                                                                                                ~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1763[0m:[0m[33m97[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'maxHeartRate' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1764[0m:[0m[33m87[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'maxHeartRate' does not exist on type 'ExerciseEntry & { source: string; _mergeData?: any; }'.
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1764[0m:[0m[33m145[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'activity.distance' is possibly 'undefined'.
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1817[0m:[0m[33m108[0m
+
+[0m[1mTS2345 [0m[ERROR]: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.
+    at [0m[36mfile:///C:/repos/greens/src/components/activities/ActivityDetailModal.tsx[0m:[0m[33m1817[0m:[0m[33m147[0m
+
+[0m[1mTS2741 [0m[ERROR]: Property 'subscription' is missing in type '{ id: string; username: string; name: string; email: string; role: "admin"; plan: "evergreen"; settings: UserSettings; createdAt: string; }' but required in type 'User'.
+    {
+[0m[31m    ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/data/sampleData.ts[0m:[0m[33m16[0m:[0m[33m5[0m
+
+    'subscription' is declared here.
+        subscription: SubscriptionStatus;
+    [0m[36m    ~~~~~~~~~~~~[0m
+        at [0m[36mfile:///C:/repos/greens/src/models/types.ts[0m:[0m[33m181[0m:[0m[33m5[0m
+
+[0m[1mTS2741 [0m[ERROR]: Property 'subscription' is missing in type '{ id: string; username: string; name: string; email: string; role: "user"; plan: "free"; settings: UserSettings; createdAt: string; }' but required in type 'User'.
+    {
+[0m[31m    ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/data/sampleData.ts[0m:[0m[33m26[0m:[0m[33m5[0m
+
+    'subscription' is declared here.
+        subscription: SubscriptionStatus;
+    [0m[36m    ~~~~~~~~~~~~[0m
+        at [0m[36mfile:///C:/repos/greens/src/models/types.ts[0m:[0m[33m181[0m:[0m[33m5[0m
+
+[0m[1mTS2741 [0m[ERROR]: Property 'subscription' is missing in type '{ id: string; username: string; name: string; email: string; role: "user"; plan: "evergreen"; settings: { dailyCalorieGoal: number; theme: Theme; visibleMeals: MealType[]; ... 26 more ...; stravaTimePreference?: "moving" | "elapsed"; }; createdAt: string; }' but required in type 'User'.
+    {
+[0m[31m    ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/data/sampleData.ts[0m:[0m[33m36[0m:[0m[33m5[0m
+
+    'subscription' is declared here.
+        subscription: SubscriptionStatus;
+    [0m[36m    ~~~~~~~~~~~~[0m
+        at [0m[36mfile:///C:/repos/greens/src/models/types.ts[0m:[0m[33m181[0m:[0m[33m5[0m
+
+[0m[1mTS2741 [0m[ERROR]: Property 'subscription' is missing in type '{ id: string; username: string; name: string; email: string; role: "admin"; plan: "evergreen"; settings: { dailyCalorieGoal: number; trainingGoal: "bulk"; theme: Theme; visibleMeals: MealType[]; ... 25 more ...; stravaTimePreference?: "moving" | "elapsed"; }; createdAt: string; }' but required in type 'User'.
+    {
+[0m[31m    ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/data/sampleData.ts[0m:[0m[33m49[0m:[0m[33m5[0m
+
+    'subscription' is declared here.
+        subscription: SubscriptionStatus;
+    [0m[36m    ~~~~~~~~~~~~[0m
+        at [0m[36mfile:///C:/repos/greens/src/models/types.ts[0m:[0m[33m181[0m:[0m[33m5[0m
+
+[0m[1mTS2741 [0m[ERROR]: Property 'subscription' is missing in type '{ id: string; username: string; name: string; email: string; role: "user"; plan: "free"; settings: { trainingGoal: "neutral"; theme: Theme; visibleMeals: MealType[]; ... 26 more ...; stravaTimePreference?: "moving" | "elapsed"; }; createdAt: string; }' but required in type 'User'.
+    {
+[0m[31m    ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/data/sampleData.ts[0m:[0m[33m63[0m:[0m[33m5[0m
+
+    'subscription' is declared here.
+        subscription: SubscriptionStatus;
+    [0m[36m    ~~~~~~~~~~~~[0m
+        at [0m[36mfile:///C:/repos/greens/src/models/types.ts[0m:[0m[33m181[0m:[0m[33m5[0m
+
+[0m[1mTS2345 [0m[ERROR]: Argument of type 'ExerciseEntry & { source: string; _mergeData?: any; }' is not assignable to parameter of type 'SetStateAction<UniversalActivity | null>'.
+  Type 'ExerciseEntry & { source: string; _mergeData?: any; }' is missing the following properties from type 'UniversalActivity': userId, status, updatedAt
+                                            onClick={() => setSelectedActivity(a)}
+[0m[31m                                                                               ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/pages/YearInReviewPage.tsx[0m:[0m[33m1246[0m:[0m[33m80[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'target' implicitly has an 'any' type.
+        goal.targets.forEach(target => {
+[0m[31m                             ~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/goalCalculations.ts[0m:[0m[33m138[0m:[0m[33m30[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'item' implicitly has an 'any' type.
+            entry.items.forEach(item => {
+[0m[31m                                ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/goalCalculations.ts[0m:[0m[33m399[0m:[0m[33m33[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'ing' implicitly has an 'any' type.
+                        recipe.ingredients.forEach(ing => {
+[0m[31m                                                   ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/goalCalculations.ts[0m:[0m[33m416[0m:[0m[33m52[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'sum' implicitly has an 'any' type.
+            targetValue = goal.targets.reduce((sum, t) => sum + (t.count || 0), 0);
+[0m[31m                                               ~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/goalCalculations.ts[0m:[0m[33m773[0m:[0m[33m48[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 't' implicitly has an 'any' type.
+            targetValue = goal.targets.reduce((sum, t) => sum + (t.count || 0), 0);
+[0m[31m                                                    ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/goalCalculations.ts[0m:[0m[33m773[0m:[0m[33m53[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'latestWeightVal' is possibly 'undefined'.
+                current = startWeight - latestWeightVal;
+[0m[31m                                        ~~~~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/goalCalculations.ts[0m:[0m[33m822[0m:[0m[33m41[0m
+
+[0m[1mTS18048 [0m[ERROR]: 'latestWeightVal' is possibly 'undefined'.
+                current = latestWeightVal - startWeight;
+[0m[31m                          ~~~~~~~~~~~~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/goalCalculations.ts[0m:[0m[33m826[0m:[0m[33m27[0m
+
+[0m[1mTS7006 [0m[ERROR]: Parameter 'item' implicitly has an 'any' type.
+                            entry.items.forEach(item => {
+[0m[31m                                                ~~~~[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/goalCalculations.ts[0m:[0m[33m945[0m:[0m[33m49[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'simulation' does not exist on type '{ default: number; interval: number; 'long-run': number; race: number; tonnage: number; ultra: number; competition: number; }'.
+    const subTypeFactor = {
+[0m[31m                          ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/performanceEngine.ts[0m:[0m[33m73[0m:[0m[33m27[0m
+
+[0m[1mTS2339 [0m[ERROR]: Property 'simulering' does not exist on type '{ default: number; interval: number; 'long-run': number; race: number; tonnage: number; ultra: number; competition: number; }'.
+    const subTypeFactor = {
+[0m[31m                          ^[0m
+    at [0m[36mfile:///C:/repos/greens/src/utils/performanceEngine.ts[0m:[0m[33m73[0m:[0m[33m27[0m
+
+Found 35 errors.
+
+[0m[1m[31merror[0m: Type checking failed.

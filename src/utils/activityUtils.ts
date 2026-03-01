@@ -58,6 +58,8 @@ export function detectRunningPBs(activities: (UniversalActivity | any)[]) {
     };
 
     activities.forEach(a => {
+        if (a.excludeFromStats || a.performance?.excludeFromStats) return;
+
         // Extract type, distance and time regardless of object structure
         const type = (a.performance?.activityType || a.type || '').toLowerCase();
         if (type !== 'running' && type !== 'löpning') return;

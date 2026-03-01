@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-export function ToolsPage() {
+export default function ToolsPage() {
     const categories = [
         {
             title: "Styrka",

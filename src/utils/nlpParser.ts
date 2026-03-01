@@ -637,8 +637,9 @@ function parseFood(input: string): OmniboxIntent | null {
         .replace(/\s+(till|som|för)\s*$/i, '')
         .trim();
 
-    // 4. If query is empty but we have quantity, it's not a valid food intent
-    if (!query && !quantity) return null;
+    // 4. If query is empty but we have an explicit meal type, we should still return the intent
+    // so meal selection auto-fills can work.
+    if (!query && !quantity && !explicitMealType) return null;
 
     // 5. If we only have a number left (no food name), return null
     if (/^\d+$/.test(query)) return null;

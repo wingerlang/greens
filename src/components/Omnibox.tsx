@@ -39,6 +39,8 @@ interface OmniboxProps {
     onClose: () => void;
     onOpenTraining?: (defaults: { type?: ExerciseType; input?: string }) => void;
     onOpenNutrition?: (item: { type: 'recipe' | 'foodItem' | 'estimate'; referenceId: string; servings: number; estimateDetails?: any }) => void;
+    onCreatePost?: () => void;
+    onOpenEstimate?: () => void;
 }
 
 
@@ -126,6 +128,8 @@ const VITALS_INFO: Record<string, { icon: any; label: string; unit: string; bg: 
 
 // Action commands for system tasks
 const ACTION_COMMANDS = [
+    { id: 'post', label: 'Skriv Inlägg', command: '!post', icon: '✏️', description: 'Skapa ett nytt inlägg i flödet' },
+    { id: 'estimate', label: 'Estimera Måltid', command: '!estimate', icon: '🤷', description: 'Snabbregistrera en estimering (t.ex. utelunch)' },
     { id: 'backup', label: 'Backup System', command: '!backup', icon: '💾', description: 'Exportera databas till JSON' },
     { id: 'recalc', label: 'Recalculate Calories', command: '!recalc', icon: '🔄', description: 'Beräkna om alla dagstotaler' },
     { id: 'debug', label: 'Toggle Debug Mode', command: '!debug', icon: '🐞', description: 'Visa/Dölj system-debug' },
@@ -209,7 +213,7 @@ const canLogAsCooked = (item: FoodItem): { canCook: boolean; effectiveYieldFacto
     return { canCook: false, effectiveYieldFactor: 1 };
 };
 
-export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: OmniboxProps) {
+export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition, onCreatePost, onOpenEstimate }: OmniboxProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const [input, setInput] = useState('');
@@ -405,6 +409,25 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         });
     }, [isSlashMode, slashQuery, visitStats, location.pathname]);
 
+    // Calculate snabbval usage stats from meal entries
+    const snabbvalUsageStats = useMemo(() => {
+        const stats: Record<string, { count: number; lastUsed: string }> = {};
+
+        mealEntries.forEach(entry => {
+            if (entry.snabbvalId) {
+                if (!stats[entry.snabbvalId]) {
+                    stats[entry.snabbvalId] = { count: 0, lastUsed: entry.date };
+                }
+                stats[entry.snabbvalId].count += (entry.pieces || 1);
+                if (entry.date > stats[entry.snabbvalId].lastUsed) {
+                    stats[entry.snabbvalId].lastUsed = entry.date;
+                }
+            }
+        });
+
+        return stats;
+    }, [mealEntries]);
+
     // Calculate food usage stats from meal entries
     const foodUsageStats = useMemo(() => {
         const stats: Record<string, { count: number; lastUsed: string; totalGrams: number; avgGrams: number }> = {};
@@ -537,11 +560,13 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
 
         const standardMatches = performSmartSearch(input, sourceQuickMeals, {
             textFn: (item) => item.name,
+            usageCountFn: (item) => snabbvalUsageStats[item.id]?.count || 0,
             limit: 5
         });
 
         const estimateMatches = performSmartSearch(input, sourceEstimates, {
             textFn: (item) => item.name,
+            usageCountFn: (item) => snabbvalUsageStats[item.id]?.count || 0,
             limit: 3
         });
 
@@ -566,7 +591,8 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                 ...qm,
                 itemType: type,
                 totals,
-                summary
+                summary,
+                usageStats: snabbvalUsageStats[qm.id] || null
             };
         };
 
@@ -574,7 +600,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             standardQuickMeals: standardMatches.map(m => processItem(m, 'quickMeal')),
             savedEstimates: estimateMatches.map(m => processItem(m, 'savedEstimate'))
         };
-    }, [input, quickMeals, isSlashMode, intent, foodItems, recipes]);
+    }, [input, quickMeals, isSlashMode, intent, foodItems, recipes, snabbvalUsageStats]);
 
 
     // Auto-lock: Only when there's exactly ONE matching result AND explicit intent
@@ -635,6 +661,16 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
             }
         }
     }, [foodResults, lockedFood, intent, input, foodUsageStats]);
+
+    // Auto-fill from intent when locked quick meal
+    useEffect(() => {
+        if (lockedQuickMeal && input.length >= 2) {
+            if (intent.type === 'food') {
+                if (intent.data.mealType) setDraftQuickMealMealType(intent.data.mealType);
+                if (intent.date) setDraftQuickMealDate(intent.date);
+            }
+        }
+    }, [input, lockedQuickMeal, intent]);
 
     // Combined selectable items for keyboard nav
     const selectableItems = useMemo(() => {
@@ -949,6 +985,38 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         setInput('');
     };
 
+    const handleExecuteAction = (action: any) => {
+        trackActionUsage(action.id);
+        if (action.id === 'post') {
+            if (onCreatePost) onCreatePost();
+        } else if (action.id === 'estimate') {
+            if (onOpenEstimate) onOpenEstimate();
+        } else if (action.id === 'add-food') {
+            navigate('/database?action=new');
+        } else if (action.id === 'backup') {
+            fetch('/api/backup').then(r => r.blob()).then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+            });
+        } else if (action.id === 'recalc') {
+            fetch('/api/recalculate-calories', { method: 'POST' });
+        } else if (action.id === 'debug') {
+            const current = localStorage.getItem('debug_view');
+            localStorage.setItem('debug_view', current === 'true' ? 'false' : 'true');
+            window.location.reload();
+        } else if (action.id === 'clear') {
+            localStorage.clear();
+            sessionStorage.clear();
+            window.location.reload();
+        }
+        onClose();
+    };
+
     const handleExecute = () => {
         // Handle locked food first
         if (lockedFood) {
@@ -982,31 +1050,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
         // Handle action selection
         if (isActionMode && selectableItems.length > 0 && selectableItems[selectedIndex]?.itemType === 'action') {
             const action = selectableItems[selectedIndex] as any;
-            trackActionUsage(action.id);
-            if (action.id === 'add-food') {
-                navigate('/database?action=new');
-            } else if (action.id === 'backup') {
-                fetch('/api/backup').then(r => r.blob()).then(blob => {
-                    const url = window.URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
-                    document.body.appendChild(a);
-                    a.click();
-                    window.URL.revokeObjectURL(url);
-                });
-            } else if (action.id === 'recalc') {
-                fetch('/api/recalculate-calories', { method: 'POST' });
-            } else if (action.id === 'debug') {
-                const current = localStorage.getItem('debug_view');
-                localStorage.setItem('debug_view', current === 'true' ? 'false' : 'true');
-                window.location.reload();
-            } else if (action.id === 'clear') {
-                localStorage.clear();
-                sessionStorage.clear();
-                window.location.reload();
-            }
-            onClose();
+            handleExecuteAction(action);
             return;
         }
 
@@ -1192,7 +1236,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 <div
                                     key={action.id}
                                     id={`omnibox-item-${idx}`}
-                                    onClick={() => setInput(action.command)}
+                                    onClick={() => { setSelectedIndex(idx); handleExecuteAction(action); }}
                                     className={`flex items-center justify-between px-3 py-2.5 rounded-lg cursor-pointer transition-all ${idx === selectedIndex
                                         ? 'bg-amber-500/20 text-amber-400'
                                         : 'hover:bg-white/5 text-white'
@@ -1307,7 +1351,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                     <select
                                         value={draftFoodMealType || ''}
                                         onChange={(e) => setDraftFoodMealType(e.target.value as MealType)}
-                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
+                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer [&>option]:bg-slate-800"
                                     >
                                         <option value="">Auto</option>
                                         <option value="breakfast">🌅 Frukost</option>
@@ -1324,7 +1368,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                     <select
                                         value={draftFoodDate || ''}
                                         onChange={(e) => setDraftFoodDate(e.target.value || null)}
-                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
+                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer [&>option]:bg-slate-800"
                                     >
                                         <option value={new Date().toISOString().split('T')[0]}>📅 Idag</option>
                                         <option value={new Date(Date.now() - 86400000).toISOString().split('T')[0]}>⏪ Igår</option>
@@ -1443,7 +1487,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                     <select
                                         value={draftQuickMealMealType || ''}
                                         onChange={(e) => setDraftQuickMealMealType(e.target.value as MealType)}
-                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
+                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer [&>option]:bg-slate-800"
                                     >
                                         <option value="">Auto</option>
                                         <option value="breakfast">🌅 Frukost</option>
@@ -1460,7 +1504,7 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                     <select
                                         value={draftQuickMealDate || ''}
                                         onChange={(e) => setDraftQuickMealDate(e.target.value || null)}
-                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer"
+                                        className="w-full text-lg font-bold bg-transparent text-white outline-none cursor-pointer [&>option]:bg-slate-800"
                                     >
                                         <option value={new Date().toISOString().split('T')[0]}>📅 Idag</option>
                                         <option value={new Date(Date.now() - 86400000).toISOString().split('T')[0]}>⏪ Igår</option>
@@ -1500,6 +1544,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                 <span>Logga {lockedQuickMeal.itemType === 'savedEstimate' ? 'Estimering' : 'Snabbval'}</span>
                                 <ArrowRight size={16} />
                             </button>
+
+                            {/* Hint for continuing to type */}
+                            <div className="text-center text-[10px] text-slate-500 mt-2">
+                                💡 Fortsätt skriva för att byta måltid (t.ex. "frukost igår")
+                            </div>
                         </div>
                     )}
 
@@ -1846,6 +1895,11 @@ export function Omnibox({ isOpen, onClose, onOpenTraining, onOpenNutrition }: Om
                                                     <span className="text-[10px] bg-amber-500/10 text-amber-400 px-1.5 py-0.5 rounded font-bold uppercase">
                                                         {Math.round((meal as any).totals.calories)} kcal
                                                     </span>
+                                                    {(meal as any).usageStats?.count > 0 && (
+                                                        <span className="text-[9px] bg-amber-500/10 text-amber-500/80 px-1.5 py-0.5 rounded font-bold uppercase">
+                                                            ⚡ {(meal as any).usageStats.count}x
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="text-[10px] text-slate-500 truncate max-w-[200px]">{(meal as any).summary}</div>
                                             </div>

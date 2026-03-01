@@ -28,6 +28,7 @@ import './TrainingPage.css';
 import { TrainingOverview } from '../components/training/TrainingOverview.tsx';
 import { HealthScoreCard } from '../components/dashboard/HealthScoreCard.tsx';
 import { KonditionView } from './Health/KonditionView.tsx';
+import { RunningStatsView } from './Health/RunningStatsView.tsx';
 import { RaceList } from '../components/training/RaceList.tsx';
 
 export function TrainingPage() {
@@ -61,8 +62,16 @@ export function TrainingPage() {
     // URL State Management
     const currentTab = useMemo(() => {
         if (!tab) return 'overview';
-        return (['overview', 'styrka', 'kondition', 'races'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'races';
+        if (/^\d{4}$/.test(tab)) return 'overview';
+        return (['overview', 'styrka', 'kondition', 'races', 'lopstatistik'].includes(tab) ? tab : 'overview') as 'overview' | 'styrka' | 'kondition' | 'races' | 'lopstatistik';
     }, [tab]);
+
+    const initialCalendarMonth = useMemo(() => {
+        if (!tab || !/^\d{4}$/.test(tab) || !subTab) return undefined;
+        const months = ['januari', 'februari', 'mars', 'april', 'maj', 'juni', 'juli', 'augusti', 'september', 'oktober', 'november', 'december'];
+        const idx = months.indexOf(subTab.toLowerCase());
+        return idx >= 0 ? idx : undefined;
+    }, [tab, subTab]);
 
     // Handle Tab Switching
     const handleTabChange = (newTab: string) => {
@@ -324,6 +333,15 @@ export function TrainingPage() {
                 >
                     🏆 Tävlingar
                 </button>
+                <button
+                    onClick={() => handleTabChange('lopstatistik')}
+                    className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${currentTab === 'lopstatistik'
+                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/25'
+                        : 'text-slate-500 hover:text-slate-300'
+                        }`}
+                >
+                    ⏱️ Löpstatistik
+                </button>
             </div>
 
             {/* Period Selector - Sticky Header */}
@@ -364,7 +382,7 @@ export function TrainingPage() {
                         {/* Dashboard Overview */}
                         <TrainingOverview
                             exercises={filteredExerciseEntries}
-                            year={filterStartDate ? new Date(filterStartDate).getFullYear() : new Date().getFullYear()}
+                            year={tab && /^\d{4}$/.test(tab) ? parseInt(tab, 10) : (filterStartDate ? new Date(filterStartDate).getFullYear() : new Date().getFullYear())}
                             isFiltered={true}
                             onExerciseClick={handleEditExercise}
                             periodLabel={
@@ -374,6 +392,7 @@ export function TrainingPage() {
                                             activePreset === 'ttm' ? 'Trailing 12 Months' :
                                                 `Periodens Volym (${activePreset.toUpperCase()})`
                             }
+                            initialCalendarMonth={initialCalendarMonth}
                         />
 
                         {/* Cycle Manager (Replaces Goal Selector) */}
@@ -885,6 +904,17 @@ export function TrainingPage() {
                             filterEndDate={filterEndDate}
                             subTab={subTab}
                             seriesId={id}
+                        />
+                    </div>
+                )
+            }
+
+            {
+                currentTab === 'lopstatistik' && (
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <RunningStatsView
+                            exerciseEntries={exerciseEntries}
+                            universalActivities={universalActivities}
                         />
                     </div>
                 )

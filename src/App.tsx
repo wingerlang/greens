@@ -25,8 +25,8 @@ const CaloriesPage = React.lazy(() => import('./pages/CaloriesPage.tsx'));
 const ProfilePage = React.lazy(() => import('./pages/ProfilePage.tsx').then(m => ({ default: m.ProfilePage })));
 const TrainingPeriodPage = React.lazy(() => import('./pages/TrainingPeriodPage.tsx').then(m => ({ default: m.TrainingPeriodPage })));
 const TrainingPage = React.lazy(() => import('./pages/TrainingPage.tsx'));
-const PlanningPage = React.lazy(() => import('./pages/PlanningPage.tsx'));
-const TrainingPlanningPage = React.lazy(() => import('./pages/TrainingPlanningPage.tsx'));
+const PlanningPage = React.lazy(() => import('./pages/PlanningPage.tsx').then(m => ({ default: m.PlanningPage })));
+const TrainingPlanningPage = React.lazy(() => import('./pages/TrainingPlanningPage.tsx').then(m => ({ default: m.TrainingPlanningPage })));
 const ApiPage = React.lazy(() => import('./pages/ApiPage.tsx'));
 const AdminPage = React.lazy(() => import('./pages/AdminPage.tsx').then(m => ({ default: m.AdminPage || m.default })));
 const AnalyticsDashboard = React.lazy(() => import('./pages/admin/AnalyticsDashboard.tsx').then(m => ({ default: m.AnalyticsDashboard })));
@@ -42,9 +42,9 @@ const UsersPage = React.lazy(() => import('./pages/UsersPage.tsx'));
 const GarminPage = React.lazy(() => import('./pages/GarminPage.tsx'));
 const IntegrationsPage = React.lazy(() => import('./pages/IntegrationsPage.tsx'));
 const ActivitiesPage = React.lazy(() => import('./pages/ActivitiesPage.tsx'));
-const StrengthPage = React.lazy(() => import('./pages/StrengthPage.tsx'));
+const StrengthPage = React.lazy(() => import('./pages/StrengthPage.tsx').then(m => ({ default: m.StrengthPage })));
 const ExercisesPage = React.lazy(() => import('./pages/ExercisesPage.tsx'));
-const MuscleOverviewPage = React.lazy(() => import('./pages/exercises/MuscleOverviewPage.tsx'));
+const MuscleOverviewPage = React.lazy(() => import('./pages/exercises/MuscleOverviewPage.tsx').then(m => ({ default: m.MuscleOverviewPage })));
 const LoadAnalysisPage = React.lazy(() => import('./pages/training/LoadAnalysisPage.tsx'));
 const WorkoutBuilderPage = React.lazy(() => import('./pages/WorkoutBuilderPage.tsx'));
 const WorkoutDetailPage = React.lazy(() => import('./pages/WorkoutDetailPage.tsx'));
@@ -58,33 +58,33 @@ const ToolsPage = React.lazy(() => import('./pages/ToolsPage.tsx'));
 const ToolsOneRepMaxPage = React.lazy(() => import('./pages/tools/ToolsOneRepMaxPage.tsx'));
 const ToolsRacePredictorPage = React.lazy(() => import('./pages/tools/ToolsRacePredictorPage.tsx'));
 const ToolsPaceConverterPage = React.lazy(() => import('./pages/tools/ToolsPaceConverterPage.tsx'));
-const ToolsHealthPage = React.lazy(() => import('./pages/tools/ToolsHealthPage.tsx'));
-const ToolsPowerPage = React.lazy(() => import('./pages/tools/ToolsPowerPage.tsx'));
-const ToolsMacroPage = React.lazy(() => import('./pages/tools/ToolsMacroPage.tsx'));
+const ToolsHealthPage = React.lazy(() => import('./pages/tools/ToolsHealthPage.tsx').then(m => ({ default: m.ToolsHealthPage })));
+const ToolsPowerPage = React.lazy(() => import('./pages/tools/ToolsPowerPage.tsx').then(m => ({ default: m.ToolsPowerPage })));
+const ToolsMacroPage = React.lazy(() => import('./pages/tools/ToolsMacroPage.tsx').then(m => ({ default: m.ToolsMacroPage })));
 const ToolsCooperPage = React.lazy(() => import('./pages/tools/ToolsCooperPage.tsx'));
-const ToolsHeartRatePage = React.lazy(() => import('./pages/tools/ToolsHeartRatePage.tsx'));
+const ToolsHeartRatePage = React.lazy(() => import('./pages/tools/ToolsHeartRatePage.tsx').then(m => ({ default: m.ToolsHeartRatePage })));
 const ToolsStrengthStandardsPage = React.lazy(() => import('./pages/tools/ToolsStrengthStandardsPage.tsx'));
-const ToolsOlympicPage = React.lazy(() => import('./pages/tools/ToolsOlympicPage.tsx'));
-const ToolsHyroxPage = React.lazy(() => import('./pages/tools/ToolsHyroxPage.tsx'));
+const ToolsOlympicPage = React.lazy(() => import('./pages/tools/ToolsOlympicPage.tsx').then(m => ({ default: m.ToolsOlympicPage })));
+const ToolsHyroxPage = React.lazy(() => import('./pages/tools/ToolsHyroxPage.tsx').then(m => ({ default: m.ToolsHyroxPage })));
 const ToolsRacePlannerPage = React.lazy(() => import('./pages/tools/ToolsRacePlannerPage.tsx'));
 const ToolsReplayPage = React.lazy(() => import('./pages/tools/ToolsReplayPage.tsx'));
-const ToolsInterferencePage = React.lazy(() => import('./pages/tools/ToolsInterferencePage.tsx'));
+const ToolsInterferencePage = React.lazy(() => import('./pages/tools/ToolsInterferencePage.tsx').then(m => ({ default: m.ToolsInterferencePage })));
 const ToolsTrainingReportPage = React.lazy(() => import('./pages/tools/ToolsTrainingReportPage.tsx'));
-const ToolsCyclingPage = React.lazy(() => import('./pages/tools/ToolsCyclingPage.tsx'));
+const ToolsCyclingPage = React.lazy(() => import('./pages/tools/ToolsCyclingPage.tsx').then(m => ({ default: m.ToolsCyclingPage })));
 const BeastModePage = React.lazy(() => import('./pages/BeastModePage.tsx'));
-const PlannerPage = React.lazy(() => import('./components/planner/PlannerPage.tsx'));
-const RoadmapPage = React.lazy(() => import('./pages/RoadmapPage.tsx'));
+const PlannerPage = React.lazy(() => import('./components/planner/PlannerPage.tsx').then(m => ({ default: m.PlannerPage })));
+const RoadmapPage = React.lazy(() => import('./pages/RoadmapPage.tsx').then(m => ({ default: m.RoadmapPage })));
 const DocsPage = React.lazy(() => import('./pages/DocsPage.tsx'));
-const SummaryPage = React.lazy(() => import('./pages/SummaryPage.tsx'));
-const DeveloperLayout = React.lazy(() => import('./pages/developer/DeveloperLayout.tsx'));
-const DeveloperDashboard = React.lazy(() => import('./pages/developer/DeveloperDashboard.tsx'));
-const DeveloperExplorer = React.lazy(() => import('./pages/developer/DeveloperExplorer.tsx'));
-const DeveloperAnalysis = React.lazy(() => import('./pages/developer/DeveloperAnalysis.tsx'));
-const DeveloperDeepAnalysis = React.lazy(() => import('./pages/developer/DeveloperDeepAnalysis.tsx'));
-const DeveloperTodos = React.lazy(() => import('./pages/developer/DeveloperTodos.tsx'));
-const DeveloperHealth = React.lazy(() => import('./pages/developer/DeveloperHealth.tsx'));
-const DeveloperManagement = React.lazy(() => import('./pages/developer/DeveloperManagement.tsx'));
-const DeveloperCoverage = React.lazy(() => import('./pages/developer/DeveloperCoverage.tsx'));
+const SummaryPage = React.lazy(() => import('./pages/SummaryPage.tsx').then(m => ({ default: m.SummaryPage })));
+const DeveloperLayout = React.lazy(() => import('./pages/developer/DeveloperLayout.tsx').then(m => ({ default: m.DeveloperLayout })));
+const DeveloperDashboard = React.lazy(() => import('./pages/developer/DeveloperDashboard.tsx').then(m => ({ default: m.DeveloperDashboard })));
+const DeveloperExplorer = React.lazy(() => import('./pages/developer/DeveloperExplorer.tsx').then(m => ({ default: m.DeveloperExplorer })));
+const DeveloperAnalysis = React.lazy(() => import('./pages/developer/DeveloperAnalysis.tsx').then(m => ({ default: m.DeveloperAnalysis })));
+const DeveloperDeepAnalysis = React.lazy(() => import('./pages/developer/DeveloperDeepAnalysis.tsx').then(m => ({ default: m.DeveloperDeepAnalysis })));
+const DeveloperTodos = React.lazy(() => import('./pages/developer/DeveloperTodos.tsx').then(m => ({ default: m.DeveloperTodos })));
+const DeveloperHealth = React.lazy(() => import('./pages/developer/DeveloperHealth.tsx').then(m => ({ default: m.DeveloperHealth })));
+const DeveloperManagement = React.lazy(() => import('./pages/developer/DeveloperManagement.tsx').then(m => ({ default: m.DeveloperManagement })));
+const DeveloperCoverage = React.lazy(() => import('./pages/developer/DeveloperCoverage.tsx').then(m => ({ default: m.DeveloperCoverage })));
 
 function PageLoader() {
     return (
@@ -97,7 +97,7 @@ function PageLoader() {
     );
 }
 
-function RequireAuth({ children }: { children: JSX.Element }) {
+function RequireAuth({ children }: { children: React.ReactNode }) {
     const { user, loading } = useAuth();
     const location = useLocation();
 
@@ -158,6 +158,8 @@ export function App() {
                                                                 <Route path="calories" element={<CaloriesPage />} />
                                                                 <Route path="training/period/:id?" element={<TrainingPeriodPage />} />
                                                                 <Route path="training/:tab?/:subTab?/:id?" element={<TrainingPage />} />
+                                                                <Route path="träning/:tab?/:subTab?/:id?" element={<TrainingPage />} />
+                                                                <Route path="traning/:tab?/:subTab?/:id?" element={<TrainingPage />} />
                                                                 <Route path="profile/:tab?" element={<ProfilePage />} />
                                                                 <Route path="profile" element={<ProfilePage />} />
                                                                 <Route path="health" element={<HealthPage />} />

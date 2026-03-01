@@ -17,12 +17,8 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
     // GET /api/activities
     if (url.pathname === "/api/activities" && method === "GET") {
         try {
-            const startDate = url.searchParams.get('start');
-            const endDate = url.searchParams.get('end');
-
-            if (!startDate || !endDate) {
-                return new Response(JSON.stringify({ error: "Missing start/end date params" }), { status: 400, headers });
-            }
+            const startDate = url.searchParams.get('start') || '1970-01-01';
+            const endDate = url.searchParams.get('end') || '2100-01-01';
 
             const activities = await activityRepo.getActivitiesByDateRange(userId, startDate, endDate);
             return new Response(JSON.stringify({ activities }), { headers });
@@ -167,6 +163,12 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
             // Use the new ID index (avoids scans!)
             activity = await activityRepo.getActivityById(activityId);
 
+            // Fallback for older activities missing the ID index
+            const urlDate = url.searchParams.get('date');
+            if (!activity && urlDate) {
+                activity = await activityRepo.getActivity(userId, urlDate, activityId);
+            }
+
             if (!activity || activity.userId !== userId) {
                 // If not found in activities, try strength repo
                 const workout = await strengthRepo.getWorkout(userId, activityId);
@@ -284,7 +286,14 @@ export async function handleActivityRoutes(req: Request, url: URL, headers: Head
                 return new Response(JSON.stringify({ error: "Missing ID" }), { status: 400, headers });
             }
 
-            const activity = await activityRepo.getActivityById(activityId);
+            let activity = await activityRepo.getActivityById(activityId);
+
+            // Fallback for older activities missing the ID index
+            const urlDate = url.searchParams.get('date');
+            if (!activity && urlDate) {
+                activity = await activityRepo.getActivity(userId, urlDate, activityId);
+            }
+
             if (!activity || activity.userId !== userId) return new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers });
 
             // If it's a merged activity, we must restore original activities

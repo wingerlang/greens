@@ -143,7 +143,7 @@ export function CommunityStatsPage() {
             activities = activities.filter(a => new Date(a.date) >= cutoff);
         }
 
-        return activities;
+        return activities.filter((a: any) => !a.excludeFromStats && !a.performance?.excludeFromStats);
     };
 
     const getFilteredStrength = () => {
@@ -163,7 +163,7 @@ export function CommunityStatsPage() {
             sessions = sessions.filter(s => new Date(s.date) >= cutoff);
         }
 
-        return sessions;
+        return sessions.filter(s => !s.excludeFromStats);
     };
 
     const filteredActivities = getFilteredActivities();
@@ -272,13 +272,19 @@ export function CommunityStatsPage() {
                             if (value > maxValue) {
                                 maxValue = value;
                                 best = {
+                                    id: s.id + '-' + ex.exerciseName,
+                                    exerciseId: ex.exerciseName,
+                                    exerciseName: ex.exerciseName,
+                                    userId: s.userId || 'unknown',
                                     value,
                                     date: s.date,
                                     workoutId: s.id,
                                     workoutName: s.name || 'Styrkepass',
                                     reps: set.reps,
                                     weight: set.weight,
-                                    isActual1RM: isActual
+                                    isActual1RM: isActual,
+                                    type: '1rm',
+                                    createdAt: new Date().toISOString()
                                 };
                             }
                         });

@@ -184,7 +184,7 @@ export function ActivityDetailModal({
 
     // Analysis visibility criteria - Strict check for meaningful content
     const perf = universalActivity?.performance || activity._mergeData?.universalActivity?.performance;
-    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.avgHeartRate && activity.avgHeartRate > 0);
+    const hasHeartRate = (perf?.avgHeartRate && perf.avgHeartRate > 0) || (activity.heartRateAvg && activity.heartRateAvg > 0);
     const hasWorkoutStructure = parsedWorkout.segments.length > 0;
     // Only show analysis if we have splits (intervals), structure, or HR data on non-strength activities
     const isWorthyOfAnalysis = hasSplits || (hasHeartRate && activity.type !== 'strength') || hasWorkoutStructure;
@@ -271,7 +271,7 @@ export function ActivityDetailModal({
             if (mergeData.strengthWorkout) {
                 reconstructed.push({
                     id: 'strength-part',
-                    userId: activity.userId || '',
+                    userId: (activity as Record<string, any>).userId || '',
                     date: activity.date,
                     status: 'COMPLETED',
                     plan: {
@@ -883,7 +883,7 @@ export function ActivityDetailModal({
                             <div className="flex items-center gap-3">
                                 <span className={`text-lg ${editForm.excludeFromStats ? 'opacity-100' : 'opacity-40'}`}>🚫</span>
                                 <div>
-                                    <p className={`text-xs font-bold ${editForm.excludeFromStats ? 'text-rose-400' : 'text-white'}`}>Exkludera från Beast Mode</p>
+                                    <p className={`text-xs font-bold ${editForm.excludeFromStats ? 'text-rose-400' : 'text-white'}`}>Exkludera från Statistik & Rekord</p>
                                     <p className="text-[10px] text-slate-500">Aktiviteten räknas inte med i statistik och poäng</p>
                                 </div>
                             </div>
@@ -1172,7 +1172,7 @@ export function ActivityDetailModal({
                             >
                                 Statistik
                             </button>
-                            {activity.distance > 0 && (
+                            {(activity.distance || 0) > 0 && (
                                 <button
                                     onClick={() => setActiveTab('compare')}
                                     className={`px-4 py-2 text-sm font-bold transition-colors border-b-2 ${activeTab === 'compare' ? 'text-indigo-400 border-indigo-400' : 'text-slate-500 border-transparent hover:text-slate-300'}`}
@@ -1491,7 +1491,7 @@ export function ActivityDetailModal({
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Distans</span>
                                                         <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">{activity.distance.toFixed(1)}</span>
+                                                            <span className="text-xl font-black text-white">{(activity.distance || 0).toFixed(1)}</span>
                                                             <span className="text-[10px] uppercase text-slate-500">km</span>
                                                         </div>
                                                     </div>
@@ -1504,8 +1504,8 @@ export function ActivityDetailModal({
                                                         <div className="flex items-baseline gap-1">
                                                             <span className="text-xl font-black text-white">
                                                                 {activity.type === 'cycling'
-                                                                    ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
-                                                                    : formatPace((activity.durationMinutes * 60) / activity.distance).replace('/km', '')
+                                                                    ? formatSpeed((activity.durationMinutes * 60) / (activity.distance || 1))
+                                                                    : formatPace((activity.durationMinutes * 60) / (activity.distance || 1)).replace('/km', '')
                                                                 }
                                                             </span>
                                                             <span className="text-[10px] uppercase text-slate-500">{activity.type === 'cycling' ? 'km/h' : '/km'}</span>
@@ -1540,11 +1540,11 @@ export function ActivityDetailModal({
                                                 </div>
 
                                                 {/* Heart Rate */}
-                                                {(!!perf?.avgHeartRate || !!activity.avgHeartRate) && (
+                                                {(!!perf?.avgHeartRate || !!activity.heartRateAvg) && (
                                                     <div className="flex flex-col">
                                                         <span className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mb-1">Medelpuls</span>
                                                         <div className="flex items-baseline gap-1">
-                                                            <span className="text-xl font-black text-white">{Math.round(perf?.avgHeartRate || activity.avgHeartRate || 0)}</span>
+                                                            <span className="text-xl font-black text-white">{Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}</span>
                                                             <span className="text-[10px] uppercase text-slate-500">bpm</span>
                                                             {perf?.maxHeartRate && <span className="text-[9px] text-red-500 font-black ml-1">MAX {Math.round(perf.maxHeartRate)}</span>}
                                                         </div>
@@ -1642,7 +1642,7 @@ export function ActivityDetailModal({
                                         {/* Distance (Only if running/has value) */}
                                         {(activity.distance || 0) > 0 ? (
                                             <div className="bg-slate-800/50 rounded-xl p-4 text-center">
-                                                <p className="text-2xl font-black text-emerald-400">{activity.distance.toFixed(1)}</p>
+                                                <p className="text-2xl font-black text-emerald-400">{(activity.distance || 0).toFixed(1)}</p>
                                                 <p className="text-xs text-slate-500 uppercase">Km</p>
                                             </div>
                                         ) : null}
@@ -1660,8 +1660,8 @@ export function ActivityDetailModal({
                                             <div className="bg-slate-800/50 rounded-xl p-4 text-center">
                                                 <p className="text-2xl font-black text-emerald-400">
                                                     {activity.type === 'cycling'
-                                                        ? formatSpeed((activity.durationMinutes * 60) / activity.distance)
-                                                        : formatPace((activity.durationMinutes * 60) / activity.distance).replace('/km', '')
+                                                        ? formatSpeed((activity.durationMinutes * 60) / (activity.distance || 1))
+                                                        : formatPace((activity.durationMinutes * 60) / (activity.distance || 1)).replace('/km', '')
                                                     }
                                                 </p>
                                                 <p className="text-xs text-slate-500 uppercase">{activity.type === 'cycling' ? 'Fart' : 'Tempo'}</p>
@@ -1758,10 +1758,10 @@ export function ActivityDetailModal({
                                         </div>
                                     </div>
                                 )}    {/* Heart Rate Zone Visualization (for cardio with HR data) */}
-                                {(perf?.avgHeartRate || activity.avgHeartRate) && activity.type?.toLowerCase() !== 'strength' && (
+                                {(perf?.avgHeartRate || activity.heartRateAvg) && activity.type?.toLowerCase() !== 'strength' && (
                                     <HeartRateZones
-                                        avgHeartRate={Math.round(perf?.avgHeartRate || activity.avgHeartRate || 0)}
-                                        maxHeartRate={(perf?.maxHeartRate || activity.maxHeartRate) ? Math.round(perf?.maxHeartRate || activity.maxHeartRate || 0) : undefined}
+                                        avgHeartRate={Math.round(perf?.avgHeartRate || activity.heartRateAvg || 0)}
+                                        maxHeartRate={(perf?.maxHeartRate || activity.heartRateMax) ? Math.round(perf?.maxHeartRate || activity.heartRateMax || 0) : undefined}
                                         duration={activity.durationMinutes ? activity.durationMinutes * 60 : undefined}
                                     />
                                 )}
@@ -1814,7 +1814,7 @@ export function ActivityDetailModal({
                                         <div className="bg-indigo-950/30 border border-indigo-500/20 rounded-xl p-4">
                                             <h3 className="text-xs font-bold text-indigo-400 uppercase mb-2">📈 Effektivt Tempo (GAP)</h3>
                                             <span className="text-2xl font-black text-white">
-                                                {formatPace(calculateGAP((activity.durationMinutes * 60) / activity.distance, perf.elevationGain, activity.distance))}
+                                                {formatPace(calculateGAP((activity.durationMinutes * 60) / (activity.distance || 1), perf.elevationGain, activity.distance || 0))}
                                             </span>
                                             <span className="text-xs text-slate-400 ml-1">/km</span>
                                         </div>

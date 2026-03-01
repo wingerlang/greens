@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Ruler, Dumbbell, Flame, LifeBuoy } from 'lucide-react';
+import { Plus, Ruler, Dumbbell, Flame, LifeBuoy, MessageSquare } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useMessages } from '../../context/MessageContext.tsx';
 
@@ -7,9 +7,10 @@ interface DashboardActionFABProps {
     onLogMeasurements: () => void;
     onImportWorkout: () => void;
     onQuickEstimate: () => void;
+    onCreatePost: () => void;
 }
 
-export function DashboardActionFAB({ onLogMeasurements, onImportWorkout, onQuickEstimate }: DashboardActionFABProps) {
+export function DashboardActionFAB({ onLogMeasurements, onImportWorkout, onQuickEstimate, onCreatePost }: DashboardActionFABProps) {
     const [isOpen, setIsOpen] = useState(false);
     const navigate = useNavigate();
     const { createSupportChat } = useMessages();
@@ -35,6 +36,21 @@ export function DashboardActionFAB({ onLogMeasurements, onImportWorkout, onQuick
                     <span className="text-xs font-bold uppercase tracking-wider">Support</span>
                     <div className="w-8 h-8 rounded-full bg-rose-500/10 flex items-center justify-center text-rose-500 group-hover:bg-rose-500 group-hover:text-white transition-colors">
                         <LifeBuoy size={16} />
+                    </div>
+                </button>
+
+                {/* Create Post */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onCreatePost();
+                        setIsOpen(false);
+                    }}
+                    className="flex items-center gap-3 bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-4 py-2 rounded-full shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors group border border-slate-200 dark:border-slate-700"
+                >
+                    <span className="text-xs font-bold uppercase tracking-wider">Skapa Inlägg</span>
+                    <div className="w-8 h-8 rounded-full bg-sky-500/10 flex items-center justify-center text-sky-500 group-hover:bg-sky-500 group-hover:text-white transition-colors">
+                        <MessageSquare size={16} />
                     </div>
                 </button>
 

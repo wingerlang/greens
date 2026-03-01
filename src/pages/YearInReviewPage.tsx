@@ -46,6 +46,32 @@ function formatYearRange(years: number[]) {
     ).join(', ');
 }
 
+function parseYearRange(yearsStr: string): number[] {
+    const years = new Set<number>();
+    // Split by comma or underscore to support both legacy formats and the new comma-separated ranges
+    const parts = yearsStr.split(/[_,]/);
+
+    for (const part of parts) {
+        if (part.includes('-')) {
+            const [startStr, endStr] = part.split('-');
+            const start = parseInt(startStr, 10);
+            const end = parseInt(endStr, 10);
+            if (!isNaN(start) && !isNaN(end) && start <= end) {
+                for (let y = start; y <= end; y++) {
+                    years.add(y);
+                }
+            }
+        } else {
+            const y = parseInt(part, 10);
+            if (!isNaN(y)) {
+                years.add(y);
+            }
+        }
+    }
+
+    return Array.from(years).sort((a, b) => a - b);
+}
+
 export function YearInReviewPage() {
     const { universalActivities = [], strengthSessions = [], performanceGoals = [], unifiedActivities = [], isLoading } = useData();
     const { token } = useAuth();
@@ -104,8 +130,7 @@ export function YearInReviewPage() {
     const [selectedYears, setSelectedYears] = useState<number[]>(() => {
         const yearsParam = searchParams.get('years');
         if (yearsParam) {
-            // Support both comma (legacy) and underscore (new)
-            return yearsParam.split(/[_,]/).map(Number).filter(n => !isNaN(n));
+            return parseYearRange(yearsParam);
         }
         // Try localStorage
         const saved = localStorage.getItem('yir_years');
@@ -123,7 +148,10 @@ export function YearInReviewPage() {
     // Sync to URL & LocalStorage
     useEffect(() => {
         if (selectedYears.length > 0) {
-            setSearchParams({ years: selectedYears.join('_') }, { replace: true });
+            // Use formatYearRange (which produces "2012-2015, 2018")
+            // and replace comma+space with underscore for the URL parameter.
+            const urlParam = formatYearRange(selectedYears).replace(/,\s*/g, '_');
+            setSearchParams({ years: urlParam }, { replace: true });
             localStorage.setItem('yir_years', JSON.stringify(selectedYears));
         }
     }, [selectedYears, setSearchParams]);
@@ -1215,7 +1243,7 @@ export function YearInReviewPage() {
                                     .map(({ original: a, resolved }) => (
                                         <div
                                             key={resolved.id}
-                                            onClick={() => setSelectedActivity(a)}
+                                            onClick={() => setSelectedActivity(a as UniversalActivity)}
                                             className="bg-slate-800/40 hover:bg-slate-800/80 border border-white/5 p-3 rounded-xl cursor-pointer transition-all flex items-center justify-between group"
                                         >
                                             <div className="flex flex-col overflow-hidden">

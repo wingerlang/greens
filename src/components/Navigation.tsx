@@ -44,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
     { path: '/pass', label: 'Passbank', icon: '📚', section: 'training', description: 'Sparade pass' },
     { path: '/logg', label: 'Logg', icon: '📜', section: 'training', description: 'Aktivitetslogg' },
     { path: '/styrka', label: 'Styrka', icon: '💪', section: 'training', description: 'Styrketräning' },
+    { path: '/training/lopstatistik', label: 'Löpstatistik', icon: '🏃', section: 'training', description: 'Löparstatistik & PB' },
     { path: '/training/load', label: 'Belastning', icon: '🏋️', section: 'training', description: 'Training Load' },
     { path: '/exercises', label: 'Övningar', icon: '📚', section: 'training', description: 'Övningsbibliotek' },
     { path: '/coach', label: 'Coach', icon: '🧠', section: 'training', description: 'Smart Coach' },

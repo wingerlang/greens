@@ -21,6 +21,7 @@ export const SAMPLE_USERS: User[] = [
         role: 'admin',
         plan: 'evergreen',
         settings: DEFAULT_USER_SETTINGS,
+        subscription: { tier: 'evergreen', status: 'active', startedAt: now, provider: 'manual', history: [] },
         createdAt: now
     },
     {
@@ -31,6 +32,7 @@ export const SAMPLE_USERS: User[] = [
         role: 'user',
         plan: 'free',
         settings: DEFAULT_USER_SETTINGS,
+        subscription: { tier: 'free', status: 'active', startedAt: now, provider: 'manual', history: [] },
         createdAt: now
     },
     {
@@ -44,6 +46,7 @@ export const SAMPLE_USERS: User[] = [
             ...DEFAULT_USER_SETTINGS,
             dailyCalorieGoal: 2200
         },
+        subscription: { tier: 'evergreen', status: 'active', startedAt: now, provider: 'manual', history: [] },
         createdAt: now
     },
     {
@@ -58,6 +61,7 @@ export const SAMPLE_USERS: User[] = [
             dailyCalorieGoal: 2500,
             trainingGoal: 'bulk'
         },
+        subscription: { tier: 'evergreen', status: 'active', startedAt: now, provider: 'manual', history: [] },
         createdAt: now
     },
     {
@@ -71,6 +75,7 @@ export const SAMPLE_USERS: User[] = [
             ...DEFAULT_USER_SETTINGS,
             trainingGoal: 'neutral'
         },
+        subscription: { tier: 'free', status: 'active', startedAt: now, provider: 'manual', history: [] },
         createdAt: now
     }
 ];

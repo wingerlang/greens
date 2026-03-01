@@ -128,8 +128,10 @@ export class ReconciliationService {
                     existing.performance = {
                         ...existing.performance,
                         ...freshPerformance,
-                        // Preserve any manually added notes?
-                        notes: existing.performance?.notes || freshPerformance.notes
+                        // Preserve manually added notes, subtypes, and exclusion flags
+                        notes: existing.performance?.notes || freshPerformance.notes,
+                        subType: existing.performance?.subType || freshPerformance.subType,
+                        excludeFromStats: existing.performance?.excludeFromStats
                     };
                     existing.updatedAt = new Date().toISOString();
 
@@ -283,7 +285,7 @@ export class ReconciliationService {
                 exerciseType: appType,
                 duration: durationMin,
                 distance: distanceKm,
-                calories: calculateStravaCalories(activity, userSettings),
+                calories: calculateStravaCalories(activity, userSettings).calories,
                 intensity: 'moderate'
             },
             visibility: visibility as any,
@@ -291,7 +293,7 @@ export class ReconciliationService {
             metrics: [
                 { label: 'Tid', value: durationMin, unit: 'min', icon: '⏱️' },
                 ...(distanceKm ? [{ label: 'Distans', value: distanceKm.toFixed(1), unit: 'km', icon: '📍' }] : []),
-                { label: 'Energi', value: Math.round(calculateStravaCalories(activity, userSettings)), unit: 'kcal', icon: '🔥' }
+                { label: 'Energi', value: Math.round(calculateStravaCalories(activity, userSettings).calories), unit: 'kcal', icon: '🔥' }
             ]
         });
     }

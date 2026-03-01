@@ -1,4 +1,4 @@
-import { ExerciseEntry, ExerciseType, PerformanceGoalType } from "../models/types";
+import { ExerciseEntry, ExerciseType, PerformanceGoalType } from "../models/types.ts";
 
 // Helper to calculate BMR and TDEE based targets
 export const calculateCalorieTarget = (

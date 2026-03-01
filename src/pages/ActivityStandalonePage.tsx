@@ -19,13 +19,15 @@ export function ActivityStandalonePage() {
     const mappedActivity = useMemo(() => {
         if (!activity) return null;
 
-        // If it's already a legacy-style activity (manual/merged), return it
-        if (activity.source === 'manual' || activity.source === 'merged' || activity.source === 'strength') {
+        // If it's already a legacy-style activity (manual/merged/strava from unifiedActivities), return it
+        // The unifiedActivities array already contains objects that mimic ExerciseEntry
+        // so we don't always need to map through mapUniversalToLegacyEntry if performance is missing
+        if (activity.source === 'manual' || activity.source === 'merged' || activity.source === 'strength' || activity.source === 'strava' || !activity.performance) {
             return activity;
         }
 
         const legacy = mapUniversalToLegacyEntry(activity);
-        if (!legacy) return null;
+        if (!legacy) return activity; // Fallback to raw activity if mapping fails
         // Ensure source property exists
         return { ...legacy, source: activity.source || 'universal' };
     }, [activity]);

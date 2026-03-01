@@ -485,7 +485,7 @@ export function WorkoutDetailModal({ workout, onClose, onSelectExercise, pbs = [
                                 <div className="flex items-center gap-3">
                                     <span className={`text-lg ${workout.excludeFromStats ? 'opacity-100' : 'opacity-40'}`}>🚫</span>
                                     <div>
-                                        <p className={`text-xs font-bold ${workout.excludeFromStats ? 'text-rose-400' : 'text-white'}`}>Exkludera från Beast Mode</p>
+                                        <p className={`text-xs font-bold ${workout.excludeFromStats ? 'text-rose-400' : 'text-white'}`}>Exkludera från Statistik & Rekord</p>
                                         <p className="text-[10px] text-slate-500">Passet räknas inte med i statistik och poäng</p>
                                     </div>
                                 </div>

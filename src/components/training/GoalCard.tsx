@@ -8,6 +8,7 @@ const EXERCISE_ICONS: Record<ExerciseType, string> = {
     walking: '🚶',
     swimming: '🏊',
     yoga: '🧘',
+    hyrox: '🔥',
     other: '✨'
 };
 

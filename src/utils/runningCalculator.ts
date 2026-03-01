@@ -120,11 +120,16 @@ export function formatSeconds(totalSeconds: number): string {
  * Uses iterative approach to find time where VO2(velocity) = VDOT * pctMax(time)
  */
 export function predictRaceTime(vdot: number, distanceKm: number): number {
+    // VDOT formula breaks down mathematically past marathon distance (curves flattens).
+    // So for ultras, we calculate the marathon time and extrapolate using Pete Riegel's formula.
+    const MARATHON_KM = 42.195;
+    const calcDistance = Math.min(distanceKm, MARATHON_KM);
+
     // Initial guess: assume 5 min/km
-    let timeMinutes = distanceKm * 5;
+    let timeMinutes = calcDistance * 5;
 
     for (let i = 0; i < 10; i++) {
-        const velocity = (distanceKm * 1000) / timeMinutes;
+        const velocity = (calcDistance * 1000) / timeMinutes;
         const vo2 = -4.60 + (0.182258 * velocity) + (0.000104 * Math.pow(velocity, 2));
         const pctMax = 0.8 +
             0.1894393 * Math.exp(-0.0115 * timeMinutes) +
@@ -136,6 +141,15 @@ export function predictRaceTime(vdot: number, distanceKm: number): number {
 
         // Simple proportional adjustment
         timeMinutes = timeMinutes * (vo2 / targetVO2);
+    }
+
+    // Pete Riegel's formula for ultra distances
+    if (distanceKm > MARATHON_KM) {
+        // T2 = T1 * (D2 / D1)^c
+        // Standard Riegel is 1.06, but for Ultras > 42km fatigue ramps up significantly.
+        // Modern ultra-extrapolations usually use an exponent between 1.08 - 1.15. 
+        // We'll use 1.12 to give a realistic, steeper pace drop-off for 100 milers.
+        timeMinutes = timeMinutes * Math.pow(distanceKm / MARATHON_KM, 1.12);
     }
 
     return timeMinutes * 60;
@@ -292,4 +306,75 @@ export function getCooperGrade(distanceMeters: number, age: number, gender: 'mal
             return 'Very Bad';
         }
     }
+}
+
+/**
+ * Parses smart time from string to seconds (e.g. "4:30", "4.5", "4 30")
+ */
+export function parseSmartTime(val: string): number {
+    if (!val) return 0;
+    const clean = val.toLowerCase().replace(/[^\d:., ]/g, '').trim().replace(',', '.');
+
+    if (clean.includes('.')) {
+        const parts = clean.split('.');
+        if (parts.length === 2 && parts[1].length === 0) return parseInt(parts[0]) * 60;
+        const dec = parseFloat(clean);
+        return isNaN(dec) ? 0 : Math.round(dec * 60);
+    }
+
+    if (clean.includes(':') || clean.includes(' ')) {
+        const parts = clean.split(/[:\s]+/).filter(Boolean);
+        const m = parseInt(parts[0] || '0', 10);
+        let sStr = parts[1] || '0';
+        if (sStr.length === 1) sStr += '0';
+        const s = parseInt(sStr, 10);
+        return m * 60 + s;
+    }
+
+    const num = parseInt(clean, 10);
+    return isNaN(num) ? 0 : num * 60;
+}
+
+/**
+ * Formats seconds back to "MM:SS" (e.g. 270 -> "4:30")
+ */
+export function formatSmartTime(totalSecs: number): string {
+    if (totalSecs <= 0 || !isFinite(totalSecs)) return "";
+    const m = Math.floor(totalSecs / 60);
+    const s = Math.round(totalSecs % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+/**
+ * Parses smart distance from string to kilometers (e.g. "halvmara", "2.5km", "2500m", "2 mil")
+ */
+export function parseSmartDistance(val: string): number {
+    if (!val) return 0;
+
+    const clean = val.toLowerCase().trim().replace(',', '.');
+
+    // Named distances
+    if (clean.includes('mara') && !clean.includes('halv')) return 42.195;
+    if (clean.includes('halvmara')) return 21.0975;
+    if (clean.includes('lidingö')) return 30;
+
+    // Extract numbers
+    const numMatch = clean.match(/[\d.]+/);
+    if (!numMatch) return 0;
+
+    const num = parseFloat(numMatch[0]);
+    if (isNaN(num)) return 0;
+
+    // Units
+    if (clean.includes('mil') && !clean.includes('mile')) return num * 10;
+    if (clean.includes('mile') || clean.includes('miles')) return num * 1.60934;
+    // If it contains "m" but not "km" or "mil" (e.g. "2500m")
+    if (clean.includes('m') && !clean.includes('km') && !clean.includes('mil') && !clean.includes('mile')) {
+        // "2500m" -> 2.5km. If someone types "5m", assume they meant 5km and typed m by mistake if it's < 100? No, let's just do strict: > 200m usually means meters.
+        if (num >= 100) return num / 1000;
+        return num; // If they said "5m" they probably meant 5 miles or km, but we default strict to m if small numbers, but let's just return num to be safe. Actually, 5m as in 5 minutes? No, this is distance. Let's return num (acting as km) if it's small, otherwise divide by 1000.
+    }
+
+    // Default to km for numbers like "5" or "5k" "5km"
+    return num;
 }

@@ -70,6 +70,7 @@ export function useTrainingSummary(startDate: string, endDate: string) {
 
         return universalActivities
             .filter((a: UniversalActivity) => !hiddenIds.has(a.id))
+            .filter((a: UniversalActivity) => !a.performance?.excludeFromStats)
             .filter((a: UniversalActivity) => {
                 const d = new Date(a.date);
                 return d >= start && d <= end;
@@ -82,6 +83,7 @@ export function useTrainingSummary(startDate: string, endDate: string) {
         end.setHours(23, 59, 59, 999);
 
         return strengthSessions.filter(s => {
+            if (s.excludeFromStats) return false;
             const d = new Date(s.date);
             return d >= start && d <= end;
         }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());

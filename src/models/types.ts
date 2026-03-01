@@ -29,6 +29,9 @@ export type FoodCategory =
     | 'sweeteners'     // Sötningsmedel (sirap, socker)
     | 'baking'         // Bakvaror (mjöl, bakpulver)
     | 'supplements'    // Kosttillskott (proteinpulver, vitaminer)
+    | 'protein-bar'    // Proteinbars, energibars
+    | 'meal-replacement' // Måltidsersättning (dryck, pulver)
+    | 'candy'          // Godis, choklad, snacks
     | 'other';
 
 /** Food storage type */
@@ -1682,6 +1685,9 @@ export const CATEGORY_LABELS: Record<FoodCategory, string> = {
     sweeteners: 'Sötningsmedel',
     baking: 'Bakvaror',
     supplements: 'Kosttillskott',
+    'protein-bar': 'Proteinbars & Snacks',
+    'meal-replacement': 'Måltidsersättning',
+    candy: 'Godis & Snacks',
     other: 'Övrigt'
 };
 

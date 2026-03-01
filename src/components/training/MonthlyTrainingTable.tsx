@@ -5,13 +5,14 @@ import { MonthlyCalendarModal } from './MonthlyCalendarModal.tsx';
 interface MonthlyTrainingTableProps {
     exercises: ExerciseEntry[];
     year: number;
+    initialCalendarMonth?: number;
 }
 
 type TabType = 'all' | 'running' | 'strength' | 'cycling' | 'swimming' | 'other';
 
-export function MonthlyTrainingTable({ exercises, year }: MonthlyTrainingTableProps) {
+export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth }: MonthlyTrainingTableProps) {
     const [activeTab, setActiveTab] = useState<TabType>('all');
-    const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+    const [selectedMonth, setSelectedMonth] = useState<number | null>(initialCalendarMonth !== undefined ? initialCalendarMonth : null);
 
     const months = useMemo(() => [
         'Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',

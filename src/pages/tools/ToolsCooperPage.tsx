@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { calculateCooperVO2, formatPace, formatSeconds, calculateVDOT, predictRaceTime, convertTimeToPace } from '../../utils/runningCalculator.ts';
+import { calculateCooperVO2, formatPace, formatSeconds, calculateVDOT, predictRaceTime, convertTimeToPace, parseSmartTime, formatSmartTime } from '../../utils/runningCalculator.ts';
 import { useData } from '../../context/DataContext.tsx';
 import {
     COOPER_STANDARDS,
@@ -16,12 +16,98 @@ import { CooperRacePredictor } from './CooperRacePredictor.tsx';
 // unifiedActivities usually has a type. Let's rely on basic inference being clearer if we initialize null properly.
 // But unifiedActivities comes from context. Let's use 'any' for the variable to avoid detailed type matching now.
 
-export function ToolsCooperPage() {
+export default function ToolsCooperPage() {
     const { userSettings, unifiedActivities } = useData();
 
     // State
-    const [distance, setDistance] = useState(2400); // meters
-    const [age, setAge] = useState(30);
+    const [distInput, setDistInput] = useState("2400");
+    const [timeInput, setTimeInput] = useState("12:00");
+    const [paceInput, setPaceInput] = useState("5:00");
+
+    const distance = parseFloat(distInput) || 0;
+    const durationSecs = parseSmartTime(timeInput);
+
+    const handleDistanceChange = (val: string) => {
+        setDistInput(val);
+        const d = parseFloat(val) || 0;
+        const tSecs = parseSmartTime(timeInput);
+        if (d > 0 && tSecs > 0) {
+            const paceSecPerKm = (tSecs / d) * 1000;
+            setPaceInput(formatSmartTime(paceSecPerKm));
+        }
+    };
+
+    const handleTimeChange = (val: string) => {
+        setTimeInput(val);
+        const tSecs = parseSmartTime(val);
+        const d = parseFloat(distInput) || 0;
+        if (d > 0 && tSecs > 0) {
+            const paceSecPerKm = (tSecs / d) * 1000;
+            setPaceInput(formatSmartTime(paceSecPerKm));
+        }
+    };
+
+    const handleTimeBlur = () => {
+        const tSecs = parseSmartTime(timeInput);
+        if (tSecs > 0) setTimeInput(formatSmartTime(tSecs));
+    };
+
+    const handlePaceChange = (val: string) => {
+        setPaceInput(val);
+        const pSecs = parseSmartTime(val);
+        const d = parseFloat(distInput) || 0;
+        if (d > 0 && pSecs > 0) {
+            const tSecs = (d / 1000) * pSecs;
+            setTimeInput(formatSmartTime(tSecs));
+        }
+    };
+
+    const handlePaceBlur = () => {
+        const pSecs = parseSmartTime(paceInput);
+        if (pSecs > 0) setPaceInput(formatSmartTime(pSecs));
+    };
+
+    const handleTimeKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const currentSecs = parseSmartTime(timeInput);
+            const delta = e.key === 'ArrowUp' ? 1 : -1;
+            const step = e.shiftKey ? 10 : 1;
+            const newSecs = Math.max(0, currentSecs + (delta * step));
+
+            setTimeInput(formatSmartTime(newSecs));
+            const d = parseFloat(distInput) || 0;
+            if (d > 0 && newSecs > 0) {
+                const paceSecPerKm = (newSecs / d) * 1000;
+                setPaceInput(formatSmartTime(paceSecPerKm));
+            }
+        }
+    };
+
+    const handlePaceKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const currentSecs = parseSmartTime(paceInput);
+            const delta = e.key === 'ArrowUp' ? 1 : -1;
+            const step = e.shiftKey ? 10 : 1;
+            const newSecs = Math.max(0, currentSecs + (delta * step));
+
+            setPaceInput(formatSmartTime(newSecs));
+            const d = parseFloat(distInput) || 0;
+            if (d > 0 && newSecs > 0) {
+                const tSecs = (d / 1000) * newSecs;
+                setTimeInput(formatSmartTime(tSecs));
+            }
+        }
+    };
+
+    // Default age based on birthYear if available, otherwise 30
+    const [age, setAge] = useState(() => {
+        if (userSettings?.birthYear) {
+            return new Date().getFullYear() - userSettings.birthYear;
+        }
+        return 30;
+    });
     const [gender, setGender] = useState<'male' | 'female'>('male');
     const [showFullTable, setShowFullTable] = useState(true);
     const [prefillSource, setPrefillSource] = useState<{
@@ -32,6 +118,14 @@ export function ToolsCooperPage() {
         duration: number, // seconds
         pace: string
     } | null>(null);
+    const [recentCooperRuns, setRecentCooperRuns] = useState<any[]>([]);
+
+    // Update age if userSettings load later
+    useEffect(() => {
+        if (userSettings?.birthYear && age === 30) {
+            setAge(new Date().getFullYear() - userSettings.birthYear);
+        }
+    }, [userSettings?.birthYear]);
 
     // Prefill from Settings & Activities
     useEffect(() => {
@@ -49,6 +143,14 @@ export function ToolsCooperPage() {
         // Auto-detect best running performance
         if (unifiedActivities && unifiedActivities.length > 0) {
             const runs = unifiedActivities.filter(a => a.type === 'running' && (a.durationMinutes || 0) >= 10);
+
+            // Find recent 12-min ish runs (between 11.5 and 12.5 mins)
+            const cooperCandidates = runs.filter(r => {
+                const dur = r.durationMinutes || 0;
+                return dur >= 11.5 && dur <= 12.5;
+            }).slice(0, 5); // Take top 5 recent
+
+            setRecentCooperRuns(cooperCandidates);
 
             let bestVDOT = 0;
             // Explicitly type bestActivity as any to avoid 'never' inference
@@ -94,7 +196,10 @@ export function ToolsCooperPage() {
                     derivedDist = mid;
                 }
 
-                setDistance(Math.round(derivedDist));
+                setDistInput(Math.round(derivedDist).toString());
+                setTimeInput("12:00");
+                const pSecs = derivedDist > 0 ? (12 * 60) / (derivedDist / 1000) : 0;
+                setPaceInput(formatSmartTime(pSecs));
 
                 const durationSec = (bestActivity.durationMinutes || 0) * 60;
                 const paceSecPerKm = durationSec / (bestActivity.distance || 1);
@@ -112,17 +217,25 @@ export function ToolsCooperPage() {
     }, [userSettings, unifiedActivities]);
 
     // Calculations
-    const vo2 = calculateCooperVO2(distance);
+    // Note: The Cooper test requires the distance covered in *exactly* 12 minutes.
+    // If user enters e.g. 2500m in 10 minutes, their pace is 4:00/km.
+    // In 12 minutes at that pace, they would cover: (12 / 10) * 2500 = 3000m.
+    // We use this "adjusted 12-min distance" for the actual Cooper evaluation.
+    const currentPaceDecimalMinPerKm = durationSecs > 0 ? (durationSecs / 60) / (distance / 1000 || 1) : 0;
+    const adjusted12MinDistance = currentPaceDecimalMinPerKm > 0 ? (12 / currentPaceDecimalMinPerKm) * 1000 : 0;
+    const evaluationDistance = durationSecs === 12 * 60 ? distance : adjusted12MinDistance;
+
+    const vo2 = calculateCooperVO2(evaluationDistance);
     const standard = useMemo(() => getCooperStandard(age, gender), [age, gender]);
 
     // Grade Details
     const details = useMemo(() => {
         if (!standard) return null;
-        return getDetailedCooperGrade(distance, standard);
-    }, [distance, standard]);
+        return getDetailedCooperGrade(evaluationDistance, standard);
+    }, [evaluationDistance, standard]);
 
-    // Pace Calculations
-    const currentPace = convertTimeToPace(distance / 1000, 12 * 60);
+    // Pace Calculations (decimal minutes / km)
+    const currentPace = currentPaceDecimalMinPerKm;
 
     // Next Level Logic
     // nextLevelDistance is the LOWER bound of the next level.
@@ -130,10 +243,13 @@ export function ToolsCooperPage() {
         ? (standard.levels[details.nextLevel.toLowerCase() as keyof typeof standard.levels] || 0)
         : 0;
 
-    const distanceToNext = Math.max(0, nextLevelThreshold - distance);
-    const nextLevelPace = convertTimeToPace(nextLevelThreshold / 1000, 12 * 60);
+    const distanceToNext = Math.round(Math.max(0, nextLevelThreshold - evaluationDistance));
 
-    // Pace Improvement
+    // convertTimeToPace returns seconds per km. formatPace expects decimal minutes.
+    const nextLevelPaceSec = convertTimeToPace(nextLevelThreshold / 1000, 12 * 60);
+    const nextLevelPace = nextLevelPaceSec / 60; // Decimal minutes
+
+    // Pace Improvement (against current pace, not exactly 12m limit if duration is different, but pace is pace)
     const paceImprovementRaw = Math.max(0, currentPace - nextLevelPace);
     // Suppress pace improvement if it's crazy high (e.g. > 4 min/km improvement needed)
     const showPaceImprovement = paceImprovementRaw < 4;
@@ -151,16 +267,35 @@ export function ToolsCooperPage() {
 
         const floor = Math.max(0, bad - 400);
 
-        if (distance < bad) return mapToSegment(distance, floor, bad);
-        if (distance < average) return 20 + mapToSegment(distance, bad, average);
-        if (distance < good) return 40 + mapToSegment(distance, average, good);
-        if (distance < excellent) return 60 + mapToSegment(distance, good, excellent);
+        if (evaluationDistance < bad) return mapToSegment(evaluationDistance, floor, bad);
+        if (evaluationDistance < average) return 20 + mapToSegment(evaluationDistance, bad, average);
+        if (evaluationDistance < good) return 40 + mapToSegment(evaluationDistance, average, good);
+        if (evaluationDistance < excellent) return 60 + mapToSegment(evaluationDistance, good, excellent);
 
         const ceiling = excellent + 400;
-        return 80 + mapToSegment(distance, excellent, ceiling);
+        return 80 + mapToSegment(evaluationDistance, excellent, ceiling);
     };
 
     const progress = getProgressPercent();
+
+    const handleQuickSelect = (run: any) => {
+        const durationSec = (run.durationMinutes || 0) * 60;
+        const paceSecPerKm = durationSec / (run.distance || 1);
+
+        const d = run.distance || 0;
+        const pSecs = d > 0 ? durationSec / d : 0;
+        setDistInput(Math.round(d * 1000).toString());
+        setTimeInput(formatSmartTime(durationSec));
+        setPaceInput(formatSmartTime(pSecs));
+        setPrefillSource({
+            id: run.id || run.externalId || '',
+            name: run.title || 'Löpning',
+            date: run.date,
+            dist: run.distance || 0,
+            duration: durationSec,
+            pace: formatSeconds(Math.round(paceSecPerKm))
+        });
+    };
 
     return (
         <div className="space-y-8 animate-fade-in pb-20">
@@ -184,18 +319,52 @@ export function ToolsCooperPage() {
                                 <div className="relative group">
                                     <input
                                         type="number"
-                                        value={distance}
-                                        onChange={(e) => setDistance(Number(e.target.value))}
+                                        value={distInput}
+                                        onChange={(e) => handleDistanceChange(e.target.value)}
                                         step="10"
                                         className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-4 text-white text-2xl font-mono font-bold focus:outline-none focus:border-emerald-500 transition-colors group-hover:border-white/20"
                                     />
                                     <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold">m</div>
                                 </div>
-                                <div className="mt-2 flex justify-between items-start text-xs">
-                                    <span className="text-slate-500">
-                                        Tempo: <strong className="text-emerald-300">{formatPace(currentPace)}</strong> min/km
-                                    </span>
+                                <div className="mt-4 flex flex-col md:flex-row gap-4">
+                                    <div className="flex-1 bg-slate-950/50 p-4 rounded-2xl border border-white/5 relative">
+                                        <div className="absolute top-0 right-0 p-2 opacity-10">⏱️</div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Tid</label>
+                                        <div className="relative group">
+                                            <input
+                                                type="text"
+                                                value={timeInput}
+                                                onChange={(e) => handleTimeChange(e.target.value)}
+                                                onBlur={handleTimeBlur}
+                                                onKeyDown={handleTimeKeyDown}
+                                                placeholder="t.ex. 12:00"
+                                                className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-3 text-white text-xl font-mono font-bold focus:outline-none focus:border-emerald-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 bg-slate-950/50 p-4 rounded-2xl border border-white/5 relative">
+                                        <div className="absolute top-0 right-0 p-2 opacity-10">⚡</div>
+                                        <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Tempo (/km)</label>
+                                        <div className="relative group">
+                                            <input
+                                                type="text"
+                                                value={paceInput}
+                                                onChange={(e) => handlePaceChange(e.target.value)}
+                                                onBlur={handlePaceBlur}
+                                                onKeyDown={handlePaceKeyDown}
+                                                placeholder="t.ex. 4:30"
+                                                className="w-full bg-slate-900 border border-white/10 rounded-lg px-4 py-3 text-white text-xl font-mono font-bold focus:outline-none focus:border-emerald-500 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
+                                {durationSecs !== 12 * 60 && (
+                                    <div className="mt-2 text-[10px] text-amber-500/80 bg-amber-500/10 p-2 rounded-lg italic text-center">
+                                        Omräknat till 12 min blir detta ca <strong>{Math.round(evaluationDistance)}m</strong>
+                                    </div>
+                                )}
+
                                 {prefillSource && (
                                     <div className="mt-3 text-[10px] text-slate-500 bg-slate-950/50 p-3 rounded-lg border border-white/5">
                                         <div className="flex items-center gap-2 mb-1">
@@ -220,6 +389,30 @@ export function ToolsCooperPage() {
                                                 <span>{prefillSource.pace}/km</span>
                                             </div>
                                             <div className="text-slate-700">{prefillSource.date}</div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {recentCooperRuns.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-white/5">
+                                        <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Snabbval (Senaste ~12 min)</label>
+                                        <div className="space-y-2">
+                                            {recentCooperRuns.map(run => (
+                                                <button
+                                                    key={run.id}
+                                                    onClick={() => handleQuickSelect(run)}
+                                                    className="w-full text-left bg-slate-800/50 hover:bg-slate-800 border border-transparent hover:border-emerald-500/30 rounded-lg p-2 transition-all flex justify-between items-center group/btn"
+                                                >
+                                                    <div className="truncate pr-2">
+                                                        <div className="text-sm font-bold text-white group-hover/btn:text-emerald-400 transition-colors truncate">{run.title || 'Löpning'}</div>
+                                                        <div className="text-[10px] text-slate-500">{new Date(run.date).toLocaleDateString('sv-SE')}</div>
+                                                    </div>
+                                                    <div className="text-right shrink-0">
+                                                        <div className="text-sm font-mono font-bold text-emerald-300">{(run.distance * 1000).toFixed(0)}m</div>
+                                                        <div className="text-[10px] text-slate-500 font-mono">{formatSeconds(Math.round((run.durationMinutes * 60) / run.distance))}/km</div>
+                                                    </div>
+                                                </button>
+                                            ))}
                                         </div>
                                     </div>
                                 )}
@@ -267,7 +460,7 @@ export function ToolsCooperPage() {
                     </div>
 
                     {/* Predictions */}
-                    <CooperRacePredictor distance={distance} />
+                    <CooperRacePredictor distance={evaluationDistance} />
                 </div>
 
                 {/* RIGHT COLUMN: Results & Visualization */}
@@ -280,7 +473,7 @@ export function ToolsCooperPage() {
                         <div className="relative z-10">
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                                 <div>
-                                    <div className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Resultat</div>
+                                    <div className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Resultat (vid 12 min)</div>
                                     <div className={`text-4xl md:text-6xl font-black ${details ? COOPER_LEVEL_TEXT_COLORS[details.grade] : 'text-white'} drop-shadow-2xl`}>
                                         {details?.grade || 'N/A'}
                                     </div>
@@ -314,7 +507,7 @@ export function ToolsCooperPage() {
                                         style={{ left: `${Math.min(99, Math.max(1, progress))}%` }}
                                     >
                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 bg-slate-900 text-white text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-500/30 whitespace-nowrap shadow-xl shadow-black">
-                                            Du: {distance}m
+                                            Du: {Math.round(evaluationDistance)}m
                                             <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-slate-900 border-r border-b border-emerald-500/30 rotate-45"></div>
                                         </div>
                                     </div>
@@ -382,8 +575,9 @@ export function ToolsCooperPage() {
                                     <tbody className="divide-y divide-white/5 bg-slate-900/50">
                                         {(['Excellent', 'Good', 'Average', 'Bad'] as const).map((lvl) => {
                                             const threshold = standard.levels[lvl.toLowerCase() as keyof typeof standard.levels];
-                                            const pace = convertTimeToPace(threshold / 1000, 12 * 60);
-                                            const diff = distance - threshold;
+                                            const paceSec = convertTimeToPace(threshold / 1000, 12 * 60);
+                                            const pace = paceSec / 60; // decimal minutes
+                                            const diff = evaluationDistance - threshold;
                                             const diffPercent = (diff / threshold) * 100;
 
                                             // Highlight active row broadly
@@ -399,7 +593,7 @@ export function ToolsCooperPage() {
                                                         {formatPace(pace)}
                                                     </td>
                                                     <td className={`px-4 py-3 text-right font-mono ${diff >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                                        {diff > 0 ? '+' : ''}{diff}m <span className="text-[10px] opacity-70">({diff > 0 ? '+' : ''}{diffPercent.toFixed(1)}%)</span>
+                                                        {diff > 0 ? '+' : ''}{Math.round(diff)}m <span className="text-[10px] opacity-70">({diff > 0 ? '+' : ''}{diffPercent.toFixed(1)}%)</span>
                                                     </td>
                                                 </tr>
                                             );
@@ -413,7 +607,7 @@ export function ToolsCooperPage() {
                                                 -
                                             </td>
                                             <td className="px-4 py-3 text-right text-emerald-400 font-mono">
-                                                +{distance - standard.levels.bad}m
+                                                {evaluationDistance < standard.levels.bad ? '-' : '+'}{Math.abs(Math.round(evaluationDistance - standard.levels.bad))}m
                                             </td>
                                         </tr>
                                     </tbody>
@@ -426,3 +620,5 @@ export function ToolsCooperPage() {
         </div>
     );
 }
+
+

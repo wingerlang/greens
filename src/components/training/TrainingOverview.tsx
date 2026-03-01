@@ -9,9 +9,10 @@ interface TrainingOverviewProps {
     periodLabel?: string;
     isFiltered?: boolean;
     onExerciseClick?: (exercise: ExerciseEntry) => void;
+    initialCalendarMonth?: number;
 }
 
-export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick }: TrainingOverviewProps) {
+export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth }: TrainingOverviewProps) {
     const [statFilter, setStatFilter] = React.useState<'all' | 'run' | 'bike' | 'strength'>('all');
 
     const stats = useMemo(() => {
@@ -62,13 +63,13 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
         const sumDuration = (exs: ExerciseEntry[]) => exs.reduce((sum, e) => sum + e.durationMinutes, 0);
         const count = (exs: ExerciseEntry[]) => exs.length;
 
-        const longestRun = yearExercises.filter(e => (e.type as string) === 'running' || (e.type as string) === 'löpning' || (e.type as string).includes('cycl')).reduce((max, e) => (e.distance || 0) > (max.distance || 0) ? e : max, { distance: 0 } as ExerciseEntry);
+        const longestRun = yearExercises.filter(e => ((e.type as string) === 'running' || (e.type as string) === 'löpning' || (e.type as string).includes('cycl')) && !e.excludeFromStats).reduce((max, e) => (e.distance || 0) > (max.distance || 0) ? e : max, { distance: 0 } as ExerciseEntry);
 
         const heavyLiftVolume = yearExercises.filter(e => (e.type as string) === 'strength' || (e.type as string) === 'gym' || (e.type as string) === 'styrka').reduce((sum, e) => sum + (e.tonnage || 0), 0);
         const maxStrengthSession = yearExercises.filter(e => (e.type as string) === 'strength' || (e.type as string) === 'gym' || (e.type as string) === 'styrka').reduce((max, e) => (max.tonnage || 0) > (e.tonnage || 0) ? max : e, {} as ExerciseEntry);
 
         const fastestPaceSession = yearExercises
-            .filter(e => ((e.type as string) === 'running' || (e.type as string) === 'löpning') && (e.distance || 0) > 3)
+            .filter(e => ((e.type as string) === 'running' || (e.type as string) === 'löpning') && (e.distance || 0) > 3 && !e.excludeFromStats)
             .reduce((best, e) => {
                 const pace = (e.durationMinutes) / (e.distance || 1);
                 const bestPace = (best.durationMinutes) / (best.distance || 1);
@@ -79,7 +80,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
 
         // For Cycling, maybe we want Max Watts?
         const maxWattSession = yearExercises
-            .filter(e => ((e.type as string).includes('cycl') && (e as any).averageWatts))
+            .filter(e => ((e.type as string).includes('cycl') && (e as any).averageWatts && !e.excludeFromStats))
             .reduce((best, e) => (e as any).averageWatts > ((best as any).averageWatts || 0) ? e : best, {} as ExerciseEntry);
 
 

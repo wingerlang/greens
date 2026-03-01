@@ -5,7 +5,7 @@
  * for getting the active calorie target from training periods and performance goals.
  */
 
-import { PerformanceGoal, TrainingPeriod, TrainingCycle } from '../models/types';
+import { PerformanceGoal, TrainingPeriod, TrainingCycle } from '../models/types.ts';
 
 export interface CalorieTargetResult {
     calories: number;

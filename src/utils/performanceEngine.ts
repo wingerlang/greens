@@ -63,14 +63,15 @@ export function calculateAdaptiveGoals(
  * Similar to TSS (Training Stress Score) but uses available app metrics.
  */
 export function calculateTrainingLoad(exercise: ExerciseEntry): number {
-    const intensityFactor = {
+    const intensityFactors: Record<string, number> = {
         low: 0.5,
         moderate: 1.0,
         high: 1.6,
         ultra: 2.2
-    }[exercise.intensity] || 1.0;
+    };
+    const iFactor = intensityFactors[exercise.intensity] || 1.0;
 
-    const subTypeFactor = {
+    const subTypeFactors: Record<string, number> = {
         default: 1.0,
         interval: 1.4,
         'long-run': 1.6,
@@ -78,11 +79,12 @@ export function calculateTrainingLoad(exercise: ExerciseEntry): number {
         tonnage: 1.1,
         ultra: 2.5,
         competition: 2.5
-    }[exercise.subType || 'default'] || 1.0;
+    };
+    const factor = subTypeFactors[exercise.subType || 'default'] || 1.0;
 
     // Normalize so a 60min moderate workout is ~50-60 load points
     // 60 * 1.0 * 1.0 * 0.83 = ~50
-    return Math.round(exercise.durationMinutes * intensityFactor * subTypeFactor * 0.83);
+    return Math.round(exercise.durationMinutes * iFactor * factor * 0.83);
 }
 
 /**

@@ -26,6 +26,9 @@ export function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps
     const [visibility, setVisibility] = useState<VisibilityLevel>('PUBLIC');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Draft Caching State & Timers
+    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     const editorRef = useRef<HTMLDivElement>(null);
 
     // Ensure editor commands work by preventing default focus loss on buttons
@@ -80,6 +83,8 @@ export function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps
             });
 
             if (res.ok) {
+                // Clear the cache upon successful publish
+                localStorage.removeItem('greens_post_draft');
                 onPostCreated();
                 onClose();
             } else {
@@ -94,10 +99,69 @@ export function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps
         }
     };
 
-    // Auto-focus title on mount
+    // Restore from cache and auto-focus on mount
     useEffect(() => {
+        const savedDraft = localStorage.getItem('greens_post_draft');
+        if (savedDraft) {
+            try {
+                const parsed = JSON.parse(savedDraft);
+                if (parsed.title) setTitle(parsed.title);
+                if (parsed.visibility) setVisibility(parsed.visibility);
+                if (parsed.contentHtml && editorRef.current) {
+                    editorRef.current.innerHTML = parsed.contentHtml;
+                }
+            } catch (err) {
+                console.error("Failed to parse post draft", err);
+            }
+        }
         document.getElementById('post-title-input')?.focus();
     }, []);
+
+    // Close on ESC
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !isSubmitting) {
+                onClose();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isSubmitting, onClose]);
+
+    // Save to cache 2 seconds after the last keystroke
+    const queueDraftSave = () => {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+
+        saveTimerRef.current = setTimeout(() => {
+            if (!editorRef.current) return;
+            // Only save if we actually have some data
+            const draft = {
+                title,
+                visibility,
+                contentHtml: editorRef.current.innerHTML
+            };
+            if (draft.title.trim() || draft.contentHtml.trim() && draft.contentHtml !== '<br>') {
+                localStorage.setItem('greens_post_draft', JSON.stringify(draft));
+            }
+        }, 2000);
+    };
+
+    // Trigger draft save whenever title or visibility changes
+    useEffect(() => {
+        queueDraftSave();
+    }, [title, visibility]);
+
+    // Handle clearing the draft
+    const handleClearDraft = () => {
+        if (confirm("Är du säker på att du vill rensa utkastet? Allt innehåll kommer att försvinna.")) {
+            setTitle('');
+            setVisibility('PUBLIC');
+            if (editorRef.current) {
+                editorRef.current.innerHTML = '';
+            }
+            localStorage.removeItem('greens_post_draft');
+        }
+    };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
@@ -152,6 +216,7 @@ export function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps
                     <div
                         ref={editorRef}
                         contentEditable
+                        onInput={queueDraftSave}
                         className="flex-1 min-h-[200px] bg-slate-950/50 rounded-xl border border-white/5 p-4 text-slate-300 outline-none focus:border-emerald-500/30 transition-colors wysiwyg-content max-w-none"
                         data-placeholder="Berätta hur träningen går..."
                         style={{ emptyCells: 'show' }}
@@ -183,27 +248,36 @@ export function CreatePostModal({ onClose, onPostCreated }: CreatePostModalProps
                         />
                     </div>
 
-                    {/* Submit Button */}
-                    <button
-                        onClick={handleSubmit}
-                        disabled={!title.trim() || isSubmitting}
-                        className={`
-                            flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all
-                            ${!title.trim() || isSubmitting
-                                ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                                : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95'
-                            }
-                        `}
-                    >
-                        {isSubmitting ? (
-                            <span className="animate-pulse">Publicerar...</span>
-                        ) : (
-                            <>
-                                <span>Publicera</span>
-                                <Send size={16} />
-                            </>
-                        )}
-                    </button>
+                    {/* Submit and Clear Buttons */}
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={handleClearDraft}
+                            disabled={isSubmitting}
+                            className="px-4 py-2.5 rounded-xl font-bold text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                        >
+                            Rensa
+                        </button>
+                        <button
+                            onClick={handleSubmit}
+                            disabled={!title.trim() || isSubmitting}
+                            className={`
+                                flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold transition-all
+                                ${!title.trim() || isSubmitting
+                                    ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                                    : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95'
+                                }
+                            `}
+                        >
+                            {isSubmitting ? (
+                                <span className="animate-pulse">Publicerar...</span>
+                            ) : (
+                                <>
+                                    <span>Publicera</span>
+                                    <Send size={16} />
+                                </>
+                            )}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

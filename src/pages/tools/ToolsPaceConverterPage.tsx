@@ -1,126 +1,342 @@
-import React, { useState } from 'react';
-import { convertPaceToTime, convertTimeToPace, formatSeconds } from '../../utils/runningCalculator.ts';
-import { useAuth } from '../../context/AuthContext.tsx';
-import { useHealth } from '../../hooks/useHealth.ts';
+import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
+import {
+    calculateVDOT,
+    predictRaceTime,
+    convertPaceToTime,
+    formatSeconds,
+    parseSmartTime,
+    formatSmartTime,
+    parseSmartDistance
+} from '../../utils/runningCalculator.ts';
+import { useData } from '../../context/DataContext.tsx';
+
+const TARGET_DISTANCES = [
+    { name: "400m", km: 0.4 },
+    { name: "800m", km: 0.8 },
+    { name: "1 km", km: 1 },
+    { name: "1.5 km", km: 1.5 },
+    { name: "3 km", km: 3 },
+    { name: "5 km", km: 5 },
+    { name: "10 km", km: 10 },
+    { name: "Halvmaraton", km: 21.0975 },
+    { name: "Maraton", km: 42.195 },
+    { name: "50 km", km: 50 },
+    { name: "50 miles", km: 80.4672 },
+    { name: "100 km", km: 100 },
+    { name: "100 miles", km: 160.934 }
+];
+
+const BASELINE_DISTANCES = [
+    { name: "1 500m", km: 1.5 },
+    { name: "3 000m", km: 3 },
+    { name: "5 km", km: 5 },
+    { name: "10 km", km: 10 },
+    { name: "Halvmaraton", km: 21.0975 },
+    { name: "Maraton", km: 42.195 }
+];
 
 export function ToolsPaceConverterPage() {
-    const { user } = useAuth();
-    const { exerciseEntries } = useHealth();
+    const { unifiedActivities } = useData();
 
-    // Pace state: MM and SS
-    const [minutes, setMinutes] = useState(5);
-    const [seconds, setSeconds] = useState(0);
+    // State
+    const [paceInput, setPaceInput] = useState("5:00");
+    const [mode, setMode] = useState<'exact' | 'predict'>('exact');
+    const [baselineKm, setBaselineKm] = useState<number>(5);
+    const [isCustomBaseline, setIsCustomBaseline] = useState<boolean>(false);
+    const [baselineInput, setBaselineInput] = useState<string>("5");
 
-    const paceSecondsPerKm = minutes * 60 + seconds;
+    // Pace in seconds per km
+    const paceSeconds = parseSmartTime(paceInput);
 
-    const distances = [
-        { name: "400m", km: 0.4 },
-        { name: "800m", km: 0.8 },
-        { name: "1 km", km: 1 },
-        { name: "1.5 km", km: 1.5 },
-        { name: "3 km", km: 3 },
-        { name: "5 km", km: 5 },
-        { name: "10 km", km: 10 },
-        { name: "Halvmaraton", km: 21.0975 },
-        { name: "Maraton", km: 42.195 },
-        { name: "50 km", km: 50 },
-        { name: "50 miles", km: 80.4672 },
-        { name: "100 km", km: 100 },
-        { name: "100 miles", km: 160.934 }
-    ];
+    // Handlers
+    const handlePaceChange = (val: string) => {
+        setPaceInput(val);
+    };
 
-    const pbs = React.useMemo(() => {
-        if (!exerciseEntries || exerciseEntries.length === 0) return [];
-        const found = [];
-        const targets = [5, 10, 21.0975, 42.195];
+    const handlePaceBlur = () => {
+        const pSecs = parseSmartTime(paceInput);
+        if (pSecs > 0) setPaceInput(formatSmartTime(pSecs));
+    };
 
-        targets.forEach(dist => {
-            const match = exerciseEntries
-                .filter(e => e.type === 'running' && e.distance && Math.abs(e.distance - dist) < (dist * 0.05))
-                .sort((a, b) => (a.durationMinutes - b.durationMinutes))[0];
+    const handlePaceKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            const currentSecs = parseSmartTime(paceInput);
+            const delta = e.key === 'ArrowUp' ? 1 : -1;
+            const step = e.shiftKey ? 10 : 1;
+            const newSecs = Math.max(0, currentSecs + (delta * step));
+            setPaceInput(formatSmartTime(newSecs));
+        }
+    };
 
-            if (match && match.distance && match.durationMinutes) {
-                const pace = (match.durationMinutes * 60) / match.distance;
-                found.push({
-                    name: dist > 40 ? 'Maraton' : dist > 20 ? 'Halvmaraton' : `${dist}km`,
-                    pace,
-                    date: match.date
-                });
+    // Calculate Best / Quick select runs
+    const bestActivities = useMemo(() => {
+        if (!unifiedActivities || unifiedActivities.length === 0) return [];
+        const running = unifiedActivities.filter(a => a.type === 'running' && (a.distance || 0) > 0 && (a.durationMinutes || 0) > 0 && !a.excludeFromStats);
+
+        // Find best VDOT ones
+        const withVDOT = running.map(r => ({
+            ...r,
+            vdot: calculateVDOT(r.distance || 0, (r.durationMinutes || 0) * 60)
+        })).sort((a, b) => b.vdot - a.vdot);
+
+        // Deduplicate similar distances to get a spread of PBs (e.g. 5k, 10k, 21k)
+        const categories = [3, 5, 10, 21.1, 42.2];
+        const pbs: any[] = [];
+
+        categories.forEach(targetDist => {
+            const match = withVDOT.find(r => Math.abs((r.distance || 0) - targetDist) < (targetDist * 0.1));
+            if (match && !pbs.find(p => p.id === match.id)) {
+                pbs.push(match);
             }
         });
-        return found;
-    }, [exerciseEntries]);
 
-    const setPaceFromSeconds = (totalSeconds: number) => {
-        const m = Math.floor(totalSeconds / 60);
-        const s = Math.round(totalSeconds % 60);
-        setMinutes(m);
-        setSeconds(s);
+        // Fill up to 5 with remaining best VDOTs
+        for (const r of withVDOT) {
+            if (pbs.length >= 5) break;
+            if (!pbs.find(p => p.id === r.id)) {
+                pbs.push(r);
+            }
+        }
+
+        return pbs.sort((a, b) => (b.distance || 0) - (a.distance || 0));
+    }, [unifiedActivities]);
+
+    const handleQuickSelect = (run: any) => {
+        const d = run.distance || 1;
+        const durSecs = (run.durationMinutes || 0) * 60;
+        const pace = durSecs / d;
+        setPaceInput(formatSmartTime(pace));
+
+        // Auto-match baseline distance if in predict mode
+        if (mode === 'predict') {
+            const nearestBaseline = [...BASELINE_DISTANCES].sort((a, b) => Math.abs(a.km - d) - Math.abs(b.km - d))[0];
+            if (nearestBaseline && Math.abs(nearestBaseline.km - d) < 0.1) {
+                setBaselineKm(nearestBaseline.km);
+                setBaselineInput(nearestBaseline.km.toString());
+                setIsCustomBaseline(false);
+            } else {
+                setBaselineKm(d);
+                setBaselineInput(d.toString());
+                setIsCustomBaseline(true);
+            }
+        }
     };
 
     return (
-        <div className="space-y-8 animate-fade-in">
-            <div>
-                <h1 className="text-3xl font-bold text-white mb-2">Pace Converter</h1>
-                <p className="text-slate-400">Se hur lång tid olika distanser tar vid ett visst tempo.</p>
+        <div className="space-y-8 animate-fade-in pb-20">
+            <div className="text-center md:text-left">
+                <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-teal-200 to-emerald-400 mb-2">
+                    Pace Converter 2.0
+                </h1>
+                <p className="text-slate-400 max-w-2xl">
+                    Se hur lång tid olika distanser tar vid ett visst tempo. Välj VDOT-prediktion för att få realistiska tider anpassade för längre sträckor.
+                </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-slate-900 border border-white/5 rounded-3xl p-6 h-fit">
-                    <div className="flex justify-between items-center mb-6">
-                        <h2 className="text-xl font-bold text-white">Ditt tempo</h2>
-                        {pbs.length > 0 && (
-                            <select
-                                onChange={(e) => setPaceFromSeconds(Number(e.target.value))}
-                                className="bg-slate-950 border border-white/10 text-xs text-slate-400 rounded-lg px-2 py-1 focus:outline-none focus:border-emerald-500"
-                                defaultValue=""
-                            >
-                                <option value="" disabled>Hämta från PB</option>
-                                {pbs.map((pb, idx) => (
-                                    <option key={idx} value={pb.pace}>
-                                        {pb.name} ({formatSeconds(pb.pace)}/km)
-                                    </option>
-                                ))}
-                            </select>
-                        )}
-                    </div>
+            <div className="grid lg:grid-cols-3 gap-8">
+                {/* LEFT COLUMN: Inputs */}
+                <div className="space-y-6">
+                    <div className="bg-slate-900/80 border border-emerald-500/20 rounded-3xl p-6 shadow-lg shadow-emerald-900/10">
+                        <h2 className="text-sm font-bold text-emerald-400 uppercase tracking-wider mb-4">Metod</h2>
 
-                    <div className="flex items-end gap-2">
-                        <div className="flex-1">
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Minuter</label>
-                            <input
-                                type="number"
-                                value={minutes}
-                                onChange={(e) => setMinutes(Math.max(0, Number(e.target.value)))}
-                                className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center text-xl font-bold"
-                            />
+                        <div className="flex bg-slate-950/50 rounded-xl p-1 mb-6 border border-white/5">
+                            <button
+                                onClick={() => setMode('exact')}
+                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${mode === 'exact' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-500 hover:text-white'}`}
+                            >
+                                Exakt Tempo
+                            </button>
+                            <button
+                                onClick={() => setMode('predict')}
+                                className={`flex-1 py-2 text-sm font-bold rounded-lg transition-colors ${mode === 'predict' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-slate-500 hover:text-white'}`}
+                            >
+                                VDOT Prediktion
+                            </button>
                         </div>
-                        <div className="text-2xl font-bold text-slate-500 pb-3">:</div>
-                        <div className="flex-1">
-                            <label className="block text-sm font-medium text-slate-400 mb-1">Sekunder</label>
-                            <input
-                                type="number"
-                                value={seconds}
-                                onChange={(e) => setSeconds(Math.max(0, Math.min(59, Number(e.target.value))))}
-                                className="w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 text-center text-xl font-bold"
-                            />
+
+                        <div className="space-y-5">
+                            {mode === 'predict' && (
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Detta tempo är mitt kap för... (km)</label>
+                                    <div className="flex gap-2">
+                                        <select
+                                            value={!isCustomBaseline && BASELINE_DISTANCES.find(d => d.km === baselineKm) ? baselineKm : 'custom'}
+                                            onChange={(e) => {
+                                                if (e.target.value === 'custom') {
+                                                    setIsCustomBaseline(true);
+                                                    setBaselineInput(baselineKm.toString());
+                                                } else {
+                                                    setIsCustomBaseline(false);
+                                                    const newKm = Number(e.target.value);
+                                                    setBaselineKm(newKm);
+                                                    setBaselineInput(newKm.toString());
+                                                }
+                                            }}
+                                            className="w-1/2 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-lg font-bold focus:outline-none focus:border-amber-500 transition-colors"
+                                        >
+                                            {BASELINE_DISTANCES.map(d => (
+                                                <option key={d.name} value={d.km}>{d.name}</option>
+                                            ))}
+                                            <option value="custom">Anpassad...</option>
+                                        </select>
+                                        <input
+                                            type="text"
+                                            value={baselineInput}
+                                            placeholder="t.ex. 2500m"
+                                            onChange={(e) => {
+                                                setIsCustomBaseline(true);
+                                                setBaselineInput(e.target.value);
+                                                const parsed = parseSmartDistance(e.target.value);
+                                                if (parsed > 0) setBaselineKm(parsed);
+                                            }}
+                                            onBlur={() => {
+                                                const parsed = parseSmartDistance(baselineInput);
+                                                if (parsed > 0) {
+                                                    setBaselineKm(parsed);
+                                                    setBaselineInput(parsed.toString());
+                                                }
+                                            }}
+                                            className="w-1/2 bg-slate-950 border border-white/10 rounded-xl px-4 py-3 text-white text-lg font-bold focus:outline-none focus:border-amber-500 transition-colors"
+                                        />
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-2 italic">
+                                        Din VO2 Max (VDOT) kommer beräknas enligt detta och sedan appliceras på andra distanser.
+                                    </p>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Tempo (/km)</label>
+                                <div className="relative group">
+                                    <input
+                                        type="text"
+                                        value={paceInput}
+                                        onChange={(e) => handlePaceChange(e.target.value)}
+                                        onBlur={handlePaceBlur}
+                                        onKeyDown={handlePaceKeyDown}
+                                        placeholder="t.ex. 4:30"
+                                        className={`w-full bg-slate-950 border border-white/10 rounded-xl px-4 py-4 text-white text-3xl font-mono font-bold focus:outline-none transition-colors group-hover:border-white/20 ${mode === 'predict' ? 'focus:border-amber-500' : 'focus:border-emerald-500'}`}
+                                    />
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-bold opacity-50">⚡</div>
+                                </div>
+                            </div>
+
+                            {bestActivities.length > 0 && (
+                                <div className="pt-2 border-t border-white/5">
+                                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-2">Hämta från tidigare pass</label>
+                                    <div className="space-y-2">
+                                        {bestActivities.map(run => {
+                                            const d = run.distance || 0;
+                                            const pace = ((run.durationMinutes || 0) * 60) / (d || 1);
+                                            return (
+                                                <button
+                                                    key={run.id}
+                                                    onClick={() => handleQuickSelect(run)}
+                                                    className="w-full text-left bg-slate-950/30 hover:bg-slate-900 border border-white/5 rounded-lg p-2 text-xs flex justify-between items-center transition-colors group"
+                                                >
+                                                    <span className="text-slate-400 truncate max-w-[150px] group-hover:text-white transition-colors">
+                                                        {d > 40 ? 'Maraton' : d > 20 ? 'Halvmaraton' : `${d.toFixed(1)} km`} ({run.date?.split('T')[0]})
+                                                    </span>
+                                                    <span className="text-emerald-400 font-mono font-bold">
+                                                        {formatSmartTime(pace)}/km
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        <div className="text-slate-500 pb-4 pl-2 font-medium">/km</div>
                     </div>
                 </div>
 
-                <div className="bg-slate-900 border border-white/5 rounded-3xl p-6">
-                    <h2 className="text-xl font-bold text-white mb-4">Tidtabell</h2>
-                    <div className="space-y-1 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                        {distances.map(dist => {
-                            const time = convertPaceToTime(dist.km, paceSecondsPerKm);
-                            return (
-                                <div key={dist.name} className="flex justify-between items-center px-3 py-2 rounded-lg hover:bg-white/5 transition-colors">
-                                    <span className="font-medium text-slate-300">{dist.name}</span>
-                                    <span className="font-bold text-emerald-400 font-mono text-lg">{formatSeconds(time)}</span>
+                {/* RIGHT COLUMN: Table */}
+                <div className="lg:col-span-2">
+                    <div className="bg-slate-900/80 border border-white/5 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
+
+                        <div className="flex justify-between items-center mb-6 relative z-10">
+                            <h2 className="text-xl font-bold text-white">
+                                Sluttider <span className={`text-sm ml-2 ${mode === 'predict' ? 'text-amber-400' : 'text-emerald-400'}`}>({mode === 'predict' ? 'Prediktion' : 'Exakt tempo'})</span>
+                            </h2>
+                            {mode === 'predict' && paceSeconds > 0 && (
+                                <div className="text-xs bg-amber-500/10 text-amber-500/80 px-3 py-1 rounded-full font-bold">
+                                    Uppskattat VDOT: {calculateVDOT(baselineKm, paceSeconds * baselineKm).toFixed(1)}
                                 </div>
-                            );
-                        })}
+                            )}
+                        </div>
+
+                        <div className="space-y-1 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar relative z-10">
+                            {(() => {
+                                // Inject custom baseline distance into the table if it's not already there
+                                const displayDistances = [...TARGET_DISTANCES];
+                                if (!displayDistances.some(d => d.km === baselineKm)) {
+                                    displayDistances.push({ name: `${baselineKm} km`, km: baselineKm });
+                                }
+                                // Sort ascending by distance
+                                displayDistances.sort((a, b) => a.km - b.km);
+
+                                return displayDistances.map(dist => {
+                                    let timeSecs = 0;
+                                    let distPace = paceSeconds;
+
+                                    if (mode === 'exact') {
+                                        timeSecs = convertPaceToTime(dist.km, paceSeconds);
+                                    } else {
+                                        if (paceSeconds > 0) {
+                                            const vdot = calculateVDOT(baselineKm, paceSeconds * baselineKm);
+                                            timeSecs = predictRaceTime(vdot, dist.km);
+                                            distPace = timeSecs / dist.km;
+                                        }
+                                    }
+
+                                    const isBaseline = mode === 'predict' && dist.km === baselineKm;
+                                    const diffPaceSecs = distPace - paceSeconds;
+
+                                    return (
+                                        <div
+                                            key={dist.name}
+                                            className={`flex items-center px-4 py-3 rounded-xl transition-colors ${isBaseline ? 'bg-amber-500/10 border border-amber-500/20' : 'hover:bg-white/5 border border-transparent'}`}
+                                        >
+                                            <div className="w-1/3">
+                                                <div className="flex flex-col">
+                                                    <span className={`font-bold ${isBaseline ? 'text-amber-300' : 'text-slate-300'}`}>
+                                                        {dist.name}
+                                                        {isBaseline && <span className="ml-2 text-[10px] uppercase tracking-wider text-amber-500/60">Bas</span>}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                            <div className="w-1/3 text-center">
+                                                {mode === 'predict' && (
+                                                    <div className="flex flex-col items-center">
+                                                        <span className={`text-xs font-mono font-bold ${isBaseline ? 'text-amber-400' : 'text-slate-500'}`}>
+                                                            {formatSmartTime(distPace)}/km
+                                                        </span>
+                                                        {!isBaseline && paceSeconds > 0 && baselineKm > 0 && (
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <span className="text-[10px] font-bold text-slate-500/80">
+                                                                    {dist.km > baselineKm ? '+' : ''}{((dist.km - baselineKm) / baselineKm * 100).toFixed(0)}% dist
+                                                                </span>
+                                                                <span className={`text-[10px] font-bold ${diffPaceSecs > 0 ? 'text-rose-400/80' : 'text-emerald-400/80'}`}>
+                                                                    {diffPaceSecs > 0 ? '+' : ''}{((diffPaceSecs / paceSeconds) * 100).toFixed(1)}% fart
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="w-1/3 text-right">
+                                                <span className={`font-black font-mono text-xl ${mode === 'predict' ? (isBaseline ? 'text-amber-400' : 'text-amber-200/80') : 'text-emerald-400'}`}>
+                                                    {timeSecs > 0 ? formatSeconds(timeSecs) : '—'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                });
+                            })()}
+                        </div>
                     </div>
                 </div>
             </div>

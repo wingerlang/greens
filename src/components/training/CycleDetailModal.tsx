@@ -212,7 +212,10 @@ export function CycleDetailModal({
                                                     unit
                                                 }],
                                                 cycleId: cycle.id,
-                                                startDate: cycle.startDate
+                                                startDate: cycle.startDate,
+                                                category: goalType === 'calories' ? 'nutrition' : 'training',
+                                                userId: '',
+                                                status: 'active'
                                             });
 
                                             (e.target as HTMLInputElement).value = '';

@@ -7,6 +7,7 @@ import {
     type Unit,
     type FoodCategory,
     type FoodStorageType,
+    type Season,
     CATEGORY_LABELS,
     UNIT_LABELS,
 } from '../models/types.ts';
@@ -29,9 +30,10 @@ const STORAGE_TYPE_LABELS: Record<FoodStorageType, string> = {
 
 const CATEGORY_GROUPS: Record<string, FoodCategory[]> = {
     'Grönt & Frukt': ['vegetables', 'fruits'],
-    'Protein & Baljväxter': ['protein', 'legumes', 'dairy-alt', 'nuts-seeds', 'supplements'],
+    'Protein & Baljväxter': ['protein', 'legumes', 'dairy-alt', 'nuts-seeds', 'supplements', 'meal-replacement', 'protein-bar'],
     'Skafferi & Bas': ['grains', 'cereals', 'baking', 'spices', 'condiments', 'sauces', 'sweeteners', 'fats'],
     'Dryck': ['beverages'],
+    'Godis & Snacks': ['candy'],
     'Övrigt': ['other']
 };
 
@@ -1300,39 +1302,39 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                         /* LIST VIEW - Modern CSS Grid Table */
                         <div className="bg-slate-900/50 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
                             {/* Header */}
-                            <div className="grid grid-cols-[3rem_1fr_7.5rem_4rem_3rem_3rem_3rem_4rem_4rem_4rem_5rem_8rem_7rem_6rem] gap-4 p-4 border-b border-slate-800 bg-slate-900/80 text-[10px] font-bold text-slate-500 uppercase tracking-wider items-center">
-                                <div className="w-10">Bild</div>
-                                <div className="cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
+                            <div className="flex flex-row gap-4 p-4 border-b border-slate-800 bg-slate-900/80 text-[10px] font-bold text-slate-500 uppercase tracking-wider items-center">
+                                <div className="w-10 shrink-0">Bild</div>
+                                <div className="flex-1 min-w-0 cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('name')}>
                                     Råvara {sortConfig?.key === 'name' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="hidden md:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('category')}>
+                                <div className="w-[7.5rem] shrink-0 hidden md:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('category')}>
                                     Kategori {sortConfig?.key === 'category' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('calories')}>
+                                <div className="w-16 shrink-0 text-right cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('calories')}>
                                     Kcal {sortConfig?.key === 'calories' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="text-right hidden sm:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('protein')}>
+                                <div className="w-12 shrink-0 text-right hidden sm:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('protein')}>
                                     Prot {sortConfig?.key === 'protein' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="text-right hidden sm:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('carbs')}>
+                                <div className="w-12 shrink-0 text-right hidden sm:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('carbs')}>
                                     Kolh {sortConfig?.key === 'carbs' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="text-right hidden sm:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('fat')}>
+                                <div className="w-12 shrink-0 text-right hidden sm:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('fat')}>
                                     Fett {sortConfig?.key === 'fat' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="text-center hidden lg:block">Pris</div>
-                                <div className="text-center hidden lg:block">Enhet</div>
-                                <div className="text-center hidden xl:block">Klimat</div>
-                                <div className="text-center cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('frequency')}>
+                                <div className="w-16 shrink-0 text-center hidden lg:block">Pris</div>
+                                <div className="w-16 shrink-0 text-center hidden lg:block">Enhet</div>
+                                <div className="w-16 shrink-0 text-center hidden xl:block">Klimat</div>
+                                <div className="w-20 shrink-0 text-center cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('frequency')}>
                                     Loggningar {sortConfig?.key === 'frequency' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="hidden xl:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('creator')}>
+                                <div className="w-32 shrink-0 hidden xl:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('creator')}>
                                     Skapad av {sortConfig?.key === 'creator' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="hidden 2xl:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('date')}>
+                                <div className="w-28 shrink-0 hidden 2xl:block cursor-pointer hover:text-white transition-colors" onClick={() => handleSort('date')}>
                                     Datum {sortConfig?.key === 'date' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                                 </div>
-                                <div className="flex justify-end"></div>
+                                <div className="w-24 shrink-0 flex justify-end"></div>
                             </div>
 
                             <div className="divide-y divide-slate-800/50">
@@ -1344,41 +1346,41 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                             initial={{ opacity: 0 }}
                                             animate={{ opacity: 1 }}
                                             exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                                            className="grid grid-cols-[3rem_1fr_7.5rem_4rem_3rem_3rem_3rem_4rem_4rem_4rem_5rem_8rem_7rem_6rem] gap-4 p-4 hover:bg-slate-800/50 transition-colors items-center group"
+                                            className="flex flex-row gap-4 p-4 hover:bg-slate-800/50 transition-colors items-center group"
                                         >
-                                            <div className="w-10 h-10 rounded-lg overflow-hidden bg-slate-800 border border-slate-700">
+                                            <div className="w-10 shrink-0 h-10 rounded-lg overflow-hidden bg-slate-800 border border-slate-700">
                                                 {item.imageUrl && (
                                                     <img src={getImgSrc(item.imageUrl)} alt="" className="w-full h-full object-cover" />
                                                 )}
                                             </div>
                                             <div
-                                                className="cursor-pointer min-w-0"
+                                                className="flex-1 min-w-0 cursor-pointer"
                                                 onClick={() => handleOpenForm(item)}
                                             >
                                                 <div className="font-bold text-slate-200 group-hover:text-emerald-400 transition-colors truncate">{item.name}</div>
                                                 {item.brand && <div className="text-xs text-slate-500 truncate">{item.brand}</div>}
                                             </div>
-                                            <div className="hidden md:block">
+                                            <div className="w-[7.5rem] shrink-0 hidden md:block">
                                                 <span className="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-400 border border-slate-700">
                                                     {CATEGORY_LABELS[item.category]}
                                                 </span>
                                             </div>
-                                            <div className="text-right font-mono text-emerald-400 font-bold">{item.calories}</div>
-                                            <div className="text-right font-mono text-slate-400 hidden sm:block">{item.protein}</div>
-                                            <div className="text-right font-mono text-slate-400 hidden sm:block">{item.carbs}</div>
-                                            <div className="text-right font-mono text-slate-400 hidden sm:block">{item.fat}</div>
-                                            <div className="text-center hidden lg:block">
+                                            <div className="w-16 shrink-0 text-right font-mono text-emerald-400 font-bold">{item.calories}</div>
+                                            <div className="w-12 shrink-0 text-right font-mono text-slate-400 hidden sm:block">{item.protein}</div>
+                                            <div className="w-12 shrink-0 text-right font-mono text-slate-400 hidden sm:block">{item.carbs}</div>
+                                            <div className="w-12 shrink-0 text-right font-mono text-slate-400 hidden sm:block">{item.fat}</div>
+                                            <div className="w-16 shrink-0 text-center hidden lg:block">
                                                 <input
                                                     type="number"
-                                                    className="w-16 bg-transparent text-right text-sm border-b border-transparent hover:border-slate-600 focus:border-emerald-500 focus:outline-none transition-colors"
+                                                    className="w-full bg-transparent text-right text-sm border-b border-transparent hover:border-slate-600 focus:border-emerald-500 focus:outline-none transition-colors"
                                                     value={item.pricePerUnit || 0}
                                                     onChange={(e) => handleCellBlur(item, 'pricePerUnit', Number(e.target.value))}
                                                     placeholder="-"
                                                 />
                                             </div>
-                                            <div className="text-center hidden lg:block">
+                                            <div className="w-16 shrink-0 text-center hidden lg:block">
                                                 <select
-                                                    className="bg-transparent text-xs text-slate-500 border-none focus:ring-0 cursor-pointer hover:text-white"
+                                                    className="w-full bg-transparent text-xs text-slate-500 border-none focus:ring-0 cursor-pointer hover:text-white"
                                                     value={item.unit}
                                                     onChange={(e) => handleCellBlur(item, 'unit', e.target.value)}
                                                 >
@@ -1387,26 +1389,26 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                                     ))}
                                                 </select>
                                             </div>
-                                            <div className="text-center hidden xl:block">
+                                            <div className="w-16 shrink-0 text-center hidden xl:block">
                                                 {item.co2PerUnit ? (
                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${getCO2Class(item.co2PerUnit)}`}>
                                                         {item.co2PerUnit}
                                                     </span>
                                                 ) : <span className="text-slate-700">-</span>}
                                             </div>
-                                            <div className="text-center">
+                                            <div className="w-20 shrink-0 text-center">
                                                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-slate-800 text-slate-400 border border-slate-700">
                                                     {itemFrequencyMap[item.id] || 0}
                                                 </span>
                                             </div>
-                                            <div className="hidden xl:block text-slate-500 text-[10px] font-medium truncate max-w-[100px]">
+                                            <div className="w-32 shrink-0 hidden xl:block text-slate-500 text-[10px] font-medium truncate max-w-[100px]">
                                                 <span className="text-slate-600 mr-1">Av:</span>
                                                 {getCreatorName(item.createdBy)}
                                             </div>
-                                            <div className="hidden 2xl:block text-slate-500 text-[10px] whitespace-nowrap">
+                                            <div className="w-28 shrink-0 hidden 2xl:block text-slate-500 text-[10px] whitespace-nowrap">
                                                 {formatDate(item.createdAt)}
                                             </div>
-                                            <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="w-24 shrink-0 flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                 <button className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors" onClick={() => setDetailItem(item)} title="Detaljer">
                                                     📋
                                                 </button>
@@ -1864,19 +1866,26 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                                         <div>
                                             <label className="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">I säsong</label>
                                             <div className="flex flex-wrap gap-2">
-                                                {['Vår', 'Sommar', 'Höst', 'Vinter'].map(s => (
-                                                    <button
-                                                        key={s}
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const seasons = formData.seasons || [];
-                                                            setFormData({ ...formData, seasons: seasons.includes(s) ? seasons.filter(x => x !== s) : [...seasons, s] });
-                                                        }}
-                                                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest ${formData.seasons?.includes(s) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
-                                                    >
-                                                        {s}
-                                                    </button>
-                                                ))}
+                                                {
+                                                    [
+                                                        { id: 'spring', label: 'Vår' },
+                                                        { id: 'summer', label: 'Sommar' },
+                                                        { id: 'autumn', label: 'Höst' },
+                                                        { id: 'winter', label: 'Vinter' }
+                                                    ].map(s => (
+                                                        <button
+                                                            key={s.id}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const seasons = formData.seasons || [];
+                                                                setFormData({ ...formData, seasons: seasons.includes(s.id as Season) ? seasons.filter(x => x !== s.id) : [...seasons, s.id as Season] });
+                                                            }}
+                                                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest ${formData.seasons?.includes(s.id as Season) ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-500 border border-slate-700'}`}
+                                                        >
+                                                            {s.label}
+                                                        </button>
+                                                    ))
+                                                }
                                             </div>
                                         </div>
                                     )}
@@ -1901,8 +1910,9 @@ export function DatabasePage({ headless = false }: { headless?: boolean }) {
                             </div>
                         </form>
                     </div>
-                </div>
-            )}
+                </div >
+            )
+            }
 
             {
                 detailItem && (

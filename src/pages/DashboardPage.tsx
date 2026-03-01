@@ -26,6 +26,7 @@ import { useAuth } from '../context/AuthContext.tsx';
 import { WeeklySummary } from '../components/dashboard/WeeklySummary.tsx';
 import { EstimateLunchModal } from '../components/calories/EstimateLunchModal.tsx';
 import { useAnalytics } from '../context/AnalyticsContext.tsx';
+import { CreatePostModal } from '../components/feed/CreatePostModal.tsx';
 
 // Feature Components
 import { DailyIntakeCard } from '../features/dashboard/components/DailyIntakeCard.tsx';
@@ -96,6 +97,7 @@ export function DashboardPage() {
     const [weightRange, setWeightRange] = useState<'7d' | '14d' | '30d' | '3m' | '1y' | 'year' | 'all'>('1y');
     const [isStravaModalOpen, setIsStravaModalOpen] = useState(false);
     const [isEstimateModalOpen, setIsEstimateModalOpen] = useState(false);
+    const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
     const [isHoveringChart, setIsHoveringChart] = useState(false);
     const [isHoveringTraining, setIsHoveringTraining] = useState(false); // State shared between Intake and Training cards
 
@@ -787,6 +789,7 @@ export function DashboardPage() {
                 onLogMeasurements={() => setIsWeightModalOpen(true)}
                 onImportWorkout={() => setShowImportModal(true)}
                 onQuickEstimate={() => setIsEstimateModalOpen(true)}
+                onCreatePost={() => setIsCreatePostModalOpen(true)}
             />
             <ImportWorkoutModal
                 isOpen={showImportModal}
@@ -795,6 +798,15 @@ export function DashboardPage() {
                 isImporting={importing}
                 importResult={importResult}
             />
+            {isCreatePostModalOpen && (
+                <CreatePostModal
+                    isOpen={isCreatePostModalOpen}
+                    onClose={() => setIsCreatePostModalOpen(false)}
+                    onPostCreated={() => {
+                        setIsCreatePostModalOpen(false);
+                    }}
+                />
+            )}
         </div>
     );
 }

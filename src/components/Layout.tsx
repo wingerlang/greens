@@ -11,6 +11,8 @@ import { GlobalNotification } from './common/GlobalNotification.tsx';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Footer } from './Footer.tsx';
 import { ActivityDetailModal } from './activities/ActivityDetailModal.tsx';
+import { CreatePostModal } from './feed/CreatePostModal.tsx';
+import { EstimateLunchModal } from './calories/EstimateLunchModal.tsx';
 
 interface LayoutProps {
     children: ReactNode;
@@ -20,6 +22,8 @@ export function Layout({ children }: LayoutProps) {
     const [isOmniboxOpen, setIsOmniboxOpen] = useState(false);
     const [isTrainingModalOpen, setIsTrainingModalOpen] = useState(false);
     const [trainingModalDefaults, setTrainingModalDefaults] = useState<{ type?: ExerciseType; input?: string; date?: string }>({});
+    const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
+    const [isEstimateModalOpen, setIsEstimateModalOpen] = useState(false);
 
     const handleOpenTraining = (defaults: { type?: ExerciseType; input?: string; date?: string }) => {
         setTrainingModalDefaults(defaults);
@@ -38,7 +42,7 @@ export function Layout({ children }: LayoutProps) {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, []);
 
-    const { recipes, foodItems, getFoodItem, unifiedActivities } = useData();
+    const { recipes, foodItems, getFoodItem, unifiedActivities, addMealEntry } = useData();
     const [nutritionBreakdownItem, setNutritionBreakdownItem] = useState<{ type: 'recipe' | 'foodItem' | 'estimate'; referenceId: string; servings: number; estimateDetails?: any } | null>(null);
 
     // Universal Activity Modal
@@ -137,6 +141,14 @@ export function Layout({ children }: LayoutProps) {
                     setIsOmniboxOpen(false);
                     setNutritionBreakdownItem(item);
                 }}
+                onCreatePost={() => {
+                    setIsOmniboxOpen(false);
+                    setIsCreatePostModalOpen(true);
+                }}
+                onOpenEstimate={() => {
+                    setIsOmniboxOpen(false);
+                    setIsEstimateModalOpen(true);
+                }}
             />
 
             <GlobalExerciseModal
@@ -167,6 +179,30 @@ export function Layout({ children }: LayoutProps) {
                     recipes={recipes}
                     foodItems={foodItems}
                     getFoodItem={getFoodItem}
+                />
+            )}
+
+            {isCreatePostModalOpen && (
+                <CreatePostModal onClose={() => setIsCreatePostModalOpen(false)} onPostCreated={() => setIsCreatePostModalOpen(false)} />
+            )}
+
+            {isEstimateModalOpen && (
+                <EstimateLunchModal
+                    isOpen={isEstimateModalOpen}
+                    onClose={() => setIsEstimateModalOpen(false)}
+                    onSave={(details) => {
+                        addMealEntry({
+                            date: new Date().toISOString().split('T')[0],
+                            mealType: 'estimate',
+                            items: [{
+                                type: 'estimate',
+                                referenceId: crypto.randomUUID?.() || Date.now().toString(),
+                                servings: 1,
+                                estimateDetails: details
+                            }]
+                        });
+                        setIsEstimateModalOpen(false);
+                    }}
                 />
             )}
 

@@ -103,11 +103,11 @@ export function calculateHealthScore(
 
     const today = date.toISOString().split('T')[0];
     const todaysMeals = meals.filter(m => m.date === today);
-    const caloriesIn = todaysMeals.reduce((sum, m) => sum + m.calories, 0);
+    const caloriesIn = todaysMeals.reduce((sum, m) => sum + ((m as any).calories || 0), 0);
 
     const todaysExercise = exercises.filter(e => e.date === today);
     const activeBurn = todaysExercise.reduce((sum, e) => sum + e.caloriesBurned, 0);
-    const target = (settings?.bmr || 2000) + activeBurn; // Dynamic target
+    const target = ((settings as any)?.bmr || 2000) + activeBurn; // Dynamic target
     // Or users usually have a static goal + active burn? Let's assume Target is NET.
     // Simplifying: Target is 'settings.dailyCalorieTarget' (e.g. 2500).
 
