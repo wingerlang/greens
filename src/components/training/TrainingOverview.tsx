@@ -10,9 +10,10 @@ interface TrainingOverviewProps {
     isFiltered?: boolean;
     onExerciseClick?: (exercise: ExerciseEntry) => void;
     initialCalendarMonth?: number;
+    initialCalendarDay?: number;
 }
 
-export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth }: TrainingOverviewProps) {
+export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onExerciseClick, initialCalendarMonth, initialCalendarDay }: TrainingOverviewProps) {
     const [statFilter, setStatFilter] = React.useState<'all' | 'run' | 'bike' | 'strength'>('all');
 
     const stats = useMemo(() => {
@@ -338,7 +339,7 @@ export function TrainingOverview({ exercises, year, periodLabel, isFiltered, onE
 
             {/* Monthly Training Table (Detailed Breakdown) */}
             <div className="mb-0">
-                <MonthlyTrainingTable exercises={exercises} year={year} />
+                <MonthlyTrainingTable exercises={exercises} year={year} initialCalendarMonth={initialCalendarMonth} initialCalendarDay={initialCalendarDay} />
             </div>
         </>
     );

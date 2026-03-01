@@ -1,18 +1,28 @@
 import React, { useState, useMemo } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
 import { MonthlyCalendarModal } from './MonthlyCalendarModal.tsx';
+import { useNavigate } from 'react-router-dom';
 
 interface MonthlyTrainingTableProps {
     exercises: ExerciseEntry[];
     year: number;
     initialCalendarMonth?: number;
+    initialCalendarDay?: number;
 }
 
 type TabType = 'all' | 'running' | 'strength' | 'cycling' | 'swimming' | 'other';
 
-export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth }: MonthlyTrainingTableProps) {
+export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth, initialCalendarDay }: MonthlyTrainingTableProps) {
     const [activeTab, setActiveTab] = useState<TabType>('all');
     const [selectedMonth, setSelectedMonth] = useState<number | null>(initialCalendarMonth !== undefined ? initialCalendarMonth : null);
+    const navigate = useNavigate();
+
+    // Sync state if URL changes (via navigate in modal)
+    React.useEffect(() => {
+        if (initialCalendarMonth !== undefined && initialCalendarMonth !== null) {
+            setSelectedMonth(initialCalendarMonth);
+        }
+    }, [initialCalendarMonth]);
 
     const months = useMemo(() => [
         'Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',
@@ -267,7 +277,10 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth }: 
                             rows.push(
                                 <div
                                     key={months[i]}
-                                    onClick={() => setSelectedMonth(i)}
+                                    onClick={() => {
+                                        setSelectedMonth(i);
+                                        navigate(`/träning/${year}/${months[i].toLowerCase()}`, { replace: true });
+                                    }}
                                     className={`grid grid-cols-[100px_1fr] text-sm group hover:bg-white/[0.05] transition-colors cursor-pointer active:scale-[0.99] duration-100 ${hasRace ? 'bg-amber-500/5' : ''
                                         }`}
                                 >
@@ -413,7 +426,11 @@ export function MonthlyTrainingTable({ exercises, year, initialCalendarMonth }: 
                     monthIndex={selectedMonth}
                     year={year}
                     exercises={exercises}
-                    onClose={() => setSelectedMonth(null)}
+                    initialDay={selectedMonth === initialCalendarMonth ? initialCalendarDay : undefined}
+                    onClose={() => {
+                        setSelectedMonth(null);
+                        navigate(`/träning/${year}`, { replace: true });
+                    }}
                 />
             )}
         </div>

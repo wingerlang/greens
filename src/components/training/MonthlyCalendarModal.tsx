@@ -1,25 +1,82 @@
-import React, { useMemo, useEffect } from 'react';
+import React, { useMemo, useEffect, useCallback } from 'react';
 import { ExerciseEntry } from '../../models/types.ts';
-import { Activity } from 'lucide-react';
+import { Activity, ArrowDownUp, Dumbbell, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface MonthlyCalendarModalProps {
     monthIndex: number; // 0-11
     year: number;
     exercises: ExerciseEntry[];
+    initialDay?: number;
     onClose: () => void;
 }
 
-export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: MonthlyCalendarModalProps) {
+import { DailyDetailModal } from './DailyDetailModal.tsx';
+
+const getTooltipPositionClasses = (weekIdx: number, dayIdx: number): string => {
+    let classes = "";
+
+    // Y-axis: Top 2 rows appear below to prevent cutoff
+    if (weekIdx <= 1) {
+        classes += "top-[120%] ";
+    } else {
+        classes += "bottom-[120%] ";
+    }
+
+    // X-axis: Leftmost cols align left, rightmost align right
+    if (dayIdx <= 1) {
+        classes += "left-0 ";
+    } else if (dayIdx >= 5) {
+        classes += "-right-4 ";
+    } else {
+        classes += "left-1/2 -translate-x-1/2 ";
+    }
+
+    return classes;
+};
+
+export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose, initialDay }: MonthlyCalendarModalProps) {
+    const navigate = useNavigate();
+    const [selectedDate, setSelectedDate] = React.useState<string | null>(() => {
+        if (initialDay) {
+            return new Date(year, monthIndex, initialDay, 12).toISOString().split('T')[0];
+        }
+        return null;
+    });
+    const [isReversed, setIsReversed] = React.useState(false);
     const monthName = new Date(year, monthIndex).toLocaleString('sv-SE', { month: 'long' });
 
-    // ESC key listener
+    // Keyboard navigation
+    const switchMonth = useCallback((direction: 'next' | 'prev') => {
+        const newMonthIndex = direction === 'next' ? monthIndex + 1 : monthIndex - 1;
+        if (newMonthIndex >= 0 && newMonthIndex <= 11) {
+            const newMonthName = new Date(year, newMonthIndex).toLocaleString('sv-SE', { month: 'long' });
+            navigate(`/träning/${year}/${newMonthName.toLowerCase()}`, { replace: true });
+        } else if (newMonthIndex < 0) {
+            // Go to prev year december
+            navigate(`/träning/${year - 1}/december`, { replace: true });
+        } else if (newMonthIndex > 11) {
+            // Go to next year januari
+            navigate(`/träning/${year + 1}/januari`, { replace: true });
+        }
+    }, [monthIndex, year, navigate]);
+
+    // Keyboard shortcuts listener
     useEffect(() => {
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') onClose();
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && !selectedDate) {
+                onClose();
+            }
+            if (e.ctrlKey && e.key === 'ArrowRight' && !selectedDate) {
+                switchMonth('next');
+            }
+            if (e.ctrlKey && e.key === 'ArrowLeft' && !selectedDate) {
+                switchMonth('prev');
+            }
         };
-        window.addEventListener('keydown', handleEsc);
-        return () => window.removeEventListener('keydown', handleEsc);
-    }, [onClose]);
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose, selectedDate, switchMonth]);
 
     // Filter exercises for this month
     const monthData = useMemo(() => {
@@ -93,6 +150,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
         // Math.min to cap at 100% just in case of multiple workouts a day, but user might want >100%. User asked for "x / 30 dagar 72%".
         const freqPercent = Math.round((monthData.filter((v, i, a) => a.findIndex(t => (t.date === v.date)) === i).length / daysPassedForStats) * 100);
         const timePerDay = Math.round(duration / daysPassedForStats);
+        const distancePerWeek = daysPassedForStats > 0 ? (distance / daysPassedForStats) * 7 : 0;
 
         // Distribution by Time (Request: "fördelning av tiden")
         const timeDist = monthData.reduce((acc, e) => {
@@ -100,7 +158,7 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
             return acc;
         }, {} as Record<string, number>);
 
-        return { distance, duration, count, tonnage, timeDist, perWeek, freqPercent, timePerDay };
+        return { distance, duration, count, tonnage, timeDist, perWeek, freqPercent, timePerDay, distancePerWeek };
     }, [monthData, monthIndex, year, calendarDays.daysInMonth]);
 
     if (monthIndex < 0) return null;
@@ -113,9 +171,28 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
             >
                 {/* Side Panel: Summary */}
                 <div className="md:w-56 lg:w-64 bg-slate-950/50 border-b md:border-b-0 md:border-r border-white/5 p-3 sm:p-4 flex flex-col gap-3 overflow-y-auto shrink-0 max-h-[35vh] md:max-h-full">
-                    <div>
-                        <h2 className="text-2xl font-black text-white capitalize mb-0.5">{monthName}</h2>
-                        <p className="text-slate-500 font-bold uppercase tracking-wider text-[10px]">{year}</p>
+                    <div className="flex justify-between items-start">
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-2xl font-black text-white capitalize mb-0.5">{monthName}</h2>
+                            <div className="flex items-center gap-1">
+                                <button onClick={() => switchMonth('prev')} className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors" title="Föregående månad (Ctrl + ←)">
+                                    <ChevronLeft className="w-4 h-4" />
+                                </button>
+                                <button onClick={() => switchMonth('next')} className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white transition-colors" title="Nästa månad (Ctrl + →)">
+                                    <ChevronRight className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <button
+                                onClick={() => setIsReversed(!isReversed)}
+                                className={`p-1.5 rounded-lg border transition-colors ${isReversed ? 'bg-sky-500/10 border-sky-500/30 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'}`}
+                                title="Senaste veckan överst"
+                            >
+                                <ArrowDownUp className="w-4 h-4" />
+                            </button>
+                            <p className="text-slate-500 font-bold uppercase tracking-wider text-[10px] pr-1 mt-1">{year}</p>
+                        </div>
                     </div>
 
                     <div className="space-y-3">
@@ -145,9 +222,16 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
-                            <div className="bg-emerald-950/20 p-3 rounded-xl border border-emerald-500/10">
-                                <p className="text-[9px] text-emerald-500/80 uppercase font-black tracking-widest mb-0.5">Distans</p>
-                                <p className="text-xl font-black text-emerald-400">{stats.distance.toFixed(1)} <span className="text-[10px]">km</span></p>
+                            <div className="bg-emerald-950/20 p-3 rounded-xl border border-emerald-500/10 flex flex-col justify-between">
+                                <div>
+                                    <p className="text-[9px] text-emerald-500/80 uppercase font-black tracking-widest mb-0.5">Distans</p>
+                                    <p className="text-xl font-black text-emerald-400">{stats.distance.toFixed(1)} <span className="text-[10px]">km</span></p>
+                                </div>
+                                <div className="mt-1 flex items-center gap-1 group/avg relative">
+                                    <p className="text-[9px] font-bold text-emerald-500/60 uppercase">
+                                        Snitt/v: <span className="text-emerald-400 font-black">{stats.distancePerWeek.toFixed(1)} km</span>
+                                    </p>
+                                </div>
                             </div>
                             <div className="bg-indigo-950/20 p-3 rounded-xl border border-indigo-500/10">
                                 <p className="text-[9px] text-indigo-500/80 uppercase font-black tracking-widest mb-0.5">Volym</p>
@@ -204,11 +288,13 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                     </div>
 
                     <div className="flex flex-col gap-1">
-                        {calendarDays.weeks.map((week, weekIdx) => {
+                        {(isReversed ? [...calendarDays.weeks].reverse() : calendarDays.weeks).map((week, weekIdx) => {
                             // Calculate weekly stats for the 8th column
                             const weekExercises = week.flatMap(d => d ? d.exercises : []);
-                            const weekRunDist = weekExercises.filter(e => e.type.includes('run')).reduce((sum, e) => sum + (e.distance || 0), 0);
-                            const weekStrengthMin = weekExercises.filter(e => e.type.includes('strength')).reduce((sum, e) => sum + e.durationMinutes, 0);
+                            const runExercises = weekExercises.filter(e => e.type.toLowerCase().includes('run') || e.type.toLowerCase().includes('löp'));
+                            const strengthExercises = weekExercises.filter(e => e.type.toLowerCase().includes('strength') || e.type.toLowerCase().includes('styrka'));
+                            const weekRunDist = runExercises.reduce((sum, e) => sum + (e.distance || 0), 0);
+                            const weekStrengthMin = strengthExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
                             const weekTotalMin = weekExercises.reduce((sum, e) => sum + e.durationMinutes, 0);
 
                             // ISO Week Number mapping approx
@@ -235,35 +321,93 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                                         const isRace = date.exercises.some(e => e.subType === 'race');
 
                                         return (
-                                            <div key={date.day} className={`
-                                                relative p-1 flex flex-col gap-0.5 rounded-lg sm:rounded-xl border transition-all duration-300 group
-                                                ${isToday ? 'bg-sky-950/40 border-sky-500/50 shadow-[0_0_15px_rgba(56,189,248,0.1)]' :
-                                                    isRace ? 'bg-amber-500/10 border-amber-500/50 shadow-amber-500/20' :
-                                                        hasExercise ? 'bg-slate-800 border-white/10 hover:border-white/30 shadow-sm' :
-                                                            'bg-white/[0.02] border-transparent'}
+                                            <div key={date.day}
+                                                onClick={() => {
+                                                    setSelectedDate(date.dateStr);
+                                                    navigate(`/träning/${year}/${monthName.toLowerCase()}/${date.day}`, { replace: true });
+                                                }}
+                                                className={`
+                                                relative p-1 flex flex-col gap-0.5 rounded-lg sm:rounded-xl border transition-all duration-300 group cursor-pointer
+                                                ${isToday ? 'bg-sky-950/40 border-sky-500/50 shadow-[0_0_15px_rgba(56,189,248,0.1)] hover:bg-sky-900/50' :
+                                                        isRace ? 'bg-amber-500/10 border-amber-500/50 shadow-amber-500/20 hover:bg-amber-500/20' :
+                                                            hasExercise ? 'bg-slate-800 border-white/10 hover:border-white/30 hover:bg-slate-700/80 shadow-sm' :
+                                                                'bg-white/[0.02] border-transparent hover:bg-white/[0.05]'}
                                             `}>
                                                 <div className="flex justify-between items-start mb-0">
                                                     <span className={`text-[9px] sm:text-[10px] font-black leading-none ${isToday ? 'text-sky-400 bg-sky-500/10 px-1 py-0.5 rounded-sm' : isRace ? 'text-amber-400' : hasExercise ? 'text-white' : 'text-slate-600'}`}>
                                                         {date.day}
                                                     </span>
-                                                    {isRace && <span className="text-[9px] sm:text-[10px] animate-pulse">🏆</span>}
+                                                    <div className="flex items-center gap-1 group/dayinfo relative">
+                                                        {hasExercise && (() => {
+                                                            const totMins = Math.round(date.exercises.reduce((sum, e) => sum + e.durationMinutes, 0));
+                                                            const timeStr = totMins >= 60 ? `${Math.floor(totMins / 60)}h${totMins % 60}min` : `${totMins}min`;
+                                                            return (
+                                                                <span className="text-[7px] sm:text-[8px] text-slate-500 font-bold bg-white/5 px-1 rounded-sm cursor-help">
+                                                                    {date.exercises.length}st • {timeStr}
+                                                                </span>
+                                                            );
+                                                        })()}
+                                                        {isRace && <span className="text-[9px] sm:text-[10px] animate-pulse">🏆</span>}
+
+                                                        {/* Day Total Tooltip - Only visible when hovering the summary pill */}
+                                                        {hasExercise && (
+                                                            <div className={`absolute top-full right-0 mt-2 w-56 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover/dayinfo:opacity-100 transition-opacity z-[60] hidden md:block pointer-events-none`}>
+                                                                <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10 flex justify-between">
+                                                                    <span>{date.day} {monthName}</span>
+                                                                    <span>{date.exercises.length} pass</span>
+                                                                </div>
+
+                                                                {/* List of Exercises for Day Tooltip */}
+                                                                <div className="flex flex-col gap-2 mb-2 pb-2 border-b border-white/5 text-xs">
+                                                                    {date.exercises.map((e, idx) => (
+                                                                        <div key={idx} className="flex justify-between items-start gap-2">
+                                                                            <span className={`capitalize truncate ${e.subType === 'race' ? 'text-amber-400 font-bold' : 'text-slate-200'}`} title={e.title || e.type}>
+                                                                                {e.subType === 'race' ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                                            </span>
+                                                                            <span className="text-white font-mono font-bold shrink-0 text-[10px] mt-0.5">
+                                                                                {e.distance ? `${e.distance.toFixed(1)}km` : `${Math.round(e.durationMinutes)}m`}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+
+                                                                {/* Aggregate Stats */}
+                                                                <div className="flex flex-col gap-1 text-[10px]">
+                                                                    {(() => {
+                                                                        const d = date.exercises.reduce((acc, e) => acc + (e.distance || 0), 0);
+                                                                        const t = date.exercises.reduce((acc, e) => acc + e.durationMinutes, 0);
+                                                                        const c = date.exercises.reduce((acc, e) => acc + (e.caloriesBurned || 0), 0);
+                                                                        const v = date.exercises.reduce((acc, e) => acc + (e.tonnage || 0), 0);
+                                                                        return (
+                                                                            <>
+                                                                                <div className="flex justify-between"><span className="text-slate-500">Total Tid</span><span className="text-white font-mono">{Math.floor(t / 60) > 0 ? `${Math.floor(t / 60)}h ` : ''}{Math.round(t % 60)}m</span></div>
+                                                                                {d > 0 && <div className="flex justify-between"><span className="text-emerald-500/80">Tot. Distans</span><span className="text-emerald-400 font-mono">{d.toFixed(1)} km</span></div>}
+                                                                                {c > 0 && <div className="flex justify-between"><span className="text-rose-500/80">Tot. Energi</span><span className="text-rose-400 font-mono">{Math.round(c)} kcal</span></div>}
+                                                                                {v > 0 && <div className="flex justify-between"><span className="text-indigo-500/80">Tot. Volym</span><span className="text-indigo-400 font-mono">{(v / 1000).toFixed(1)} t</span></div>}
+                                                                            </>
+                                                                        );
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </div>
 
-                                                <div className="flex flex-col gap-0.5 overflow-y-auto custom-scrollbar pr-0.5 pb-0.5 pt-0.5">
+                                                <div className="flex flex-col gap-0.5 pr-0.5 pb-0.5 pt-0.5">
                                                     {date.exercises.map(ex => {
                                                         const isRun = ex.type.includes('run') || ex.type.includes('löp');
                                                         const isStrength = ex.type.includes('strength') || ex.type.includes('styrka');
 
-                                                        let icon = '⚡';
+                                                        let icon: React.ReactNode = '⚡';
                                                         let typeName = 'Pass';
                                                         let colorClass = 'border-slate-500 text-slate-300 bg-slate-500/10';
 
                                                         if (isRun) {
-                                                            icon = '🏃‍♂️';
+                                                            icon = <Activity className="w-3 h-3 stroke-[3] text-emerald-500" />;
                                                             typeName = ex.subType === 'race' ? 'Tävling' : 'Löpning';
                                                             colorClass = 'border-emerald-500 text-emerald-100 bg-emerald-500/10';
                                                         } else if (isStrength) {
-                                                            icon = '💪';
+                                                            icon = <Dumbbell className="w-3 h-3 text-indigo-500" />;
                                                             typeName = 'Styrka';
                                                             colorClass = 'border-indigo-500 text-indigo-100 bg-indigo-500/10';
                                                         } else if (ex.type.includes('cycl')) {
@@ -284,66 +428,191 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                                                         const shortVal = ex.distance ? `${Math.round(ex.distance)}k` : `${Math.round(ex.durationMinutes)}m`;
 
                                                         return (
-                                                            <div key={ex.id} title={`${typeName} - ${fullVal}`}
-                                                                className={`text-[9px] sm:text-[10px] leading-none px-1 py-1 rounded-md border-l-2 ${colorClass} truncate cursor-help flex justify-between items-center gap-1`}>
-                                                                <span className="truncate opacity-90 font-bold flex gap-1 items-center">
-                                                                    {icon} <span className="hidden sm:inline">{typeName}</span>
+                                                            <div key={ex.id}
+                                                                className={`relative text-[9px] sm:text-[10px] leading-none px-1 py-1 rounded-md border-l-2 ${colorClass} cursor-pointer flex justify-between items-center gap-1 group/ex min-w-0`}>
+                                                                <span className="font-bold flex gap-1 items-center min-w-0 shrink truncate opacity-90">
+                                                                    {icon} <span className="hidden sm:inline truncate">{typeName}</span>
                                                                 </span>
                                                                 <span className="font-mono opacity-90 font-bold shrink-0 text-[9px]">
                                                                     {shortVal}
                                                                 </span>
+
+                                                                {/* Rich Tooltip per Activity */}
+                                                                <div className={`absolute ${getTooltipPositionClasses(weekIdx, dayIdx)} w-48 sm:w-56 bg-slate-900 border border-white/10 rounded-xl p-2.5 sm:p-3 shadow-2xl opacity-0 group-hover/ex:opacity-100 transition-opacity z-[70] hidden md:block pointer-events-none`}>
+                                                                    <div className="flex flex-col gap-1.5 whitespace-normal">
+                                                                        <div className="flex items-start gap-2 mb-1 pb-1.5 border-b border-white/10">
+                                                                            <div className="p-1 rounded-lg bg-slate-800/50 text-white shrink-0 mt-0.5">
+                                                                                {icon}
+                                                                            </div>
+                                                                            <div className="flex flex-col min-w-0 flex-1">
+                                                                                <span className="text-xs font-bold text-white uppercase tracking-wider truncate" title={ex.title || typeName}>
+                                                                                    {ex.title || typeName}
+                                                                                </span>
+                                                                                <span className="text-[9px] text-slate-400 font-medium truncate">
+                                                                                    {ex.subType === 'race' ? 'Tävling' : typeName}
+                                                                                </span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-xs text-left">
+                                                                            <div className="flex flex-col">
+                                                                                <span className="text-[8px] text-slate-500 uppercase font-black tracking-widest">Tid</span>
+                                                                                <span className="font-mono text-slate-200">{Math.round(ex.durationMinutes)} min</span>
+                                                                            </div>
+                                                                            {ex.distance !== undefined && ex.distance > 0 && (
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[8px] text-emerald-500/80 uppercase font-black tracking-widest">Distans</span>
+                                                                                    <span className="font-mono text-emerald-400">{ex.distance.toFixed(2)} km</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {ex.tonnage !== undefined && ex.tonnage > 0 && (
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[8px] text-indigo-500/80 uppercase font-black tracking-widest">Volym</span>
+                                                                                    <span className="font-mono text-indigo-400">{(ex.tonnage / 1000).toFixed(1)} t</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {ex.caloriesBurned !== undefined && ex.caloriesBurned > 0 && (
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[8px] text-rose-500/80 uppercase font-black tracking-widest">Energi</span>
+                                                                                    <span className="font-mono text-rose-400">{Math.round(ex.caloriesBurned)} kcal</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {ex.averageWatts !== undefined && ex.averageWatts > 0 && (
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[8px] text-sky-500/80 uppercase font-black tracking-widest">Effekt</span>
+                                                                                    <span className="font-mono text-sky-400">{ex.averageWatts} W</span>
+                                                                                </div>
+                                                                            )}
+                                                                            {ex.heartRateAvg !== undefined && ex.heartRateAvg > 0 && (
+                                                                                <div className="flex flex-col">
+                                                                                    <span className="text-[8px] text-amber-500/80 uppercase font-black tracking-widest">Puls</span>
+                                                                                    <span className="font-mono text-amber-400">{Math.round(ex.heartRateAvg)} bpm</span>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+
+                                                                        <div className="mt-2 text-[9px] text-sky-400/80 text-right font-bold pt-1.5 border-t border-sky-500/10">
+                                                                            Klicka för dagsvy
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
-
-                                                {/* Tooltip on Hover */}
-                                                {hasExercise && (
-                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-950 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 hidden md:block z-[60]">
-                                                        <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10 flex justify-between">
-                                                            <span>{date.day} {monthName}</span>
-                                                            {isToday && <span className="text-sky-400">IDAG</span>}
-                                                        </div>
-                                                        {date.exercises.map((e, idx) => (
-                                                            <div key={idx} className="flex justify-between items-center text-xs mb-1.5 last:mb-0">
-                                                                <span className={`capitalize ${e.subType === 'race' ? 'text-amber-400 font-bold' : 'text-slate-200'}`}>
-                                                                    {e.subType === 'race' ? '🏆 ' : ''}{e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
-                                                                </span>
-                                                                <span className="text-white font-mono font-bold">
-                                                                    {e.distance ? `${e.distance.toFixed(1)} km` : `${Math.round(e.durationMinutes)}m`}
-                                                                </span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
                                             </div>
                                         );
                                     })}
 
                                     {/* 8th Column: Weekly Summary */}
-                                    <div className="bg-slate-950/40 border border-white/[0.02] rounded-xl p-1.5 sm:p-2 flex flex-col justify-center relative group shadow-inner overflow-hidden min-h-[40px]">
-                                        <div className="absolute inset-0 flex items-center justify-center text-3xl sm:text-5xl font-black text-white/[0.03] pointer-events-none select-none z-0">
-                                            {weekNumberStr}
-                                        </div>
+                                    <div className="bg-slate-950/40 border border-white/[0.02] rounded-xl p-1.5 sm:p-2 flex flex-col justify-start relative group shadow-inner min-h-[40px]">
+                                        {weekNumberStr && (
+                                            <div className="absolute top-1 right-1 text-[7px] font-black uppercase text-slate-500 bg-black/20 px-1 py-0.5 rounded-sm line-clamp-1 truncate max-w-[90%]">
+                                                {weekNumberStr}
+                                            </div>
+                                        )}
 
-                                        <div className="flex flex-row flex-wrap gap-1 text-[9px] sm:text-[10px] font-mono font-bold relative z-10 w-full items-center justify-start mt-0.5">
-                                            {weekRunDist > 0 && (
-                                                <div className="flex items-center gap-0.5 bg-emerald-500/10 text-emerald-400 px-1 py-0.5 rounded cursor-help" title={`Löpning: ${weekRunDist.toFixed(1)} km`}>
-                                                    <Activity className="w-3 h-3 stroke-[3]" />
-                                                    <span>{Math.round(weekRunDist)}k</span>
-                                                </div>
-                                            )}
-                                            {weekStrengthMin > 0 && (
-                                                <div className="flex items-center gap-0.5 bg-indigo-500/10 text-indigo-400 px-1 py-0.5 rounded cursor-help" title={`Styrka: ${Math.floor(weekStrengthMin / 60)}h ${Math.round(weekStrengthMin % 60)}m`}>
-                                                    <span className="text-[10px] leading-none">💪</span>
-                                                    <span>
-                                                        {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h` : ''}
-                                                        {Math.floor(weekStrengthMin / 60) > 0 && Math.round(weekStrengthMin % 60) === 0 ? '' : `${Math.round(weekStrengthMin % 60)}m`}
+                                        <div className="flex flex-col gap-1 text-[9px] sm:text-[10px] font-mono font-bold relative z-10 w-full mt-3">
+                                            <div className="flex flex-row flex-wrap gap-1">
+                                                {weekRunDist > 0 && (
+                                                    <div className="flex items-center gap-0.5 bg-emerald-500/10 text-emerald-400 px-1 py-0.5 rounded cursor-help relative group/weekrun">
+                                                        <Activity className="w-3 h-3 stroke-[3]" />
+                                                        <span>{Math.round(weekRunDist)}k</span>
+                                                        {/* Rich Tooltip */}
+                                                        <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 top-0 w-56 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weekrun:opacity-100 transition-opacity z-[70] hidden xl:block cursor-default" onClick={e => e.stopPropagation()}>
+                                                            <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Löpning</div>
+                                                            <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                                                {runExercises.map((e, idx) => (
+                                                                    <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
+                                                                        onClick={() => {
+                                                                            setSelectedDate(e.date);
+                                                                            navigate(`/träning/${year}/${monthName.toLowerCase()}/${e.date.split('-')[2]}`, { replace: true });
+                                                                        }}>
+                                                                        <span className="capitalize truncate text-slate-200" title={e.title || e.type}>{e.title || 'Löpning'}</span>
+                                                                        <span className="text-white font-mono font-bold shrink-0 text-[10px]">{e.distance?.toFixed(1)}km</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
+                                                                <span className="text-slate-500">Totalt</span>
+                                                                <span className="text-emerald-400 font-mono">{weekRunDist.toFixed(1)} km</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {weekStrengthMin > 0 && (
+                                                    <div className="flex items-center gap-0.5 bg-indigo-500/10 text-indigo-400 px-1 py-0.5 rounded cursor-help relative group/weekstr">
+                                                        <span className="text-[10px] leading-none">💪</span>
+                                                        <span>
+                                                            {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h` : ''}
+                                                            {Math.floor(weekStrengthMin / 60) > 0 && Math.round(weekStrengthMin % 60) === 0 ? '' : `${Math.round(weekStrengthMin % 60)}m`}
+                                                        </span>
+                                                        {/* Rich Tooltip */}
+                                                        <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 top-0 w-56 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weekstr:opacity-100 transition-opacity z-[70] hidden xl:block cursor-default" onClick={e => e.stopPropagation()}>
+                                                            <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Styrka</div>
+                                                            <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                                                {strengthExercises.map((e, idx) => (
+                                                                    <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
+                                                                        onClick={() => {
+                                                                            setSelectedDate(e.date);
+                                                                            navigate(`/träning/${year}/${monthName.toLowerCase()}/${e.date.split('-')[2]}`, { replace: true });
+                                                                        }}>
+                                                                        <span className="capitalize truncate text-slate-200" title={e.title || e.type}>{e.title || 'Styrka'}</span>
+                                                                        <span className="text-white font-mono font-bold shrink-0 text-[10px]">{Math.round(e.durationMinutes)}m</span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
+                                                                <span className="text-slate-500">Totalt</span>
+                                                                <span className="text-indigo-400 font-mono">
+                                                                    {Math.floor(weekStrengthMin / 60) > 0 ? `${Math.floor(weekStrengthMin / 60)}h ` : ''}{Math.round(weekStrengthMin % 60)}m
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {weekTotalMin === 0 && (
+                                                    <div className="text-slate-600 italic text-[9px]">Ingen träning</div>
+                                                )}
+                                            </div>
+
+                                            {weekTotalMin > 0 && (
+                                                <div className="flex items-center justify-between border-t border-white/5 pt-1 mt-0.5 w-full text-[9px] relative group/weektot cursor-help">
+                                                    <span className="text-slate-500 hidden xl:inline">Tot:</span>
+                                                    <span className="text-slate-300 ml-auto flex items-center gap-1">
+                                                        <span className="text-slate-500">{weekExercises.length}st</span>
+                                                        <span>
+                                                            {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h ` : ''}
+                                                            {Math.round(weekTotalMin % 60)}m
+                                                        </span>
                                                     </span>
+                                                    {/* Rich Tooltip */}
+                                                    <div className="absolute right-[calc(100%+0.5rem)] sm:right-full sm:mr-2 bottom-0 sm:bottom-auto sm:top-0 w-56 bg-slate-900 border border-white/10 rounded-xl p-3 shadow-2xl opacity-0 xl:group-hover/weektot:opacity-100 transition-opacity z-[70] hidden xl:block cursor-default" onClick={e => e.stopPropagation()}>
+                                                        <div className="text-[10px] text-slate-400 font-bold mb-2 pb-1 border-b border-white/10">Veckans Alla Pass</div>
+                                                        <div className="flex flex-col gap-2 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                                                            {weekExercises.map((e, idx) => (
+                                                                <div key={idx} className="flex justify-between items-start gap-2 hover:bg-white/5 p-1 -mx-1 rounded cursor-pointer transition-colors"
+                                                                    onClick={() => {
+                                                                        setSelectedDate(e.date);
+                                                                        navigate(`/träning/${year}/${monthName.toLowerCase()}/${e.date.split('-')[2]}`, { replace: true });
+                                                                    }}>
+                                                                    <span className="capitalize truncate text-slate-200" title={e.title || e.type}>
+                                                                        {e.subType === 'race' ? '🏆 ' : ''}{e.title || e.type.replace('strength', 'Styrka').replace('running', 'Löpning')}
+                                                                    </span>
+                                                                    <span className="text-white font-mono font-bold shrink-0 text-[10px]">
+                                                                        {e.distance ? `${e.distance.toFixed(1)}km` : `${Math.round(e.durationMinutes)}m`}
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                        <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-[10px] font-bold">
+                                                            <span className="text-slate-500">Totalt</span>
+                                                            <span className="text-sky-400 font-mono">
+                                                                {Math.floor(weekTotalMin / 60) > 0 ? `${Math.floor(weekTotalMin / 60)}h ` : ''}{Math.round(weekTotalMin % 60)}m
+                                                            </span>
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                            )}
-                                            {weekTotalMin === 0 && (
-                                                <div className="text-slate-600 italic text-[9px]">Ingen träning</div>
                                             )}
                                         </div>
                                     </div>
@@ -361,6 +630,24 @@ export function MonthlyCalendarModal({ monthIndex, year, exercises, onClose }: M
                     ✕
                 </button>
             </div>
+
+            {/* Daily Detail Modal */}
+            {selectedDate && (
+                <DailyDetailModal
+                    date={selectedDate}
+                    allExercises={exercises}
+                    onClose={() => {
+                        setSelectedDate(null);
+                        navigate(`/träning/${year}/${monthName.toLowerCase()}`, { replace: true });
+                    }}
+                    onDateChange={(newDate) => {
+                        setSelectedDate(newDate);
+                        const parts = newDate.split('-');
+                        const day = parseInt(parts[2], 10);
+                        navigate(`/träning/${year}/${monthName.toLowerCase()}/${day}`, { replace: true });
+                    }}
+                />
+            )}
         </div>
     );
 }

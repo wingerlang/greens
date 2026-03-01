@@ -73,6 +73,12 @@ export function TrainingPage() {
         return idx >= 0 ? idx : undefined;
     }, [tab, subTab]);
 
+    const initialCalendarDay = useMemo(() => {
+        if (!tab || !/^\d{4}$/.test(tab) || !subTab || !id) return undefined;
+        const day = parseInt(id, 10);
+        return isNaN(day) ? undefined : day;
+    }, [tab, subTab, id]);
+
     // Handle Tab Switching
     const handleTabChange = (newTab: string) => {
         if (newTab === 'styrka' && currentTab !== 'styrka') {
@@ -393,6 +399,7 @@ export function TrainingPage() {
                                                 `Periodens Volym (${activePreset.toUpperCase()})`
                             }
                             initialCalendarMonth={initialCalendarMonth}
+                            initialCalendarDay={initialCalendarDay}
                         />
 
                         {/* Cycle Manager (Replaces Goal Selector) */}
